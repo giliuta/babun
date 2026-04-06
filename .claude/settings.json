@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx prettier --write \"$FILEPATH\" 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$FILEPATH\" | grep -qE '\\.(ts|tsx)$'; then npx eslint --fix \"$FILEPATH\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$FILEPATH\" | grep -qvE '(server|actions|queries|api|edge|functions)' && grep -l 'service_role\\|supabaseAdmin\\|SUPABASE_SERVICE_ROLE' \"$FILEPATH\" 2>/dev/null; then echo 'BLOCKED: service_role key detected in client code!' && exit 1; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

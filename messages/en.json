@@ -1,0 +1,65 @@
+{
+  "common": {
+    "appName": "Babun CRM",
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search",
+    "filter": "Filter",
+    "back": "Back",
+    "next": "Next",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Confirm",
+    "error": "Error",
+    "success": "Success"
+  },
+  "auth": {
+    "login": "Log in",
+    "logout": "Log out",
+    "email": "Email",
+    "password": "Password",
+    "loginTitle": "Sign in",
+    "loginDescription": "Enter your credentials to sign in"
+  },
+  "nav": {
+    "orders": "Orders",
+    "clients": "Clients",
+    "calendar": "Calendar",
+    "crews": "Crews",
+    "finance": "Finance",
+    "inbox": "Inbox",
+    "reports": "Reports",
+    "settings": "Settings"
+  },
+  "orders": {
+    "title": "Orders",
+    "newOrder": "New order",
+    "status": {
+      "new": "New",
+      "confirmed": "Confirmed",
+      "scheduled": "Scheduled",
+      "in_progress": "In progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "no_show": "No show"
+    }
+  },
+  "clients": {
+    "title": "Clients",
+    "newClient": "New client",
+    "name": "Name",
+    "phone": "Phone",
+    "city": "City",
+    "address": "Address"
+  },
+  "cities": {
+    "limassol": "Limassol",
+    "paphos": "Paphos",
+    "larnaca": "Larnaca",
+    "nicosia": "Nicosia"
+  }
+}

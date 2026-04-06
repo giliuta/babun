@@ -1,0 +1,65 @@
+{
+  "common": {
+    "appName": "Babun CRM",
+    "loading": "Загрузка...",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "delete": "Удалить",
+    "edit": "Редактировать",
+    "create": "Создать",
+    "search": "Поиск",
+    "filter": "Фильтр",
+    "back": "Назад",
+    "next": "Далее",
+    "yes": "Да",
+    "no": "Нет",
+    "confirm": "Подтвердить",
+    "error": "Ошибка",
+    "success": "Успешно"
+  },
+  "auth": {
+    "login": "Войти",
+    "logout": "Выйти",
+    "email": "Email",
+    "password": "Пароль",
+    "loginTitle": "Вход в систему",
+    "loginDescription": "Введите ваши данные для входа"
+  },
+  "nav": {
+    "orders": "Заказы",
+    "clients": "Клиенты",
+    "calendar": "Календарь",
+    "crews": "Бригады",
+    "finance": "Финансы",
+    "inbox": "Сообщения",
+    "reports": "Отчёты",
+    "settings": "Настройки"
+  },
+  "orders": {
+    "title": "Заказы",
+    "newOrder": "Новый заказ",
+    "status": {
+      "new": "Новый",
+      "confirmed": "Подтверждён",
+      "scheduled": "Запланирован",
+      "in_progress": "В работе",
+      "completed": "Завершён",
+      "cancelled": "Отменён",
+      "no_show": "Неявка"
+    }
+  },
+  "clients": {
+    "title": "Клиенты",
+    "newClient": "Новый клиент",
+    "name": "Имя",
+    "phone": "Телефон",
+    "city": "Город",
+    "address": "Адрес"
+  },
+  "cities": {
+    "limassol": "Лимассол",
+    "paphos": "Пафос",
+    "larnaca": "Ларнака",
+    "nicosia": "Никосия"
+  }
+}
