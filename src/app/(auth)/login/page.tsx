@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { login } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,15 +67,7 @@ export default function LoginPage() {
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Вход..." : "Войти"}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Нет аккаунта?{" "}
-            <Link
-              href="/signup"
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              Зарегистрироваться
-            </Link>
-          </p>
+          {/* Регистрация отключена — пользователи создаются администратором */}
         </CardFooter>
       </form>
     </Card>
