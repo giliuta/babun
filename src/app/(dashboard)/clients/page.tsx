@@ -3,6 +3,8 @@ import { getClients } from "@/lib/queries/clients";
 import { ClientTable } from "@/components/clients/client-table";
 import { ClientFilters } from "@/components/clients/client-filters";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Users } from "lucide-react";
 
 interface Props {
   searchParams: {
@@ -21,21 +23,41 @@ export default async function ClientsPage({ searchParams }: Props) {
     page: searchParams.page ? parseInt(searchParams.page) : 1,
   });
 
+  const hasFilters = !!(
+    searchParams.search ||
+    searchParams.city ||
+    searchParams.source
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Клиенты</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Клиенты</h1>
+          <p className="text-sm text-muted-foreground">
+            Управление клиентской базой
+          </p>
+        </div>
         <AddClientDialog />
       </div>
       <Suspense fallback={null}>
         <ClientFilters />
       </Suspense>
-      <ClientTable
-        clients={clients}
-        total={total}
-        page={page}
-        totalPages={totalPages}
-      />
+      {clients.length === 0 && !hasFilters ? (
+        <EmptyState
+          icon={Users}
+          title="Пока нет клиентов"
+          description="Добавьте первого клиента чтобы начать работу с заказами"
+          action={<AddClientDialog />}
+        />
+      ) : (
+        <ClientTable
+          clients={clients}
+          total={total}
+          page={page}
+          totalPages={totalPages}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCrews, getCrewMembers } from "@/lib/queries/crews";
 import { CrewCard } from "@/components/crews/crew-card";
 import { AddCrewDialog } from "@/components/crews/add-crew-dialog";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Wrench } from "lucide-react";
 
 export default async function CrewsPage() {
   const supabase = await createClient();
@@ -42,11 +44,21 @@ export default async function CrewsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Бригады</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Бригады</h1>
+          <p className="text-sm text-muted-foreground">
+            Управление бригадами и работниками
+          </p>
+        </div>
         <AddCrewDialog />
       </div>
       {crewData.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Нет бригад</p>
+        <EmptyState
+          icon={Wrench}
+          title="Пока нет бригад"
+          description="Создайте первую бригаду для назначения заказов"
+          action={<AddCrewDialog />}
+        />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {crewData.map(({ crew, members, stats }) => (

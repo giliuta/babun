@@ -39,7 +39,12 @@ export default async function FinancePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Финансы</h1>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Финансы</h1>
+        <p className="text-sm text-muted-foreground">
+          Платежи, расходы и прибыль
+        </p>
+      </div>
 
       {/* Summary cards */}
       <div className="grid gap-4 sm:grid-cols-3">

@@ -15,7 +15,10 @@ export default async function InboxPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Сообщения</h1>
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Сообщения</h1>
+        <p className="text-sm text-muted-foreground">Диалоги с клиентами</p>
+      </div>
       <InboxShell conversations={conversations} messagesMap={messagesMap} />
     </div>
   );

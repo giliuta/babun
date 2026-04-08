@@ -42,7 +42,12 @@ export default async function OrdersPage({ searchParams }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Заказы</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Заказы</h1>
+          <p className="text-sm text-muted-foreground">
+            Управление заказами и статусами
+          </p>
+        </div>
         <CreateOrderDialog
           clients={clientsForForm}
           crews={crews.map((c) => ({ id: c.id, name: c.name, city: c.city }))}
