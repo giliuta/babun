@@ -65,39 +65,23 @@ export async function signup(formData: FormData): Promise<AuthResult> {
     return { error: "Failed to create user" };
   }
 
-  // 2. Create tenant
+  // 2. Create tenant + profile via SECURITY DEFINER function (bypasses RLS)
   const slug = companyName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-  const { data: tenant, error: tenantError } = await supabase
-    .from("tenants")
-    .insert({ name: companyName, slug })
-    .select("id")
-    .single();
-
-  if (tenantError) {
-    return { error: tenantError.message };
-  }
-
-  // 3. Create profile with role=owner
-  const { error: profileError } = await supabase.from("profiles").insert({
-    id: authData.user.id,
-    tenant_id: tenant.id,
-    full_name: fullName,
-    email,
-    role: "owner",
+  const { error: signupError } = await supabase.rpc("handle_signup", {
+    p_user_id: authData.user.id,
+    p_full_name: fullName,
+    p_email: email,
+    p_company_name: companyName,
+    p_company_slug: slug,
   });
 
-  if (profileError) {
-    return { error: profileError.message };
+  if (signupError) {
+    return { error: signupError.message };
   }
-
-  // 4. Set tenant_id and role in app_metadata via admin
-  // Note: This requires a database trigger or edge function to set app_metadata
-  // after profile creation. For now, we store it in the profile and
-  // the middleware will read it from there.
 
   redirect("/orders");
 }

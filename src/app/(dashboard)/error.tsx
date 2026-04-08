@@ -21,9 +21,8 @@ export default function DashboardError({
           <>
             <h2 className="text-2xl font-semibold">Настройте Supabase</h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              Для работы CRM необходимо подключить Supabase. Добавьте
-              переменные окружения на Vercel (Settings → Environment
-              Variables) или в{" "}
+              Для работы CRM необходимо подключить Supabase. Добавьте переменные
+              окружения на Vercel (Settings → Environment Variables) или в{" "}
               <code className="rounded bg-muted px-1">.env.local</code>:
             </p>
             <pre className="mt-4 rounded-lg bg-muted p-4 text-left text-xs">

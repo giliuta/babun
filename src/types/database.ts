@@ -855,6 +855,16 @@ export type Database = {
         Args: Record<string, never>;
         Returns: string;
       };
+      handle_signup: {
+        Args: {
+          p_user_id: string;
+          p_full_name: string;
+          p_email: string;
+          p_company_name: string;
+          p_company_slug: string;
+        };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
   };
