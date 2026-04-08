@@ -1,6 +1,8 @@
 import { DashboardShell } from "@/components/shared/dashboard-shell";
 import { Header } from "@/components/shared/header";
 
+export const dynamic = "force-dynamic";
+
 export default function DashboardLayout({
   children,
 }: {

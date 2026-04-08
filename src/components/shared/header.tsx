@@ -5,34 +5,40 @@ import { Button } from "@/components/ui/button";
 import { MobileSidebar } from "@/components/shared/mobile-sidebar";
 
 export async function Header() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
   let profile: {
     full_name: string;
     email: string | null;
     role: string;
   } | null = null;
   let tenantName = "Babun CRM";
+  let userEmail = "";
 
-  if (user) {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("full_name, email, role, tenant_id")
-      .eq("id", user.id)
-      .single();
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (profileData) {
-      profile = profileData;
-      const { data: tenant } = await supabase
-        .from("tenants")
-        .select("name")
-        .eq("id", profileData.tenant_id)
+    if (user) {
+      userEmail = user.email ?? "";
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("full_name, email, role, tenant_id")
+        .eq("id", user.id)
         .single();
-      if (tenant) tenantName = tenant.name;
+
+      if (profileData) {
+        profile = profileData;
+        const { data: tenant } = await supabase
+          .from("tenants")
+          .select("name")
+          .eq("id", profileData.tenant_id)
+          .single();
+        if (tenant) tenantName = tenant.name;
+      }
     }
+  } catch {
+    // Supabase not configured or auth failed
   }
 
   return (
@@ -46,8 +52,8 @@ export async function Header() {
           <Bell className="h-4 w-4" />
         </Button>
         <UserMenu
-          fullName={profile?.full_name ?? user?.email ?? "User"}
-          email={user?.email ?? ""}
+          fullName={profile?.full_name ?? userEmail ?? "User"}
+          email={userEmail}
           role={profile?.role ?? ""}
         />
       </div>
