@@ -1,5 +1,6 @@
 import { DashboardShell } from "@/components/shared/dashboard-shell";
 import { Header } from "@/components/shared/header";
+import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,12 @@ export default function DashboardLayout({
   return (
     <DashboardShell>
       <Header />
-      <div className="flex-1 overflow-auto p-6">{children}</div>
+      <div className="flex-1 overflow-auto">
+        <div className="px-6 pt-4">
+          <Breadcrumbs />
+        </div>
+        <div className="p-6 pt-3">{children}</div>
+      </div>
     </DashboardShell>
   );
 }

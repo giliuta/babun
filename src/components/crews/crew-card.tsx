@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { updateCrewAction, deleteCrewAction } from "@/lib/actions/crews";
 import { cities } from "@/lib/validations/client";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { PhoneLink } from "@/components/shared/phone-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Trash2, Save, X, Phone, MapPin, User } from "lucide-react";
+import { Pencil, Trash2, Save, X, MapPin, User } from "lucide-react";
 import type { Database } from "@/types/database";
 
 type Crew = Database["public"]["Tables"]["crews"]["Row"];
@@ -44,8 +47,8 @@ export function CrewCard({ crew, stats, members }: CrewCardProps) {
   }
 
   async function handleDelete() {
-    if (!confirm("Деактивировать бригаду?")) return;
     await deleteCrewAction(crew.id);
+    toast.success("Бригада деактивирована");
   }
 
   if (editing) {
@@ -134,14 +137,21 @@ export function CrewCard({ crew, stats, members }: CrewCardProps) {
           >
             <Pencil className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive"
-            onClick={handleDelete}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          <ConfirmDialog
+            trigger={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            }
+            title="Деактивировать бригаду?"
+            description={`Бригада "${crew.name}" будет деактивирована.`}
+            confirmLabel="Деактивировать"
+            onConfirm={handleDelete}
+          />
         </div>
       </div>
 
@@ -167,10 +177,9 @@ export function CrewCard({ crew, stats, members }: CrewCardProps) {
           <User className="h-3.5 w-3.5 text-muted-foreground" />
           <span>{crew.lead_name}</span>
           {crew.phone && (
-            <>
-              <Phone className="ml-2 h-3.5 w-3.5 text-muted-foreground" />
-              <span className="font-mono">{crew.phone}</span>
-            </>
+            <span className="ml-2">
+              <PhoneLink phone={crew.phone} />
+            </span>
           )}
         </div>
       )}

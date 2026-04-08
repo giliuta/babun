@@ -18,10 +18,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowLeft, User, MapPin, Calendar, Phone } from "lucide-react";
+import { ArrowLeft, User, MapPin, Calendar } from "lucide-react";
 import { OrderActionsBar } from "@/components/orders/order-actions-bar";
 import { PaymentDialog } from "@/components/orders/payment-dialog";
 import { ActivityLog } from "@/components/orders/activity-log";
+import { PhoneLink } from "@/components/shared/phone-link";
 
 const statusLabels: Record<string, string> = {
   new: "Новый",
@@ -262,10 +263,10 @@ export default async function OrderDetailPage({ params }: Props) {
                 >
                   {client.full_name}
                 </Link>
-                <p className="flex items-center gap-1 text-muted-foreground">
-                  <Phone className="h-3 w-3" />
-                  {client.phone}
-                </p>
+                <PhoneLink
+                  phone={client.phone}
+                  className="text-muted-foreground"
+                />
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">—</p>
