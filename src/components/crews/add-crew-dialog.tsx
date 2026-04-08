@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { createCrewAction } from "@/lib/actions/crews";
 import { cities } from "@/lib/validations/client";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ export function AddCrewDialog() {
       setError(result.error);
     } else {
       setOpen(false);
+      toast.success("Бригада создана");
     }
   }
 

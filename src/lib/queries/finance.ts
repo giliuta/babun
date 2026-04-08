@@ -20,7 +20,10 @@ export async function getPayments(filters: FinanceFilters = {}) {
   if (filters.method) query = query.eq("method", filters.method);
 
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) {
+    console.error("payments", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -36,7 +39,10 @@ export async function getExpenses(filters: FinanceFilters = {}) {
   if (filters.category) query = query.eq("category", filters.category);
 
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) {
+    console.error("expenses", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -46,7 +52,10 @@ export async function getSalaryRecords() {
     .from("salary_records")
     .select("*")
     .order("period_start", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    console.error("salary_records", error.message);
+    return [];
+  }
   if (!records || records.length === 0) return [];
 
   const profileIds = Array.from(new Set(records.map((r) => r.profile_id)));

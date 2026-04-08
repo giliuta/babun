@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { changeOrderStatusAction } from "@/lib/actions/orders";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Play, Calendar, ThumbsUp } from "lucide-react";
@@ -42,8 +43,13 @@ export function OrderActionsBar({ orderId, status }: OrderActionsBarProps) {
 
   async function handleAction(nextStatus: string) {
     setLoading(nextStatus);
-    await changeOrderStatusAction(orderId, nextStatus);
+    const result = await changeOrderStatusAction(orderId, nextStatus);
     setLoading(null);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(`Статус изменён`);
+    }
   }
 
   if (actions.length === 0) return null;

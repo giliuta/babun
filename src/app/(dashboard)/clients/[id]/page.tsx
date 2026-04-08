@@ -19,12 +19,8 @@ interface Props {
 }
 
 export default async function ClientDetailPage({ params }: Props) {
-  let client;
-  try {
-    client = await getClientById(params.id);
-  } catch {
-    notFound();
-  }
+  const client = await getClientById(params.id);
+  if (!client) notFound();
 
   const [equipment, orders, payments] = await Promise.all([
     getClientEquipment(params.id),

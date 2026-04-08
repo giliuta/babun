@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { recordPaymentAction } from "@/lib/actions/orders";
 import { paymentMethods } from "@/lib/validations/order";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ export function PaymentDialog({
       setError(result.error);
     } else {
       setOpen(false);
+      toast.success("Оплата записана");
     }
   }
 

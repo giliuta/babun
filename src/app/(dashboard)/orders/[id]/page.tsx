@@ -48,12 +48,8 @@ interface Props {
 }
 
 export default async function OrderDetailPage({ params }: Props) {
-  let order;
-  try {
-    order = await getOrderById(params.id);
-  } catch {
-    notFound();
-  }
+  const order = await getOrderById(params.id);
+  if (!order) notFound();
 
   const [items, comments, photos, payments] = await Promise.all([
     getOrderItems(params.id),

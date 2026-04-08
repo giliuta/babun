@@ -7,7 +7,10 @@ export async function getCrews() {
     .select("*")
     .eq("is_active", true)
     .order("name");
-  if (error) throw error;
+  if (error) {
+    console.error("crews", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -18,7 +21,10 @@ export async function getCrewById(id: string) {
     .select("*")
     .eq("id", id)
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error("crews", error.message);
+    return null;
+  }
   return data;
 }
 
@@ -29,6 +35,9 @@ export async function getCrewMembers(crewId: string) {
     .select("id, full_name, phone, role")
     .eq("crew_id", crewId)
     .eq("is_active", true);
-  if (error) throw error;
+  if (error) {
+    console.error("profiles", error.message);
+    return [];
+  }
   return data ?? [];
 }

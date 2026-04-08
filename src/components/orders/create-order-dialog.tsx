@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { createOrderAction } from "@/lib/actions/orders";
 import { cities } from "@/lib/validations/client";
 import { Button } from "@/components/ui/button";
@@ -152,6 +153,7 @@ export function CreateOrderDialog({
     } else {
       setOpen(false);
       resetForm();
+      toast.success("Заказ создан");
     }
   }
 

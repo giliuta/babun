@@ -66,6 +66,7 @@ export async function signup(formData: FormData): Promise<AuthResult> {
   }
 
   // 2. Create tenant + profile via SECURITY DEFINER function (bypasses RLS)
+  // This also sets app_metadata.tenant_id on the auth user
   const slug = companyName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -81,6 +82,16 @@ export async function signup(formData: FormData): Promise<AuthResult> {
 
   if (signupError) {
     return { error: signupError.message };
+  }
+
+  // 3. Sign in immediately to get a fresh JWT with tenant_id in app_metadata
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (signInError) {
+    return { error: signInError.message };
   }
 
   redirect("/orders");

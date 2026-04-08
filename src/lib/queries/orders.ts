@@ -44,7 +44,10 @@ export async function getOrders(
   if (filters.date) query = query.eq("scheduled_date", filters.date);
 
   const { data: orders, error } = await query;
-  if (error) throw error;
+  if (error) {
+    console.error("orders", error.message);
+    return [];
+  }
   if (!orders || orders.length === 0) return [];
 
   // Enrich with client and crew data
@@ -53,22 +56,41 @@ export async function getOrders(
     new Set(orders.map((o) => o.crew_id).filter(Boolean) as string[]),
   );
 
-  const [{ data: clients }, { data: crews }] = await Promise.all([
-    supabase.from("clients").select("id, full_name, phone").in("id", clientIds),
-    crewIds.length > 0
-      ? supabase.from("crews").select("id, name, color, city").in("id", crewIds)
-      : Promise.resolve({
-          data: [] as {
-            id: string;
-            name: string;
-            color: string | null;
-            city: string;
-          }[],
-        }),
-  ]);
+  let clientMap = new Map<
+    string,
+    { id: string; full_name: string; phone: string }
+  >();
+  let crewMap = new Map<
+    string,
+    { id: string; name: string; color: string | null; city: string }
+  >();
 
-  const clientMap = new Map((clients ?? []).map((c) => [c.id, c]));
-  const crewMap = new Map((crews ?? []).map((c) => [c.id, c]));
+  try {
+    const [{ data: clients }, { data: crews }] = await Promise.all([
+      supabase
+        .from("clients")
+        .select("id, full_name, phone")
+        .in("id", clientIds),
+      crewIds.length > 0
+        ? supabase
+            .from("crews")
+            .select("id, name, color, city")
+            .in("id", crewIds)
+        : Promise.resolve({
+            data: [] as {
+              id: string;
+              name: string;
+              color: string | null;
+              city: string;
+            }[],
+          }),
+    ]);
+
+    clientMap = new Map((clients ?? []).map((c) => [c.id, c]));
+    crewMap = new Map((crews ?? []).map((c) => [c.id, c]));
+  } catch (e) {
+    console.error("orders enrichment", e);
+  }
 
   return orders.map((o) => ({
     ...o,
@@ -85,7 +107,10 @@ export async function getOrderById(id: string) {
     .select("*")
     .eq("id", id)
     .single();
-  if (error) throw error;
+  if (error) {
+    console.error("orders", error.message);
+    return null;
+  }
 
   let client = null;
   let crew = null;
@@ -124,7 +149,10 @@ export async function getOrderItems(orderId: string): Promise<OrderItem[]> {
     .from("order_items")
     .select("*")
     .eq("order_id", orderId);
-  if (error) throw error;
+  if (error) {
+    console.error("order_items", error.message);
+    return [];
+  }
   if (!items || items.length === 0) return [];
 
   const serviceIds = items.map((i) => i.service_id).filter(Boolean) as string[];
@@ -165,7 +193,10 @@ export async function getOrderComments(
     .select("*")
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
-  if (error) throw error;
+  if (error) {
+    console.error("order_comments", error.message);
+    return [];
+  }
   if (!comments || comments.length === 0) return [];
 
   const authorIds = Array.from(
@@ -199,7 +230,10 @@ export async function getOrderPhotos(orderId: string) {
     .select("*")
     .eq("order_id", orderId)
     .order("created_at", { ascending: true });
-  if (error) throw error;
+  if (error) {
+    console.error("order_photos", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -210,6 +244,9 @@ export async function getOrderPayments(orderId: string) {
     .select("*")
     .eq("order_id", orderId)
     .order("paid_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    console.error("payments", error.message);
+    return [];
+  }
   return data ?? [];
 }

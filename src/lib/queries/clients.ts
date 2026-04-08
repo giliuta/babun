@@ -32,7 +32,10 @@ export async function getClients(filters: ClientFilters = {}) {
   query = query.range(from, to);
 
   const { data, error, count } = await query;
-  if (error) throw error;
+  if (error) {
+    console.error("clients", error.message);
+    return { clients: [], total: 0, page, perPage, totalPages: 0 };
+  }
 
   return {
     clients: data ?? [],
@@ -52,7 +55,10 @@ export async function getClientById(id: string) {
     .eq("id", id)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("clients", error.message);
+    return null;
+  }
   return data;
 }
 
@@ -65,7 +71,10 @@ export async function getClientEquipment(clientId: string) {
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error("client_equipment", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -80,7 +89,10 @@ export async function getClientOrders(clientId: string) {
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error("orders", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -93,6 +105,9 @@ export async function getClientPayments(clientId: string) {
     .eq("client_id", clientId)
     .order("paid_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error("payments", error.message);
+    return [];
+  }
   return data ?? [];
 }

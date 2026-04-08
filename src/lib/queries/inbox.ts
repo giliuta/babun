@@ -17,7 +17,10 @@ export async function getConversations(): Promise<ConversationWithClient[]> {
     .from("conversations")
     .select("*")
     .order("last_message_at", { ascending: false });
-  if (error) throw error;
+  if (error) {
+    console.error("conversations", error.message);
+    return [];
+  }
   if (!convos || convos.length === 0) return [];
 
   const clientIds = Array.from(
@@ -65,6 +68,9 @@ export async function getMessages(conversationId: string) {
     .select("*")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
-  if (error) throw error;
+  if (error) {
+    console.error("messages", error.message);
+    return [];
+  }
   return data ?? [];
 }

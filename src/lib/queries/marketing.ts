@@ -15,7 +15,10 @@ export async function getReEngagementClients(monthsInactive: number = 3) {
     .gt("total_orders", 0)
     .order("last_service_date", { ascending: true });
 
-  if (error) throw error;
+  if (error) {
+    console.error("clients", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -34,7 +37,10 @@ export async function getUpcomingReminders() {
     .lte("next_service_date", twoWeeks)
     .order("next_service_date");
 
-  if (error) throw error;
+  if (error) {
+    console.error("clients", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -44,7 +50,10 @@ export async function getNotificationTemplates() {
     .from("notification_templates")
     .select("*")
     .order("trigger_event");
-  if (error) throw error;
+  if (error) {
+    console.error("notification_templates", error.message);
+    return [];
+  }
   return data ?? [];
 }
 
@@ -55,7 +64,10 @@ export async function getNotificationLog(limit: number = 50) {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) throw error;
+  if (error) {
+    console.error("notification_log", error.message);
+    return [];
+  }
   if (!logs || logs.length === 0) return [];
 
   const clientIds = Array.from(

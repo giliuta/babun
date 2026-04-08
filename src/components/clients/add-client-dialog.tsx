@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { createClientAction } from "@/lib/actions/clients";
 import { cities, clientSources, languages } from "@/lib/validations/client";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,7 @@ export function AddClientDialog() {
       setError(result.error);
     } else {
       setOpen(false);
+      toast.success("Клиент создан");
     }
   }
 
