@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/shared/user-menu";
+import { GlobalSearch } from "@/components/shared/global-search";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MobileSidebar } from "@/components/shared/mobile-sidebar";
@@ -42,13 +44,17 @@ export async function Header() {
   }
 
   return (
-    <header className="flex h-14 items-center gap-3 border-b bg-background px-4">
+    <header className="flex h-14 items-center gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
       <MobileSidebar />
-      <span className="text-sm font-medium text-muted-foreground">
+      <span className="hidden text-sm font-semibold sm:block">
         {tenantName}
       </span>
-      <div className="ml-auto flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="h-8 w-8">
+      <div className="hidden md:block">
+        <GlobalSearch />
+      </div>
+      <div className="ml-auto flex items-center gap-1">
+        <ThemeToggle />
+        <Button variant="ghost" size="icon" className="h-8 w-8 relative">
           <Bell className="h-4 w-4" />
         </Button>
         <UserMenu

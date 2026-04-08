@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 
@@ -50,49 +51,57 @@ export async function signup(formData: FormData): Promise<AuthResult> {
     email,
     password,
     options: {
-      data: {
-        full_name: fullName,
-        company_name: companyName,
-      },
+      data: { full_name: fullName, company_name: companyName },
     },
   });
 
-  if (authError) {
-    return { error: authError.message };
-  }
+  if (authError) return { error: authError.message };
+  if (!authData.user) return { error: "Failed to create user" };
 
-  if (!authData.user) {
-    return { error: "Failed to create user" };
-  }
-
-  // 2. Create tenant + profile via SECURITY DEFINER function (bypasses RLS)
-  // This also sets app_metadata.tenant_id on the auth user
+  // 2. Create tenant + profile via SECURITY DEFINER function
   const slug = companyName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-  const { error: signupError } = await supabase.rpc("handle_signup", {
-    p_user_id: authData.user.id,
-    p_full_name: fullName,
-    p_email: email,
-    p_company_name: companyName,
-    p_company_slug: slug,
-  });
+  const { data: rpcResult, error: signupError } = await supabase.rpc(
+    "handle_signup",
+    {
+      p_user_id: authData.user.id,
+      p_full_name: fullName,
+      p_email: email,
+      p_company_name: companyName,
+      p_company_slug: slug,
+    },
+  );
 
-  if (signupError) {
-    return { error: signupError.message };
+  if (signupError) return { error: signupError.message };
+
+  // 3. Use admin client to set app_metadata (ensures JWT gets tenant_id)
+  try {
+    const tenantId =
+      typeof rpcResult === "object" && rpcResult !== null
+        ? (rpcResult as { tenant_id: string }).tenant_id
+        : null;
+
+    if (tenantId) {
+      const admin = createAdminClient();
+      await admin.auth.admin.updateUserById(authData.user.id, {
+        app_metadata: { tenant_id: tenantId, role: "owner" },
+      });
+    }
+  } catch {
+    // Admin client may not be available if service_role key isn't set
+    // handle_signup already sets it via SQL, this is a backup
   }
 
-  // 3. Sign in immediately to get a fresh JWT with tenant_id in app_metadata
+  // 4. Sign in to get fresh JWT with tenant_id
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (signInError) {
-    return { error: signInError.message };
-  }
+  if (signInError) return { error: signInError.message };
 
   redirect("/orders");
 }

@@ -1,0 +1,16 @@
+{
+  "name": "Babun CRM",
+  "short_name": "Babun",
+  "description": "CRM для сервисных бизнесов",
+  "start_url": "/orders",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
