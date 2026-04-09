@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   createEquipmentAction,
   updateEquipmentAction,
@@ -59,6 +60,7 @@ export function EquipmentTab({ clientId, equipment }: EquipmentTabProps) {
       setError(result.error);
     } else {
       setAddOpen(false);
+      toast.success("Оборудование добавлено");
     }
   }
 
@@ -71,13 +73,17 @@ export function EquipmentTab({ clientId, equipment }: EquipmentTabProps) {
       setError(result.error);
     } else {
       setEditingId(null);
+      toast.success("Оборудование обновлено");
     }
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Удалить оборудование?")) return;
     const result = await deleteEquipmentAction(id, clientId);
-    if (result.error) setError(result.error);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success("Оборудование удалено");
+    }
   }
 
   return (

@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { updateClientAction } from "@/lib/actions/clients";
 import { cities, clientSources, languages } from "@/lib/validations/client";
+import { PhoneLink } from "@/components/shared/phone-link";
+import { WhatsAppLink } from "@/components/shared/whatsapp-link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -53,6 +56,7 @@ export function ClientInfoTab({ client }: { client: Client }) {
       setError(result.error);
     } else {
       setEditing(false);
+      toast.success("Клиент обновлён");
     }
   }
 
@@ -68,7 +72,13 @@ export function ClientInfoTab({ client }: { client: Client }) {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Имя" value={client.full_name} />
-          <Field label="Телефон" value={client.phone} mono />
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Телефон</p>
+            <div className="mt-1 flex items-center gap-3">
+              <PhoneLink phone={client.phone} />
+              <WhatsAppLink phone={client.phone} />
+            </div>
+          </div>
           <Field label="Доп. телефон" value={client.phone_secondary} mono />
           <Field label="Email" value={client.email} />
           <Field
