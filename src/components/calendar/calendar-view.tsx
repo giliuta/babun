@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { format, addDays, startOfWeek, isSameDay } from "date-fns";
+import {
+  format,
+  addDays,
+  addMonths,
+  startOfWeek,
+  startOfMonth,
+  endOfMonth,
+  isSameDay,
+  isSameMonth,
+} from "date-fns";
 import { ru } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,7 +51,7 @@ const cityLabels: Record<string, string> = {
 
 export function CalendarView({ orders, crews, cities }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"day" | "week">("week");
+  const [viewMode, setViewMode] = useState<"day" | "week" | "month">("week");
   const [filterCity, setFilterCity] = useState("all");
   const [filterCrew, setFilterCrew] = useState("all");
 
@@ -61,10 +70,18 @@ export function CalendarView({ orders, crews, cities }: CalendarViewProps) {
   const hours = Array.from({ length: 12 }, (_, i) => i + 7); // 7:00 - 18:00
 
   function prev() {
-    setCurrentDate((d) => addDays(d, viewMode === "week" ? -7 : -1));
+    setCurrentDate((d) =>
+      viewMode === "month"
+        ? addMonths(d, -1)
+        : addDays(d, viewMode === "week" ? -7 : -1),
+    );
   }
   function next() {
-    setCurrentDate((d) => addDays(d, viewMode === "week" ? 7 : 1));
+    setCurrentDate((d) =>
+      viewMode === "month"
+        ? addMonths(d, 1)
+        : addDays(d, viewMode === "week" ? 7 : 1),
+    );
   }
 
   function getOrdersForDay(day: Date) {
@@ -148,78 +165,180 @@ export function CalendarView({ orders, crews, cities }: CalendarViewProps) {
             >
               Неделя
             </Button>
+            <Button
+              variant={viewMode === "month" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setViewMode("month")}
+            >
+              Месяц
+            </Button>
           </div>
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="overflow-x-auto rounded-lg border">
-        <div
-          className="grid min-w-[700px]"
-          style={{
-            gridTemplateColumns: `60px repeat(${days.length}, 1fr)`,
-          }}
-        >
-          {/* Header row */}
-          <div className="border-b bg-muted/50 p-2" />
-          {days.map((day) => (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                "border-b border-l bg-muted/50 p-2 text-center text-sm",
-                isSameDay(day, new Date()) && "bg-primary/5 font-semibold",
-              )}
-            >
-              <div>{format(day, "EEE", { locale: ru })}</div>
-              <div className="text-lg">{format(day, "d")}</div>
-            </div>
-          ))}
-
-          {/* Time rows */}
-          {hours.map((hour) => (
-            <div key={hour} className="contents">
-              <div className="border-b p-1 text-right text-xs text-muted-foreground">
-                {hour}:00
+      {/* Month view */}
+      {viewMode === "month" ? (
+        <MonthGrid
+          currentDate={currentDate}
+          orders={filteredOrders}
+          getOrdersForDay={getOrdersForDay}
+        />
+      ) : (
+        /* Day/Week Grid */
+        <div className="overflow-x-auto rounded-lg border">
+          <div
+            className="grid min-w-[700px]"
+            style={{
+              gridTemplateColumns: `60px repeat(${days.length}, 1fr)`,
+            }}
+          >
+            <div className="border-b bg-muted/50 p-2" />
+            {days.map((day) => (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "border-b border-l bg-muted/50 p-2 text-center text-sm",
+                  isSameDay(day, new Date()) && "bg-primary/5 font-semibold",
+                )}
+              >
+                <div>{format(day, "EEE", { locale: ru })}</div>
+                <div className="text-lg">{format(day, "d")}</div>
               </div>
-              {days.map((day) => {
-                const dayOrders = getOrdersForDay(day).filter((o) => {
-                  if (!o.scheduled_time_start) return hour === 7;
-                  const h = parseInt(o.scheduled_time_start.split(":")[0]);
-                  return h === hour;
-                });
-                return (
-                  <div
-                    key={`${day.toISOString()}-${hour}`}
-                    className="min-h-[48px] border-b border-l p-0.5"
-                  >
-                    {dayOrders.map((o) => (
-                      <Link
-                        key={o.id}
-                        href={`/orders/${o.id}`}
-                        className="mb-0.5 block rounded px-1.5 py-0.5 text-xs transition-colors hover:opacity-80"
-                        style={{
-                          backgroundColor: o.crew_color
-                            ? `${o.crew_color}20`
-                            : "#e5e7eb",
-                          borderLeft: `3px solid ${o.crew_color ?? "#9ca3af"}`,
-                        }}
-                      >
-                        <span className="font-medium">#{o.order_number}</span>{" "}
-                        {o.client_name}
-                        {o.address && (
-                          <span className="block text-muted-foreground truncate">
-                            {o.address}
-                          </span>
-                        )}
-                      </Link>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+            ))}
+            {hours.map((hour) => (
+              <div key={hour} className="contents">
+                <div className="border-b p-1 text-right text-xs text-muted-foreground">
+                  {hour}:00
+                </div>
+                {days.map((day) => {
+                  const dayOrders = getOrdersForDay(day).filter((o) => {
+                    if (!o.scheduled_time_start) return hour === 7;
+                    const h = parseInt(o.scheduled_time_start.split(":")[0]);
+                    return h === hour;
+                  });
+                  return (
+                    <div
+                      key={`${day.toISOString()}-${hour}`}
+                      className="min-h-[48px] border-b border-l p-0.5"
+                    >
+                      {dayOrders.map((o) => (
+                        <Link
+                          key={o.id}
+                          href={`/orders/${o.id}`}
+                          className="mb-0.5 block rounded px-1.5 py-0.5 text-xs transition-colors hover:opacity-80"
+                          style={{
+                            backgroundColor: o.crew_color
+                              ? `${o.crew_color}20`
+                              : "#e5e7eb",
+                            borderLeft: `3px solid ${o.crew_color ?? "#9ca3af"}`,
+                          }}
+                        >
+                          <span className="font-medium">#{o.order_number}</span>{" "}
+                          {o.client_name}
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function MonthGrid({
+  currentDate,
+  getOrdersForDay,
+}: {
+  currentDate: Date;
+  orders: CalendarOrder[];
+  getOrdersForDay: (day: Date) => CalendarOrder[];
+}) {
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+
+  // Build 6 weeks of days
+  const weeks: Date[][] = [];
+  let day = calStart;
+  for (let w = 0; w < 6; w++) {
+    const week: Date[] = [];
+    for (let d = 0; d < 7; d++) {
+      week.push(day);
+      day = addDays(day, 1);
+    }
+    weeks.push(week);
+    if (day > monthEnd && w >= 3) break;
+  }
+
+  const dayNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+  return (
+    <div className="rounded-lg border">
+      <div className="grid grid-cols-7">
+        {dayNames.map((d) => (
+          <div
+            key={d}
+            className="border-b bg-muted/50 p-2 text-center text-xs font-medium text-muted-foreground"
+          >
+            {d}
+          </div>
+        ))}
       </div>
+      {weeks.map((week, wi) => (
+        <div key={wi} className="grid grid-cols-7">
+          {week.map((d) => {
+            const dayOrders = getOrdersForDay(d);
+            const isToday = isSameDay(d, new Date());
+            const isCurrentMonth = isSameMonth(d, currentDate);
+
+            return (
+              <div
+                key={d.toISOString()}
+                className={cn(
+                  "min-h-[80px] border-b border-r p-1",
+                  !isCurrentMonth && "bg-muted/20 text-muted-foreground",
+                )}
+              >
+                <div
+                  className={cn(
+                    "mb-1 text-right text-xs",
+                    isToday &&
+                      "inline-flex h-5 w-5 float-right items-center justify-center rounded-full bg-primary text-primary-foreground font-medium",
+                  )}
+                >
+                  {format(d, "d")}
+                </div>
+                <div className="space-y-0.5">
+                  {dayOrders.slice(0, 3).map((o) => (
+                    <Link
+                      key={o.id}
+                      href={`/orders/${o.id}`}
+                      className="block truncate rounded px-1 py-0.5 text-[10px] leading-tight hover:opacity-80"
+                      style={{
+                        backgroundColor: o.crew_color
+                          ? `${o.crew_color}20`
+                          : "#e5e7eb",
+                        color: o.crew_color ?? "#6b7280",
+                      }}
+                    >
+                      #{o.order_number} {o.client_name}
+                    </Link>
+                  ))}
+                  {dayOrders.length > 3 && (
+                    <span className="block text-center text-[10px] text-muted-foreground">
+                      +{dayOrders.length - 3}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { createClient } from "@/lib/supabase/server";
 import { getOrders } from "@/lib/queries/orders";
 import { getCrews } from "@/lib/queries/crews";
 import { getServices } from "@/lib/queries/services";
@@ -7,6 +8,7 @@ import { KanbanBoard } from "@/components/orders/kanban-board";
 import { OrderList } from "@/components/orders/order-list";
 import { OrderFilters } from "@/components/orders/order-filters";
 import { CreateOrderDialog } from "@/components/orders/create-order-dialog";
+import { OrdersStats } from "@/components/orders/orders-stats";
 
 interface Props {
   searchParams: {
@@ -30,6 +32,31 @@ export default async function OrdersPage({ searchParams }: Props) {
     getServices(),
     getClients({ perPage: 200 }),
   ]);
+
+  // Stats
+  const today = new Date().toISOString().split("T")[0];
+  const active = orders.filter((o) =>
+    ["new", "confirmed", "scheduled", "in_progress"].includes(o.status),
+  ).length;
+  const completedToday = orders.filter(
+    (o) => o.status === "completed" && o.completed_at?.startsWith(today),
+  ).length;
+
+  let todayRevenue = 0;
+  try {
+    const supabase = await createClient();
+    const { data: todayPayments } = await supabase
+      .from("payments")
+      .select("amount")
+      .gte("paid_at", today)
+      .eq("status", "completed");
+    todayRevenue = (todayPayments ?? []).reduce(
+      (s, p) => s + Number(p.amount),
+      0,
+    );
+  } catch {
+    // ignore
+  }
 
   const clientsForForm = clientsData.clients.map((c) => ({
     id: c.id,
@@ -60,6 +87,12 @@ export default async function OrdersPage({ searchParams }: Props) {
           }))}
         />
       </div>
+      <OrdersStats
+        total={orders.length}
+        active={active}
+        completedToday={completedToday}
+        todayRevenue={todayRevenue}
+      />
       <Suspense fallback={null}>
         <OrderFilters
           crews={crews.map((c) => ({ id: c.id, name: c.name }))}

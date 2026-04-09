@@ -4,6 +4,7 @@ import { ClientTable } from "@/components/clients/client-table";
 import { ClientFilters } from "@/components/clients/client-filters";
 import { AddClientDialog } from "@/components/clients/add-client-dialog";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExportCsv } from "@/components/shared/export-csv";
 import { Users } from "lucide-react";
 
 interface Props {
@@ -38,7 +39,21 @@ export default async function ClientsPage({ searchParams }: Props) {
             Управление клиентской базой
           </p>
         </div>
-        <AddClientDialog />
+        <div className="flex gap-2">
+          <ExportCsv
+            data={clients.map((c) => ({
+              name: c.full_name,
+              phone: c.phone,
+              city: c.city ?? "",
+              email: c.email ?? "",
+              orders: c.total_orders,
+              revenue: c.total_revenue,
+              source: c.source ?? "",
+            }))}
+            filename="clients"
+          />
+          <AddClientDialog />
+        </div>
       </div>
       <Suspense fallback={null}>
         <ClientFilters />
