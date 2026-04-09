@@ -2,8 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { UserMenu } from "@/components/shared/user-menu";
 import { GlobalSearch } from "@/components/shared/global-search";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { NotificationCenter } from "@/components/shared/notification-center";
 import { MobileSidebar } from "@/components/shared/mobile-sidebar";
 
 export async function Header() {
@@ -54,9 +53,7 @@ export async function Header() {
       </div>
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
-        <Button variant="ghost" size="icon" className="h-8 w-8 relative">
-          <Bell className="h-4 w-4" />
-        </Button>
+        <NotificationCenter />
         <UserMenu
           fullName={profile?.full_name ?? userEmail ?? "User"}
           email={userEmail}

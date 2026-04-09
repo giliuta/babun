@@ -22,27 +22,9 @@ import { ArrowLeft, User, MapPin, Calendar } from "lucide-react";
 import { OrderActionsBar } from "@/components/orders/order-actions-bar";
 import { PaymentDialog } from "@/components/orders/payment-dialog";
 import { ActivityLog } from "@/components/orders/activity-log";
+import { OrderChecklist } from "@/components/orders/order-checklist";
 import { PhoneLink } from "@/components/shared/phone-link";
-
-const statusLabels: Record<string, string> = {
-  new: "Новый",
-  confirmed: "Подтверждён",
-  scheduled: "Запланирован",
-  in_progress: "В работе",
-  completed: "Завершён",
-  cancelled: "Отменён",
-  no_show: "Неявка",
-};
-
-const statusColors: Record<string, string> = {
-  new: "bg-gray-100 text-gray-800",
-  confirmed: "bg-blue-100 text-blue-800",
-  scheduled: "bg-amber-100 text-amber-800",
-  in_progress: "bg-purple-100 text-purple-800",
-  completed: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-  no_show: "bg-orange-100 text-orange-800",
-};
+import { StatusBadge } from "@/components/shared/status-badge";
 
 interface Props {
   params: { id: string };
@@ -84,9 +66,7 @@ export default async function OrderDetailPage({ params }: Props) {
               <h1 className="text-2xl font-semibold tracking-tight">
                 Заказ #{order.order_number}
               </h1>
-              <Badge className={statusColors[order.status]}>
-                {statusLabels[order.status] ?? order.status}
-              </Badge>
+              <StatusBadge status={order.status} />
             </div>
             <p className="text-sm text-muted-foreground">
               Создан {new Date(order.created_at).toLocaleDateString("ru-RU")}
@@ -290,6 +270,13 @@ export default async function OrderDetailPage({ params }: Props) {
               <p className="text-sm text-muted-foreground">Не назначена</p>
             )}
           </div>
+
+          {/* Checklist */}
+          {["in_progress", "scheduled"].includes(order.status) && (
+            <div className="rounded-lg border p-4">
+              <OrderChecklist orderId={order.id} />
+            </div>
+          )}
 
           {/* Notes */}
           {(order.client_notes || order.internal_notes) && (
