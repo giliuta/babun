@@ -178,7 +178,7 @@ export function PeriodWheelsModal({
           {/* С | До endpoint segment */}
           <View
             className="mb-3 flex-row rounded-xl p-1"
-            style={{ backgroundColor: t.canvas, gap: 4 }}
+            style={{ backgroundColor: t.fill, gap: 4 }}
           >
             {segment("from", "С", periodDates({ preset: "custom", from, to: from }))}
             {segment("to", "До", periodDates({ preset: "custom", from: to, to }))}

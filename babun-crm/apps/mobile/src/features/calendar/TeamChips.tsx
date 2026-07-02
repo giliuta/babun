@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView } from "react-native";
+import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
 
 export type ChipTeam = { id: string; name: string; color?: string | null };
@@ -32,45 +33,17 @@ export function TeamChips({
     >
       {all.map((tm) => {
         const id = tm.id === "__all__" ? null : tm.id;
-        const active = activeId === id;
-        const color = tm.color || null;
-        let bg: string;
-        let fg: string;
-        let border: string;
-        if (active) {
-          bg = color || t.accent;
-          fg = "#ffffff";
-          border = color || t.accent;
-        } else if (color) {
-          bg = t.surface;
-          fg = color;
-          border = color;
-        } else {
-          bg = t.surface;
-          fg = t.ink;
-          border = t.separator;
-        }
         return (
-          <Pressable
+          <Chip
             key={tm.id}
+            label={tm.name}
+            variant="outline"
+            color={tm.color || undefined}
+            radio
+            selected={activeId === id}
             onPress={() => onSelect(id)}
-            style={({ pressed }) => ({
-              height: 32,
-              paddingHorizontal: 14,
-              borderRadius: 16,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: bg,
-              borderWidth: 1,
-              borderColor: border,
-              maxWidth: 180,
-              opacity: pressed ? 0.75 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "600", color: fg }} numberOfLines={1}>
-              {tm.name}
-            </Text>
-          </Pressable>
+            style={{ maxWidth: 180 }}
+          />
         );
       })}
     </ScrollView>

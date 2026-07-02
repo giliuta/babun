@@ -16,6 +16,7 @@ import type {
   UnitDue,
 } from "@babun/shared/local/selectors/service-due";
 import { useBookingNav } from "@/features/clients/card-booking";
+import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
 interface ServiceBlockProps {
@@ -84,10 +85,7 @@ export default function ServiceBlock({
   };
 
   return (
-    <View
-      className="mx-3 mt-2 overflow-hidden rounded-2xl shadow-sm"
-      style={{ backgroundColor: t.surface }}
-    >
+    <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
       <Text
         className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider"
         style={{ color: t.sub }}
@@ -130,7 +128,7 @@ export default function ServiceBlock({
       ) : (
         <View className="pb-1.5" />
       )}
-    </View>
+    </Card>
   );
 }
 

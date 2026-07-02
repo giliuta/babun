@@ -144,9 +144,7 @@ const MessageRow = memo(function MessageRow({
         style={{
           backgroundColor: out
             ? t.accent
-            : t.dark
-              ? "rgba(255,255,255,0.07)"
-              : "#eef1f5",
+            : t.fill,
         }}
       >
         {quoted ? (
@@ -577,7 +575,7 @@ export default function ChatThreadScreen() {
             accessibilityLabel="Текст сообщения"
             className="max-h-24 flex-1 rounded-2xl px-4 py-2.5 text-base"
             style={{
-              backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+              backgroundColor: t.fill,
               color: t.ink,
             }}
           />
@@ -755,13 +753,17 @@ export default function ChatThreadScreen() {
 
       {/* link client */}
       <Modal visible={linkOpen} transparent animationType="slide" onRequestClose={() => setLinkOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setLinkOpen(false)}
         />
         <View
-          className="absolute bottom-0 left-0 right-0 h-[70%] rounded-t-3xl"
+          className="h-[70%] rounded-t-3xl"
           style={{ backgroundColor: t.surface }}
         >
           <View className="flex-row items-center justify-between px-4 py-3">
@@ -790,7 +792,7 @@ export default function ChatThreadScreen() {
           <View
             className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
             style={{
-              backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+              backgroundColor: t.fill,
             }}
           >
             <Search color={t.faint} size={ICON.sm} />
@@ -840,6 +842,7 @@ export default function ChatThreadScreen() {
             )}
           />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

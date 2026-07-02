@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
+import { Chip } from "@/components/ui/Chip";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { parseYMD, formatYMD } from "@/features/appointments/helpers";
 import {
@@ -50,46 +51,24 @@ function GridPill({
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  // v812 grid geometry (h-11 / rounded-xl / 2-col) поверх примитива Chip
+  // variant="tint" — цвета/типографика/a11y едины с остальными чипами.
   return (
-    <Pressable
+    <Chip
+      label={label}
+      count={count}
+      variant="tint"
+      selected={active}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
-      className="h-11 flex-row items-center justify-center gap-1.5 rounded-xl border px-3 active:opacity-70"
+      icon={active ? <Check color={t.accent} size={14} strokeWidth={2.6} /> : null}
+      textStyle={active ? undefined : { color: t.ink }}
       style={{
         width: full ? "100%" : "48.3%",
-        borderColor: active ? t.accent : "transparent",
-        backgroundColor: active
-          ? t.dark
-            ? `${t.accent}29`
-            : `${t.accent}14`
-          : t.dark
-            ? "rgba(255,255,255,0.07)"
-            : "#eef1f5",
+        minHeight: 44,
+        borderRadius: 12,
+        paddingHorizontal: 12,
       }}
-    >
-      {active ? <Check color={t.accent} size={14} strokeWidth={2.6} /> : null}
-      <Text
-        className="text-sm font-semibold"
-        numberOfLines={1}
-        style={{ color: active ? t.accent : t.ink, flexShrink: 1 }}
-      >
-        {label}
-      </Text>
-      {count !== undefined ? (
-        <Text
-          className="text-sm font-semibold"
-          style={{
-            color: active ? t.accent : t.ink,
-            opacity: 0.7,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {count}
-        </Text>
-      ) : null}
-    </Pressable>
+    />
   );
 }
 
@@ -122,9 +101,7 @@ function FacetRow({
           ? t.dark
             ? `${t.accent}29`
             : `${t.accent}14`
-          : t.dark
-            ? "rgba(255,255,255,0.07)"
-            : "#eef1f5",
+          : t.fill,
         opacity: dimmed ? 0.4 : 1,
       }}
     >

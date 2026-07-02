@@ -23,6 +23,7 @@ import {
 } from "@babun/shared/local/sms-templates";
 import { analyzeSmsEncoding } from "@babun/shared/local/sms-encoding";
 import { getSmsPresets } from "@babun/shared/local/sms-presets";
+import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -196,17 +197,32 @@ export default function SmsTemplatesScreen() {
         />
       ) : templates.length === 0 ? (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Свои шаблоны — отдельная секция: заголовок «Шаблонов пока нет»
+              прямо над карточками пресетов противоречил сам себе. */}
           <View className="mx-3 mt-2">
             <Card>
               <View className="p-4">
                 <View className="mb-1 flex-row items-center gap-2">
                   <MessageSquareText color={t.accent} size={ICON.sm} />
                   <Text className="text-base font-semibold" style={{ color: t.ink }}>
-                    Шаблонов пока нет
+                    Свои шаблоны
                   </Text>
                 </View>
+                <Text className="text-sm leading-5" style={{ color: t.sub }}>
+                  Своих шаблонов пока нет — создайте через «+» или возьмите
+                  готовый ниже.
+                </Text>
+              </View>
+            </Card>
+          </View>
+          <View className="mx-3 mt-3">
+            <Card>
+              <View className="p-4">
+                <Text className="mb-1 text-base font-semibold" style={{ color: t.ink }}>
+                  Готовые шаблоны
+                </Text>
                 <Text className="mb-3 text-sm leading-5" style={{ color: t.sub }}>
-                  Начните с готового — потом подкрутите текст под себя.
+                  Нажмите „Использовать“, чтобы добавить и настроить под себя.
                 </Text>
                 {STARTER_PRESETS.map((p) => (
                   <Pressable
@@ -216,7 +232,7 @@ export default function SmsTemplatesScreen() {
                     accessibilityLabel={`Использовать шаблон ${p.name}`}
                     className="mb-2 flex-row items-center justify-between rounded-xl px-4 py-3 active:opacity-60"
                     style={{
-                      backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+                      backgroundColor: t.fill,
                     }}
                   >
                     <View className="min-w-0 flex-1 pr-2">
@@ -267,9 +283,7 @@ export default function SmsTemplatesScreen() {
                         className="overflow-hidden rounded px-1.5 py-0.5 text-[11px]"
                         style={{
                           color: t.sub,
-                          backgroundColor: t.dark
-                            ? "rgba(255,255,255,0.07)"
-                            : "#eef1f5",
+                          backgroundColor: t.fill,
                         }}
                       >
                         выкл.
@@ -363,8 +377,6 @@ function TemplateEditor({
     bodyRef.current?.focus();
   };
 
-  const fieldBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
-
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -415,26 +427,16 @@ function TemplateEditor({
                 Тип события
               </Text>
               <View className="mb-4 flex-row flex-wrap gap-2">
-                {(Object.keys(KIND_LABELS) as TemplateKind[]).map((k) => {
-                  const active = draft.kind === k;
-                  return (
-                    <Pressable
-                      key={k}
-                      onPress={() => setDraft((d) => ({ ...d, kind: k }))}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тип: ${KIND_LABELS[k]}`}
-                      className="rounded-full px-3 py-2"
-                      style={{ backgroundColor: active ? t.accent : fieldBg }}
-                    >
-                      <Text
-                        className="text-xs font-semibold"
-                        style={{ color: active ? t.onAccent : t.sub }}
-                      >
-                        {KIND_LABELS[k]}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {(Object.keys(KIND_LABELS) as TemplateKind[]).map((k) => (
+                  <Chip
+                    key={k}
+                    label={KIND_LABELS[k]}
+                    radio
+                    selected={draft.kind === k}
+                    onPress={() => setDraft((d) => ({ ...d, kind: k }))}
+                    accessibilityLabel={`Тип: ${KIND_LABELS[k]}`}
+                  />
+                ))}
               </View>
 
               <View className="mb-1 flex-row items-end justify-between">

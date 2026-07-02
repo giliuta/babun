@@ -22,6 +22,7 @@ import {
 } from "@babun/shared/common/utils/avatar-color";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
+import { TYPE } from "@/components/ui/tokens";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import {
   buildSegmentCounts,
@@ -82,8 +83,10 @@ function ClientRow({
     figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
   if (cardFields.inc && income > 0)
     figs.push({ key: "inc", text: formatEUR(income), color: t.success });
+  // «долг €450», не голый цветовой код: золото без подписи в списке
+  // не читается, а должника надо находить по слову, не по памяти.
   if (cardFields.debt && debt > 0)
-    figs.push({ key: "debt", text: formatEUR(debt), color: DEBT_GOLD });
+    figs.push({ key: "debt", text: `долг ${formatEUR(debt)}`, color: DEBT_GOLD });
 
   // Meta line — last visit (с иконкой часов, web parity) · team · city ·
   // tags. Каждое поле гейтится своим тогглом.
@@ -273,9 +276,7 @@ export default function ClientsListScreen() {
   return (
     <Screen>
       <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
-        <Text className="text-2xl font-bold" style={{ color: t.ink }}>
-          Клиенты
-        </Text>
+        <Text style={{ ...TYPE.display, color: t.ink }}>Клиенты</Text>
         <View className="flex-row items-center gap-2">
           {/* v811 — импорт/экспорт переехали в «Настройки клиентов»
               (шестерёнка); в хедере остаётся только «+». */}
@@ -289,7 +290,7 @@ export default function ClientsListScreen() {
             accessibilityRole="button"
             accessibilityLabel="Настройки клиентов"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-            style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+            style={{ backgroundColor: t.fill }}
           >
             <Settings color={t.body} size={20} />
           </Pressable>
@@ -307,7 +308,7 @@ export default function ClientsListScreen() {
 
       <View
         className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
-        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+        style={{ backgroundColor: t.fill }}
       >
         <Search color={t.faint} size={18} />
         <TextInput

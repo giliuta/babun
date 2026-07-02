@@ -13,6 +13,7 @@ import {
 } from "@babun/shared/local/chats";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -336,7 +337,7 @@ export default function ChatsListScreen() {
 
       <View
         className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
-        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+        style={{ backgroundColor: t.fill }}
       >
         <Search color={t.faint} size={ICON.sm} />
         <TextInput
@@ -372,35 +373,19 @@ export default function ChatsListScreen() {
               ? (channelCounts.get(ch) ?? 0)
               : visibleCount;
           const showCount = !ch || count > 0 || active;
-          const label = (!ch ? "Все" : waiting ? "Без ответа" : CHANNEL_LABELS[ch]) +
-            (showCount ? ` (${count})` : "");
+          const label = !ch ? "Все" : waiting ? "Без ответа" : CHANNEL_LABELS[ch];
           const idleTint = waiting && unansweredCount > 0;
           return (
-            <Pressable
+            <Chip
               key={ch ?? "all"}
+              label={label}
+              count={showCount ? count : undefined}
+              radio
+              selected={active}
+              color={color}
+              idleColor={idleTint ? t.warning : undefined}
               onPress={() => setFilter(ch)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={label}
-              hitSlop={6}
-              className="rounded-full px-3.5 py-1.5"
-              style={{
-                backgroundColor: active
-                  ? color
-                  : idleTint
-                    ? `${t.warning}24`
-                    : t.dark
-                      ? "rgba(255,255,255,0.07)"
-                      : "#eef1f5",
-              }}
-            >
-              <Text
-                className="text-sm font-medium"
-                style={{ color: active ? "#fff" : idleTint ? t.warning : t.body }}
-              >
-                {label}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </ScrollView>
@@ -435,10 +420,12 @@ export default function ChatsListScreen() {
               fill
               icon={<MessageCircle color={t.faint} size={40} strokeWidth={1.6} />}
               title="Нет диалогов"
+              // Честный текст: кнопки «подключить» пока нет — не обещаем
+              // действие, которое некуда нажать.
               subtitle={
                 filter || query.trim()
                   ? "Попробуйте другой фильтр или обнулите поиск."
-                  : "Подключите WhatsApp / Instagram / Telegram, чтобы вести переписку с клиентами в одном месте."
+                  : "Здесь появятся диалоги из WhatsApp, Instagram и Telegram после подключения каналов — оно скоро появится."
               }
               // STORY-053a — demo data strictly ON REQUEST (auto-seed was
               // removed in Wave 1): explicit button, only on a truly empty

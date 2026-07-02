@@ -1,8 +1,18 @@
 import { useMemo, useState } from "react";
-import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
@@ -76,6 +86,8 @@ export default function TemplatesScreen() {
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить шаблон"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={t.accent} size={ICON.md} />
@@ -110,7 +122,12 @@ export default function TemplatesScreen() {
               >
                 {formatEUR(Number(item.amount))}
               </Text>
-              <Pressable onPress={() => confirmDelete(item.id, item.name)} hitSlop={8}>
+              <Pressable
+                onPress={() => confirmDelete(item.id, item.name)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить шаблон ${item.name}`}
+              >
                 <Trash2 color={t.danger} size={ICON.sm} />
               </Pressable>
             </View>
@@ -127,48 +144,34 @@ export default function TemplatesScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setOpen(false)}
         />
         <View
-          className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8"
+          className="rounded-t-3xl p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
             Новый шаблон
           </Text>
-          <View
-            className="mb-3 flex-row rounded-xl p-1"
-            style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
-          >
-            {(["expense", "income"] as const).map((k) => (
-              <Pressable
-                key={k}
-                onPress={() => {
-                  setKind(k);
-                  setCategoryId(null);
-                }}
-                className="flex-1 items-center rounded-lg py-2"
-                style={kind === k ? { backgroundColor: t.surface } : undefined}
-              >
-                <Text
-                  className="text-sm font-semibold"
-                  style={{
-                    color:
-                      kind === k
-                        ? k === "expense"
-                          ? t.danger
-                          : t.success
-                        : t.sub,
-                  }}
-                >
-                  {k === "expense" ? "Расход" : "Доход"}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          <SegmentedControl
+            options={[
+              { value: "expense", label: "Расход", color: t.danger },
+              { value: "income", label: "Доход", color: t.success },
+            ]}
+            value={kind}
+            onChange={(k) => {
+              setKind(k);
+              setCategoryId(null);
+            }}
+            style={{ marginBottom: 12 }}
+          />
           <Field label="Название" value={name} onChangeText={setName} placeholder="Аренда" autoFocus />
           <Field
             label="Сумма €"
@@ -188,9 +191,7 @@ export default function TemplatesScreen() {
                     backgroundColor:
                       categoryId === c.id
                         ? t.accent
-                        : t.dark
-                          ? "rgba(255,255,255,0.07)"
-                          : "#eef1f5",
+                        : t.fill,
                   }}
                 >
                   <Text
@@ -205,6 +206,7 @@ export default function TemplatesScreen() {
           ) : null}
           <Button label="Создать" onPress={add} disabled={!canSave} loading={insert.isPending} />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

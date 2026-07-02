@@ -1,4 +1,4 @@
-import { type ComponentType } from "react";
+import { useMemo, type ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
@@ -24,12 +24,15 @@ import {
   Wrench,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
+import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
+import { formatYMD } from "@/features/appointments/helpers";
+import { useAppointments } from "@/features/calendar/queries";
 
 type IconType = ComponentType<{ color?: string; size?: number }>;
 
@@ -37,10 +40,13 @@ function MenuRow({
   icon: Icon,
   label,
   href,
+  badge,
 }: {
   icon: IconType;
   label: string;
   href?: Href;
+  /** Счётчик справа (например, незакрытые дни); 0/undefined — скрыт. */
+  badge?: number;
 }) {
   const router = useRouter();
   const t = useThemeColors();
@@ -67,6 +73,24 @@ function MenuRow({
         <Icon color={t.accent} size={18} />
       </View>
       <Text style={{ marginLeft: 12, flex: 1, fontSize: 16, color: t.ink }}>{label}</Text>
+      {badge ? (
+        <View
+          style={{
+            minWidth: 20,
+            height: 20,
+            paddingHorizontal: 6,
+            marginRight: 6,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 10,
+            backgroundColor: t.warning,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
+            {badge}
+          </Text>
+        </View>
+      ) : null}
       <ChevronRight color={t.chevron} size={18} />
     </Pressable>
   );
@@ -96,11 +120,23 @@ function GroupLabel({ children }: { children: string }) {
 export default function CabinetHome() {
   const { session } = useSession();
   const t = useThemeColors();
+  // Бейдж «Незакрытые дни» — тот же фильтр, что и в unclosed.tsx, но хабу
+  // нужен только count; useAppointments — локальный кэш, тяжёлого нет.
+  const { data: appts = [] } = useAppointments();
+  const unclosedCount = useMemo(() => {
+    const todayKey = formatYMD(new Date());
+    return appts.filter(
+      (a) =>
+        (a.kind === undefined || a.kind === "work") &&
+        a.status === "scheduled" &&
+        a.date < todayKey,
+    ).length;
+  }, [appts]);
 
   return (
     <Screen>
       <View className="px-4 pb-1 pt-4">
-        <Text style={{ fontSize: 24, fontWeight: "700", color: t.ink }}>Кабинет</Text>
+        <Text style={{ ...TYPE.display, color: t.ink }}>Кабинет</Text>
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
@@ -110,7 +146,12 @@ export default function CabinetHome() {
           <Divider inset={56} />
           {/* Веб: /dashboard/unclosed («Не закрыто») живёт рядом с закрытием
               дня. Экран делает соседний агент — роут уже зарезервирован. */}
-          <MenuRow icon={CalendarX2} label="Незакрытые дни" href={"/cabinet/unclosed" as Href} />
+          <MenuRow
+            icon={CalendarX2}
+            label="Незакрытые дни"
+            href={"/cabinet/unclosed" as Href}
+            badge={unclosedCount}
+          />
           <Divider inset={56} />
           <MenuRow icon={Package} label="Склад" href="/cabinet/inventory" />
           <Divider inset={56} />

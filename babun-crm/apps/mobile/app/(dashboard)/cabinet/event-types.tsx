@@ -1,8 +1,19 @@
 import { useState } from "react";
-import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
 import { generatePersonalEventTypeId } from "@babun/shared/local/personal-event-types";
+import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
@@ -15,10 +26,9 @@ import {
   useSavePersonalEventTypes,
 } from "@/features/settings/local-settings";
 
-const SWATCHES = [
-  "#FF9500", "#007AFF", "#AF52DE", "#34C759",
-  "#FF3B30", "#5856D6", "#8E8E93", "#FF2D55",
-];
+// Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
+// local SWATCHES list is gone — default stays синий.
+const DEFAULT_COLOR = PRESET_COLORS[1].value;
 
 export default function EventTypesScreen() {
   const t = useThemeColors();
@@ -26,7 +36,7 @@ export default function EventTypesScreen() {
   const save = useSavePersonalEventTypes();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
-  const [color, setColor] = useState(SWATCHES[1]);
+  const [color, setColor] = useState(DEFAULT_COLOR);
   const [duration, setDuration] = useState("60");
 
   const add = () => {
@@ -73,6 +83,8 @@ export default function EventTypesScreen() {
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить тип события"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={t.accent} size={ICON.md} />
@@ -101,7 +113,12 @@ export default function EventTypesScreen() {
                   {item.allDay ? "Весь день" : `${item.defaultDuration} мин`}
                 </Text>
               </View>
-              <Pressable onPress={() => remove(item.id)} hitSlop={8}>
+              <Pressable
+                onPress={() => remove(item.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить ${item.label}`}
+              >
                 <Trash2 color={t.danger} size={ICON.sm} />
               </Pressable>
             </View>
@@ -114,21 +131,15 @@ export default function EventTypesScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={() => setOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип события</Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Обед" autoFocus />
-          <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Цвет</Text>
-          <View className="mb-4 flex-row flex-wrap gap-3">
-            {SWATCHES.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setColor(c)}
-                className={`h-9 w-9 rounded-full ${color === c ? "border-2" : ""}`}
-                style={{ backgroundColor: c, ...(color === c ? { borderColor: t.ink } : null) }}
-              />
-            ))}
-          </View>
+          <ColorPicker value={color} onChange={setColor} />
           <Field
             label="Длительность, мин"
             value={duration}
@@ -143,6 +154,7 @@ export default function EventTypesScreen() {
             loading={save.isPending}
           />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

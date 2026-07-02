@@ -2,7 +2,9 @@ import { useState, type ReactElement } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   Text,
   View,
@@ -13,6 +15,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
@@ -130,6 +133,8 @@ export function RefListScreen<T extends { id: string }>({
           <Pressable
             onPress={openCreate}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить"
             className="h-10 w-10 items-center justify-center rounded-full"
             style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
           >
@@ -166,13 +171,18 @@ export function RefListScreen<T extends { id: string }>({
         animationType="slide"
         onRequestClose={close}
       >
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={close}
+          accessibilityLabel="Закрыть"
         />
         <View
-          className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8"
+          className="rounded-t-3xl p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text style={{ marginBottom: 12, fontSize: 18, fontWeight: "700", color: t.ink }}>
@@ -180,25 +190,13 @@ export function RefListScreen<T extends { id: string }>({
           </Text>
           {fields.map((f, i) =>
             f.type === "color" ? (
-              <View key={f.key} className="mb-3">
-                <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-                  {f.label}
-                </Text>
-                <View className="flex-row flex-wrap gap-3">
-                  {(f.colors ?? []).map((c) => (
-                    <Pressable
-                      key={c}
-                      onPress={() => setValues((s) => ({ ...s, [f.key]: c }))}
-                      className="h-9 w-9 rounded-full"
-                      style={{
-                        backgroundColor: c,
-                        borderWidth: values[f.key] === c ? 2 : 0,
-                        borderColor: t.ink,
-                      }}
-                    />
-                  ))}
-                </View>
-              </View>
+              <ColorPicker
+                key={f.key}
+                label={f.label}
+                value={values[f.key]}
+                onChange={(c) => setValues((s) => ({ ...s, [f.key]: c }))}
+                colors={f.colors}
+              />
             ) : (
               <Field
                 key={f.key}
@@ -226,6 +224,7 @@ export function RefListScreen<T extends { id: string }>({
             </Pressable>
           ) : null}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

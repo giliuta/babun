@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -24,7 +26,9 @@ import {
 } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -321,6 +325,10 @@ export function AppointmentSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
         <Pressable className="flex-1" onPress={onClose} />
         <View className="h-[88%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.canvas }}>
@@ -329,6 +337,8 @@ export function AppointmentSheet({
             <Pressable
               onPress={onClose}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={t.body} size={ICON.md} />
@@ -347,23 +357,15 @@ export function AppointmentSheet({
 
           <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
             {/* kind toggle */}
-            <View className="mx-3 mt-3 flex-row rounded-xl p-1" style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}>
-              {(["work", "event"] as const).map((k) => (
-                <Pressable
-                  key={k}
-                  onPress={() => setKind(k)}
-                  className="flex-1 items-center rounded-lg py-2"
-                  style={kind === k ? { backgroundColor: t.surface } : undefined}
-                >
-                  <Text
-                    className="text-sm font-semibold"
-                    style={{ color: kind === k ? t.ink : t.sub }}
-                  >
-                    {k === "work" ? "Работа" : "Событие"}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+            <SegmentedControl
+              options={[
+                { value: "work", label: "Работа" },
+                { value: "event", label: "Событие" },
+              ]}
+              value={kind}
+              onChange={setKind}
+              style={{ marginHorizontal: 12, marginTop: 12 }}
+            />
 
             {kind === "work" ? (
               <>
@@ -492,7 +494,7 @@ export function AppointmentSheet({
                         accessibilityRole="button"
                         accessibilityLabel="Уменьшить количество"
                         className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
-                        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+                        style={{ backgroundColor: t.fill }}
                       >
                         <Minus color={t.body} size={13} />
                       </Pressable>
@@ -505,7 +507,7 @@ export function AppointmentSheet({
                         accessibilityRole="button"
                         accessibilityLabel="Увеличить количество"
                         className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
-                        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+                        style={{ backgroundColor: t.fill }}
                       >
                         <Plus color={t.body} size={13} />
                       </Pressable>
@@ -592,24 +594,15 @@ export function AppointmentSheet({
                     { v: "fixed", label: "€" },
                     { v: "percent", label: "%" },
                   ] as const
-                ).map((opt) => {
-                  const active = discountType === opt.v;
-                  return (
-                    <Pressable
-                      key={opt.label}
-                      onPress={() => setDiscountType(opt.v)}
-                      className="rounded-full px-3.5 py-1.5"
-                      style={{ backgroundColor: active ? t.accent : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-                    >
-                      <Text
-                        className="text-sm font-medium"
-                        style={{ color: active ? "#fff" : t.sub }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                ).map((opt) => (
+                  <Chip
+                    key={opt.label}
+                    label={opt.label}
+                    radio
+                    selected={discountType === opt.v}
+                    onPress={() => setDiscountType(opt.v)}
+                  />
+                ))}
                 {discountType ? (
                   <TextInput
                     value={discountValue}
@@ -670,24 +663,15 @@ export function AppointmentSheet({
             {/* status */}
             <SectionCard title="Статус">
               <View className="flex-row flex-wrap gap-2 p-3">
-                {STATUSES.map((s) => {
-                  const active = status === s.value;
-                  return (
-                    <Pressable
-                      key={s.value}
-                      onPress={() => setStatus(s.value)}
-                      className="rounded-full px-3 py-1.5"
-                      style={{ backgroundColor: active ? t.accent : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-                    >
-                      <Text
-                        className="text-sm font-medium"
-                        style={{ color: active ? "#fff" : t.sub }}
-                      >
-                        {s.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                {STATUSES.map((s) => (
+                  <Chip
+                    key={s.value}
+                    label={s.label}
+                    radio
+                    selected={status === s.value}
+                    onPress={() => setStatus(s.value)}
+                  />
+                ))}
               </View>
             </SectionCard>
 
@@ -695,24 +679,15 @@ export function AppointmentSheet({
             {status === "cancelled" ? (
               <SectionCard title="Причина отмены">
                 <View className="flex-row flex-wrap gap-2 p-3">
-                  {CANCEL_REASONS.map((r) => {
-                    const active = cancelReason === r;
-                    return (
-                      <Pressable
-                        key={r}
-                        onPress={() => setCancelReason(active ? "" : r)}
-                        className="rounded-full px-3 py-1.5"
-                        style={{ backgroundColor: active ? t.danger : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-                      >
-                        <Text
-                          className="text-sm font-medium"
-                          style={{ color: active ? "#fff" : t.sub }}
-                        >
-                          {r}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                  {CANCEL_REASONS.map((r) => (
+                    <Chip
+                      key={r}
+                      label={r}
+                      color={t.danger}
+                      selected={cancelReason === r}
+                      onPress={() => setCancelReason(cancelReason === r ? "" : r)}
+                    />
+                  ))}
                 </View>
                 <TextInput
                   value={cancelReason}
@@ -861,6 +836,7 @@ export function AppointmentSheet({
           )
         }
       />
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -881,24 +857,15 @@ function ChipRow({
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}
     >
-      {items.map((it) => {
-        const active = selected === it.id;
-        return (
-          <Pressable
-            key={it.id}
-            onPress={() => onSelect(it.id)}
-            className="rounded-full px-3.5 py-1.5"
-            style={{ backgroundColor: active ? t.accent : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-          >
-            <Text
-              className="text-sm font-medium"
-              style={{ color: active ? "#fff" : t.sub }}
-            >
-              {it.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+      {items.map((it) => (
+        <Chip
+          key={it.id}
+          label={it.label}
+          radio
+          selected={selected === it.id}
+          onPress={() => onSelect(it.id)}
+        />
+      ))}
     </ScrollView>
   );
 }
@@ -942,6 +909,10 @@ function PickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <View className="flex-1 justify-end" style={{ backgroundColor: th.scrim }}>
         <Pressable className="flex-1" onPress={onClose} />
         <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: th.surface }}>
@@ -952,6 +923,8 @@ function PickerModal({
             <Pressable
               onPress={onClose}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={multi ? "Готово" : "Закрыть"}
               className={`h-10 items-center justify-center rounded-full active:opacity-60 ${multi ? "px-3" : "w-10"}`}
             >
               {multi ? (
@@ -1021,6 +994,7 @@ function PickerModal({
           />
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1092,6 +1066,10 @@ function ClientPickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
         <Pressable className="flex-1" onPress={onClose} />
         <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.surface }}>
@@ -1100,6 +1078,8 @@ function ClientPickerModal({
               <Pressable
                 onPress={() => setMode("list")}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Назад"
                 className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
               >
                 <ChevronLeft color={t.body} size={ICON.md} />
@@ -1111,6 +1091,8 @@ function ClientPickerModal({
             <Pressable
               onPress={onClose}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={t.body} size={ICON.md} />
@@ -1209,6 +1191,7 @@ function ClientPickerModal({
           )}
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

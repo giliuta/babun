@@ -1,6 +1,5 @@
 import { forwardRef, useEffect, useState, type ReactNode } from "react";
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -21,15 +20,13 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import Animated, {
-  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { useAuthTheme } from "@/components/auth/theme";
 
 // «Halo Cobalt» auth surfaces — one styling dialect, formal «вы», §5 focus ring,
@@ -292,106 +289,19 @@ export function NoticeCard({ children }: { children: ReactNode }) {
   );
 }
 
-// Full-width accent pill CTA — gradient fill, floating shadow, halo sheen, press
-// dip. Motion gated on Reduce Motion. Disabled → legible flat fill.
-export function PillButton({
-  label,
-  onPress,
-  disabled,
-  loading,
-}: {
+// Full-width accent pill CTA — a thin alias over the app-wide GradientButton
+// (ui/GradientButton.tsx), the ONE gradient primary action in the whole app.
+// Only the auth stack rhythm (marginTop 16 above the form card) lives here.
+export function PillButton(props: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
 }) {
-  const t = useAuthTheme();
-  const reduced = useReducedMotion();
-  const filled = loading || !disabled;
-  const pressable = !disabled && !loading;
-  const [w, setW] = useState(0);
-  const scale = useSharedValue(1);
-  const sheen = useSharedValue(-160);
-
-  useEffect(() => {
-    if (filled && !reduced && w > 0) {
-      // Two sweeps, then rest — an endless loop kept the login screen's UI
-      // thread redrawing (GPU/battery) for as long as it was mounted.
-      sheen.value = -160;
-      sheen.value = withRepeat(
-        withTiming(w + 60, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
-        2,
-        false,
-      );
-    }
-    return () => cancelAnimation(sheen);
-  }, [filled, reduced, w, sheen]);
-
-  const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  const sheenStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: sheen.value }, { skewX: "-18deg" }],
-  }));
-
   return (
-    <Pressable
-      onPress={pressable ? onPress : undefined}
-      onPressIn={() => {
-        if (pressable && !reduced) scale.value = withTiming(0.97, { duration: 120 });
-      }}
-      onPressOut={() => {
-        if (!reduced) scale.value = withSpring(1, { damping: 16 });
-      }}
-      disabled={!pressable}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !pressable, busy: !!loading }}
-    >
-      <Animated.View
-        onLayout={(e) => setW(e.nativeEvent.layout.width)}
-        style={[
-          {
-            marginTop: 16,
-            minHeight: 52,
-            paddingVertical: 14,
-            borderRadius: 999,
-            overflow: "hidden",
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: filled ? t.accentTo : t.disabledFill,
-            boxShadow: filled ? t.brandShadow : undefined,
-          },
-          scaleStyle,
-        ]}
-      >
-        {filled ? (
-          <Svg style={FILL} width="100%" height="100%" pointerEvents="none">
-            <Defs>
-              <LinearGradient id="cta" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={t.accentFrom} />
-                <Stop offset="1" stopColor={t.accentTo} />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#cta)" />
-          </Svg>
-        ) : null}
-        {filled && !reduced ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              { position: "absolute", top: -8, bottom: -8, width: 56, backgroundColor: "rgba(255,255,255,0.18)" },
-              sheenStyle,
-            ]}
-          />
-        ) : null}
-        {loading ? (
-          <ActivityIndicator color={t.onAccent} />
-        ) : (
-          <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 17, fontWeight: "600", color: filled ? t.onAccent : t.sub }}>
-            {label}
-          </Text>
-        )}
-      </Animated.View>
-    </Pressable>
+    <View style={{ marginTop: 16 }}>
+      <GradientButton {...props} />
+    </View>
   );
 }
 

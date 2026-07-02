@@ -13,8 +13,14 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Fab } from "@/components/ui/Fab";
 import { useThemeColors } from "@/theme/colors";
-import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
+import {
+  formatYMD,
+  humanDay,
+  pad2,
+  parseYMD,
+} from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { DayView } from "@/features/calendar/DayView";
 import { WeekView } from "@/features/calendar/WeekView";
@@ -111,6 +117,25 @@ function AppointmentRow({
         </View>
       ) : null}
     </Pressable>
+  );
+}
+
+// Ненавязчивая подсказка поверх пустой сетки дня/недели — жест «тап по
+// слоту» иначе никак не обнаружить. pointerEvents=none: тапы уходят в сетку.
+function EmptyGridHint() {
+  const th = useThemeColors();
+  return (
+    <View
+      pointerEvents="none"
+      className="absolute inset-0 items-center justify-center"
+    >
+      <Text
+        className="overflow-hidden rounded-full px-4 py-2 text-[13px] font-medium"
+        style={{ color: th.sub, backgroundColor: th.fill }}
+      >
+        Тапните по времени, чтобы записать
+      </Text>
+    </View>
   );
 }
 
@@ -311,6 +336,35 @@ export default function CalendarTab() {
     setBookDefaults(defaults);
     setSheetOpen(true);
   };
+  // FAB «+» — главный сценарий диспетчера всегда на виду. Дефолт:
+  // сегодня, ближайший свободный слот (шаг сетки, от рабочих часов);
+  // тап по пустому слоту в сетке остаётся быстрым путём.
+  const quickCreate = () => {
+    const step = calSettings?.gridStep ?? 30;
+    const dayStart = (calSettings?.workStartHour ?? 9) * 60;
+    const dayEnd = (calSettings?.workEndHour ?? 20) * 60;
+    const toMin = (hm: string) => {
+      const [h, m] = hm.split(":").map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+    const busy = appts
+      .filter((a) => a.date === todayYmd && a.status !== "cancelled")
+      .map((a) => [toMin(a.time_start), toMin(a.time_end)] as const);
+    const base = Math.max(dayStart, Math.ceil(nowMinutes / step) * step);
+    let slot = base;
+    while (
+      slot + step <= dayEnd &&
+      busy.some(([s, e]) => s < slot + step && e > slot)
+    )
+      slot += step;
+    // День забит / рабочие часы прошли — просто ближайшее время, не 00:00.
+    if (slot + step > dayEnd) slot = base;
+    slot = Math.min(slot, 23 * 60);
+    openCreate({
+      date: todayYmd,
+      time_start: `${pad2(Math.floor(slot / 60))}:${pad2(slot % 60)}`,
+    });
+  };
   const openEdit = (apt: Appointment) => {
     setEditing(apt);
     setBookDefaults(undefined);
@@ -435,18 +489,21 @@ export default function CalendarTab() {
         />
       ) : mode === "week" || mode === "3days" ? (
         <>
-          <WeekView
-            days={gridDays}
-            appointments={gridAppts}
-            today={now}
-            onCreateAt={(d, timeStart) =>
-              openCreate({ date: d, time_start: timeStart })
-            }
-            onPickDay={pickDay}
-            onPrev={() => setDay((d) => addDays(d, -gridDays.length))}
-            onNext={() => setDay((d) => addDays(d, gridDays.length))}
-            {...gridProps}
-          />
+          <View className="flex-1">
+            <WeekView
+              days={gridDays}
+              appointments={gridAppts}
+              today={now}
+              onCreateAt={(d, timeStart) =>
+                openCreate({ date: d, time_start: timeStart })
+              }
+              onPickDay={pickDay}
+              onPrev={() => setDay((d) => addDays(d, -gridDays.length))}
+              onNext={() => setDay((d) => addDays(d, gridDays.length))}
+              {...gridProps}
+            />
+            {gridAppts.length === 0 ? <EmptyGridHint /> : null}
+          </View>
           <DayFinanceFooter
             days={gridDays}
             appointments={gridAppts}
@@ -457,17 +514,20 @@ export default function CalendarTab() {
         </>
       ) : mode === "day" ? (
         <>
-          <DayView
-            dateYmd={dayYmd}
-            appointments={dayAppts}
-            isToday={dayYmd === todayYmd}
-            onCreateAt={(d, timeStart) =>
-              openCreate({ date: d, time_start: timeStart })
-            }
-            onPrev={() => setDay((d) => addDays(d, -1))}
-            onNext={() => setDay((d) => addDays(d, 1))}
-            {...gridProps}
-          />
+          <View className="flex-1">
+            <DayView
+              dateYmd={dayYmd}
+              appointments={dayAppts}
+              isToday={dayYmd === todayYmd}
+              onCreateAt={(d, timeStart) =>
+                openCreate({ date: d, time_start: timeStart })
+              }
+              onPrev={() => setDay((d) => addDays(d, -1))}
+              onNext={() => setDay((d) => addDays(d, 1))}
+              {...gridProps}
+            />
+            {dayAppts.length === 0 ? <EmptyGridHint /> : null}
+          </View>
           <DayFinanceFooter
             days={[day]}
             appointments={dayAppts}
@@ -491,6 +551,20 @@ export default function CalendarTab() {
           </View>
         </GestureDetector>
       )}
+
+      {/* Кобальтовый FAB (как у Финансов) — в грид-режимах приподнят над
+          финансовым футером. */}
+      {!isLoading && !error ? (
+        <Fab
+          onPress={quickCreate}
+          accessibilityLabel="Новая запись"
+          style={
+            mode === "day" || mode === "week" || mode === "3days"
+              ? { bottom: 56 }
+              : undefined
+          }
+        />
+      ) : null}
 
       <MiniCalendar
         visible={miniCalOpen}

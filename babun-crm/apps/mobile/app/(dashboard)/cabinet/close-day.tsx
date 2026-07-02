@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View, Pressable } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Check } from "lucide-react-native";
 import {
@@ -225,7 +234,15 @@ export default function CloseDayScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Закрыть день" />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+      <ScrollView
+        className="flex-1"
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
         {closedRec ? (
           <View
             className="mx-3 mt-2 flex-row items-start gap-3 rounded-2xl p-4"
@@ -333,9 +350,7 @@ export default function CloseDayScreen() {
                   onPress={() => moveToTomorrow(apt)}
                   className="h-9 items-center justify-center rounded-lg px-3 active:opacity-80"
                   style={{
-                    backgroundColor: t.dark
-                      ? "rgba(255,255,255,0.07)"
-                      : "#eef1f5",
+                    backgroundColor: t.fill,
                   }}
                 >
                   <Text
@@ -379,10 +394,26 @@ export default function CloseDayScreen() {
               keyboardAppearance={t.dark ? "dark" : "light"}
               className="h-12 rounded-[10px] px-3.5 text-[17px] tabular-nums"
               style={{
-                backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+                backgroundColor: t.fill,
                 color: t.ink,
               }}
             />
+            {/* Тап-чип — заполняет поле ожидаемой суммой (сознательный тап,
+                не автозаполнение: пересчёт кассы должен остаться честным). */}
+            <Pressable
+              onPress={() => setActualCashStr(String(expectedCash))}
+              accessibilityRole="button"
+              accessibilityLabel={`Заполнить ожидаемой суммой ${formatEUR(expectedCash)}`}
+              className="mt-2 self-start rounded-full px-3 py-1.5 active:opacity-60"
+              style={{ backgroundColor: t.dark ? "rgba(90,134,255,0.16)" : "rgba(44,91,224,0.10)" }}
+            >
+              <Text
+                className="text-[13px] font-medium tabular-nums"
+                style={{ color: t.accent }}
+              >
+                = Должно быть {formatEUR(expectedCash)}
+              </Text>
+            </Pressable>
             {actualCashStr ? (
               <Text
                 className="mt-2 text-[13px] font-medium tabular-nums"
@@ -398,9 +429,18 @@ export default function CloseDayScreen() {
             <View className="mt-4">
               <Button label="Закрыть день" onPress={closeDay} disabled={!actualCashStr} />
             </View>
+            {!actualCashStr ? (
+              <Text
+                className="mt-2 text-center text-[13px]"
+                style={{ color: t.faint }}
+              >
+                Введите фактическую сумму в кассе
+              </Text>
+            ) : null}
           </SectionCard>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }

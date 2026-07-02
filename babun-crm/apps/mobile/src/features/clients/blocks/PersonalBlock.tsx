@@ -6,8 +6,9 @@
 // update(), persists via the composer's Supabase mutation.
 
 import { useEffect, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
+import { Chip } from "@/components/ui/Chip";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
@@ -53,7 +54,7 @@ function EditableField({
       keyboardAppearance={t.dark ? "dark" : "light"}
       className="h-9 flex-1 rounded-lg px-2 text-[13px]"
       style={{
-        backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+        backgroundColor: t.fill,
         color: t.ink,
       }}
     />
@@ -110,29 +111,16 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
           />
         </Row>
         <Row label="Язык">
-          <View className="flex-1 flex-row gap-1">
+          <View className="flex-1 flex-row flex-wrap gap-1">
             {LANG_OPTIONS.map((l) => {
               const active = (client.language ?? "") === l.value;
               return (
-                <Pressable
+                <Chip
                   key={l.value}
+                  label={`${l.flag} ${l.label}`}
+                  selected={active}
                   onPress={() => update({ language: active ? "" : l.value })}
-                  className="h-7 items-center justify-center rounded-full px-2.5 active:opacity-60"
-                  style={{
-                    backgroundColor: active
-                      ? t.accent
-                      : t.dark
-                      ? "rgba(255,255,255,0.07)"
-                      : "#eef1f5",
-                  }}
-                >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{ color: active ? "#fff" : t.sub }}
-                  >
-                    {l.flag} {l.label}
-                  </Text>
-                </Pressable>
+                />
               );
             })}
           </View>

@@ -14,18 +14,25 @@ export type Master = Tables["masters"]["Row"];
 export type City = Tables["cities"]["Row"];
 
 // ─── Teams ───────────────────────────────────────────────────────────
-export function useTeams() {
+// `includeInactive` — для резолва имён по историческим ссылкам
+// (accounts.brigade_id может указывать на soft-deleted команду; список
+// счетов обязан показать её имя, а не прочерк). Пикеры/фильтры зовут
+// без опции и видят только активные.
+export function useTeams(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
+  const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: ["teams", tenantId],
+    queryKey: includeInactive
+      ? ["teams", tenantId, "all"]
+      : ["teams", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("teams")
         .select("*")
-        .eq("tenant_id", tenantId as string)
-        .eq("is_active", true)
-        .order("position");
+        .eq("tenant_id", tenantId as string);
+      if (!includeInactive) q = q.eq("is_active", true);
+      const { data, error } = await q.order("position");
       if (error) throw new Error(error.message);
       return data;
     },

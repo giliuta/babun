@@ -400,7 +400,9 @@ export function DayColumn({
             left: 0,
             right: 0,
             height: nowTop,
-            backgroundColor: t.dark ? "rgba(255,255,255,0.02)" : "rgba(11,18,32,0.02)",
+            // dark: 0.02 неотличима от фона на реальном OLED — 0.055 даёт
+            // едва заметный, но читаемый wash (light не трогаем).
+            backgroundColor: t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)",
           }}
         />
       ) : null}

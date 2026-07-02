@@ -152,7 +152,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
               <View
                 key={a.id}
                 className="relative aspect-square w-[31%] overflow-hidden rounded-[10px]"
-                style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+                style={{ backgroundColor: t.fill }}
               >
                 <Pressable
                   onPress={() => open(a)}

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Switch,
@@ -77,6 +79,8 @@ export default function LoyaltyScreen() {
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить уровень"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={th.accent} size={ICON.md} />
@@ -130,7 +134,12 @@ export default function LoyaltyScreen() {
                   <Text className="mr-3 text-base font-bold" style={{ color: th.success }}>
                     −{t.percent}%
                   </Text>
-                  <Pressable onPress={() => removeTier(t.id)} hitSlop={8}>
+                  <Pressable
+                    onPress={() => removeTier(t.id)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Удалить ${t.label}`}
+                  >
                     <Trash2 color={th.danger} size={ICON.sm} />
                   </Pressable>
                 </View>
@@ -155,8 +164,12 @@ export default function LoyaltyScreen() {
       </ScrollView>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>Новый уровень</Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Серебро" autoFocus />
           <View className="flex-row gap-3">
@@ -181,6 +194,7 @@ export default function LoyaltyScreen() {
           </View>
           <Button label="Добавить" onPress={addTier} disabled={!threshold.trim()} />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

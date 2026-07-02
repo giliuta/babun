@@ -19,7 +19,9 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -205,6 +207,10 @@ export default function ClientDetailScreen() {
         </>
       ) : null}
 
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -243,6 +249,7 @@ export default function ClientDetailScreen() {
         <PersonalBlock client={client} update={update} />
         <MetaBlock client={client} update={update} tags={tags} />
       </ScrollView>
+      </KeyboardAvoidingView>
     </Screen>
   );
 }

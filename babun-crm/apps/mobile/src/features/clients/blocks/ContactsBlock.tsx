@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { Phone as PhoneIcon, Plus, Send, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
+import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import {
   instagramUrl,
   telegramUrl,
@@ -102,7 +103,7 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
   const ig = (client.instagram_username || "").replace(/^@/, "");
   const waDigits = (client.whatsapp_phone || "").replace(/\D/g, "");
 
-  const inputFill = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
+  const inputFill = t.fill;
 
   // Collapsed-row summary: primary phone «+357 99… · ещё 1» (mockup).
   const summary = client.phone
@@ -168,6 +169,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             {dialUrl(p.number) ? (
               <Pressable
                 onPress={() => Linking.openURL(dialUrl(p.number) as string)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Позвонить"
                 className="h-7 w-7 items-center justify-center rounded-md active:opacity-70"
                 style={{ backgroundColor: `${t.success}1a` }}
               >
@@ -176,6 +180,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             ) : null}
             <Pressable
               onPress={() => removeExtra(p.id)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Удалить номер"
               className="h-7 w-7 items-center justify-center rounded-md active:opacity-60"
             >
               <X color={t.faint} size={13} />
@@ -201,8 +208,8 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             value={client.telegram_username}
             onChange={(v) => update({ telegram_username: v })}
             url={telegramUrl(tg, client.phone)}
-            icon={<Send color="#3e88f7" size={13} />}
-            tintColor="#3e88f7"
+            icon={<Send color={CHANNEL_COLORS.telegram} size={13} />}
+            tintColor={CHANNEL_COLORS.telegram}
             t={t}
             inputFill={inputFill}
           />
@@ -212,8 +219,8 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             value={client.instagram_username}
             onChange={(v) => update({ instagram_username: v })}
             url={instagramUrl(ig)}
-            icon={<Send color="#ec407a" size={13} />}
-            tintColor="#ec407a"
+            icon={<Send color={CHANNEL_COLORS.instagram} size={13} />}
+            tintColor={CHANNEL_COLORS.instagram}
             t={t}
             inputFill={inputFill}
           />
@@ -225,8 +232,8 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             url={
               waDigits ? whatsappUrl(client.whatsapp_phone) : whatsappUrl(client.phone)
             }
-            icon={<PhoneIcon color={t.success} size={13} />}
-            tintColor={t.success}
+            icon={<PhoneIcon color={CHANNEL_COLORS.whatsapp} size={13} />}
+            tintColor={CHANNEL_COLORS.whatsapp}
             t={t}
             inputFill={inputFill}
           />

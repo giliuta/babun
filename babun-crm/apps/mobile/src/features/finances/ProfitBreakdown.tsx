@@ -4,6 +4,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
@@ -93,17 +94,14 @@ export function ProfitBreakdown({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
-      <View
-        className="mx-3 mt-2 rounded-2xl p-4"
-        style={{ backgroundColor: th.surface }}
-      >
+      <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 16 }}>
         <Text className="text-xs" style={{ color: th.sub }}>
           Прибыль за период
         </Text>
         <Text className="text-3xl font-bold" style={{ color: th.brandAccent }}>
           {formatEUR(income - expense)}
         </Text>
-      </View>
+      </Card>
 
       <View className="mt-1">
         <View className="flex-row items-baseline px-4 pb-1 pt-3">

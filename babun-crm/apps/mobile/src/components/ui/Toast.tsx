@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Animated, Text, View } from "react-native";
+import { AccessibilityInfo, Animated, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
 
@@ -30,6 +30,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback(
     (message: string, type: ToastType = "success") => {
       setToast({ id: Date.now(), message, type });
+      // The toast is pointerEvents="none" and auto-dismisses — VoiceOver
+      // users would never know it appeared without an explicit announcement.
+      AccessibilityInfo.announceForAccessibility(message);
       Animated.parallel([
         Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
         Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -15,7 +17,9 @@ import type {
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -37,37 +41,6 @@ const PAYMENTS: { value: PaymentMethod; label: string }[] = [
   { value: "transfer", label: "Перевод" },
   { value: "other", label: "Другое" },
 ];
-
-function Chip({
-  label,
-  active,
-  onPress,
-  tone = "brand",
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  tone?: "brand" | "danger" | "success";
-}) {
-  const t = useThemeColors();
-  const activeBg =
-    tone === "danger" ? t.danger : tone === "success" ? t.success : t.accent;
-  const inactiveBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
-  return (
-    <Pressable
-      onPress={onPress}
-      className="rounded-full px-3.5 py-1.5"
-      style={{ backgroundColor: active ? activeBg : inactiveBg }}
-    >
-      <Text
-        className="text-sm font-medium"
-        style={{ color: active ? "#fff" : t.sub }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
 
 export function OperationSheet({
   visible,
@@ -190,6 +163,10 @@ export function OperationSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <View className="flex-1 justify-end" style={{ backgroundColor: th.scrim }}>
         <Pressable className="flex-1" onPress={onClose} />
         <View className="h-[86%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: th.canvas }}>
@@ -197,6 +174,8 @@ export function OperationSheet({
             <Pressable
               onPress={onClose}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={th.body} size={ICON.md} />
@@ -223,8 +202,10 @@ export function OperationSheet({
                 contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, gap: 8, alignItems: "center" }}
               >
                 {templates.map((t) => (
-                  <Pressable
+                  <Chip
                     key={t.id}
+                    label={`${t.name} · ${formatEUR(Number(t.amount))}`}
+                    variant="outline"
                     onPress={() => {
                       setType(t.kind);
                       setAmount(String(t.amount));
@@ -233,44 +214,25 @@ export function OperationSheet({
                       if (t.account_id) setAccountId(t.account_id);
                       if (t.payment_method) setPayment(t.payment_method as PaymentMethod);
                     }}
-                    className="rounded-full px-3 py-1.5 active:opacity-70"
-                    style={{ backgroundColor: th.surface, borderWidth: 1, borderColor: th.separator }}
-                  >
-                    <Text className="text-sm font-medium" style={{ color: th.sub }}>
-                      {t.name} · {formatEUR(Number(t.amount))}
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </ScrollView>
             ) : null}
 
             {/* type segmented */}
-            <View className="mx-3 mt-3 flex-row rounded-xl p-1" style={{ backgroundColor: th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}>
-              {(["expense", "income"] as const).map((seg) => {
-                const active = type === seg;
-                const activeColor = seg === "expense" ? th.danger : th.success;
-                const label = seg === "expense" ? "Расход" : "Доход";
-                return (
-                  <Pressable
-                    key={seg}
-                    disabled={isEdit}
-                    onPress={() => {
-                      setType(seg);
-                      setCategoryId(null);
-                    }}
-                    className={`flex-1 items-center rounded-lg py-2 ${isEdit && !active ? "opacity-40" : ""}`}
-                    style={active ? { backgroundColor: th.surface } : undefined}
-                  >
-                    <Text
-                      className="text-sm font-semibold"
-                      style={{ color: active ? activeColor : th.faint }}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <SegmentedControl
+              options={[
+                { value: "expense", label: "Расход", color: th.danger },
+                { value: "income", label: "Доход", color: th.success },
+              ]}
+              value={type}
+              onChange={(seg) => {
+                setType(seg);
+                setCategoryId(null);
+              }}
+              disabled={isEdit}
+              style={{ marginHorizontal: 12, marginTop: 12 }}
+            />
 
             {/* amount */}
             <SectionCard title="Сумма">
@@ -307,8 +269,8 @@ export function OperationSheet({
                     <Chip
                       key={c.id}
                       label={c.name}
-                      active={categoryId === c.id}
-                      tone={isExpense ? "danger" : "success"}
+                      selected={categoryId === c.id}
+                      color={isExpense ? th.danger : th.success}
                       onPress={() =>
                         setCategoryId(categoryId === c.id ? null : c.id)
                       }
@@ -334,7 +296,7 @@ export function OperationSheet({
                     <Chip
                       key={t.id}
                       label={t.name}
-                      active={teamId === t.id}
+                      selected={teamId === t.id}
                       onPress={() => {
                         setTeamId(teamId === t.id ? null : t.id);
                         setAccountId(null);
@@ -361,7 +323,7 @@ export function OperationSheet({
                     <Chip
                       key={a.id}
                       label={a.name}
-                      active={accountId === a.id}
+                      selected={accountId === a.id}
                       onPress={() =>
                         setAccountId(accountId === a.id ? null : a.id)
                       }
@@ -378,7 +340,8 @@ export function OperationSheet({
                   <Chip
                     key={p.value}
                     label={p.label}
-                    active={payment === p.value}
+                    selected={payment === p.value}
+                    radio
                     onPress={() => setPayment(p.value)}
                   />
                 ))}
@@ -428,6 +391,7 @@ export function OperationSheet({
           </View>
         </View>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

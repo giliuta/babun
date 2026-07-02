@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { DEFAULT_BLOCK_ORDER } from "@babun/shared/local/business-blocks";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatShortDateRu, formatVisitDate } from "@/features/clients/format";
@@ -10,7 +11,8 @@ import { useThemeColors } from "@/theme/colors";
 
 // VisitsBlock (mobile port of apps/web/.../blocks/VisitsBlock.tsx).
 //
-// Reference block — collapsed by default (CollapsibleCard); the closed row
+// Reference block (CollapsibleCard) — open on first visit (shared
+// DEFAULT_BLOCK_ORDER), user's toggle persists in MMKV; the closed row
 // shows «N · был {дата}». Expanded: appointment history newest-first, with
 // status + payment pills and the amount. Tapping a row jumps to the calendar
 // focused on that visit's date (web pushed /dashboard?date=…; mobile
@@ -37,6 +39,11 @@ interface VisitsBlockProps {
 const INITIAL = 10;
 const LIMIT = 50;
 
+// Web parity: visits expand on first visit (DEFAULT_BLOCK_ORDER.visits
+// defaultOpen=true); once the user toggles, MMKV persistence wins.
+const VISITS_DEFAULT_OPEN =
+  DEFAULT_BLOCK_ORDER.find((b) => b.kind === "visits")?.defaultOpen ?? true;
+
 export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
   const router = useRouter();
   const t = useThemeColors();
@@ -61,7 +68,12 @@ export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
         : `${own.length}`;
 
   return (
-    <CollapsibleCard title="Визиты" summary={summary}>
+    <CollapsibleCard
+      title="Визиты"
+      summary={summary}
+      kind="visits"
+      defaultOpen={VISITS_DEFAULT_OPEN}
+    >
       {own.length === 0 ? (
         <Text className="px-1 py-2 text-sm" style={{ color: t.faint }}>
           Записей пока нет.
@@ -160,7 +172,7 @@ function statusPill(apt: Appointment, t: ThemeColors): PillColors {
     case "cancelled":
       return {
         label: "Отменено",
-        bg: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+        bg: t.fill,
         text: t.sub,
       };
     case "in_progress":

@@ -25,6 +25,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
+import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
 interface ClientHeaderProps {
@@ -69,7 +70,7 @@ function StatusBadges({
     slots.push({ key: "calendar", Icon: Calendar, bg: `${t.accent}1a`, color: t.accent });
   }
   if (client.tag_ids?.includes("tag-vip")) {
-    slots.push({ key: "vip", Icon: Star, bg: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5", color: "#b78600" });
+    slots.push({ key: "vip", Icon: Star, bg: t.fill, color: "#b78600" });
   }
   const isNew =
     stats !== undefined && stats.ageDays >= 0 && stats.ageDays < 30 && stats.visits === 0;
@@ -133,7 +134,7 @@ function EditableLine({
           if (draft.trim() !== value) onSave(draft.trim());
         }}
         className={`rounded-lg px-2 py-1 ${textClass}`}
-        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5", color: t.ink }}
+        style={{ backgroundColor: t.fill, color: t.ink }}
       />
     );
   }
@@ -169,7 +170,7 @@ export default function ClientHeader({ client, stats, update }: ClientHeaderProp
   ) as string[];
 
   return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
+    <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
       {/* Name + status badges */}
       <View className="flex-row items-center gap-1.5">
         <View className="flex-1">
@@ -229,6 +230,6 @@ export default function ClientHeader({ client, stats, update }: ClientHeaderProp
           {trustSegments.join(" · ")}
         </Text>
       ) : null}
-    </View>
+    </Card>
   );
 }

@@ -2,7 +2,7 @@ import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
-import { ICON } from "./tokens";
+import { ICON, TYPE } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
 
 // Unified screen chrome. Two modes:
@@ -28,7 +28,7 @@ export function ScreenHeader({
     return (
       <View className="flex-row items-end justify-between px-4 pb-2 pt-4">
         <View className="flex-1">
-          <Text style={{ fontSize: 24, fontWeight: "700", color: t.ink }}>{title}</Text>
+          <Text style={{ ...TYPE.display, color: t.ink }}>{title}</Text>
           {subtitle ? (
             <Text style={{ fontSize: 14, color: t.sub }}>{subtitle}</Text>
           ) : null}
@@ -52,6 +52,8 @@ export function ScreenHeader({
           (() => (router.canGoBack() ? router.back() : router.replace("/")))
         }
         hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Назад"
         style={({ pressed }) => ({
           height: 44,
           width: 44,

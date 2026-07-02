@@ -8,6 +8,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Divider } from "@/components/ui/Divider";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
@@ -38,12 +39,15 @@ function Stepper({
   max: number;
 }) {
   const t = useThemeColors();
-  const chipBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
+  const chipBg = t.fill;
   return (
     <View className="flex-row items-center gap-3">
       <Pressable
         onPress={() => onChange(Math.max(min, value - 1))}
         style={{ backgroundColor: chipBg }}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Минус час"
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Minus color={t.body} size={16} />
@@ -54,6 +58,9 @@ function Stepper({
       <Pressable
         onPress={() => onChange(Math.min(max, value + 1))}
         style={{ backgroundColor: chipBg }}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Плюс час"
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Plus color={t.body} size={16} />
@@ -79,8 +86,6 @@ export default function CalendarSettingsScreen() {
 
   const patch = (p: Partial<CalendarSettings>) =>
     setChanges((prev) => ({ ...prev, ...p }));
-
-  const chipBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
 
   return (
     <Screen edges={["top"]}>
@@ -113,26 +118,15 @@ export default function CalendarSettingsScreen() {
       </SectionCard>
 
       <SectionCard title="Шаг сетки" padded>
-        <View className="flex-row gap-2">
-          {([15, 30, 60] as const).map((g) => {
-            const active = s.gridStep === g;
-            return (
-              <Pressable
-                key={g}
-                onPress={() => patch({ gridStep: g })}
-                style={{ backgroundColor: active ? t.accent : chipBg }}
-                className="flex-1 items-center rounded-xl py-2.5"
-              >
-                <Text
-                  style={{ color: active ? "#fff" : t.sub }}
-                  className="text-sm font-semibold"
-                >
-                  {g} мин
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SegmentedControl
+          options={[
+            { value: "15", label: "15 мин" },
+            { value: "30", label: "30 мин" },
+            { value: "60", label: "60 мин" },
+          ]}
+          value={String(s.gridStep) as "15" | "30" | "60"}
+          onChange={(v) => patch({ gridStep: Number(v) as 15 | 30 | 60 })}
+        />
       </SectionCard>
 
       <SectionCard title="Отображение" padded>

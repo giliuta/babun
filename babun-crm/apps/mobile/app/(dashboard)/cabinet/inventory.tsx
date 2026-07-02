@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { Package, Plus, Trash2 } from "lucide-react-native";
 import {
   createBlankEquipment,
@@ -11,6 +20,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -107,6 +117,8 @@ export default function InventoryScreen() {
           <Pressable
             onPress={openNew}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить позицию"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={th.accent} size={ICON.md} />
@@ -148,7 +160,12 @@ export default function InventoryScreen() {
                     .join(" · ")}
                 </Text>
               </View>
-              <Pressable onPress={() => remove(item.id)} hitSlop={8}>
+              <Pressable
+                onPress={() => remove(item.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить ${item.name}`}
+              >
                 <Trash2 color={th.danger} size={ICON.sm} />
               </Pressable>
             </Pressable>
@@ -165,9 +182,13 @@ export default function InventoryScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
         <View
-          className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8"
+          className="rounded-t-3xl p-5 pb-8"
           style={{ backgroundColor: th.surface }}
         >
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
@@ -187,26 +208,13 @@ export default function InventoryScreen() {
               <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Бригада</Text>
               <View className="mb-3 flex-row flex-wrap gap-2">
                 {[{ id: null as string | null, name: "На полке" }, ...teams].map((t) => (
-                  <Pressable
+                  <Chip
                     key={t.id ?? "shelf"}
+                    label={t.name}
+                    radio
+                    selected={teamId === t.id}
                     onPress={() => setTeamId(t.id)}
-                    className="rounded-full px-3 py-1.5"
-                    style={{
-                      backgroundColor:
-                        teamId === t.id
-                          ? th.accent
-                          : th.dark
-                            ? "rgba(255,255,255,0.07)"
-                            : "#eef1f5",
-                    }}
-                  >
-                    <Text
-                      className="text-sm"
-                      style={{ color: teamId === t.id ? th.onAccent : th.sub }}
-                    >
-                      {t.name}
-                    </Text>
-                  </Pressable>
+                  />
                 ))}
               </View>
             </>
@@ -230,6 +238,7 @@ export default function InventoryScreen() {
             </Pressable>
           ) : null}
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

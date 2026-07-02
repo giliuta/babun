@@ -6,6 +6,7 @@ import {
   type Appointment,
 } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
+import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
 // «Долги» panel — port of the web DebtorsList
@@ -52,10 +53,7 @@ export function DebtorsList({
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
-      <View
-        className="mx-3 mt-2 overflow-hidden rounded-2xl"
-        style={{ backgroundColor: t.surface }}
-      >
+      <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
         {rows.length === 0 ? (
           <Text
             className="px-4 py-6 text-center text-xs"
@@ -90,7 +88,7 @@ export function DebtorsList({
             </View>
           ))
         )}
-      </View>
+      </Card>
     </ScrollView>
   );
 }

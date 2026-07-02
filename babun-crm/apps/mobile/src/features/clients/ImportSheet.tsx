@@ -113,7 +113,12 @@ export function ImportSheet({
           <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
             Импорт клиентов
           </Text>
-          <Pressable onPress={close} hitSlop={8}>
+          <Pressable
+            onPress={close}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Закрыть"
+          >
             <X color={t.body} size={ICON.md} />
           </Pressable>
         </View>
@@ -152,7 +157,7 @@ export function ImportSheet({
                 <Text
                   key={f}
                   className="rounded-full px-2.5 py-1 text-xs font-medium"
-                  style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5", color: t.accent }}
+                  style={{ backgroundColor: t.fill, color: t.accent }}
                 >
                   {FIELD_LABEL[f] ?? f}
                 </Text>

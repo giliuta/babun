@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -25,7 +26,9 @@ import { useRouter } from "expo-router";
 import { Check, ChevronLeft } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
+import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
+import { useBookingNav } from "@/features/clients/card-booking";
 import { useCreateClient } from "@/features/clients/queries";
 import { tryToE164 } from "@/features/clients/phone";
 import { supabase } from "@/lib/supabase";
@@ -37,6 +40,7 @@ export default function NewClientScreen() {
   const router = useRouter();
   const tenantId = useTenantId();
   const create = useCreateClient();
+  const book = useBookingNav();
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +99,23 @@ export default function NewClientScreen() {
         full_name: name.trim(),
         phone_e164: e164,
       });
-      router.replace(`/clients/${c.id}`);
+      // Успех → выбор следующего шага: сразу записать (частый сценарий
+      // диспетчера) или открыть карточку. Обе ветки заменяют экран
+      // создания карточкой, «Записать» дополнительно открывает букинг
+      // (useBookingNav — календарь с ?new=1&clientId=…).
+      Alert.alert("Клиент создан", name.trim() || trimmedPhone, [
+        {
+          text: "Записать",
+          onPress: () => {
+            router.replace(`/clients/${c.id}`);
+            book({ clientId: c.id });
+          },
+        },
+        {
+          text: "К карточке",
+          onPress: () => router.replace(`/clients/${c.id}`),
+        },
+      ]);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -149,11 +169,17 @@ export default function NewClientScreen() {
         >
           {/* Header = the card's header in «creating» order: phone is the
               big title, name the quiet subtitle. */}
-          <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
+          <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
             <View className="flex-row items-center gap-2">
               <TextInput
                 value={phone}
-                onChangeText={setPhone}
+                // Сброс дубля на КАЖДЫЙ ввод: стейл-баннер прошлого номера
+                // иначе отключал бы дедуп-проверку в handleCreate (ветка
+                // «!duplicate» видела старый хит и форс-создавала дубль).
+                onChangeText={(v) => {
+                  setPhone(v);
+                  setDuplicate(null);
+                }}
                 placeholder="Телефон"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
@@ -223,7 +249,7 @@ export default function NewClientScreen() {
                 </Text>
               </View>
             ) : null}
-          </View>
+          </Card>
 
           {error ? (
             <Text className="mx-4 mt-3 text-sm" style={{ color: t.danger }}>

@@ -11,7 +11,9 @@ import {
 } from "react-native";
 import { MapPin, Plus, Star } from "lucide-react-native";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
+import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -311,8 +313,7 @@ export default function LabelsScreen() {
           </SectionCard>
 
           <Text className="mx-4 mt-3 text-xs leading-4" style={{ color: t.faint }}>
-            Звезда — основная метка: она сама подставляется под каждой датой
-            своим цветом. Без основной под датой будет серая плашка выбора.
+            Основная метка (★) автоматически красит новые даты своим цветом.
           </Text>
         </ScrollView>
       )}
@@ -402,26 +403,7 @@ function LabelSheet({
             autoFocus
           />
 
-          <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-            Цвет
-          </Text>
-          <View className="mb-4 flex-row flex-wrap gap-3">
-            {PRESET_COLORS.map((c) => (
-              <Pressable
-                key={c.value}
-                onPress={() => setColor(c.value)}
-                accessibilityRole="button"
-                accessibilityLabel={`Цвет ${c.name}`}
-                hitSlop={4}
-                className="h-9 w-9 items-center justify-center rounded-full"
-                style={{
-                  backgroundColor: c.value,
-                  borderWidth: color === c.value ? 2 : 0,
-                  borderColor: t.ink,
-                }}
-              />
-            ))}
-          </View>
+          <ColorPicker value={color} onChange={setColor} />
 
           {!isEdit && suggestions.length > 0 ? (
             <>
@@ -430,31 +412,23 @@ function LabelSheet({
               </Text>
               <View className="mb-4 flex-row flex-wrap gap-2">
                 {suggestions.slice(0, 8).map((c) => (
-                  <Pressable
+                  <Chip
                     key={c.id}
-                    onPress={() => onCreate(c.name, c.color ?? FALLBACK_COLOR)}
+                    label={c.name}
                     disabled={busy}
-                    accessibilityRole="button"
+                    onPress={() => onCreate(c.name, c.color ?? FALLBACK_COLOR)}
                     accessibilityLabel={`Добавить метку ${c.name}`}
-                    className="flex-row items-center rounded-full px-3 py-2 active:opacity-60"
-                    style={{
-                      backgroundColor: t.dark
-                        ? "rgba(255,255,255,0.07)"
-                        : "#eef1f5",
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: 8,
-                        width: 8,
-                        borderRadius: 4,
-                        backgroundColor: c.color ?? FALLBACK_COLOR,
-                      }}
-                    />
-                    <Text className="ml-1.5 text-sm font-medium" style={{ color: t.ink }}>
-                      {c.name}
-                    </Text>
-                  </Pressable>
+                    icon={
+                      <View
+                        style={{
+                          height: 8,
+                          width: 8,
+                          borderRadius: 4,
+                          backgroundColor: c.color ?? FALLBACK_COLOR,
+                        }}
+                      />
+                    }
+                  />
                 ))}
               </View>
             </>

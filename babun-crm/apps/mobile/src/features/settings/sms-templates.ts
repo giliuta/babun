@@ -106,19 +106,22 @@ export function useSaveSmsTemplates() {
   return useMutation({
     mutationFn: async (list: SmsTemplate[]) => {
       saveCache(list); // девайс первым — офлайн-безопасность
-      if (tenantId) {
-        // merge, не replace: web держит в этом блобе ещё 9 сущностей.
-        const blob = (await fetchBlob(tenantId)) ?? {};
-        const { error } = await supabase.from("tenant_state").upsert(
-          {
-            tenant_id: tenantId,
-            prototype_state: { ...blob, smsTemplates: list } as unknown as Json,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "tenant_id" },
-        );
-        if (error) throw new Error(error.message);
+      if (!tenantId) {
+        // Кэш записан (не потеряется), но канонический блоб — нет:
+        // «Шаблон сохранён» здесь было бы враньём кросс-девайс.
+        throw new Error("Нет подключения к аккаунту — попробуйте позже");
       }
+      // merge, не replace: web держит в этом блобе ещё 9 сущностей.
+      const blob = (await fetchBlob(tenantId)) ?? {};
+      const { error } = await supabase.from("tenant_state").upsert(
+        {
+          tenant_id: tenantId,
+          prototype_state: { ...blob, smsTemplates: list } as unknown as Json,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "tenant_id" },
+      );
+      if (error) throw new Error(error.message);
       return list;
     },
     onSuccess: (list) => qc.setQueryData(["sms-templates", tenantId], list),

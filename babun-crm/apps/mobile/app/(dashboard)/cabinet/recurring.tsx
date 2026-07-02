@@ -21,6 +21,7 @@ import {
 } from "@babun/shared/local/recurring";
 import { formatDateLongRu } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
@@ -61,7 +62,7 @@ function dueTone(
   return {
     label: humanDay(next),
     color: t.sub,
-    bg: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+    bg: t.fill,
   };
 }
 
@@ -419,7 +420,7 @@ function NewReminderSheet({
             <>
               <View
                 className="mb-2 flex-row items-center gap-2 rounded-xl px-3"
-                style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+                style={{ backgroundColor: t.fill }}
               >
                 <Search color={t.faint} size={ICON.sm} />
                 <TextInput
@@ -498,33 +499,16 @@ function NewReminderSheet({
               <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
                 Через
               </Text>
-              <View className="mb-2 flex-row gap-2">
-                {[3, 6, 12].map((m) => (
-                  <Pressable
-                    key={m}
-                    onPress={() => setMonths(m)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: months === m }}
-                    accessibilityLabel={`Через ${m} месяцев`}
-                    className="flex-1 items-center rounded-xl py-2.5"
-                    style={{
-                      backgroundColor:
-                        months === m
-                          ? t.accent
-                          : t.dark
-                            ? "rgba(255,255,255,0.07)"
-                            : "#eef1f5",
-                    }}
-                  >
-                    <Text
-                      className="text-sm font-semibold"
-                      style={{ color: months === m ? t.onAccent : t.sub }}
-                    >
-                      {m} мес
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              <SegmentedControl
+                options={[
+                  { value: "3", label: "3 мес" },
+                  { value: "6", label: "6 мес" },
+                  { value: "12", label: "12 мес" },
+                ]}
+                value={String(months) as "3" | "6" | "12"}
+                onChange={(v) => setMonths(Number(v))}
+                style={{ marginBottom: 8 }}
+              />
               <Text className="mb-4 text-center text-sm" style={{ color: t.sub }}>
                 Напомним{" "}
                 <Text style={{ fontWeight: "600", color: t.ink }}>

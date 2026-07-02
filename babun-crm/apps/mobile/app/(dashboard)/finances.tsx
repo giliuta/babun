@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, Share, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Plus, Settings, Share2 } from "lucide-react-native";
+import { Settings, Share2 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   signedAmount,
@@ -11,6 +11,7 @@ import { getDebtAmount } from "@babun/shared/local/appointments";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Fab } from "@/components/ui/Fab";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
 import { useServices } from "@/features/services/queries";
@@ -313,24 +314,13 @@ export default function FinancesTab() {
         />
       )}
 
-      <Pressable
+      <Fab
         onPress={() => {
           setEditingTx(null);
           setOpOpen(true);
         }}
-        accessibilityRole="button"
         accessibilityLabel="Новая операция"
-        className="absolute bottom-6 right-5 h-14 w-14 items-center justify-center rounded-full active:opacity-90"
-        style={{
-          backgroundColor: t.accent,
-          shadowColor: t.accent,
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 4 },
-        }}
-      >
-        <Plus color={t.onAccent} size={28} />
-      </Pressable>
+      />
 
       <TransactionPopup
         visible={!!popupTx}

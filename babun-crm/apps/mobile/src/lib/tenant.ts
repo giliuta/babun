@@ -47,6 +47,14 @@ function writeCache(key: string, value: string): void {
   }
 }
 
+function removeCache(key: string): void {
+  try {
+    getStorage().remove(key);
+  } catch {
+    // cache only
+  }
+}
+
 /** Positive local stamp «этот tenant уже прошёл онбординг». Exported for the
  *  onboarding screen so completion flips the gate without a refetch. */
 export function stampOnboarded(tenantId: string): void {
@@ -124,6 +132,9 @@ function useTenantResolution() {
   return {
     userId,
     tenantId: knownTenantId ?? membership.data ?? null,
+    /** true → the id came from the MMKV cache, not the JWT: a CONFIRMED
+     *  missing tenants row means the cache is dead and must be dropped. */
+    tenantIdFromCache: !jwtTenantId && !!cachedTenantId,
     membership,
   };
 }
@@ -164,7 +175,8 @@ export const tenantOnboardingKey = (tenantId: string | null) =>
   ["tenant-onboarding", tenantId] as const;
 
 export function useOnboardingGate(): OnboardingGate {
-  const { userId, tenantId, membership } = useTenantResolution();
+  const { userId, tenantId, tenantIdFromCache, membership } =
+    useTenantResolution();
   // Once a tenant has been SEEN onboarded, the stamp short-circuits the gate
   // forever (onboarded_at never un-sets) — configured users pay zero network
   // and can never be bounced to onboarding by a flaky lookup.
@@ -187,6 +199,14 @@ export function useOnboardingGate(): OnboardingGate {
       );
       if (error) throw new Error(error.message);
       if (data?.onboarded_at) stampOnboarded(tenantId as string);
+      // CONFIRMED dead CACHED tenant id (row gone / переехал в другой
+      // тенант): drop the MMKV cache — the resulting re-render resolves
+      // to knownTenantId=null, which re-enables the tenant_members lookup
+      // instead of stranding the user on «no-tenant». JWT ids are not
+      // ours to clear (web parity: login?error=tenant_missing).
+      if (!data && tenantIdFromCache && userId) {
+        removeCache(tenantIdCacheKey(userId));
+      }
       return data ?? null;
     },
   });

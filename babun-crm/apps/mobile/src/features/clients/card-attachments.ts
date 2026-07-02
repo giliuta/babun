@@ -158,8 +158,14 @@ async function deleteAttachment(args: {
   const { attachment, tenantId } = args;
   // Storage first — if metadata delete fails after, we have an orphan row
   // the UI can re-cleanup. The reverse leaves a mystery file the user
-  // can't see or remove.
-  await supabase.storage.from(BUCKET).remove([attachment.storage_path]);
+  // can't see or remove. A FAILED storage remove aborts the whole delete:
+  // dropping the row anyway would leave an invisible, undeletable file.
+  const { error: storageErr } = await supabase.storage
+    .from(BUCKET)
+    .remove([attachment.storage_path]);
+  if (storageErr) {
+    throw new AttachmentError(`removeStorage: ${storageErr.message}`);
+  }
   const { error } = await supabase
     .from("client_attachments")
     .delete()

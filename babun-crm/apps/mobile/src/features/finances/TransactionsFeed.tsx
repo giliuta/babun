@@ -20,6 +20,15 @@ import type { Service } from "@/features/services/queries";
 // the description, amount on the right. An income tied to an appointment
 // titles itself with the visit's SERVICES and its tap jumps to the
 // client card; everything else opens the tx popup.
+// «ЧЧ:ММ» из ISO-времени — фолбэк контекста дохода (web hhmm parity).
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+}
+
 export function TransactionsFeed({
   transactions,
   accounts,
@@ -111,7 +120,9 @@ export function TransactionsFeed({
     let ctx = "";
     if (isIn) {
       const client = tx.client_id ? lookups.client.get(tx.client_id) : null;
-      ctx = [appt?.time_start, client?.full_name].filter(Boolean).join(" · ");
+      // Доход без привязанной записи — время создания операции (web parity).
+      const time = appt?.time_start || hhmm(tx.created_at);
+      ctx = [time, client?.full_name].filter(Boolean).join(" · ");
     } else if (isEx && cat && tx.notes) {
       ctx = tx.notes;
     }

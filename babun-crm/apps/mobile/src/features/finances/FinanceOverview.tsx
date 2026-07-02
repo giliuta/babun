@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, Wallet } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
@@ -62,43 +63,19 @@ export function FinanceOverview({
             alignItems: "center",
           }}
         >
-          {teams.map((team) => {
-            const active = scopeTeamId === team.id;
-            const color = team.color || t.accent;
-            return (
-              <Pressable
-                key={team.id}
-                onPress={() => onScopeChange(team.id)}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={`Команда ${team.name}`}
-                style={({ pressed }) => ({
-                  height: 32,
-                  paddingHorizontal: 14,
-                  borderRadius: 16,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: active ? color : t.surface,
-                  borderWidth: 1,
-                  borderColor: color,
-                  maxWidth: 180,
-                  opacity: pressed ? 0.75 : 1,
-                })}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "600",
-                    color: active ? "#ffffff" : color,
-                  }}
-                  numberOfLines={1}
-                >
-                  {team.name}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {teams.map((team) => (
+            <Chip
+              key={team.id}
+              label={team.name}
+              variant="outline"
+              color={team.color || t.accent}
+              radio
+              selected={scopeTeamId === team.id}
+              onPress={() => onScopeChange(team.id)}
+              accessibilityLabel={`Команда ${team.name}`}
+              style={{ maxWidth: 180 }}
+            />
+          ))}
         </ScrollView>
       ) : null}
 

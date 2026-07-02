@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -37,6 +45,8 @@ export default function ObjectTypesScreen() {
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить тип объекта"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={t.accent} size={ICON.md} />
@@ -54,7 +64,12 @@ export default function ObjectTypesScreen() {
           renderItem={({ item }) => (
             <View className="flex-row items-center px-4 py-3">
               <Text className="flex-1 text-base" style={{ color: t.ink }}>{item.name}</Text>
-              <Pressable onPress={() => remove(item.id)} hitSlop={8}>
+              <Pressable
+                onPress={() => remove(item.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить ${item.name}`}
+              >
                 <Trash2 color={t.danger} size={ICON.sm} />
               </Pressable>
             </View>
@@ -71,12 +86,17 @@ export default function ObjectTypesScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={() => setOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип</Text>
           <Field label="Название" value={name} onChangeText={setName} placeholder="Вилла" autoFocus />
           <Button label="Добавить" onPress={add} disabled={!name.trim()} />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

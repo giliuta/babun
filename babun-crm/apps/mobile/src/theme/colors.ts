@@ -32,6 +32,7 @@ export type ThemeColors = {
   danger: string;
   warning: string;
   // seams + depth
+  fill: string; // idle chip / segmented track / inset input fill
   separator: string;
   chevron: string;
   highlight: string;
@@ -72,6 +73,7 @@ export const light: ThemeColors = {
   success: "#1fb47a",
   danger: "#f0473c",
   warning: "#f5a623",
+  fill: "#eef1f5",
   separator: "#e7ebf0",
   chevron: "#c4c4c4",
   highlight: "rgba(255,255,255,0.9)",
@@ -107,6 +109,7 @@ export const dark: ThemeColors = {
   success: "#2fd39a",
   danger: "#ff6b68",
   warning: "#f5b942",
+  fill: "rgba(255,255,255,0.07)",
   separator: "rgba(255,255,255,0.10)",
   chevron: "#4a5260",
   highlight: "rgba(255,255,255,0.06)",

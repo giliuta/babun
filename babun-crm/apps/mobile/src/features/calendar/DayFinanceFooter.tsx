@@ -74,9 +74,10 @@ export function DayFinanceFooter({
         paddingVertical: 4,
       }}
     >
+      {/* Лейблы — нейтральный t.sub: семантический цвет несут только суммы. */}
       <View style={{ width: RAIL_W, paddingRight: 5, alignItems: "flex-end", justifyContent: "center" }}>
-        <Text style={{ fontSize: 9, fontWeight: "600", color: t.success }}>Доход</Text>
-        <Text style={{ fontSize: 9, fontWeight: "600", color: t.danger }}>Расход</Text>
+        <Text style={{ fontSize: 9, fontWeight: "600", color: t.sub }}>Доход</Text>
+        <Text style={{ fontSize: 9, fontWeight: "600", color: t.sub }}>Расход</Text>
       </View>
       {days.map((d, i) => {
         const ymd = formatYMD(d);
@@ -102,15 +103,17 @@ export function DayFinanceFooter({
               borderLeftColor: t.separator,
             }}
           >
+            {/* €0 — приглушённый t.faint: зелёный/красный только там, где
+                есть реальные деньги (цвет = смысл). */}
             <Text
-              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: t.success }}
+              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
             >
               {formatEUR(income)}
             </Text>
             <Text
-              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: t.danger }}
+              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: totals.spent !== 0 ? t.danger : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
             >

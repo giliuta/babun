@@ -9,12 +9,13 @@
 // matching web).
 
 import { Plus, X } from "lucide-react-native";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import {
   ACQUISITION_LABELS,
   type AcquisitionSource,
 } from "@babun/shared/local/clients";
+import { Chip } from "@/components/ui/Chip";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { useThemeColors } from "@/theme/colors";
 
@@ -50,8 +51,6 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
         : [...client.tag_ids, id],
     });
 
-  const chipInactiveBg = th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
-
   // Collapsed-row summary: «Рекомендация · 2 тега» — only what's set.
   const summary = [
     client.acquisition_source && client.acquisition_source !== "unknown"
@@ -74,24 +73,15 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
             Источник обращения
           </Text>
           <View className="flex-row flex-wrap gap-1.5">
-            {SOURCE_KEYS.map((k) => {
-              const active = client.acquisition_source === k;
-              return (
-                <Pressable
-                  key={k}
-                  onPress={() => update({ acquisition_source: k })}
-                  className="h-7 items-center justify-center rounded-full px-2.5 active:opacity-60"
-                  style={{ backgroundColor: active ? th.accent : chipInactiveBg }}
-                >
-                  <Text
-                    className="text-xs font-semibold"
-                    style={{ color: active ? "#fff" : th.sub }}
-                  >
-                    {ACQUISITION_LABELS[k]}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {SOURCE_KEYS.map((k) => (
+              <Chip
+                key={k}
+                label={ACQUISITION_LABELS[k]}
+                radio
+                selected={client.acquisition_source === k}
+                onPress={() => update({ acquisition_source: k })}
+              />
+            ))}
           </View>
         </View>
 
@@ -107,34 +97,21 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
               {tags.map((tag) => {
                 const active = client.tag_ids.includes(tag.id);
                 return (
-                  <Pressable
+                  <Chip
                     key={tag.id}
+                    label={tag.name}
+                    variant="tint"
+                    color={tag.color}
+                    selected={active}
                     onPress={() => toggleTag(tag.id)}
-                    className="h-7 flex-row items-center gap-1 rounded-full border px-2.5 active:opacity-60"
-                    style={
-                      active
-                        ? {
-                            backgroundColor: `${tag.color}22`,
-                            borderColor: tag.color,
-                          }
-                        : {
-                            backgroundColor: th.surface,
-                            borderColor: th.separator,
-                          }
+                    icon={
+                      active ? (
+                        <X color={tag.color} size={10} strokeWidth={2.5} />
+                      ) : (
+                        <Plus color={th.faint} size={10} strokeWidth={2.5} />
+                      )
                     }
-                  >
-                    {active ? (
-                      <X color={tag.color} size={10} strokeWidth={2.5} />
-                    ) : (
-                      <Plus color={th.faint} size={10} strokeWidth={2.5} />
-                    )}
-                    <Text
-                      className="text-xs font-semibold"
-                      style={{ color: active ? tag.color : th.faint }}
-                    >
-                      {tag.name}
-                    </Text>
-                  </Pressable>
+                  />
                 );
               })}
             </View>
@@ -145,18 +122,13 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
             block, but the field exists and belongs with meta flags. */}
         <View className="flex-row items-center justify-between border-t pt-3" style={{ borderColor: th.separator }}>
           <Text className="text-[13px]" style={{ color: th.sub }}>Чёрный список</Text>
-          <Pressable
+          <Chip
+            label={client.blacklisted ? "В списке" : "Нет"}
+            color={th.danger}
+            selected={!!client.blacklisted}
             onPress={() => update({ blacklisted: !client.blacklisted })}
-            className="h-7 items-center justify-center rounded-full px-3 active:opacity-60"
-            style={{ backgroundColor: client.blacklisted ? th.danger : chipInactiveBg }}
-          >
-            <Text
-              className="text-xs font-semibold"
-              style={{ color: client.blacklisted ? "#fff" : th.sub }}
-            >
-              {client.blacklisted ? "В списке" : "Нет"}
-            </Text>
-          </Pressable>
+            accessibilityLabel="Чёрный список"
+          />
         </View>
 
         {/* В базе с … */}

@@ -17,6 +17,7 @@ import {
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -24,6 +25,7 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -347,8 +349,6 @@ function ServiceSheet({
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
-  const fieldBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
-
   const toggleBrigade = (id: string) =>
     setBrigadeIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -413,75 +413,37 @@ function ServiceSheet({
                     Категория
                   </Text>
                   <View className="mb-4 flex-row flex-wrap gap-2">
-                    <Pressable
+                    <Chip
+                      label="Без категории"
+                      radio
+                      selected={categoryId === null}
                       onPress={() => setCategoryId(null)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Без категории"
-                      className="rounded-full px-3 py-2"
-                      style={{
-                        backgroundColor: categoryId === null ? t.accent : fieldBg,
-                      }}
-                    >
-                      <Text
-                        className="text-xs font-semibold"
-                        style={{ color: categoryId === null ? t.onAccent : t.sub }}
-                      >
-                        Без категории
-                      </Text>
-                    </Pressable>
-                    {categories.map((c) => {
-                      const active = categoryId === c.id;
-                      return (
-                        <Pressable
-                          key={c.id}
-                          onPress={() => setCategoryId(c.id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Категория ${c.name}`}
-                          className="flex-row items-center rounded-full px-3 py-2"
-                          style={{ backgroundColor: active ? t.accent : fieldBg }}
-                        >
+                    />
+                    {categories.map((c) => (
+                      <Chip
+                        key={c.id}
+                        label={c.name}
+                        radio
+                        selected={categoryId === c.id}
+                        onPress={() => setCategoryId(c.id)}
+                        accessibilityLabel={`Категория ${c.name}`}
+                        icon={
                           <View
                             style={{
                               height: 8,
                               width: 8,
                               borderRadius: 4,
-                              marginRight: 6,
                               backgroundColor: c.color ?? t.faint,
                             }}
                           />
-                          <Text
-                            className="text-xs font-semibold"
-                            style={{ color: active ? t.onAccent : t.sub }}
-                          >
-                            {c.name}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                        }
+                      />
+                    ))}
                   </View>
                 </>
               ) : null}
 
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-                Цвет на календаре
-              </Text>
-              <View className="mb-4 flex-row flex-wrap gap-3">
-                {PRESET_COLORS.map((c) => (
-                  <Pressable
-                    key={c.value}
-                    onPress={() => setColor(c.value)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Цвет ${c.name}`}
-                    hitSlop={4}
-                    className="h-9 w-9 items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: c.value,
-                      borderWidth: color === c.value ? 2 : 0,
-                      borderColor: t.ink,
-                    }}
-                  />
-                ))}
-              </View>
+              <ColorPicker value={color} onChange={setColor} label="Цвет на календаре" />
 
               {teams.length > 0 ? (
                 <>
@@ -492,33 +454,20 @@ function ServiceSheet({
                     {teams.map((tm) => {
                       const active = brigadeIds.includes(tm.id);
                       return (
-                        <Pressable
+                        <Chip
                           key={tm.id}
+                          label={tm.name}
+                          variant="tint"
+                          color={tm.color ?? undefined}
+                          selected={active}
                           onPress={() => toggleBrigade(tm.id)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: active }}
                           accessibilityLabel={`Команда ${tm.name}`}
-                          className="flex-row items-center rounded-full px-3 py-2"
-                          style={{
-                            backgroundColor: active ? `${tm.color}22` : fieldBg,
-                            borderWidth: 1,
-                            borderColor: active ? tm.color : "transparent",
-                          }}
-                        >
-                          {active ? (
-                            <Check
-                              color={tm.color}
-                              size={ICON.xs}
-                              style={{ marginRight: 4 }}
-                            />
-                          ) : null}
-                          <Text
-                            className="text-xs font-semibold"
-                            style={{ color: active ? tm.color : t.sub }}
-                          >
-                            {tm.name}
-                          </Text>
-                        </Pressable>
+                          icon={
+                            active ? (
+                              <Check color={tm.color} size={ICON.xs} />
+                            ) : null
+                          }
+                        />
                       );
                     })}
                   </View>
@@ -662,26 +611,7 @@ function CategoriesSheet({
                 placeholder="Кондиционеры, Уборка…"
                 autoFocus
               />
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-                Цвет
-              </Text>
-              <View className="mb-4 flex-row flex-wrap gap-3">
-                {PRESET_COLORS.map((c) => (
-                  <Pressable
-                    key={c.value}
-                    onPress={() => setColor(c.value)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Цвет ${c.name}`}
-                    hitSlop={4}
-                    className="h-9 w-9 items-center justify-center rounded-full"
-                    style={{
-                      backgroundColor: c.value,
-                      borderWidth: color === c.value ? 2 : 0,
-                      borderColor: t.ink,
-                    }}
-                  />
-                ))}
-              </View>
+              <ColorPicker value={color} onChange={setColor} />
               <Button
                 label={form.id ? "Сохранить" : "Создать"}
                 onPress={() => void submit()}

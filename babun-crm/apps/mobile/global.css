@@ -27,5 +27,6 @@
   --color-sub: #5b6678; /* text secondary */
   --color-faint: #97a0ae; /* text tertiary */
   --color-separator: #e7ebf0; /* hairline — a color, never a 1px border */
+  --color-fill: #eef1f5; /* idle chip / segmented track / inset input (light; dark reads t.fill) */
   --color-canvas: #f4f6f9; /* app ground — lifts white surfaces for free */
 }

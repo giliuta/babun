@@ -9,7 +9,37 @@
 import { useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronRight } from "lucide-react-native";
+import type { BlockKind } from "@babun/shared/local/business-blocks";
+import { getStorage } from "@babun/shared/storage";
+import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
+
+// Open-state persistence — MMKV mirror of the web localStorage contract
+// (shared business-blocks.ts getBlockOpen/setBlockOpen use window.localStorage
+// directly, which doesn't exist on native): global per-kind key, not
+// per-client, to avoid 6300+ keys at 900-client scale.
+const OPEN_KEY = (kind: BlockKind) => `babun-block-open:${kind}`;
+
+function readBlockOpen(kind: BlockKind | undefined, fallback: boolean): boolean {
+  if (!kind) return fallback;
+  try {
+    const raw = getStorage().getRaw(OPEN_KEY(kind));
+    if (raw === "1") return true;
+    if (raw === "0") return false;
+  } catch {
+    // MMKV may throw while the Keychain is locked — fallback wins.
+  }
+  return fallback;
+}
+
+function writeBlockOpen(kind: BlockKind | undefined, open: boolean): void {
+  if (!kind) return;
+  try {
+    getStorage().setRaw(OPEN_KEY(kind), open ? "1" : "0");
+  } catch {
+    // cache only
+  }
+}
 
 interface CollapsibleCardProps {
   /** Quiet row label, e.g. «Финансы». */
@@ -19,6 +49,9 @@ interface CollapsibleCardProps {
   /** danger → red summary (долг). muted → grey regular (заметки/«—»). */
   tone?: "default" | "danger" | "muted";
   defaultOpen?: boolean;
+  /** Block kind — set it to persist the open-state per kind (MMKV,
+   *  `babun-block-open:{kind}`, web-parity). Omitted → session-only. */
+  kind?: BlockKind;
   children: ReactNode;
 }
 
@@ -27,10 +60,16 @@ export function CollapsibleCard({
   summary,
   tone = "default",
   defaultOpen = false,
+  kind,
   children,
 }: CollapsibleCardProps) {
   const t = useThemeColors();
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(() => readBlockOpen(kind, defaultOpen));
+  const toggle = () => {
+    const next = !open;
+    writeBlockOpen(kind, next);
+    setOpen(next);
+  };
 
   const value = summary || "—";
   const valueColor =
@@ -39,12 +78,9 @@ export function CollapsibleCard({
   const Chevron = open ? ChevronDown : ChevronRight;
 
   return (
-    <View
-      className="mx-3 mt-2 overflow-hidden rounded-2xl shadow-sm"
-      style={{ backgroundColor: t.surface }}
-    >
+    <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
       <Pressable
-        onPress={() => setOpen((v) => !v)}
+        onPress={toggle}
         accessibilityRole="button"
         accessibilityLabel={title}
         accessibilityState={{ expanded: open }}
@@ -71,6 +107,6 @@ export function CollapsibleCard({
           {children}
         </View>
       ) : null}
-    </View>
+    </Card>
   );
 }

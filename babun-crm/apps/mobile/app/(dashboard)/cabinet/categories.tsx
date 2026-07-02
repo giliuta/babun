@@ -1,8 +1,20 @@
 import { useMemo, useState } from "react";
-import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
+import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
+import { ColorPicker } from "@/components/ui/ColorPicker";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
@@ -16,10 +28,9 @@ import {
   useInsertCategory,
 } from "@/features/finances/queries";
 
-const SWATCHES = [
-  "#ef4444", "#f97316", "#eab308", "#10b981", "#06b6d4",
-  "#4338ca", "#a855f7", "#ec4899", "#737373",
-];
+// Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
+// tailwind-hued SWATCHES are gone — default stays индиго.
+const DEFAULT_COLOR = PRESET_COLORS[2].value;
 
 export default function CategoriesScreen() {
   const th = useThemeColors();
@@ -30,7 +41,7 @@ export default function CategoriesScreen() {
   const [type, setType] = useState<"expense" | "income">("expense");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [color, setColor] = useState(SWATCHES[5]);
+  const [color, setColor] = useState(DEFAULT_COLOR);
 
   const filtered = useMemo(
     () => cats.filter((c) => c.type === type),
@@ -73,6 +84,8 @@ export default function CategoriesScreen() {
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить категорию"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={th.accent} size={ICON.md} />
@@ -80,35 +93,15 @@ export default function CategoriesScreen() {
         }
       />
 
-      <View
-        className="mx-4 mt-3 flex-row rounded-xl p-1"
-        style={{ backgroundColor: th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
-      >
-        {(["expense", "income"] as const).map((seg) => {
-          const active = type === seg;
-          return (
-            <Pressable
-              key={seg}
-              onPress={() => setType(seg)}
-              className="flex-1 items-center rounded-lg py-2"
-              style={active ? { backgroundColor: th.surface } : undefined}
-            >
-              <Text
-                className="text-sm font-semibold"
-                style={{
-                  color: active
-                    ? seg === "expense"
-                      ? th.danger
-                      : th.success
-                    : th.sub,
-                }}
-              >
-                {seg === "expense" ? "Расходы" : "Доходы"}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SegmentedControl
+        options={[
+          { value: "expense", label: "Расходы", color: th.danger },
+          { value: "income", label: "Доходы", color: th.success },
+        ]}
+        value={type}
+        onChange={setType}
+        style={{ marginHorizontal: 16, marginTop: 12 }}
+      />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -126,7 +119,12 @@ export default function CategoriesScreen() {
               />
               <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
               {item.tenant_id ? (
-                <Pressable onPress={() => confirmDelete(item)} hitSlop={8}>
+                <Pressable
+                  onPress={() => confirmDelete(item)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Удалить ${item.name}`}
+                >
                   <Trash2 color={th.danger} size={ICON.sm} />
                 </Pressable>
               ) : (
@@ -142,8 +140,12 @@ export default function CategoriesScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             Новая категория · {type === "expense" ? "расход" : "доход"}
           </Text>
@@ -154,17 +156,7 @@ export default function CategoriesScreen() {
             placeholder="Напр. Бензин"
             autoFocus
           />
-          <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Цвет</Text>
-          <View className="mb-4 flex-row flex-wrap gap-3">
-            {SWATCHES.map((c) => (
-              <Pressable
-                key={c}
-                onPress={() => setColor(c)}
-                className="h-9 w-9 rounded-full"
-                style={{ backgroundColor: c, borderWidth: color === c ? 2 : 0, borderColor: th.ink }}
-              />
-            ))}
-          </View>
+          <ColorPicker value={color} onChange={setColor} />
           <Button
             label="Создать"
             onPress={add}
@@ -172,6 +164,7 @@ export default function CategoriesScreen() {
             loading={insert.isPending}
           />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

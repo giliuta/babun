@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -14,6 +14,8 @@ import { useRouter } from "expo-router";
 import { Check, CheckCircle2, XCircle } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { Card } from "@/components/ui/Card";
+import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -26,8 +28,8 @@ import { useClients } from "@/features/clients/queries";
 
 // «Незакрытые дни» — port of web /dashboard/unclosed: past days whose
 // work visits are still «Запланирован». The dispatcher works through the
-// list with two quick actions per row: «Выполнено» closes the visit
-// successfully, «Отменить» records the real reason (chips + free text)
+// list with two quick actions per row: «Выполнена» closes the visit
+// successfully, «Не состоялась» records the real reason (chips + free text)
 // so the audit trail stays honest. Reachable by direct route; the
 // cabinet menu entry is added separately.
 
@@ -131,20 +133,28 @@ export default function UnclosedScreen() {
           contentContainerStyle={{ padding: 12, paddingBottom: 32, gap: 10 }}
           ListHeaderComponent={
             unclosed.length > 0 && totalAtRisk > 0 ? (
-              <View
-                className="mb-1 flex-row items-center justify-between rounded-2xl px-4 py-3"
-                style={{ backgroundColor: t.surface }}
+              <Card
+                style={{
+                  marginBottom: 4,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                }}
               >
                 <Text className="text-[13px]" style={{ color: t.sub }}>
-                  Под вопросом на сумму
+                  Не подтверждено:
                 </Text>
                 <Text
                   className="text-[15px] font-semibold tabular-nums"
                   style={{ color: t.ink }}
                 >
+                  {unclosed.length}{" "}
+                  {countWord(unclosed.length, "запись", "записи", "записей")} на{" "}
                   {formatEUR(totalAtRisk)}
                 </Text>
-              </View>
+              </Card>
             ) : null
           }
           ListEmptyComponent={
@@ -202,10 +212,7 @@ function UnclosedCard({
   const days = daysSince(apt.date);
   const amount = apt.total_amount ?? 0;
   return (
-    <View
-      className="overflow-hidden rounded-2xl"
-      style={{ backgroundColor: t.surface }}
-    >
+    <Card>
       <Pressable
         onPress={onOpenClient}
         disabled={!apt.client_id}
@@ -251,13 +258,13 @@ function UnclosedCard({
           onPress={onComplete}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel="Отметить выполненным"
+          accessibilityLabel="Запись выполнена"
           className="flex-1 flex-row items-center justify-center gap-1.5 active:opacity-60"
           style={{ height: 44, opacity: busy ? 0.5 : 1 }}
         >
           <Check color={t.accent} size={16} strokeWidth={2.2} />
           <Text className="text-[13px] font-medium" style={{ color: t.accent }}>
-            Выполнено
+            Выполнена
           </Text>
         </Pressable>
         <View className="w-px" style={{ backgroundColor: t.separator }} />
@@ -265,17 +272,17 @@ function UnclosedCard({
           onPress={onCancel}
           disabled={busy}
           accessibilityRole="button"
-          accessibilityLabel="Отменить визит"
+          accessibilityLabel="Запись не состоялась"
           className="flex-1 flex-row items-center justify-center gap-1.5 active:opacity-60"
           style={{ height: 44, opacity: busy ? 0.5 : 1 }}
         >
           <XCircle color={t.danger} size={16} strokeWidth={2.2} />
           <Text className="text-[13px] font-medium" style={{ color: t.danger }}>
-            Отменить
+            Не состоялась
           </Text>
         </Pressable>
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -297,6 +304,12 @@ function CancelReasonSheet({
   const t = useThemeColors();
   const [picked, setPicked] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
+  // Сброс по визиту: подтверждение (onConfirm) закрывает шит МИМО close(),
+  // и стейл-причина прошлого клиента иначе доехала бы до следующего.
+  useEffect(() => {
+    setPicked(null);
+    setCustomText("");
+  }, [apt?.id]);
   const visible = !!apt;
   const isCustom = picked === "__custom__";
   const reasonToSubmit = isCustom ? customText.trim() : picked ?? "";
@@ -333,36 +346,15 @@ function CancelReasonSheet({
             Причина
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {[...CANCEL_REASON_PRESETS, "__custom__"].map((r) => {
-              const active = picked === r;
-              const label = r === "__custom__" ? "Другое…" : r;
-              return (
-                <Pressable
-                  key={r}
-                  onPress={() => setPicked(r)}
-                  hitSlop={4}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  accessibilityLabel={label}
-                  className="items-center justify-center rounded-full px-3.5 active:opacity-70"
-                  style={{
-                    height: 36,
-                    backgroundColor: active
-                      ? t.accent
-                      : t.dark
-                        ? "rgba(255,255,255,0.07)"
-                        : "#eef1f5",
-                  }}
-                >
-                  <Text
-                    className="text-[13px] font-medium"
-                    style={{ color: active ? t.onAccent : t.ink }}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            {[...CANCEL_REASON_PRESETS, "__custom__"].map((r) => (
+              <Chip
+                key={r}
+                label={r === "__custom__" ? "Другое…" : r}
+                radio
+                selected={picked === r}
+                onPress={() => setPicked(r)}
+              />
+            ))}
           </View>
           {isCustom ? (
             <TextInput
@@ -377,7 +369,7 @@ function CancelReasonSheet({
               className="mt-3 rounded-[10px] px-3.5 text-[15px]"
               style={{
                 height: 44,
-                backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+                backgroundColor: t.fill,
                 color: t.ink,
               }}
             />

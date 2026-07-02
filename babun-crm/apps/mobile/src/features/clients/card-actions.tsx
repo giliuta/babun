@@ -20,6 +20,7 @@ import {
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
+import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
   telUrl,
@@ -102,7 +103,13 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
       />
       <Action
         label="WhatsApp"
-        icon={<MessageCircle color={wa ? t.success : t.faint} size={21} strokeWidth={2} />}
+        icon={
+          <MessageCircle
+            color={wa ? CHANNEL_COLORS.whatsapp : t.faint}
+            size={21}
+            strokeWidth={2}
+          />
+        }
         onPress={wa ? () => Linking.openURL(wa) : undefined}
       />
       <Action
@@ -141,7 +148,7 @@ function Action({
     >
       <View
         className="h-12 w-12 items-center justify-center rounded-full"
-        style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+        style={{ backgroundColor: t.fill }}
       >
         {icon}
       </View>

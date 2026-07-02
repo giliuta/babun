@@ -1,5 +1,14 @@
 import { useMemo, useState } from "react";
-import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import {
   ArrowLeftRight,
   Banknote,
@@ -10,13 +19,18 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import type { AccountKind } from "@babun/shared/local/finance/account";
+import {
+  accountDisplayName,
+  type AccountKind,
+} from "@babun/shared/local/finance/account";
+import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { Chip } from "@/components/ui/Chip";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -45,14 +59,18 @@ const KINDS: { value: AccountKind; label: string }[] = [
 export default function AccountsScreen() {
   const th = useThemeColors();
   const { data: accounts = [], isLoading } = useAccountsWithBalances();
+  // Активные — для чипов «Бригада» в форме создания; ВСЕ (вкл. soft-deleted)
+  // — для резолва подзаголовков: счёт живёт дольше своей команды, и его
+  // имя обязано резолвиться, иначе две «Налички» неразличимы.
   const { data: teams = [] } = useTeams();
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const insert = useInsertAccount();
   const closeAcc = useSoftCloseAccount();
   const transfer = useCreateTransfer();
 
-  const teamName = useMemo(
-    () => new Map(teams.map((t) => [t.id, t.name])),
-    [teams],
+  const teamById = useMemo(
+    () => new Map(allTeams.map((t) => [t.id, t])),
+    [allTeams],
   );
   const total = useMemo(
     () => accounts.reduce((s, a) => s + a.balance, 0),
@@ -140,6 +158,8 @@ export default function AccountsScreen() {
               <Pressable
                 onPress={() => setTOpen(true)}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Перевод между счетами"
                 className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
               >
                 <ArrowLeftRight color={th.body} size={ICON.sm} />
@@ -148,6 +168,8 @@ export default function AccountsScreen() {
             <Pressable
               onPress={() => setOpen(true)}
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Добавить счёт"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
             >
               <Plus color={th.accent} size={ICON.md} />
@@ -156,7 +178,7 @@ export default function AccountsScreen() {
         }
       />
 
-      <View className="mx-3 mt-2 rounded-2xl p-4 shadow-sm" style={{ backgroundColor: th.surface }}>
+      <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 16 }}>
         <Text className="text-xs" style={{ color: th.sub }}>Всего на счетах</Text>
         <Text
           className="mt-0.5 text-2xl font-bold"
@@ -164,7 +186,7 @@ export default function AccountsScreen() {
         >
           {formatEUR(total)}
         </Text>
-      </View>
+      </Card>
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -176,6 +198,11 @@ export default function AccountsScreen() {
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => {
             const Icon = KIND_ICON[item.kind];
+            // Счета строго per-brigade: подзаголовок = имя команды (это
+            // единственное, что различает две «Налички»). Никаких «—»-
+            // плейсхолдеров; оборванная ссылка читается как «Без бригады».
+            const team = teamById.get(item.brigade_id);
+            const teamLabel = team?.name ?? "Без бригады";
             return (
               <Pressable
                 // A plain tap must never be destructive — everywhere else in
@@ -183,7 +210,7 @@ export default function AccountsScreen() {
                 // long-press, mirrored as an explicit accessibility action so
                 // VoiceOver users (who can't long-press) still reach it.
                 onLongPress={() => confirmClose(item)}
-                accessibilityLabel={`${item.name}, ${formatEUR(item.balance)}`}
+                accessibilityLabel={`${item.name}, ${teamLabel}, ${formatEUR(item.balance)}`}
                 accessibilityHint="Долгое нажатие закрывает счёт"
                 accessibilityActions={[
                   { name: "close-account", label: "Закрыть счёт" },
@@ -201,9 +228,25 @@ export default function AccountsScreen() {
                   <Text className="text-base font-semibold" style={{ color: th.ink }} numberOfLines={1}>
                     {item.name}
                   </Text>
-                  <Text className="text-xs" style={{ color: th.sub }}>
-                    {teamName.get(item.brigade_id) ?? "—"}
-                  </Text>
+                  <View className="mt-0.5 flex-row items-center gap-1.5">
+                    {team?.color ? (
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: team.color,
+                        }}
+                      />
+                    ) : null}
+                    <Text
+                      className="text-xs"
+                      style={{ color: th.sub }}
+                      numberOfLines={1}
+                    >
+                      {teamLabel}
+                    </Text>
+                  </View>
                 </View>
                 <Text className="text-base font-bold tabular-nums" style={{ color: th.ink }}>
                   {formatEUR(item.balance)}
@@ -223,8 +266,12 @@ export default function AccountsScreen() {
       )}
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>Новый счёт</Text>
           <Field
             label="Название"
@@ -236,16 +283,13 @@ export default function AccountsScreen() {
           <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Тип</Text>
           <View className="mb-3 flex-row flex-wrap gap-2">
             {KINDS.map((k) => (
-              <Pressable
+              <Chip
                 key={k.value}
+                label={k.label}
+                radio
+                selected={kind === k.value}
                 onPress={() => setKind(k.value)}
-                className="rounded-full px-3.5 py-1.5"
-                style={{ backgroundColor: kind === k.value ? th.accent : (th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-              >
-                <Text className="text-sm font-medium" style={{ color: kind === k.value ? "#fff" : th.sub }}>
-                  {k.label}
-                </Text>
-              </Pressable>
+              />
             ))}
           </View>
           <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Бригада</Text>
@@ -256,16 +300,13 @@ export default function AccountsScreen() {
           ) : (
             <View className="mb-3 flex-row flex-wrap gap-2">
               {teams.map((t) => (
-                <Pressable
+                <Chip
                   key={t.id}
+                  label={t.name}
+                  radio
+                  selected={brigadeId === t.id}
                   onPress={() => setBrigadeId(t.id)}
-                  className="rounded-full px-3.5 py-1.5"
-                  style={{ backgroundColor: brigadeId === t.id ? th.accent : (th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-                >
-                  <Text className="text-sm font-medium" style={{ color: brigadeId === t.id ? "#fff" : th.sub }}>
-                    {t.name}
-                  </Text>
-                </Pressable>
+                />
               ))}
             </View>
           )}
@@ -283,28 +324,31 @@ export default function AccountsScreen() {
             loading={insert.isPending}
           />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* transfer */}
       <Modal visible={tOpen} transparent animationType="slide" onRequestClose={() => setTOpen(false)}>
+        <KeyboardAvoidingView
+          className="flex-1"
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setTOpen(false)} />
-        <View className="absolute bottom-0 left-0 right-0 rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             Перевод между счетами
           </Text>
           <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Откуда</Text>
           <View className="mb-3 flex-row flex-wrap gap-2">
+            {/* «Наличка · Юра» — имя бригады различает одноимённые счета */}
             {accounts.map((a) => (
-              <Pressable
+              <Chip
                 key={a.id}
+                label={accountDisplayName(a, teamById.get(a.brigade_id)?.name)}
+                color={th.danger}
+                selected={fromId === a.id}
                 onPress={() => setFromId(a.id === fromId ? null : a.id)}
-                className="rounded-full px-3.5 py-1.5"
-                style={{ backgroundColor: fromId === a.id ? th.danger : (th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-              >
-                <Text className="text-sm font-medium" style={{ color: fromId === a.id ? "#fff" : th.sub }}>
-                  {a.name}
-                </Text>
-              </Pressable>
+              />
             ))}
           </View>
           <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Куда</Text>
@@ -312,16 +356,13 @@ export default function AccountsScreen() {
             {accounts
               .filter((a) => a.id !== fromId)
               .map((a) => (
-                <Pressable
+                <Chip
                   key={a.id}
+                  label={accountDisplayName(a, teamById.get(a.brigade_id)?.name)}
+                  color={th.success}
+                  selected={toId === a.id}
                   onPress={() => setToId(a.id === toId ? null : a.id)}
-                  className="rounded-full px-3.5 py-1.5"
-                  style={{ backgroundColor: toId === a.id ? th.success : (th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
-                >
-                  <Text className="text-sm font-medium" style={{ color: toId === a.id ? "#fff" : th.sub }}>
-                    {a.name}
-                  </Text>
-                </Pressable>
+                />
               ))}
           </View>
           <Field
@@ -338,6 +379,7 @@ export default function AccountsScreen() {
             loading={transfer.isPending}
           />
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );

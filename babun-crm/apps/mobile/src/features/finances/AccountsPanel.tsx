@@ -10,6 +10,7 @@ import {
 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import type { AccountKind } from "@babun/shared/local/finance/account";
+import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 import type { AccountWithBalance } from "./accounts";
 
@@ -62,10 +63,7 @@ export function AccountsPanel({
         </Text>
       </View>
 
-      <View
-        className="mx-3 overflow-hidden rounded-2xl"
-        style={{ backgroundColor: t.surface }}
-      >
+      <Card style={{ marginHorizontal: 12 }}>
         {isLoading ? (
           <Text className="px-4 py-6 text-center text-xs" style={{ color: t.faint }}>
             Загрузка…
@@ -125,7 +123,7 @@ export function AccountsPanel({
             <ChevronRight color={t.chevron} size={16} />
           </View>
         </Pressable>
-      </View>
+      </Card>
     </ScrollView>
   );
 }

@@ -159,7 +159,7 @@ export function RepeatReminderSheet({
                 className="rounded-xl px-3.5 py-2.5 text-base"
                 style={{
                   color: t.ink,
-                  backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+                  backgroundColor: t.fill,
                 }}
                 accessibilityLabel="Заметка к напоминанию"
               />
@@ -178,7 +178,7 @@ export function RepeatReminderSheet({
                 accessibilityRole="button"
                 accessibilityLabel="Отмена"
                 className="h-11 flex-1 items-center justify-center rounded-xl active:opacity-70"
-                style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
+                style={{ backgroundColor: t.fill }}
               >
                 <Text className="text-base font-medium" style={{ color: t.ink }}>
                   Отмена

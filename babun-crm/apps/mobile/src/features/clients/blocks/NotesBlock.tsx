@@ -71,7 +71,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
             keyboardAppearance={t.dark ? "dark" : "light"}
             className="h-9 flex-1 rounded-[10px] px-3 text-[13px]"
             style={{
-              backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
+              backgroundColor: t.fill,
               color: t.ink,
             }}
           />
@@ -79,7 +79,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
             onPress={submit}
             disabled={!draft.trim()}
             className="items-center justify-center rounded-[10px] px-4"
-            style={{ backgroundColor: draft.trim() ? t.accent : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
+            style={{ backgroundColor: draft.trim() ? t.accent : t.fill }}
           >
             <Text className="text-sm font-semibold" style={{ color: draft.trim() ? "#fff" : t.faint }}>Добавить</Text>
           </Pressable>
@@ -110,6 +110,9 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
                 </Text>
                 <Pressable
                   onPress={() => remove(n.id)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Удалить заметку"
                   className="h-6 w-6 items-center justify-center active:opacity-60"
                 >
                   <X color={t.warning} size={13} />
