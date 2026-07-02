@@ -20,7 +20,8 @@ export type ThemeColors = {
   accentFrom: string;
   accentTo: string;
   onAccent: string;
-  brandAccent: string; // finance / profit accent
+  brandAccent: string; // finance / profit accent — kept as a token but
+  // aliased to the cobalt accent (DS: single accent, no second teal hue).
   // text tiers
   ink: string;
   body: string;
@@ -62,7 +63,7 @@ export const light: ThemeColors = {
   accentFrom: "#3e84ff",
   accentTo: "#1f4fcc",
   onAccent: "#ffffff",
-  brandAccent: "#34aadc",
+  brandAccent: "#2c5be0",
   ink: "#0b1220",
   body: "#39414e",
   sub: "#5b6678",
@@ -100,7 +101,7 @@ export const dark: ThemeColors = {
   accentFrom: "#5a86ff",
   accentTo: "#2c5be0",
   onAccent: "#ffffff",
-  brandAccent: "#5ac8f5",
+  brandAccent: "#5a86ff",
   ink: "#f2f5f9",
   body: "#c2ccda",
   sub: "#9ba6b6",
