@@ -9,13 +9,14 @@ import {
   Text,
   View,
 } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import { generatePersonalEventTypeId } from "@babun/shared/local/personal-event-types";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -77,20 +78,7 @@ export default function EventTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Типы событий"
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить тип события"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Типы событий" />
       {isLoading ? (
         <EmptyState state="loading" fill />
       ) : (
@@ -124,8 +112,21 @@ export default function EventTypesScreen() {
             </View>
           )}
           ItemSeparatorComponent={() => <Divider inset={56} />}
+          ListFooterComponent={
+            types.length > 0 ? (
+              <>
+                <Divider inset={56} />
+                <AddRow label="Добавить тип" onPress={() => setOpen(true)} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
-            <EmptyState fill title="Нет типов событий" />
+            <EmptyState
+              fill
+              title="Нет типов событий"
+              subtitle="Обед, выходной, личное — типы для событий в личном календаре"
+              action={{ label: "Добавить тип", onPress: () => setOpen(true) }}
+            />
           }
         />
       )}

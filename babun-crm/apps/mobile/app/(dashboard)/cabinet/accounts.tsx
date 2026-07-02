@@ -140,6 +140,13 @@ export default function AccountsScreen() {
     setBrigadeId(null);
     setOpening("");
   };
+  // Закрытие без сохранения (scrim/back) должно сбросить пресеты, иначе
+  // предзаполненное из цепочки «команда→счёт» имя «Касса» доедет до
+  // следующего ручного открытия через AddRow.
+  const closeCreate = () => {
+    setOpen(false);
+    reset();
+  };
   const canSave = !!name.trim() && !!brigadeId && !insert.isPending;
 
   const add = async () => {
@@ -286,12 +293,12 @@ export default function AccountsScreen() {
         />
       )}
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="slide" onRequestClose={closeCreate}>
         <KeyboardAvoidingView
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
+        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={closeCreate} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>Новый счёт</Text>
           <Field

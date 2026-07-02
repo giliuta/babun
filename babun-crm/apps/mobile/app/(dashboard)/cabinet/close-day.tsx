@@ -179,6 +179,10 @@ export default function CloseDayScreen() {
   const markPaidCash = (apt: Appointment) => {
     const debt = getDebtAmount(apt);
     if (debt <= 0) return;
+    // Пишем зеркальные колонки (payment_status → серверный триггер
+    // дохода), иначе оплата закрытия дня не создаёт finance_transactions
+    // и визит остаётся «неоплаченным» для веба. Сверка дня — про кассу,
+    // поэтому способ строго наличные.
     update.mutate(
       {
         id: apt.id,
@@ -192,6 +196,9 @@ export default function CloseDayScreen() {
               paid_at: new Date().toISOString(),
             },
           ],
+          payment_status: "paid",
+          payment_method: "cash",
+          paid_amount: getPaidAmount(apt) + debt,
         },
       },
       {

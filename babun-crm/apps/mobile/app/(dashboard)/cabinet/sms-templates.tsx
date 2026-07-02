@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { MessageSquareText, Plus, X } from "lucide-react-native";
+import { MessageSquareText, X } from "lucide-react-native";
 import {
   AVAILABLE_TOKENS,
   KIND_LABELS,
@@ -27,6 +27,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
@@ -173,17 +174,6 @@ export default function SmsTemplatesScreen() {
       <ScreenHeader
         title="SMS-шаблоны"
         subtitle={templates.length ? `${templates.length} шт.` : undefined}
-        right={
-          <Pressable
-            onPress={() => setEditing(createBlankTemplate())}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Новый шаблон"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
       />
 
       {isLoading ? (
@@ -208,10 +198,14 @@ export default function SmsTemplatesScreen() {
                     Свои шаблоны
                   </Text>
                 </View>
-                <Text className="text-sm leading-5" style={{ color: t.sub }}>
-                  Своих шаблонов пока нет — создайте через «+» или возьмите
+                <Text className="mb-3 text-sm leading-5" style={{ color: t.sub }}>
+                  Своих шаблонов пока нет — создайте пустой или возьмите
                   готовый ниже.
                 </Text>
+                <Button
+                  label="Создать шаблон"
+                  onPress={() => setEditing(createBlankTemplate())}
+                />
               </View>
             </Card>
           </View>
@@ -262,6 +256,14 @@ export default function SmsTemplatesScreen() {
           data={templates}
           keyExtractor={(x) => x.id}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }}
+          ListFooterComponent={
+            <View className="mt-1">
+              <AddRow
+                label="Добавить шаблон"
+                onPress={() => setEditing(createBlankTemplate())}
+              />
+            </View>
+          }
           renderItem={({ item }) => (
             <View className="mx-3 mb-2">
               <Card>

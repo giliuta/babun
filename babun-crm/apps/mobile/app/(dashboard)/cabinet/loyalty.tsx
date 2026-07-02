@@ -10,7 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import {
   DEFAULT_LOYALTY,
   generateLoyaltyTierId,
@@ -21,6 +21,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -73,20 +74,7 @@ export default function LoyaltyScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Лояльность"
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить уровень"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={th.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Лояльность" />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard padded>
@@ -107,44 +95,62 @@ export default function LoyaltyScreen() {
                 Уровней пока нет. Клиент со столькими-то выполненными визитами
                 получает скидку.
               </Text>
-              <Pressable
-                onPress={() =>
-                  patch({ tiers: STARTER_LOYALTY_TIERS, enabled: true })
-                }
-                className="mt-2 active:opacity-70"
-              >
-                <Text className="text-sm font-medium" style={{ color: th.accent }}>
-                  Загрузить пример (3 / 10 / 25 визитов)
-                </Text>
-              </Pressable>
+              <View className="mt-2 flex-row items-center gap-4">
+                <Pressable
+                  onPress={() =>
+                    patch({ tiers: STARTER_LOYALTY_TIERS, enabled: true })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Загрузить пример уровней"
+                  className="active:opacity-70"
+                >
+                  <Text className="text-sm font-medium" style={{ color: th.accent }}>
+                    Загрузить пример (3 / 10 / 25 визитов)
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Добавить уровень"
+                  className="active:opacity-70"
+                >
+                  <Text className="text-sm font-medium" style={{ color: th.accent }}>
+                    Добавить свой
+                  </Text>
+                </Pressable>
+              </View>
             </View>
           ) : (
-            s.tiers.map((t, i) => (
-              <View key={t.id}>
-                {i > 0 ? <Divider inset={16} /> : null}
-                <View className="flex-row items-center px-4 py-3">
-                  <View className="flex-1">
-                    <Text className="text-base font-semibold" style={{ color: th.ink }}>
-                      {t.label}
+            <>
+              {s.tiers.map((t, i) => (
+                <View key={t.id}>
+                  {i > 0 ? <Divider inset={16} /> : null}
+                  <View className="flex-row items-center px-4 py-3">
+                    <View className="flex-1">
+                      <Text className="text-base font-semibold" style={{ color: th.ink }}>
+                        {t.label}
+                      </Text>
+                      <Text className="text-sm" style={{ color: th.sub }}>
+                        от {t.threshold} визитов
+                      </Text>
+                    </View>
+                    <Text className="mr-3 text-base font-bold" style={{ color: th.success }}>
+                      −{t.percent}%
                     </Text>
-                    <Text className="text-sm" style={{ color: th.sub }}>
-                      от {t.threshold} визитов
-                    </Text>
+                    <Pressable
+                      onPress={() => removeTier(t.id)}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Удалить ${t.label}`}
+                    >
+                      <Trash2 color={th.danger} size={ICON.sm} />
+                    </Pressable>
                   </View>
-                  <Text className="mr-3 text-base font-bold" style={{ color: th.success }}>
-                    −{t.percent}%
-                  </Text>
-                  <Pressable
-                    onPress={() => removeTier(t.id)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Удалить ${t.label}`}
-                  >
-                    <Trash2 color={th.danger} size={ICON.sm} />
-                  </Pressable>
                 </View>
-              </View>
-            ))
+              ))}
+              <Divider inset={16} />
+              <AddRow label="Добавить уровень" onPress={() => setOpen(true)} />
+            </>
           )}
         </SectionCard>
 

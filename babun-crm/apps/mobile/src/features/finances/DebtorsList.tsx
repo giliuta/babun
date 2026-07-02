@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import {
   getDebtAmount,
   type Appointment,
@@ -22,9 +23,9 @@ import { humanDay } from "@/features/appointments/helpers";
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
 // appointments for the active team in the period, client + outstanding sum.
 // The outstanding sum comes from the shared getDebtAmount (prepaid +
-// payments[]): the web-only payment_status/paid_amount fields are never
-// mapped by the mobile repository, so relying on them would list every
-// completed visit — paid ones included — at its full price.
+// payments[]) — the authoritative per-visit balance. payment_status /
+// paid_amount now round-trip through the repository (W4), but the
+// payments[] ledger stays the source of truth for the owed figure.
 //
 // Цепочка «должник → напомнить»: у строки есть labeled-кнопка «Напомнить»
 // (SMS с суммой и датой визита), тап по строке открывает карточку клиента.
@@ -79,7 +80,7 @@ export function DebtorsList({
     const digits = r.phone.replace(/[^\d+]/g, "");
     const [, mm, dd] = r.date.split("-");
     const body = encodeURIComponent(
-      `Здравствуйте! Напоминаем об оплате ${formatEUR(r.owed)} за визит ${dd}.${mm}. Спасибо!`,
+      debtReminderSms({ amount: formatEUR(r.owed), visitDate: `${dd}.${mm}` }),
     );
     const sep = Platform.OS === "ios" ? "&" : "?";
     Linking.openURL(`sms:${digits}${sep}body=${body}`);

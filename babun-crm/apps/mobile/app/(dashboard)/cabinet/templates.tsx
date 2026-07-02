@@ -9,12 +9,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -80,20 +81,7 @@ export default function TemplatesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Шаблоны операций"
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить шаблон"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Шаблоны операций" />
       {isLoading ? (
         <EmptyState state="loading" fill />
       ) : (
@@ -133,11 +121,20 @@ export default function TemplatesScreen() {
             </View>
           )}
           ItemSeparatorComponent={() => <Divider inset={16} />}
+          ListFooterComponent={
+            templates.length > 0 ? (
+              <>
+                <Divider inset={16} />
+                <AddRow label="Добавить шаблон" onPress={() => setOpen(true)} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               fill
               title="Нет шаблонов"
-              subtitle="Частые операции (Аренда, Бензин…) — добавьте через +"
+              subtitle="Частые операции (Аренда, Бензин…) — заведите шаблон и добавляйте их в один тап"
+              action={{ label: "Добавить шаблон", onPress: () => setOpen(true) }}
             />
           }
         />

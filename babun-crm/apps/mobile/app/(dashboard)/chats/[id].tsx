@@ -21,6 +21,7 @@ import {
   CornerUpLeft,
   EllipsisVertical,
   Link2,
+  MessageSquareText,
   Pin,
   Plus,
   Search,
@@ -30,7 +31,6 @@ import {
   UserPlus,
   UserRound,
   X,
-  Zap,
 } from "lucide-react-native";
 import {
   CHANNEL_LABELS,
@@ -592,10 +592,10 @@ export default function ChatThreadScreen() {
           <Pressable
             onPress={() => setQrOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Быстрые ответы"
+            accessibilityLabel="Шаблоны"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
-            <Zap color={t.accent} size={ICON.sm} />
+            <MessageSquareText color={t.accent} size={ICON.sm} />
           </Pressable>
           <TextInput
             value={draft}

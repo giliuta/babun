@@ -32,6 +32,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
+  debtReminderSms,
   telUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
@@ -101,10 +102,7 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
   const debtSmsUrl = (() => {
     if (debt <= 0 || !phoneDigits) return null;
     const first = (client.full_name || "").trim().split(/\s+/)[0] ?? "";
-    // Нейтральный текст (Babun — SaaS, без вертикали/бренда в дефолте).
-    const body =
-      `Здравствуйте${first ? `, ${first}` : ""}! Напоминаем: за вами ` +
-      `задолженность ${formatEUR(debt)}. Спасибо!`;
+    const body = debtReminderSms({ amount: formatEUR(debt), name: first });
     const sep = Platform.OS === "ios" ? "&" : "?";
     return `sms:${phoneDigits}${sep}body=${encodeURIComponent(body)}`;
   })();

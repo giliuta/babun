@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { Check, Phone, Plus, Search, X } from "lucide-react-native";
+import { Check, Phone, Search, X } from "lucide-react-native";
 import {
   addMonthsYYYYMMDD,
   dueReminders,
@@ -24,6 +24,7 @@ import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -232,17 +233,6 @@ export default function RecurringScreen() {
               : `${future.length} на потом`
             : undefined
         }
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Новое напоминание"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
       />
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -288,11 +278,20 @@ export default function RecurringScreen() {
             return renderReminder(row.item);
           }}
           ItemSeparatorComponent={() => <Divider inset={16} />}
+          ListFooterComponent={
+            reminders.length > 0 ? (
+              <>
+                <Divider inset={16} />
+                <AddRow label="Добавить напоминание" onPress={() => setOpen(true)} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               fill
               title="Нет повторных напоминаний"
-              subtitle="После выполненной записи «Повторить через…» создаст карточку — мы сами подскажем, когда звонить. Или добавьте вручную через +"
+              subtitle="После выполненной записи «Повторить через…» создаст карточку — мы сами подскажем, когда звонить. Или добавьте вручную."
+              action={{ label: "Добавить напоминание", onPress: () => setOpen(true) }}
             />
           }
         />

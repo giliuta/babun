@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { MapPin, Plus, Star } from "lucide-react-native";
+import { MapPin, Star } from "lucide-react-native";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
@@ -17,6 +17,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
@@ -286,30 +287,10 @@ export default function LabelsScreen() {
               </View>
             ))}
             <Divider inset={44} />
-            <Pressable
+            <AddRow
+              label="Добавить метку"
               onPress={() => setEditing({ mode: "create" })}
-              accessibilityRole="button"
-              accessibilityLabel="Новая метка"
-              className="flex-row items-center px-4 py-3.5 active:opacity-60"
-            >
-              <View
-                style={{
-                  height: 24,
-                  width: 24,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 8,
-                  backgroundColor: t.dark
-                    ? "rgba(90,134,255,0.16)"
-                    : "rgba(44,91,224,0.10)",
-                }}
-              >
-                <Plus color={t.accent} size={ICON.xs} />
-              </View>
-              <Text className="ml-3 text-base font-medium" style={{ color: t.accent }}>
-                Новая метка
-              </Text>
-            </Pressable>
+            />
           </SectionCard>
 
           <Text className="mx-4 mt-3 text-xs leading-4" style={{ color: t.faint }}>

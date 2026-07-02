@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { Check, PartyPopper, XCircle } from "lucide-react-native";
 import {
   getDebtAmount,
+  getPaidAmount,
   type Appointment,
 } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -96,7 +97,13 @@ export default function UnclosedScreen() {
 
   // Цепочка «после завершения — оплата»: визит с непогашенной суммой сразу
   // спрашивает про деньги, иначе должник появился бы молча (Финансы → Долги).
-  const markPaidCash = (apt: Appointment, debt: number) => {
+  // Способ оплаты влияет на сверку кассы, поэтому предлагаем нал/карту —
+  // как секция «Оплата» в AppointmentSheet, не только наличные. Пишем И
+  // payments[], И зеркальные колонки (payment_status → серверный триггер
+  // дохода; иначе визит остаётся неоплаченным для веба и триггер молчит).
+  const markPaid = (apt: Appointment, debt: number, method: "cash" | "card") => {
+    const paidAt = new Date().toISOString();
+    const alreadyPaid = getPaidAmount(apt);
     update.mutate(
       {
         id: apt.id,
@@ -105,11 +112,14 @@ export default function UnclosedScreen() {
             ...(apt.payments ?? []),
             {
               id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              method: "cash",
+              method,
               amount: debt,
-              paid_at: new Date().toISOString(),
+              paid_at: paidAt,
             },
           ],
+          payment_status: "paid",
+          payment_method: method,
+          paid_amount: alreadyPaid + debt,
         },
       },
       {
@@ -132,7 +142,11 @@ export default function UnclosedScreen() {
               [
                 {
                   text: "Оплачено наличными",
-                  onPress: () => markPaidCash(apt, debt),
+                  onPress: () => markPaid(apt, debt, "cash"),
+                },
+                {
+                  text: "Оплачено картой",
+                  onPress: () => markPaid(apt, debt, "card"),
                 },
                 { text: "Долг — позже", style: "cancel" },
               ],

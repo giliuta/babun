@@ -8,10 +8,11 @@ import {
   Text,
   View,
 } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -39,20 +40,7 @@ export default function ObjectTypesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Типы объектов"
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить тип объекта"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Типы объектов" />
       {isLoading ? (
         <EmptyState state="loading" fill />
       ) : (
@@ -75,11 +63,20 @@ export default function ObjectTypesScreen() {
             </View>
           )}
           ItemSeparatorComponent={() => <Divider inset={16} />}
+          ListFooterComponent={
+            labels.length > 0 ? (
+              <>
+                <Divider inset={16} />
+                <AddRow label="Добавить тип" onPress={() => setOpen(true)} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               fill
               title="Нет типов"
               subtitle="Дом, Офис, Вилла… — пресеты для объектов клиента"
+              action={{ label: "Добавить тип", onPress: () => setOpen(true) }}
             />
           }
         />

@@ -121,8 +121,21 @@ export default function CategoriesScreen() {
             </View>
           )}
           ItemSeparatorComponent={() => <Divider inset={56} />}
+          ListFooterComponent={
+            filtered.length > 0 ? (
+              <>
+                <Divider inset={56} />
+                <AddRow label="Добавить категорию" onPress={() => setOpen(true)} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
-            <EmptyState fill title="Нет категорий — добавьте через +" />
+            <EmptyState
+              fill
+              title={type === "expense" ? "Нет категорий расходов" : "Нет категорий доходов"}
+              subtitle="Категории группируют операции — «Бензин», «Аренда», «Выручка»"
+              action={{ label: "Добавить категорию", onPress: () => setOpen(true) }}
+            />
           }
         />
       )}

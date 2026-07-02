@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Package, Plus, Trash2 } from "lucide-react-native";
+import { Package, Trash2 } from "lucide-react-native";
 import {
   createBlankEquipment,
   type Equipment,
@@ -17,6 +17,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -111,20 +112,7 @@ export default function InventoryScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Склад"
-        right={
-          <Pressable
-            onPress={openNew}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить позицию"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={th.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Склад" />
       {isLoading ? (
         <EmptyState state="loading" fill />
       ) : (
@@ -171,11 +159,20 @@ export default function InventoryScreen() {
             </Pressable>
           )}
           ItemSeparatorComponent={() => <Divider inset={64} />}
+          ListFooterComponent={
+            items.length > 0 ? (
+              <>
+                <Divider inset={64} />
+                <AddRow label="Добавить позицию" onPress={openNew} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               fill
               title="Склад пуст"
-              subtitle="Инструменты, расходники, приборы — добавьте через +"
+              subtitle="Инструменты, расходники, приборы — держите под рукой"
+              action={{ label: "Добавить позицию", onPress: openNew }}
             />
           }
         />

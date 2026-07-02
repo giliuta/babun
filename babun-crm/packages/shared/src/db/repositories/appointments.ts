@@ -83,6 +83,18 @@ function rowToAppointment(r: Row): Appointment {
     ),
     color_override: r.color_override,
     prepaid_amount: Number(r.prepaid_amount ?? 0),
+    // v-W4 — mirror payment columns. The server income trigger fires on
+    // status='completed' AND payment_status='paid'; the mobile «Завершена
+    // → Наличные/Карта» flow writes these and they must round-trip so the
+    // read model matches web (DebtorsList/ledger key on payment_status).
+    payment_status:
+      (r.payment_status ?? undefined) as Appointment["payment_status"],
+    payment_method:
+      (r.payment_method ?? undefined) as Appointment["payment_method"],
+    paid_amount:
+      r.paid_amount === null || r.paid_amount === undefined
+        ? undefined
+        : Number(r.paid_amount),
     payments: asArray<Payment>(r.payments),
     payment: (r.payment ?? null) as AppointmentPayment | null,
     services: asArray<AppointmentService>(r.services),
@@ -157,6 +169,15 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     custom_total: a.custom_total,
     discount_amount: a.discount_amount,
     prepaid_amount: a.prepaid_amount,
+    // v-W4 — payment mirror columns (see rowToAppointment). Undefined
+    // lets the DB default (payment_status='unpaid') stand.
+    ...(a.payment_status !== undefined
+      ? { payment_status: a.payment_status }
+      : {}),
+    ...(a.payment_method !== undefined
+      ? { payment_method: a.payment_method ?? null }
+      : {}),
+    ...(a.paid_amount !== undefined ? { paid_amount: a.paid_amount } : {}),
     comment: a.comment,
     address: a.address,
     address_note: a.address_note,
@@ -219,6 +240,15 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
     out.discount_amount = patch.discount_amount;
   if (patch.prepaid_amount !== undefined)
     out.prepaid_amount = patch.prepaid_amount;
+  // v-W4 — payment mirror columns. Without these the «Завершена →
+  // Наличные/Карта» flow's payment_status='paid' is silently dropped and
+  // the server income trigger never fires (finance_transactions stays
+  // empty). Mirrors web appointmentsCached.ts.
+  if (patch.payment_status !== undefined)
+    out.payment_status = patch.payment_status;
+  if (patch.payment_method !== undefined)
+    out.payment_method = patch.payment_method ?? null;
+  if (patch.paid_amount !== undefined) out.paid_amount = patch.paid_amount;
   if (patch.comment !== undefined) out.comment = patch.comment;
   if (patch.address !== undefined) out.address = patch.address;
   if (patch.address_note !== undefined) out.address_note = patch.address_note;
