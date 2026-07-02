@@ -4,26 +4,41 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+// STORY-062 slice 4 — clients + tags WRITES go through the shared offline-aware
+// cache wrappers (optimistic sqlite write, then online→repo / offline→enqueue).
+// READS stay on the repo: the SWR list wrapper's warm-cache branch returns a
+// STRIPPED sqlite row (tag_ids/phones/locations/notes/equipment all []) and
+// only revalidates into sqlite — it never re-hydrates the react-query cache
+// (mobile has no realtime bridge like the web's useRealtimeTenantSync). So the
+// online list would silently lose tag_ids (breaking the tag facet / filter /
+// card meta) and never recover. repoListClients/repoListClientTags return the
+// FULL domain shape and every fetch is authoritative & fresh. `getClient`
+// likewise stays a direct repo read — the card must render the canonical row,
+// not a stripped offline one.
 import {
-  createClient as createClientRepo,
   getClient,
-  listClientTags,
-  listClients,
-  updateClient,
+  listClients as repoListClients,
+  listClientTags as repoListClientTags,
+  createClient as createClientRepo,
 } from "@babun/shared/db/repositories/clients";
+import {
+  createClient as createClientCached,
+  updateClient,
+} from "@babun/shared/sync/clientsCached";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
+import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { tryToE164 } from "./phone";
 
-// Clients list — TanStack Query on top of the shared Supabase repository
-// (port-as-is). RLS scopes rows to the tenant; we pass tenantId for the index.
+// Clients list — repo read (full domain shape incl. tag_ids). RLS scopes rows
+// to the tenant; we pass tenantId for the query key and the RLS filter.
 export function useClients() {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: ["clients", tenantId],
     enabled: !!tenantId,
-    queryFn: () => listClients(supabase, tenantId as string),
+    queryFn: () => repoListClients(supabase, tenantId as string),
   });
 }
 
@@ -72,7 +87,19 @@ export function useCreateClient() {
   return useMutation({
     mutationFn: (overrides: Partial<Client>) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      return createClientRepo(supabase, createBlankClient(overrides), tenantId);
+      // Offline-aware: wrapper writes the optimistic row to sqlite and either
+      // hits the repo (online) or enqueues an insert op (offline), returning
+      // the client-generated UUID either way.
+      //
+      // RN UUID guard: createBlankClient falls back to a NON-uuid `cli-…` id
+      // when `crypto.randomUUID` is absent — which is EXACTLY the RN/Hermes
+      // case (react-native-get-random-values only polyfills getRandomValues).
+      // The wrapper keeps a supplied id verbatim (`id = input.id || …`), so a
+      // `cli-…` id would flow into the offline queue and the replayer would
+      // permanently-fail its update op (non-uuid row_id). Stamp a real RN-safe
+      // UUID up front so the whole create→edit→replay chain stays consistent.
+      const blank = createBlankClient(overrides);
+      return createClientCached(supabase, { ...blank, id: randomUuid() }, tenantId);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
     meta: { errorHandled: true }, // call sites alert themselves
@@ -86,6 +113,14 @@ export function useCreateClient() {
 // parallel chunks (500 strictly sequential round-trips took minutes).
 // Invalidates in onSettled so a mid-file failure still surfaces the
 // rows that WERE created, and a retry skips them as duplicates.
+//
+// STORY-062 slice 4 — bulk import stays ONLINE-ONLY on the direct repo
+// (createClientRepo), matching the web (apps/web/.../import/csv-import.ts
+// batch-inserts straight into supabase, bypassing clientsCached). Routing
+// hundreds of CSV rows through the offline wrapper would enqueue hundreds
+// of insert ops + per-row sqlite upserts on a flaky connection — the wrong
+// shape for a bulk operation the user runs deliberately while connected.
+// A cold import with no network simply fails and the ImportSheet alerts.
 export function useImportClients() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
@@ -143,6 +178,8 @@ export function useClientTags() {
   return useQuery({
     queryKey: ["client-tags", tenantId],
     enabled: !!tenantId,
-    queryFn: () => listClientTags(supabase, tenantId as string),
+    // Repo read (same reason as useClients): the tags SWR wrapper warm-cache
+    // branch only revalidates sqlite and never re-hydrates this query cache.
+    queryFn: () => repoListClientTags(supabase, tenantId as string),
   });
 }

@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, SectionList, Text, View } from "react-native";
+import {
+  Pressable,
+  RefreshControl,
+  SectionList,
+  Text,
+  View,
+} from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -140,13 +147,28 @@ function EmptyGridHint() {
 }
 
 export default function CalendarTab() {
-  const { data: appts = [], isLoading, error } = useAppointments();
+  const {
+    data: appts = [],
+    isLoading,
+    isRefetching,
+    refetch,
+    error,
+  } = useAppointments();
+  const qc = useQueryClient();
   const { data: clients = [] } = useClients();
   const { data: services = [] } = useServices();
   const { data: teams = [] } = useTeams();
   const { data: calSettings } = useCalendarSettings();
   const updateAppt = useUpdateAppointment();
   const toast = useToast();
+
+  // Pull-to-refresh (agenda list). Invalidates the shared ['appointments']
+  // key so the query refetches from the repo (authoritative, network-fresh —
+  // reads bypass the SWR warm-cache branch, so this actually updates the UI);
+  // the per-client appointment hooks share that key and refresh in lockstep.
+  const onRefresh = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: ["appointments"] });
+  }, [qc]);
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (apt.time_start === newStart) return;
@@ -462,6 +484,9 @@ export default function CalendarTab() {
           keyExtractor={(item) => item.id}
           stickySectionHeadersEnabled
           contentContainerStyle={{ paddingBottom: 96, flexGrow: 1 }}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />
+          }
           renderSectionHeader={({ section }) => (
             <Text
               className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider"

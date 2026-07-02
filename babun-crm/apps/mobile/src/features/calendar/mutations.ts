@@ -1,12 +1,31 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+// STORY-062 slice 4 — appointment writes go through the offline-aware cache
+// wrappers (same 3-table scope the web caches) instead of the repo directly.
+// The wrapper owns the sqlite optimistic write + online/offline branch
+// (online → repo; offline → enqueue op); this hook keeps its own TanStack
+// `qc` optimistic layer for instant UI. Two optimistic layers (sqlite in the
+// wrapper, qc here) is intentional and correct — the qc layer paints the
+// dragged block onto its slot without waiting, the sqlite layer survives an
+// app restart while offline.
 import {
   createAppointment,
   deleteAppointment,
   updateAppointment,
-} from "@babun/shared/db/repositories/appointments";
+} from "@babun/shared/sync/appointmentsCached";
+import { randomUuid } from "@babun/shared/sync";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+
+// Mirror of the wrapper's UUID guard. createBlankAppointment falls back to a
+// NON-uuid `apt-…` id when `crypto.randomUUID` is missing — the RN/Hermes case
+// (react-native-get-random-values only polyfills getRandomValues). We stamp a
+// real RN-safe UUID before handing the blank to the offline wrapper so an
+// offline create + subsequent offline edit both key on the same valid UUID:
+// otherwise the edit lands in the update-op path with a non-uuid row_id and
+// the replayer silently drops it, losing the edit.
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Appointment writes go through the shared repo (same as web). Completing an
 // appointment triggers finance income sync server-side (sync_appointment_finance
@@ -35,7 +54,11 @@ export function useCreateAppointment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: Appointment) =>
-      createAppointment(supabase, input, tenantId as string),
+      createAppointment(
+        supabase,
+        UUID_RE.test(input.id) ? input : { ...input, id: randomUuid() },
+        tenantId as string,
+      ),
     onSuccess: () => {
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
     },
