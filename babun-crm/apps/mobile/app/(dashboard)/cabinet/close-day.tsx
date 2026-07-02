@@ -190,7 +190,7 @@ export default function CloseDayScreen() {
     );
   };
 
-  const closeDay = () => {
+  const doCloseDay = () => {
     const rec: ClosedRecord = {
       closedAt: new Date().toISOString(),
       expectedCash,
@@ -200,6 +200,22 @@ export default function CloseDayScreen() {
     getStorage().setRaw(`${CLOSED_PREFIX}${todayKey}`, JSON.stringify(rec));
     setClosedRec(rec);
     toast("День закрыт");
+  };
+  // Web parity (close-day page): closing with scheduled work left is a
+  // conscious decision — confirm it instead of silently burying visits.
+  const closeDay = () => {
+    if (stillScheduled.length > 0) {
+      Alert.alert(
+        "Остались запланированные записи",
+        `${stillScheduled.length} записей не выполнены. Закрыть день всё равно?`,
+        [
+          { text: "Отмена", style: "cancel" },
+          { text: "Закрыть", onPress: doCloseDay },
+        ],
+      );
+      return;
+    }
+    doCloseDay();
   };
   const reopen = () => {
     getStorage().remove(`${CLOSED_PREFIX}${todayKey}`);

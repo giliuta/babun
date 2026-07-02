@@ -42,6 +42,39 @@ export function useTransactions(
   });
 }
 
+// Σ возвратов по каждому исходному доходу (refund_of_id → сумма) — кап для
+// «Создать возврат». Намеренно НЕ оконный запрос (та же логика, что у
+// listAccountBalanceDeltas): возврат датируется сегодняшним днём и может
+// лежать ВНЕ просматриваемого периода — периодная выборка занижала бы «уже
+// возвращено» и пропускала бы возвраты сверх остатка. Слим-проекция
+// (refund_of_id, amount) держит пейлоад маленьким; ключ под префиксом
+// ["transactions"], поэтому invalidateLedger обновляет и его.
+export function useRefundTotals() {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["transactions", tenantId, "refund-totals"],
+    enabled: !!tenantId,
+    queryFn: async (): Promise<Map<string, number>> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("refund_of_id, amount")
+        .eq("tenant_id", tenantId as string)
+        .eq("type", "refund")
+        .not("refund_of_id", "is", null);
+      if (error) throw new Error(`useRefundTotals: ${error.message}`);
+      const m = new Map<string, number>();
+      for (const r of data ?? []) {
+        if (!r.refund_of_id) continue;
+        m.set(
+          r.refund_of_id,
+          (m.get(r.refund_of_id) ?? 0) + Math.abs(Number(r.amount ?? 0)),
+        );
+      }
+      return m;
+    },
+  });
+}
+
 export function useFinanceCategories() {
   const tenantId = useTenantId();
   return useQuery({

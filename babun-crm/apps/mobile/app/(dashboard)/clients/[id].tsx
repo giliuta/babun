@@ -1,17 +1,16 @@
-// Client detail card — COMPOSER (mobile port of the web ClientCardPage).
+// Client detail card — COMPOSER (mobile port of the web ClientCardPage,
+// «Карта-диспетчер» LOCKED design).
 //
 // This screen does ALL data wiring; the blocks are presentational. It
 // fetches the client + its appointments, computes the shared `stats`
 // (client-stats selector) and `serviceDue` (service-due selector), then
-// renders the header, the next-job hero and the configurable blocks in a
-// sensible DEFAULT order:
+// renders in the web ClientCardPage order:
 //
-//   ClientHeader · ClientNextJob · Objects · Visits · Finance · Contacts
-//   · Notes · Personal · Meta
-//
-// (AttachmentsBlock is intentionally skipped — it needs Supabase Storage.
-//  TODO: add an AttachmentsBlock once the appointment-photos / storage
-//  path is wired on mobile.)
+//   ClientHeader (list-tile) · ClientNextJob (hero) · CardActions (5)
+//   · ServiceBlock («Обслуживание» spine, hero unit de-duped)
+//   · ObjectsBlock (equipment-first)
+//   · collapsed reference: Visits · Finance · Notes · Attachments
+//     · Contacts · Personal · Meta
 //
 // A top chrome row owns the back button + a ⋯ action menu (message via
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
@@ -42,9 +41,12 @@ import {
 import { useClientAppointments } from "@/features/clients/appointments";
 import ClientHeader from "@/features/clients/ClientHeader";
 import ClientNextJob from "@/features/clients/ClientNextJob";
+import CardActions from "@/features/clients/card-actions";
+import ServiceBlock from "@/features/clients/blocks/ServiceBlock";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
 import VisitsBlock from "@/features/clients/blocks/VisitsBlock";
 import FinanceBlock from "@/features/clients/blocks/FinanceBlock";
+import AttachmentsBlock from "@/features/clients/blocks/AttachmentsBlock";
 import ContactsBlock from "@/features/clients/blocks/ContactsBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import PersonalBlock from "@/features/clients/blocks/PersonalBlock";
@@ -77,6 +79,14 @@ export default function ClientDetailScreen() {
     () => buildServiceDue(client ?? { locations: [] }),
     [client],
   );
+
+  // The unit the NEXT-JOB hero already names — the «Обслуживание» spine
+  // drops it so the same overdue/soon fact never appears twice (web
+  // ClientCardPage parity: one home per fact).
+  const heroUnitId = useMemo(() => {
+    if (stats?.nextApt) return null;
+    return serviceDue.overdue[0]?.unitId ?? serviceDue.soon[0]?.unitId ?? null;
+  }, [serviceDue, stats]);
 
   if (isLoading) {
     return (
@@ -212,15 +222,24 @@ export default function ClientDetailScreen() {
           stats={stats}
           serviceDue={serviceDue}
         />
+        <CardActions client={client} stats={stats} update={update} />
+        <ServiceBlock
+          client={client}
+          stats={stats}
+          serviceDue={serviceDue}
+          excludeUnitId={heroUnitId}
+        />
         <ObjectsBlock
           client={client}
           appointments={appointments}
+          stats={stats}
           update={update}
         />
         <VisitsBlock appointments={appointments} stats={stats} />
         <FinanceBlock appointments={appointments} stats={stats} />
-        <ContactsBlock client={client} update={update} />
         <NotesBlock client={client} update={update} />
+        <AttachmentsBlock clientId={client.id} />
+        <ContactsBlock client={client} update={update} />
         <PersonalBlock client={client} update={update} />
         <MetaBlock client={client} update={update} tags={tags} />
       </ScrollView>

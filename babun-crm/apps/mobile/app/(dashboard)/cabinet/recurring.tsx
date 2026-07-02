@@ -2,15 +2,24 @@ import { useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter } from "expo-router";
 import { Check, Phone, Plus, Search, X } from "lucide-react-native";
-import type { RecurringReminder } from "@babun/shared/local/recurring";
+import {
+  addMonthsYYYYMMDD,
+  dueReminders,
+  type RecurringReminder,
+} from "@babun/shared/local/recurring";
+import { formatDateLongRu } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,6 +37,14 @@ import {
   useRecurringReminders,
   useUpdateReminderStatus,
 } from "@/features/recurring/queries";
+
+// Повторяющиеся ТО — инбокс возвратов (web /dashboard/recurring):
+//  * «Пора» = next_due_date в пределах 14 дней или просрочено (dueReminders);
+//  * «Будущие» скрыты за «Показать ещё N на потом»;
+//  * «Записать» ведёт в букинг с предзаполненным клиентом/командой;
+//  * ручное создание — с выбором даты ПОСЛЕДНЕГО ТО + интервала, чтобы
+//    next_due = last + interval (авто-посев из завершённой записи делает
+//    AppointmentSheet — см. RepeatReminderSheet в features/recurring).
 
 function dueTone(
   next: string,
@@ -48,70 +65,51 @@ function dueTone(
   };
 }
 
+type ListRow =
+  | { kind: "header"; id: string; title: string }
+  | { kind: "item"; id: string; item: RecurringReminder }
+  | { kind: "more"; id: string; count: number };
+
 export default function RecurringScreen() {
-  const { data: reminders = [], isLoading } = useRecurringReminders();
+  const { data: reminders = [], isLoading, isError, refetch } = useRecurringReminders();
   const { data: clients = [] } = useClients();
   const create = useCreateReminder();
   const setStatus = useUpdateReminderStatus();
   const del = useDeleteReminder();
   const toast = useToast();
   const t = useThemeColors();
-
-  const pending = useMemo(
-    () => reminders.filter((r) => r.status === "pending"),
-    [reminders],
-  );
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [summary, setSummary] = useState("");
-  const [months, setMonths] = useState(6);
-  const [q, setQ] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
-  const client = clients.find((c) => c.id === clientId) ?? null;
-  const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    return (
-      query
-        ? clients.filter(
-            (c) =>
-              c.full_name.toLowerCase().includes(query) ||
-              (c.phone ?? "").includes(query),
-          )
-        : clients
-    ).slice(0, 50);
-  }, [clients, q]);
+  // Пора / будущие (web parity: dueReminders = просрочено или ≤ 14 дней).
+  const due = useMemo(() => dueReminders(reminders), [reminders]);
+  const future = useMemo(
+    () =>
+      reminders
+        .filter((r) => r.status === "pending" && !due.includes(r))
+        .sort((a, b) => a.next_due_date.localeCompare(b.next_due_date)),
+    [reminders, due],
+  );
+  const totalPending = due.length + future.length;
 
-  const reset = () => {
-    setClientId(null);
-    setSummary("");
-    setMonths(6);
-    setQ("");
-  };
-
-  const submit = async () => {
-    if (!client) return;
-    try {
-      await create.mutateAsync({
-        client_id: client.id,
-        client_name: client.full_name,
-        phone: client.phone ?? "",
-        team_id: null,
-        service_ids: [],
-        service_summary: summary.trim() || "Повторное ТО",
-        last_date: formatYMD(new Date()),
-        interval_months: months,
-        note: "",
-        manual: true,
-      });
-      setOpen(false);
-      reset();
-      toast("Напоминание создано");
-    } catch (e) {
-      // Sheet stays open — retry without re-picking the client.
-      Alert.alert("Ошибка", (e as Error).message);
+  const rows = useMemo<ListRow[]>(() => {
+    const out: ListRow[] = [];
+    if (due.length > 0) {
+      out.push({ kind: "header", id: "h-due", title: "Пора" });
+      for (const r of due) out.push({ kind: "item", id: r.id, item: r });
     }
-  };
+    if (future.length > 0) {
+      if (showAll) {
+        out.push({ kind: "header", id: "h-future", title: "Будущие" });
+        for (const r of future) out.push({ kind: "item", id: r.id, item: r });
+      } else {
+        out.push({ kind: "more", id: "more", count: future.length });
+      }
+    }
+    return out;
+  }, [due, future, showAll]);
 
   // Web parity (recurring/page.tsx): hard delete goes through a confirm.
   const confirmDelete = (item: RecurringReminder) =>
@@ -127,15 +125,118 @@ export default function RecurringScreen() {
       },
     ]);
 
+  // «Записать» — в календарь с предзаполненным клиентом/командой (веб шлёт
+  // ?new=1&client_id=…; мобильный обработчик в (dashboard)/index.tsx читает
+  // new/clientId/locationId/teamId).
+  const book = (item: RecurringReminder) =>
+    router.push({
+      pathname: "/",
+      params: {
+        new: "1",
+        // Пустые значения не передаём: обработчик читает `?? null`, а пустая
+        // строка выглядела бы как «клиент с id ""».
+        ...(item.client_id ? { clientId: item.client_id } : {}),
+        ...(item.team_id ? { teamId: item.team_id } : {}),
+      },
+    });
+
+  const renderReminder = (item: RecurringReminder) => {
+    const tone = dueTone(item.next_due_date, t);
+    return (
+      <View className="px-4 py-3">
+        <View className="flex-row items-center">
+          <View className="flex-1 pr-2">
+            <Text
+              className="text-base font-semibold"
+              style={{ color: t.ink }}
+              numberOfLines={1}
+            >
+              {item.client_name}
+            </Text>
+            {item.service_summary ? (
+              <Text className="text-sm" style={{ color: t.sub }} numberOfLines={1}>
+                {item.service_summary}
+              </Text>
+            ) : null}
+            <Text
+              className="mt-1 self-start overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ color: tone.color, backgroundColor: tone.bg }}
+            >
+              {tone.label}
+            </Text>
+          </View>
+          {item.phone ? (
+            <Pressable
+              onPress={() => Linking.openURL(`tel:${item.phone}`)}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={`Позвонить: ${item.client_name}`}
+              className="mr-1 h-11 w-11 items-center justify-center rounded-full"
+              style={{ backgroundColor: t.success + "1a" }}
+            >
+              <Phone color={t.success} size={ICON.sm} />
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={() =>
+              setStatus.mutate(
+                { id: item.id, status: "booked" },
+                {
+                  onSuccess: () => toast("Отмечено записанным"),
+                  onError: (e) => Alert.alert("Ошибка", e.message),
+                },
+              )
+            }
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Отметить записанным"
+            className="mr-1 h-11 w-11 items-center justify-center rounded-full"
+            style={{ backgroundColor: t.accent + "1a" }}
+          >
+            <Check color={t.accent} size={ICON.sm} />
+          </Pressable>
+          <Pressable
+            onPress={() => confirmDelete(item)}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Удалить напоминание"
+            className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+          >
+            <X color={t.faint} size={ICON.sm} />
+          </Pressable>
+        </View>
+        <Pressable
+          onPress={() => book(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`Записать: ${item.client_name}`}
+          className="mt-2 items-center rounded-xl py-2.5 active:opacity-80"
+          style={{ backgroundColor: t.accent }}
+        >
+          <Text className="text-sm font-semibold" style={{ color: t.onAccent }}>
+            Записать
+          </Text>
+        </Pressable>
+      </View>
+    );
+  };
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
         title="Повторяющиеся ТО"
-        subtitle={pending.length ? `${pending.length} в работе` : undefined}
+        subtitle={
+          totalPending
+            ? due.length
+              ? `${due.length} пора · ${future.length} на потом`
+              : `${future.length} на потом`
+            : undefined
+        }
         right={
           <Pressable
             onPress={() => setOpen(true)}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Новое напоминание"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Plus color={t.accent} size={ICON.md} />
@@ -144,81 +245,176 @@ export default function RecurringScreen() {
       />
       {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : isError ? (
+        <EmptyState
+          fill
+          state="error"
+          title="Не удалось загрузить напоминания"
+          action={{ label: "Повторить", onPress: () => void refetch() }}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={pending}
+          data={rows}
           keyExtractor={(r) => r.id}
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
-          renderItem={({ item }) => {
-            const tone = dueTone(item.next_due_date, t);
-            return (
-              <View className="flex-row items-center px-4 py-3">
-                <View className="flex-1 pr-2">
-                  <Text className="text-base font-semibold" style={{ color: t.ink }} numberOfLines={1}>
-                    {item.client_name}
-                  </Text>
-                  <Text className="text-sm" style={{ color: t.sub }} numberOfLines={1}>
-                    {item.service_summary}
-                  </Text>
-                  <Text
-                    className="mt-1 self-start overflow-hidden rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                    style={{ color: tone.color, backgroundColor: tone.bg }}
-                  >
-                    {tone.label}
-                  </Text>
-                </View>
-                {item.phone ? (
-                  <Pressable
-                    onPress={() => Linking.openURL(`tel:${item.phone}`)}
-                    className="mr-1 h-9 w-9 items-center justify-center rounded-full"
-                    style={{ backgroundColor: t.success + "1a" }}
-                  >
-                    <Phone color={t.success} size={ICON.sm} />
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  onPress={() =>
-                    setStatus.mutate(
-                      { id: item.id, status: "booked" },
-                      {
-                        onSuccess: () => toast("Отмечено записанным"),
-                        onError: (e) => Alert.alert("Ошибка", e.message),
-                      },
-                    )
-                  }
-                  className="mr-1 h-9 w-9 items-center justify-center rounded-full"
-                  style={{ backgroundColor: t.accent + "1a" }}
+          contentContainerStyle={{ flexGrow: 1, paddingTop: 8, paddingBottom: 24 }}
+          renderItem={({ item: row }) => {
+            if (row.kind === "header") {
+              return (
+                <Text
+                  className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: t.faint }}
                 >
-                  <Check color={t.accent} size={ICON.sm} />
-                </Pressable>
+                  {row.title}
+                </Text>
+              );
+            }
+            if (row.kind === "more") {
+              return (
                 <Pressable
-                  onPress={() => confirmDelete(item)}
-                  className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
+                  onPress={() => setShowAll(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Показать ещё ${row.count} на потом`}
+                  className="mx-4 mt-2 items-center rounded-xl border border-dashed py-3 active:opacity-60"
+                  style={{ borderColor: t.separator }}
                 >
-                  <X color={t.faint} size={ICON.sm} />
+                  <Text className="text-sm font-medium" style={{ color: t.sub }}>
+                    Показать ещё {row.count} на потом
+                  </Text>
                 </Pressable>
-              </View>
-            );
+              );
+            }
+            return renderReminder(row.item);
           }}
           ItemSeparatorComponent={() => <Divider inset={16} />}
           ListEmptyComponent={
             <EmptyState
               fill
-              title="Нет напоминаний"
-              subtitle="«Через 6 мес — чистка» и т.п. Добавьте через +"
+              title="Нет повторных напоминаний"
+              subtitle="После выполненной записи «Повторить через…» создаст карточку — мы сами подскажем, когда звонить. Или добавьте вручную через +"
             />
           }
         />
       )}
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={() => setOpen(false)} />
+      <NewReminderSheet
+        open={open}
+        clients={clients}
+        busy={create.isPending}
+        onClose={() => setOpen(false)}
+        onSubmit={async (input) => {
+          try {
+            await create.mutateAsync(input);
+            setOpen(false);
+            toast("Напоминание создано");
+            return true;
+          } catch (e) {
+            // Шит остаётся открытым — ввод не теряется.
+            Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+            return false;
+          }
+        }}
+      />
+    </Screen>
+  );
+}
+
+// ─── Ручное создание: клиент → что напомнить → последнее ТО + интервал ──
+function NewReminderSheet({
+  open,
+  clients,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean;
+  clients: { id: string; full_name: string; phone: string | null }[];
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (input: {
+    client_id: string;
+    client_name: string;
+    phone: string;
+    team_id: null;
+    service_ids: string[];
+    service_summary: string;
+    last_date: string;
+    interval_months: number;
+    note: string;
+    manual: true;
+  }) => Promise<boolean>;
+}) {
+  const t = useThemeColors();
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [summary, setSummary] = useState("");
+  const [months, setMonths] = useState(6);
+  const [lastDate, setLastDate] = useState(() => formatYMD(new Date()));
+  const [q, setQ] = useState("");
+  const [wasOpen, setWasOpen] = useState(false);
+
+  if (open !== wasOpen) {
+    // Сброс черновика на каждое открытие (render-time reset).
+    setWasOpen(open);
+    if (open) {
+      setClientId(null);
+      setSummary("");
+      setMonths(6);
+      setLastDate(formatYMD(new Date()));
+      setQ("");
+    }
+  }
+
+  const client = clients.find((c) => c.id === clientId) ?? null;
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    return (
+      query
+        ? clients.filter(
+            (c) =>
+              c.full_name.toLowerCase().includes(query) ||
+              (c.phone ?? "").includes(query),
+          )
+        : clients
+    ).slice(0, 50);
+  }, [clients, q]);
+
+  const nextDue = addMonthsYYYYMMDD(lastDate, months);
+
+  const submit = async () => {
+    if (!client) return;
+    await onSubmit({
+      client_id: client.id,
+      client_name: client.full_name,
+      phone: client.phone ?? "",
+      team_id: null,
+      service_ids: [],
+      service_summary: summary.trim() || "Повторное ТО",
+      last_date: lastDate,
+      interval_months: months,
+      note: "",
+      manual: true,
+    });
+  };
+
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Pressable
+          className="flex-1"
+          style={{ backgroundColor: t.scrim }}
+          onPress={onClose}
+          accessibilityLabel="Закрыть"
+        />
         <View
-          className="absolute bottom-0 left-0 right-0 h-[80%] rounded-t-3xl p-5 pb-8"
+          className="h-[80%] rounded-t-3xl p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
-          <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Напоминание</Text>
+          <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
+            Напоминание
+          </Text>
           {!client ? (
             <>
               <View
@@ -235,6 +431,7 @@ export default function RecurringScreen() {
                   keyboardAppearance={t.dark ? "dark" : "light"}
                   className="flex-1 py-2.5 text-base"
                   style={{ color: t.ink }}
+                  accessibilityLabel="Поиск клиента"
                 />
               </View>
               <FlatList
@@ -244,36 +441,71 @@ export default function RecurringScreen() {
                 renderItem={({ item }) => (
                   <Pressable
                     onPress={() => setClientId(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Выбрать клиента ${item.full_name}`}
                     className="px-1 py-3 active:opacity-70"
                   >
-                    <Text className="text-base" style={{ color: t.ink }}>{item.full_name}</Text>
+                    <Text className="text-base" style={{ color: t.ink }}>
+                      {item.full_name}
+                    </Text>
                     {item.phone ? (
-                      <Text className="text-sm" style={{ color: t.sub }}>{item.phone}</Text>
+                      <Text className="text-sm" style={{ color: t.sub }}>
+                        {item.phone}
+                      </Text>
                     ) : null}
                   </Pressable>
                 )}
                 ItemSeparatorComponent={() => <Divider />}
+                ListEmptyComponent={
+                  <EmptyState title="Никого не нашли" subtitle="Измените запрос" />
+                }
               />
             </>
           ) : (
             <>
               <Pressable
                 onPress={() => setClientId(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Сменить клиента"
                 className="mb-2 flex-row items-center justify-between rounded-xl px-3 py-2.5"
                 style={{ backgroundColor: t.canvas }}
               >
                 <Text className="text-base font-semibold" style={{ color: t.ink }}>
                   {client.full_name}
                 </Text>
-                <Text className="text-sm" style={{ color: t.accent }}>Изменить</Text>
+                <Text className="text-sm" style={{ color: t.accent }}>
+                  Изменить
+                </Text>
               </Pressable>
-              <Field label="Что напомнить" value={summary} onChangeText={setSummary} placeholder="Чистка 2 шт" />
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Через</Text>
-              <View className="mb-4 flex-row gap-2">
+              <Field
+                label="Что напомнить"
+                value={summary}
+                onChangeText={setSummary}
+                placeholder="Чистка 2 шт"
+              />
+              <View className="mb-3 flex-row items-center justify-between">
+                <Text className="text-xs font-medium" style={{ color: t.sub }}>
+                  Последнее ТО
+                </Text>
+                <DateTimePicker
+                  value={parseYMD(lastDate)}
+                  mode="date"
+                  display="compact"
+                  maximumDate={new Date()}
+                  onChange={(_, d) => d && setLastDate(formatYMD(d))}
+                />
+              </View>
+              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
+                Через
+              </Text>
+              <View className="mb-2 flex-row gap-2">
                 {[3, 6, 12].map((m) => (
                   <Pressable
                     key={m}
                     onPress={() => setMonths(m)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: months === m }}
+                    accessibilityLabel={`Через ${m} месяцев`}
                     className="flex-1 items-center rounded-xl py-2.5"
                     style={{
                       backgroundColor:
@@ -293,11 +525,22 @@ export default function RecurringScreen() {
                   </Pressable>
                 ))}
               </View>
-              <Button label="Создать" onPress={submit} disabled={create.isPending} loading={create.isPending} />
+              <Text className="mb-4 text-center text-sm" style={{ color: t.sub }}>
+                Напомним{" "}
+                <Text style={{ fontWeight: "600", color: t.ink }}>
+                  {formatDateLongRu(nextDue)}
+                </Text>
+              </Text>
+              <Button
+                label="Создать"
+                onPress={() => void submit()}
+                disabled={busy}
+                loading={busy}
+              />
             </>
           )}
         </View>
-      </Modal>
-    </Screen>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

@@ -5,12 +5,15 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatVisitDate } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 // FinanceBlock (mobile port of apps/web/.../blocks/FinanceBlock.tsx).
 //
-// Read-only money summary: LTV, средний чек, последняя оплата, последний
+// Reference block — collapsed by default (CollapsibleCard); the closed row
+// shows «долг €N» (red) or the LTV. Expanded: read-only money summary —
+// LTV, средний чек, последняя оплата, последний
 // визит, долг, плюс история транзакций (paid + completed visits). All
 // figures come from the shared `client-stats` selector + the appointments
 // array — same data path as web.
@@ -72,12 +75,16 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
         )
       : 0;
 
-  return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
-      <Text className="px-1 pb-1 pt-1 text-xs font-semibold uppercase tracking-wider" style={{ color: t.sub }}>
-        Финансы
-      </Text>
+  // Collapsed-row summary: долг shouts (red), otherwise quiet LTV.
+  const summary =
+    debt > 0 ? `долг ${formatEUR(debt)}` : ltv > 0 ? formatEUR(ltv) : "";
 
+  return (
+    <CollapsibleCard
+      title="Финансы"
+      summary={summary}
+      tone={debt > 0 ? "danger" : "default"}
+    >
       <View className="gap-2 px-1 py-1">
         <Row
           icon={<Wallet color={t.faint} size={14} />}
@@ -131,7 +138,7 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
           ) : null}
         </View>
       ) : null}
-    </View>
+    </CollapsibleCard>
   );
 }
 

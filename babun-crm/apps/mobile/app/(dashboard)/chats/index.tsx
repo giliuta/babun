@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { MessageCircle, Pin, Search } from "lucide-react-native";
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
+import { Archive, Clock, MessageCircle, Pin, Search } from "lucide-react-native";
 import {
   CHANNEL_COLORS,
   CHANNEL_LABELS,
@@ -13,7 +16,12 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { useChats } from "@/features/chats/store";
+import {
+  useChats,
+  useSeedDemoChats,
+  useSetChatStatus,
+  useTogglePin,
+} from "@/features/chats/store";
 
 // P2 #38 (web chats/page.tsx:286) — no «SMS» chip: SMS is one-way
 // (outbound only, no inbox); historical sms-chats still show under «Все».
@@ -53,69 +61,205 @@ function shortTime(iso: string): string {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
-function ChatRow({ c, onPress }: { c: Chat; onPress: () => void }) {
-  const t = useThemeColors();
-  const color = CHANNEL_COLORS[c.channel] ?? "#6b7280";
-  const initial = (c.contact_name || "?").trim().slice(0, 1).toUpperCase();
+// SLA badge — elapsed time since the client's last unanswered message
+// (web WaitingBadge, chats/page.tsx:877–907). Escalates: faint < 1h,
+// warning 1–4h, danger > 4h. Hidden under 30 minutes.
+function slaOf(
+  c: Chat,
+  now: number,
+): { label: string; tier: "faint" | "warning" | "danger" } | null {
+  if (!isUnanswered(c)) return null;
+  const last = c.messages[c.messages.length - 1];
+  if (!last) return null;
+  const mins = Math.floor((now - new Date(last.timestamp).getTime()) / 60000);
+  if (mins < 30) return null;
+  const label =
+    mins < 60 ? `${mins}м` : mins < 1440 ? `${Math.floor(mins / 60)}ч` : `${Math.floor(mins / 1440)}д`;
+  return { label, tier: mins > 240 ? "danger" : mins > 60 ? "warning" : "faint" };
+}
+
+// Swipe action panel (leading = pin, trailing = archive; web
+// chats/page.tsx:320–326). Fixed 88pt wide, full-height tap target.
+function SwipeAction({
+  icon,
+  label,
+  color,
+  onPress,
+}: {
+  icon: ReactNode;
+  label: string;
+  color: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center px-4 py-3 active:opacity-60"
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="w-[88px] items-center justify-center gap-1"
+      style={{ backgroundColor: color }}
     >
-      <View
-        className="h-12 w-12 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${color}22` }}
-      >
-        <Text className="text-lg font-semibold" style={{ color }}>
-          {initial}
-        </Text>
-      </View>
-      <View className="ml-3 flex-1">
-        <View className="flex-row items-center justify-between">
-          {c.is_pinned ? (
-            <Pin
-              color={t.faint}
-              size={12}
-              fill={t.faint}
-              style={{ marginRight: 4, transform: [{ rotate: "45deg" }] }}
-            />
-          ) : null}
-          <Text
-            className="flex-1 pr-2 text-base font-semibold"
-            style={{ color: t.ink }}
-            numberOfLines={1}
-          >
-            {c.contact_name || "Без имени"}
-          </Text>
-          <Text className="text-xs" style={{ color: t.faint }}>
-            {shortTime(c.last_message_at)}
-          </Text>
-        </View>
-        <View className="mt-0.5 flex-row items-center">
-          <Text className="text-[11px] font-medium" style={{ color }}>
-            {CHANNEL_LABELS[c.channel]}
-          </Text>
-          <Text className="px-1" style={{ color: t.faint }}>·</Text>
-          <Text
-            className="flex-1 text-sm"
-            style={{ color: t.sub }}
-            numberOfLines={1}
-          >
-            {lastPreview(c)}
-          </Text>
-          {c.unread_count > 0 ? (
-            <View
-              className="ml-2 h-5 min-w-[20px] items-center justify-center rounded-full px-1.5"
-              style={{ backgroundColor: t.accent }}
-            >
-              <Text className="text-[11px] font-bold" style={{ color: "#fff" }}>
-                {c.unread_count}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
+      {icon}
+      <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+        {label}
+      </Text>
     </Pressable>
+  );
+}
+
+function ChatRow({
+  c,
+  now,
+  onPress,
+  onTogglePin,
+  onArchive,
+}: {
+  c: Chat;
+  now: number;
+  onPress: () => void;
+  onTogglePin: () => void;
+  onArchive: () => void;
+}) {
+  const t = useThemeColors();
+  const swipeRef = useRef<SwipeableMethods | null>(null);
+  const color = CHANNEL_COLORS[c.channel] ?? "#6b7280";
+  const title = c.contact_name || c.contact_handle || "Без имени";
+  const initial = title.trim().slice(0, 1).toUpperCase();
+  const sla = slaOf(c, now);
+  const slaColor =
+    sla?.tier === "danger" ? t.danger : sla?.tier === "warning" ? t.warning : t.faint;
+  const pinLabel = c.is_pinned ? "Открепить" : "Закрепить";
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={2}
+      leftThreshold={44}
+      rightThreshold={44}
+      overshootLeft={false}
+      overshootRight={false}
+      renderLeftActions={() => (
+        <SwipeAction
+          icon={<Pin color="#fff" size={ICON.sm} />}
+          label={pinLabel}
+          color={t.accent}
+          onPress={() => {
+            swipeRef.current?.close();
+            onTogglePin();
+          }}
+        />
+      )}
+      renderRightActions={() => (
+        <SwipeAction
+          icon={<Archive color="#fff" size={ICON.sm} />}
+          label="Архив"
+          color={t.warning}
+          onPress={() => {
+            swipeRef.current?.close();
+            onArchive();
+          }}
+        />
+      )}
+    >
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}, ${CHANNEL_LABELS[c.channel]}${
+          c.unread_count > 0 ? `, непрочитанных: ${c.unread_count}` : ""
+        }`}
+        // Screen-reader path to the swipe actions.
+        accessibilityActions={[
+          { name: "pin", label: pinLabel },
+          { name: "archive", label: "В архив" },
+        ]}
+        onAccessibilityAction={(e) => {
+          if (e.nativeEvent.actionName === "pin") onTogglePin();
+          if (e.nativeEvent.actionName === "archive") onArchive();
+        }}
+        className="flex-row items-center px-4 py-3 active:opacity-60"
+        style={{ backgroundColor: t.canvas }}
+      >
+        <View
+          className="h-12 w-12 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${color}22` }}
+        >
+          <Text className="text-lg font-semibold" style={{ color }}>
+            {initial}
+          </Text>
+        </View>
+        <View className="ml-3 flex-1">
+          <View className="flex-row items-center justify-between">
+            {c.is_pinned ? (
+              <Pin
+                color={t.faint}
+                size={12}
+                fill={t.faint}
+                style={{ marginRight: 4, transform: [{ rotate: "45deg" }] }}
+              />
+            ) : null}
+            <Text
+              className="flex-1 pr-2 text-base font-semibold"
+              style={{ color: t.ink }}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            {sla ? (
+              <View className="mr-1.5 flex-row items-center gap-0.5">
+                <Clock color={slaColor} size={11} />
+                <Text
+                  className="text-xs"
+                  style={{
+                    color: slaColor,
+                    fontWeight: sla.tier === "danger" ? "700" : "400",
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {sla.label}
+                </Text>
+              </View>
+            ) : null}
+            <Text className="text-xs" style={{ color: t.faint }}>
+              {shortTime(c.last_message_at)}
+            </Text>
+          </View>
+          <View className="mt-0.5 flex-row items-center">
+            <Text className="text-[11px] font-medium" style={{ color }}>
+              {CHANNEL_LABELS[c.channel]}
+            </Text>
+            <Text className="px-1" style={{ color: t.faint }}>·</Text>
+            {c.draft ? (
+              // Web parity (chats/page.tsx:367–368) — unsent draft beats
+              // the last-message preview and warns in red.
+              <Text
+                className="flex-1 text-sm"
+                style={{ color: t.danger }}
+                numberOfLines={1}
+              >
+                Черновик: {c.draft}
+              </Text>
+            ) : (
+              <Text
+                className="flex-1 text-sm"
+                style={{ color: t.sub }}
+                numberOfLines={1}
+              >
+                {lastPreview(c)}
+              </Text>
+            )}
+            {c.unread_count > 0 ? (
+              <View
+                className="ml-2 h-5 min-w-[20px] items-center justify-center rounded-full px-1.5"
+                style={{ backgroundColor: t.accent }}
+              >
+                <Text className="text-[11px] font-bold" style={{ color: "#fff" }}>
+                  {c.unread_count}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Pressable>
+    </ReanimatedSwipeable>
   );
 }
 
@@ -123,8 +267,18 @@ export default function ChatsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: chats = [], isLoading } = useChats();
+  const seedDemo = useSeedDemoChats();
+  const togglePin = useTogglePin();
+  const setStatus = useSetChatStatus();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ChatFilter>(null);
+
+  // Single per-screen minute tick drives every row's SLA badge.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const unansweredCount = useMemo(() => chats.filter(isUnanswered).length, [chats]);
 
@@ -162,6 +316,15 @@ export default function ChatsListScreen() {
     () => chats.reduce((s, c) => s + c.unread_count, 0),
     [chats],
   );
+  // Per-channel counts for the chips (web chats/page.tsx:296–298).
+  const channelCounts = useMemo(() => {
+    const m = new Map<ChatChannel, number>();
+    for (const c of chats) {
+      if (c.status === "archived") continue;
+      m.set(c.channel, (m.get(c.channel) ?? 0) + 1);
+    }
+    return m;
+  }, [chats]);
 
   return (
     <Screen edges={["top"]}>
@@ -179,11 +342,12 @@ export default function ChatsListScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Поиск по имени или тексту"
+          placeholder="Имя, телефон, @handle или текст"
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
           keyboardAppearance={t.dark ? "dark" : "light"}
           clearButtonMode="while-editing"
+          accessibilityLabel="Поиск по чатам"
           className="flex-1 py-2.5 text-base"
           style={{ color: t.ink }}
         />
@@ -198,20 +362,27 @@ export default function ChatsListScreen() {
           const active = filter === ch;
           const waiting = ch === "unanswered";
           const color = waiting ? t.warning : ch ? CHANNEL_COLORS[ch] : t.accent;
-          // «Без ответа» is the operator's work queue — show the count
-          // and a warning tint while it's non-empty (web parity).
-          const label = waiting
-            ? unansweredCount > 0 || active
-              ? `Без ответа (${unansweredCount})`
-              : "Без ответа"
+          // Counts in chips — web parity (chats/page.tsx:294–309): «Все»
+          // always shows its count (canonical total); «Без ответа» and the
+          // channels only when > 0 or active, so a first-time user doesn't
+          // see a row of «(0)» noise.
+          const count = waiting
+            ? unansweredCount
             : ch
-              ? CHANNEL_LABELS[ch]
-              : "Все";
+              ? (channelCounts.get(ch) ?? 0)
+              : visibleCount;
+          const showCount = !ch || count > 0 || active;
+          const label = (!ch ? "Все" : waiting ? "Без ответа" : CHANNEL_LABELS[ch]) +
+            (showCount ? ` (${count})` : "");
           const idleTint = waiting && unansweredCount > 0;
           return (
             <Pressable
               key={ch ?? "all"}
               onPress={() => setFilter(ch)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              hitSlop={6}
               className="rounded-full px-3.5 py-1.5"
               style={{
                 backgroundColor: active
@@ -243,7 +414,15 @@ export default function ChatsListScreen() {
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ flexGrow: 1 }}
           renderItem={({ item }) => (
-            <ChatRow c={item} onPress={() => router.push(`/chats/${item.id}`)} />
+            <ChatRow
+              c={item}
+              now={now}
+              onPress={() => router.push(`/chats/${item.id}`)}
+              onTogglePin={() => togglePin.mutate(item.id)}
+              onArchive={() =>
+                setStatus.mutate({ chatId: item.id, status: "archived" })
+              }
+            />
           )}
           ItemSeparatorComponent={() => (
             <View
@@ -260,6 +439,17 @@ export default function ChatsListScreen() {
                 filter || query.trim()
                   ? "Попробуйте другой фильтр или обнулите поиск."
                   : "Подключите WhatsApp / Instagram / Telegram, чтобы вести переписку с клиентами в одном месте."
+              }
+              // STORY-053a — demo data strictly ON REQUEST (auto-seed was
+              // removed in Wave 1): explicit button, only on a truly empty
+              // inbox (no chats at all, not just a filtered-out view).
+              action={
+                !filter && !query.trim() && chats.length === 0
+                  ? {
+                      label: "Загрузить демо-чаты",
+                      onPress: () => seedDemo.mutate(),
+                    }
+                  : undefined
               }
             />
           }

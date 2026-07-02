@@ -6,14 +6,17 @@ import {
   Building2,
   CalendarCheck2,
   CalendarClock,
+  CalendarX2,
   ChevronRight,
   CircleUser,
   Gift,
   Landmark,
   MapPin,
+  MessageSquareText,
   Package,
   Receipt,
   RotateCw,
+  Tag,
   Tags,
   Scissors,
   Users,
@@ -105,6 +108,10 @@ export default function CabinetHome() {
         <SectionCard>
           <MenuRow icon={CalendarCheck2} label="Закрыть день" href="/cabinet/close-day" />
           <Divider inset={56} />
+          {/* Веб: /dashboard/unclosed («Не закрыто») живёт рядом с закрытием
+              дня. Экран делает соседний агент — роут уже зарезервирован. */}
+          <MenuRow icon={CalendarX2} label="Незакрытые дни" href={"/cabinet/unclosed" as Href} />
+          <Divider inset={56} />
           <MenuRow icon={Package} label="Склад" href="/cabinet/inventory" />
           <Divider inset={56} />
           <MenuRow icon={RotateCw} label="Повторяющиеся ТО" href="/cabinet/recurring" />
@@ -132,6 +139,16 @@ export default function CabinetHome() {
           <MenuRow icon={Building2} label="Бизнес" href="/cabinet/business" />
           <Divider inset={56} />
           <MenuRow icon={CalendarClock} label="Календарь" href="/cabinet/calendar" />
+          <Divider inset={56} />
+          {/* Веб: Настройки → Календарь → Метки (личные метки календаря). */}
+          <MenuRow icon={Tag} label="Метки" href={"/cabinet/labels" as Href} />
+          <Divider inset={56} />
+          {/* Веб: группа «Записи» держит SMS-шаблоны рядом с календарём. */}
+          <MenuRow
+            icon={MessageSquareText}
+            label="SMS-шаблоны"
+            href={"/cabinet/sms-templates" as Href}
+          />
           <Divider inset={56} />
           <MenuRow icon={Gift} label="Лояльность" href="/cabinet/loyalty" />
           <Divider inset={56} />

@@ -138,6 +138,7 @@ export default function CalendarTab() {
   const params = useLocalSearchParams<{
     new?: string;
     clientId?: string;
+    locationId?: string;
     teamId?: string;
     date?: string;
   }>();
@@ -154,6 +155,7 @@ export default function CalendarTab() {
       date?: string;
       time_start?: string;
       client_id?: string | null;
+      location_id?: string | null;
       team_id?: string | null;
     } | undefined
   >(undefined);
@@ -181,10 +183,18 @@ export default function CalendarTab() {
       setEditing(null);
       setBookDefaults({
         client_id: params.clientId ?? null,
+        // «Записать сюда» / «Записать ТО» с карточки клиента шлют объект —
+        // предвыбираем его в шите (LOCKED «Карта-диспетчер»: букинг в 2 тапа).
+        location_id: params.locationId ?? null,
         team_id: params.teamId ?? null,
       });
       setSheetOpen(true);
-      router.setParams({ new: undefined, clientId: undefined, teamId: undefined });
+      router.setParams({
+        new: undefined,
+        clientId: undefined,
+        locationId: undefined,
+        teamId: undefined,
+      });
     } else if (params.date) {
       const d = parseYMD(params.date);
       setCursor(startOfMonth(d));

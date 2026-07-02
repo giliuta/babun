@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,10 +9,9 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { Filter, Phone, Pin, Plus, Search, Upload } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Clock, Phone, Pin, Plus, Search, Settings } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
-import { matchesClient } from "@babun/shared/local/selectors/client-search";
 import {
   buildStatsMap,
   type ClientStats,
@@ -25,13 +24,20 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import {
+  buildSegmentCounts,
   EMPTY_FILTER,
-  applyClientsFilter,
-  cityOptions,
-  filterActiveCount,
+  resetFilters,
+  type ActiveToken,
   type ClientsFilter,
 } from "@/features/clients/filter";
+import { useClientFilters } from "@/features/clients/useClientFilters";
+import {
+  DEFAULT_CARD_FIELDS,
+  useCardFields,
+  type CardFieldPrefs,
+} from "@/features/clients/card-prefs";
 import { formatShortDateRu } from "@/features/clients/format";
+import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportSheet } from "@/features/clients/ImportSheet";
 import { useAppointments } from "@/features/calendar/queries";
@@ -43,20 +49,21 @@ const DEBT_GOLD = "#b78600";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
-// · gold debt) · meta row (посл. запись · команда · город · теги). The
-// web's «Что показывать» cardFields prefs have no mobile settings screen
-// yet, so all fields render (= the web defaults).
+// · gold debt) · meta row (посл. запись · команда · город · теги).
+// Field visibility is driven by the «Что показывать» prefs (cardFields).
 function ClientRow({
   client,
   stats,
   teamName,
   tags,
+  cardFields,
   onPress,
 }: {
   client: Client;
   stats: ClientStats | undefined;
   teamName: string | null;
   tags: ClientTag[];
+  cardFields: CardFieldPrefs;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -71,21 +78,50 @@ function ClientRow({
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
 
   const figs: { key: string; text: string; color: string }[] = [];
-  if (exp > 0) figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
-  if (income > 0)
+  if (cardFields.exp && exp > 0)
+    figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
+  if (cardFields.inc && income > 0)
     figs.push({ key: "inc", text: formatEUR(income), color: t.success });
-  if (debt > 0)
+  if (cardFields.debt && debt > 0)
     figs.push({ key: "debt", text: formatEUR(debt), color: DEBT_GOLD });
 
-  const metaSegs: string[] = [
-    stats?.lastVisitDate ? formatShortDateRu(stats.lastVisitDate) : "нет записей",
-  ];
-  if (teamName) metaSegs.push(teamName);
-  const city = (client.city ?? "").trim();
-  if (city) metaSegs.push(city);
-  for (const tid of client.tag_ids) {
-    const tag = tags.find((x) => x.id === tid);
-    if (tag) metaSegs.push(tag.name);
+  // Meta line — last visit (с иконкой часов, web parity) · team · city ·
+  // tags. Каждое поле гейтится своим тогглом.
+  const metaSegs: { key: string; node: React.ReactNode }[] = [];
+  if (cardFields.last) {
+    metaSegs.push({
+      key: "last",
+      node: stats?.lastVisitDate ? (
+        <View className="flex-row items-center gap-1">
+          <Clock color={t.sub} size={11} strokeWidth={2.2} />
+          <Text className="text-[11px]" style={{ color: t.ink }}>
+            {formatShortDateRu(stats.lastVisitDate)}
+          </Text>
+        </View>
+      ) : (
+        <Text className="text-[11px]" style={{ color: t.faint }}>
+          нет записей
+        </Text>
+      ),
+    });
+  }
+  if (cardFields.meta) {
+    const push = (key: string, text: string) =>
+      metaSegs.push({
+        key,
+        node: (
+          <Text className="text-[11px]" style={{ color: t.ink }} numberOfLines={1}>
+            {text}
+          </Text>
+        ),
+      });
+    if (teamName) push("team", teamName);
+    const city = (client.city ?? "").trim();
+    if (city) push("city", city);
+    for (const tid of client.tag_ids) {
+      const tag = tags.find((x) => x.id === tid);
+      if (tag) push(`tag-${tid}`, tag.name);
+    }
   }
 
   return (
@@ -127,13 +163,20 @@ function ClientRow({
             ))}
           </View>
         ) : null}
-        <Text
-          className="mt-0.5 text-[11px]"
-          style={{ color: t.sub }}
-          numberOfLines={1}
-        >
-          {metaSegs.join(" · ")}
-        </Text>
+        {metaSegs.length > 0 ? (
+          <View className="mt-0.5 flex-row flex-wrap items-center">
+            {metaSegs.map((seg, i) => (
+              <View key={seg.key} className="flex-row items-center">
+                {i > 0 ? (
+                  <Text className="mx-[5px] text-[11px]" style={{ color: t.faint }}>
+                    ·
+                  </Text>
+                ) : null}
+                {seg.node}
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
       {phoneDigits ? (
         <Pressable
@@ -153,18 +196,30 @@ function ClientRow({
 export default function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  // Экран настроек возвращается сюда с nonce-параметрами: «Фильтры /
+  // Сортировка» → openFilters, «Импорт из CSV» → openImport.
+  const params = useLocalSearchParams<{
+    openFilters?: string;
+    openImport?: string;
+  }>();
   const { data, isLoading, isRefetching, refetch, error } = useClients();
   const { data: tags = [] } = useClientTags();
   const { data: appointments = [] } = useAppointments();
   const { data: teams = [] } = useTeams();
+  const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
+  useEffect(() => {
+    if (params.openFilters) setSheetOpen(true);
+  }, [params.openFilters]);
+  useEffect(() => {
+    if (params.openImport) setImportOpen(true);
+  }, [params.openImport]);
+
   const clients = data ?? [];
-  const cities = useMemo(() => cityOptions(clients), [clients]);
-  const activeCount = filterActiveCount(filter);
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
@@ -173,52 +228,75 @@ export default function ClientsListScreen() {
     [clients, appointments],
   );
 
-  // Sort depends on clients+stats ONLY — keystrokes in the search box
-  // must not re-run the O(n log n) comparator. Web default order:
-  // pinned-first, then «recent» (last visit / created_at desc).
-  const sorted = useMemo(() => {
-    return [...clients].sort((a, b) => {
-      const aPinned = a.pinned_at ? 1 : 0;
-      const bPinned = b.pinned_at ? 1 : 0;
-      if (aPinned !== bPinned) return bPinned - aPinned;
-      if (aPinned && bPinned) {
-        return (b.pinned_at ?? "").localeCompare(a.pinned_at ?? "");
-      }
-      const aDate = statsMap.get(a.id)?.lastVisitDate || a.created_at;
-      const bDate = statsMap.get(b.id)?.lastVisitDate || b.created_at;
-      return bDate.localeCompare(aDate);
-    });
-  }, [clients, statsMap]);
+  const segmentCounts = useMemo(
+    () => buildSegmentCounts(clients, statsMap),
+    [clients, statsMap],
+  );
 
-  const visible = useMemo(() => {
-    const byFilter = applyClientsFilter(sorted, filter, statsMap);
-    const q = query.trim();
-    return q ? byFilter.filter((c) => matchesClient(c, q)) : byFilter;
-  }, [sorted, statsMap, query, filter]);
+  // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
+  // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
+  // localeCompare-компаратор.
+  const result = useClientFilters(
+    clients,
+    appointments,
+    teams,
+    tags,
+    statsMap,
+    filter,
+    query,
+    sheetOpen,
+  );
 
-  const filtering = activeCount > 0 || query.trim().length > 0;
+  const removeToken = (token: ActiveToken) => {
+    if (token.key === "team")
+      setFilter((f) => ({
+        ...f,
+        selectedTeams: f.selectedTeams.filter((x) => x !== token.val),
+      }));
+    else if (token.key === "city")
+      setFilter((f) => ({
+        ...f,
+        selectedCities: f.selectedCities.filter((x) => x !== token.val),
+      }));
+    else if (token.key === "tag")
+      setFilter((f) => ({
+        ...f,
+        activeTags: f.activeTags.filter((x) => x !== token.val),
+      }));
+    else if (token.key === "period") setFilter((f) => ({ ...f, period: null }));
+    else if (token.key === "segment")
+      setFilter((f) => ({ ...f, segment: "all" }));
+  };
+
+  const filtering = result.activeCount > 0 || query.trim().length > 0;
 
   return (
     <Screen>
       <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
-        <View>
-          <Text className="text-2xl font-bold" style={{ color: t.ink }}>Клиенты</Text>
-          <Text className="text-sm" style={{ color: t.sub }}>
-            {filtering
-              ? `Найдено: ${visible.length} из ${clients.length}`
-              : `${clients.length} всего`}
-          </Text>
-        </View>
+        <Text className="text-2xl font-bold" style={{ color: t.ink }}>
+          Клиенты
+        </Text>
         <View className="flex-row items-center gap-2">
+          {/* v811 — импорт/экспорт переехали в «Настройки клиентов»
+              (шестерёнка); в хедере остаётся только «+». */}
           <Pressable
-            onPress={() => setImportOpen(true)}
+            onPress={() =>
+              router.push({
+                pathname: "/clients/settings",
+                params: { sort: filter.sort },
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Настройки клиентов"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
             style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
           >
-            <Upload color={t.body} size={20} />
+            <Settings color={t.body} size={20} />
           </Pressable>
           <Pressable
             onPress={() => router.push("/clients/new")}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить клиента"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
             style={{ backgroundColor: t.accent }}
           >
@@ -246,40 +324,15 @@ export default function ClientsListScreen() {
         />
       </View>
 
-      {/* «Сбросить» is a SIBLING of the filter pressable (not nested) so
-          VoiceOver reads two targets and a miss can't open the sheet. */}
-      <View
-        className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl border px-3"
-        style={
-          activeCount
-            ? { borderColor: t.accent + "66", backgroundColor: t.dark ? `${t.accent}1a` : `${t.accent}0d` }
-            : { borderColor: t.separator, backgroundColor: t.surface }
-        }
-      >
-        <Pressable
-          onPress={() => setSheetOpen(true)}
-          className="flex-1 flex-row items-center gap-2 py-2.5 active:opacity-60"
-        >
-          <Filter color={activeCount ? t.accent : t.faint} size={16} />
-          <Text
-            className="flex-1 text-sm"
-            style={{ color: activeCount ? t.accent : t.sub, fontWeight: activeCount ? "600" : "400" }}
-          >
-            {activeCount ? `Фильтры · ${activeCount}` : "Фильтры"}
-          </Text>
-        </Pressable>
-        {activeCount ? (
-          <Pressable
-            hitSlop={12}
-            onPress={() => setFilter(EMPTY_FILTER)}
-            accessibilityRole="button"
-            accessibilityLabel="Сбросить фильтры"
-            className="py-2.5 pl-2 active:opacity-60"
-          >
-            <Text className="text-xs" style={{ color: t.faint }}>Сбросить</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <ClientsFilterBar
+        totalCount={clients.length}
+        foundCount={result.filtered.length}
+        activeCount={result.activeCount}
+        tokens={result.activeTokens}
+        onOpen={() => setSheetOpen(true)}
+        onRemoveToken={removeToken}
+        onReset={() => setFilter(resetFilters(filter))}
+      />
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
@@ -294,7 +347,7 @@ export default function ClientsListScreen() {
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={visible}
+          data={result.filtered}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
@@ -308,6 +361,7 @@ export default function ClientsListScreen() {
                 stats={stats}
                 teamName={teamName}
                 tags={tags}
+                cardFields={cardFields}
                 onPress={() => router.push(`/clients/${item.id}`)}
               />
             );
@@ -331,10 +385,10 @@ export default function ClientsListScreen() {
       <ClientsFilterSheet
         visible={sheetOpen}
         filter={filter}
+        result={result}
+        segmentCounts={segmentCounts}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
-        tags={tags}
-        cities={cities}
       />
       <ImportSheet visible={importOpen} onClose={() => setImportOpen(false)} />
     </Screen>

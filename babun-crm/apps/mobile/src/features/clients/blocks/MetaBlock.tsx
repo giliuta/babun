@@ -1,5 +1,7 @@
 // MetaBlock (mobile port of apps/web/.../blocks/MetaBlock.tsx)
 // STORY-034 — Метаданные: Источник обращения · теги · «в базе с …».
+// Collapsed by default (CollapsibleCard) — the closed row shows
+// «{источник} · N тегов».
 // Plus a Чёрный список toggle (client.blacklisted) — the field exists
 // on Client and has no home in the other blocks, so it lives here.
 // Presentational only — receives client + update() + the tenant tag
@@ -13,6 +15,7 @@ import {
   ACQUISITION_LABELS,
   type AcquisitionSource,
 } from "@babun/shared/local/clients";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { useThemeColors } from "@/theme/colors";
 
 interface MetaBlockProps {
@@ -49,13 +52,21 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
 
   const chipInactiveBg = th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
 
-  return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: th.surface }}>
-      <Text className="px-1 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider" style={{ color: th.sub }}>
-        Метаданные
-      </Text>
+  // Collapsed-row summary: «Рекомендация · 2 тега» — only what's set.
+  const summary = [
+    client.acquisition_source && client.acquisition_source !== "unknown"
+      ? ACQUISITION_LABELS[client.acquisition_source]
+      : null,
+    client.tag_ids.length
+      ? `${client.tag_ids.length} ${tagsWord(client.tag_ids.length)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-      <View className="gap-3 px-1">
+  return (
+    <CollapsibleCard title="Метаданные" summary={summary}>
+      <View className="gap-3 px-1 pt-1">
         {/* Источник обращения — web uses a <select>; RN has no native
             select, so render the options as a wrapping chip group. */}
         <View>
@@ -153,8 +164,16 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
           В базе с {formatCreatedAt(client.created_at)}
         </Text>
       </View>
-    </View>
+    </CollapsibleCard>
   );
+}
+
+function tagsWord(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "тег";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "тега";
+  return "тегов";
 }
 
 export default MetaBlock;

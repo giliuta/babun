@@ -125,7 +125,9 @@ export function useCreateCity() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; country?: string }) => {
+    // `color` — v492 labels: custom tags («Германия», «День ног») get a
+    // per-city accent colour that tints the calendar day chip (web parity).
+    mutationFn: async (input: { name: string; country?: string; color?: string }) => {
       const { data, error } = await supabase
         .from("cities")
         .insert({
@@ -133,6 +135,7 @@ export function useCreateCity() {
           tenant_id: tenantId as string,
           name: input.name,
           country: input.country || "",
+          color: input.color || null,
         })
         .select("*")
         .single();

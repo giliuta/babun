@@ -6,10 +6,17 @@ import {
   Users,
   Wallet,
 } from "lucide-react-native";
+import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
+import { useChats } from "@/features/chats/store";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
+  // Unread badge on the «Чаты» tab icon (web parity: the unread chip in
+  // the chats nav title, chats/page.tsx:256–260). Reads the same ["chats"]
+  // query the screens mutate, so it updates live.
+  const { data: chats = [] } = useChats();
+  const unread = getTotalUnread(chats);
   return (
     <Tabs
       screenOptions={{
@@ -44,6 +51,13 @@ export default function DashboardLayout() {
           tabBarIcon: ({ color, size }) => (
             <MessageCircle color={color} size={size} />
           ),
+          tabBarBadge: unread > 0 ? (unread > 99 ? "99+" : unread) : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: t.danger,
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: "600",
+          },
         }}
       />
       <Tabs.Screen

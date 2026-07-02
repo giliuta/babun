@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
+  Clipboard,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -9,18 +11,31 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  Archive,
+  CalendarPlus,
+  Check,
+  CheckCheck,
+  Copy,
   CornerUpLeft,
+  EllipsisVertical,
   Link2,
+  Pin,
   Search,
   Send,
   Star,
   Trash2,
+  UserPlus,
+  UserRound,
   X,
   Zap,
 } from "lucide-react-native";
-import { CHANNEL_LABELS, type ChatMessage } from "@babun/shared/local/chats";
+import {
+  CHANNEL_LABELS,
+  type ChatMessage,
+  type MessageStatus,
+} from "@babun/shared/local/chats";
 import {
   detectLanguage,
   QUICK_REPLIES,
@@ -28,9 +43,11 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { useClients } from "@/features/clients/queries";
+import { useClients, useCreateClient } from "@/features/clients/queries";
+import { tryToE164 } from "@/features/clients/phone";
 import {
   useChat,
   useDeleteMessage,
@@ -38,7 +55,9 @@ import {
   useMarkRead,
   usePersistDraft,
   useSendMessage,
+  useSetChatStatus,
   useStarMessage,
+  useTogglePin,
 } from "@/features/chats/store";
 
 function msgTime(iso: string): string {
@@ -49,6 +68,18 @@ function msgTime(iso: string): string {
   ).padStart(2, "0")}`;
 }
 
+// «Сегодня / Вчера / 5 марта» — web parity (chats/page.tsx:863–871),
+// including the ISO-slice date key so both platforms bucket identically.
+function formatDateLabel(dateKey: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  if (dateKey === today) return "Сегодня";
+  if (dateKey === yesterday) return "Вчера";
+  const [, m, d] = dateKey.split("-").map(Number);
+  const months = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+  return `${d} ${months[m - 1]}`;
+}
+
 function bodyOf(m: ChatMessage): string {
   if (m.content_type === "image") return "📷 Фото";
   if (m.content_type === "audio") return "🎤 Голосовое";
@@ -56,22 +87,56 @@ function bodyOf(m: ChatMessage): string {
   return m.text;
 }
 
+// Delivery ticks for outgoing messages — web StatusChecks
+// (chats/page.tsx:820–831): ✓ sent, ✓✓ delivered, ✓✓ accent when read.
+function StatusTicks({ status }: { status?: MessageStatus }) {
+  const t = useThemeColors();
+  if (!status) return null;
+  const Icon = status === "sent" ? Check : CheckCheck;
+  return (
+    <Icon
+      color={status === "read" ? t.accent : t.faint}
+      size={13}
+      strokeWidth={2.4}
+    />
+  );
+}
+
+// Rows of the inverted thread list: date separators interleaved with
+// messages (web groups by day, chats/page.tsx:615–621).
+type ThreadRow =
+  | { type: "date"; key: string; label: string }
+  | { type: "msg"; m: ChatMessage };
+
 // Memoized bubble — message objects are referentially stable across
 // composer keystrokes, so typing doesn't re-render the visible thread.
 const MessageRow = memo(function MessageRow({
   m,
   quoted,
   onLongPress,
+  onCopy,
 }: {
   m: ChatMessage;
   quoted: ChatMessage | null;
   onLongPress: (m: ChatMessage) => void;
+  onCopy: (m: ChatMessage) => void;
 }) {
   const t = useThemeColors();
   const out = m.direction === "out";
   return (
     <Pressable
       onLongPress={() => onLongPress(m)}
+      accessibilityLabel={`${out ? "Вы" : "Клиент"}: ${bodyOf(m)}, ${msgTime(m.timestamp)}`}
+      accessibilityHint="Долгое нажатие — меню сообщения"
+      // Screen-reader path to the long-press menu and to copy.
+      accessibilityActions={[
+        { name: "longpress", label: "Меню сообщения" },
+        { name: "copy", label: "Копировать" },
+      ]}
+      onAccessibilityAction={(e) => {
+        if (e.nativeEvent.actionName === "copy") onCopy(m);
+        else onLongPress(m);
+      }}
       className={`my-0.5 max-w-[82%] ${out ? "self-end" : "self-start"}`}
     >
       <View
@@ -119,16 +184,37 @@ const MessageRow = memo(function MessageRow({
         <Text className="text-[10px]" style={{ color: t.faint }}>
           {msgTime(m.timestamp)}
         </Text>
+        {out ? <StatusTicks status={m.status} /> : null}
       </View>
     </Pressable>
   );
 });
 
+function DateSeparator({ label }: { label: string }) {
+  const t = useThemeColors();
+  return (
+    <View className="my-2 items-center">
+      <View
+        className="rounded-full px-3 py-1"
+        style={{
+          backgroundColor: t.dark ? "rgba(255,255,255,0.08)" : "rgba(11,18,32,0.06)",
+        }}
+      >
+        <Text className="text-xs font-medium" style={{ color: t.sub }}>
+          {label}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function ChatThreadScreen() {
   const t = useThemeColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const chat = useChat(id);
   const { data: clients = [] } = useClients();
+  const toast = useToast();
 
   const send = useSendMessage();
   const star = useStarMessage();
@@ -136,10 +222,14 @@ export default function ChatThreadScreen() {
   const persistDraft = usePersistDraft();
   const linkClient = useLinkClient();
   const markRead = useMarkRead();
+  const togglePin = useTogglePin();
+  const setStatus = useSetChatStatus();
+  const createClient = useCreateClient();
 
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [menuMsg, setMenuMsg] = useState<ChatMessage | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState("");
@@ -175,11 +265,22 @@ export default function ChatThreadScreen() {
   );
   // Inverted-list order: newest first (standard RN chat pattern — the
   // list stays pinned to the bottom without scrollToEnd forcing the
-  // whole thread to render on open).
-  const reversed = useMemo(
-    () => [...(chat?.messages ?? [])].reverse(),
-    [chat?.messages],
-  );
+  // whole thread to render on open). Date separators are interleaved
+  // BEFORE reversing, so each label ends up visually above its day.
+  const rows = useMemo<ThreadRow[]>(() => {
+    const out: ThreadRow[] = [];
+    let lastDate = "";
+    for (const m of chat?.messages ?? []) {
+      const dateKey = m.timestamp.slice(0, 10);
+      if (dateKey !== lastDate) {
+        out.push({ type: "date", key: `d-${dateKey}`, label: formatDateLabel(dateKey) });
+        lastDate = dateKey;
+      }
+      out.push({ type: "msg", m });
+    }
+    out.reverse();
+    return out;
+  }, [chat?.messages]);
   const lang = useMemo(
     () => detectLanguage((chat?.messages ?? []).map((m) => m.text)),
     [chat?.messages],
@@ -188,23 +289,18 @@ export default function ChatThreadScreen() {
     ? clients.find((c) => c.id === chat.client_id)
     : null;
 
-  if (!chat) {
-    return (
-      <Screen edges={["top"]}>
-        <ScreenHeader title="Чат" />
-        <EmptyState fill title="Диалог не найден" />
-      </Screen>
-    );
-  }
+  const copyMessage = useCallback(
+    (m: ChatMessage) => {
+      // RN core Clipboard (deprecated upstream, still shipped in 0.81) —
+      // expo-clipboard isn't in deps and new packages are frozen.
+      Clipboard.setString(m.text || bodyOf(m));
+      toast("Скопировано");
+      setMenuMsg(null);
+    },
+    [toast],
+  );
 
-  const submit = () => {
-    const text = draft.trim();
-    if (!text) return;
-    setDraft("");
-    send.mutate({ chatId: chat.id, text, replyToId: replyTo?.id ?? null });
-    setReplyTo(null);
-  };
-
+  // Above the early return — hook order must not depend on `chat`.
   const filteredClients = useMemo(() => {
     const q = clientQuery.trim().toLowerCase();
     const base = q
@@ -217,23 +313,184 @@ export default function ChatThreadScreen() {
     return base.slice(0, 50);
   }, [clients, clientQuery]);
 
+  if (!chat) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Чат" />
+        <EmptyState fill title="Диалог не найден" />
+      </Screen>
+    );
+  }
+
+  const title = chat.contact_name || chat.contact_handle || "Без имени";
+  const subtitleParts = [
+    CHANNEL_LABELS[chat.channel],
+    chat.contact_name ? chat.contact_handle : "",
+    linkedClient?.full_name ?? "",
+  ].filter(Boolean);
+
+  const submit = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    send.mutate({ chatId: chat.id, text, replyToId: replyTo?.id ?? null });
+    setReplyTo(null);
+  };
+
+  // ⋮ «Создать клиента» — web opens CreateClientModal prefilled with the
+  // dialog contact (name always, phone only for whatsapp/sms — page.tsx:
+  // 566–572; name is the only required field there). Mobile creates the
+  // client directly after a confirm, links it to the chat and lands on
+  // the client card (add-client decision: create IS the client card).
+  const createFromChat = () => {
+    const phone =
+      chat.channel === "whatsapp" || chat.channel === "sms"
+        ? chat.contact_phone.trim()
+        : "";
+    const name = (chat.contact_name || chat.contact_handle).trim();
+    if (!name && !phone) {
+      // Nothing to prefill — hand over to the regular create screen.
+      router.push("/clients/new");
+      return;
+    }
+
+    // Dedup guard (web's «existing» tab): same E.164 → offer to link.
+    const e164 = phone ? tryToE164(phone) : null;
+    const existing = e164
+      ? clients.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === e164)
+      : undefined;
+    if (existing) {
+      Alert.alert(
+        "Клиент уже существует",
+        `${existing.full_name || existing.phone}${existing.phone ? ` · ${existing.phone}` : ""}`,
+        [
+          { text: "Отмена", style: "cancel" },
+          {
+            text: "Привязать",
+            onPress: () => {
+              linkClient.mutate({ chatId: chat.id, clientId: existing.id });
+              toast("Клиент привязан");
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Создать клиента",
+      [name, phone].filter(Boolean).join(" · "),
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Создать",
+          onPress: async () => {
+            try {
+              const created = await createClient.mutateAsync({
+                full_name: name,
+                phone,
+                phone_e164: e164,
+              });
+              linkClient.mutate({ chatId: chat.id, clientId: created.id });
+              router.push(`/clients/${created.id}`);
+            } catch (e) {
+              // useCreateClient is meta.errorHandled — alerting is on us.
+              Alert.alert(
+                "Не удалось создать клиента",
+                (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // ⋮ menu — web header menu semantics (chats/page.tsx:649–674).
+  const headerActions: {
+    label: string;
+    icon: typeof Pin;
+    danger?: boolean;
+    onPress: () => void;
+  }[] = [
+    {
+      label: chat.is_pinned ? "Открепить" : "Закрепить",
+      icon: Pin,
+      onPress: () => togglePin.mutate(chat.id),
+    },
+    ...(linkedClient
+      ? [
+          {
+            label: "Открыть карточку клиента",
+            icon: UserRound,
+            onPress: () => router.push(`/clients/${linkedClient.id}`),
+          },
+        ]
+      : [
+          {
+            label: "Создать клиента",
+            icon: UserPlus,
+            onPress: createFromChat,
+          },
+        ]),
+    {
+      label: "Записать на приём",
+      icon: CalendarPlus,
+      onPress: () =>
+        router.push({
+          pathname: "/",
+          params: {
+            new: "1",
+            ...(chat.client_id ? { clientId: chat.client_id } : {}),
+          },
+        }),
+    },
+    {
+      label: "Закрыть чат",
+      icon: Check,
+      onPress: () => {
+        setStatus.mutate({ chatId: chat.id, status: "closed" });
+        toast("Чат закрыт");
+      },
+    },
+    {
+      label: "В архив",
+      icon: Archive,
+      onPress: () => {
+        setStatus.mutate({ chatId: chat.id, status: "archived" });
+        router.back();
+      },
+    },
+  ];
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
-        title={chat.contact_name || "Без имени"}
-        subtitle={
-          linkedClient
-            ? `${CHANNEL_LABELS[chat.channel]} · ${linkedClient.full_name}`
-            : CHANNEL_LABELS[chat.channel]
-        }
+        title={title}
+        subtitle={subtitleParts.join(" · ")}
         right={
-          <Pressable
-            onPress={() => setLinkOpen(true)}
-            hitSlop={8}
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Link2 color={linkedClient ? t.accent : t.faint} size={ICON.sm} />
-          </Pressable>
+          <View className="flex-row items-center">
+            <Pressable
+              onPress={() => setLinkOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={
+                linkedClient ? "Клиент привязан — изменить" : "Привязать клиента"
+              }
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+            >
+              <Link2 color={linkedClient ? t.accent : t.faint} size={ICON.sm} />
+            </Pressable>
+            <Pressable
+              onPress={() => setHeaderMenuOpen(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Меню диалога"
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+            >
+              <EllipsisVertical color={t.body} size={ICON.sm} />
+            </Pressable>
+          </View>
         }
       />
       <KeyboardAvoidingView
@@ -242,19 +499,26 @@ export default function ChatThreadScreen() {
       >
         <FlatList
           style={{ flex: 1 }}
-          data={reversed}
+          data={rows}
           // Only invert when there are messages — an inverted empty list
           // would render ListEmptyComponent upside down.
-          inverted={reversed.length > 0}
-          keyExtractor={(m) => m.id}
+          inverted={rows.length > 0}
+          keyExtractor={(r) => (r.type === "date" ? r.key : r.m.id)}
           contentContainerStyle={{ padding: 12, flexGrow: 1 }}
-          renderItem={({ item }) => (
-            <MessageRow
-              m={item}
-              quoted={item.reply_to_id ? (byId.get(item.reply_to_id) ?? null) : null}
-              onLongPress={setMenuMsg}
-            />
-          )}
+          renderItem={({ item }) =>
+            item.type === "date" ? (
+              <DateSeparator label={item.label} />
+            ) : (
+              <MessageRow
+                m={item.m}
+                quoted={
+                  item.m.reply_to_id ? (byId.get(item.m.reply_to_id) ?? null) : null
+                }
+                onLongPress={setMenuMsg}
+                onCopy={copyMessage}
+              />
+            )
+          }
           ListEmptyComponent={
             <EmptyState title="Нет сообщений" subtitle="Напишите первым" />
           }
@@ -277,7 +541,12 @@ export default function ChatThreadScreen() {
             >
               {bodyOf(replyTo)}
             </Text>
-            <Pressable onPress={() => setReplyTo(null)} hitSlop={8}>
+            <Pressable
+              onPress={() => setReplyTo(null)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Отменить ответ"
+            >
               <X color={t.sub} size={16} />
             </Pressable>
           </View>
@@ -290,6 +559,8 @@ export default function ChatThreadScreen() {
         >
           <Pressable
             onPress={() => setQrOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Быстрые ответы"
             className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
           >
             <Zap color={t.accent} size={ICON.sm} />
@@ -303,6 +574,7 @@ export default function ChatThreadScreen() {
             selectionColor={t.accent}
             keyboardAppearance={t.dark ? "dark" : "light"}
             multiline
+            accessibilityLabel="Текст сообщения"
             className="max-h-24 flex-1 rounded-2xl px-4 py-2.5 text-base"
             style={{
               backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5",
@@ -312,6 +584,8 @@ export default function ChatThreadScreen() {
           <Pressable
             onPress={submit}
             disabled={!draft.trim()}
+            accessibilityRole="button"
+            accessibilityLabel="Отправить"
             className={`h-10 w-10 items-center justify-center rounded-full ${draft.trim() ? "active:opacity-80" : ""}`}
             style={{ backgroundColor: draft.trim() ? t.accent : t.disabledFill }}
           >
@@ -319,6 +593,48 @@ export default function ChatThreadScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* header ⋮ menu */}
+      <Modal
+        visible={headerMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHeaderMenuOpen(false)}
+      >
+        <Pressable
+          className="flex-1 justify-end"
+          style={{ backgroundColor: t.scrim }}
+          onPress={() => setHeaderMenuOpen(false)}
+          accessibilityLabel="Закрыть меню"
+        >
+          <View
+            className="m-3 overflow-hidden rounded-2xl"
+            style={{ backgroundColor: t.surface }}
+          >
+            {headerActions.map((a, i) => (
+              <Pressable
+                key={a.label}
+                onPress={() => {
+                  setHeaderMenuOpen(false);
+                  a.onPress();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={a.label}
+                className={`flex-row items-center gap-3 px-4 py-3.5 active:opacity-60 ${i > 0 ? "border-t" : ""}`}
+                style={i > 0 ? { borderColor: t.separator } : undefined}
+              >
+                <a.icon color={a.danger ? t.danger : t.body} size={ICON.sm} />
+                <Text
+                  className="text-base"
+                  style={{ color: a.danger ? t.danger : t.ink }}
+                >
+                  {a.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* message context menu */}
       <Modal visible={!!menuMsg} transparent animationType="fade" onRequestClose={() => setMenuMsg(null)}>
@@ -338,6 +654,15 @@ export default function ChatThreadScreen() {
                 onPress: () => {
                   setReplyTo(menuMsg);
                   setMenuMsg(null);
+                },
+              },
+              // Web parity (chats/page.tsx:750) — copy sits between
+              // reply and star in the long-press menu.
+              {
+                label: "Копировать",
+                icon: Copy,
+                onPress: () => {
+                  if (menuMsg) copyMessage(menuMsg);
                 },
               },
               {
@@ -361,6 +686,8 @@ export default function ChatThreadScreen() {
               <Pressable
                 key={a.label}
                 onPress={a.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={a.label}
                 className={`flex-row items-center gap-3 px-4 py-3.5 active:opacity-60 ${i > 0 ? "border-t" : ""}`}
                 style={i > 0 ? { borderColor: t.separator } : undefined}
               >
@@ -447,6 +774,9 @@ export default function ChatThreadScreen() {
                   linkClient.mutate({ chatId: chat.id, clientId: null });
                   setLinkOpen(false);
                 }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Отвязать клиента"
               >
                 <Text
                   className="text-sm font-medium"

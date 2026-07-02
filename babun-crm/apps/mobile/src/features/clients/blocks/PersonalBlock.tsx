@@ -1,12 +1,15 @@
 // PersonalBlock (mobile port of apps/web/.../blocks/PersonalBlock.tsx)
 // STORY-034 — Личное: Город · ДР · Email · Язык. Reference data for
 // SMS templates and birthday reminders; nothing here drives behavior.
-// Presentational only — receives client + update(), persists via the
-// composer's Supabase mutation.
+// Collapsed by default (CollapsibleCard) — the closed row shows
+// «{город} · ДР {дата}». Presentational only — receives client +
+// update(), persists via the composer's Supabase mutation.
 
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import type { Client } from "@babun/shared/local/clients";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
+import { formatShortDateRu } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 interface PersonalBlockProps {
@@ -69,18 +72,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function PersonalBlock({ client, update }: PersonalBlockProps) {
   const t = useThemeColors();
+
+  // Collapsed-row summary: «Пафос · ДР 14 мар» — only what's filled.
+  const summary = [
+    client.city || null,
+    client.birthday ? `ДР ${formatShortDateRu(client.birthday) || client.birthday}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <View
-      className="mx-3 mt-2 rounded-2xl p-3 shadow-sm"
-      style={{ backgroundColor: t.surface }}
-    >
-      <Text
-        className="px-1 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider"
-        style={{ color: t.sub }}
-      >
-        Личное
-      </Text>
-      <View className="gap-2.5 px-1">
+    <CollapsibleCard title="Личное" summary={summary}>
+      <View className="gap-2.5 px-1 pt-1">
         <Row label="Город">
           <EditableField
             value={client.city}
@@ -135,7 +138,7 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
           </View>
         </Row>
       </View>
-    </View>
+    </CollapsibleCard>
   );
 }
 

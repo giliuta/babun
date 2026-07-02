@@ -1,7 +1,9 @@
 // NotesBlock — mobile port of the web client-card Notes block
 // (apps/web/src/components/clients/blocks/NotesBlock.tsx).
 //
-// Free-form dated log: calls, meetings, complaints, upsell hooks. Each
+// Reference block — collapsed by default (CollapsibleCard); the closed row
+// quotes the freshest note. Expanded:
+// free-form dated log: calls, meetings, complaints, upsell hooks. Each
 // note carries a created_at timestamp shown as «25 июн». Add prepends a
 // new note; remove drops one. Persists via `update(patch)`.
 //
@@ -12,13 +14,14 @@
 //
 // DROPPED vs web: the `focusToken` prop (open + focus + scrollIntoView
 // driven by the hero «+ Заметка» quick action) relied on DOM refs /
-// window.setTimeout / scrollIntoView. The block is always expanded on
-// mobile, so the input is reachable without that machinery.
+// window.setTimeout / scrollIntoView. On mobile the input sits right at
+// the top of the expanded card — one extra tap, no machinery.
 
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { StickyNote, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { useThemeColors } from "@/theme/colors";
 
 interface NotesBlockProps {
@@ -50,12 +53,12 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
   const remove = (id: string) =>
     update({ notes: notes.filter((n) => n.id !== id) });
 
-  return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
-      <Text className="px-1 pb-1 pt-1 text-xs font-semibold uppercase tracking-wider" style={{ color: t.sub }}>
-        Заметки{notes.length ? ` · ${notes.length}` : ""}
-      </Text>
+  // Collapsed-row summary: the freshest note, quoted (mockup: «звонить
+  // после 18») — muted so the reference stack stays quiet.
+  const summary = notes.length > 0 ? `«${notes[0].text}»` : "";
 
+  return (
+    <CollapsibleCard title="Заметки" summary={summary} tone="muted">
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row gap-2">
           <TextInput
@@ -116,7 +119,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
           </View>
         )}
       </View>
-    </View>
+    </CollapsibleCard>
   );
 }
 

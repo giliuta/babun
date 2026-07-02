@@ -93,7 +93,10 @@ export function OperationSheet({
   const toast = useToast();
   const isEdit = !!transaction;
 
-  const [type, setType] = useState<"income" | "expense" | "refund">("expense");
+  // No free-form «Возврат» here — a real refund is created from the
+  // tx-detail popup («Создать возврат»): negative amount + refund_of_id
+  // capped by the income's remaining sum (web parity).
+  const [type, setType] = useState<"income" | "expense">("expense");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
@@ -105,7 +108,7 @@ export function OperationSheet({
   useEffect(() => {
     if (!visible) return;
     if (transaction) {
-      setType(transaction.type === "transfer" ? "expense" : transaction.type);
+      setType(transaction.type === "income" ? "income" : "expense");
       setAmount(String(transaction.amount));
       setCategoryId(transaction.category_id ?? null);
       setTeamId(transaction.team_id ?? null);
@@ -125,7 +128,6 @@ export function OperationSheet({
     }
   }, [visible, defaultTeamId, transaction?.id]);
 
-  // Refund relates to income, so it picks income categories.
   const cats = useMemo(
     () =>
       categories.filter((c) =>
@@ -244,16 +246,10 @@ export function OperationSheet({
 
             {/* type segmented */}
             <View className="mx-3 mt-3 flex-row rounded-xl p-1" style={{ backgroundColor: th.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}>
-              {(["expense", "income", "refund"] as const).map((seg) => {
+              {(["expense", "income"] as const).map((seg) => {
                 const active = type === seg;
-                const activeColor =
-                  seg === "expense"
-                    ? th.danger
-                    : seg === "income"
-                      ? th.success
-                      : th.warning;
-                const label =
-                  seg === "expense" ? "Расход" : seg === "income" ? "Доход" : "Возврат";
+                const activeColor = seg === "expense" ? th.danger : th.success;
+                const label = seg === "expense" ? "Расход" : "Доход";
                 return (
                   <Pressable
                     key={seg}
@@ -423,9 +419,7 @@ export function OperationSheet({
                   ? "Сохранить"
                   : isExpense
                     ? "Добавить расход"
-                    : type === "income"
-                      ? "Добавить доход"
-                      : "Добавить возврат"
+                    : "Добавить доход"
               }
               onPress={save}
               disabled={!canSave}

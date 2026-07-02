@@ -1,7 +1,9 @@
 // ContactsBlock — mobile port of the web client-card Contacts block
 // (apps/web/src/components/clients/blocks/ContactsBlock.tsx).
 //
-// Primary phone + extra phones (each with an optional name like
+// Reference block — collapsed by default (CollapsibleCard); the closed row
+// shows «{телефон} · ещё N». Expanded:
+// primary phone + extra phones (each with an optional name like
 // «Жена · Мария») + messengers (Telegram / Instagram / WhatsApp).
 // Editable inline. Each phone has a call (tel:) action; each messenger
 // has an «Открыть» action via Linking. Presentational: persists via
@@ -30,6 +32,7 @@ import {
   telegramUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { useThemeColors } from "@/theme/colors";
 
 interface ContactsBlockProps {
@@ -101,12 +104,15 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
 
   const inputFill = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
 
-  return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
-      <Text className="px-1 pb-1 pt-1 text-xs font-semibold uppercase tracking-wider" style={{ color: t.sub }}>
-        Контакты
-      </Text>
+  // Collapsed-row summary: primary phone «+357 99… · ещё 1» (mockup).
+  const summary = client.phone
+    ? `${client.phone}${extras.length ? ` · ещё ${extras.length}` : ""}`
+    : extras.length
+      ? `ещё ${extras.length}`
+      : "";
 
+  return (
+    <CollapsibleCard title="Контакты" summary={summary}>
       <View className="gap-3 px-1 pt-1">
         {/* Primary phone */}
         <View className="flex-row items-center gap-2">
@@ -226,7 +232,7 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
           />
         </View>
       </View>
-    </View>
+    </CollapsibleCard>
   );
 }
 

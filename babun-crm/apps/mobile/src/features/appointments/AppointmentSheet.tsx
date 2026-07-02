@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Check, ChevronLeft, Minus, Plus, Search, X } from "lucide-react-native";
+import { Check, ChevronLeft, Minus, Plus, Repeat, Search, X } from "lucide-react-native";
 import {
   appointmentTotal,
   globalDiscountAmount,
@@ -31,6 +31,8 @@ import { useThemeColors } from "@/theme/colors";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
+import { RepeatReminderSheet } from "@/features/recurring/RepeatReminderSheet";
+import { useCreateReminder } from "@/features/recurring/queries";
 import {
   useCreateAppointment,
   useDeleteAppointment,
@@ -75,6 +77,7 @@ export function AppointmentSheet({
     date?: string;
     time_start?: string;
     client_id?: string | null;
+    location_id?: string | null;
     team_id?: string | null;
   };
 }) {
@@ -88,6 +91,7 @@ export function AppointmentSheet({
   const createMut = useCreateAppointment();
   const updateMut = useUpdateAppointment();
   const deleteMut = useDeleteAppointment();
+  const createReminder = useCreateReminder();
   const toast = useToast();
 
   const catalog = useMemo(
@@ -117,10 +121,12 @@ export function AppointmentSheet({
 
   const [clientPicker, setClientPicker] = useState(false);
   const [servicePicker, setServicePicker] = useState(false);
+  const [repeatOpen, setRepeatOpen] = useState(false);
 
   // Hydrate on open.
   useEffect(() => {
     if (!visible) return;
+    setRepeatOpen(false);
     if (appointment) {
       setClientId(appointment.client_id);
       setDate(appointment.date);
@@ -167,7 +173,9 @@ export function AppointmentSheet({
       setCustomTotal(false);
       setStatus("scheduled");
       setComment("");
-      setLocationId(null);
+      // «Записать сюда» с карточки клиента предвыбирает объект (LOCKED
+      // «Карта-диспетчер»: букинг в 2 тапа с предвыбранным объектом).
+      setLocationId(defaults?.location_id ?? null);
       setOverrides({});
       setDiscountType(null);
       setDiscountValue("");
@@ -212,6 +220,15 @@ export function AppointmentSheet({
 
   const effectiveTotal = customTotal ? Number(total) || 0 : computedTotal;
   const client = clients.find((c) => c.id === clientId) ?? null;
+  // «Чистка · Диагностика» — для RepeatReminderSheet (web serviceSummary).
+  const serviceSummary = useMemo(
+    () =>
+      serviceIds
+        .map((id) => catalog.get(id)?.name)
+        .filter((n): n is string => Boolean(n))
+        .join(" · "),
+    [serviceIds, catalog],
+  );
   const canSave = !!date && !createMut.isPending && !updateMut.isPending;
 
   const buildPatch = (): Partial<Appointment> => {
@@ -726,6 +743,24 @@ export function AppointmentSheet({
               />
             </SectionCard>
 
+            {/* «Повторить через…» — посев recurring-напоминания из
+                ЗАВЕРШЁННОЙ записи (web: ClientActionMenu → RepeatReminderSheet;
+                инбокс возвратов — экран «Повторяющиеся ТО»). */}
+            {isEdit && kind === "work" && status === "completed" && client ? (
+              <Pressable
+                onPress={() => setRepeatOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Повторить через…"
+                className="mt-4 flex-row items-center justify-center gap-2 py-3 active:opacity-70"
+                style={{ minHeight: 44 }}
+              >
+                <Repeat color={t.accent} size={ICON.xs} />
+                <Text className="text-base font-medium" style={{ color: t.accent }}>
+                  Повторить через…
+                </Text>
+              </Pressable>
+            ) : null}
+
             {isEdit ? (
               <Pressable onPress={remove} className="items-center py-5 active:opacity-70">
                 <Text className="text-base font-medium" style={{ color: t.danger }}>
@@ -775,6 +810,38 @@ export function AppointmentSheet({
           return created.id;
         }}
       />
+
+      {/* «Повторить через…» — интервалы ТО; onConfirm сеет напоминание в
+          инбокс «Повторяющиеся ТО» (web AppointmentSheet.onRepeatConfirm). */}
+      {client ? (
+        <RepeatReminderSheet
+          visible={repeatOpen}
+          clientName={client.full_name || "Без имени"}
+          serviceSummary={serviceSummary}
+          lastDate={date}
+          busy={createReminder.isPending}
+          onClose={() => setRepeatOpen(false)}
+          onConfirm={(months, note) =>
+            createReminder.mutate(
+              {
+                client_id: client.id,
+                client_name: client.full_name,
+                phone: client.phone ?? "",
+                team_id: teamId,
+                service_ids: serviceIds,
+                service_summary: serviceSummary,
+                last_date: date,
+                interval_months: months,
+                note,
+              },
+              {
+                onSuccess: () => toast("Напоминание создано"),
+                onError: (e) => Alert.alert("Ошибка", e.message),
+              },
+            )
+          }
+        />
+      ) : null}
 
       {/* service picker (multi) */}
       <PickerModal

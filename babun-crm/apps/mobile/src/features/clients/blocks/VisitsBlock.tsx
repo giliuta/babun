@@ -4,13 +4,15 @@ import { useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { formatVisitDate } from "@/features/clients/format";
+import { CollapsibleCard } from "@/features/clients/card-collapse";
+import { formatShortDateRu, formatVisitDate } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 // VisitsBlock (mobile port of apps/web/.../blocks/VisitsBlock.tsx).
 //
-// «История визитов» — appointment history newest-first, with status +
-// payment pills and the amount. Tapping a row jumps to the calendar
+// Reference block — collapsed by default (CollapsibleCard); the closed row
+// shows «N · был {дата}». Expanded: appointment history newest-first, with
+// status + payment pills and the amount. Tapping a row jumps to the calendar
 // focused on that visit's date (web pushed /dashboard?date=…; mobile
 // routes to the dashboard tab with the same query param).
 //
@@ -35,7 +37,7 @@ interface VisitsBlockProps {
 const INITIAL = 10;
 const LIMIT = 50;
 
-export default function VisitsBlock({ appointments }: VisitsBlockProps) {
+export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
   const router = useRouter();
   const t = useThemeColors();
   const [showAll, setShowAll] = useState(false);
@@ -50,12 +52,16 @@ export default function VisitsBlock({ appointments }: VisitsBlockProps) {
 
   const shown = own.slice(0, showAll ? LIMIT : INITIAL);
 
-  return (
-    <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
-      <Text className="px-1 pb-1 pt-1 text-xs font-semibold uppercase tracking-wider" style={{ color: t.sub }}>
-        История визитов {own.length > 0 ? `· ${own.length}` : ""}
-      </Text>
+  // Collapsed-row summary: «8 · был 10 мая» (count · last completed visit).
+  const summary =
+    own.length === 0
+      ? ""
+      : stats?.lastVisitDate
+        ? `${own.length} · был ${formatShortDateRu(stats.lastVisitDate)}`
+        : `${own.length}`;
 
+  return (
+    <CollapsibleCard title="Визиты" summary={summary}>
       {own.length === 0 ? (
         <Text className="px-1 py-2 text-sm" style={{ color: t.faint }}>
           Записей пока нет.
@@ -91,7 +97,7 @@ export default function VisitsBlock({ appointments }: VisitsBlockProps) {
           ) : null}
         </View>
       )}
-    </View>
+    </CollapsibleCard>
   );
 }
 

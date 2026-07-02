@@ -3,8 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   loadChats,
   saveChats,
+  seedDemoChats,
   type Chat,
   type ChatMessage,
+  type ConversationStatus,
 } from "@babun/shared/local/chats";
 import { getStorage } from "@babun/shared/storage/provider";
 
@@ -158,4 +160,42 @@ export function useMarkRead() {
         : c,
     ),
   );
+}
+
+// Web parity: togglePin (web chats/page.tsx:187–190).
+export function useTogglePin() {
+  return useChatMutation<string>((chats, chatId) =>
+    chats.map((c) => (c.id === chatId ? { ...c, is_pinned: !c.is_pinned } : c)),
+  );
+}
+
+// Web parity: closeChat / archiveChat (web chats/page.tsx:192–202).
+// «Закрыть» keeps the dialog in the list (drops out of «Без ответа»);
+// «В архив» hides it from the inbox entirely.
+export function useSetChatStatus() {
+  return useChatMutation<{ chatId: string; status: ConversationStatus }>(
+    (chats, { chatId, status }) =>
+      chats.map((c) => (c.id === chatId ? { ...c, status } : c)),
+  );
+}
+
+// STORY-053a — demo data loads ONLY on explicit request from the empty
+// inbox (auto-seed was removed in Wave 1 and must not come back). The
+// shared seed OVERWRITES the stored list, so refuse to run when any real
+// dialogs exist — the call site only shows the button on an empty inbox,
+// this is the belt to that suspender.
+export function useSeedDemoChats() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const existing = loadChats();
+      if (existing.length > 0) return existing;
+      const seeded = seedDemoChats();
+      // Requested demos are user data — make sure the one-shot purge of
+      // old auto-seeded builds never eats them on the next cold start.
+      getStorage().set(DEMO_PURGE_KEY, true);
+      return seeded;
+    },
+    onSuccess: (next) => qc.setQueryData(["chats"], next),
+  });
 }
