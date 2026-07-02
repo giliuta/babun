@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
@@ -18,6 +18,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
+import { AddRow } from "@/components/ui/AddRow";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
@@ -78,20 +79,7 @@ export default function CategoriesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title="Категории"
-        right={
-          <Pressable
-            onPress={() => setOpen(true)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить категорию"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={th.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title="Категории" />
 
       <SegmentedControl
         options={[

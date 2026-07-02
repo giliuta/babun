@@ -11,8 +11,11 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Check, CheckCircle2, XCircle } from "lucide-react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
+import { Check, PartyPopper, XCircle } from "lucide-react-native";
+import {
+  getDebtAmount,
+  type Appointment,
+} from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -91,11 +94,53 @@ export default function UnclosedScreen() {
     [unclosed],
   );
 
+  // Цепочка «после завершения — оплата»: визит с непогашенной суммой сразу
+  // спрашивает про деньги, иначе должник появился бы молча (Финансы → Долги).
+  const markPaidCash = (apt: Appointment, debt: number) => {
+    update.mutate(
+      {
+        id: apt.id,
+        patch: {
+          payments: [
+            ...(apt.payments ?? []),
+            {
+              id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              method: "cash",
+              amount: debt,
+              paid_at: new Date().toISOString(),
+            },
+          ],
+        },
+      },
+      {
+        onSuccess: () => toast("Оплата отмечена"),
+        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+      },
+    );
+  };
+
   const handleComplete = (apt: Appointment) => {
     update.mutate(
       { id: apt.id, patch: { status: "completed" } },
       {
-        onSuccess: () => toast("Закрыто как «Выполнено»"),
+        onSuccess: () => {
+          const debt = getDebtAmount(apt);
+          if (debt > 0) {
+            Alert.alert(
+              "Закрыто как «Выполнено»",
+              `Клиент оплатил ${formatEUR(debt)}?`,
+              [
+                {
+                  text: "Оплачено наличными",
+                  onPress: () => markPaidCash(apt, debt),
+                },
+                { text: "Долг — позже", style: "cancel" },
+              ],
+            );
+          } else {
+            toast("Закрыто как «Выполнено»");
+          }
+        },
         onError: (e) => Alert.alert("Ошибка", (e as Error).message),
       },
     );
@@ -159,9 +204,9 @@ export default function UnclosedScreen() {
           }
           ListEmptyComponent={
             <EmptyState
-              icon={<CheckCircle2 color={t.success} size={28} />}
-              title="Все визиты закрыты"
-              subtitle="Здесь появляются записи прошедшим днём, у которых статус остался «Запланирован»."
+              icon={<PartyPopper color={t.success} size={32} />}
+              title="Всё разобрано!"
+              subtitle="Ни одной незакрытой записи. Здесь появляются визиты прошедших дней со статусом «Запланирован»."
             />
           }
           renderItem={({ item }) => (

@@ -20,7 +20,8 @@ export default function MastersScreen() {
       title="Мастера"
       items={masters}
       isLoading={isLoading}
-      emptyText="Нет мастеров — добавьте первого через +"
+      emptyText="Нет мастеров"
+      addLabel="Добавить мастера"
       fields={[
         { key: "full_name", label: "Имя", placeholder: "Иван Петров", required: true },
         { key: "phone", label: "Телефон", placeholder: "+357…", keyboardType: "phone-pad" },

@@ -33,7 +33,7 @@ import {
   useUpdateTransaction,
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
-import { useFinanceTemplates } from "./templates-queries";
+import { useFinanceTemplates, useInsertTemplate } from "./templates-queries";
 
 const PAYMENTS: { value: PaymentMethod; label: string }[] = [
   { value: "cash", label: "Наличные" },
@@ -60,6 +60,7 @@ export function OperationSheet({
   // screen — one network round-trip instead of a duplicate listAccounts.
   const { data: accounts = [] } = useAccountsWithBalances();
   const { data: templates = [] } = useFinanceTemplates();
+  const insertTemplate = useInsertTemplate();
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
@@ -77,9 +78,13 @@ export function OperationSheet({
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [date, setDate] = useState(formatYMD(new Date()));
   const [notes, setNotes] = useState("");
+  // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
+  // счёт следует за командой операции (счета строго per-team).
+  const [accountTouched, setAccountTouched] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
+    setAccountTouched(false);
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
       setAmount(String(transaction.amount));
@@ -114,6 +119,16 @@ export function OperationSheet({
     [accounts, teamId],
   );
 
+  // Дефолт счёта = счёт команды операции. Эффект (а не разовый сет при
+  // открытии), потому что счета приезжают асинхронно и команда меняется
+  // чипами; ручной выбор/сброс счёта (accountTouched) дефолт отключает.
+  useEffect(() => {
+    if (!visible || isEdit || accountTouched) return;
+    if (!teamId || accountId !== null) return;
+    const def = accounts.find((a) => a.brigade_id === teamId);
+    if (def) setAccountId(def.id);
+  }, [visible, isEdit, accountTouched, teamId, accountId, accounts]);
+
   const amountNum = Number(amount.replace(",", ".")) || 0;
   const busy = insert.isPending || update.isPending;
   const canSave = amountNum > 0 && !busy;
@@ -139,6 +154,56 @@ export function OperationSheet({
       onClose();
     } catch (e) {
       Alert.alert("Ошибка", (e as Error).message);
+    }
+  };
+
+  // «+ Шаблон» — инлайн-создание шаблона из заполненной формы (labeled,
+  // не голый глиф): следующая такая же операция становится 3 тапа
+  // (FAB → чип → Добавить). CRUD-экран остаётся в Кабинете.
+  const createTemplate = async (name: string) => {
+    try {
+      await insertTemplate.mutateAsync({
+        name,
+        kind: type,
+        amount: amountNum,
+        category_id: categoryId,
+        brigade_id: teamId,
+        account_id: accountId,
+        payment_method: payment,
+      });
+      toast("Шаблон сохранён");
+    } catch (e) {
+      Alert.alert("Ошибка", (e as Error).message);
+    }
+  };
+  const saveAsTemplate = () => {
+    if (amountNum <= 0) {
+      toast("Заполните сумму — шаблон создастся из формы");
+      return;
+    }
+    const fallback =
+      notes.trim() ||
+      (categoryId
+        ? categories.find((c) => c.id === categoryId)?.name
+        : undefined) ||
+      (isExpense ? "Расход" : "Доход");
+    if (Platform.OS === "ios") {
+      Alert.prompt(
+        "Название шаблона",
+        "Появится чипом наверху этой формы",
+        [
+          { text: "Отмена", style: "cancel" },
+          {
+            text: "Сохранить",
+            onPress: (v: string | undefined) =>
+              void createTemplate((v ?? "").trim() || fallback),
+          },
+        ],
+        "plain-text",
+        fallback,
+      );
+    } else {
+      void createTemplate(fallback);
     }
   };
 
@@ -193,8 +258,8 @@ export function OperationSheet({
           </View>
 
           <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
-            {/* template quick-chips */}
-            {!isEdit && templates.length > 0 ? (
+            {/* template quick-chips + labeled inline «+ Шаблон» */}
+            {!isEdit ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -210,12 +275,26 @@ export function OperationSheet({
                       setType(t.kind);
                       setAmount(String(t.amount));
                       setCategoryId(t.category_id ?? null);
-                      if (t.brigade_id) setTeamId(t.brigade_id);
+                      if (t.brigade_id) {
+                        setTeamId(t.brigade_id);
+                        // без своего счёта в шаблоне — дефолт от команды
+                        if (!t.account_id) {
+                          setAccountId(null);
+                          setAccountTouched(false);
+                        }
+                      }
                       if (t.account_id) setAccountId(t.account_id);
                       if (t.payment_method) setPayment(t.payment_method as PaymentMethod);
                     }}
                   />
                 ))}
+                <Chip
+                  label="+ Шаблон"
+                  variant="outline"
+                  color={th.accent}
+                  onPress={saveAsTemplate}
+                  accessibilityLabel="Сохранить заполненную форму как шаблон"
+                />
               </ScrollView>
             ) : null}
 
@@ -299,7 +378,10 @@ export function OperationSheet({
                       selected={teamId === t.id}
                       onPress={() => {
                         setTeamId(teamId === t.id ? null : t.id);
+                        // смена команды = новый контекст счёта: сброс к
+                        // дефолту «счёт команды» (эффект выше подхватит)
                         setAccountId(null);
+                        setAccountTouched(false);
                       }}
                     />
                   ))}
@@ -324,9 +406,10 @@ export function OperationSheet({
                       key={a.id}
                       label={a.name}
                       selected={accountId === a.id}
-                      onPress={() =>
-                        setAccountId(accountId === a.id ? null : a.id)
-                      }
+                      onPress={() => {
+                        setAccountTouched(true);
+                        setAccountId(accountId === a.id ? null : a.id);
+                      }}
                     />
                   ))}
                 </ScrollView>

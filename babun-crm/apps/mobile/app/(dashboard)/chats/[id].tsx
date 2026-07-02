@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Archive,
   CalendarPlus,
@@ -22,6 +22,7 @@ import {
   EllipsisVertical,
   Link2,
   Pin,
+  Plus,
   Search,
   Send,
   Star,
@@ -40,14 +41,18 @@ import {
   detectLanguage,
   QUICK_REPLIES,
 } from "@babun/shared/common/utils/quick-replies";
+import { renderTemplate } from "@babun/shared/local/sms-templates";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { tryToE164 } from "@/features/clients/phone";
+import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { useTenant } from "@/features/settings/tenant";
 import {
   useChat,
   useDeleteMessage,
@@ -223,12 +228,17 @@ export default function ChatThreadScreen() {
   const togglePin = useTogglePin();
   const setStatus = useSetChatStatus();
   const createClient = useCreateClient();
+  const { data: smsTemplates = [] } = useSmsTemplates();
+  const { data: tenant } = useTenant();
 
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [menuMsg, setMenuMsg] = useState<ChatMessage | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  // Template palette tab: built-in quick replies vs the user's own
+  // SMS templates (Кабинет → SMS-шаблоны).
+  const [qrTab, setQrTab] = useState<"quick" | "sms">("quick");
   const [linkOpen, setLinkOpen] = useState(false);
   const [clientQuery, setClientQuery] = useState("");
 
@@ -287,6 +297,21 @@ export default function ChatThreadScreen() {
     ? clients.find((c) => c.id === chat.client_id)
     : null;
 
+  // The user's own SMS templates as composer inserts. [Имя]/[Компания]
+  // are substituted right away (linked client beats the raw contact
+  // name); appointment tokens ([Дата], [Время], [Мастер]…) have no
+  // value in a chat context and stay literal — renderTemplate keeps
+  // unresolved tokens visible so the operator fills them before send.
+  const smsInserts = useMemo(() => {
+    const name = (linkedClient?.full_name || chat?.contact_name || "").trim();
+    const vars: Record<string, string> = {};
+    if (name) vars.Name = name;
+    if (tenant?.name) vars.Company = tenant.name;
+    return smsTemplates
+      .filter((tpl) => tpl.enabled)
+      .map((tpl) => ({ ...tpl, rendered: renderTemplate(tpl.body, vars) }));
+  }, [smsTemplates, linkedClient?.full_name, chat?.contact_name, tenant?.name]);
+
   const copyMessage = useCallback(
     (m: ChatMessage) => {
       // RN core Clipboard (deprecated upstream, still shipped in 0.81) —
@@ -335,11 +360,21 @@ export default function ChatThreadScreen() {
     setReplyTo(null);
   };
 
+  // Next step of the «чат → клиент → запись» chain: the calendar's
+  // ?new= handler opens the appointment sheet at the nearest slot with
+  // the client prefilled (dashboard index.tsx:207).
+  const bookClient = (clientId?: string | null) =>
+    router.push({
+      pathname: "/",
+      params: { new: "1", ...(clientId ? { clientId } : {}) },
+    });
+
   // ⋮ «Создать клиента» — web opens CreateClientModal prefilled with the
   // dialog contact (name always, phone only for whatsapp/sms — page.tsx:
   // 566–572; name is the only required field there). Mobile creates the
   // client directly after a confirm, links it to the chat and lands on
   // the client card (add-client decision: create IS the client card).
+  // «…и записать» continues the daily chain straight into the calendar.
   const createFromChat = () => {
     const phone =
       chat.channel === "whatsapp" || chat.channel === "sms"
@@ -370,41 +405,50 @@ export default function ChatThreadScreen() {
               toast("Клиент привязан");
             },
           },
+          {
+            text: "Привязать и записать",
+            onPress: () => {
+              linkClient.mutate({ chatId: chat.id, clientId: existing.id });
+              bookClient(existing.id);
+            },
+          },
         ],
       );
       return;
     }
 
+    const doCreate = async (book: boolean) => {
+      try {
+        const created = await createClient.mutateAsync({
+          full_name: name,
+          phone,
+          phone_e164: e164,
+        });
+        linkClient.mutate({ chatId: chat.id, clientId: created.id });
+        if (book) bookClient(created.id);
+        else router.push(`/clients/${created.id}`);
+      } catch (e) {
+        // useCreateClient is meta.errorHandled — alerting is on us.
+        Alert.alert(
+          "Не удалось создать клиента",
+          (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+        );
+      }
+    };
     Alert.alert(
       "Создать клиента",
       [name, phone].filter(Boolean).join(" · "),
       [
         { text: "Отмена", style: "cancel" },
-        {
-          text: "Создать",
-          onPress: async () => {
-            try {
-              const created = await createClient.mutateAsync({
-                full_name: name,
-                phone,
-                phone_e164: e164,
-              });
-              linkClient.mutate({ chatId: chat.id, clientId: created.id });
-              router.push(`/clients/${created.id}`);
-            } catch (e) {
-              // useCreateClient is meta.errorHandled — alerting is on us.
-              Alert.alert(
-                "Не удалось создать клиента",
-                (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
-              );
-            }
-          },
-        },
+        { text: "Создать", onPress: () => void doCreate(false) },
+        { text: "Создать и записать", onPress: () => void doCreate(true) },
       ],
     );
   };
 
   // ⋮ menu — web header menu semantics (chats/page.tsx:649–674).
+  // Linking lives here as labeled rows (стандарт «добавить»: no bare
+  // glyphs in headers — the old unlabeled Link2 icon moved into ⋮).
   const headerActions: {
     label: string;
     icon: typeof Pin;
@@ -423,6 +467,11 @@ export default function ChatThreadScreen() {
             icon: UserRound,
             onPress: () => router.push(`/clients/${linkedClient.id}`),
           },
+          {
+            label: "Сменить клиента",
+            icon: Link2,
+            onPress: () => setLinkOpen(true),
+          },
         ]
       : [
           {
@@ -430,18 +479,16 @@ export default function ChatThreadScreen() {
             icon: UserPlus,
             onPress: createFromChat,
           },
+          {
+            label: "Привязать клиента",
+            icon: Link2,
+            onPress: () => setLinkOpen(true),
+          },
         ]),
     {
       label: "Записать на приём",
       icon: CalendarPlus,
-      onPress: () =>
-        router.push({
-          pathname: "/",
-          params: {
-            new: "1",
-            ...(chat.client_id ? { clientId: chat.client_id } : {}),
-          },
-        }),
+      onPress: () => bookClient(chat.client_id),
     },
     {
       label: "Закрыть чат",
@@ -467,28 +514,15 @@ export default function ChatThreadScreen() {
         title={title}
         subtitle={subtitleParts.join(" · ")}
         right={
-          <View className="flex-row items-center">
-            <Pressable
-              onPress={() => setLinkOpen(true)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={
-                linkedClient ? "Клиент привязан — изменить" : "Привязать клиента"
-              }
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-            >
-              <Link2 color={linkedClient ? t.accent : t.faint} size={ICON.sm} />
-            </Pressable>
-            <Pressable
-              onPress={() => setHeaderMenuOpen(true)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Меню диалога"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-            >
-              <EllipsisVertical color={t.body} size={ICON.sm} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => setHeaderMenuOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Меню диалога"
+            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+          >
+            <EllipsisVertical color={t.body} size={ICON.sm} />
+          </Pressable>
         }
       />
       <KeyboardAvoidingView
@@ -714,20 +748,67 @@ export default function ChatThreadScreen() {
           style={{ backgroundColor: t.surface }}
         >
           <Text className="mb-2 text-lg font-bold" style={{ color: t.ink }}>
-            Быстрые ответы
+            Шаблоны
           </Text>
-          <FlatList
-            data={QUICK_REPLIES}
-            keyExtractor={(q) => q.id}
-            renderItem={({ item }) => {
-              const variant =
-                item.variants.find((v) => v.lang === lang) ?? item.variants[0];
-              return (
+          {/* Two palettes in one sheet: built-in multilingual quick
+              replies + the user's SMS templates with [Имя] pre-filled
+              (Кабинет → SMS-шаблоны). */}
+          <SegmentedControl
+            options={[
+              { value: "quick", label: "Быстрые ответы" },
+              { value: "sms", label: "SMS-шаблоны" },
+            ]}
+            value={qrTab}
+            onChange={setQrTab}
+            style={{ marginBottom: 8 }}
+          />
+          {qrTab === "quick" ? (
+            <FlatList
+              data={QUICK_REPLIES}
+              keyExtractor={(q) => q.id}
+              renderItem={({ item }) => {
+                const variant =
+                  item.variants.find((v) => v.lang === lang) ?? item.variants[0];
+                return (
+                  <Pressable
+                    onPress={() => {
+                      setDraft((d) => (d ? `${d} ${variant.text}` : variant.text));
+                      setQrOpen(false);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Шаблон: ${item.title}`}
+                    className="border-b py-3 active:opacity-70"
+                    style={{ borderColor: t.separator }}
+                  >
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{ color: t.ink }}
+                    >
+                      {item.emoji} {item.title}
+                    </Text>
+                    <Text
+                      className="mt-0.5 text-sm"
+                      style={{ color: t.sub }}
+                      numberOfLines={2}
+                    >
+                      {variant.text}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+            />
+          ) : (
+            <FlatList
+              data={smsInserts}
+              keyExtractor={(tpl) => tpl.id}
+              renderItem={({ item }) => (
                 <Pressable
                   onPress={() => {
-                    setDraft((d) => (d ? `${d} ${variant.text}` : variant.text));
+                    setDraft((d) => (d ? `${d} ${item.rendered}` : item.rendered));
                     setQrOpen(false);
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Шаблон: ${item.name}`}
                   className="border-b py-3 active:opacity-70"
                   style={{ borderColor: t.separator }}
                 >
@@ -735,19 +816,42 @@ export default function ChatThreadScreen() {
                     className="text-sm font-semibold"
                     style={{ color: t.ink }}
                   >
-                    {item.emoji} {item.title}
+                    {item.name}
                   </Text>
                   <Text
                     className="mt-0.5 text-sm"
                     style={{ color: t.sub }}
                     numberOfLines={2}
                   >
-                    {variant.text}
+                    {item.rendered}
                   </Text>
                 </Pressable>
-              );
-            }}
-          />
+              )}
+              ListEmptyComponent={
+                <View className="items-center py-6">
+                  <Text className="text-sm" style={{ color: t.sub }}>
+                    Нет включённых SMS-шаблонов
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      setQrOpen(false);
+                      router.push("/cabinet/sms-templates" as Href);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Настроить SMS-шаблоны"
+                    className="mt-1 min-h-[44px] items-center justify-center px-4 active:opacity-60"
+                  >
+                    <Text
+                      className="text-base font-semibold"
+                      style={{ color: t.accent }}
+                    >
+                      Настроить шаблоны
+                    </Text>
+                  </Pressable>
+                </View>
+              }
+            />
+          )}
         </View>
       </Modal>
 
@@ -807,6 +911,29 @@ export default function ChatThreadScreen() {
               style={{ color: t.ink }}
             />
           </View>
+          {/* Инлайн-создание по стандарту «добавить» (labeled, не голый
+              глиф): клиента нет в списке → создаём из контакта чата, не
+              выходя из сценария (createFromChat сам дедупит и линкует). */}
+          <Pressable
+            onPress={() => {
+              setLinkOpen(false);
+              createFromChat();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Новый клиент из этого чата"
+            className="min-h-[52px] flex-row items-center gap-3 border-b px-4 active:opacity-60"
+            style={{ borderColor: t.separator }}
+          >
+            <View
+              className="h-7 w-7 items-center justify-center rounded-full"
+              style={{ backgroundColor: `${t.accent}1A` }}
+            >
+              <Plus color={t.accent} size={16} strokeWidth={2.4} />
+            </View>
+            <Text className="text-base font-medium" style={{ color: t.accent }}>
+              Новый клиент из этого чата
+            </Text>
+          </Pressable>
           <FlatList
             data={filteredClients}
             keyExtractor={(c) => c.id}
@@ -816,7 +943,10 @@ export default function ChatThreadScreen() {
                 onPress={() => {
                   linkClient.mutate({ chatId: chat.id, clientId: item.id });
                   setLinkOpen(false);
+                  toast("Клиент привязан");
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Привязать: ${item.full_name}`}
                 className="flex-row items-center justify-between px-4 py-3 active:opacity-60"
               >
                 <View>

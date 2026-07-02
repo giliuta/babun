@@ -20,10 +20,12 @@ import {
 } from "@babun/shared/local/finance/appointment-calc";
 import {
   createBlankAppointment,
+  getPaidAmount,
   type Appointment,
   type AppointmentStatus,
   type Discount,
 } from "@babun/shared/local/appointments";
+import { generateId } from "@babun/shared/local/masters";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -42,6 +44,7 @@ import {
   useDeleteAppointment,
   useUpdateAppointment,
 } from "@/features/calendar/mutations";
+import { useAppointments } from "@/features/calendar/queries";
 import {
   addMinutesHM,
   buildServices,
@@ -103,6 +106,61 @@ export function AppointmentSheet({
     [services],
   );
 
+  // История записей питает умные дефолты (кеш уже тёплый — календарь
+  // грузит тот же queryKey): недавние клиенты, последняя команда,
+  // частые услуги. Все три сокращают заполнение шита до 1 тапа на поле.
+  const { data: allAppts = [] } = useAppointments();
+
+  // Последние 5 клиентов по дате последней записи — верх пикера клиента.
+  const recentClientIds = useMemo(() => {
+    const sorted = [...allAppts]
+      .filter((a) => a.client_id)
+      .sort((a, b) =>
+        a.date !== b.date
+          ? b.date.localeCompare(a.date)
+          : b.time_start.localeCompare(a.time_start),
+      );
+    const out: string[] = [];
+    for (const a of sorted) {
+      const id = a.client_id as string;
+      if (!out.includes(id)) {
+        out.push(id);
+        if (out.length >= 5) break;
+      }
+    }
+    return out;
+  }, [allAppts]);
+
+  // Команда последней созданной записи — дефолт для новой (умный дефолт:
+  // диспетчер обычно набивает день одной бригаде подряд).
+  const lastTeamId = useMemo(() => {
+    let best: string | null = null;
+    let bestTs = "";
+    for (const a of allAppts) {
+      if (
+        a.team_id &&
+        a.created_at > bestTs &&
+        teams.some((tm) => tm.id === a.team_id)
+      ) {
+        bestTs = a.created_at;
+        best = a.team_id;
+      }
+    }
+    return best;
+  }, [allAppts, teams]);
+
+  // Топ-4 услуг по частоте использования — быстрый выбор в один тап.
+  const frequentServices = useMemo(() => {
+    const freq = new Map<string, number>();
+    for (const a of allAppts)
+      for (const id of a.service_ids) freq.set(id, (freq.get(id) ?? 0) + 1);
+    return [...freq.entries()]
+      .filter(([id]) => catalog.has(id))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4)
+      .map(([id]) => catalog.get(id) as Service);
+  }, [allAppts, catalog]);
+
   const [clientId, setClientId] = useState<string | null>(null);
   const [date, setDate] = useState("");
   const [timeStart, setTimeStart] = useState("10:00");
@@ -126,11 +184,15 @@ export function AppointmentSheet({
   const [clientPicker, setClientPicker] = useState(false);
   const [servicePicker, setServicePicker] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
+  // «Выполнено» + долг → предлагаем сразу принять оплату (нал/карта).
+  // null = «позже»: сохраняем без платежа, долг остаётся в «Должниках».
+  const [payMethod, setPayMethod] = useState<"cash" | "card" | null>(null);
 
   // Hydrate on open.
   useEffect(() => {
     if (!visible) return;
     setRepeatOpen(false);
+    setPayMethod(null);
     if (appointment) {
       setClientId(appointment.client_id);
       setDate(appointment.date);
@@ -171,7 +233,10 @@ export function AppointmentSheet({
       setTimeStart(defaults?.time_start ?? "10:00");
       setTimeEnd(addMinutesHM(defaults?.time_start ?? "10:00", 60));
       setServiceIds([]);
-      setTeamId(defaults?.team_id ?? null);
+      // Умный дефолт: команда последней созданной записи (записи одной
+      // бригаде обычно набивают подряд). Явный defaults?.team_id
+      // («Записать сюда» с карточки клиента) всегда важнее.
+      setTeamId(defaults?.team_id ?? lastTeamId);
       setMasterId(null);
       setTotal("0");
       setCustomTotal(false);
@@ -223,6 +288,10 @@ export function AppointmentSheet({
   }, [computedTotal, customTotal]);
 
   const effectiveTotal = customTotal ? Number(total) || 0 : computedTotal;
+  // Долг = сумма минус уже полученное (аванс + платежи). Питает секцию
+  // «Оплата» при статусе «Выполнено» (getPaidAmount — как «Должники»).
+  const alreadyPaid = appointment ? getPaidAmount(appointment) : 0;
+  const debt = Math.max(0, effectiveTotal - alreadyPaid);
   const client = clients.find((c) => c.id === clientId) ?? null;
   // «Чистка · Диагностика» — для RepeatReminderSheet (web serviceSummary).
   const serviceSummary = useMemo(
@@ -261,7 +330,7 @@ export function AppointmentSheet({
         cancel_reason: cancel,
       };
     }
-    return {
+    const patch: Partial<Appointment> = {
       kind: "work",
       client_id: clientId,
       date,
@@ -282,6 +351,27 @@ export function AppointmentSheet({
       discount_amount: globalDiscountAmount(selectedServices, globalDiscount),
       cancel_reason: cancel,
     };
+    // «Выполнено» + выбран способ → фиксируем оплату остатка (web
+    // buildCompletedAppointment parity). Пишем И legacy payments[] (его
+    // читают getPaidAmount/«Должники»/дневная сводка), И payment-объект
+    // (web PaymentBlock), И зеркальные колонки-мирроры.
+    if (status === "completed" && payMethod && debt > 0) {
+      const paidAt = new Date().toISOString();
+      patch.payments = [
+        ...(appointment?.payments ?? []),
+        { id: generateId("pay"), method: payMethod, amount: debt, paid_at: paidAt },
+      ];
+      patch.payment = {
+        method: payMethod,
+        cashAmount: payMethod === "cash" ? debt : 0,
+        cardAmount: payMethod === "card" ? debt : 0,
+        paid_at: paidAt,
+      };
+      patch.payment_status = "paid";
+      patch.payment_method = payMethod;
+      patch.paid_amount = alreadyPaid + debt;
+    }
+    return patch;
   };
 
   const save = async () => {
@@ -291,12 +381,16 @@ export function AppointmentSheet({
       } else {
         await createMut.mutateAsync(createBlankAppointment(buildPatch()));
       }
+      const paidNow =
+        kind === "work" && status === "completed" && payMethod && debt > 0;
       toast(
-        isEdit
-          ? "Сохранено"
-          : kind === "event"
-            ? "Событие создано"
-            : "Запись создана",
+        paidNow
+          ? `Оплата ${formatEUR(debt)} получена`
+          : isEdit
+            ? "Сохранено"
+            : kind === "event"
+              ? "Событие создано"
+              : "Запись создана",
       );
       onClose();
     } catch (e) {
@@ -466,12 +560,35 @@ export function AppointmentSheet({
               action={{ label: "Изменить", onPress: () => setServicePicker(true) }}
             >
               {serviceIds.length === 0 ? (
-                <Pressable
-                  onPress={() => setServicePicker(true)}
-                  className="px-4 py-3 active:opacity-60"
-                >
-                  <Text className="text-base" style={{ color: t.accent }}>Добавить услуги</Text>
-                </Pressable>
+                frequentServices.length > 0 ? (
+                  // Частые услуги — добавление в 1 тап вместо трёх
+                  // (открыть пикер → найти → выбрать). Длительность и
+                  // сумма подтянутся из каталога автоматически.
+                  <View className="flex-row flex-wrap gap-2 p-3">
+                    {frequentServices.map((s) => (
+                      <Chip
+                        key={s.id}
+                        label={s.name}
+                        variant="outline"
+                        color={t.accent}
+                        accessibilityLabel={`Добавить услугу ${s.name}`}
+                        onPress={() => setServiceIds((prev) => [...prev, s.id])}
+                      />
+                    ))}
+                    <Chip
+                      label="Все услуги…"
+                      variant="outline"
+                      onPress={() => setServicePicker(true)}
+                    />
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => setServicePicker(true)}
+                    className="px-4 py-3 active:opacity-60"
+                  >
+                    <Text className="text-base" style={{ color: t.accent }}>Добавить услуги</Text>
+                  </Pressable>
+                )
               ) : (
                 serviceIds.map((id) => {
                   const s = catalog.get(id);
@@ -675,6 +792,48 @@ export function AppointmentSheet({
               </View>
             </SectionCard>
 
+            {/* payment — появляется сразу после «Выполнено», чтобы цепочка
+                «завершил → получил деньги» не требовала отдельного экрана.
+                «Позже» = сохранить с долгом (клиент останется в «Должниках»). */}
+            {kind === "work" && status === "completed" ? (
+              debt > 0 ? (
+                <SectionCard title={`Оплата · ${formatEUR(debt)}`}>
+                  <View className="flex-row flex-wrap gap-2 p-3">
+                    {(
+                      [
+                        { v: "cash", label: "Наличные" },
+                        { v: "card", label: "Карта" },
+                        { v: null, label: "Позже" },
+                      ] as const
+                    ).map((opt) => (
+                      <Chip
+                        key={opt.label}
+                        label={opt.label}
+                        radio
+                        color={opt.v ? t.success : undefined}
+                        selected={payMethod === opt.v}
+                        onPress={() => setPayMethod(opt.v)}
+                      />
+                    ))}
+                  </View>
+                  <Text className="px-4 pb-3 text-sm" style={{ color: payMethod ? t.success : t.sub }}>
+                    {payMethod
+                      ? `При сохранении будет отмечена оплата ${formatEUR(debt)}`
+                      : "«Позже» — долг останется в списке должников"}
+                  </Text>
+                </SectionCard>
+              ) : effectiveTotal > 0 ? (
+                <SectionCard title="Оплата">
+                  <View className="flex-row items-center gap-2 px-4 py-3">
+                    <Check color={t.success} size={ICON.sm} />
+                    <Text className="text-base font-medium" style={{ color: t.success }}>
+                      Оплачено · {formatEUR(alreadyPaid)}
+                    </Text>
+                  </View>
+                </SectionCard>
+              ) : null
+            ) : null}
+
             {/* cancel reason */}
             {status === "cancelled" ? (
               <SectionCard title="Причина отмены">
@@ -772,6 +931,7 @@ export function AppointmentSheet({
         visible={clientPicker}
         onClose={() => setClientPicker(false)}
         clients={clients}
+        recentIds={recentClientIds}
         selectedId={clientId}
         onPick={(id) => {
           setClientId(id);
@@ -1002,17 +1162,25 @@ function PickerModal({
 // Calendar client picker with inline «Новый клиент» create — one Modal that
 // switches between the list and the create form (web parity; avoids the iOS
 // «can't present a modal while another dismisses» race of stacked modals).
+type PickerClient = { id: string; full_name: string | null; phone: string | null };
+type ClientRow =
+  | { kind: "header"; title: string }
+  | { kind: "client"; client: PickerClient };
+
 function ClientPickerModal({
   visible,
   onClose,
   clients,
+  recentIds,
   selectedId,
   onPick,
   onCreate,
 }: {
   visible: boolean;
   onClose: () => void;
-  clients: { id: string; full_name: string | null; phone: string | null }[];
+  clients: PickerClient[];
+  /** Клиенты последних записей — секция «Недавние» над общим списком. */
+  recentIds?: string[];
   selectedId: string | null;
   onPick: (id: string) => void;
   onCreate: (name: string, phone: string) => Promise<string>;
@@ -1033,15 +1201,32 @@ function ClientPickerModal({
     }
   }, [visible]);
 
-  const filtered = useMemo(() => {
+  // Без запроса: «Недавние» (по последней записи) сверху, потом полный
+  // список. При поиске секции убираются — просто совпадения.
+  const rows = useMemo<ClientRow[]>(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return clients;
-    return clients.filter(
-      (c) =>
-        (c.full_name ?? "").toLowerCase().includes(s) ||
-        (c.phone ?? "").toLowerCase().includes(s),
-    );
-  }, [q, clients]);
+    if (s) {
+      return clients
+        .filter(
+          (c) =>
+            (c.full_name ?? "").toLowerCase().includes(s) ||
+            (c.phone ?? "").toLowerCase().includes(s),
+        )
+        .map((c) => ({ kind: "client" as const, client: c }));
+    }
+    const byId = new Map(clients.map((c) => [c.id, c]));
+    const recents = (recentIds ?? [])
+      .map((id) => byId.get(id))
+      .filter((c): c is PickerClient => !!c);
+    if (recents.length === 0)
+      return clients.map((c) => ({ kind: "client" as const, client: c }));
+    return [
+      { kind: "header" as const, title: "Недавние" },
+      ...recents.map((c) => ({ kind: "client" as const, client: c })),
+      { kind: "header" as const, title: "Все клиенты" },
+      ...clients.map((c) => ({ kind: "client" as const, client: c })),
+    ];
+  }, [q, clients, recentIds]);
 
   const startCreate = () => {
     const query = q.trim();
@@ -1116,8 +1301,10 @@ function ClientPickerModal({
               </View>
               <FlatList
                 style={{ flex: 1 }}
-                data={filtered}
-                keyExtractor={(i) => i.id}
+                data={rows}
+                keyExtractor={(i, idx) =>
+                  i.kind === "header" ? `h-${i.title}` : `${i.client.id}-${idx}`
+                }
                 keyboardShouldPersistTaps="handled"
                 ListHeaderComponent={
                   <Pressable
@@ -1132,19 +1319,30 @@ function ClientPickerModal({
                   </Pressable>
                 }
                 renderItem={({ item }) => {
-                  const sel = item.id === selectedId;
+                  if (item.kind === "header") {
+                    return (
+                      <Text
+                        className="px-4 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wider"
+                        style={{ color: t.sub }}
+                      >
+                        {item.title}
+                      </Text>
+                    );
+                  }
+                  const c = item.client;
+                  const sel = c.id === selectedId;
                   return (
                     <Pressable
-                      onPress={() => onPick(item.id)}
+                      onPress={() => onPick(c.id)}
                       className="flex-row items-center px-4 py-3 active:opacity-60"
                     >
                       <View className="flex-1 pr-2">
                         <Text className="text-base" style={{ color: t.ink }} numberOfLines={1}>
-                          {item.full_name || "Без имени"}
+                          {c.full_name || "Без имени"}
                         </Text>
-                        {item.phone ? (
+                        {c.phone ? (
                           <Text className="text-sm" style={{ color: t.sub }} numberOfLines={1}>
-                            {item.phone}
+                            {c.phone}
                           </Text>
                         ) : null}
                       </View>

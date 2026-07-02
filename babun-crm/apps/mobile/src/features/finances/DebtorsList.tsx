@@ -1,5 +1,13 @@
 import { useMemo } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
+import { useRouter } from "expo-router";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   getDebtAmount,
@@ -8,6 +16,7 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
+import { humanDay } from "@/features/appointments/helpers";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -16,6 +25,9 @@ import { useThemeColors } from "@/theme/colors";
 // payments[]): the web-only payment_status/paid_amount fields are never
 // mapped by the mobile repository, so relying on them would list every
 // completed visit — paid ones included — at its full price.
+//
+// Цепочка «должник → напомнить»: у строки есть labeled-кнопка «Напомнить»
+// (SMS с суммой и датой визита), тап по строке открывает карточку клиента.
 export function DebtorsList({
   appointments,
   clients,
@@ -30,6 +42,7 @@ export function DebtorsList({
   toDate: string;
 }) {
   const t = useThemeColors();
+  const router = useRouter();
   const rows = useMemo(
     () =>
       appointments
@@ -40,16 +53,37 @@ export function DebtorsList({
             a.date <= toDate &&
             (!teamId || a.team_id === teamId),
         )
-        .map((a) => ({
-          id: a.id,
-          name: clientName(a, clients),
-          owed: getDebtAmount(a),
-          date: a.date,
-        }))
+        .map((a) => {
+          const client = a.client_id
+            ? clients.find((x) => x.id === a.client_id)
+            : undefined;
+          return {
+            id: a.id,
+            clientId: client?.id ?? null,
+            phone: client?.phone?.trim() || null,
+            name:
+              client?.full_name || a.comment?.trim() || "Без имени",
+            owed: getDebtAmount(a),
+            date: a.date,
+          };
+        })
         .filter((r) => r.owed > 0)
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
     [appointments, clients, teamId, fromDate, toDate],
   );
+
+  // SMS-напоминание: сумма + дата визита уже подставлены, диспетчер только
+  // жмёт «Отправить» в Сообщениях (iOS: «&body=», Android: «?body=»).
+  const remind = (r: (typeof rows)[number]) => {
+    if (!r.phone) return;
+    const digits = r.phone.replace(/[^\d+]/g, "");
+    const [, mm, dd] = r.date.split("-");
+    const body = encodeURIComponent(
+      `Здравствуйте! Напоминаем об оплате ${formatEUR(r.owed)} за визит ${dd}.${mm}. Спасибо!`,
+    );
+    const sep = Platform.OS === "ios" ? "&" : "?";
+    Linking.openURL(`sms:${digits}${sep}body=${body}`);
+  };
 
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
@@ -63,40 +97,66 @@ export function DebtorsList({
           </Text>
         ) : (
           rows.map((r, i) => (
-            <View
+            <Pressable
               key={r.id}
-              className="flex-row items-center gap-3 px-4 py-2.5"
+              onPress={
+                r.clientId
+                  ? () => router.push(`/clients/${r.clientId}`)
+                  : undefined
+              }
+              disabled={!r.clientId}
+              accessibilityRole="button"
+              accessibilityLabel={`${r.name}, долг ${formatEUR(r.owed)}, открыть карточку клиента`}
+              className="flex-row items-center gap-3 px-4 py-2 active:opacity-70"
               style={
                 i > 0
                   ? { borderTopWidth: 1, borderTopColor: t.separator }
                   : undefined
               }
             >
-              <Text
-                className="flex-1 text-[15px] font-medium"
-                style={{ color: t.ink }}
-                numberOfLines={1}
-              >
-                {r.name}
-              </Text>
+              <View className="min-w-0 flex-1">
+                <Text
+                  className="text-[15px] font-medium"
+                  style={{ color: t.ink }}
+                  numberOfLines={1}
+                >
+                  {r.name}
+                </Text>
+                <Text className="text-xs" style={{ color: t.faint }}>
+                  {humanDay(r.date)}
+                </Text>
+              </View>
               <Text
                 className="text-[15px] font-bold tabular-nums"
                 style={{ color: t.warning }}
               >
                 {formatEUR(r.owed)}
               </Text>
-            </View>
+              {r.phone ? (
+                <Pressable
+                  onPress={() => remind(r)}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Напомнить ${r.name} об оплате по SMS`}
+                  className="rounded-full px-3 py-1.5 active:opacity-60"
+                  style={{
+                    backgroundColor: t.dark
+                      ? "rgba(90,134,255,0.16)"
+                      : "rgba(44,91,224,0.10)",
+                  }}
+                >
+                  <Text
+                    className="text-[13px] font-semibold"
+                    style={{ color: t.accent }}
+                  >
+                    Напомнить
+                  </Text>
+                </Pressable>
+              ) : null}
+            </Pressable>
           ))
         )}
       </Card>
     </ScrollView>
   );
-}
-
-function clientName(a: Appointment, clients: Client[]): string {
-  if (a.client_id) {
-    const c = clients.find((x) => x.id === a.client_id);
-    if (c?.full_name) return c.full_name;
-  }
-  return a.comment?.trim() || "Без имени";
 }

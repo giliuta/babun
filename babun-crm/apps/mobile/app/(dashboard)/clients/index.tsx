@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Clock, Phone, Pin, Plus, Search, Settings } from "lucide-react-native";
+import { Clock, Phone, Pin, Search, Settings, Users } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import {
   buildStatsMap,
@@ -21,6 +21,8 @@ import {
   getInitials,
 } from "@babun/shared/common/utils/avatar-color";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Fab } from "@/components/ui/Fab";
 import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { useClients, useClientTags } from "@/features/clients/queries";
@@ -277,33 +279,22 @@ export default function ClientsListScreen() {
     <Screen>
       <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
         <Text style={{ ...TYPE.display, color: t.ink }}>Клиенты</Text>
-        <View className="flex-row items-center gap-2">
-          {/* v811 — импорт/экспорт переехали в «Настройки клиентов»
-              (шестерёнка); в хедере остаётся только «+». */}
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/clients/settings",
-                params: { sort: filter.sort },
-              })
-            }
-            accessibilityRole="button"
-            accessibilityLabel="Настройки клиентов"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-            style={{ backgroundColor: t.fill }}
-          >
-            <Settings color={t.body} size={20} />
-          </Pressable>
-          <Pressable
-            onPress={() => router.push("/clients/new")}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить клиента"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-            style={{ backgroundColor: t.accent }}
-          >
-            <Plus color="#fff" size={22} />
-          </Pressable>
-        </View>
+        {/* Стандарт «добавить»: создание клиента — ТОЛЬКО градиентный FAB
+            (низ-право); кружок «+» из шапки убран, шестерёнка остаётся. */}
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/clients/settings",
+              params: { sort: filter.sort },
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Настройки клиентов"
+          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+          style={{ backgroundColor: t.fill }}
+        >
+          <Settings color={t.body} size={20} />
+        </Pressable>
       </View>
 
       <View
@@ -351,6 +342,8 @@ export default function ClientsListScreen() {
           data={result.filtered}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
+          // Низ списка не должен прятаться под FAB (56 + inset 20).
+          contentContainerStyle={{ paddingBottom: 96 }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
             const teamName = stats?.lastTeamId
@@ -374,14 +367,30 @@ export default function ClientsListScreen() {
             <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
           }
           ListEmptyComponent={
-            <View className="items-center px-6 pt-20">
-              <Text className="text-sm" style={{ color: t.faint }}>
-                {filtering ? "Ничего не найдено" : "Пока нет клиентов"}
-              </Text>
-            </View>
+            filtering ? (
+              <EmptyState
+                title="Ничего не найдено"
+                subtitle="Измените запрос или сбросьте фильтры"
+              />
+            ) : (
+              <EmptyState
+                icon={<Users color={t.faint} size={40} strokeWidth={1.5} />}
+                title="Пока нет клиентов"
+                subtitle="Телефон — и клиент в базе, остальное добавите на карточке"
+                action={{
+                  label: "Добавить клиента",
+                  onPress: () => router.push("/clients/new"),
+                }}
+              />
+            )
           }
         />
       )}
+
+      <Fab
+        onPress={() => router.push("/clients/new")}
+        accessibilityLabel="Новый клиент"
+      />
 
       <ClientsFilterSheet
         visible={sheetOpen}

@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Check, ChevronRight, Plus, Scissors, Settings2 } from "lucide-react-native";
+import { Check, ChevronRight, Scissors, Settings2 } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   FORMS_KATEGORIYA,
@@ -22,6 +22,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
+import { AddRow } from "@/components/ui/AddRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -147,17 +148,6 @@ export default function ServicesScreen() {
             ? `${formatCountRu(services.length, FORMS_USLUGA)} в ${formatCountRu(categories.length, FORMS_KATEGORIYA)}`
             : undefined
         }
-        right={
-          <Pressable
-            onPress={() => setEditing({ mode: "create" })}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Новая услуга"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
       />
 
       {isLoading ? (
@@ -198,7 +188,8 @@ export default function ServicesScreen() {
               }}
             />
           ) : (
-            grouped.map(([catKey, list]) => {
+            <>
+            {grouped.map(([catKey, list]) => {
               const cat = categoryById.get(catKey);
               return (
                 <SectionCard key={catKey}>
@@ -270,7 +261,15 @@ export default function ServicesScreen() {
                   })}
                 </SectionCard>
               );
-            })
+            })}
+            {/* Стандарт «Добавить»: строка под последним элементом списка. */}
+            <SectionCard>
+              <AddRow
+                label="Добавить услугу"
+                onPress={() => setEditing({ mode: "create" })}
+              />
+            </SectionCard>
+            </>
           )}
         </ScrollView>
       )}

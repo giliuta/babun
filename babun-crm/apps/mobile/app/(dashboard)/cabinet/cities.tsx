@@ -20,7 +20,8 @@ export default function CitiesScreen() {
       title="Города"
       items={cities}
       isLoading={isLoading}
-      emptyText="Нет городов — добавьте первый через +"
+      emptyText="Нет городов"
+      addLabel="Добавить город"
       fields={[
         { key: "name", label: "Город", placeholder: "Limassol", required: true },
         { key: "country", label: "Страна", placeholder: "Кипр" },

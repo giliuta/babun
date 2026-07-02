@@ -9,8 +9,17 @@
 // never reflows. «Записать» opens the calendar pre-aimed via card-booking;
 // «Напомнить» sets client.reminder_at through quick presets (web uses a
 // native date input — RN has no such input, presets keep it 2 taps).
+//
+// Цепочки (стандарт «минимум тапов»):
+// · «Чат» — если у клиента уже есть привязанный диалог (chat.client_id),
+//   открываем ЕГО (самый свежий по last_message_at), а не корень вкладки;
+//   без привязки деградирует в список чатов (web deep-link parity).
+// · «Напомнить» у должника — первым пунктом «SMS о долге €X» (sms: с
+//   готовым текстом) и «Напомнить в чате», затем обычные пресеты
+//   напоминания себе. Долг считается как в списке: stats.debt, иначе
+//   отрицательный balance.
 
-import { Alert, Linking, Pressable, Text, View } from "react-native";
+import { Alert, Linking, Platform, Pressable, Text, View } from "react-native";
 import {
   Bell,
   CalendarPlus,
@@ -26,6 +35,8 @@ import {
   telUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
+import { formatEUR } from "@babun/shared/common/utils/money";
+import { useChats } from "@/features/chats/store";
 import { useBookingNav } from "@/features/clients/card-booking";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
@@ -46,13 +57,31 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
   const t = useThemeColors();
   const router = useRouter();
   const book = useBookingNav();
+  const { data: chats = [] } = useChats();
 
   const tel = telUrl(client.phone);
   const wa = whatsappUrl(client.whatsapp_phone || client.phone);
+  const phoneDigits = (client.phone ?? "").replace(/\D/g, "");
   const primaryLocationId =
     client.locations?.find((l) => l.isPrimary)?.id ??
     client.locations?.[0]?.id ??
     null;
+
+  // Привязанный диалог — самый свежий из chats с этим client_id.
+  const linkedChat =
+    chats
+      .filter((c) => c.client_id === client.id)
+      .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at))[0] ??
+    null;
+
+  // Долг — то же правило, что в строке списка (stats.debt, иначе
+  // отрицательный баланс).
+  const debt =
+    (stats?.debt ?? 0) > 0
+      ? stats!.debt
+      : client.balance < 0
+        ? Math.abs(client.balance)
+        : 0;
 
   const onBook = () =>
     book({
@@ -61,17 +90,49 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
       teamId: stats?.lastTeamId ?? null,
     });
 
-  // Mobile chats list doesn't take a client filter param yet — plain open
-  // (degrades gracefully, same tab the web deep-link lands on).
-  const onChat = () => router.push("/(dashboard)/chats");
+  const openLinkedChat = () => router.push(`/(dashboard)/chats/${linkedChat!.id}`);
+
+  // «Чат»: есть привязанный диалог → сразу в него (1 тап, web
+  // ?client_id parity); нет — список чатов (degrades gracefully).
+  const onChat = () =>
+    linkedChat ? openLinkedChat() : router.push("/(dashboard)/chats");
+
+  // Готовое SMS о долге: sms: с body (iOS — «&body», Android — «?body»).
+  const debtSmsUrl = (() => {
+    if (debt <= 0 || !phoneDigits) return null;
+    const first = (client.full_name || "").trim().split(/\s+/)[0] ?? "";
+    // Нейтральный текст (Babun — SaaS, без вертикали/бренда в дефолте).
+    const body =
+      `Здравствуйте${first ? `, ${first}` : ""}! Напоминаем: за вами ` +
+      `задолженность ${formatEUR(debt)}. Спасибо!`;
+    const sep = Platform.OS === "ios" ? "&" : "?";
+    return `sms:${phoneDigits}${sep}body=${encodeURIComponent(body)}`;
+  })();
 
   const onRemind = () => {
+    const messageParts = [
+      debt > 0 ? `Долг ${formatEUR(debt)}` : null,
+      client.reminder_at
+        ? `Напоминание стоит на ${formatShortDateRu(client.reminder_at) || client.reminder_at}`
+        : null,
+    ].filter(Boolean) as string[];
     Alert.alert(
       "Напомнить о клиенте",
-      client.reminder_at
-        ? `Сейчас стоит на ${formatShortDateRu(client.reminder_at) || client.reminder_at}`
-        : undefined,
+      messageParts.length > 0 ? messageParts.join(" · ") : undefined,
       [
+        // Должнику — напомнить ЕМУ: готовое SMS и/или привязанный чат.
+        ...(debtSmsUrl
+          ? [
+              {
+                text: `SMS о долге ${formatEUR(debt)}`,
+                onPress: () => Linking.openURL(debtSmsUrl),
+              },
+            ]
+          : []),
+        ...(debt > 0 && linkedChat
+          ? [{ text: "Напомнить в чате", onPress: openLinkedChat }]
+          : []),
+        // Себе — пресеты reminder_at (2 тапа, web date-input parity).
         { text: "Завтра", onPress: () => update({ reminder_at: ymdInDays(1) }) },
         { text: "Через неделю", onPress: () => update({ reminder_at: ymdInDays(7) }) },
         { text: "Через месяц", onPress: () => update({ reminder_at: ymdInDays(30) }) },

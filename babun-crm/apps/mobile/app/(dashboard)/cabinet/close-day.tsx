@@ -9,8 +9,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { Check } from "lucide-react-native";
+import { useFocusEffect, useRouter } from "expo-router";
+import { Check, ChevronRight } from "lucide-react-native";
 import {
   getDebtAmount,
   getPaidAmount,
@@ -92,6 +92,7 @@ export default function CloseDayScreen() {
   const update = useUpdateAppointment();
   const toast = useToast();
   const t = useThemeColors();
+  const router = useRouter();
 
   // Recomputed on focus: the screen is used late in the evening, and left
   // open past midnight it must not silently close YESTERDAY's date.
@@ -159,6 +160,19 @@ export default function CloseDayScreen() {
   const expectedCash = cash;
   const actualCash = Math.round(Number(actualCashStr.replace(",", ".")) || 0);
   const delta = actualCash - expectedCash;
+
+  // Следующий шаг после закрытия: бэклог прошлых дней (тот же фильтр, что
+  // и в unclosed.tsx / бейдже хаба) — деньги «под вопросом» важнее всего.
+  const unclosedPast = useMemo(
+    () =>
+      appts.filter(
+        (a) =>
+          (a.kind === undefined || a.kind === "work") &&
+          a.status === "scheduled" &&
+          a.date < todayKey,
+      ).length,
+    [appts, todayKey],
+  );
 
   // Success toasts fire only from onSuccess — a failed write must not
   // pretend a money record landed (offline field use is the norm here).
@@ -277,6 +291,32 @@ export default function CloseDayScreen() {
                   Открыть обратно
                 </Text>
               </Pressable>
+              {/* следующий логичный шаг: разобрать бэклог прошлых дней */}
+              {unclosedPast > 0 ? (
+                <Pressable
+                  onPress={() => router.push("/cabinet/unclosed")}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Незакрытые дни, ${unclosedPast}`}
+                  className="mt-3 flex-row items-center justify-between rounded-xl px-3 active:opacity-70"
+                  style={{ minHeight: 44, backgroundColor: t.surface }}
+                >
+                  <Text
+                    className="text-[14px] font-semibold"
+                    style={{ color: t.ink }}
+                  >
+                    Разобрать незакрытые дни
+                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Text
+                      className="text-[14px] font-bold tabular-nums"
+                      style={{ color: t.warning }}
+                    >
+                      {unclosedPast}
+                    </Text>
+                    <ChevronRight color={t.chevron} size={16} />
+                  </View>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : null}

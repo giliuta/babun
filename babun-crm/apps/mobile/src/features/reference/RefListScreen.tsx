@@ -10,15 +10,14 @@ import {
   View,
   type KeyboardTypeOptions,
 } from "react-native";
-import { Plus } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
+import { AddRow } from "@/components/ui/AddRow";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
 export interface RefField {
@@ -37,6 +36,8 @@ export interface RefField {
 
 // Generic reference-data screen: list + create/edit bottom-sheet + delete.
 // When itemToValues + onUpdate are provided, tapping a row opens it for edit.
+// Создание — по стандарту «Добавить»: строка AddRow под списком (не «+» в
+// нав-баре); в пустом состоянии — CTA внутри EmptyState.
 export function RefListScreen<T extends { id: string }>({
   title,
   items,
@@ -48,6 +49,7 @@ export function RefListScreen<T extends { id: string }>({
   itemToValues,
   renderItem,
   emptyText,
+  addLabel,
 }: {
   title: string;
   items: T[];
@@ -59,6 +61,8 @@ export function RefListScreen<T extends { id: string }>({
   itemToValues?: (item: T) => Record<string, string>;
   renderItem: (item: T) => ReactElement;
   emptyText: string;
+  /** Подпись строки создания: «Добавить команду», «Добавить город»… */
+  addLabel: string;
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -127,21 +131,7 @@ export function RefListScreen<T extends { id: string }>({
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader
-        title={title}
-        right={
-          <Pressable
-            onPress={openCreate}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить"
-            className="h-10 w-10 items-center justify-center rounded-full"
-            style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
-      />
+      <ScreenHeader title={title} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -161,7 +151,21 @@ export function RefListScreen<T extends { id: string }>({
             )
           }
           ItemSeparatorComponent={() => <Divider inset={16} />}
-          ListEmptyComponent={<EmptyState fill title={emptyText} />}
+          ListFooterComponent={
+            items.length > 0 ? (
+              <>
+                <Divider inset={16} />
+                <AddRow label={addLabel} onPress={openCreate} />
+              </>
+            ) : null
+          }
+          ListEmptyComponent={
+            <EmptyState
+              fill
+              title={emptyText}
+              action={{ label: addLabel, onPress: openCreate }}
+            />
+          }
         />
       )}
 

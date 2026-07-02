@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -9,12 +9,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeftRight,
   Banknote,
   CreditCard,
   Landmark,
-  Plus,
   Wallet,
   type LucideIcon,
 } from "lucide-react-native";
@@ -28,6 +28,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
+import { AddRow } from "@/components/ui/AddRow";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -82,6 +83,28 @@ export default function AccountsScreen() {
   const [kind, setKind] = useState<AccountKind>("cash");
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
   const [opening, setOpening] = useState("");
+
+  // Умный дефолт: одна команда — значит счёт её; выбирать нечего.
+  const openCreate = (presetBrigadeId?: string) => {
+    setBrigadeId(
+      presetBrigadeId ?? (teams.length === 1 ? teams[0].id : null),
+    );
+    setOpen(true);
+  };
+
+  // Цепочка из «Команды»: teams.tsx после создания команды шлёт
+  // ?create=1&brigadeId=… — открываем шит с предвыбранной бригадой и
+  // дефолтным именем «Касса»: до готового счёта остаётся один тап.
+  const router = useRouter();
+  const params = useLocalSearchParams<{ create?: string; brigadeId?: string }>();
+  useEffect(() => {
+    if (params.create === "1") {
+      setName((n) => n || "Касса");
+      openCreate(params.brigadeId || undefined);
+      router.setParams({ create: undefined, brigadeId: undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.create, params.brigadeId]);
 
   const [tOpen, setTOpen] = useState(false);
   const [fromId, setFromId] = useState<string | null>(null);
@@ -153,28 +176,17 @@ export default function AccountsScreen() {
       <ScreenHeader
         title="Счета"
         right={
-          <View className="flex-row items-center">
-            {accounts.length >= 2 ? (
-              <Pressable
-                onPress={() => setTOpen(true)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Перевод между счетами"
-                className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
-              >
-                <ArrowLeftRight color={th.body} size={ICON.sm} />
-              </Pressable>
-            ) : null}
+          accounts.length >= 2 ? (
             <Pressable
-              onPress={() => setOpen(true)}
+              onPress={() => setTOpen(true)}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Добавить счёт"
+              accessibilityLabel="Перевод между счетами"
               className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
             >
-              <Plus color={th.accent} size={ICON.md} />
+              <ArrowLeftRight color={th.body} size={ICON.sm} />
             </Pressable>
-          </View>
+          ) : undefined
         }
       />
 
@@ -255,11 +267,20 @@ export default function AccountsScreen() {
             );
           }}
           ItemSeparatorComponent={() => <Divider inset={64} />}
+          ListFooterComponent={
+            accounts.length > 0 ? (
+              <>
+                <Divider inset={64} />
+                <AddRow label="Добавить счёт" onPress={() => openCreate()} />
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               fill
               title="Нет счетов"
-              subtitle="Добавьте кассу или карту бригады через +"
+              subtitle="Касса или карта бригады — деньги операций живут на счетах"
+              action={{ label: "Добавить счёт", onPress: () => openCreate() }}
             />
           }
         />
