@@ -1,0 +1,78 @@
+import { Alert } from "react-native";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import { getStorage } from "@babun/shared/storage";
+import { queryClient } from "@/lib/query-client";
+import { supabase } from "@/lib/supabase";
+
+// Mobile port of apps/web/src/lib/sync/auth-clear.ts — wipe device-local data
+// when this device must no longer see the previous account's data.
+//
+// The shared local stores persist under GLOBAL (non-tenant-scoped) MMKV keys
+// («babun-chats», «babun-appointments», «babun:closed-day:*», …), so without
+// a wipe Tenant B logging in on the same phone inherits Tenant A's chats,
+// finances and reference books — the cross-tenant leak STORY-053a tracked on
+// web.
+//
+// Web-parity semantics (v504 + STORY-072/078):
+//   * intentional logout        → wipe after a SUCCESSFUL signOut
+//     (signOutAndWipe below — a failed signOut must not destroy data);
+//   * SIGNED_IN, different user → wipe (covers «register a new account
+//     without logging out first»);
+//   * bare SIGNED_OUT event     → NO wipe. Supabase fires spurious SIGNED_OUT
+//     pairs on refresh-token network blips; wiping there repeatedly nuked
+//     real user data on web (v504). The identity stamp survives so the next
+//     SIGNED_IN can still compare accounts.
+
+// Every Babun-owned key starts with one of these — a prefix sweep catches new
+// modules automatically (no «we forgot to add the key» follow-ups).
+const TENANT_PREFIXES = ["babun-", "babun2:", "babun:"];
+
+// Identity stamp — must SURVIVE the wipe so the next sign-in can detect a
+// different account (mirrors LAST_USER_KEY / KEEP_KEYS on web).
+const LAST_USER_KEY = "babun:auth:last-user-id";
+const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
+
+/** Drop every tenant-scoped local key + the in-memory query cache. */
+export function wipeLocalData(): void {
+  const storage = getStorage();
+  for (const key of storage.list()) {
+    if (KEEP_KEYS.has(key)) continue;
+    if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
+  }
+  queryClient.clear();
+}
+
+/** Intentional «Выйти» — sign out FIRST, wipe only once the session is
+ *  really gone. auth-js signOut() does NOT throw: on a network failure
+ *  (offline is a normal mobile state) it returns { error } and KEEPS the
+ *  local session — wiping before it would destroy device-only data
+ *  (chats, closed-day records) while leaving the user logged in with
+ *  empty screens. The wipe still runs before any next sign-in, so a
+ *  shared device never leaks this account's cached data. */
+export async function signOutAndWipe(): Promise<void> {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    Alert.alert(
+      "Не удалось выйти",
+      "Проверьте соединение и попробуйте ещё раз.",
+    );
+    return;
+  }
+  wipeLocalData();
+}
+
+/** Fed every onAuthStateChange event by SessionProvider. Wipes ONLY on a
+ *  concrete user-id mismatch — never on a first-ever sign-in and never on
+ *  SIGNED_OUT — so it cannot destroy data for legitimate sessions. */
+export function handleAuthEvent(
+  event: AuthChangeEvent,
+  session: Session | null,
+): void {
+  if (event !== "SIGNED_IN" && event !== "INITIAL_SESSION") return;
+  const next = session?.user?.id;
+  if (!next) return;
+  const storage = getStorage();
+  const prev = storage.getRaw(LAST_USER_KEY);
+  if (prev && prev !== next) wipeLocalData();
+  if (prev !== next) storage.setRaw(LAST_USER_KEY, next);
+}

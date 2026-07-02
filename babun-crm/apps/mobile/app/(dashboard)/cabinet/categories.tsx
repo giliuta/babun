@@ -39,9 +39,14 @@ export default function CategoriesScreen() {
 
   const add = async () => {
     if (!name.trim()) return;
-    await insert.mutateAsync({ name: name.trim(), type, color });
-    setName("");
-    setOpen(false);
+    try {
+      await insert.mutateAsync({ name: name.trim(), type, color });
+      setName("");
+      setOpen(false);
+    } catch (e) {
+      // Sheet stays open — nothing entered is lost.
+      Alert.alert("Ошибка", (e as Error).message);
+    }
   };
 
   const confirmDelete = (c: FinanceCategory) => {
@@ -51,7 +56,12 @@ export default function CategoriesScreen() {
     }
     Alert.alert("Удалить категорию?", c.name, [
       { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => del.mutate(c.id) },
+      {
+        text: "Удалить",
+        style: "destructive",
+        onPress: () =>
+          del.mutate(c.id, { onError: (e) => Alert.alert("Ошибка", e.message) }),
+      },
     ]);
   };
 

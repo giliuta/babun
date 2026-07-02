@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Database } from "@babun/shared/db/database.types";
+import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -35,14 +36,19 @@ export function useCreateTeam() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; region?: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      region?: string;
+      color?: string;
+    }) => {
       const { data, error } = await supabase
         .from("teams")
         .insert({
-          id: `team_${Date.now()}`,
+          id: generateId("team"),
           tenant_id: tenantId as string,
           name: input.name,
           region: input.region || null,
+          color: input.color || null,
         })
         .select("*")
         .single();
@@ -50,6 +56,7 @@ export function useCreateTeam() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 
@@ -80,7 +87,7 @@ export function useCreateMaster() {
       const { data, error } = await supabase
         .from("masters")
         .insert({
-          id: `master_${Date.now()}`,
+          id: generateId("master"),
           tenant_id: tenantId as string,
           full_name: input.full_name,
           phone: input.phone || null,
@@ -91,6 +98,7 @@ export function useCreateMaster() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["masters"] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 
@@ -121,7 +129,7 @@ export function useCreateCity() {
       const { data, error } = await supabase
         .from("cities")
         .insert({
-          id: `city_${Date.now()}`,
+          id: generateId("city"),
           tenant_id: tenantId as string,
           name: input.name,
           country: input.country || "",
@@ -132,6 +140,7 @@ export function useCreateCity() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cities"] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 
@@ -159,6 +168,7 @@ function useRefUpdate(table: RefTable) {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [table] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 
@@ -174,6 +184,7 @@ function useRefDelete(table: RefTable) {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [table] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
 

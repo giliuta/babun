@@ -26,10 +26,12 @@ export function SectionCard({
         {title ? (
           <View className="flex-row items-center justify-between px-4 pb-1 pt-3">
             <Text
+              // Caption tier (DS §2: 11/700/+0.6 uppercase) — same recipe as
+              // SectionHeader in Card.tsx so section eyebrows match app-wide.
               style={{
-                fontSize: 12,
-                fontWeight: "600",
-                letterSpacing: 0.4,
+                fontSize: 11,
+                fontWeight: "700",
+                letterSpacing: 0.6,
                 textTransform: "uppercase",
                 color: t.faint,
               }}

@@ -6,7 +6,7 @@ import { Divider } from "@/components/ui/Divider";
 import { Button } from "@/components/ui/Button";
 import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
-import { supabase } from "@/lib/supabase";
+import { signOutAndWipe } from "@/lib/auth-clear";
 
 function Row({ label, value }: { label: string; value: string }) {
   const t = useThemeColors();
@@ -47,7 +47,10 @@ export default function AccountScreen() {
           label="Выйти"
           variant="secondary"
           tone="danger"
-          onPress={() => supabase.auth.signOut()}
+          // Same intentional-logout path as the cabinet hub: a bare
+          // signOut() would keep all tenant data in MMKV on a shared
+          // device (bare SIGNED_OUT events deliberately never wipe).
+          onPress={() => void signOutAndWipe()}
         />
       </View>
     </Screen>

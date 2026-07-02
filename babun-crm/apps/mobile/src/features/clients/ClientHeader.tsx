@@ -24,6 +24,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 interface ClientHeaderProps {
@@ -31,27 +32,6 @@ interface ClientHeaderProps {
   appointments: Appointment[];
   stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => void;
-}
-
-const MONTHS_RU_SHORT = [
-  "янв", "фев", "мар", "апр", "мая", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек",
-];
-
-/** "2024-05-10" → "10 мая"; "" → "". */
-function formatShortDateRu(key: string): string {
-  if (!key) return "";
-  const [y, m, d] = key.split("-").map(Number);
-  if (!y || !m || !d) return "";
-  return `${d} ${MONTHS_RU_SHORT[m - 1] ?? ""}`.trim();
-}
-
-function visitsWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "визит";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "визита";
-  return "визитов";
 }
 
 // ─── Status badges (port of ClientStatusBadges, capped at 3) ──────────
@@ -158,7 +138,13 @@ function EditableLine({
     );
   }
   return (
-    <Pressable onPress={() => setEditing(true)} className="active:opacity-60">
+    <Pressable
+      onPress={() => setEditing(true)}
+      accessibilityRole="button"
+      accessibilityHint="Нажмите, чтобы изменить"
+      hitSlop={{ top: 8, bottom: 8 }}
+      className="active:opacity-60"
+    >
       <Text style={{ color: value ? (valueColor ?? t.ink) : t.faint }} className={textClass}>
         {value || placeholder}
       </Text>

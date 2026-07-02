@@ -471,6 +471,9 @@ export function AppointmentSheet({
                       </Text>
                       <Pressable
                         onPress={() => setOv({ qty: Math.max(1, qty - 1) })}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Уменьшить количество"
                         className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
                         style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
                       >
@@ -481,6 +484,9 @@ export function AppointmentSheet({
                       </Text>
                       <Pressable
                         onPress={() => setOv({ qty: qty + 1 })}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Увеличить количество"
                         className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
                         style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}
                       >
@@ -615,13 +621,24 @@ export function AppointmentSheet({
             {kind === "event" ? (
               <SectionCard title="Цвет">
                 <View className="flex-row flex-wrap gap-3 p-3">
-                  {[
-                    "#4338ca", "#10b981", "#ef4444", "#f59e0b",
-                    "#06b6d4", "#a855f7", "#ec4899", "#737373",
-                  ].map((c) => (
+                  {(
+                    [
+                      ["#4338ca", "Индиго"],
+                      ["#10b981", "Зелёный"],
+                      ["#ef4444", "Красный"],
+                      ["#f59e0b", "Оранжевый"],
+                      ["#06b6d4", "Голубой"],
+                      ["#a855f7", "Фиолетовый"],
+                      ["#ec4899", "Розовый"],
+                      ["#737373", "Серый"],
+                    ] as const
+                  ).map(([c, name]) => (
                     <Pressable
                       key={c}
                       onPress={() => setEventColor(c)}
+                      accessibilityRole="button"
+                      accessibilityLabel={name}
+                      accessibilityState={{ selected: eventColor === c }}
                       className="h-9 w-9 rounded-full"
                       style={[
                         { backgroundColor: c },

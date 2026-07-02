@@ -37,6 +37,7 @@ export function useCreateReminder() {
     mutationFn: (input: CreateRecurringInput) =>
       createRecurringReminder(supabase, tenantId as string, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -46,6 +47,7 @@ export function useUpdateReminderStatus() {
     mutationFn: ({ id, status }: { id: string; status: RecurringStatus }) =>
       updateReminderStatus(supabase, id, status),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -54,5 +56,6 @@ export function useDeleteReminder() {
   return useMutation({
     mutationFn: (id: string) => deleteRecurringReminder(supabase, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }

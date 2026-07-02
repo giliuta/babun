@@ -70,11 +70,16 @@ export default function ResetPasswordScreen() {
     setLoading(true);
     setError(null);
     const { error: e } = await supabase.auth.updateUser({ password });
-    setLoading(false);
     if (e) {
+      setLoading(false);
       setError(mapAuthError(e, "reset"));
       return;
     }
+    // End the recovery session: the done-screen promises «Теперь можно
+    // войти», and with a live session the root guard would bounce «Войти»
+    // straight into the app instead of showing /login.
+    await supabase.auth.signOut();
+    setLoading(false);
     setDone(true);
   }
 

@@ -75,7 +75,17 @@ export default function RegisterScreen() {
 
   async function resend() {
     if (cooldown > 0) return;
-    await supabase.auth.resend({ type: "signup", email: email.trim() });
+    const { error: e } = await supabase.auth.resend({
+      type: "signup",
+      email: email.trim(),
+    });
+    if (e) {
+      // Rate limit / network — don't restart the cooldown and don't let the
+      // user believe the email went out.
+      setError(mapAuthError(e, "signup"));
+      return;
+    }
+    setError(null);
     setCooldown(45);
   }
 
@@ -95,6 +105,7 @@ export default function RegisterScreen() {
           <Text style={{ fontWeight: "600", color: t.ink }}>{email.trim()}</Text>.
           Откройте его, перейдите по ссылке — и возвращайтесь, чтобы войти.
         </NoticeCard>
+        <FormError message={error} />
         <PillButton label="Открыть Почту" onPress={openMail} />
         <GhostLink
           label={cooldown > 0 ? `Отправить снова (${cooldown})` : "Отправить ещё раз"}

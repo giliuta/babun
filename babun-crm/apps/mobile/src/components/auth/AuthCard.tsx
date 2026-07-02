@@ -21,6 +21,7 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useReducedMotion,
@@ -314,13 +315,16 @@ export function PillButton({
 
   useEffect(() => {
     if (filled && !reduced && w > 0) {
+      // Two sweeps, then rest — an endless loop kept the login screen's UI
+      // thread redrawing (GPU/battery) for as long as it was mounted.
       sheen.value = -160;
       sheen.value = withRepeat(
         withTiming(w + 60, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
-        -1,
+        2,
         false,
       );
     }
+    return () => cancelAnimation(sheen);
   }, [filled, reduced, w, sheen]);
 
   const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));

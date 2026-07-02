@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Search } from "lucide-react-native";
+import { MessageCircle, Pin, Search } from "lucide-react-native";
 import {
   CHANNEL_COLORS,
   CHANNEL_LABELS,
@@ -15,7 +15,18 @@ import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
 
-const CHANNELS: ChatChannel[] = ["whatsapp", "telegram", "instagram", "sms"];
+// P2 #38 (web chats/page.tsx:286) — no «SMS» chip: SMS is one-way
+// (outbound only, no inbox); historical sms-chats still show under «Все».
+const CHANNELS: ChatChannel[] = ["whatsapp", "instagram", "telegram"];
+
+type ChatFilter = ChatChannel | "unanswered" | null;
+
+// Web parity (chats/page.tsx:87–90) — «без ответа» = the client spoke
+// last and the conversation is still open.
+function isUnanswered(c: Chat): boolean {
+  const last = c.messages[c.messages.length - 1];
+  return last?.direction === "in" && c.status !== "closed" && c.status !== "archived";
+}
 
 function lastPreview(c: Chat): string {
   const m = c.messages[c.messages.length - 1];
@@ -61,6 +72,14 @@ function ChatRow({ c, onPress }: { c: Chat; onPress: () => void }) {
       </View>
       <View className="ml-3 flex-1">
         <View className="flex-row items-center justify-between">
+          {c.is_pinned ? (
+            <Pin
+              color={t.faint}
+              size={12}
+              fill={t.faint}
+              style={{ marginRight: 4, transform: [{ rotate: "45deg" }] }}
+            />
+          ) : null}
           <Text
             className="flex-1 pr-2 text-base font-semibold"
             style={{ color: t.ink }}
@@ -105,22 +124,40 @@ export default function ChatsListScreen() {
   const router = useRouter();
   const { data: chats = [], isLoading } = useChats();
   const [query, setQuery] = useState("");
-  const [channel, setChannel] = useState<ChatChannel | null>(null);
+  const [filter, setFilter] = useState<ChatFilter>(null);
 
+  const unansweredCount = useMemo(() => chats.filter(isUnanswered).length, [chats]);
+
+  // Web parity (chats/page.tsx:94–118): channel/unanswered filter →
+  // archived hidden → search (name, handle, phone, message texts) →
+  // pinned-first, then newest.
   const sorted = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return [...chats]
-      .filter((c) => (channel ? c.channel === channel : true))
-      .filter((c) => {
-        if (!q) return true;
-        const last = c.messages[c.messages.length - 1]?.text ?? "";
-        return (
+    let list =
+      filter === "unanswered"
+        ? chats.filter(isUnanswered)
+        : filter
+          ? chats.filter((c) => c.channel === filter)
+          : chats;
+    list = list.filter((c) => c.status !== "archived");
+    if (q) {
+      list = list.filter(
+        (c) =>
           c.contact_name.toLowerCase().includes(q) ||
-          last.toLowerCase().includes(q)
-        );
-      })
-      .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at));
-  }, [chats, query, channel]);
+          c.contact_handle.toLowerCase().includes(q) ||
+          c.contact_phone.includes(q) ||
+          c.messages.some((m) => m.text.toLowerCase().includes(q)),
+      );
+    }
+    return [...list].sort((a, b) => {
+      if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+      return b.last_message_at.localeCompare(a.last_message_at);
+    });
+  }, [chats, query, filter]);
+  const visibleCount = useMemo(
+    () => chats.filter((c) => c.status !== "archived").length,
+    [chats],
+  );
   const unread = useMemo(
     () => chats.reduce((s, c) => s + c.unread_count, 0),
     [chats],
@@ -131,7 +168,7 @@ export default function ChatsListScreen() {
       <ScreenHeader
         large
         title="Чаты"
-        subtitle={`${chats.length} диалогов${unread > 0 ? ` · ${unread} непрочитанных` : ""}`}
+        subtitle={`${visibleCount} диалогов${unread > 0 ? ` · ${unread} непрочитанных` : ""}`}
       />
 
       <View
@@ -157,27 +194,40 @@ export default function ChatsListScreen() {
         style={{ flexGrow: 0, maxHeight: 48 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8, alignItems: "center" }}
       >
-        {[null, ...CHANNELS].map((ch) => {
-          const active = channel === ch;
-          const color = ch ? CHANNEL_COLORS[ch] : t.accent;
+        {([null, "unanswered", ...CHANNELS] as ChatFilter[]).map((ch) => {
+          const active = filter === ch;
+          const waiting = ch === "unanswered";
+          const color = waiting ? t.warning : ch ? CHANNEL_COLORS[ch] : t.accent;
+          // «Без ответа» is the operator's work queue — show the count
+          // and a warning tint while it's non-empty (web parity).
+          const label = waiting
+            ? unansweredCount > 0 || active
+              ? `Без ответа (${unansweredCount})`
+              : "Без ответа"
+            : ch
+              ? CHANNEL_LABELS[ch]
+              : "Все";
+          const idleTint = waiting && unansweredCount > 0;
           return (
             <Pressable
               key={ch ?? "all"}
-              onPress={() => setChannel(ch)}
+              onPress={() => setFilter(ch)}
               className="rounded-full px-3.5 py-1.5"
               style={{
                 backgroundColor: active
                   ? color
-                  : t.dark
-                    ? "rgba(255,255,255,0.07)"
-                    : "#eef1f5",
+                  : idleTint
+                    ? `${t.warning}24`
+                    : t.dark
+                      ? "rgba(255,255,255,0.07)"
+                      : "#eef1f5",
               }}
             >
               <Text
                 className="text-sm font-medium"
-                style={{ color: active ? "#fff" : t.body }}
+                style={{ color: active ? "#fff" : idleTint ? t.warning : t.body }}
               >
-                {ch ? CHANNEL_LABELS[ch] : "Все"}
+                {label}
               </Text>
             </Pressable>
           );
@@ -201,7 +251,18 @@ export default function ChatsListScreen() {
               style={{ backgroundColor: t.separator }}
             />
           )}
-          ListEmptyComponent={<EmptyState fill title="Нет диалогов" />}
+          ListEmptyComponent={
+            <EmptyState
+              fill
+              icon={<MessageCircle color={t.faint} size={40} strokeWidth={1.6} />}
+              title="Нет диалогов"
+              subtitle={
+                filter || query.trim()
+                  ? "Попробуйте другой фильтр или обнулите поиск."
+                  : "Подключите WhatsApp / Instagram / Telegram, чтобы вести переписку с клиентами в одном месте."
+              }
+            />
+          }
         />
       )}
     </Screen>

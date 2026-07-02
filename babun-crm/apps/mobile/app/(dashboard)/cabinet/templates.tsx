@@ -34,25 +34,38 @@ export default function TemplatesScreen() {
     () => categories.filter((c) => c.type === kind),
     [categories, kind],
   );
-  const canSave = !!name.trim() && Number(amount) > 0 && !insert.isPending;
+  // Comma decimals («12,50» from the ru decimal-pad) must pass the same
+  // normalisation as add(), otherwise the button never enables.
+  const canSave =
+    !!name.trim() && Number(amount.replace(",", ".")) > 0 && !insert.isPending;
 
   const add = async () => {
-    await insert.mutateAsync({
-      name: name.trim(),
-      kind,
-      amount: Number(amount.replace(",", ".")) || 0,
-      category_id: categoryId,
-    });
-    setName("");
-    setAmount("");
-    setCategoryId(null);
-    setOpen(false);
+    try {
+      await insert.mutateAsync({
+        name: name.trim(),
+        kind,
+        amount: Number(amount.replace(",", ".")) || 0,
+        category_id: categoryId,
+      });
+      setName("");
+      setAmount("");
+      setCategoryId(null);
+      setOpen(false);
+    } catch (e) {
+      // Sheet stays open — nothing entered is lost.
+      Alert.alert("Ошибка", (e as Error).message);
+    }
   };
 
   const confirmDelete = (id: string, label: string) =>
     Alert.alert("Удалить шаблон?", label, [
       { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => del.mutate(id) },
+      {
+        text: "Удалить",
+        style: "destructive",
+        onPress: () =>
+          del.mutate(id, { onError: (e) => Alert.alert("Ошибка", e.message) }),
+      },
     ]);
 
   return (

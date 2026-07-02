@@ -1,4 +1,5 @@
 import type { Client } from "@babun/shared/local/clients";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 
 // Mobile port of the web ClientsFilterPanel facets (Статус / Тег / Город).
 // Команда/Период are deferred (need appointments+teams join / a date wheel).
@@ -30,12 +31,20 @@ export function filterActiveCount(f: ClientsFilter): number {
 export function applyClientsFilter(
   clients: Client[],
   f: ClientsFilter,
+  statsMap?: Map<string, ClientStats>,
 ): Client[] {
   return clients.filter((c) => {
     if (f.status === "active" && c.blacklisted) return false;
-    if (f.status === "debtors" && c.balance >= 0) return false;
+    // Должник = долг по завершённым визитам ИЛИ минусовой баланс — web
+    // parity (useClientFilters «debt»). В живых данных balance почти
+    // всегда 0; реальный долг живёт в payment_status визитов (stats).
+    if (f.status === "debtors") {
+      const debt = statsMap?.get(c.id)?.debt ?? 0;
+      if (!(debt > 0 || c.balance < 0)) return false;
+    }
     if (f.status === "blacklisted" && !c.blacklisted) return false;
-    if (f.tagIds.length && !f.tagIds.some((t) => c.tag_ids.includes(t)))
+    // AND-семантика как в вебе: каждый выбранный тег обязателен.
+    if (f.tagIds.length && !f.tagIds.every((t) => c.tag_ids.includes(t)))
       return false;
     if (f.cities.length && !f.cities.includes(c.city)) return false;
     return true;

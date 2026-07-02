@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { Alert, ScrollView, Text, View } from "react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
-import { useTenant, useUpdateTenant } from "@/features/settings/tenant";
+import { useThemeColors } from "@/theme/colors";
+import {
+  useCurrentRole,
+  useTenant,
+  useUpdateTenant,
+} from "@/features/settings/tenant";
 
 type FormKey =
   | "name"
@@ -34,10 +39,16 @@ const EMPTY: Record<FormKey, string> = {
 };
 
 export default function BusinessScreen() {
+  const t = useThemeColors();
   const { data: tenant, isLoading, error } = useTenant();
+  const { data: role } = useCurrentRole();
   const update = useUpdateTenant();
   const [form, setForm] = useState<Record<FormKey, string>>(EMPTY);
   const [dirty, setDirty] = useState(false);
+
+  // RLS (tenants_update_owner) allows saving to the owner only — disable
+  // upfront instead of letting the save fail with an opaque error.
+  const readOnly = role != null && role !== "owner";
 
   useEffect(() => {
     if (!tenant) return;
@@ -147,10 +158,18 @@ export default function BusinessScreen() {
         </SectionCard>
 
         <View className="mx-3 mt-5">
+          {readOnly ? (
+            <Text
+              className="mb-2 text-center text-xs"
+              style={{ color: t.sub }}
+            >
+              Изменять профиль бизнеса может только владелец.
+            </Text>
+          ) : null}
           <Button
             label="Сохранить"
             onPress={save}
-            disabled={!dirty || update.isPending}
+            disabled={!dirty || readOnly || update.isPending}
             loading={update.isPending}
           />
         </View>

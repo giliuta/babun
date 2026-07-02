@@ -14,6 +14,7 @@ import { ArrowUpRight, Home, MapPin, Plus, Trash2 } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { buildMapUrl } from "@babun/shared/common/utils/map-links";
+import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 interface ObjectsBlockProps {
@@ -143,7 +144,14 @@ export default function ObjectsBlock({
               className="flex-1 items-center rounded-lg py-2"
               style={{ backgroundColor: draft.address.trim() ? t.accent : (t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5") }}
             >
-              <Text className="text-sm font-semibold" style={{ color: "#fff" }}>Сохранить</Text>
+              {/* Conditional label color (as in NotesBlock) — plain white
+                  is invisible on the light disabled fill. */}
+              <Text
+                className="text-sm font-semibold"
+                style={{ color: draft.address.trim() ? "#fff" : t.faint }}
+              >
+                Сохранить
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => setDraft(null)}
@@ -189,16 +197,9 @@ function ObjectRow({
     if (url) Linking.openURL(url);
   };
 
-  const visitWord =
-    history && history.count === 1
-      ? "визит"
-      : history && history.count < 5
-        ? "визита"
-        : "визитов";
-
   return (
     <View className="flex-row items-start gap-2 rounded-xl p-3" style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5" }}>
-      <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: t.dark ? "rgba(44,91,224,0.18)" : "rgba(44,91,224,0.10)" }}>
+      <View className="h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: t.dark ? `${t.accent}2e` : `${t.accent}1a` }}>
         <Home color={t.accent} size={16} />
       </View>
 
@@ -233,8 +234,8 @@ function ObjectRow({
 
         {history && history.count > 0 ? (
           <Text className="mt-0.5 text-[11px]" style={{ color: t.sub }}>
-            {history.count} {visitWord}
-            {history.lastDate ? ` · посл. ${formatHistDate(history.lastDate)}` : ""}
+            {history.count} {visitsWord(history.count)}
+            {history.lastDate ? ` · посл. ${formatShortDateRu(history.lastDate)}` : ""}
           </Text>
         ) : null}
       </View>
@@ -243,7 +244,7 @@ function ObjectRow({
         <Pressable
           onPress={openMaps}
           className="h-8 w-8 items-center justify-center rounded-lg active:opacity-70"
-          style={{ backgroundColor: t.dark ? "rgba(44,91,224,0.18)" : "rgba(44,91,224,0.10)" }}
+          style={{ backgroundColor: t.dark ? `${t.accent}2e` : `${t.accent}1a` }}
         >
           <ArrowUpRight color={t.accent} size={14} />
         </Pressable>
@@ -257,13 +258,4 @@ function ObjectRow({
       </Pressable>
     </View>
   );
-}
-
-function formatHistDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-  });
 }

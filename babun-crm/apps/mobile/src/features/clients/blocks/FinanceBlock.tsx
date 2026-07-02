@@ -5,6 +5,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatVisitDate } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 // FinanceBlock (mobile port of apps/web/.../blocks/FinanceBlock.tsx).
@@ -174,14 +175,4 @@ function methodLabel(method: string): string {
     default:
       return method;
   }
-}
-
-function formatVisitDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }

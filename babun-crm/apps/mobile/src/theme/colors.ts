@@ -1,10 +1,9 @@
 import { useColorScheme } from "react-native";
 
 // «Halo Cobalt» — single app-wide runtime palette (light + dark token inversion).
-// This is the source of truth for COLOR. Components call useThemeColors() and
-// read t.* into inline styles, so the «no component rebuild» promise in
-// DESIGN-SYSTEM.md holds app-wide. The light slice is mirrored statically in
-// components/ui/tokens.ts (COLORS) for legacy importers; the auth screens read
+// This is the SINGLE source of truth for COLOR. Components call
+// useThemeColors() and read t.* into inline styles, so the «no component
+// rebuild» promise in DESIGN-SYSTEM.md holds app-wide; the auth screens read
 // this via the useAuthTheme alias in components/auth/theme.ts.
 //
 // NativeWind v5-preview has no `dark:` variants wired, so COLOR never goes
@@ -66,7 +65,9 @@ export const light: ThemeColors = {
   ink: "#0b1220",
   body: "#39414e",
   sub: "#5b6678",
-  faint: "#97a0ae",
+  // WCAG AA: 4.6:1 on canvas / 5.0:1 on surface (was #97a0ae ≈ 2.4:1 —
+  // unreadable captions). Still lighter than `sub`, so the tier order holds.
+  faint: "#66707e",
   placeholder: "#8b94a3",
   success: "#1fb47a",
   danger: "#f0473c",
@@ -78,7 +79,8 @@ export const light: ThemeColors = {
   scrim: "rgba(11,18,32,0.30)",
   cardShadow: "0px 1px 2px rgba(11,18,32,0.04), 0px 8px 24px rgba(11,18,32,0.06)",
   brandShadow: "0px 8px 28px rgba(44,91,224,0.28)",
-  disabledFill: "#dde3ea",
+  // Light enough that a `sub`-colored disabled label reads at ≥4.5:1.
+  disabledFill: "#e2e7ee",
   haloOpacity: 0.12,
   googleBg: "#ffffff",
   googleBorder: "#d9dee5",

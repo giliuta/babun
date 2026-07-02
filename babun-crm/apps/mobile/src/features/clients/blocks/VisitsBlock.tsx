@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatVisitDate } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 // VisitsBlock (mobile port of apps/web/.../blocks/VisitsBlock.tsx).
@@ -28,11 +29,16 @@ interface VisitsBlockProps {
   stats?: ClientStats;
 }
 
+// Loyal clients carry dozens of visits; mounting 50 rows synchronously
+// inside the card's shared ScrollView noticeably delays opening it, so
+// we start collapsed at 10 and expand to LIMIT on demand.
+const INITIAL = 10;
 const LIMIT = 50;
 
 export default function VisitsBlock({ appointments }: VisitsBlockProps) {
   const router = useRouter();
   const t = useThemeColors();
+  const [showAll, setShowAll] = useState(false);
 
   const own = useMemo(
     () =>
@@ -41,6 +47,8 @@ export default function VisitsBlock({ appointments }: VisitsBlockProps) {
       ),
     [appointments],
   );
+
+  const shown = own.slice(0, showAll ? LIMIT : INITIAL);
 
   return (
     <View className="mx-3 mt-2 rounded-2xl p-3 shadow-sm" style={{ backgroundColor: t.surface }}>
@@ -54,7 +62,7 @@ export default function VisitsBlock({ appointments }: VisitsBlockProps) {
         </Text>
       ) : (
         <View>
-          {own.slice(0, LIMIT).map((apt) => (
+          {shown.map((apt) => (
             <VisitRow
               key={apt.id}
               apt={apt}
@@ -65,7 +73,18 @@ export default function VisitsBlock({ appointments }: VisitsBlockProps) {
               }
             />
           ))}
-          {own.length > LIMIT ? (
+          {!showAll && own.length > INITIAL ? (
+            <Pressable
+              onPress={() => setShowAll(true)}
+              className="items-center py-2.5 active:opacity-60"
+              style={{ borderTopWidth: 1, borderTopColor: t.separator }}
+            >
+              <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
+                Показать все ({Math.min(own.length, LIMIT)})
+              </Text>
+            </Pressable>
+          ) : null}
+          {showAll && own.length > LIMIT ? (
             <Text className="px-1 pt-2 text-center text-xs" style={{ color: t.faint }}>
               + ещё {own.length - LIMIT} визитов
             </Text>
@@ -190,14 +209,4 @@ function pluralService(n: number): string {
   if (mod10 === 1 && mod100 !== 11) return "услуга";
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "услуги";
   return "услуг";
-}
-
-function formatVisitDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
 }

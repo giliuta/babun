@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Pressable, Text, View } from "react-native";
 import {
   Gesture,
@@ -9,8 +9,7 @@ import { runOnJS } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { DayColumn, TimeRail, RAIL_W } from "@/features/calendar/DayView";
-import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
+import { DayColumn, TimeRail, RAIL_W, HOUR_H } from "@/features/calendar/DayView";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -25,6 +24,7 @@ function sameDay(a: Date, b: Date) {
 // Week / 3-day grid: a fixed day-header row + a shared hour rail with N day
 // columns. Reuses DayColumn so the block/gridline/now-line rendering is
 // identical to the day view (now-line is scoped to today's column).
+// The finance footer is rendered by the parent (under both this and DayView).
 export function WeekView({
   days,
   appointments,
@@ -40,6 +40,11 @@ export function WeekView({
   onNext,
   startHour,
   endHour,
+  stepMinutes,
+  workStartHour,
+  workEndHour,
+  nowMinutes,
+  scrollToHour,
 }: {
   days: Date[];
   appointments: Appointment[];
@@ -55,8 +60,23 @@ export function WeekView({
   onNext: () => void;
   startHour?: number;
   endHour?: number;
+  stepMinutes?: number;
+  workStartHour?: number;
+  workEndHour?: number;
+  nowMinutes?: number | null;
+  scrollToHour?: number;
 }) {
   const t = useThemeColors();
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (scrollToHour == null) return;
+    const y = Math.max(0, (scrollToHour - (startHour ?? 0)) * HOUR_H);
+    const raf = requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ y, animated: false }),
+    );
+    return () => cancelAnimationFrame(raf);
+  }, [scrollToHour, startHour]);
+
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-18, 18])
@@ -96,6 +116,8 @@ export function WeekView({
             <Pressable
               key={formatYMD(d)}
               onPress={() => onPickDay(d)}
+              accessibilityRole="button"
+              accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${dayAppts.length > 0 ? `, записей: ${dayAppts.length}` : ""}`}
               style={{ flex: 1, alignItems: "center", paddingTop: 4 }}
             >
               <Text
@@ -130,7 +152,7 @@ export function WeekView({
                   {d.getDate()}
                 </Text>
               </View>
-              <Text style={{ fontSize: 10, fontWeight: "600", color: t.faint }} className="tabular-nums">
+              <Text style={{ fontSize: 10, fontWeight: "600", color: t.sub }} className="tabular-nums">
                 {dayAppts.length > 0 ? dayAppts.length : ""}
               </Text>
             </Pressable>
@@ -140,6 +162,7 @@ export function WeekView({
 
       {/* grid */}
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120, paddingTop: 6 }}
       >
@@ -160,12 +183,14 @@ export function WeekView({
               onReschedule={onReschedule}
               startHour={startHour}
               endHour={endHour}
+              stepMinutes={stepMinutes}
+              workStartHour={workStartHour}
+              workEndHour={workEndHour}
+              nowMinutes={nowMinutes}
             />
           ))}
         </View>
       </ScrollView>
-
-      <DayFinanceFooter days={days} appointments={appointments} onTapDay={onPickDay} />
     </View>
     </GestureDetector>
   );

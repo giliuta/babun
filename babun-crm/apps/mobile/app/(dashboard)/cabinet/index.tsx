@@ -25,7 +25,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
-import { supabase } from "@/lib/supabase";
+import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
 
 type IconType = ComponentType<{ color?: string; size?: number }>;
@@ -34,16 +34,14 @@ function MenuRow({
   icon: Icon,
   label,
   href,
-  soon,
 }: {
   icon: IconType;
   label: string;
   href?: Href;
-  soon?: boolean;
 }) {
   const router = useRouter();
   const t = useThemeColors();
-  const disabled = soon || !href;
+  const disabled = !href;
   return (
     <Pressable
       onPress={() => href && router.push(href)}
@@ -66,11 +64,7 @@ function MenuRow({
         <Icon color={t.accent} size={18} />
       </View>
       <Text style={{ marginLeft: 12, flex: 1, fontSize: 16, color: t.ink }}>{label}</Text>
-      {soon ? (
-        <Text style={{ fontSize: 12, color: t.faint }}>скоро</Text>
-      ) : (
-        <ChevronRight color={t.chevron} size={18} />
-      )}
+      <ChevronRight color={t.chevron} size={18} />
     </Pressable>
   );
 }
@@ -79,13 +73,14 @@ function GroupLabel({ children }: { children: string }) {
   const t = useThemeColors();
   return (
     <Text
+      // Caption tier (DS §2: 11/700/+0.6 uppercase) — matches SectionHeader.
       style={{
         paddingHorizontal: 20,
         paddingTop: 20,
         paddingBottom: 4,
-        fontSize: 12,
-        fontWeight: "600",
-        letterSpacing: 0.4,
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.6,
         textTransform: "uppercase",
         color: t.faint,
       }}
@@ -159,7 +154,10 @@ export default function CabinetHome() {
             label="Выйти"
             variant="secondary"
             tone="danger"
-            onPress={() => supabase.auth.signOut()}
+            // Wipes tenant-scoped MMKV + query cache once signOut succeeds,
+            // so the next account on this device never sees this tenant's
+            // data (and a failed signOut never destroys it).
+            onPress={() => void signOutAndWipe()}
           />
         </View>
       </ScrollView>

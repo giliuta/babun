@@ -15,10 +15,13 @@ const ymd = (d: Date) =>
 export function MonthView({
   month,
   appointments,
+  todayYmd,
   onPickDay,
 }: {
   month: Date; // first of the displayed month
   appointments: Appointment[];
+  /** Business-timezone today (YYYY-MM-DD); falls back to device time. */
+  todayYmd?: string;
   onPickDay: (d: Date) => void;
 }) {
   const cells = useMemo(() => {
@@ -37,7 +40,7 @@ export function MonthView({
   }, [appointments]);
 
   const t = useThemeColors();
-  const todayStr = ymd(new Date());
+  const todayStr = todayYmd ?? ymd(new Date());
 
   return (
     <View className="flex-1 px-1.5 pt-1">
@@ -64,6 +67,8 @@ export function MonthView({
                 <Pressable
                   key={key}
                   onPress={() => onPickDay(d)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
                   className="flex-1 items-center pt-1.5 active:opacity-60"
                   style={{ borderTopWidth: 1, borderTopColor: t.separator }}
                 >

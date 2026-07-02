@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, ChevronDown } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
-export type CalMode = "week" | "day" | "month" | "agenda";
+export type CalMode = "day" | "3days" | "week" | "month" | "agenda";
 
+// Web parity: VIEW_MODE_ORDER = day / 3days / week / month / agenda.
 const MODES: { key: CalMode; label: string }[] = [
-  { key: "week", label: "Неделя" },
   { key: "day", label: "День" },
+  { key: "3days", label: "3 дня" },
+  { key: "week", label: "Неделя" },
   { key: "month", label: "Месяц" },
   { key: "agenda", label: "Список" },
 ];
 const LABEL: Record<CalMode, string> = {
-  week: "Неделя",
   day: "День",
+  "3days": "3 дня",
+  week: "Неделя",
   month: "Месяц",
   agenda: "Список",
 };
@@ -28,12 +32,14 @@ export function ViewModeDropdown({
   onChange: (m: CalMode) => void;
 }) {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   return (
     <>
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
+        accessibilityLabel={`Режим просмотра: ${LABEL[mode]}`}
         accessibilityState={{ expanded: open }}
         style={({ pressed }) => ({
           height: 36,
@@ -61,7 +67,9 @@ export function ViewModeDropdown({
           <View
             style={{
               position: "absolute",
-              top: 100,
+              // Below the 48-pt header row, respecting the status-bar inset
+              // (Dynamic Island vs old notch) instead of a fixed 100.
+              top: insets.top + 52,
               right: 12,
               minWidth: 180,
               backgroundColor: t.surface,
@@ -81,6 +89,8 @@ export function ViewModeDropdown({
                     onChange(m.key);
                     setOpen(false);
                   }}
+                  accessibilityRole="menuitem"
+                  accessibilityState={{ selected: cur }}
                   style={({ pressed }) => ({
                     minHeight: 44,
                     paddingHorizontal: 12,

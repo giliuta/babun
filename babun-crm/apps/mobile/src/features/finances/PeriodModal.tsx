@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Check } from "lucide-react-native";
@@ -29,13 +29,23 @@ export function PeriodModal({
   const [from, setFrom] = useState(current.from);
   const [to, setTo] = useState(current.to);
 
+  // The modal stays mounted — resync the wheels with the active period on
+  // every open, otherwise they keep showing the range from first mount.
+  useEffect(() => {
+    if (!visible) return;
+    setFrom(current.from);
+    setTo(current.to);
+  }, [visible, current.from, current.to]);
+
   const pickPreset = (preset: PeriodPreset) => {
     onApply(makePeriod(preset));
     onClose();
   };
 
   const applyCustom = () => {
-    onApply({ preset: "custom", from, to });
+    // An inverted range would silently query an empty window — swap it.
+    const [f, t2] = from <= to ? [from, to] : [to, from];
+    onApply({ preset: "custom", from: f, to: t2 });
     onClose();
   };
 

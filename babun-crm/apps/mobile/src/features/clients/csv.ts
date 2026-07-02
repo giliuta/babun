@@ -37,15 +37,28 @@ const FIELD_MAP: Record<string, keyof Client> = {
   "примечание": "comment",
 };
 
-function splitLine(line: string, delim: string): string[] {
-  const out: string[] = [];
+// Character-scan the WHOLE text into records so newlines inside quoted
+// fields ("Заметка\nв две строки" — valid CSV, Excel/Numbers export it)
+// stay part of the field instead of spawning garbage rows. Blank records
+// are dropped. Handles "" escapes and \r\n / \n / \r line endings.
+function parseCsvRecords(text: string, delim: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
   let cur = "";
   let inQ = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+
+  const endRow = () => {
+    row.push(cur.trim());
+    cur = "";
+    if (row.some((c) => c.length > 0)) rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inQ) {
       if (ch === '"') {
-        if (line[i + 1] === '"') {
+        if (text[i + 1] === '"') {
           cur += '"';
           i++;
         } else {
@@ -57,14 +70,17 @@ function splitLine(line: string, delim: string): string[] {
     } else if (ch === '"') {
       inQ = true;
     } else if (ch === delim) {
-      out.push(cur);
+      row.push(cur.trim());
       cur = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      endRow();
     } else {
       cur += ch;
     }
   }
-  out.push(cur);
-  return out.map((s) => s.trim());
+  endRow();
+  return rows;
 }
 
 export interface ParsedClientsCsv {
@@ -75,29 +91,31 @@ export interface ParsedClientsCsv {
 }
 
 /**
- * Parse a clients CSV (RU/EN headers, `,` or `;` delimiter, quoted fields,
- * BOM-tolerant). Rows need at least a name or a phone; a phone-only row uses
- * the phone as the display name.
+ * Parse a clients CSV (RU/EN headers, `,` or `;` delimiter, quoted fields
+ * incl. embedded newlines, BOM-tolerant). Rows need at least a name or a
+ * phone; a phone-only row uses the phone as the display name.
  */
 export function parseClientsCsv(input: string): ParsedClientsCsv {
   const text = input.replace(/^﻿/, "");
-  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) {
+  // Delimiter heuristic runs on the header (first physical line) — a
+  // quoted newline inside a HEADER cell is not a real-world case.
+  const nl = text.search(/\r\n|\n|\r/);
+  const header = nl === -1 ? text : text.slice(0, nl);
+  const delim =
+    header.split(";").length > header.split(",").length ? ";" : ",";
+
+  const rows = parseCsvRecords(text, delim);
+  if (rows.length === 0) {
     return { drafts: [], mappedFields: [], total: 0, skipped: 0 };
   }
 
-  const header = lines[0];
-  const delim =
-    header.split(";").length > header.split(",").length ? ";" : ",";
-  const cols = splitLine(header, delim).map(
-    (h) => FIELD_MAP[h.toLowerCase()] ?? null,
-  );
+  const cols = rows[0].map((h) => FIELD_MAP[h.toLowerCase()] ?? null);
   const mappedFields = [...new Set(cols.filter(Boolean) as string[])];
 
   const drafts: Partial<Client>[] = [];
   let skipped = 0;
-  for (let r = 1; r < lines.length; r++) {
-    const cells = splitLine(lines[r], delim);
+  for (let r = 1; r < rows.length; r++) {
+    const cells = rows[r];
     const draft: Partial<Client> = {};
     cols.forEach((field, i) => {
       if (!field) return;
@@ -112,5 +130,5 @@ export function parseClientsCsv(input: string): ParsedClientsCsv {
     drafts.push(draft);
   }
 
-  return { drafts, mappedFields, total: lines.length - 1, skipped };
+  return { drafts, mappedFields, total: rows.length - 1, skipped };
 }

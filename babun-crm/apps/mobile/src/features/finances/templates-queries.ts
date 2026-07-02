@@ -30,6 +30,7 @@ export function useInsertTemplate() {
     mutationFn: (draft: TemplateDraft) =>
       insertFinanceTemplate(supabase, tenantId as string, draft),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-templates"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -38,5 +39,6 @@ export function useDeleteTemplate() {
   return useMutation({
     mutationFn: (id: string) => deleteFinanceTemplate(supabase, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-templates"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }

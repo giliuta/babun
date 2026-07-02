@@ -22,6 +22,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import type { ServiceDueSummary } from "@babun/shared/local/selectors/service-due";
+import { MONTHS_RU_SHORT } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 interface ClientNextJobProps {
@@ -32,11 +33,6 @@ interface ClientNextJobProps {
 }
 
 type Tone = "accent" | "info" | "alert" | "warn";
-
-const MONTHS_RU_SHORT = [
-  "янв", "фев", "мар", "апр", "мая", "июн",
-  "июл", "авг", "сен", "окт", "ноя", "дек",
-];
 
 function aptLabel(nextApt: { date: string; time: string }): string {
   const [y, m, d] = nextApt.date.split("-").map(Number);
@@ -145,17 +141,20 @@ export default function ClientNextJob({
       subColor: "rgba(255,255,255,0.85)",
       chevColor: "rgba(255,255,255,0.90)",
     },
+    // Semantic tones are tints of the DS tokens (as in Badge /
+    // ClientHeader) — no tailwind-amber / light-cobalt literals, so the
+    // dark scheme keeps its own accent (#5a86ff) and warning hues.
     warn: {
-      wrapBg: th.dark ? "rgba(251,191,36,0.15)" : "#fffbeb",
-      iconBg: th.dark ? "rgba(251,191,36,0.20)" : "#fef3c7",
+      wrapBg: `${th.warning}1a`,
+      iconBg: `${th.warning}2e`,
       iconColor: th.warning,
       titleColor: th.warning,
       subColor: th.sub,
       chevColor: th.warning,
     },
     info: {
-      wrapBg: th.dark ? "rgba(44,91,224,0.15)" : "rgba(44,91,224,0.08)",
-      iconBg: th.dark ? "rgba(44,91,224,0.20)" : "rgba(44,91,224,0.12)",
+      wrapBg: th.dark ? `${th.accent}26` : `${th.accent}14`,
+      iconBg: th.dark ? `${th.accent}33` : `${th.accent}1f`,
       iconColor: th.accent,
       titleColor: th.accent,
       subColor: th.sub,

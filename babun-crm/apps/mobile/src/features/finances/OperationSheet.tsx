@@ -23,12 +23,12 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useTeams } from "@/features/reference/queries";
 import {
-  useAccounts,
   useDeleteTransaction,
   useFinanceCategories,
   useInsertTransaction,
   useUpdateTransaction,
 } from "./queries";
+import { useAccountsWithBalances } from "./accounts";
 import { useFinanceTemplates } from "./templates-queries";
 
 const PAYMENTS: { value: PaymentMethod; label: string }[] = [
@@ -83,7 +83,9 @@ export function OperationSheet({
   const th = useThemeColors();
   const { data: categories = [] } = useFinanceCategories();
   const { data: teams = [] } = useTeams();
-  const { data: accounts = [] } = useAccounts();
+  // Shares the ["accounts", tenantId, "balances"] cache with the finances
+  // screen — one network round-trip instead of a duplicate listAccounts.
+  const { data: accounts = [] } = useAccountsWithBalances();
   const { data: templates = [] } = useFinanceTemplates();
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
@@ -173,8 +175,12 @@ export function OperationSheet({
         text: "Удалить",
         style: "destructive",
         onPress: async () => {
-          await del.mutateAsync(transaction.id);
-          onClose();
+          try {
+            await del.mutateAsync(transaction.id);
+            onClose();
+          } catch (e) {
+            Alert.alert("Ошибка", (e as Error).message);
+          }
         },
       },
     ]);

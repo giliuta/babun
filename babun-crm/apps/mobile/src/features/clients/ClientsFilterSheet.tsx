@@ -1,4 +1,5 @@
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
@@ -26,7 +27,7 @@ function Chip({
       style={{
         borderColor: active ? t.accent : t.separator,
         backgroundColor: active
-          ? t.dark ? "rgba(44,91,224,0.18)" : "rgba(44,91,224,0.08)"
+          ? t.dark ? `${t.accent}2e` : `${t.accent}14`
           : t.surface,
       }}
       className="mb-2 mr-2 flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
@@ -83,6 +84,7 @@ export function ClientsFilterSheet({
   cities: string[];
 }) {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   const toggleTag = (id: string) =>
     onChange({
@@ -161,7 +163,16 @@ export function ClientsFilterSheet({
           ) : null}
         </ScrollView>
 
-        <View style={{ borderTopColor: t.separator, borderTopWidth: 1 }} className="p-4">
+        {/* Bottom-pinned sheet → the home-indicator inset must be added
+            explicitly or the button lands in the system gesture zone. */}
+        <View
+          style={{
+            borderTopColor: t.separator,
+            borderTopWidth: 1,
+            paddingBottom: Math.max(16, insets.bottom + 8),
+          }}
+          className="px-4 pt-4"
+        >
           <Button label="Показать" onPress={onClose} />
         </View>
       </View>

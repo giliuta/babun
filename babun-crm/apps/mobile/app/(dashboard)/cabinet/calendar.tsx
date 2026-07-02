@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { useState } from "react";
+import { Alert, Pressable, Switch, Text, View } from "react-native";
 import { Minus, Plus } from "lucide-react-native";
 import {
   DEFAULT_CALENDAR_SETTINGS,
@@ -66,20 +66,19 @@ export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const { data: settings } = useCalendarSettings();
   const save = useSaveCalendarSettings();
-  const [s, setS] = useState<CalendarSettings>(DEFAULT_CALENDAR_SETTINGS);
-  const [dirty, setDirty] = useState(false);
-
-  useEffect(() => {
-    if (settings) {
-      setS(settings);
-      setDirty(false);
-    }
-  }, [settings]);
-
-  const patch = (p: Partial<CalendarSettings>) => {
-    setS((prev) => ({ ...prev, ...p }));
-    setDirty(true);
+  // Only the fields the user touched. Saving sends THIS object as a
+  // targeted patch, so unloaded / web-managed fields can never be pushed
+  // as DEFAULT_CALENDAR_SETTINGS; a late query resolve refreshes the base
+  // values underneath without discarding unsaved edits.
+  const [changes, setChanges] = useState<Partial<CalendarSettings>>({});
+  const dirty = Object.keys(changes).length > 0;
+  const s: CalendarSettings = {
+    ...(settings ?? DEFAULT_CALENDAR_SETTINGS),
+    ...changes,
   };
+
+  const patch = (p: Partial<CalendarSettings>) =>
+    setChanges((prev) => ({ ...prev, ...p }));
 
   const chipBg = t.dark ? "rgba(255,255,255,0.07)" : "#eef1f5";
 
@@ -152,8 +151,15 @@ export default function CalendarSettingsScreen() {
       <View className="mx-3 mt-5">
         <Button
           label="Сохранить"
-          onPress={() => save.mutate(s, { onSuccess: () => setDirty(false) })}
-          disabled={!dirty || save.isPending}
+          onPress={() =>
+            save.mutate(changes, {
+              onSuccess: () => setChanges({}),
+              onError: (e) => Alert.alert("Ошибка", e.message),
+            })
+          }
+          // `!settings` — no saving until the settings query resolved at
+          // least once; before that the form shows unconfirmed defaults.
+          disabled={!settings || !dirty || save.isPending}
           loading={save.isPending}
         />
       </View>

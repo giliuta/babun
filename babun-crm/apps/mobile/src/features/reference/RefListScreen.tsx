@@ -24,6 +24,12 @@ export interface RefField {
   placeholder?: string;
   keyboardType?: KeyboardTypeOptions;
   required?: boolean;
+  /** "color" renders a swatch row instead of a text input. */
+  type?: "text" | "color";
+  /** Palette for type="color" (hex values). */
+  colors?: string[];
+  /** Pre-filled value when creating a new record. */
+  defaultValue?: string;
 }
 
 // Generic reference-data screen: list + create/edit bottom-sheet + delete.
@@ -64,7 +70,9 @@ export function RefListScreen<T extends { id: string }>({
 
   const openCreate = () => {
     setEditing(null);
-    setValues({});
+    const init: Record<string, string> = {};
+    for (const f of fields) if (f.defaultValue) init[f.key] = f.defaultValue;
+    setValues(init);
     setOpen(true);
   };
   const openEdit = (item: T) => {
@@ -84,6 +92,9 @@ export function RefListScreen<T extends { id: string }>({
       else await onCreate(values);
       close();
       setValues({});
+    } catch (e) {
+      // Keep the sheet open so nothing typed is lost — user can retry.
+      Alert.alert("Ошибка", (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -101,6 +112,8 @@ export function RefListScreen<T extends { id: string }>({
           try {
             await onDelete(editing.id);
             close();
+          } catch (e) {
+            Alert.alert("Ошибка", (e as Error).message);
           } finally {
             setBusy(false);
           }
@@ -165,17 +178,39 @@ export function RefListScreen<T extends { id: string }>({
           <Text style={{ marginBottom: 12, fontSize: 18, fontWeight: "700", color: t.ink }}>
             {editing ? "Изменить" : "Добавить"}
           </Text>
-          {fields.map((f, i) => (
-            <Field
-              key={f.key}
-              label={f.label}
-              value={values[f.key] ?? ""}
-              onChangeText={(v) => setValues((s) => ({ ...s, [f.key]: v }))}
-              placeholder={f.placeholder}
-              keyboardType={f.keyboardType}
-              autoFocus={i === 0}
-            />
-          ))}
+          {fields.map((f, i) =>
+            f.type === "color" ? (
+              <View key={f.key} className="mb-3">
+                <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
+                  {f.label}
+                </Text>
+                <View className="flex-row flex-wrap gap-3">
+                  {(f.colors ?? []).map((c) => (
+                    <Pressable
+                      key={c}
+                      onPress={() => setValues((s) => ({ ...s, [f.key]: c }))}
+                      className="h-9 w-9 rounded-full"
+                      style={{
+                        backgroundColor: c,
+                        borderWidth: values[f.key] === c ? 2 : 0,
+                        borderColor: t.ink,
+                      }}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <Field
+                key={f.key}
+                label={f.label}
+                value={values[f.key] ?? ""}
+                onChangeText={(v) => setValues((s) => ({ ...s, [f.key]: v }))}
+                placeholder={f.placeholder}
+                keyboardType={f.keyboardType}
+                autoFocus={i === 0}
+              />
+            ),
+          )}
           <Button
             label={editing ? "Сохранить" : "Создать"}
             onPress={submit}

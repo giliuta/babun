@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  Alert,
   FlatList,
   Linking,
   Modal,
@@ -19,7 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
-import { formatYMD, humanDay } from "@/features/appointments/helpers";
+import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
 import { useClients } from "@/features/clients/queries";
 import {
   useCreateReminder,
@@ -35,7 +36,9 @@ function dueTone(
   const today = formatYMD(new Date());
   if (next <= today)
     return { label: "Пора", color: t.danger, bg: t.danger + "1a" };
-  const d = new Date(next).getTime() - Date.now();
+  // parseYMD = local midnight; `new Date("YYYY-MM-DD")` would parse as
+  // UTC and shift the 14-day threshold by a few hours east of UTC.
+  const d = parseYMD(next).getTime() - Date.now();
   if (d <= 14 * 86400000)
     return { label: "Скоро", color: t.warning, bg: t.warning + "26" };
   return {
@@ -88,22 +91,41 @@ export default function RecurringScreen() {
 
   const submit = async () => {
     if (!client) return;
-    await create.mutateAsync({
-      client_id: client.id,
-      client_name: client.full_name,
-      phone: client.phone ?? "",
-      team_id: null,
-      service_ids: [],
-      service_summary: summary.trim() || "Повторное ТО",
-      last_date: formatYMD(new Date()),
-      interval_months: months,
-      note: "",
-      manual: true,
-    });
-    setOpen(false);
-    reset();
-    toast("Напоминание создано");
+    try {
+      await create.mutateAsync({
+        client_id: client.id,
+        client_name: client.full_name,
+        phone: client.phone ?? "",
+        team_id: null,
+        service_ids: [],
+        service_summary: summary.trim() || "Повторное ТО",
+        last_date: formatYMD(new Date()),
+        interval_months: months,
+        note: "",
+        manual: true,
+      });
+      setOpen(false);
+      reset();
+      toast("Напоминание создано");
+    } catch (e) {
+      // Sheet stays open — retry without re-picking the client.
+      Alert.alert("Ошибка", (e as Error).message);
+    }
   };
+
+  // Web parity (recurring/page.tsx): hard delete goes through a confirm.
+  const confirmDelete = (item: RecurringReminder) =>
+    Alert.alert("Удалить напоминание?", item.client_name, [
+      { text: "Отмена", style: "cancel" },
+      {
+        text: "Удалить",
+        style: "destructive",
+        onPress: () =>
+          del.mutate(item.id, {
+            onError: (e) => Alert.alert("Ошибка", e.message),
+          }),
+      },
+    ]);
 
   return (
     <Screen edges={["top"]}>
@@ -156,17 +178,22 @@ export default function RecurringScreen() {
                   </Pressable>
                 ) : null}
                 <Pressable
-                  onPress={() => {
-                    setStatus.mutate({ id: item.id, status: "booked" });
-                    toast("Отмечено записанным");
-                  }}
+                  onPress={() =>
+                    setStatus.mutate(
+                      { id: item.id, status: "booked" },
+                      {
+                        onSuccess: () => toast("Отмечено записанным"),
+                        onError: (e) => Alert.alert("Ошибка", e.message),
+                      },
+                    )
+                  }
                   className="mr-1 h-9 w-9 items-center justify-center rounded-full"
                   style={{ backgroundColor: t.accent + "1a" }}
                 >
                   <Check color={t.accent} size={ICON.sm} />
                 </Pressable>
                 <Pressable
-                  onPress={() => del.mutate(item.id)}
+                  onPress={() => confirmDelete(item)}
                   className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
                 >
                   <X color={t.faint} size={ICON.sm} />

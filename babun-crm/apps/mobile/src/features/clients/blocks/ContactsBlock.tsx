@@ -6,8 +6,23 @@
 // Editable inline. Each phone has a call (tel:) action; each messenger
 // has an «Открыть» action via Linking. Presentational: persists via
 // `update(patch)`.
+//
+// Every input buffers keystrokes locally and commits ONCE on blur
+// (DraftInput below — same pattern as PersonalBlock's EditableField).
+// The web block writes to a synchronous local context on every change;
+// here `update` is a Supabase mutation, so per-keystroke commits used
+// to fire a network PATCH per character and the async cache write-back
+// raced (and dropped) fast typing.
 
-import { Linking, Pressable, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  Linking,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+  type TextInputProps,
+} from "react-native";
 import { Phone as PhoneIcon, Plus, Send, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import {
@@ -30,6 +45,32 @@ function dialUrl(phone: string): string | null {
   const digits = (phone ?? "").replace(/[^0-9+]/g, "");
   if (digits.replace(/\D/g, "").length < 3) return null;
   return `tel:${digits}`;
+}
+
+// Draft-buffered TextInput: keystrokes stay local, `onCommit` fires once
+// on blur (only when the trimmed value actually changed). Mirrors
+// PersonalBlock's EditableField so ContactsBlock stops mutating Supabase
+// per character.
+function DraftInput({
+  value,
+  onCommit,
+  ...rest
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+} & Omit<TextInputProps, "value" | "onChangeText" | "onBlur">) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <TextInput
+      value={draft}
+      onChangeText={setDraft}
+      onBlur={() => {
+        if (draft.trim() !== value) onCommit(draft.trim());
+      }}
+      {...rest}
+    />
+  );
 }
 
 export default function ContactsBlock({ client, update }: ContactsBlockProps) {
@@ -72,9 +113,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
           <Text className="w-28 shrink-0 text-xs" style={{ color: t.sub }}>
             Основной телефон
           </Text>
-          <TextInput
+          <DraftInput
             value={client.phone}
-            onChangeText={(v) => update({ phone: v })}
+            onCommit={(v) => update({ phone: v })}
             placeholder="+357 99 ..."
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
@@ -97,9 +138,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
         {/* Extra phones (wife / work / WhatsApp on a different number) */}
         {extras.map((p) => (
           <View key={p.id} className="flex-row items-center gap-2">
-            <TextInput
+            <DraftInput
               value={p.name ?? ""}
-              onChangeText={(v) => updateExtra(p.id, { name: v })}
+              onCommit={(v) => updateExtra(p.id, { name: v })}
               placeholder="Жена"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
@@ -107,9 +148,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
               className="h-8 w-20 rounded-md px-2 text-[12px]"
               style={{ backgroundColor: inputFill, color: t.ink }}
             />
-            <TextInput
+            <DraftInput
               value={p.number}
-              onChangeText={(v) => updateExtra(p.id, { number: v })}
+              onCommit={(v) => updateExtra(p.id, { number: v })}
               placeholder="+357 ..."
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
@@ -203,6 +244,7 @@ function Messenger({
   label: string;
   placeholder: string;
   value: string;
+  /** Fires on blur with the trimmed draft (not per keystroke). */
   onChange: (v: string) => void;
   url: string | null;
   icon: React.ReactNode;
@@ -218,9 +260,9 @@ function Messenger({
       >
         {icon}
       </View>
-      <TextInput
+      <DraftInput
         value={value}
-        onChangeText={onChange}
+        onCommit={onChange}
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}

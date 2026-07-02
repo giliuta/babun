@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useReducedMotion,
@@ -42,13 +43,16 @@ export function GradientButton({
 
   useEffect(() => {
     if (filled && animate && w > 0) {
+      // Two sweeps, then rest — an endless loop kept the UI thread redrawing
+      // (GPU/battery) the whole time a sheet with a primary CTA was open.
       sweep.value = -160;
       sweep.value = withRepeat(
         withTiming(w + 60, { duration: 2600, easing: Easing.inOut(Easing.quad) }),
-        -1,
+        2,
         false,
       );
     }
+    return () => cancelAnimation(sweep);
   }, [filled, animate, w, sweep]);
 
   const scaleStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
@@ -74,7 +78,10 @@ export function GradientButton({
         onLayout={(e) => setW(e.nativeEvent.layout.width)}
         style={[
           {
-            height: 52,
+            // minHeight + padding (not a fixed height) so Dynamic Type can
+            // grow the label without clipping — same recipe as PillButton.
+            minHeight: 52,
+            paddingVertical: 14,
             borderRadius: t.radius.pill,
             overflow: "hidden",
             alignItems: "center",
@@ -108,7 +115,10 @@ export function GradientButton({
         {loading ? (
           <ActivityIndicator color={t.onAccent} />
         ) : (
-          <Text style={{ fontSize: 17, fontWeight: "600", color: filled ? t.onAccent : t.faint }}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ fontSize: 17, fontWeight: "600", color: filled ? t.onAccent : t.sub }}
+          >
             {label}
           </Text>
         )}

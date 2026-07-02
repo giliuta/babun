@@ -17,7 +17,7 @@
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
 // blocks stay free of screen-level concerns.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -34,7 +34,11 @@ import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import { Screen } from "@/components/ui/Screen";
 import { useThemeColors } from "@/theme/colors";
-import { useClient, useUpdateClient } from "@/features/clients/queries";
+import {
+  useClient,
+  useClientTags,
+  useUpdateClient,
+} from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
 import ClientHeader from "@/features/clients/ClientHeader";
 import ClientNextJob from "@/features/clients/ClientNextJob";
@@ -54,11 +58,25 @@ export default function ClientDetailScreen() {
   const { data: client, isLoading } = useClient(id);
   const updateClient = useUpdateClient(id);
   const { data: appointments = [] } = useClientAppointments(id);
+  const { data: tags = [] } = useClientTags();
 
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Single persist path for every block (mirrors the web blocks' update()).
   const update = (patch: Partial<Client>) => updateClient.mutate(patch);
+
+  // Shared selectors — port-as-is, memoized so unrelated state changes
+  // (menu open, mutation responses) don't re-scan every appointment.
+  // Hooks must run unconditionally, hence the guards before the early
+  // returns below.
+  const stats = useMemo(
+    () => (client ? buildStats(client, appointments) : undefined),
+    [client, appointments],
+  );
+  const serviceDue = useMemo(
+    () => buildServiceDue(client ?? { locations: [] }),
+    [client],
+  );
 
   if (isLoading) {
     return (
@@ -86,12 +104,6 @@ export default function ClientDetailScreen() {
       </Screen>
     );
   }
-
-  // Shared selectors — port-as-is. buildStats does its own client_id +
-  // legacy name fallback when handed the array; buildServiceDue reads the
-  // client's locations[].equipment (no appointments).
-  const stats = buildStats(client, appointments);
-  const serviceDue = buildServiceDue(client);
 
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
 
@@ -130,6 +142,7 @@ export default function ClientDetailScreen() {
       >
         <Pressable
           onPress={() => router.back()}
+          hitSlop={8}
           className="h-9 w-9 items-center justify-center rounded-lg active:opacity-60"
           accessibilityLabel="Назад"
         >
@@ -209,7 +222,7 @@ export default function ClientDetailScreen() {
         <ContactsBlock client={client} update={update} />
         <NotesBlock client={client} update={update} />
         <PersonalBlock client={client} update={update} />
-        <MetaBlock client={client} update={update} />
+        <MetaBlock client={client} update={update} tags={tags} />
       </ScrollView>
     </Screen>
   );

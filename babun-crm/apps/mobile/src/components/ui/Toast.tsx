@@ -45,14 +45,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [opacity, translateY],
   );
 
-  const toastBg =
-    toast?.type === "error"
-      ? t.danger
-      : toast?.type === "info"
-        ? t.dark
-          ? "#2a313d"
-          : "#1f2937"
-        : t.success;
+  // info = inverse surface from the palette (ink ground, canvas text) — the
+  // classic iOS dark toast in light mode, a light toast in dark mode.
+  const info = toast?.type === "info";
+  const toastBg = toast?.type === "error" ? t.danger : info ? t.ink : t.success;
+  const toastText = info ? t.canvas : "#ffffff";
 
   return (
     <ToastCtx.Provider value={show}>
@@ -73,7 +70,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             className="rounded-2xl px-4 py-3 shadow-lg"
             style={{ backgroundColor: toastBg }}
           >
-            <Text className="text-center text-sm font-semibold text-white">
+            <Text
+              className="text-center text-sm font-semibold"
+              style={{ color: toastText }}
+            >
               {toast.message}
             </Text>
           </View>

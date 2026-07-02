@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import { Alert, FlatList, Modal, Pressable, Text, View } from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
+import { generatePersonalEventTypeId } from "@babun/shared/local/personal-event-types";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -30,23 +31,39 @@ export default function EventTypesScreen() {
 
   const add = () => {
     if (!label.trim()) return;
-    save.mutate([
-      ...types,
+    save.mutate(
       {
-        id: `pet-${Date.now()}`,
-        label: label.trim(),
-        icon: "tag",
-        color,
-        defaultDuration: Number(duration) || 60,
-        allDay: false,
-        order: types.length,
+        types: [
+          ...types,
+          {
+            id: generatePersonalEventTypeId(),
+            label: label.trim(),
+            icon: "tag",
+            color,
+            defaultDuration: Number(duration) || 60,
+            allDay: false,
+            order: types.length,
+          },
+        ],
       },
-    ]);
-    setLabel("");
-    setDuration("60");
-    setOpen(false);
+      {
+        // Sheet closes only on success — a failed save keeps the input.
+        onSuccess: () => {
+          setLabel("");
+          setDuration("60");
+          setOpen(false);
+        },
+        onError: (e) => Alert.alert("Ошибка", e.message),
+      },
+    );
   };
-  const remove = (id: string) => save.mutate(types.filter((t) => t.id !== id));
+  const remove = (id: string) =>
+    // removeIds carries the explicit deletion — the server must never
+    // derive it from a (possibly stale) full snapshot.
+    save.mutate(
+      { types: types.filter((t) => t.id !== id), removeIds: [id] },
+      { onError: (e) => Alert.alert("Ошибка", e.message) },
+    );
 
   return (
     <Screen edges={["top"]}>
@@ -119,7 +136,12 @@ export default function EventTypesScreen() {
             placeholder="60"
             keyboardType="number-pad"
           />
-          <Button label="Добавить" onPress={add} disabled={!label.trim()} />
+          <Button
+            label="Добавить"
+            onPress={add}
+            disabled={!label.trim() || save.isPending}
+            loading={save.isPending}
+          />
         </View>
       </Modal>
     </Screen>

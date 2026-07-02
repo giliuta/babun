@@ -1,20 +1,44 @@
+import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   loadChats,
   saveChats,
-  seedDemoChats,
   type Chat,
   type ChatMessage,
 } from "@babun/shared/local/chats";
+import { getStorage } from "@babun/shared/storage/provider";
 
-// Chats persist in MMKV via the shared storage seam. First run seeds the demo
-// inbox so the screen isn't empty; afterwards it's the user's own data.
-function loadOrSeed(): Chat[] {
-  const existing = loadChats();
-  if (existing.length) return existing;
-  const seeded = seedDemoChats();
-  saveChats(seeded);
-  return seeded;
+// STORY-053a — the demo seed MUST NOT auto-fire on empty load: new tenants
+// get an empty inbox (see the contract note in shared/local/chats.ts).
+// Older mobile builds DID auto-seed on first open, so purge those demo
+// dialogs once. Signature = the fixed seed ids from seedDemoChats();
+// real chats get generateId() ids ("chat-<ts36>-<rand>"), so a plain
+// "chat-N" id can only come from the seed.
+const DEMO_SEED_IDS = new Set(["chat-1", "chat-2", "chat-3", "chat-4"]);
+const DEMO_PURGE_KEY = "babun-chats-demo-purged";
+
+// A seed dialog the user of an old build «оживил» is user data now — the
+// purge must spare it. Signs of life: a linked real client, an unsent
+// draft, or an outgoing message the USER sent. The seeds themselves ship
+// canned "out" messages with fixed short ids ("m2", "m5", "m8"…), while
+// user-sent ones come from msgId() → "m_<ts>_<rand>", so the generated
+// prefix cleanly separates the two.
+function isUntouchedDemoSeed(c: Chat): boolean {
+  if (!DEMO_SEED_IDS.has(c.id)) return false;
+  if (c.client_id != null) return false;
+  if ((c.draft ?? "").trim().length > 0) return false;
+  if (c.messages.some((m) => m.direction === "out" && m.id.startsWith("m_")))
+    return false;
+  return true;
+}
+
+function loadPurged(): Chat[] {
+  const chats = loadChats();
+  if (getStorage().get<boolean>(DEMO_PURGE_KEY)) return chats;
+  const cleaned = chats.filter((c) => !isUntouchedDemoSeed(c));
+  if (cleaned.length !== chats.length) saveChats(cleaned);
+  getStorage().set(DEMO_PURGE_KEY, true);
+  return cleaned;
 }
 
 const msgId = () =>
@@ -23,7 +47,7 @@ const msgId = () =>
 export function useChats() {
   return useQuery({
     queryKey: ["chats"],
-    queryFn: () => loadOrSeed(),
+    queryFn: () => loadPurged(),
     staleTime: Infinity,
   });
 }
@@ -95,10 +119,25 @@ export function useDeleteMessage() {
   );
 }
 
-export function useSetDraft() {
-  return useChatMutation<{ chatId: string; draft: string }>(
-    (chats, { chatId, draft }) =>
-      chats.map((c) => (c.id === chatId ? { ...c, draft } : c)),
+// Draft persistence — a direct write instead of useMutation so it can run
+// from the thread screen's blur/unmount cleanup, where mutation observers
+// are already torn down. Web parity: saveDraft() trims and saves when
+// leaving a chat (web chats/page.tsx:123–129).
+export function usePersistDraft() {
+  const qc = useQueryClient();
+  return useCallback(
+    (chatId: string, draft: string) => {
+      const trimmed = draft.trim();
+      const chats = loadChats();
+      const current = chats.find((c) => c.id === chatId);
+      if (!current || (current.draft ?? "") === trimmed) return;
+      const next = chats.map((c) =>
+        c.id === chatId ? { ...c, draft: trimmed } : c,
+      );
+      saveChats(next);
+      qc.setQueryData(["chats"], next);
+    },
+    [qc],
   );
 }
 
@@ -109,8 +148,14 @@ export function useLinkClient() {
   );
 }
 
+// Opening a conversation clears unread AND promotes new → active,
+// matching the web openChat() semantics (web chats/page.tsx:135).
 export function useMarkRead() {
   return useChatMutation<string>((chats, chatId) =>
-    chats.map((c) => (c.id === chatId ? { ...c, unread_count: 0 } : c)),
+    chats.map((c) =>
+      c.id === chatId
+        ? { ...c, unread_count: 0, status: c.status === "new" ? "active" : c.status }
+        : c,
+    ),
   );
 }

@@ -1,10 +1,13 @@
-import { useMemo, useState } from "react";
-import { ScrollView, Text, TextInput, View, Pressable } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, Text, TextInput, View, Pressable } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { Check } from "lucide-react-native";
 import {
   getDebtAmount,
+  getPaidAmount,
   type Appointment,
 } from "@babun/shared/local/appointments";
+import { getDayExtras, sumExtras } from "@babun/shared/local/day-extras";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { getStorage } from "@babun/shared/storage";
 import { Screen } from "@/components/ui/Screen";
@@ -14,8 +17,9 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD } from "@/features/appointments/helpers";
-import { useAppointments } from "@/features/calendar/queries";
+import { useAppointments, useDayExtras } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
+import { useTeams } from "@/features/reference/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 
 const CLOSED_PREFIX = "babun:closed-day:";
@@ -28,6 +32,20 @@ type ClosedRecord = {
   actualCash: number;
   delta: number;
 };
+
+function readClosedRecord(dayKey: string): ClosedRecord | null {
+  const raw = getStorage().getRaw(`${CLOSED_PREFIX}${dayKey}`);
+  if (!raw) return null;
+  if (raw === "1") {
+    // legacy bare flag — closed, but the cash figures weren't saved
+    return { closedAt: "", expectedCash: 0, actualCash: 0, delta: 0 };
+  }
+  try {
+    return JSON.parse(raw) as ClosedRecord;
+  } catch {
+    return null;
+  }
+}
 
 function Row({
   label,
@@ -60,25 +78,28 @@ function Row({
 export default function CloseDayScreen() {
   const { data: appts = [] } = useAppointments();
   const { data: clients = [] } = useClients();
+  const { data: extrasMap = {} } = useDayExtras();
+  const { data: teams = [] } = useTeams();
   const update = useUpdateAppointment();
   const toast = useToast();
   const t = useThemeColors();
 
-  const todayKey = useMemo(() => formatYMD(new Date()), []);
+  // Recomputed on focus: the screen is used late in the evening, and left
+  // open past midnight it must not silently close YESTERDAY's date.
+  const [todayKey, setTodayKey] = useState(() => formatYMD(new Date()));
+  useFocusEffect(
+    useCallback(() => {
+      setTodayKey(formatYMD(new Date()));
+    }, []),
+  );
   const [actualCashStr, setActualCashStr] = useState("");
-  const [closedRec, setClosedRec] = useState<ClosedRecord | null>(() => {
-    const raw = getStorage().getRaw(`${CLOSED_PREFIX}${todayKey}`);
-    if (!raw) return null;
-    if (raw === "1") {
-      // legacy bare flag — closed, but the cash figures weren't saved
-      return { closedAt: "", expectedCash: 0, actualCash: 0, delta: 0 };
-    }
-    try {
-      return JSON.parse(raw) as ClosedRecord;
-    } catch {
-      return null;
-    }
-  });
+  const [closedRec, setClosedRec] = useState<ClosedRecord | null>(() =>
+    readClosedRecord(todayKey),
+  );
+  // Re-read the closure snapshot when the date rolls over.
+  useEffect(() => {
+    setClosedRec(readClosedRecord(todayKey));
+  }, [todayKey]);
   const closed = closedRec !== null;
 
   const nameById = useMemo(
@@ -97,50 +118,76 @@ export default function CloseDayScreen() {
         (a) => a.status === "scheduled" && a.kind === "work",
       );
       const unpaid = completed.filter((a) => getDebtAmount(a) > 0);
-      const income = completed.reduce((s, a) => s + (a.total_amount || 0), 0);
-      // Expected TILL cash = cash-method payments received on the day's
-      // appointments. Card/transfer/unpaid jobs never hit the till, so the old
-      // `income` (total invoiced) made the касса delta meaningless.
-      const cash = day.reduce(
-        (s, a) =>
-          s +
-          (a.payments ?? [])
-            .filter((p) => p.method === "cash")
-            .reduce((ps, p) => ps + (p.amount || 0), 0),
+      // Web parity — computeFinancials (packages/shared/src/local/finance/
+      // compute.ts): only completed + in_progress appointments count.
+      const till = [...completed, ...inProgress];
+      // «Доход» = money actually RECEIVED (prepaid + payments), not the
+      // invoiced total_amount, PLUS the manual day-extras income across
+      // all teams — mirrors fin.totalIncome on the web close-day page
+      // (computeFinancials with dayExtrasOf=getExtrasFor) and the mobile
+      // calendar footer (computeDayFinance). Extras deliberately do NOT
+      // touch the expected till cash — same as compute.ts.
+      const extrasIncome = teams.reduce(
+        (s, team) =>
+          s + sumExtras(getDayExtras(extrasMap, team.id, todayKey)).income,
         0,
       );
+      const income =
+        till.reduce((s, a) => s + getPaidAmount(a), 0) + extrasIncome;
+      // Expected TILL cash = cash-method payments + prepaid (prepaid is
+      // assumed cash, same conservative default as compute.ts). Cancelled/
+      // scheduled visits never hit the till.
+      const cash = till.reduce((s, a) => {
+        let c = (a.payments ?? [])
+          .filter((p) => p.method === "cash" && p.amount > 0)
+          .reduce((ps, p) => ps + p.amount, 0);
+        if ((a.prepaid_amount ?? 0) > 0) c += a.prepaid_amount;
+        return s + c;
+      }, 0);
       return { completed, inProgress, stillScheduled, unpaid, income, cash };
-    }, [appts, todayKey]);
+    }, [appts, todayKey, extrasMap, teams]);
 
   const expectedCash = cash;
   const actualCash = Math.round(Number(actualCashStr.replace(",", ".")) || 0);
   const delta = actualCash - expectedCash;
 
+  // Success toasts fire only from onSuccess — a failed write must not
+  // pretend a money record landed (offline field use is the norm here).
   const markPaidCash = (apt: Appointment) => {
     const debt = getDebtAmount(apt);
     if (debt <= 0) return;
-    update.mutate({
-      id: apt.id,
-      patch: {
-        payments: [
-          ...(apt.payments ?? []),
-          {
-            id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-            method: "cash",
-            amount: debt,
-            paid_at: new Date().toISOString(),
-          },
-        ],
+    update.mutate(
+      {
+        id: apt.id,
+        patch: {
+          payments: [
+            ...(apt.payments ?? []),
+            {
+              id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              method: "cash",
+              amount: debt,
+              paid_at: new Date().toISOString(),
+            },
+          ],
+        },
       },
-    });
-    toast("Оплата отмечена");
+      {
+        onSuccess: () => toast("Оплата отмечена"),
+        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+      },
+    );
   };
 
   const moveToTomorrow = (apt: Appointment) => {
     const next = new Date();
     next.setDate(next.getDate() + 1);
-    update.mutate({ id: apt.id, patch: { date: formatYMD(next) } });
-    toast("Перенесено на завтра");
+    update.mutate(
+      { id: apt.id, patch: { date: formatYMD(next) } },
+      {
+        onSuccess: () => toast("Перенесено на завтра"),
+        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+      },
+    );
   };
 
   const closeDay = () => {

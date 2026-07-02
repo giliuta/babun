@@ -46,7 +46,10 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => ({
-        height: 52,
+        // minHeight + padding so Dynamic Type can grow the label (see
+        // GradientButton / PillButton — same recipe).
+        minHeight: 52,
+        paddingVertical: 14,
         borderRadius: t.radius.pill,
         alignItems: "center",
         justifyContent: "center",
@@ -59,7 +62,9 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={tone === "danger" ? t.danger : t.accent} />
       ) : (
-        <Text style={{ fontSize: 17, fontWeight: "600", color: tint }}>{label}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 17, fontWeight: "600", color: tint }}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );

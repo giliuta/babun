@@ -10,7 +10,6 @@ import {
   updateTransaction,
   type TransactionDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
-import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import {
   deleteFinanceCategory,
   insertFinanceCategory,
@@ -43,15 +42,6 @@ export function useTransactions(
   });
 }
 
-export function useAccounts() {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["accounts", tenantId],
-    enabled: !!tenantId,
-    queryFn: () => listAccounts(supabase, tenantId as string),
-  });
-}
-
 export function useFinanceCategories() {
   const tenantId = useTenantId();
   return useQuery({
@@ -61,13 +51,22 @@ export function useFinanceCategories() {
   });
 }
 
+// Every transaction write also invalidates ["accounts"] — the prefix covers
+// ["accounts", tenantId, "balances"], whose listAccountBalanceDeltas sums the
+// same ledger rows (web parity: refreshBalances() after each ledger mutation).
+function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["transactions"] });
+  qc.invalidateQueries({ queryKey: ["accounts"] });
+}
+
 export function useInsertTransaction() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (draft: TransactionDraft) =>
       insertTransaction(supabase, tenantId as string, draft),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => invalidateLedger(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -76,7 +75,8 @@ export function useUpdateTransaction() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
       updateTransaction(supabase, id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => invalidateLedger(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -84,7 +84,8 @@ export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteTransaction(supabase, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => invalidateLedger(qc),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -95,6 +96,7 @@ export function useInsertCategory() {
     mutationFn: (draft: NewFinanceCategory) =>
       insertFinanceCategory(supabase, tenantId as string, draft),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -103,5 +105,6 @@ export function useDeleteCategory() {
   return useMutation({
     mutationFn: (id: string) => deleteFinanceCategory(supabase, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }

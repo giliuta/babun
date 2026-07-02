@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import { Plus, Trash2 } from "lucide-react-native";
 import {
   DEFAULT_LOYALTY,
@@ -134,7 +142,12 @@ export default function LoyaltyScreen() {
         <View className="mx-3 mt-5">
           <Button
             label="Сохранить"
-            onPress={() => save.mutate(s, { onSuccess: () => setDirty(false) })}
+            onPress={() =>
+              save.mutate(s, {
+                onSuccess: () => setDirty(false),
+                onError: (e) => Alert.alert("Ошибка", e.message),
+              })
+            }
             disabled={!dirty || save.isPending}
             loading={save.isPending}
           />

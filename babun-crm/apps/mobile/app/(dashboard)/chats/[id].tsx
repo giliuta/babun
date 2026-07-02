@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import {
   CornerUpLeft,
   Link2,
@@ -36,8 +36,8 @@ import {
   useDeleteMessage,
   useLinkClient,
   useMarkRead,
+  usePersistDraft,
   useSendMessage,
-  useSetDraft,
   useStarMessage,
 } from "@/features/chats/store";
 
@@ -56,6 +56,74 @@ function bodyOf(m: ChatMessage): string {
   return m.text;
 }
 
+// Memoized bubble — message objects are referentially stable across
+// composer keystrokes, so typing doesn't re-render the visible thread.
+const MessageRow = memo(function MessageRow({
+  m,
+  quoted,
+  onLongPress,
+}: {
+  m: ChatMessage;
+  quoted: ChatMessage | null;
+  onLongPress: (m: ChatMessage) => void;
+}) {
+  const t = useThemeColors();
+  const out = m.direction === "out";
+  return (
+    <Pressable
+      onLongPress={() => onLongPress(m)}
+      className={`my-0.5 max-w-[82%] ${out ? "self-end" : "self-start"}`}
+    >
+      <View
+        className="rounded-2xl px-3.5 py-2"
+        style={{
+          backgroundColor: out
+            ? t.accent
+            : t.dark
+              ? "rgba(255,255,255,0.07)"
+              : "#eef1f5",
+        }}
+      >
+        {quoted ? (
+          <View
+            className="mb-1 rounded-md border-l-2 px-2 py-1"
+            style={{
+              borderColor: out ? "rgba(255,255,255,0.6)" : t.accent,
+              backgroundColor: out
+                ? "rgba(255,255,255,0.15)"
+                : t.dark
+                  ? "rgba(255,255,255,0.06)"
+                  : "rgba(11,18,32,0.05)",
+            }}
+          >
+            <Text
+              className="text-[11px]"
+              style={{ color: out ? "rgba(255,255,255,0.8)" : t.sub }}
+              numberOfLines={1}
+            >
+              {bodyOf(quoted)}
+            </Text>
+          </View>
+        ) : null}
+        <Text
+          className="text-base"
+          style={{ color: out ? "#fff" : t.ink }}
+        >
+          {bodyOf(m)}
+        </Text>
+      </View>
+      <View className={`mt-0.5 flex-row items-center gap-1 px-1 ${out ? "justify-end" : ""}`}>
+        {m.is_starred ? (
+          <Star color={t.warning} size={11} fill={t.warning} />
+        ) : null}
+        <Text className="text-[10px]" style={{ color: t.faint }}>
+          {msgTime(m.timestamp)}
+        </Text>
+      </View>
+    </Pressable>
+  );
+});
+
 export default function ChatThreadScreen() {
   const t = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -65,11 +133,10 @@ export default function ChatThreadScreen() {
   const send = useSendMessage();
   const star = useStarMessage();
   const del = useDeleteMessage();
-  const setDraftMut = useSetDraft();
+  const persistDraft = usePersistDraft();
   const linkClient = useLinkClient();
   const markRead = useMarkRead();
 
-  const listRef = useRef<FlatList>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [menuMsg, setMenuMsg] = useState<ChatMessage | null>(null);
@@ -85,8 +152,32 @@ export default function ChatThreadScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat?.id]);
 
+  // Persist the draft whenever the screen loses focus (back nav, tab
+  // switch, unmount) — not only on input blur; leaving with the keyboard
+  // open used to drop the draft. Web parity: saveDraft() in openChat
+  // (web chats/page.tsx:123–129). Refs keep the cleanup closure fresh.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const chatIdRef = useRef<string | null>(null);
+  chatIdRef.current = chat?.id ?? null;
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (chatIdRef.current) persistDraft(chatIdRef.current, draftRef.current);
+      },
+      [persistDraft],
+    ),
+  );
+
   const byId = useMemo(
     () => new Map((chat?.messages ?? []).map((m) => [m.id, m])),
+    [chat?.messages],
+  );
+  // Inverted-list order: newest first (standard RN chat pattern — the
+  // list stays pinned to the bottom without scrollToEnd forcing the
+  // whole thread to render on open).
+  const reversed = useMemo(
+    () => [...(chat?.messages ?? [])].reverse(),
     [chat?.messages],
   );
   const lang = useMemo(
@@ -105,10 +196,6 @@ export default function ChatThreadScreen() {
       </Screen>
     );
   }
-
-  const persistDraft = () => {
-    if ((chat.draft ?? "") !== draft) setDraftMut.mutate({ chatId: chat.id, draft });
-  };
 
   const submit = () => {
     const text = draft.trim();
@@ -154,69 +241,20 @@ export default function ChatThreadScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <FlatList
-          ref={listRef}
           style={{ flex: 1 }}
-          data={chat.messages}
+          data={reversed}
+          // Only invert when there are messages — an inverted empty list
+          // would render ListEmptyComponent upside down.
+          inverted={reversed.length > 0}
           keyExtractor={(m) => m.id}
-          contentContainerStyle={{ padding: 12, flexGrow: 1, justifyContent: "flex-end" }}
-          renderItem={({ item }) => {
-            const out = item.direction === "out";
-            const quoted = item.reply_to_id ? byId.get(item.reply_to_id) : null;
-            return (
-              <Pressable
-                onLongPress={() => setMenuMsg(item)}
-                className={`my-0.5 max-w-[82%] ${out ? "self-end" : "self-start"}`}
-              >
-                <View
-                  className="rounded-2xl px-3.5 py-2"
-                  style={{
-                    backgroundColor: out
-                      ? t.accent
-                      : t.dark
-                        ? "rgba(255,255,255,0.07)"
-                        : "#eef1f5",
-                  }}
-                >
-                  {quoted ? (
-                    <View
-                      className="mb-1 rounded-md border-l-2 px-2 py-1"
-                      style={{
-                        borderColor: out ? "rgba(255,255,255,0.6)" : t.accent,
-                        backgroundColor: out
-                          ? "rgba(255,255,255,0.15)"
-                          : t.dark
-                            ? "rgba(255,255,255,0.06)"
-                            : "rgba(11,18,32,0.05)",
-                      }}
-                    >
-                      <Text
-                        className="text-[11px]"
-                        style={{ color: out ? "rgba(255,255,255,0.8)" : t.sub }}
-                        numberOfLines={1}
-                      >
-                        {bodyOf(quoted)}
-                      </Text>
-                    </View>
-                  ) : null}
-                  <Text
-                    className="text-base"
-                    style={{ color: out ? "#fff" : t.ink }}
-                  >
-                    {bodyOf(item)}
-                  </Text>
-                </View>
-                <View className={`mt-0.5 flex-row items-center gap-1 px-1 ${out ? "justify-end" : ""}`}>
-                  {item.is_starred ? (
-                    <Star color={t.warning} size={11} fill={t.warning} />
-                  ) : null}
-                  <Text className="text-[10px]" style={{ color: t.faint }}>
-                    {msgTime(item.timestamp)}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          }}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          contentContainerStyle={{ padding: 12, flexGrow: 1 }}
+          renderItem={({ item }) => (
+            <MessageRow
+              m={item}
+              quoted={item.reply_to_id ? (byId.get(item.reply_to_id) ?? null) : null}
+              onLongPress={setMenuMsg}
+            />
+          )}
           ListEmptyComponent={
             <EmptyState title="Нет сообщений" subtitle="Напишите первым" />
           }
@@ -259,7 +297,7 @@ export default function ChatThreadScreen() {
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            onBlur={persistDraft}
+            onBlur={() => persistDraft(chat.id, draft)}
             placeholder="Сообщение…"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}

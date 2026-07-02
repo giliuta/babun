@@ -70,9 +70,17 @@ export default function InventoryScreen() {
     const list = editing
       ? items.map((i) => (i.id === editing.id ? next : i))
       : [...items, next];
-    save.mutate(list);
-    setOpen(false);
-    toast(editing ? "Сохранено" : "Добавлено");
+    save.mutate(
+      { list },
+      {
+        // Sheet closes only on success — a failed save keeps the input.
+        onSuccess: () => {
+          setOpen(false);
+          toast(editing ? "Сохранено" : "Добавлено");
+        },
+        onError: (e) => Alert.alert("Ошибка", e.message),
+      },
+    );
   };
 
   const remove = (id: string) =>
@@ -81,7 +89,13 @@ export default function InventoryScreen() {
       {
         text: "Удалить",
         style: "destructive",
-        onPress: () => save.mutate(items.filter((i) => i.id !== id)),
+        onPress: () =>
+          // removeIds carries the explicit deletion — the server must never
+          // derive it from a (possibly stale) full snapshot.
+          save.mutate(
+            { list: items.filter((i) => i.id !== id), removeIds: [id] },
+            { onError: (e) => Alert.alert("Ошибка", e.message) },
+          ),
       },
     ]);
 
@@ -198,7 +212,12 @@ export default function InventoryScreen() {
             </>
           ) : null}
           <Field label="Заметки" value={notes} onChangeText={setNotes} placeholder="—" />
-          <Button label={editing ? "Сохранить" : "Добавить"} onPress={submit} disabled={!name.trim()} />
+          <Button
+            label={editing ? "Сохранить" : "Добавить"}
+            onPress={submit}
+            disabled={!name.trim() || save.isPending}
+            loading={save.isPending}
+          />
           {editing ? (
             <Pressable
               onPress={() => {

@@ -76,16 +76,21 @@ export default function AccountsScreen() {
 
   const doTransfer = async () => {
     if (!fromId || !toId) return;
-    await transfer.mutateAsync({
-      from_account_id: fromId,
-      to_account_id: toId,
-      amount: tNum,
-      occurred_on: formatYMD(new Date()),
-    });
-    setFromId(null);
-    setToId(null);
-    setTAmount("");
-    setTOpen(false);
+    try {
+      await transfer.mutateAsync({
+        from_account_id: fromId,
+        to_account_id: toId,
+        amount: tNum,
+        occurred_on: formatYMD(new Date()),
+      });
+      setFromId(null);
+      setToId(null);
+      setTAmount("");
+      setTOpen(false);
+    } catch (e) {
+      // Sheet stays open — nothing entered is lost.
+      Alert.alert("Ошибка", (e as Error).message);
+    }
   };
 
   const reset = () => {
@@ -98,20 +103,31 @@ export default function AccountsScreen() {
 
   const add = async () => {
     if (!brigadeId) return;
-    await insert.mutateAsync({
-      name: name.trim(),
-      kind,
-      brigade_id: brigadeId,
-      opening_balance: Number(opening.replace(",", ".")) || 0,
-    });
-    reset();
-    setOpen(false);
+    try {
+      await insert.mutateAsync({
+        name: name.trim(),
+        kind,
+        brigade_id: brigadeId,
+        opening_balance: Number(opening.replace(",", ".")) || 0,
+      });
+      reset();
+      setOpen(false);
+    } catch (e) {
+      Alert.alert("Ошибка", (e as Error).message);
+    }
   };
 
   const confirmClose = (a: AccountWithBalance) =>
     Alert.alert("Закрыть счёт?", `${a.name} — история сохранится`, [
       { text: "Отмена", style: "cancel" },
-      { text: "Закрыть", style: "destructive", onPress: () => closeAcc.mutate(a.id) },
+      {
+        text: "Закрыть",
+        style: "destructive",
+        onPress: () =>
+          closeAcc.mutate(a.id, {
+            onError: (e) => Alert.alert("Ошибка", e.message),
+          }),
+      },
     ]);
 
   return (
@@ -162,7 +178,20 @@ export default function AccountsScreen() {
             const Icon = KIND_ICON[item.kind];
             return (
               <Pressable
+                // A plain tap must never be destructive — everywhere else in
+                // the app a row tap means «открыть». Closing stays on
+                // long-press, mirrored as an explicit accessibility action so
+                // VoiceOver users (who can't long-press) still reach it.
                 onLongPress={() => confirmClose(item)}
+                accessibilityLabel={`${item.name}, ${formatEUR(item.balance)}`}
+                accessibilityHint="Долгое нажатие закрывает счёт"
+                accessibilityActions={[
+                  { name: "close-account", label: "Закрыть счёт" },
+                ]}
+                onAccessibilityAction={(e) => {
+                  if (e.nativeEvent.actionName === "close-account")
+                    confirmClose(item);
+                }}
                 className="flex-row items-center px-4 py-3 active:opacity-60"
               >
                 <View className="mr-3 h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: th.highlight }}>

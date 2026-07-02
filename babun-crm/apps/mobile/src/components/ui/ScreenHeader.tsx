@@ -44,7 +44,13 @@ export function ScreenHeader({
       style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
     >
       <Pressable
-        onPress={onBack ?? (() => router.back())}
+        // Cold deep link (push / state restore) can land here with an empty
+        // history — GO_BACK would be a dead button (red screen in dev), so
+        // fall back to the app root.
+        onPress={
+          onBack ??
+          (() => (router.canGoBack() ? router.back() : router.replace("/")))
+        }
         hitSlop={8}
         style={({ pressed }) => ({
           height: 44,

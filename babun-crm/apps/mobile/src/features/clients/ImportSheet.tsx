@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as DocumentPicker from "expo-document-picker";
 import { FileUp, X } from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
@@ -25,6 +26,7 @@ export function ImportSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
+  const insets = useSafeAreaInsets();
   const importer = useImportClients();
   const [parsed, setParsed] = useState<ParsedClientsCsv | null>(null);
   const [fileName, setFileName] = useState("");
@@ -78,11 +80,17 @@ export function ImportSheet({
   const runImport = async () => {
     if (!parsed) return;
     try {
-      const n = await importer.mutateAsync({
+      const { created, duplicates } = await importer.mutateAsync({
         drafts: parsed.drafts,
         onProgress: (done, total) => setProgress({ done, total }),
       });
-      Alert.alert("Готово", `Импортировано клиентов: ${n}`);
+      Alert.alert(
+        "Готово",
+        `Импортировано клиентов: ${created}` +
+          (duplicates > 0
+            ? `\nПропущено дубликатов по телефону: ${duplicates}`
+            : ""),
+      );
       close();
     } catch (e) {
       setError((e as Error).message);
@@ -93,7 +101,14 @@ export function ImportSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
       <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={close} />
-      <View className="absolute bottom-0 left-0 right-0 max-h-[80%] rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+      <View
+        className="absolute bottom-0 left-0 right-0 max-h-[80%] rounded-t-3xl p-5"
+        style={{
+          backgroundColor: t.surface,
+          // Bottom-pinned sheet → add the home-indicator inset explicitly.
+          paddingBottom: Math.max(32, insets.bottom + 12),
+        }}
+      >
         <View className="mb-2 flex-row items-center">
           <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
             Импорт клиентов

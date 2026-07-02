@@ -1,7 +1,7 @@
+import { useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listAppointments } from "@babun/shared/db/repositories/appointments";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { supabase } from "@/lib/supabase";
+import { listAppointmentsPaged } from "@/features/calendar/queries";
 import { useTenantId } from "@/lib/tenant";
 
 // Appointments for a single client — TanStack Query on top of the shared
@@ -10,19 +10,25 @@ import { useTenantId } from "@/lib/tenant";
 // client in `select`. The list query is cached per-tenant, so opening
 // several client cards reuses one network round-trip.
 //
-// NOTE: matches the web's client-stats fallback that also picks up legacy
-// seed rows with client_id=null by name — but on mobile the selectors
-// (buildStats) already do that name fallback when handed the full array, so
-// here we pass through the strict client_id matches plus keep null-id rows
-// out (the strict filter is enough for the live Supabase data, which always
-// has client_id set on real bookings). Keeping it simple and correct.
+// KNOWN DIVERGENCE vs web: buildStatsMap on the web also name-matches
+// legacy seed rows with client_id=null (name baked into `comment`). Here we
+// deliberately pass ONLY strict client_id matches: the card blocks
+// (Visits / Objects / Finance) render every row they receive, so letting
+// null-id rows through would require duplicating that name matching at
+// this layer. Live Supabase bookings always carry client_id; tenants with
+// unmigrated legacy seed data may show fewer visits/LTV than the web list.
 export function useClientAppointments(clientId: string) {
   const tenantId = useTenantId();
+  // Stable `select` identity — an inline arrow would make TanStack re-run
+  // the tenant-wide filter on every render of every consumer.
+  const select = useCallback(
+    (all: Appointment[]) => all.filter((a) => a.client_id === clientId),
+    [clientId],
+  );
   return useQuery({
     queryKey: ["appointments", tenantId],
     enabled: !!tenantId && !!clientId,
-    queryFn: () => listAppointments(supabase, tenantId as string),
-    select: (all: Appointment[]) =>
-      all.filter((a) => a.client_id === clientId),
+    queryFn: () => listAppointmentsPaged(tenantId as string),
+    select,
   });
 }

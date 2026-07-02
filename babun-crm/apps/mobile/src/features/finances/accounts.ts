@@ -11,6 +11,7 @@ import {
 } from "@babun/shared/db/repositories/accounts";
 import {
   createTransfer,
+  deleteTransfer,
   listAccountBalanceDeltas,
   type TransferDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
@@ -47,6 +48,7 @@ export function useInsertAccount() {
     mutationFn: (draft: AccountDraft) =>
       insertAccount(supabase, tenantId as string, draft),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -55,6 +57,7 @@ export function useSoftCloseAccount() {
   return useMutation({
     mutationFn: (id: string) => softCloseAccount(supabase, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
@@ -68,5 +71,21 @@ export function useCreateTransfer() {
       qc.invalidateQueries({ queryKey: ["accounts"] });
       qc.invalidateQueries({ queryKey: ["transactions"] });
     },
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+// Removes BOTH legs of a transfer pair by transfer_group_id (web parity:
+// the ledger must never carry a half-transfer — see createTransfer's
+// invariant in the shared repository).
+export function useDeleteTransfer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (groupId: string) => deleteTransfer(supabase, groupId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+    meta: { errorHandled: true }, // call sites alert themselves
   });
 }

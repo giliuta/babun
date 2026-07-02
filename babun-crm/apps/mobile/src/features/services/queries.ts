@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { Database } from "@babun/shared/db/database.types";
+import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -42,7 +43,7 @@ export function useCreateService() {
       const { data, error } = await supabase
         .from("services")
         .insert({
-          id: `svc_${Date.now()}`,
+          id: generateId("svc"),
           tenant_id: tenantId as string,
           name: input.name,
           price: input.price,
@@ -54,5 +55,6 @@ export function useCreateService() {
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
+    meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
