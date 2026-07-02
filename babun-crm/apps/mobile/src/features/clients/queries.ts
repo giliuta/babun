@@ -4,41 +4,46 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-// STORY-062 slice 4 — clients + tags WRITES go through the shared offline-aware
-// cache wrappers (optimistic sqlite write, then online→repo / offline→enqueue).
-// READS stay on the repo: the SWR list wrapper's warm-cache branch returns a
-// STRIPPED sqlite row (tag_ids/phones/locations/notes/equipment all []) and
-// only revalidates into sqlite — it never re-hydrates the react-query cache
-// (mobile has no realtime bridge like the web's useRealtimeTenantSync). So the
-// online list would silently lose tag_ids (breaking the tag facet / filter /
-// card meta) and never recover. repoListClients/repoListClientTags return the
-// FULL domain shape and every fetch is authoritative & fresh. `getClient`
-// likewise stays a direct repo read — the card must render the canonical row,
-// not a stripped offline one.
+// STORY-062 slice 5 — clients + tags READS now go through the shared
+// offline-aware SWR wrappers (listClients / listClientTags). The two slice-4
+// blockers are both closed:
+//   1. cache-of-DOMAIN — the wrapper stores the FULL Client (tag_ids + nested
+//      phones/locations/notes/equipment) and returns it whole, so the online
+//      warm-cache read is byte-identical to a live repo read (no stripped-row
+//      regression on the tag facet / filter / card meta);
+//   2. revalidate bridge — the wrapper's background revalidate now prunes
+//      server-deleted rows (cacheReplaceTenant) and, on a real change, fires
+//      `revalidated`, which the realtime bridge (SyncBridgeMount) turns into a
+//      react-query invalidate so the list re-reads the freshened cache.
+// Offline the warm cache serves the last snapshot; a cold offline read returns
+// [] (empty state, not an error). `getClient` stays a direct repo read — the
+// single-client card is not one of the three cached tables and must render the
+// canonical row live.
 import {
   getClient,
-  listClients as repoListClients,
-  listClientTags as repoListClientTags,
   createClient as createClientRepo,
 } from "@babun/shared/db/repositories/clients";
 import {
+  listClients as listClientsCached,
   createClient as createClientCached,
   updateClient,
 } from "@babun/shared/sync/clientsCached";
+import { listClientTags as listClientTagsCached } from "@babun/shared/sync/tagsCached";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { tryToE164 } from "./phone";
 
-// Clients list — repo read (full domain shape incl. tag_ids). RLS scopes rows
-// to the tenant; we pass tenantId for the query key and the RLS filter.
+// Clients list — SWR wrapper read (full domain shape incl. tag_ids, served
+// from the SQLite cache when warm, then revalidated). RLS scopes rows to the
+// tenant; we pass tenantId for the query key and the RLS/cache filter.
 export function useClients() {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: ["clients", tenantId],
     enabled: !!tenantId,
-    queryFn: () => repoListClients(supabase, tenantId as string),
+    queryFn: () => listClientsCached(supabase, tenantId as string),
   });
 }
 
@@ -178,8 +183,8 @@ export function useClientTags() {
   return useQuery({
     queryKey: ["client-tags", tenantId],
     enabled: !!tenantId,
-    // Repo read (same reason as useClients): the tags SWR wrapper warm-cache
-    // branch only revalidates sqlite and never re-hydrates this query cache.
-    queryFn: () => repoListClientTags(supabase, tenantId as string),
+    // SWR wrapper read (same as useClients): warm cache serves instantly, the
+    // background revalidate prunes + emits, the realtime bridge re-reads.
+    queryFn: () => listClientTagsCached(supabase, tenantId as string),
   });
 }

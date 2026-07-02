@@ -26,13 +26,31 @@
 //            repo.updateClient (on error → enqueue+kick); offline → enqueueOp.
 //   delete:  cacheDelete optimistic; online → repo.deleteClient else enqueueOp.
 //
-// v1 limitation — `tag_ids` patch is ONLINE-ONLY: junction table isn't
-// cached; offline + patch carrying tag_ids → strip + toast.
+// Slice 5 — cache-of-DOMAIN. The cache `data` column now stores the FULL
+// `Client` domain object (WITH `tag_ids` + nested phones/locations/notes/
+// equipment) decorated with the two bookkeeping keys the domain shape
+// itself lacks (`tenant_id`, `updated_at`). `rowToClient` returns it whole
+// so an online read-from-cache is byte-identical to a live repo read — no
+// more emptied `tag_ids` / nested-field regression. The revalidate path
+// pulls the canonical domain list via `repoListClients` (which joins the
+// junction) so background refresh keeps `tag_ids` accurate too.
+//
+// TWO PROJECTIONS (offline-plan rule 4). What lands in the queue payload is
+// the RAW DB-column projection the server accepts (built by `makeServerRow`
+// / `patchToRow` — NO `tag_ids`, nested arrays as jsonb). What lands in the
+// cache `data` is the full domain object (built by `makeCachedRow` /
+// `mergeCachedRow`). The two never mix: dispatch relays `payload` straight
+// to PostgREST; reads parse `data`.
+//
+// v1 limitation — `tag_ids` patch is ONLINE-ONLY: the junction write path
+// lives in the repo (online) and the replayer can't diff assignments, so
+// offline + patch carrying tag_ids → strip + toast.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
   listClients as repoListClients,
+  getClient as repoGetClient,
   createClient as repoCreateClient,
   updateClient as repoUpdateClient,
   deleteClient as repoDeleteClient,
@@ -42,9 +60,10 @@ import {
   cacheRead,
   cacheUpsert,
   cacheDelete,
-  cacheBulkUpsert,
+  cacheReplaceTenant,
   cacheGetOne,
   type CachedClient,
+  type CachedClientData,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
 import { kickReplayer } from "./replayer";
@@ -53,6 +72,7 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
+import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -76,22 +96,28 @@ export async function listClients(
   tenantId: string,
 ): Promise<Client[]> {
   // 1. Try cache first. If we have rows, return them right away;
-  //    the network refetch will refresh asynchronously.
+  //    the network refetch will refresh asynchronously. The cached
+  //    rows are FULL domain objects (with tag_ids + nested fields), so
+  //    the returned list matches a live repo read.
   const cached = await safeCacheReadClients(tenantId);
   if (cached.length > 0) {
     void revalidateClients(supabase, tenantId); // fire and forget
-    // We don't have tag_ids in the cache row; return with empty
-    // tag_ids and let revalidate fix it on the next tick.
     return cached.map(rowToClient);
   }
 
-  // 2. Cold cache — pull live, populate the cache, return.
-  const fresh = await repoListClients(supabase, tenantId);
-  // Stash row-level state for offline: only the columns we cache.
-  // The Client domain shape carries derived fields; we store the
-  // matching Database Row shape via a re-fetch.
-  await refreshCacheFromSupabase(supabase, tenantId).catch(() => {});
-  return fresh;
+  // 2. Cold cache — pull the canonical domain list, populate the cache
+  //    with the same objects, return. Cold-OFFLINE guard (offline-plan
+  //    rule 4): with an empty cache AND no network, `repoListClients` throws
+  //    — catch it and return [] so the screen shows an empty state, not an
+  //    error screen (matches tagsCached). Once online, the SWR refresh
+  //    backfills and the revalidate bridge re-reads.
+  try {
+    const fresh = await repoListClients(supabase, tenantId);
+    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
+    return fresh;
+  } catch {
+    return [];
+  }
 }
 
 async function revalidateClients(
@@ -99,64 +125,87 @@ async function revalidateClients(
   tenantId: string,
 ): Promise<void> {
   try {
-    await refreshCacheFromSupabase(supabase, tenantId);
+    const changed = await refreshCacheFromSupabase(supabase, tenantId);
+    // Emit only on a real change so the mobile bridge's invalidate →
+    // refetch → revalidate cycle settles after one pass (loop guard).
+    if (changed) emitRevalidated("clients");
   } catch {
     // ignore — list() already returned cached data; UI is fine.
   }
 }
 
+/** Refill the cache with the canonical DOMAIN list (tag_ids + nested
+ *  fields intact). `repoListClients` joins the junction table for us; we
+ *  then decorate each `Client` with the bookkeeping keys the cache layer
+ *  needs (tenant_id for scoping, updated_at for the LWW sentinel) — the
+ *  latter pulled in a light id/updated_at select the domain list drops.
+ *
+ *  Callers on the cold path pass the already-fetched `domain` to avoid a
+ *  second list round-trip.
+ *
+ *  Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. Uses `cacheReplaceTenant`
+ *  (delete-then-fill) so a client deleted on another device is pruned from
+ *  the cache, not left as a phantom row. Diffs the fresh server signature
+ *  against the pre-refresh cache signature and returns whether it changed —
+ *  the SWR caller emits `revalidated` only on a real change (loop guard). */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`refreshClients: ${error.message}`);
-  await cacheBulkUpsert("clients", (data ?? []) as CachedClient[]);
+  domain?: Client[],
+): Promise<boolean> {
+  const clients = domain ?? (await repoListClients(supabase, tenantId));
+  const updatedById = await fetchUpdatedAtById(supabase, tenantId);
+  const rows = clients.map((c) =>
+    makeCachedRow(c, tenantId, updatedById.get(c.id)),
+  );
+  // Signature BEFORE the write — what the UI is currently showing.
+  const before = cacheSignature(await safeCacheReadClients(tenantId));
+  await cacheReplaceTenant("clients", tenantId, rows);
+  const after = cacheSignature(rows);
+  return before !== after;
 }
 
-// Minimal row → domain conversion for the cache fallback path. The
-// real adapters live in the repo; we re-use the shape conservatively.
-function rowToClient(r: CachedClient): Client {
-  // Fall back to live fetch if any consumer needs full domain
-  // mapping; for offline display we stick close to the row shape
-  // and let the existing realtime listener overwrite with the
-  // canonical Client (with tag_ids etc.) once reconnect happens.
+/** Map id → updated_at for the tenant's clients. The domain `Client`
+ *  shape drops `updated_at`; we need it for the cache's denorm column +
+ *  the LWW conflict sentinel, so pull it in a tiny separate projection. */
+async function fetchUpdatedAtById(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id, updated_at")
+    .eq("tenant_id", tenantId);
+  if (error) throw new Error(`refreshClients meta: ${error.message}`);
+  const map = new Map<string, string>();
+  for (const r of data ?? []) {
+    if (r.updated_at) map.set(r.id, r.updated_at);
+  }
+  return map;
+}
+
+// Cache row → domain. The cache stores the full domain object decorated
+// with tenant_id + updated_at; strip those two bookkeeping keys and return
+// a clean `Client` (identical to what the repo list returns).
+function rowToClient(r: CachedClientData): Client {
+  const { tenant_id: _t, updated_at: _u, ...client } = r;
+  void _t;
+  void _u;
+  return client;
+}
+
+/** Build the DOMAIN cache row (what lands in `data`) from a canonical
+ *  `Client`. Carries tag_ids + nested fields verbatim + the two
+ *  bookkeeping keys. */
+function makeCachedRow(
+  client: Client,
+  tenantId: string,
+  updatedAt: string | undefined,
+): CachedClientData {
   return {
-    id: r.id,
-    full_name: r.full_name,
-    phone: r.phone,
-    whatsapp_phone: r.whatsapp_phone,
-    email: r.email,
-    sms_name: r.sms_name,
-    telegram_username: r.telegram_username,
-    instagram_username: r.instagram_username,
-    balance: Number(r.balance ?? 0),
-    discount: r.discount ?? 0,
-    comment: r.comment,
-    acquisition_source: (r.acquisition_source ?? "unknown") as Client["acquisition_source"],
-    referred_by_client_id: r.referred_by_client_id,
-    first_contact_date: r.first_contact_date,
-    address: r.address,
-    city: r.city,
-    property_type: (r.property_type ?? "") as Client["property_type"],
-    language: r.language ?? "",
-    birthday: r.birthday,
-    blacklisted: r.blacklisted,
-    pinned_at: r.pinned_at,
-    reminder_at: r.reminder_at,
-    phones: [],
-    locations: [],
-    notes: [],
-    equipment: [],
-    tag_ids: [],
-    phone_e164: r.phone_e164 ?? null,
-    avatar_url: r.avatar_url ?? null,
-    deleted_at: r.deleted_at ?? null,
-    favorite_master_id: r.favorite_master_id ?? null,
-    created_at: r.created_at,
+    ...client,
+    tenant_id: tenantId,
+    updated_at: updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -173,17 +222,27 @@ export async function createClient(
   // replayer's INSERT lands at the same row.
   const id = input.id || randomUuid();
   const nowIso = new Date().toISOString();
-  const optimisticRow = makeOptimisticRow(input, tenantId, id, nowIso);
+  // Two projections (rule 4):
+  //   cachedRow — full DOMAIN object for reads (tag_ids + nested intact).
+  //   serverRow — raw DB columns for the queue payload the replayer INSERTs.
+  const cachedRow = makeCachedRow({ ...input, id }, tenantId, nowIso);
+  const serverRow = makeServerRow(input, tenantId, id, nowIso);
+  const insertOp = {
+    table: "clients" as const,
+    op: "insert" as const,
+    row_id: id,
+    payload: serverRow as unknown as Record<string, unknown>,
+    expected_updated_at: null,
+  };
 
   if (isOnline()) {
     // Optimistic UI first (standalone upsert is fine online — there is no
     // queued op to keep it atomic with; the server write follows).
-    await cacheUpsert("clients", optimisticRow);
+    await cacheUpsert("clients", cachedRow);
     try {
       const created = await repoCreateClient(supabase, { ...input, id }, tenantId);
-      // Re-fetch the canonical row for the cache (created carries
-      // domain shape; we want Row shape with the server's
-      // updated_at).
+      // Re-fetch the canonical DOMAIN row for the cache (with the server's
+      // updated_at + any server-side defaults).
       await refetchAndCacheOne(supabase, id, tenantId);
       return created;
     } catch (err) {
@@ -191,34 +250,14 @@ export async function createClient(
       // the optimistic row + the queued op land in one exclusive tx so a
       // crash between them can't strand one without the other.
       void err;
-      await enqueueOpWithCacheUpsertAndEmit(
-        {
-          table: "clients",
-          op: "insert",
-          row_id: id,
-          payload: optimisticRow as unknown as Record<string, unknown>,
-          expected_updated_at: null,
-        },
-        "clients",
-        optimisticRow,
-      );
+      await enqueueOpWithCacheUpsertAndEmit(insertOp, "clients", cachedRow);
       void kickReplayer({ supabase });
       return { ...input, id };
     }
   }
 
   // Offline path — ATOMIC optimistic upsert + enqueue (risk #6).
-  await enqueueOpWithCacheUpsertAndEmit(
-    {
-      table: "clients",
-      op: "insert",
-      row_id: id,
-      payload: optimisticRow as unknown as Record<string, unknown>,
-      expected_updated_at: null,
-    },
-    "clients",
-    optimisticRow,
-  );
+  await enqueueOpWithCacheUpsertAndEmit(insertOp, "clients", cachedRow);
   return { ...input, id };
 }
 
@@ -248,11 +287,13 @@ export async function updateClient(
   }
 
   // Optimistic local update — computed once so the offline / error paths
-  // can enqueue it ATOMICALLY with the queued op (risk #6).
-  const merged: CachedClient | null = existing
+  // can enqueue it ATOMICALLY with the queued op (risk #6). The cache
+  // merge is DOMAIN-shaped (patch applied to the full domain object), while
+  // the queue payload stays the raw-column projection (rule 4).
+  const merged: CachedClientData | null = existing
     ? {
         ...existing,
-        ...patchToRow(scrubbedPatch),
+        ...scrubbedPatch,
         updated_at: new Date().toISOString(),
       }
     : null;
@@ -282,14 +323,21 @@ export async function updateClient(
       void kickReplayer({ supabase });
       // Optimistic shape — caller sees the merged result; realtime
       // will overwrite once reconnect.
-      return { ...(existing as unknown as Client), ...scrubbedPatch, id };
+      return { ...toDomain(existing), ...scrubbedPatch, id } as Client;
     }
   }
 
   // Offline — queue the write (ATOMIC with the optimistic row when we have
   // one; plain enqueue when the row wasn't cached yet).
   await enqueueUpdate(updateOp, merged);
-  return { ...(existing as unknown as Client), ...scrubbedPatch, id };
+  return { ...toDomain(existing), ...scrubbedPatch, id } as Client;
+}
+
+/** Domain view of a cached row (drops the bookkeeping keys), or an empty
+ *  patch base when the row wasn't cached. Used to build the optimistic
+ *  return shape without leaking tenant_id/updated_at into the Client. */
+function toDomain(existing: CachedClientData | null): Partial<Client> {
+  return existing ? rowToClient(existing) : {};
 }
 
 /** Enqueue an update op, pairing it in one exclusive transaction with the
@@ -298,7 +346,7 @@ export async function updateClient(
  *  emit-enqueue matches the prior behaviour (the `if (existing)` guard). */
 async function enqueueUpdate(
   op: Parameters<typeof enqueueOpAndEmit>[0],
-  merged: CachedClient | null,
+  merged: CachedClientData | null,
 ): Promise<void> {
   if (merged) {
     await enqueueOpWithCacheUpsertAndEmit(op, "clients", merged);
@@ -344,9 +392,11 @@ export async function deleteClient(
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-async function safeCacheReadClients(tenantId: string): Promise<CachedClient[]> {
+async function safeCacheReadClients(
+  tenantId: string,
+): Promise<CachedClientData[]> {
   try {
-    return await cacheRead<CachedClient>("clients", tenantId);
+    return await cacheRead<CachedClientData>("clients", tenantId);
   } catch {
     return [];
   }
@@ -355,41 +405,50 @@ async function safeCacheReadClients(tenantId: string): Promise<CachedClient[]> {
 async function readCachedClient(
   id: string,
   tenantId?: string,
-): Promise<CachedClient | null> {
+): Promise<CachedClientData | null> {
   try {
     // Tenant-scope the single-row read to the active tenant (minor: keeps
     // the LWW snapshot from a shared multi-tenant cache picking up a row
     // belonging to another of the user's tenants on an id collision).
-    return await cacheGetOne<CachedClient>("clients", id, tenantId);
+    return await cacheGetOne<CachedClientData>("clients", id, tenantId);
   } catch {
     return null;
   }
 }
 
+/** After a successful server write, refresh the cache with the CANONICAL
+ *  domain row: `repoGetClient` re-reads the row + its junction assignments
+ *  (so tag_ids are correct) and we pair it with the server's updated_at for
+ *  the denorm column + LWW sentinel. */
 async function refetchAndCacheOne(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", id)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (error || !data) return;
-  await cacheUpsert("clients", data as CachedClient);
+  const [client, meta] = await Promise.all([
+    repoGetClient(supabase, id, tenantId).catch(() => null),
+    supabase
+      .from("clients")
+      .select("updated_at")
+      .eq("id", id)
+      .eq("tenant_id", tenantId)
+      .maybeSingle(),
+  ]);
+  if (!client) return;
+  const updatedAt =
+    (meta.data?.updated_at as string | undefined) ?? new Date().toISOString();
+  await cacheUpsert("clients", makeCachedRow(client, tenantId, updatedAt));
 }
 
-function makeOptimisticRow(
+function makeServerRow(
   input: Client,
   tenantId: string,
   id: string,
   nowIso: string,
 ): CachedClient {
-  // Best-effort shape — fill required Row columns with safe defaults
-  // matching the DB schema. The canonical row from refetchAndCacheOne
-  // overwrites this on success.
+  // RAW DB-column projection for the queue payload the replayer INSERTs.
+  // Fill required Row columns with safe defaults matching the DB schema;
+  // NO tag_ids here (that's a junction table, written online by the repo).
   return {
     id,
     tenant_id: tenantId,

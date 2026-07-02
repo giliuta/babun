@@ -29,7 +29,7 @@ import {
   cacheRead,
   cacheUpsert,
   cacheDelete,
-  cacheBulkUpsert,
+  cacheReplaceTenant,
   cacheGetOne,
   type CachedTag,
 } from "../db/cache/sql";
@@ -40,6 +40,7 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
+import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -71,22 +72,32 @@ async function revalidateTags(
   tenantId: string,
 ): Promise<void> {
   try {
-    await refreshCacheFromSupabase(supabase, tenantId);
+    const changed = await refreshCacheFromSupabase(supabase, tenantId);
+    // Emit only on a real change (loop guard — see revalidate-events).
+    if (changed) emitRevalidated("tags");
   } catch {
     /* ignore */
   }
 }
 
+/** Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. `cacheReplaceTenant` prunes
+ *  tags deleted on another device; the signature diff (which folds the whole
+ *  tag row — client_tags has no `updated_at`, so a rename/recolour still
+ *  registers) drives the bridge emit. Returns whether anything changed. */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
-): Promise<void> {
+): Promise<boolean> {
   const { data, error } = await supabase
     .from("client_tags")
     .select("*")
     .eq("tenant_id", tenantId);
   if (error) throw new Error(`refreshTags: ${error.message}`);
-  await cacheBulkUpsert("tags", (data ?? []) as CachedTag[]);
+  const rows = (data ?? []) as CachedTag[];
+  const before = cacheSignature(await safeCacheReadTags(tenantId));
+  await cacheReplaceTenant("tags", tenantId, rows);
+  const after = cacheSignature(rows);
+  return before !== after;
 }
 
 function rowToTag(r: CachedTag): ClientTag {

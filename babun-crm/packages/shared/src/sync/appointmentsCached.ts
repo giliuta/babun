@@ -12,11 +12,30 @@
 // non-uuid id (legacy `apt-${ts}-rnd` from generateId("apt")) never reached
 // Supabase, so update/delete on it skip the network + queue entirely (the
 // optimistic cache write is the full story).
+//
+// Slice 5 — cache-of-DOMAIN. The cache `data` column stores the FULL
+// `Appointment` domain object (the same shape `repoListAppointments`
+// returns) decorated with `tenant_id` (the only bookkeeping key the domain
+// shape lacks — it already carries `date` + `updated_at`). `rowToAppointment`
+// returns it whole, so an online read-from-cache is byte-identical to a live
+// repo read.
+//
+// TWO PROJECTIONS (rule 4). The queue payload is the RAW DB-column
+// projection the server accepts (built by `makeServerRow` / `patchToRow`);
+// the cache `data` is the full domain object (built by `makeCachedRow` /
+// domain merge). dispatch relays `payload` to PostgREST; reads parse `data`.
+//
+// PHOTOS — the appointments row dropped its `photos` column (STORY-049);
+// list/get never carry blobs (they live in appointment_photos + Storage).
+// So the domain `Appointment` from the repo already has `photos: []`, and
+// the cache stores that — nothing to preserve here. The photo viewer
+// fetches blobs on demand (online-only), matching web + the repo contract.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
   listAppointments as repoListAppointments,
+  getAppointment as repoGetAppointment,
   createAppointment as repoCreateAppointment,
   updateAppointment as repoUpdateAppointment,
   deleteAppointment as repoDeleteAppointment,
@@ -26,10 +45,13 @@ import {
   cacheRead,
   cacheUpsert,
   cacheDelete,
-  cacheBulkUpsert,
+  cacheReplaceTenant,
   cacheGetOne,
   type CachedAppointment,
+  type CachedAppointmentData,
 } from "../db/cache/sql";
+// CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
+// (full domain) is the cache-read projection. Both are used below.
 import { isOnline } from "./network";
 import { kickReplayer } from "./replayer";
 import {
@@ -37,6 +59,7 @@ import {
   enqueueOpWithCacheUpsertAndEmit,
   enqueueOpWithCacheDeleteAndEmit,
 } from "./queue-events";
+import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -62,9 +85,16 @@ export async function listAppointments(
     void revalidateAppointments(supabase, tenantId);
     return cached.map(rowToAppointment);
   }
-  const fresh = await repoListAppointments(supabase, tenantId);
-  await refreshCacheFromSupabase(supabase, tenantId).catch(() => {});
-  return fresh;
+  // Cold-OFFLINE guard (offline-plan rule 4): empty cache + no network →
+  // `repoListAppointments` throws. Catch and return [] so the calendar shows
+  // an empty grid, not an error screen (matches tagsCached / clientsCached).
+  try {
+    const fresh = await repoListAppointments(supabase, tenantId);
+    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
+    return fresh;
+  } catch {
+    return [];
+  }
 }
 
 async function revalidateAppointments(
@@ -72,85 +102,54 @@ async function revalidateAppointments(
   tenantId: string,
 ): Promise<void> {
   try {
-    await refreshCacheFromSupabase(supabase, tenantId);
+    const changed = await refreshCacheFromSupabase(supabase, tenantId);
+    // Emit only on a real change (loop guard — see revalidate-events).
+    if (changed) emitRevalidated("appointments");
   } catch {
     // ignore — cached list already returned
   }
 }
 
+/** Refill the cache with the canonical DOMAIN list. `repoListAppointments`
+ *  already maps every jsonb column into its domain shape; we only decorate
+ *  each with `tenant_id` (the one bookkeeping key the domain drops — `date`
+ *  + `updated_at` are already on the Appointment). Callers on the cold path
+ *  pass the already-fetched list to avoid a second round-trip.
+ *
+ *  Slice 5 — AUTHORITATIVE + REVALIDATE-BRIDGE. `cacheReplaceTenant` prunes
+ *  appointments deleted on another device; the signature diff drives the
+ *  bridge emit (returns whether anything changed). */
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`refreshAppointments: ${error.message}`);
-  await cacheBulkUpsert(
-    "appointments",
-    (data ?? []) as CachedAppointment[],
-  );
+  domain?: Appointment[],
+): Promise<boolean> {
+  const appts = domain ?? (await repoListAppointments(supabase, tenantId));
+  const rows = appts.map((a) => makeCachedRow(a, tenantId));
+  const before = cacheSignature(await safeCacheReadAppointments(tenantId));
+  await cacheReplaceTenant("appointments", tenantId, rows);
+  const after = cacheSignature(rows);
+  return before !== after;
 }
 
-function rowToAppointment(r: CachedAppointment): Appointment {
-  return {
-    id: r.id,
-    date: r.date,
-    time_start: r.time_start,
-    time_end: r.time_end,
-    client_id: r.client_id,
-    location_id: r.location_id,
-    team_id: r.team_id,
-    master_id: r.master_id,
-    service_ids: asStringArray(r.service_ids),
-    total_amount: r.total_amount,
-    custom_total: r.custom_total,
-    discount_amount: r.discount_amount,
-    expenses: asArray(r.expenses) as Appointment["expenses"],
-    service_price_overrides: asRecord(r.service_price_overrides) as Record<string, number>,
-    color_override: r.color_override,
-    prepaid_amount: r.prepaid_amount,
-    payments: asArray(r.payments) as Appointment["payments"],
-    payment: (r.payment ?? null) as Appointment["payment"],
-    services: asArray(r.services) as Appointment["services"],
-    kind: (r.kind ?? "work") as Appointment["kind"],
-    status: (r.status ?? "scheduled") as Appointment["status"],
-    comment: r.comment ?? "",
-    address: r.address ?? "",
-    address_note: r.address_note ?? "",
-    address_lat: r.address_lat,
-    address_lng: r.address_lng,
-    cancel_reason: r.cancel_reason ?? null,
-    source: (r.source ?? null) as Appointment["source"],
-    is_online_booking: r.is_online_booking,
-    consent_given: r.consent_given,
-    reminder_enabled: r.reminder_enabled,
-    reminder_offsets: asArray(r.reminder_offsets) as Appointment["reminder_offsets"],
-    reminder_template: r.reminder_template ?? "",
-    global_discount: (r.global_discount ?? null) as Appointment["global_discount"],
-    total_duration: r.total_duration,
-    payment_status: (r.payment_status ?? "unpaid") as Appointment["payment_status"],
-    payment_method: (r.payment_method ?? undefined) as Appointment["payment_method"],
-    paid_amount: r.paid_amount ?? 0,
-    photos: [], // not cached — fetched separately by photo viewer
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  };
+// Cache row → domain. The cache stores the full domain object decorated
+// with tenant_id; strip it and return a clean `Appointment` (identical to
+// what the repo list returns).
+function rowToAppointment(r: CachedAppointmentData): Appointment {
+  const { tenant_id: _t, ...appointment } = r;
+  void _t;
+  return appointment;
 }
 
-function asArray<T = unknown>(v: unknown): T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
-}
-function asRecord(v: unknown): Record<string, unknown> {
-  return v && typeof v === "object" && !Array.isArray(v)
-    ? (v as Record<string, unknown>)
-    : {};
-}
-function asStringArray(v: unknown): string[] {
-  return Array.isArray(v)
-    ? v.filter((x): x is string => typeof x === "string")
-    : [];
+/** Build the DOMAIN cache row (what lands in `data`) from a canonical
+ *  `Appointment`. Nested fields verbatim + the tenant_id bookkeeping key.
+ *  `date` + `updated_at` are already on the domain object (the SQL layer
+ *  reads them off the top level for its denorm columns). */
+function makeCachedRow(
+  appointment: Appointment,
+  tenantId: string,
+): CachedAppointmentData {
+  return { ...appointment, tenant_id: tenantId };
 }
 
 // ─── Write ────────────────────────────────────────────────────────
@@ -162,18 +161,25 @@ export async function createAppointment(
 ): Promise<Appointment> {
   const id = input.id || randomUuid();
   const nowIso = new Date().toISOString();
-  const optimisticRow = makeOptimisticRow(input, tenantId, id, nowIso);
+  // Two projections (rule 4):
+  //   cachedRow — full DOMAIN object for reads.
+  //   serverRow — raw DB columns for the queue payload the replayer INSERTs.
+  const cachedRow = makeCachedRow(
+    { ...input, id, created_at: input.created_at || nowIso, updated_at: nowIso },
+    tenantId,
+  );
+  const serverRow = makeServerRow(input, tenantId, id, nowIso);
   const insertOp = {
     table: "appointments" as const,
     op: "insert" as const,
     row_id: id,
-    payload: optimisticRow as unknown as Record<string, unknown>,
+    payload: serverRow as unknown as Record<string, unknown>,
     expected_updated_at: null,
   };
 
   if (isOnline()) {
     // Optimistic UI first (standalone online — no queued op to pair with).
-    await cacheUpsert("appointments", optimisticRow);
+    await cacheUpsert("appointments", cachedRow);
     try {
       const created = await repoCreateAppointment(
         supabase,
@@ -196,18 +202,14 @@ export async function createAppointment(
     } catch (err) {
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
       void err;
-      await enqueueOpWithCacheUpsertAndEmit(
-        insertOp,
-        "appointments",
-        optimisticRow,
-      );
+      await enqueueOpWithCacheUpsertAndEmit(insertOp, "appointments", cachedRow);
       void kickReplayer({ supabase });
       return { ...input, id };
     }
   }
 
   // Offline — ATOMIC optimistic upsert + enqueue (risk #6).
-  await enqueueOpWithCacheUpsertAndEmit(insertOp, "appointments", optimisticRow);
+  await enqueueOpWithCacheUpsertAndEmit(insertOp, "appointments", cachedRow);
   return { ...input, id };
 }
 
@@ -220,10 +222,12 @@ export async function updateAppointment(
   const existing = await readCachedAppointment(id, tenantId);
   const expectedUpdatedAt = existing?.updated_at ?? null;
 
-  const merged: CachedAppointment | null = existing
+  // Optimistic cache merge is DOMAIN-shaped (patch applied to the full
+  // domain object); the queue payload stays the raw-column projection.
+  const merged: CachedAppointmentData | null = existing
     ? {
         ...existing,
-        ...patchToRow(patch),
+        ...patch,
         updated_at: new Date().toISOString(),
       }
     : null;
@@ -233,7 +237,7 @@ export async function updateAppointment(
   // it stays a standalone upsert (there is no queued op to pair with).
   if (!isUuid(id)) {
     if (merged) await cacheUpsert("appointments", merged);
-    return { ...(existing as unknown as Appointment), ...patch, id };
+    return { ...toDomain(existing), ...patch, id } as Appointment;
   }
 
   const updateOp = {
@@ -260,13 +264,19 @@ export async function updateAppointment(
       void err;
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });
-      return { ...(existing as unknown as Appointment), ...patch, id };
+      return { ...toDomain(existing), ...patch, id } as Appointment;
     }
   }
 
   // Offline — ATOMIC with the optimistic row when cached (risk #6).
   await enqueueUpdate(updateOp, merged);
-  return { ...(existing as unknown as Appointment), ...patch, id };
+  return { ...toDomain(existing), ...patch, id } as Appointment;
+}
+
+/** Domain view of a cached row (drops the tenant_id bookkeeping key), or an
+ *  empty base when the row wasn't cached. */
+function toDomain(existing: CachedAppointmentData | null): Partial<Appointment> {
+  return existing ? rowToAppointment(existing) : {};
 }
 
 /** Enqueue an update op, pairing it in one exclusive transaction with the
@@ -274,7 +284,7 @@ export async function updateAppointment(
  *  not cached) → plain emit-enqueue, matching the prior `if (existing)`. */
 async function enqueueUpdate(
   op: Parameters<typeof enqueueOpAndEmit>[0],
-  merged: CachedAppointment | null,
+  merged: CachedAppointmentData | null,
 ): Promise<void> {
   if (merged) {
     await enqueueOpWithCacheUpsertAndEmit(op, "appointments", merged);
@@ -326,9 +336,9 @@ export async function deleteAppointment(
 
 async function safeCacheReadAppointments(
   tenantId: string,
-): Promise<CachedAppointment[]> {
+): Promise<CachedAppointmentData[]> {
   try {
-    return await cacheRead<CachedAppointment>("appointments", tenantId);
+    return await cacheRead<CachedAppointmentData>("appointments", tenantId);
   } catch {
     return [];
   }
@@ -337,32 +347,30 @@ async function safeCacheReadAppointments(
 async function readCachedAppointment(
   id: string,
   tenantId?: string,
-): Promise<CachedAppointment | null> {
+): Promise<CachedAppointmentData | null> {
   try {
     // Tenant-scope the single-row read to the active tenant (minor: avoids
     // reading a row of another of the user's tenants on an id collision).
-    return await cacheGetOne<CachedAppointment>("appointments", id, tenantId);
+    return await cacheGetOne<CachedAppointmentData>("appointments", id, tenantId);
   } catch {
     return null;
   }
 }
 
+/** After a successful server write, refresh the cache with the CANONICAL
+ *  domain row via `repoGetAppointment` (maps every jsonb column to its
+ *  domain shape + carries the server's updated_at). */
 async function refetchAndCacheOne(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from("appointments")
-    .select("*")
-    .eq("id", id)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (error || !data) return;
-  await cacheUpsert("appointments", data as CachedAppointment);
+  const appt = await repoGetAppointment(supabase, id, tenantId).catch(() => null);
+  if (!appt) return;
+  await cacheUpsert("appointments", makeCachedRow(appt, tenantId));
 }
 
-function makeOptimisticRow(
+function makeServerRow(
   input: Appointment,
   tenantId: string,
   id: string,

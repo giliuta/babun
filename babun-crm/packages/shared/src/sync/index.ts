@@ -44,6 +44,17 @@ export {
   useQueueDepth,
 } from "./queue-events";
 
+export {
+  emitRevalidated,
+  subscribeRevalidated,
+  cacheSignature,
+} from "./revalidate-events";
+
+export {
+  startRealtimeTenantSync,
+  type RealtimeTenantSyncOptions,
+} from "./realtime";
+
 export { labelForOp, relativeTime, pluralizeOps } from "./format";
 
 export {

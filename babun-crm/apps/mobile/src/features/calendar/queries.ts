@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { listAppointments as repoListAppointments } from "@babun/shared/db/repositories/appointments";
+import { listAppointments as listAppointmentsCached } from "@babun/shared/sync/appointmentsCached";
 import { listDayExtras } from "@babun/shared/db/repositories/day-extras";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { supabase } from "@/lib/supabase";
@@ -9,21 +9,22 @@ import { useTenantId } from "@/lib/tenant";
 // max-rows), so an unordered, unlimited listAppointments truncates a busy
 // tenant's calendar without any error.
 //
-// STORY-062 slice 4 — WRITES go through the offline-aware wrappers
-// (appointmentsCached.create/update/delete). READS stay on the repo
-// (repoListAppointments): the SWR wrapper's warm-cache branch returns the
-// stale sqlite snapshot synchronously and only revalidates into sqlite — it
-// never bumps the react-query cache (mobile has no realtime bridge like the
-// web's useRealtimeTenantSync), so pull-to-refresh would visibly no-op and
-// the list would drift stale. Reading straight from the repo keeps every
-// fetch authoritative and fresh, exactly as before slice 4; the wrappers'
-// optimistic sqlite layer is still the offline safety net for writes.
+// STORY-062 slice 5 — READS now go through the offline-aware SWR wrapper
+// (appointmentsCached.listAppointments). The slice-4 blocker is closed: the
+// wrapper stores the FULL domain Appointment and its background revalidate
+// prunes server-deleted rows (cacheReplaceTenant) and, on a real change, fires
+// `revalidated`, which the realtime bridge (SyncBridgeMount) turns into a
+// react-query invalidate so pull-to-refresh and focus refetch settle on fresh
+// data. Warm cache serves the last snapshot offline; a cold offline read
+// returns [] (empty grid, not an error). Writes already go through the wrapper.
 //
-// We keep paging AROUND the query at the client level: the self-paging shim
-// below intercepts `from → select → eq` (the exact chain repoListAppointments
-// builds) and returns a PostgREST-thenable that loops every 1000-row window
-// internally, resolving to the FULL row set. If the chain ever changes shape,
-// the shim throws (undefined method) instead of mis-paging.
+// PAGING is preserved by threading the self-paging shim BELOW into the wrapper
+// as its supabase client. `listAppointments` uses that client both for the
+// cold-cache read and the background revalidate, so every server list still
+// loops the 1000-row windows internally. The shim intercepts `from → select →
+// eq` (the exact chain repoListAppointments builds — the wrapper calls the
+// same repo under the hood) and throws on any other builder method so a
+// query-shape drift fails loudly instead of mis-paging.
 const APPT_PAGE_SIZE = 1000;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,13 +97,14 @@ function pagingClient(): typeof supabase {
   } as unknown as typeof supabase;
 }
 
-// All tenant appointments (RLS-scoped), read from the repo and paged around
-// the 1000-row cap via the shim above. Retained name/signature:
-// useClientAppointments imports this.
+// All tenant appointments (RLS-scoped), read via the offline-aware SWR wrapper
+// and paged around the 1000-row cap by threading the shim above in as the
+// wrapper's supabase client. Retained name/signature: useClientAppointments
+// imports this.
 export async function listAppointmentsPaged(
   tenantId: string,
 ): Promise<Appointment[]> {
-  return repoListAppointments(pagingClient(), tenantId);
+  return listAppointmentsCached(pagingClient(), tenantId);
 }
 
 // All tenant appointments (RLS-scoped) — shared cache key with the per-client

@@ -27,6 +27,8 @@
 import { getSql } from "../../storage/sql/provider";
 import type { SqlAdapter } from "../../storage/sql/types";
 import { migrate } from "./schema";
+import type { Client } from "../../local/clients";
+import type { Appointment } from "../../local/appointments";
 import type {
   CachedAppointment,
   CachedClient,
@@ -45,7 +47,44 @@ export type {
   QueuedOp,
 } from "./index";
 
-type CachedRow = CachedClient | CachedAppointment | CachedTag;
+// ─── Cache-of-DOMAIN row shapes (slice 5) ─────────────────────────────
+// The `data` column is opaque JSON — the SQL layer only ever reads the
+// denormalised keys (`id`, `tenant_id`, `updated_at`, `date`) off the
+// top level to fill the indexed columns; the rest round-trips untouched.
+//
+// Slice 5 fix: the cached-wrappers now store the FULL DOMAIN object (the
+// same shape `repositories/*.list*` return — `Client` WITH `tag_ids`,
+// `Appointment` with nested arrays) instead of the raw DB Row. That keeps
+// online reads-from-cache byte-identical to a live repo read (no `tag_ids`
+// regression, no emptied nested fields). To satisfy the SQL layer's
+// denorm-key extraction + the tenant-scoped reads, the stored object is the
+// domain object DECORATED with the two bookkeeping keys the domain shape
+// itself doesn't carry (`tenant_id`; `updated_at` for clients — Appointment
+// already has `updated_at` + `date`).
+//
+// The queue PAYLOAD is a DIFFERENT projection (raw DB columns the server
+// accepts) and is built separately in the wrappers — see the "two
+// projections" note there. These types describe only what lands in `data`.
+export type CachedClientData = Client & {
+  tenant_id: string;
+  updated_at: string;
+};
+export type CachedAppointmentData = Appointment & {
+  tenant_id: string;
+};
+export type CachedTagData = CachedTag;
+
+// Anything the cache can store in `data`. The write/read APIs accept the
+// domain-decorated shapes (slice 5) as well as the raw Row shapes still
+// used by a few tests + the replayer's canonical-row write-through. All
+// that matters at this layer is the presence of the denorm keys, which
+// every member carries.
+type CachedRow =
+  | CachedClient
+  | CachedAppointment
+  | CachedTag
+  | CachedClientData
+  | CachedAppointmentData;
 
 // ─── Schema bootstrap (run-once, awaited by every call) ───────────────
 // Mirrors the web cache's `getCache()` singleton: the first call opens +
@@ -254,6 +293,34 @@ export async function cacheBulkUpsert<T extends CachedRow>(
   // rows; an interleaved optimistic single-row write must not land inside
   // this BEGIN…COMMIT and get committed/rolled-back with the whole batch.
   await sql.withExclusiveTransactionAsync(async (txn) => {
+    for (const row of rows) {
+      await upsertRow(txn, table, row);
+    }
+  });
+}
+
+/** AUTHORITATIVE tenant resync (slice 5). Replace every cached row for a
+ *  tenant with the supplied server snapshot in ONE EXCLUSIVE transaction:
+ *  DELETE the tenant's rows, then re-insert `rows`. Unlike `cacheBulkUpsert`
+ *  (upsert-only) this PRUNES rows the server no longer has — a client/appt/
+ *  tag deleted on another device would otherwise linger in the cache forever
+ *  and the online list would show a phantom row (offline-plan: «лучше пусто,
+ *  чем неверно»). The single exclusive tx makes it crash-safe and stops an
+ *  interleaved optimistic write from landing between the clear and the fill.
+ *
+ *  `rows.length === 0` still runs the DELETE — an emptied server table must
+ *  empty the cache too (that's the whole point vs. bulk-upsert's early-out). */
+export async function cacheReplaceTenant<T extends CachedRow>(
+  table: CachedTable,
+  tenantId: string,
+  rows: T[],
+): Promise<void> {
+  const sql = await ready();
+  await sql.withExclusiveTransactionAsync(async (txn) => {
+    await txn.runAsync(
+      `DELETE FROM ${tableName(table)} WHERE tenant_id = ?`,
+      [tenantId],
+    );
     for (const row of rows) {
       await upsertRow(txn, table, row);
     }
