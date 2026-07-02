@@ -7,6 +7,8 @@ import type { Database } from "../database.types";
 import type { FinanceTemplate } from "../../local/finance/template";
 import type { PaymentMethod } from "../../local/finance/transaction";
 
+export type { FinanceTemplate };
+
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_templates"]["Row"];
 

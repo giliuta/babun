@@ -74,7 +74,7 @@ export default function BusinessScreen() {
         vat_number: clean(form.vat_number),
         iban: clean(form.iban),
         bank_name: clean(form.bank_name),
-        invoice_prefix: clean(form.invoice_prefix),
+        invoice_prefix: form.invoice_prefix.trim(),
       });
       setDirty(false);
       Alert.alert("Сохранено", "Профиль обновлён.");
