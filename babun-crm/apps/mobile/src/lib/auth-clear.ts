@@ -1,6 +1,7 @@
 import { Alert } from "react-native";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
+import { cacheClearAll } from "@babun/shared/db/cache/sql";
 import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
 
@@ -32,7 +33,16 @@ const TENANT_PREFIXES = ["babun-", "babun2:", "babun:"];
 const LAST_USER_KEY = "babun:auth:last-user-id";
 const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
 
-/** Drop every tenant-scoped local key + the in-memory query cache. */
+/** Drop every tenant-scoped local key + the in-memory query cache + the
+ *  SQLite offline cache (clients / appointments / tags / sync_queue /
+ *  sync_meta). Without the SQLite wipe, Tenant A's cached rows AND — worse
+ *  — A's un-drained sync_queue ops survive a logout→login-B on the same
+ *  device: those ops would replay onto the server under B's session
+ *  (cross-tenant leak, offline-plan risk #1). Web parity: apps/web's
+ *  wipeLocalData fires `void cacheClearAll()` too. Fire-and-forget with a
+ *  swallow so logout never blocks / throws on the heavy async clear (the
+ *  MMKV sweep above is what makes the UI instantly clean; the next
+ *  sign-in's leak guard awaits nothing from here). */
 export function wipeLocalData(): void {
   const storage = getStorage();
   for (const key of storage.list()) {
@@ -40,6 +50,12 @@ export function wipeLocalData(): void {
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
   queryClient.clear();
+  void cacheClearAll().catch(() => {
+    // Cache not injected yet (SqlAdapter set only on native bootstrap) or a
+    // transient SQLite error — swallow. The cross-tenant leak this guards
+    // only materialises once slice 4 wires mutations onto the wrappers; on
+    // web / pre-bootstrap there is nothing to clear.
+  });
 }
 
 /** Intentional «Выйти» — sign out FIRST, wipe only once the session is

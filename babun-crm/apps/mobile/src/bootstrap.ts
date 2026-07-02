@@ -5,11 +5,15 @@
 //   2. URL / URLSearchParams polyfill (required by @supabase/supabase-js).
 //   3. Bind the synchronous KV backend for all shared local/* stores.
 //      Until this runs, getStorage() THROWS on native (no silent data loss).
-//   4. Sentry (no-op without a DSN).
+//   4. Bind the async SQLite backend + NetInfo network detector for the
+//      offline cache / sync layer. Until setSql() runs, getSql() THROWS on
+//      native (same no-silent-data-loss guarantee as storage).
+//   5. Sentry (no-op without a DSN).
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
 import { Platform } from "react-native";
 import { setStorage, WebKVStorage } from "@babun/shared/storage";
+import { setSql, setNetwork } from "@babun/shared/storage/sql";
 import { initSentry } from "@/lib/sentry";
 
 // Storage backend is platform-split. The `@/` alias goes through tsconfig
@@ -21,9 +25,25 @@ import { initSentry } from "@/lib/sentry";
 // localStorage via WebKVStorage.
 if (Platform.OS === "web") {
   setStorage(new WebKVStorage());
+  // Web (Expo web / Preview) has no expo-sqlite native module and no
+  // NetInfo native module, and the mobile web target never imports the
+  // SQLite cache. Leave the SQL backend un-injected (getSql() only fires
+  // on native code paths) and let getNetwork() fall back to its
+  // navigator.onLine default. Behaviour on web is unchanged.
 } else {
   const { MMKVStorage } = require("@/storage/mmkv") as typeof import("@/storage/mmkv");
   setStorage(new MMKVStorage());
+
+  // expo-sqlite (JSI/native) + NetInfo are native-only. Lazy-require so
+  // their module-eval stays off the web bundle path, matching the MMKV
+  // treatment above. Injected right after setStorage so the offline cache
+  // has a backend before any store/sync call can run.
+  const { ExpoSqliteAdapter } =
+    require("@/storage/sqlite") as typeof import("@/storage/sqlite");
+  const { NetInfoNetwork } =
+    require("@/storage/netinfo") as typeof import("@/storage/netinfo");
+  setSql(new ExpoSqliteAdapter());
+  setNetwork(new NetInfoNetwork());
 }
 
 initSentry();
