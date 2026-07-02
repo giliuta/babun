@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import {
   getDebtAmount,
   type Appointment,
@@ -17,6 +16,7 @@ import {
 import type { Client } from "@babun/shared/local/clients";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
+import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
 import { humanDay } from "@/features/appointments/helpers";
 
 // «Долги» panel — port of the web DebtorsList
@@ -28,7 +28,8 @@ import { humanDay } from "@/features/appointments/helpers";
 // payments[] ledger stays the source of truth for the owed figure.
 //
 // Цепочка «должник → напомнить»: у строки есть labeled-кнопка «Напомнить»
-// (SMS с суммой и датой визита), тап по строке открывает карточку клиента.
+// (SMS с суммой; дата визита — только в зашитом фолбэке, кастомный
+// debt-шаблон её не подставляет), тап по строке открывает карточку клиента.
 export function DebtorsList({
   appointments,
   clients,
@@ -44,6 +45,7 @@ export function DebtorsList({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const { data: smsTemplates = [] } = useSmsTemplates();
   const rows = useMemo(
     () =>
       appointments
@@ -64,6 +66,9 @@ export function DebtorsList({
             phone: client?.phone?.trim() || null,
             name:
               client?.full_name || a.comment?.trim() || "Без имени",
+            // [Имя] в шаблоне — только реальное имя клиента (не comment /
+            // «Без имени»); пусто, если запись без клиента.
+            firstName: (client?.full_name || "").trim().split(/\s+/)[0] ?? "",
             owed: getDebtAmount(a),
             date: a.date,
           };
@@ -73,14 +78,21 @@ export function DebtorsList({
     [appointments, clients, teamId, fromDate, toDate],
   );
 
-  // SMS-напоминание: сумма + дата визита уже подставлены, диспетчер только
-  // жмёт «Отправить» в Сообщениях (iOS: «&body=», Android: «?body=»).
+  // SMS-напоминание: сумма подставляется всегда; дата визита — только в
+  // зашитом фолбэке debtReminderSms. Кастомный debt-шаблон поддерживает
+  // лишь [Имя]/[Сумма] (см. renderDebtSms) — дата визита в него не идёт.
+  // Диспетчер только жмёт «Отправить» в Сообщениях (iOS: «&body=»,
+  // Android: «?body=») и при желании дописывает текст.
   const remind = (r: (typeof rows)[number]) => {
     if (!r.phone) return;
     const digits = r.phone.replace(/[^\d+]/g, "");
     const [, mm, dd] = r.date.split("-");
     const body = encodeURIComponent(
-      debtReminderSms({ amount: formatEUR(r.owed), visitDate: `${dd}.${mm}` }),
+      renderDebtSms(smsTemplates, {
+        amount: formatEUR(r.owed),
+        name: r.firstName,
+        visitDate: `${dd}.${mm}`,
+      }),
     );
     const sep = Platform.OS === "ios" ? "&" : "?";
     Linking.openURL(`sms:${digits}${sep}body=${body}`);

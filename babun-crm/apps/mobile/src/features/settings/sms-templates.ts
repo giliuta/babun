@@ -6,9 +6,11 @@ import {
 import type { Json } from "@babun/shared/db/database.types";
 import {
   KIND_LABELS,
+  renderTemplate,
   type SmsTemplate,
   type TemplateKind,
 } from "@babun/shared/local/sms-templates";
+import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -127,4 +129,37 @@ export function useSaveSmsTemplates() {
     onSuccess: (list) => qc.setQueryData(["sms-templates", tenantId], list),
     meta: { errorHandled: true }, // экран алертит сам
   });
+}
+
+// C1 — текст «SMS о долге» из пользовательского шаблона kind=debt.
+// Берём первый включённый непустой debt-шаблон, рендерим его с
+// [Имя]/[Сумма] (renderTemplate маппит на Name/Amount). Если такого
+// шаблона нет — фолбэк на зашитый debtReminderSms (единый источник).
+//
+// Область debt-шаблона намеренно узкая: поддерживаются ТОЛЬКО [Имя] и
+// [Сумма]. opts.visitDate прокидывается лишь в фолбэк (в палитре нет
+// токена даты визита) — как только оператор заводит свой debt-шаблон,
+// дата визита в напоминание не попадает. Любой посторонний токен из
+// общей палитры ([Услуга], [Дата], …) renderTemplate оставит сырым
+// «[…]» литералом — это осознанный паттерн (ср. chats/[id].tsx): SMS
+// открывается черновиком в Сообщениях, оператор дописывает перед
+// отправкой. Расширять контекст здесь нельзя без синхронного сужения
+// палитры токенов для kind=debt в редакторе (иначе «Тест» в редакторе
+// покажет одно, а клиенту уйдёт другое).
+export function renderDebtSms(
+  templates: SmsTemplate[],
+  opts: { amount: string; name?: string | null; visitDate?: string | null },
+): string {
+  const tpl = templates.find(
+    (x) => x.kind === "debt" && x.enabled && x.body.trim(),
+  );
+  if (tpl) {
+    // Только Name/Amount: visitDate и прочие токены сюда не маппятся —
+    // см. комментарий выше (узкая область debt-шаблона).
+    return renderTemplate(tpl.body, {
+      Name: opts.name?.trim() || "",
+      Amount: opts.amount,
+    });
+  }
+  return debtReminderSms(opts);
 }

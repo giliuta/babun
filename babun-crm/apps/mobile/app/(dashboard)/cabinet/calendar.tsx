@@ -17,6 +17,29 @@ import {
   useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
 
+// Eyebrow-заголовок секции НА канвасе (единый grouped-list-диалект хаба
+// кабинета/финансов): caption-tier caps над карточкой, а не первой строкой
+// внутри неё. Отступ 24 сверху / 8 снизу.
+function SectionEyebrow({ children }: { children: string }) {
+  const t = useThemeColors();
+  return (
+    <Text
+      style={{
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingBottom: 8,
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.6,
+        textTransform: "uppercase",
+        color: t.faint,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 function Row({ label, right }: { label: string; right: React.ReactNode }) {
   const t = useThemeColors();
   return (
@@ -91,7 +114,8 @@ export default function CalendarSettingsScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Календарь" />
 
-      <SectionCard title="Рабочие часы (сетка «День»)" padded>
+      <SectionEyebrow>Рабочие часы (сетка «День»)</SectionEyebrow>
+      <SectionCard padded>
         <Row
           label="Начало"
           right={
@@ -117,7 +141,8 @@ export default function CalendarSettingsScreen() {
         />
       </SectionCard>
 
-      <SectionCard title="Шаг сетки" padded>
+      <SectionEyebrow>Шаг сетки</SectionEyebrow>
+      <SectionCard padded>
         <SegmentedControl
           options={[
             { value: "15", label: "15 мин" },
@@ -129,7 +154,8 @@ export default function CalendarSettingsScreen() {
         />
       </SectionCard>
 
-      <SectionCard title="Отображение" padded>
+      <SectionEyebrow>Отображение</SectionEyebrow>
+      <SectionCard padded>
         <Row
           label="Скрывать отменённые"
           right={

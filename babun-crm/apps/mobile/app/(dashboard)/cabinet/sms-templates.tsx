@@ -86,6 +86,12 @@ const STARTER_PRESETS: ReadonlyArray<{
       "[Имя], с днём рождения! В этом месяце скидка на сервис от " +
       "[Компания]. Бронируйте по этой ссылке: [СсылкаНаОтмену].",
   },
+  {
+    id: "preset-debt",
+    kind: "debt",
+    name: "Напоминание о долге",
+    body: "Здравствуйте, [Имя]! Напоминаем об оплате [Сумма]. Спасибо!",
+  },
 ];
 
 // Ключи — канонические английские: alias-таблица renderTemplate маппит
@@ -99,6 +105,7 @@ const SAMPLE_VARS: Record<string, string> = {
   Service: "x4 A/C Чистка",
   Address: "Лимассол",
   Price: "€80",
+  Amount: "€80",
   Company: "Babun",
   CancelUrl: "babun.app/c/abc",
 };

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FlatList, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { useRouter } from "expo-router";
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -353,11 +354,14 @@ export default function ChatsListScreen() {
           style={{ color: t.ink }}
         />
       </View>
+      <View style={{ position: "relative" }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         style={{ flexGrow: 0, maxHeight: 48 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 8, gap: 8, alignItems: "center" }}
+        // paddingRight = «peek»: последний чип не упирается в край, поэтому
+        // видно, что ряд можно прокрутить (web parity: чипы каналов).
+        contentContainerStyle={{ paddingLeft: 16, paddingRight: 28, paddingBottom: 8, gap: 8, alignItems: "center" }}
       >
         {([null, "unanswered", ...CHANNELS] as ChatFilter[]).map((ch) => {
           const active = filter === ch;
@@ -389,6 +393,23 @@ export default function ChatsListScreen() {
           );
         })}
       </ScrollView>
+        {/* Fade у правого края: прозрачное → canvas, подсказывает скролл.
+            pointerEvents=none — не перехватывает тап по крайнему чипу. */}
+        <View
+          pointerEvents="none"
+          style={{ position: "absolute", top: 0, right: 0, bottom: 8, width: 24 }}
+        >
+          <Svg width="100%" height="100%">
+            <Defs>
+              <LinearGradient id="chip-fade" x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={t.canvas} stopOpacity={0} />
+                <Stop offset="1" stopColor={t.canvas} stopOpacity={1} />
+              </LinearGradient>
+            </Defs>
+            <Rect width="100%" height="100%" fill="url(#chip-fade)" />
+          </Svg>
+        </View>
+      </View>
 
       {isLoading ? (
         <EmptyState state="loading" fill />

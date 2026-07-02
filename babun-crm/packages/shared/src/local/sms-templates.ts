@@ -21,7 +21,8 @@ export type TemplateKind =
   | "after_24h_short"
   | "after_24h_long"
   | "cancellation"
-  | "waitlist";
+  | "waitlist"
+  | "debt";
 
 export interface SmsTemplate {
   id: string;
@@ -38,6 +39,7 @@ export const KIND_LABELS: Record<TemplateKind, string> = {
   after_24h_long: "После записи (после 24 ч.)",
   cancellation: "После отмены записи",
   waitlist: "Для листа ожидания",
+  debt: "Напоминание о долге",
 };
 
 export const AVAILABLE_TOKENS = [
@@ -49,6 +51,7 @@ export const AVAILABLE_TOKENS = [
   { token: "[Услуга]", label: "Услуга" },
   { token: "[Адрес]", label: "Адрес" },
   { token: "[Цена]", label: "Цена" },
+  { token: "[Сумма]", label: "Сумма долга" },
   { token: "[Компания]", label: "Компания" },
   { token: "[СсылкаНаОтмену]", label: "Ссылка на отмену" },
 ] as const;
@@ -65,6 +68,7 @@ const TOKEN_ALIASES: Record<string, string> = {
   Услуга: "Service",
   Адрес: "Address",
   Цена: "Price",
+  Сумма: "Amount",
   Компания: "Company",
   СсылкаНаОтмену: "CancelUrl",
 };

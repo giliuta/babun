@@ -56,6 +56,29 @@ function readClosedRecord(dayKey: string): ClosedRecord | null {
   }
 }
 
+// Eyebrow-заголовок секции НА канвасе (единый grouped-list-диалект хаба
+// кабинета/финансов): caption-tier caps над карточкой, а не первой строкой
+// внутри неё. Отступ 24 сверху / 8 снизу.
+function SectionEyebrow({ children }: { children: string }) {
+  const t = useThemeColors();
+  return (
+    <Text
+      style={{
+        paddingHorizontal: 20,
+        paddingTop: 24,
+        paddingBottom: 8,
+        fontSize: 11,
+        fontWeight: "700",
+        letterSpacing: 0.6,
+        textTransform: "uppercase",
+        color: t.faint,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 function Row({
   label,
   value,
@@ -328,7 +351,8 @@ export default function CloseDayScreen() {
           </View>
         ) : null}
 
-        <SectionCard title="Сегодня">
+        <SectionEyebrow>Сегодня</SectionEyebrow>
+        <SectionCard>
           <Row label="Завершено" value={String(completed.length)} />
           <Row label="В работе" value={String(inProgress.length)} />
           <Row label="Ещё запланировано" value={String(stillScheduled.length)} />
@@ -336,7 +360,9 @@ export default function CloseDayScreen() {
         </SectionCard>
 
         {!closed && (unpaid.length > 0 || stillScheduled.length > 0) ? (
-          <SectionCard title="Что осталось">
+          <>
+          <SectionEyebrow>Что осталось</SectionEyebrow>
+          <SectionCard>
             {unpaid.map((apt) => (
               <View
                 key={apt.id}
@@ -410,10 +436,13 @@ export default function CloseDayScreen() {
               </View>
             ))}
           </SectionCard>
+          </>
         ) : null}
 
         {!closed ? (
-          <SectionCard title="Касса" padded>
+          <>
+          <SectionEyebrow>Касса</SectionEyebrow>
+          <SectionCard padded>
             <View className="flex-row items-baseline justify-between">
               <Text className="text-[15px]" style={{ color: t.sub }}>
                 Должно быть
@@ -485,6 +514,7 @@ export default function CloseDayScreen() {
               </Text>
             ) : null}
           </SectionCard>
+          </>
         ) : null}
       </ScrollView>
       </KeyboardAvoidingView>

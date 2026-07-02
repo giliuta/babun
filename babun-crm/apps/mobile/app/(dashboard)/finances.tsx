@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, Share, View } from "react-native";
+import { Alert, Pressable, Share } from "react-native";
 import { useRouter } from "expo-router";
-import { Settings, Share2 } from "lucide-react-native";
+import { Settings } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   signedAmount,
@@ -196,6 +196,9 @@ export default function FinancesTab() {
         text: "Шаблоны операций",
         onPress: () => router.push("/cabinet/templates"),
       },
+      // Экспорт переехал сюда из шапки: иконка без подписи не читалась.
+      // Подпись явно называет и действие, и его границы (текущий период).
+      { text: "Экспорт отчёта за период", onPress: () => exportCsv() },
       { text: "Отмена", style: "cancel" },
     ]);
   };
@@ -225,26 +228,15 @@ export default function FinancesTab() {
   };
 
   const headerRight = (
-    <View className="flex-row items-center">
-      <Pressable
-        onPress={exportCsv}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Экспорт CSV"
-        className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
-      >
-        <Share2 color={t.body} size={18} />
-      </Pressable>
-      <Pressable
-        onPress={openFinanceSettings}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel="Настройки финансов"
-        className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
-      >
-        <Settings color={t.body} size={18} />
-      </Pressable>
-    </View>
+    <Pressable
+      onPress={openFinanceSettings}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Настройки финансов"
+      className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
+    >
+      <Settings color={t.body} size={18} />
+    </Pressable>
   );
 
   const feedTitle =

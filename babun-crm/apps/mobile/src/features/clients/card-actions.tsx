@@ -31,13 +31,10 @@ import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import {
-  debtReminderSms,
-  telUrl,
-  whatsappUrl,
-} from "@babun/shared/common/utils/messenger-links";
+import { telUrl, whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { useChats } from "@/features/chats/store";
+import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
 import { useBookingNav } from "@/features/clients/card-booking";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
@@ -59,6 +56,7 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
   const router = useRouter();
   const book = useBookingNav();
   const { data: chats = [] } = useChats();
+  const { data: smsTemplates = [] } = useSmsTemplates();
 
   const tel = telUrl(client.phone);
   const wa = whatsappUrl(client.whatsapp_phone || client.phone);
@@ -102,7 +100,7 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
   const debtSmsUrl = (() => {
     if (debt <= 0 || !phoneDigits) return null;
     const first = (client.full_name || "").trim().split(/\s+/)[0] ?? "";
-    const body = debtReminderSms({ amount: formatEUR(debt), name: first });
+    const body = renderDebtSms(smsTemplates, { amount: formatEUR(debt), name: first });
     const sep = Platform.OS === "ios" ? "&" : "?";
     return `sms:${phoneDigits}${sep}body=${encodeURIComponent(body)}`;
   })();
