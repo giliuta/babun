@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "react-native";
-import { CalendarClock, ChevronDown, Settings } from "lucide-react-native";
+import { Calendar, ChevronDown, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ViewModeDropdown, type CalMode } from "@/features/calendar/ViewModeDropdown";
 
@@ -34,8 +34,8 @@ export function CalendarHeader({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 2,
-        paddingHorizontal: 6,
+        gap: 4,
+        paddingHorizontal: 8,
         minHeight: 48,
         backgroundColor: t.surface,
         borderBottomWidth: 1,
@@ -98,14 +98,17 @@ export function CalendarHeader({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
-          <CalendarClock color={t.sub} size={20} strokeWidth={2} />
+          {/* «Сегодня» = action → accent (DS: cobalt = action). A plain
+              Calendar glyph with today's number stamped in its body reads
+              like the iOS Calendar icon; the clock-variant crowded the digit. */}
+          <Calendar color={t.accent} size={22} strokeWidth={2} />
           <Text
             style={{
               position: "absolute",
-              fontSize: 11,
-              fontWeight: "700",
-              color: t.sub,
-              transform: [{ translateY: 3 }],
+              fontSize: 10,
+              fontWeight: "800",
+              color: t.accent,
+              transform: [{ translateY: 3.5 }],
             }}
             className="tabular-nums"
           >
