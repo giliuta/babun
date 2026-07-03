@@ -10,8 +10,8 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { Check, Pencil, Plus, Search, Users } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Pencil, Plus, Search, Users } from "lucide-react-native";
 import {
   LEGACY_HELPER_ROLE_ID,
   LEGACY_LEAD_ROLE_ID,
@@ -73,6 +73,7 @@ type RoleDraft = BrigadeRole | { id: null };
 
 export default function BrigadeMastersScreen() {
   const t = useThemeColors();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: team, isLoading } = useTeam(id);
   const { data: masters = [] } = useMasters();
@@ -80,7 +81,6 @@ export default function BrigadeMastersScreen() {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDraft | null>(null);
-  const [assigningMaster, setAssigningMaster] = useState<Master | null>(null);
 
   const roles = team ? teamRoles(team) : [];
   const members = team ? teamMembers(team) : [];
@@ -237,31 +237,11 @@ export default function BrigadeMastersScreen() {
     setPickerOpen(false);
   };
 
-  const setMemberRole = (masterId: string, roleId: string | null) => {
-    persist(
-      roles,
-      members.map((m) =>
-        m.master_id === masterId ? { ...m, role_id: roleId } : m,
-      ),
-    );
-    setAssigningMaster(null);
-  };
-
-  const removeMember = (master: Master) => {
-    Alert.alert(`Убрать ${master.full_name}?`, "Мастер выйдет из команды.", [
-      { text: "Отмена", style: "cancel" },
-      {
-        text: "Убрать",
-        style: "destructive",
-        onPress: () => {
-          persist(
-            roles,
-            members.filter((m) => m.master_id !== master.id),
-          );
-          setAssigningMaster(null);
-        },
-      },
-    ]);
+  // Тап по участнику → экран доступа под эту команду (per-brigade матрица +
+  // смена роли + «убрать из команды»). Заменяет прежний RolePicker-модал.
+  const openMemberAccess = (master: Master) => {
+    if (!team) return;
+    router.push(`/cabinet/teams/${team.id}/masters/${master.id}`);
   };
 
   if (isLoading) {
@@ -315,14 +295,14 @@ export default function BrigadeMastersScreen() {
                 role={role}
                 people={grouped.get(role.id) ?? []}
                 onEditRole={() => setEditingRole(role)}
-                onTapMember={(m) => setAssigningMaster(m)}
+                onTapMember={openMemberAccess}
               />
             ))}
             {(grouped.get(null)?.length ?? 0) > 0 ? (
               <RoleGroup
                 role={null}
                 people={grouped.get(null) ?? []}
-                onTapMember={(m) => setAssigningMaster(m)}
+                onTapMember={openMemberAccess}
               />
             ) : null}
           </>
@@ -365,23 +345,6 @@ export default function BrigadeMastersScreen() {
         roles={roles}
         onClose={() => setPickerOpen(false)}
         onAdd={addMember}
-      />
-
-      {/* Reassign role for existing member */}
-      <RolePicker
-        master={assigningMaster}
-        currentRoleId={
-          assigningMaster
-            ? (members.find((m) => m.master_id === assigningMaster.id)
-                ?.role_id ?? null)
-            : null
-        }
-        roles={roles}
-        onClose={() => setAssigningMaster(null)}
-        onPick={(roleId) =>
-          assigningMaster && setMemberRole(assigningMaster.id, roleId)
-        }
-        onRemove={() => assigningMaster && removeMember(assigningMaster)}
       />
     </Screen>
   );
@@ -756,85 +719,3 @@ function AddMemberPicker({
   );
 }
 
-// ─── Role picker for an existing member (reassign / remove) ──────────
-function RolePicker({
-  master,
-  currentRoleId,
-  roles,
-  onClose,
-  onPick,
-  onRemove,
-}: {
-  master: Master | null;
-  currentRoleId: string | null;
-  roles: BrigadeRole[];
-  onClose: () => void;
-  onPick: (roleId: string | null) => void;
-  onRemove: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Modal
-      visible={master !== null}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable
-          className="flex-1"
-          onPress={onClose}
-          accessibilityLabel="Закрыть"
-        />
-        <View
-          className="max-h-[88%] rounded-t-3xl"
-          style={{ backgroundColor: t.surface }}
-        >
-          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
-            <Text className="mb-1 text-lg font-bold" style={{ color: t.ink }}>
-              {master?.full_name ?? ""}
-            </Text>
-            <Text className="mb-4 text-sm" style={{ color: t.sub }}>
-              Роль в команде
-            </Text>
-            <View className="mb-4 flex-row flex-wrap gap-2">
-              <Chip
-                label="Без роли"
-                radio
-                selected={currentRoleId === null}
-                onPress={() => onPick(null)}
-              />
-              {roles.map((r) => (
-                <Chip
-                  key={r.id}
-                  label={r.name}
-                  radio
-                  selected={currentRoleId === r.id}
-                  onPress={() => onPick(r.id)}
-                  color={r.color ?? undefined}
-                  variant={r.color ? "tint" : "filled"}
-                  accessibilityLabel={`Роль ${r.name}`}
-                  icon={
-                    currentRoleId === r.id && r.color ? (
-                      <Check color={r.color} size={ICON.xs} />
-                    ) : null
-                  }
-                />
-              ))}
-            </View>
-            <Pressable
-              onPress={onRemove}
-              accessibilityRole="button"
-              accessibilityLabel="Убрать из команды"
-              className="items-center py-3 active:opacity-70"
-            >
-              <Text style={{ fontSize: 16, fontWeight: "500", color: t.danger }}>
-                Убрать из команды
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-}

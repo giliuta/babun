@@ -28,9 +28,18 @@ import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useEquipment, useSaveEquipment } from "@/features/inventory/queries";
 
+// Экран склада переиспользуется в двух местах (не дублируем CRUD):
+//  · глобальный /cabinet/inventory (весь склад, InventoryScreen ниже),
+//  · per-team /cabinet/teams/[id]/equipment (обёртка передаёт lockedTeamId).
+// С lockedTeamId список сужается до позиций ЭТОЙ команды
+// (assigned_team_id === id), а новая позиция создаётся уже привязанной.
 export default function InventoryScreen() {
+  return <InventoryList />;
+}
+
+export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) {
   const th = useThemeColors();
-  const { data: items = [], isLoading } = useEquipment();
+  const { data: allItems = [], isLoading } = useEquipment();
   const { data: teams = [] } = useTeams();
   const save = useSaveEquipment();
   const toast = useToast();
@@ -38,6 +47,17 @@ export default function InventoryScreen() {
   const teamName = useMemo(
     () => new Map(teams.map((t) => [t.id, t.name])),
     [teams],
+  );
+  const team = lockedTeamId ? teams.find((t) => t.id === lockedTeamId) : undefined;
+
+  // Per-team контекст: только позиции этой бригады (web parity —
+  // assigned_team_id === id). Глобальный экран показывает всё.
+  const items = useMemo(
+    () =>
+      lockedTeamId
+        ? allItems.filter((i) => i.assigned_team_id === lockedTeamId)
+        : allItems,
+    [allItems, lockedTeamId],
   );
 
   const [open, setOpen] = useState(false);
@@ -53,7 +73,8 @@ export default function InventoryScreen() {
     setName("");
     setCategory("");
     setSerial("");
-    setTeamId(null);
+    // На создании из хаба команды — заранее привязываем бригаду.
+    setTeamId(lockedTeamId ?? null);
     setNotes("");
     setOpen(true);
   };
@@ -78,9 +99,12 @@ export default function InventoryScreen() {
       assigned_team_id: teamId,
       notes: notes.trim() || undefined,
     };
+    // Пишем поверх ПОЛНОГО списка (allItems), а не отфильтрованного по
+    // команде: save перезаписывает весь MMKV-кэш и переиндексирует position
+    // по порядку массива — подмена subset'ом стёрла бы чужие позиции склада.
     const list = editing
-      ? items.map((i) => (i.id === editing.id ? next : i))
-      : [...items, next];
+      ? allItems.map((i) => (i.id === editing.id ? next : i))
+      : [...allItems, next];
     save.mutate(
       { list },
       {
@@ -102,9 +126,10 @@ export default function InventoryScreen() {
         style: "destructive",
         onPress: () =>
           // removeIds carries the explicit deletion — the server must never
-          // derive it from a (possibly stale) full snapshot.
+          // derive it from a (possibly stale) full snapshot. list=allItems
+          // (без удаляемой) сохраняет остальной склад в кэше и позициях.
           save.mutate(
-            { list: items.filter((i) => i.id !== id), removeIds: [id] },
+            { list: allItems.filter((i) => i.id !== id), removeIds: [id] },
             { onError: (e) => Alert.alert("Ошибка", e.message) },
           ),
       },
@@ -112,7 +137,10 @@ export default function InventoryScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Склад" />
+      <ScreenHeader
+        title={lockedTeamId ? "Оборудование" : "Склад"}
+        subtitle={team ? team.name : undefined}
+      />
       {isLoading ? (
         <EmptyState state="loading" fill />
       ) : (
@@ -170,8 +198,12 @@ export default function InventoryScreen() {
           ListEmptyComponent={
             <EmptyState
               fill
-              title="Склад пуст"
-              subtitle="Инструменты, расходники, приборы — держите под рукой"
+              title={lockedTeamId ? "За командой пока ничего нет" : "Склад пуст"}
+              subtitle={
+                lockedTeamId
+                  ? "Добавьте инструмент, машину или прибор — они появятся тут и на общем складе."
+                  : "Инструменты, расходники, приборы — держите под рукой"
+              }
               action={{ label: "Добавить позицию", onPress: openNew }}
             />
           }

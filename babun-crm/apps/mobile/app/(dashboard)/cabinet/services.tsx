@@ -56,10 +56,20 @@ const DEFAULT_SERVICE_COLOR = PRESET_COLORS[1].value; // синий
 
 type ServiceEditing = { mode: "create" } | { mode: "edit"; service: Service };
 
+// Экран услуг переиспользуется в двух местах (не дублируем CRUD):
+//  · глобальный /cabinet/services (все услуги, ServicesScreen ниже),
+//  · per-team /cabinet/teams/[id]/services (обёртка передаёт teamId).
+// С teamId список сужается до услуг ЭТОЙ команды (brigade_ids includes id,
+// а пустой brigade_ids = «делают все» → тоже показываем, web parity), а
+// новая услуга создаётся с уже привязанной бригадой (lockedTeamId).
 export default function ServicesScreen() {
+  return <ServicesList />;
+}
+
+export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const t = useThemeColors();
   const toast = useToast();
-  const { data: services = [], isLoading, isError, refetch } = useServices();
+  const { data: allServices = [], isLoading, isError, refetch } = useServices();
   const { data: categories = [] } = useServiceCategories();
   const { data: teams = [] } = useTeams();
   const create = useCreateService();
@@ -68,6 +78,18 @@ export default function ServicesScreen() {
 
   const [editing, setEditing] = useState<ServiceEditing | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+
+  const team = teamId ? teams.find((tm) => tm.id === teamId) : undefined;
+
+  // Фильтр по команде: услуга видна, если её brigade_ids содержит teamId,
+  // ИЛИ brigade_ids пуст (услугу делают все команды — web parity).
+  const services = useMemo(() => {
+    if (!teamId) return allServices;
+    return allServices.filter((s) => {
+      const b = serviceBrigadeIds(s);
+      return b.length === 0 || b.includes(teamId);
+    });
+  }, [allServices, teamId]);
 
   const categoryById = useMemo(() => {
     const m = new Map<string, ServiceCategory>();
@@ -144,9 +166,11 @@ export default function ServicesScreen() {
       <ScreenHeader
         title="Услуги"
         subtitle={
-          services.length
-            ? `${formatCountRu(services.length, FORMS_USLUGA)} в ${formatCountRu(categories.length, FORMS_KATEGORIYA)}`
-            : undefined
+          team
+            ? team.name
+            : services.length
+              ? `${formatCountRu(services.length, FORMS_USLUGA)} в ${formatCountRu(categories.length, FORMS_KATEGORIYA)}`
+              : undefined
         }
       />
 
@@ -282,6 +306,7 @@ export default function ServicesScreen() {
           name: tm.name,
           color: tm.color ?? t.accent,
         }))}
+        lockedTeamId={teamId}
         busy={create.isPending || update.isPending || del.isPending}
         onClose={() => setEditing(null)}
         onSave={handleSave}
@@ -302,6 +327,7 @@ function ServiceSheet({
   editing,
   categories,
   teams,
+  lockedTeamId,
   busy,
   onClose,
   onSave,
@@ -310,6 +336,8 @@ function ServiceSheet({
   editing: ServiceEditing | null;
   categories: ServiceCategory[];
   teams: { id: string; name: string; color: string }[];
+  /** Per-team-контекст: новая услуга сразу привязана к этой бригаде. */
+  lockedTeamId?: string;
   busy: boolean;
   onClose: () => void;
   onSave: (
@@ -344,7 +372,15 @@ function ServiceSheet({
     setDuration(service ? String(service.duration_minutes) : "60");
     setCategoryId(service?.category_id ?? null);
     setColor(service?.color || DEFAULT_SERVICE_COLOR);
-    setBrigadeIds(service ? serviceBrigadeIds(service) : []);
+    // На создании из хаба команды — заранее привязываем бригаду
+    // (lockedTeamId), чтобы услуга сразу попала в её список.
+    setBrigadeIds(
+      service
+        ? serviceBrigadeIds(service)
+        : lockedTeamId
+          ? [lockedTeamId]
+          : [],
+    );
   }
 
   const canSubmit = name.trim().length > 0 && !busy;

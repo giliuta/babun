@@ -238,9 +238,6 @@ export default function MasterHubScreen() {
     );
   };
 
-  const soon = (label: string) =>
-    Alert.alert(label, "Скоро появится.", [{ text: "Понятно" }]);
-
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
@@ -374,7 +371,7 @@ export default function MasterHubScreen() {
                   ? `${perf.total} ${pluralVisits(perf.total)} в этом месяце`
                   : "нет визитов в этом месяце"
               }
-              onPress={() => soon("Визиты")}
+              onPress={() => router.push(`/cabinet/masters/${master.id}/visits`)}
             />
             <Divider inset={60} />
             <NavRow
@@ -386,7 +383,7 @@ export default function MasterHubScreen() {
                   ? `${perf.completed} закрыто · ${Math.round(perf.revenue)} €`
                   : "пока без данных"
               }
-              onPress={() => soon("Статистика")}
+              onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
             />
           </Card>
         </View>
@@ -420,7 +417,10 @@ export default function MasterHubScreen() {
         {/* Мини-сводка «За этот месяц» → тап уводит на статистику. */}
         {assignedTeams.length > 0 ? (
           <View className="mx-3 mt-4">
-            <Pressable onPress={() => soon("Статистика")} className="active:opacity-80">
+            <Pressable
+              onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
+              className="active:opacity-80"
+            >
               <Card>
                 <View className="px-4 py-3">
                   <View className="mb-2 flex-row items-center justify-between">
