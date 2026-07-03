@@ -1,14 +1,14 @@
 import { useMemo } from "react";
-import { Alert, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
+import { ChevronRight } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { TEAM_COLORS } from "@babun/shared/local/masters";
 import { RefListScreen } from "@/features/reference/RefListScreen";
+import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCreateTeam,
-  useDeleteTeam,
   useTeams,
-  useUpdateTeam,
   type Team,
 } from "@/features/reference/queries";
 
@@ -17,8 +17,6 @@ export default function TeamsScreen() {
   const router = useRouter();
   const { data: teams = [], isLoading } = useTeams();
   const create = useCreateTeam();
-  const update = useUpdateTeam();
-  const del = useDeleteTeam();
 
   // Web parity: colour is mandatory from creation (teams/page.tsx picks
   // TEAM_COLORS[0]); default to the first palette colour not in use so
@@ -30,6 +28,11 @@ export default function TeamsScreen() {
     );
   }, [teams]);
 
+  // v-hubs: a team row is now a NAV row to the brigade hub (teams/[id]),
+  // not an inline editor. Name / colour / active / delete all moved into
+  // the hub (web parity: teams/[id]/page.tsx). So we deliberately omit
+  // itemToValues/onUpdate/onDelete — RefListScreen then renders our row
+  // as-is and we own the Pressable → push.
   return (
     <RefListScreen<Team>
       title="Команды"
@@ -62,7 +65,10 @@ export default function TeamsScreen() {
           "Команда создана",
           `Создать счёт для «${team.name}»? Он нужен, чтобы вести деньги бригады.`,
           [
-            { text: "Позже", style: "cancel" },
+            {
+              text: "Настроить команду",
+              onPress: () => router.push(`/cabinet/teams/${team.id}`),
+            },
             {
               text: "Создать счёт",
               onPress: () =>
@@ -71,36 +77,31 @@ export default function TeamsScreen() {
                   params: { create: "1", brigadeId: team.id },
                 }),
             },
+            { text: "Позже", style: "cancel" },
           ],
         );
       }}
-      onUpdate={async (id, v) => {
-        await update.mutateAsync({
-          id,
-          patch: { name: v.name, region: v.region || null, color: v.color },
-        });
-      }}
-      onDelete={async (id) => {
-        await del.mutateAsync(id);
-      }}
-      itemToValues={(t) => ({
-        name: t.name,
-        region: t.region ?? "",
-        color: t.color ?? "",
-      })}
       renderItem={(item) => (
-        <View className="flex-row items-center px-4 py-3">
+        <Pressable
+          onPress={() => router.push(`/cabinet/teams/${item.id}`)}
+          accessibilityRole="button"
+          accessibilityLabel={`Команда ${item.name}`}
+          className="flex-row items-center px-4 py-3 active:opacity-60"
+        >
           <View
             className="mr-3 h-4 w-4 rounded-full"
             style={{ backgroundColor: item.color ?? th.faint }}
           />
           <View className="flex-1">
-            <Text style={{ fontSize: 16, fontWeight: "600", color: th.ink }}>{item.name}</Text>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: th.ink }}>
+              {item.name}
+            </Text>
             {item.region ? (
               <Text style={{ fontSize: 14, color: th.sub }}>{item.region}</Text>
             ) : null}
           </View>
-        </View>
+          <ChevronRight color={th.chevron} size={ICON.sm} />
+        </Pressable>
       )}
     />
   );
