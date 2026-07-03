@@ -19,21 +19,18 @@ import {
 // [] (empty state, not an error). `getClient` stays a direct repo read — the
 // single-client card is not one of the three cached tables and must render the
 // canonical row live.
-import {
-  getClient,
-  createClient as createClientRepo,
-} from "@babun/shared/db/repositories/clients";
+import { getClient } from "@babun/shared/db/repositories/clients";
 import {
   listClients as listClientsCached,
   createClient as createClientCached,
   updateClient,
+  deleteClient as deleteClientCached,
 } from "@babun/shared/sync/clientsCached";
 import { listClientTags as listClientTagsCached } from "@babun/shared/sync/tagsCached";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { tryToE164 } from "./phone";
 
 // Clients list — SWR wrapper read (full domain shape incl. tag_ids, served
 // from the SQLite cache when warm, then revalidated). RLS scopes rows to the
@@ -111,70 +108,53 @@ export function useCreateClient() {
   });
 }
 
-// Bulk import (CSV). Normalizes each draft's phone to E.164 (so the
-// web dedup guard keeps working on mobile-imported rows), skips drafts
-// whose number already exists — in the cached list or earlier in the
-// same file — and creates the rest through the shared repo in small
-// parallel chunks (500 strictly sequential round-trips took minutes).
-// Invalidates in onSettled so a mid-file failure still surfaces the
-// rows that WERE created, and a retry skips them as duplicates.
+// Bulk delete (clients list bulk-mode). Deletes each selected client
+// through the SAME offline-aware wrapper the web «Удалить» uses
+// (clientsCached.deleteClient): online it hits the repo + optimistically
+// drops the cache row, offline it enqueues a delete op — so a bulk delete
+// on a flaky connection degrades gracefully instead of half-failing. Runs
+// in small parallel chunks and invalidates in onSettled, so a mid-batch
+// failure still surfaces the rows that WERE removed. Errors are collected
+// per-row (Promise.allSettled) rather than sinking the whole run on the
+// first reject — parity with useImportRows — so the caller can report a
+// partial result. The mutation itself never rejects when at least one row
+// succeeded; the caller reads {deleted, failed} and messages accordingly.
 //
-// STORY-062 slice 4 — bulk import stays ONLINE-ONLY on the direct repo
-// (createClientRepo), matching the web (apps/web/.../import/csv-import.ts
-// batch-inserts straight into supabase, bypassing clientsCached). Routing
-// hundreds of CSV rows through the offline wrapper would enqueue hundreds
-// of insert ops + per-row sqlite upserts on a flaky connection — the wrong
-// shape for a bulk operation the user runs deliberately while connected.
-// A cold import with no network simply fails and the ImportSheet alerts.
-export function useImportClients() {
+// NB — HARD delete, matching web parity. The shared repo also exposes
+// softDeleteClients (deleted_at), but the app-level «Удалить» on both web
+// and mobile routes through the hard-delete wrapper today; junction rows
+// cascade via FK. Switching the product to soft-delete is a separate,
+// cross-platform decision, not a mobile-only divergence.
+export interface DeleteClientsResult {
+  deleted: number;
+  failed: number;
+}
+
+export function useDeleteClients() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      drafts,
-      onProgress,
-    }: {
-      drafts: Partial<Client>[];
-      onProgress?: (done: number, total: number) => void;
-    }): Promise<{ created: number; duplicates: number }> => {
+    mutationFn: async (ids: string[]): Promise<DeleteClientsResult> => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      const cached = qc.getQueryData<Client[]>(["clients", tenantId]) ?? [];
-      const seen = new Set<string>();
-      for (const c of cached) {
-        const key = c.phone_e164 ?? tryToE164(c.phone ?? "");
-        if (key) seen.add(key);
-      }
-
-      let duplicates = 0;
-      const queue: Partial<Client>[] = [];
-      for (const d of drafts) {
-        const e164 = tryToE164(d.phone ?? "");
-        if (e164) {
-          if (seen.has(e164)) {
-            duplicates++;
-            continue;
-          }
-          seen.add(e164);
-        }
-        queue.push({ ...d, phone_e164: e164 });
-      }
-
-      let created = 0;
-      const CHUNK = 10;
-      for (let i = 0; i < queue.length; i += CHUNK) {
-        const chunk = queue.slice(i, i + CHUNK);
-        await Promise.all(
-          chunk.map((d) =>
-            createClientRepo(supabase, createBlankClient(d), tenantId),
-          ),
+      let deleted = 0;
+      let failed = 0;
+      const CHUNK = 8;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        // Settle each so one bad row (repo error / RLS online) doesn't abort
+        // the remaining chunks — count fulfilled vs rejected instead.
+        const settled = await Promise.allSettled(
+          chunk.map((id) => deleteClientCached(supabase, id, tenantId)),
         );
-        created += chunk.length;
-        onProgress?.(created, queue.length);
+        for (const res of settled) {
+          if (res.status === "fulfilled") deleted++;
+          else failed++;
+        }
       }
-      return { created, duplicates };
+      return { deleted, failed };
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["clients"] }),
-    meta: { errorHandled: true }, // ImportSheet alerts itself
+    meta: { errorHandled: true }, // caller messages the partial result itself
   });
 }
 

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Linking,
   Pressable,
@@ -9,8 +10,20 @@ import {
   TextInput,
   View,
 } from "react-native";
+import ReanimatedSwipeable, {
+  type SwipeableMethods,
+} from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Clock, Phone, Pin, Search, Settings, Users } from "lucide-react-native";
+import {
+  Check,
+  CircleCheck,
+  Clock,
+  Phone,
+  Pin,
+  Search,
+  Settings,
+  Users,
+} from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import {
   buildStatsMap,
@@ -21,11 +34,17 @@ import {
   getInitials,
 } from "@babun/shared/common/utils/avatar-color";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Fab } from "@/components/ui/Fab";
 import { Screen } from "@/components/ui/Screen";
-import { TYPE } from "@/components/ui/tokens";
-import { useClients, useClientTags } from "@/features/clients/queries";
+import { ICON, TYPE } from "@/components/ui/tokens";
+import { useToast } from "@/components/ui/Toast";
+import {
+  useClients,
+  useClientTags,
+  useDeleteClients,
+} from "@/features/clients/queries";
 import {
   buildSegmentCounts,
   EMPTY_FILTER,
@@ -42,7 +61,10 @@ import {
 import { formatShortDateRu } from "@/features/clients/format";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
-import { ImportSheet } from "@/features/clients/ImportSheet";
+import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
+import { BulkActionBar } from "@/features/clients/BulkActionBar";
+import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
+import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
@@ -54,22 +76,34 @@ const DEBT_GOLD = "#b78600";
 // ClientCard): name row (+pin) · money row (grey expected · green income
 // · gold debt) · meta row (посл. запись · команда · город · теги).
 // Field visibility is driven by the «Что показывать» prefs (cardFields).
+//
+// Bulk-mode (web-parity): long-press ENTERS selection mode; in it the avatar
+// becomes a checkbox, the phone-call button hides, and a tap toggles the pick
+// instead of opening the card. A right-swipe surfaces «Позвонить» as a visible
+// dup of the tap-to-call button (only outside selection, only with a phone).
 function ClientRow({
   client,
   stats,
   teamName,
   tags,
   cardFields,
+  selectionMode,
+  picked,
   onPress,
+  onLongPress,
 }: {
   client: Client;
   stats: ClientStats | undefined;
   teamName: string | null;
   tags: ClientTag[];
   cardFields: CardFieldPrefs;
+  selectionMode: boolean;
+  picked: boolean;
   onPress: () => void;
+  onLongPress: () => void;
 }) {
   const t = useThemeColors();
+  const swipeRef = useRef<SwipeableMethods | null>(null);
   const exp = Math.round(stats?.expectedRevenue ?? 0);
   const income = Math.round(stats?.totalSpent ?? 0);
   const debt =
@@ -129,19 +163,38 @@ function ClientRow({
     }
   }
 
-  return (
+  const row = (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={280}
+      accessibilityRole="button"
+      accessibilityState={selectionMode ? { selected: picked } : undefined}
       className="flex-row items-center px-4 py-3 active:opacity-60"
+      style={{ backgroundColor: t.canvas }}
     >
-      <View
-        className="h-11 w-11 items-center justify-center rounded-full"
-        style={{ backgroundColor: getAvatarColor(client.full_name) }}
-      >
-        <Text className="text-sm font-bold" style={{ color: "#fff" }}>
-          {getInitials(client.full_name || "?")}
-        </Text>
-      </View>
+      {selectionMode ? (
+        // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
+        <View
+          className="h-11 w-11 items-center justify-center rounded-full"
+          style={{
+            backgroundColor: picked ? t.accent : t.fill,
+            borderWidth: picked ? 0 : 2,
+            borderColor: t.separator,
+          }}
+        >
+          {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
+        </View>
+      ) : (
+        <View
+          className="h-11 w-11 items-center justify-center rounded-full"
+          style={{ backgroundColor: getAvatarColor(client.full_name) }}
+        >
+          <Text className="text-sm font-bold" style={{ color: "#fff" }}>
+            {getInitials(client.full_name || "?")}
+          </Text>
+        </View>
+      )}
       <View className="ml-3 flex-1">
         <View className="flex-row items-center gap-1.5">
           {client.pinned_at ? (
@@ -183,7 +236,7 @@ function ClientRow({
           </View>
         ) : null}
       </View>
-      {phoneDigits ? (
+      {phoneDigits && !selectionMode ? (
         <Pressable
           onPress={() => Linking.openURL(`tel:${phoneDigits}`)}
           hitSlop={6}
@@ -196,11 +249,44 @@ function ClientRow({
       ) : null}
     </Pressable>
   );
+
+  // Свайп-звонок — тривиальный дубль тап-звонка (RN-GH уже стоит, паттерн
+  // из chats/index.tsx). Отключён в режиме выбора (свайп мешал бы тапу-
+  // тоглу) и без телефона. Видимый дубль жеста — та же зелёная «Позвонить».
+  if (selectionMode || !phoneDigits) return row;
+  return (
+    <ReanimatedSwipeable
+      ref={swipeRef}
+      friction={2}
+      rightThreshold={44}
+      overshootRight={false}
+      renderRightActions={() => (
+        <Pressable
+          onPress={() => {
+            swipeRef.current?.close();
+            Linking.openURL(`tel:${phoneDigits}`);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Позвонить"
+          className="w-[88px] items-center justify-center gap-1"
+          style={{ backgroundColor: t.success }}
+        >
+          <Phone color="#fff" size={ICON.sm} />
+          <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+            Позвонить
+          </Text>
+        </Pressable>
+      )}
+    >
+      {row}
+    </ReanimatedSwipeable>
+  );
 }
 
 export default function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  const toast = useToast();
   // Экран настроек возвращается сюда с nonce-параметрами: «Фильтры /
   // Сортировка» → openFilters, «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
@@ -212,10 +298,16 @@ export default function ClientsListScreen() {
   const { data: appointments = [] } = useAppointments();
   const { data: teams = [] } = useTeams();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
+  const deleteClients = useDeleteClients();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  // ── Bulk-mode (multi-select) ──────────────────────────────────────
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [smsOpen, setSmsOpen] = useState(false);
 
   useEffect(() => {
     if (params.openFilters) setSheetOpen(true);
@@ -275,56 +367,188 @@ export default function ClientsListScreen() {
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
+  // ── Bulk-mode helpers ─────────────────────────────────────────────
+  const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
+  const allSelected =
+    visible.length > 0 && selectedIds.size === visible.length;
+
+  const enterSelection = (seedId?: string) => {
+    setSelecting(true);
+    setSelectedIds(seedId ? new Set([seedId]) : new Set());
+  };
+  const exitSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
+  const toggleId = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = () =>
+    setSelectedIds(allSelected ? new Set() : new Set(visible.map((c) => c.id)));
+
+  const selectedClients = useMemo(
+    () => clients.filter((c) => selectedIds.has(c.id)),
+    [clients, selectedIds],
+  );
+
+  const onExport = async () => {
+    if (selectedClients.length === 0) return;
+    try {
+      const shared = await shareClientsCsv(selectedClients, tags);
+      if (shared) {
+        toast(`CSV выгружен (${selectedClients.length})`, "success");
+        exitSelection();
+      }
+    } catch (e) {
+      Alert.alert("Не удалось выгрузить", (e as Error).message);
+    }
+  };
+
+  const onDelete = () => {
+    const n = selectedClients.length;
+    if (n === 0) return;
+    const word = countWordRu(n, "клиента", "клиента", "клиентов");
+    Alert.alert(
+      `Удалить ${n} ${word}?`,
+      "Это действие необратимо. Связанные записи будут откреплены.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { deleted, failed } = await deleteClients.mutateAsync(
+                selectedClients.map((c) => c.id),
+              );
+              if (failed > 0 && deleted > 0) {
+                toast(
+                  `Удалено: ${deleted}, не удалось: ${failed}`,
+                  "error",
+                );
+              } else if (failed > 0) {
+                Alert.alert(
+                  "Не удалось удалить",
+                  `Ни один из ${failed} клиентов не удалён. Проверьте соединение и попробуйте ещё раз.`,
+                );
+                return;
+              } else {
+                toast(`Удалено: ${deleted}`, "success");
+              }
+              exitSelection();
+            } catch (e) {
+              Alert.alert("Не удалось удалить", (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <Screen>
-      <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
-        <Text style={{ ...TYPE.display, color: t.ink }}>Клиенты</Text>
-        {/* Стандарт «добавить»: создание клиента — ТОЛЬКО градиентный FAB
-            (низ-право); кружок «+» из шапки убран, шестерёнка остаётся. */}
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/clients/settings",
-              params: { sort: filter.sort },
-            })
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Настройки клиентов"
-          className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-          style={{ backgroundColor: t.fill }}
-        >
-          <Settings color={t.body} size={20} />
-        </Pressable>
-      </View>
+      {selecting ? (
+        // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять.
+        <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
+          <Pressable
+            onPress={exitSelection}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Отменить выбор"
+            className="active:opacity-60"
+          >
+            <Text className="text-base font-semibold" style={{ color: t.accent }}>
+              Отмена
+            </Text>
+          </Pressable>
+          <Text className="text-base font-semibold" style={{ color: t.ink }}>
+            {selectedIds.size > 0
+              ? `Выбрано ${selectedIds.size}`
+              : "Выберите клиентов"}
+          </Text>
+          <Pressable
+            onPress={toggleAll}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={allSelected ? "Снять всё" : "Выбрать всё"}
+            className="active:opacity-60"
+          >
+            <Text className="text-base font-semibold" style={{ color: t.accent }}>
+              {allSelected ? "Снять" : "Всё"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
+          <Text style={{ ...TYPE.display, color: t.ink }}>Клиенты</Text>
+          <View className="flex-row items-center gap-1">
+            {/* Видимый дубль long-press — вход в мультивыбор из шапки. */}
+            <Pressable
+              onPress={() => enterSelection()}
+              accessibilityRole="button"
+              accessibilityLabel="Выбрать несколько"
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+              style={{ backgroundColor: t.fill }}
+            >
+              <CircleCheck color={t.body} size={20} />
+            </Pressable>
+            {/* Стандарт «добавить»: создание клиента — ТОЛЬКО градиентный FAB
+                (низ-право); кружок «+» из шапки убран, шестерёнка остаётся. */}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: "/clients/settings",
+                  params: { sort: filter.sort },
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Настройки клиентов"
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+              style={{ backgroundColor: t.fill }}
+            >
+              <Settings color={t.body} size={20} />
+            </Pressable>
+          </View>
+        </View>
+      )}
 
-      <View
-        className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
-        style={{ backgroundColor: t.fill }}
-      >
-        <Search color={t.faint} size={18} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Поиск по имени, телефону, адресу"
-          placeholderTextColor={t.placeholder}
-          selectionColor={t.accent}
-          keyboardAppearance={t.dark ? "dark" : "light"}
-          autoCapitalize="none"
-          clearButtonMode="while-editing"
-          className="flex-1 py-2.5 text-base"
-          style={{ color: t.ink }}
-        />
-      </View>
+      {/* Поиск и фильтры прячем в режиме выбора — фокус на наборе. */}
+      {!selecting ? (
+        <>
+          <View
+            className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
+            style={{ backgroundColor: t.fill }}
+          >
+            <Search color={t.faint} size={18} />
+            <TextInput
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Поиск по имени, телефону, адресу"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance={t.dark ? "dark" : "light"}
+              autoCapitalize="none"
+              clearButtonMode="while-editing"
+              className="flex-1 py-2.5 text-base"
+              style={{ color: t.ink }}
+            />
+          </View>
 
-      <ClientsFilterBar
-        totalCount={clients.length}
-        foundCount={result.filtered.length}
-        activeCount={result.activeCount}
-        tokens={result.activeTokens}
-        onOpen={() => setSheetOpen(true)}
-        onRemoveToken={removeToken}
-        onReset={() => setFilter(resetFilters(filter))}
-      />
+          <ClientsFilterBar
+            totalCount={clients.length}
+            foundCount={result.filtered.length}
+            activeCount={result.activeCount}
+            tokens={result.activeTokens}
+            onOpen={() => setSheetOpen(true)}
+            onRemoveToken={removeToken}
+            onReset={() => setFilter(resetFilters(filter))}
+          />
+        </>
+      ) : null}
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
@@ -342,8 +566,9 @@ export default function ClientsListScreen() {
           data={result.filtered}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
-          // Низ списка не должен прятаться под FAB (56 + inset 20).
-          contentContainerStyle={{ paddingBottom: 96 }}
+          // Низ списка не должен прятаться под FAB (56 + inset 20) или под
+          // нижней панелью массовых действий в режиме выбора.
+          contentContainerStyle={{ paddingBottom: selecting ? 108 : 96 }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
             const teamName = stats?.lastTeamId
@@ -356,7 +581,16 @@ export default function ClientsListScreen() {
                 teamName={teamName}
                 tags={tags}
                 cardFields={cardFields}
-                onPress={() => router.push(`/clients/${item.id}`)}
+                selectionMode={selecting}
+                picked={selectedIds.has(item.id)}
+                onPress={() =>
+                  selecting
+                    ? toggleId(item.id)
+                    : router.push(`/clients/${item.id}`)
+                }
+                onLongPress={() =>
+                  selecting ? toggleId(item.id) : enterSelection(item.id)
+                }
               />
             );
           }}
@@ -364,7 +598,11 @@ export default function ClientsListScreen() {
             <View className="ml-[68px] h-px" style={{ backgroundColor: t.separator }} />
           )}
           refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+            // В режиме выбора pull-to-refresh отключаем — refetch мог бы
+            // выронить выбранные строки из-под чекбоксов.
+            selecting ? undefined : (
+              <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+            )
           }
           ListEmptyComponent={
             filtering ? (
@@ -387,10 +625,20 @@ export default function ClientsListScreen() {
         />
       )}
 
-      <Fab
-        onPress={() => router.push("/clients/new")}
-        accessibilityLabel="Новый клиент"
-      />
+      {/* FAB прячем в режиме выбора — там своя нижняя панель действий. */}
+      {!selecting ? (
+        <Fab
+          onPress={() => router.push("/clients/new")}
+          accessibilityLabel="Новый клиент"
+        />
+      ) : (
+        <BulkActionBar
+          count={selectedIds.size}
+          onSms={() => setSmsOpen(true)}
+          onExport={onExport}
+          onDelete={onDelete}
+        />
+      )}
 
       <ClientsFilterSheet
         visible={sheetOpen}
@@ -400,7 +648,16 @@ export default function ClientsListScreen() {
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
       />
-      <ImportSheet visible={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportWizardSheet visible={importOpen} onClose={() => setImportOpen(false)} />
+      <BulkSmsSheet
+        visible={smsOpen}
+        recipients={selectedClients}
+        onClose={() => setSmsOpen(false)}
+        onSent={() => {
+          setSmsOpen(false);
+          exitSelection();
+        }}
+      />
     </Screen>
   );
 }
