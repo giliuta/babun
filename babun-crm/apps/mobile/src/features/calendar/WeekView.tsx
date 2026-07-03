@@ -152,9 +152,23 @@ export function WeekView({
                   {d.getDate()}
                 </Text>
               </View>
-              <Text style={{ fontSize: 10, fontWeight: "600", color: t.sub }} className="tabular-nums">
-                {dayAppts.length > 0 ? dayAppts.length : ""}
-              </Text>
+              {/* Presence dot (Apple/Google native): a filled dot when the day
+                  has bookings — denser than a raw count that reads like a
+                  second date. Exact count lives in the day view + a11y label. */}
+              <View
+                style={{
+                  marginTop: 3,
+                  height: 5,
+                  width: 5,
+                  borderRadius: 3,
+                  backgroundColor:
+                    dayAppts.length > 0
+                      ? isToday
+                        ? t.accent
+                        : t.faint
+                      : "transparent",
+                }}
+              />
             </Pressable>
           );
         })}

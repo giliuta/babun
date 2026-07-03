@@ -172,7 +172,7 @@ function Block({
             backgroundColor: colors.fill,
             borderLeftColor: colors.stripe,
             borderLeftWidth: 3,
-            borderRadius: 6,
+            borderRadius: 8,
             paddingHorizontal: compact ? 3 : 6,
             paddingVertical: 2,
             overflow: "hidden",
@@ -185,7 +185,7 @@ function Block({
           style={{ position: "absolute", top: 0, left: 3, right: 0, height: 1, backgroundColor: t.highlight }}
         />
         <Text
-          style={{ color: colors.base, fontSize: compact ? 9 : 11, fontWeight: "700", opacity: 0.9 }}
+          style={{ color: t.sub, fontSize: compact ? 9 : 11, fontWeight: "600" }}
           className="tabular-nums"
           numberOfLines={1}
         >
