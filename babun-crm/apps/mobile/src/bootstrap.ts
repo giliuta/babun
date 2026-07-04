@@ -11,10 +11,16 @@
 //   5. Sentry (no-op without a DSN).
 import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
-import { Platform } from "react-native";
+import { Appearance, Platform } from "react-native";
 import { setStorage, WebKVStorage } from "@babun/shared/storage";
 import { setSql, setNetwork } from "@babun/shared/storage/sql";
 import { initSentry } from "@/lib/sentry";
+
+// The app is light-only. Lock the scheme at runtime so native chrome (system
+// alerts, keyboard, date pickers) never follows the device into dark mode —
+// the JS palette is already light-only (src/theme/colors.ts). Belt-and-braces
+// with app.json «userInterfaceStyle: light» (which applies on native rebuild).
+Appearance.setColorScheme("light");
 
 // Storage backend is platform-split. The `@/` alias goes through tsconfig
 // paths, which Expo's Metro resolver does NOT widen with platform extensions

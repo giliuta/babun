@@ -1,13 +1,10 @@
-import { useColorScheme } from "react-native";
-
-// «Halo Cobalt» — single app-wide runtime palette (light + dark token inversion).
+// «Halo Cobalt» — single app-wide runtime palette. LIGHT-ONLY: the app is
+// locked to the light scheme (see bootstrap.ts «Appearance.setColorScheme» +
+// app.json «userInterfaceStyle: light»), so there is no dark palette.
 // This is the SINGLE source of truth for COLOR. Components call
 // useThemeColors() and read t.* into inline styles, so the «no component
 // rebuild» promise in DESIGN-SYSTEM.md holds app-wide; the auth screens read
 // this via the useAuthTheme alias in components/auth/theme.ts.
-//
-// NativeWind v5-preview has no `dark:` variants wired, so COLOR never goes
-// through classNames — only layout/spacing does. Hence the runtime hook.
 export type ThemeColors = {
   dark: boolean;
   statusBar: "dark" | "light";
@@ -91,41 +88,6 @@ export const light: ThemeColors = {
   radius: RADIUS,
 };
 
-export const dark: ThemeColors = {
-  dark: true,
-  statusBar: "light",
-  canvas: "#0b0e14",
-  surface: "#161b24",
-  surfaceElevated: "rgba(22,27,36,0.72)",
-  accent: "#5a86ff",
-  accentFrom: "#5a86ff",
-  accentTo: "#2c5be0",
-  onAccent: "#ffffff",
-  brandAccent: "#5a86ff",
-  ink: "#f2f5f9",
-  body: "#c2ccda",
-  sub: "#9ba6b6",
-  faint: "#6b7686",
-  placeholder: "#5e6878",
-  success: "#2fd39a",
-  danger: "#ff6b68",
-  warning: "#f5b942",
-  fill: "rgba(255,255,255,0.07)",
-  separator: "rgba(255,255,255,0.10)",
-  chevron: "#4a5260",
-  highlight: "rgba(255,255,255,0.06)",
-  pressed: "rgba(255,255,255,0.05)",
-  scrim: "rgba(0,0,0,0.50)",
-  cardShadow: undefined,
-  brandShadow: "0px 8px 28px rgba(90,134,255,0.34)",
-  disabledFill: "#222834",
-  haloOpacity: 0.18,
-  googleBg: "#131314",
-  googleBorder: "#3a3f47",
-  googleText: "#e3e3e3",
-  radius: RADIUS,
-};
-
 export function useThemeColors(): ThemeColors {
-  return useColorScheme() === "dark" ? dark : light;
+  return light;
 }
