@@ -20,7 +20,6 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Fab } from "@/components/ui/Fab";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatYMD,
@@ -29,12 +28,13 @@ import {
   parseYMD,
 } from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
-import { DayView } from "@/features/calendar/DayView";
+import { DayView, HOUR_H_DEFAULT } from "@/features/calendar/DayView";
 import { WeekView } from "@/features/calendar/WeekView";
 import { type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { CalendarHeader } from "@/features/calendar/CalendarHeader";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { TeamChips } from "@/features/calendar/TeamChips";
+import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
 import { MonthView } from "@/features/calendar/MonthView";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
@@ -42,8 +42,9 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useServices } from "@/features/services/queries";
-import { useTeams } from "@/features/reference/queries";
+import { useCreateTeam, useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { TEAM_COLORS } from "@babun/shared/local/masters";
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 const AGENDA_HORIZON_DAYS = 60;
@@ -127,25 +128,6 @@ function AppointmentRow({
   );
 }
 
-// Ненавязчивая подсказка поверх пустой сетки дня/недели — жест «тап по
-// слоту» иначе никак не обнаружить. pointerEvents=none: тапы уходят в сетку.
-function EmptyGridHint() {
-  const th = useThemeColors();
-  return (
-    <View
-      pointerEvents="none"
-      className="absolute inset-0 items-center justify-center"
-    >
-      <Text
-        className="overflow-hidden rounded-full px-4 py-2 text-[13px] font-medium"
-        style={{ color: th.sub, backgroundColor: th.fill }}
-      >
-        Тапните по времени, чтобы записать
-      </Text>
-    </View>
-  );
-}
-
 export default function CalendarTab() {
   const {
     data: appts = [],
@@ -157,9 +139,14 @@ export default function CalendarTab() {
   const qc = useQueryClient();
   const { data: clients = [] } = useClients();
   const { data: services = [] } = useServices();
-  const { data: teams = [] } = useTeams();
+  const {
+    data: teams = [],
+    isLoading: teamsLoading,
+    isFetching: teamsFetching,
+  } = useTeams();
   const { data: calSettings } = useCalendarSettings();
   const updateAppt = useUpdateAppointment();
+  const createTeam = useCreateTeam();
   const toast = useToast();
 
   // Pull-to-refresh (agenda list). Invalidates the shared ['appointments']
@@ -193,7 +180,14 @@ export default function CalendarTab() {
   const [mode, setMode] = useState<CalMode>("week");
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [day, setDay] = useState(() => startOfDay(new Date()));
-  const [teamFilter, setTeamFilter] = useState<string | null>(null);
+  // Pixels-per-hour for the time grid — pinch-to-zoom (session-only, web
+  // parity: web resets zoom on reload too). Shared by Day + Week grids.
+  const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
+  // Web parity (Header.tsx): exactly one team calendar is active at a time —
+  // no «all teams» view. `teamChoice` remembers the user's pick; the derived
+  // `activeTeamId` falls back to the first team until they choose and
+  // re-anchors if the chosen team is deleted / deactivated.
+  const [teamChoice, setTeamChoice] = useState<string | null>(null);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<Appointment | null>(null);
@@ -293,16 +287,24 @@ export default function CalendarTab() {
     [teamColor],
   );
 
+  // Active team calendar. Derived (not stored) so it self-heals: falls back
+  // to the first team until the user picks one, and re-anchors if the chosen
+  // team disappears. Null only while there are no teams (→ first-run gate).
+  const activeTeamId =
+    teamChoice && teams.some((tm) => tm.id === teamChoice)
+      ? teamChoice
+      : teams[0]?.id ?? null;
+
   const hideCancelled = !!calSettings?.hideCancelled;
   const byTeam = (a: Appointment) =>
-    (teamFilter ? a.team_id === teamFilter : true) &&
+    (activeTeamId ? a.team_id === activeTeamId : true) &&
     (!hideCancelled || a.status !== "cancelled");
 
-  // Team-filtered set — MonthView counts every visible cell (incl. the
+  // Team-scoped set — MonthView counts every visible cell (incl. the
   // prev/next-month tails) and the MiniCalendar dots from this.
   const visibleAppts = useMemo(
     () => appts.filter(byTeam),
-    [appts, teamFilter, hideCancelled],
+    [appts, activeTeamId, hideCancelled],
   );
 
   const dayYmd = formatYMD(day);
@@ -355,37 +357,32 @@ export default function CalendarTab() {
 
   const openCreate = (defaults?: typeof bookDefaults) => {
     setEditing(null);
-    setBookDefaults(defaults);
+    // New records belong to the team calendar currently open (web parity:
+    // creating in team X's calendar sets team_id = X). An explicit team from
+    // a card booking still wins via the spread.
+    setBookDefaults({ team_id: activeTeamId, ...defaults });
     setSheetOpen(true);
   };
-  // FAB «+» — главный сценарий диспетчера всегда на виду. Дефолт:
-  // сегодня, ближайший свободный слот (шаг сетки, от рабочих часов);
-  // тап по пустому слоту в сетке остаётся быстрым путём.
-  const quickCreate = () => {
-    const step = calSettings?.gridStep ?? 30;
-    const dayStart = (calSettings?.workStartHour ?? 9) * 60;
-    const dayEnd = (calSettings?.workEndHour ?? 20) * 60;
-    const toMin = (hm: string) => {
-      const [h, m] = hm.split(":").map(Number);
-      return (h || 0) * 60 + (m || 0);
-    };
-    const busy = appts
-      .filter((a) => a.date === todayYmd && a.status !== "cancelled")
-      .map((a) => [toMin(a.time_start), toMin(a.time_end)] as const);
-    const base = Math.max(dayStart, Math.ceil(nowMinutes / step) * step);
-    let slot = base;
-    while (
-      slot + step <= dayEnd &&
-      busy.some(([s, e]) => s < slot + step && e > slot)
-    )
-      slot += step;
-    // День забит / рабочие часы прошли — просто ближайшее время, не 00:00.
-    if (slot + step > dayEnd) slot = base;
-    slot = Math.min(slot, 23 * 60);
-    openCreate({
-      date: todayYmd,
-      time_start: `${pad2(Math.floor(slot / 60))}:${pad2(slot % 60)}`,
-    });
+
+  // First-run gate CTA — spins up the first team calendar (web parity:
+  // /dashboard/teams?new=1 immediately creates a team). Default name +
+  // first unused palette colour; the gear → team hub renames / configures.
+  const createFirstCalendar = () => {
+    const used = new Set(
+      (teams as { color?: string | null }[]).map((tm) => tm.color).filter(Boolean),
+    );
+    const color =
+      TEAM_COLORS.find((c) => !used.has(c.value))?.value ?? TEAM_COLORS[0].value;
+    createTeam.mutate(
+      { name: "Команда 1", color },
+      {
+        onSuccess: (team) => {
+          setTeamChoice(team.id);
+          toast("Календарь создан");
+        },
+        onError: () => toast("Не удалось создать календарь"),
+      },
+    );
   };
   const openEdit = (apt: Appointment) => {
     setEditing(apt);
@@ -452,6 +449,8 @@ export default function CalendarTab() {
     workEndHour: calSettings?.workEndHour,
     nowMinutes,
     scrollToHour,
+    hourH,
+    onZoom: setHourH,
   };
 
   const pickDay = (d: Date) => {
@@ -459,8 +458,30 @@ export default function CalendarTab() {
     setMode("day");
   };
 
+  // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
+  // show the «Создать календарь» screen instead of an empty grid. Hold on a
+  // spinner while teams load / the just-created team round-trips so the CTA
+  // never flashes back after a successful create.
+  if (teams.length === 0) {
+    return (
+      <Screen>
+        {teamsLoading ? (
+          <EmptyState state="loading" fill />
+        ) : (
+          <FirstRunCalendarChoice
+            onCreate={createFirstCalendar}
+            creating={createTeam.isPending || teamsFetching}
+          />
+        )}
+      </Screen>
+    );
+  }
+
   return (
-    <Screen>
+    // No bottom safe-area edge here: inside expo-router Tabs the tab bar
+    // already consumes it, so a bottom inset double-counts and floats the
+    // Доход/Расход footer ~34pt above the tab bar. Drop it → footer sits flush.
+    <Screen edges={["top", "left", "right"]}>
       <CalendarHeader
         monthTitle={headerTitle}
         mode={mode}
@@ -471,7 +492,7 @@ export default function CalendarTab() {
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
-      <TeamChips teams={teams} activeId={teamFilter} onSelect={setTeamFilter} />
+      <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -527,12 +548,11 @@ export default function CalendarTab() {
               onNext={() => setDay((d) => addDays(d, gridDays.length))}
               {...gridProps}
             />
-            {gridAppts.length === 0 ? <EmptyGridHint /> : null}
           </View>
           <DayFinanceFooter
             days={gridDays}
             appointments={gridAppts}
-            teamId={teamFilter}
+            teamId={activeTeamId}
             todayYmd={todayYmd}
             onTapDay={pickDay}
           />
@@ -551,12 +571,11 @@ export default function CalendarTab() {
               onNext={() => setDay((d) => addDays(d, 1))}
               {...gridProps}
             />
-            {dayAppts.length === 0 ? <EmptyGridHint /> : null}
           </View>
           <DayFinanceFooter
             days={[day]}
             appointments={dayAppts}
-            teamId={teamFilter}
+            teamId={activeTeamId}
             todayYmd={todayYmd}
           />
         </>
@@ -576,20 +595,6 @@ export default function CalendarTab() {
           </View>
         </GestureDetector>
       )}
-
-      {/* Кобальтовый FAB (как у Финансов) — в грид-режимах приподнят над
-          финансовым футером. */}
-      {!isLoading && !error ? (
-        <Fab
-          onPress={quickCreate}
-          accessibilityLabel="Новая запись"
-          style={
-            mode === "day" || mode === "week" || mode === "3days"
-              ? { bottom: 56 }
-              : undefined
-          }
-        />
-      ) : null}
 
       <MiniCalendar
         visible={miniCalOpen}

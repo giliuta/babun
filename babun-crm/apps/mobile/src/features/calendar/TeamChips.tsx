@@ -4,8 +4,12 @@ import { useThemeColors } from "@/theme/colors";
 
 export type ChipTeam = { id: string; name: string; color?: string | null };
 
-// Web-parity brigade tabs: horizontal pills. Active = filled team colour + white
-// label; idle+colour = outline in the brigade hue; idle = separator-bordered.
+// Web-parity team-calendar tabs (apps/web Header.tsx → TeamTabStrip): a
+// horizontally-scrollable pill strip that SWITCHES the visible calendar
+// between teams. Exactly one team is active at a time — there is no «all
+// teams» view (web deliberately dropped the combined view). Active = filled
+// team colour + white label; idle+colour = outline in the team hue; idle =
+// separator-bordered.
 export function TeamChips({
   teams,
   activeId,
@@ -13,11 +17,10 @@ export function TeamChips({
 }: {
   teams: ChipTeam[];
   activeId: string | null;
-  onSelect: (id: string | null) => void;
+  onSelect: (id: string) => void;
 }) {
   const t = useThemeColors();
   if (teams.length === 0) return null;
-  const all: ChipTeam[] = [{ id: "__all__", name: "Все", color: null }, ...teams];
   return (
     <ScrollView
       horizontal
@@ -31,21 +34,18 @@ export function TeamChips({
         alignItems: "center",
       }}
     >
-      {all.map((tm) => {
-        const id = tm.id === "__all__" ? null : tm.id;
-        return (
-          <Chip
-            key={tm.id}
-            label={tm.name}
-            variant="outline"
-            color={tm.color || undefined}
-            radio
-            selected={activeId === id}
-            onPress={() => onSelect(id)}
-            style={{ maxWidth: 180 }}
-          />
-        );
-      })}
+      {teams.map((tm) => (
+        <Chip
+          key={tm.id}
+          label={tm.name}
+          variant="outline"
+          color={tm.color || undefined}
+          radio
+          selected={activeId === tm.id}
+          onPress={() => onSelect(tm.id)}
+          style={{ maxWidth: 180 }}
+        />
+      ))}
     </ScrollView>
   );
 }

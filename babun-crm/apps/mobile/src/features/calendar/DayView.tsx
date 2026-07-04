@@ -1,5 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  Pressable,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -19,7 +26,13 @@ import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import { useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
 
-export const HOUR_H = 64;
+// Vertical scale of the time grid (pixels per hour). Threaded as a prop so
+// pinch-to-zoom can change it live; DEFAULT keeps the current mobile density.
+export const HOUR_H_DEFAULT = 64;
+export const HOUR_H_MIN = 28;
+export const HOUR_H_MAX = 200;
+export const clampHourH = (h: number) =>
+  Math.max(HOUR_H_MIN, Math.min(HOUR_H_MAX, h));
 export const RAIL_W = 48;
 const GAP = 3;
 // Visible window fallback — mirrors shared DEFAULT_CALENDAR_SETTINGS
@@ -40,6 +53,7 @@ const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)
 
 function Block({
   placed,
+  hourH,
   laneX,
   laneW,
   startHour,
@@ -53,6 +67,7 @@ function Block({
   onReschedule,
 }: {
   placed: PlacedAppt;
+  hourH: number;
   laneX: number;
   laneW: number;
   startHour: number;
@@ -78,8 +93,8 @@ function Block({
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
   const colW = laneW / colCount;
-  const top = ((visStart - winStart) / 60) * HOUR_H;
-  const height = Math.max(((visEnd - visStart) / 60) * HOUR_H - 2, 22);
+  const top = ((visStart - winStart) / 60) * hourH;
+  const height = Math.max(((visEnd - visStart) / 60) * hourH - 2, 22);
   const left = laneX + colIndex * colW + 1;
   const width = colW - GAP;
   const cancelled = apt.status === "cancelled";
@@ -95,7 +110,7 @@ function Block({
     // do.
     const step = Math.max(5, Math.min(60, stepMinutes));
     const deltaMin =
-      Math.round(((translationY / HOUR_H) * 60) / step) * step;
+      Math.round(((translationY / hourH) * 60) / step) * step;
     let newStart = startMin + deltaMin;
     // Clamp into the window, but never TIGHTER than where the block
     // already sits — a clipped block may legitimately stay clipped.
@@ -233,9 +248,11 @@ function Block({
 export function TimeRail({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
+  hourH = HOUR_H_DEFAULT,
 }: {
   startHour?: number;
   endHour?: number;
+  hourH?: number;
 }) {
   const t = useThemeColors();
   const hours = useMemo(() => {
@@ -244,13 +261,13 @@ export function TimeRail({
     return out;
   }, [startHour, endHour]);
   return (
-    <View style={{ width: RAIL_W, height: (endHour - startHour) * HOUR_H }}>
+    <View style={{ width: RAIL_W, height: (endHour - startHour) * hourH }}>
       {hours.map((h) => (
         <Text
           key={h}
           style={{
             position: "absolute",
-            top: (h - startHour) * HOUR_H - (h === startHour ? 0 : 7),
+            top: (h - startHour) * hourH - (h === startHour ? 0 : 7),
             right: 6,
             width: RAIL_W - 8,
             textAlign: "right",
@@ -284,6 +301,7 @@ export function DayColumn({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
+  hourH = HOUR_H_DEFAULT,
   workStartHour,
   workEndHour,
   nowMinutes,
@@ -303,6 +321,8 @@ export function DayColumn({
   /** Snap granularity for drag + empty-slot taps (settings.gridStep) —
    *  web DayColumn `snapMinutes` semantics. */
   stepMinutes?: number;
+  /** Pixels per hour — pinch-zoom scale, threaded from the parent. */
+  hourH?: number;
   /** Work band — everything outside gets the grey off-hours wash (web
    *  DayColumn out-of-hours overlays). Defaults to the visible window. */
   workStartHour?: number;
@@ -320,7 +340,7 @@ export function DayColumn({
     for (let h = startHour; h <= endHour; h++) out.push(h);
     return out;
   }, [startHour, endHour]);
-  const totalH = (endHour - startHour) * HOUR_H;
+  const totalH = (endHour - startHour) * hourH;
   const winStartMin = startHour * 60;
   const winEndMin = endHour * 60;
 
@@ -346,7 +366,7 @@ export function DayColumn({
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
       ? nowMinutes - winStartMin
       : null;
-  const nowTop = nowMin != null ? (nowMin / 60) * HOUR_H : null;
+  const nowTop = nowMin != null ? (nowMin / 60) * hourH : null;
   const halfLine = t.dark ? "rgba(255,255,255,0.05)" : "rgba(60,60,67,0.07)";
 
   const workStart = Math.max((workStartHour ?? startHour) * 60, winStartMin);
@@ -372,7 +392,7 @@ export function DayColumn({
             top: 0,
             left: 0,
             right: 0,
-            height: ((workStart - winStartMin) / 60) * HOUR_H,
+            height: ((workStart - winStartMin) / 60) * hourH,
             backgroundColor: t.pressed,
           }}
         />
@@ -382,10 +402,10 @@ export function DayColumn({
           pointerEvents="none"
           style={{
             position: "absolute",
-            top: ((workEnd - winStartMin) / 60) * HOUR_H,
+            top: ((workEnd - winStartMin) / 60) * hourH,
             left: 0,
             right: 0,
-            height: ((winEndMin - workEnd) / 60) * HOUR_H,
+            height: ((winEndMin - workEnd) / 60) * hourH,
             backgroundColor: t.pressed,
           }}
         />
@@ -412,7 +432,7 @@ export function DayColumn({
           <View
             style={{
               position: "absolute",
-              top: (h - startHour) * HOUR_H,
+              top: (h - startHour) * hourH,
               left: 0,
               right: 0,
               height: 1,
@@ -423,7 +443,7 @@ export function DayColumn({
             <View
               style={{
                 position: "absolute",
-                top: (h - startHour) * HOUR_H + HOUR_H / 2,
+                top: (h - startHour) * hourH + hourH / 2,
                 left: 0,
                 right: 0,
                 height: 1,
@@ -447,7 +467,7 @@ export function DayColumn({
             const y = e?.nativeEvent?.locationY ?? 0;
             const offset = Math.min(
               60 - step,
-              Math.floor(((y / HOUR_H) * 60) / step) * step,
+              Math.floor(((y / hourH) * 60) / step) * step,
             );
             onCreateAt(dateYmd, minToHM(h * 60 + Math.max(0, offset)));
           }}
@@ -455,10 +475,10 @@ export function DayColumn({
           accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
           style={{
             position: "absolute",
-            top: (h - startHour) * HOUR_H,
+            top: (h - startHour) * hourH,
             left: 0,
             right: 0,
-            height: HOUR_H,
+            height: hourH,
           }}
         />
       ))}
@@ -490,6 +510,7 @@ export function DayColumn({
             <Block
               key={p.apt.id}
               placed={p}
+              hourH={hourH}
               laneX={reservedW}
               laneW={Math.max(laneW - reservedW, 0)}
               startHour={startHour}
@@ -525,6 +546,57 @@ export function DayColumn({
   );
 }
 
+// Pinch-to-zoom the time grid: commit a new pixels-per-hour on each update
+// (quantised to whole px) and keep the viewport-centre time fixed. Shared by
+// DayView and WeekView so the gesture behaves identically in both.
+export function usePinchZoom({
+  scrollRef,
+  hourH,
+  startHour,
+  endHour,
+  onZoom,
+}: {
+  scrollRef: RefObject<ScrollView | null>;
+  hourH: number;
+  startHour: number;
+  endHour: number;
+  onZoom?: (next: number) => void;
+}) {
+  const scrollY = useRef(0);
+  const viewportH = useRef(0);
+  const baseH = useRef(hourH);
+  const centerFrac = useRef(0);
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    scrollY.current = e.nativeEvent.contentOffset.y;
+  };
+  const onLayout = (e: LayoutChangeEvent) => {
+    viewportH.current = e.nativeEvent.layout.height;
+  };
+  const begin = () => {
+    baseH.current = hourH;
+    const total = Math.max(1, (endHour - startHour) * hourH);
+    centerFrac.current = (scrollY.current + viewportH.current / 2) / total;
+  };
+  const apply = (scale: number) => {
+    if (!onZoom) return;
+    const next = clampHourH(Math.round(baseH.current * scale));
+    onZoom(next);
+    const y = Math.max(
+      0,
+      centerFrac.current * (endHour - startHour) * next - viewportH.current / 2,
+    );
+    requestAnimationFrame(() =>
+      scrollRef.current?.scrollTo({ y, animated: false }),
+    );
+  };
+  const pinch = Gesture.Pinch()
+    .onStart(() => runOnJS(begin)())
+    .onUpdate((e) => runOnJS(apply)(e.scale));
+
+  return { pinch, onScroll, onLayout };
+}
+
 // Single-day grid: hour rail + one day column, vertically scrollable.
 export function DayView({
   dateYmd,
@@ -541,6 +613,8 @@ export function DayView({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
+  hourH = HOUR_H_DEFAULT,
+  onZoom,
   workStartHour,
   workEndHour,
   nowMinutes,
@@ -560,6 +634,9 @@ export function DayView({
   startHour?: number;
   endHour?: number;
   stepMinutes?: number;
+  hourH?: number;
+  /** Pinch-zoom commit — new pixels-per-hour. */
+  onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
   nowMinutes?: number | null;
@@ -569,13 +646,14 @@ export function DayView({
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
     if (scrollToHour == null) return;
-    const y = Math.max(0, (scrollToHour - startHour) * HOUR_H);
+    const y = Math.max(0, (scrollToHour - startHour) * hourH);
     const raf = requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ y, animated: false }),
     );
     return () => cancelAnimationFrame(raf);
   }, [scrollToHour, startHour]);
 
+  const zoom = usePinchZoom({ scrollRef, hourH, startHour, endHour, onZoom });
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-18, 18])
@@ -584,14 +662,17 @@ export function DayView({
       else if (e.translationX < -55 && onNext) runOnJS(onNext)();
     });
   return (
-    <GestureDetector gesture={swipe}>
+    <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120, paddingTop: 6 }}
+        onScroll={zoom.onScroll}
+        onLayout={zoom.onLayout}
+        scrollEventThrottle={16}
       >
         <View style={{ flexDirection: "row" }}>
-          <TimeRail startHour={startHour} endHour={endHour} />
+          <TimeRail startHour={startHour} endHour={endHour} hourH={hourH} />
           <DayColumn
             dateYmd={dateYmd}
             appointments={appointments}
@@ -605,6 +686,7 @@ export function DayView({
             startHour={startHour}
             endHour={endHour}
             stepMinutes={stepMinutes}
+            hourH={hourH}
             workStartHour={workStartHour}
             workEndHour={workEndHour}
             nowMinutes={nowMinutes}

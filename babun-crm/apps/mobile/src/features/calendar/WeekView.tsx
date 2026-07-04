@@ -9,7 +9,13 @@ import { runOnJS } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { DayColumn, TimeRail, RAIL_W, HOUR_H } from "@/features/calendar/DayView";
+import {
+  DayColumn,
+  TimeRail,
+  RAIL_W,
+  HOUR_H_DEFAULT,
+  usePinchZoom,
+} from "@/features/calendar/DayView";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -41,6 +47,8 @@ export function WeekView({
   startHour,
   endHour,
   stepMinutes,
+  hourH = HOUR_H_DEFAULT,
+  onZoom,
   workStartHour,
   workEndHour,
   nowMinutes,
@@ -61,6 +69,8 @@ export function WeekView({
   startHour?: number;
   endHour?: number;
   stepMinutes?: number;
+  hourH?: number;
+  onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
   nowMinutes?: number | null;
@@ -70,13 +80,21 @@ export function WeekView({
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
     if (scrollToHour == null) return;
-    const y = Math.max(0, (scrollToHour - (startHour ?? 0)) * HOUR_H);
+    const y = Math.max(0, (scrollToHour - (startHour ?? 0)) * hourH);
     const raf = requestAnimationFrame(() =>
       scrollRef.current?.scrollTo({ y, animated: false }),
     );
     return () => cancelAnimationFrame(raf);
+    // hourH intentionally excluded: zoom must NOT re-fire the open-scroll.
   }, [scrollToHour, startHour]);
 
+  const zoom = usePinchZoom({
+    scrollRef,
+    hourH,
+    startHour: startHour ?? 0,
+    endHour: endHour ?? 24,
+    onZoom,
+  });
   const swipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-18, 18])
@@ -96,7 +114,7 @@ export function WeekView({
   }, [appointments]);
 
   return (
-    <GestureDetector gesture={swipe}>
+    <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
     <View style={{ flex: 1 }}>
       {/* day headers */}
       <View
@@ -179,9 +197,12 @@ export function WeekView({
         ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingBottom: 120, paddingTop: 6 }}
+        onScroll={zoom.onScroll}
+        onLayout={zoom.onLayout}
+        scrollEventThrottle={16}
       >
         <View style={{ flexDirection: "row" }}>
-          <TimeRail startHour={startHour} endHour={endHour} />
+          <TimeRail startHour={startHour} endHour={endHour} hourH={hourH} />
           {days.map((d) => (
             <DayColumn
               key={formatYMD(d)}
@@ -198,6 +219,7 @@ export function WeekView({
               startHour={startHour}
               endHour={endHour}
               stepMinutes={stepMinutes}
+              hourH={hourH}
               workStartHour={workStartHour}
               workEndHour={workEndHour}
               nowMinutes={nowMinutes}
