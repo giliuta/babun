@@ -515,7 +515,7 @@ export default function CalendarTab() {
         todayNumber={now.getDate()}
         isOnToday={isOnToday}
         onModeChange={setMode}
-        onGear={() => router.push("/cabinet")}
+        onGear={() => router.push("/cabinet/calendar")}
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
