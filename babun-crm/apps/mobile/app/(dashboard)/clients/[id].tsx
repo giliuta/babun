@@ -19,6 +19,7 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -38,6 +39,7 @@ import { useThemeColors } from "@/theme/colors";
 import {
   useClient,
   useClientTags,
+  useDeleteClients,
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -62,6 +64,7 @@ export default function ClientDetailScreen() {
 
   const { data: client, isLoading } = useClient(id);
   const updateClient = useUpdateClient(id);
+  const deleteClients = useDeleteClients();
   const { data: appointments = [] } = useClientAppointments(id);
   const { data: tags = [] } = useClientTags();
   // Web parity: VisitsBlock resolves service NAMES from the catalog.
@@ -148,6 +151,29 @@ export default function ClientDetailScreen() {
     update({ blacklisted: !client.blacklisted });
   };
 
+  // Web parity: ClientCardPage ⋯ «Удалить клиента» → confirm → hard delete
+  // (useDeleteClients) → back to the list. Destructive style on both buttons.
+  const onDelete = () => {
+    setMenuOpen(false);
+    Alert.alert(
+      "Удалить клиента?",
+      "Клиент и вся его история будут удалены безвозвратно.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: () =>
+            deleteClients.mutate([client.id], {
+              onSuccess: (res) => {
+                if (res.deleted > 0) router.back();
+              },
+            }),
+        },
+      ],
+    );
+  };
+
   return (
     <Screen edges={["top"]}>
       {/* Chrome: back + title + ⋯ menu */}
@@ -206,6 +232,8 @@ export default function ClientDetailScreen() {
               onPress={onToggleBlacklist}
               danger={!client.blacklisted}
             />
+            <View className="h-px" style={{ backgroundColor: t.separator }} />
+            <MenuItem label="Удалить клиента" onPress={onDelete} danger />
           </View>
         </>
       ) : null}
