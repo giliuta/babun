@@ -53,6 +53,8 @@ export function WeekView({
   workStartHour,
   workEndHour,
   workBandFor,
+  labelFor,
+  labelTintFor,
   bufferMinutes,
   nowMinutes,
   scrollToHour,
@@ -80,6 +82,14 @@ export function WeekView({
    *  weekday overrides / days off differ across the week (web DayColumn
    *  parity). See DayColumn.workBand for the null/undefined semantics. */
   workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Day label (city/tag) for the header pill — resolved by the parent:
+   *  explicit day_cities → team default_city (web DayColumn city pill).
+   *  No picker here: tapping a header opens the day view, whose header
+   *  pill is the tappable one (web parity). */
+  labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** Per-date day-label colour → light column wash; undefined resolver
+   *  when team.tint_days_by_label is off (see DayColumn.tintColor). */
+  labelTintFor?: (dateYmd: string) => string | null;
   /** Buffer after each appointment (team ?? global), minutes. */
   bufferMinutes?: number;
   nowMinutes?: number | null;
@@ -139,12 +149,13 @@ export function WeekView({
           const isToday = sameDay(d, today);
           const weekend = d.getDay() === 0 || d.getDay() === 6;
           const dayAppts = byDay.get(formatYMD(d)) ?? [];
+          const label = labelFor?.(formatYMD(d)) ?? null;
           return (
             <Pressable
               key={formatYMD(d)}
               onPress={() => onPickDay(d)}
               accessibilityRole="button"
-              accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${dayAppts.length > 0 ? `, записей: ${dayAppts.length}` : ""}`}
+              accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${dayAppts.length > 0 ? `, записей: ${dayAppts.length}` : ""}${label ? `, метка: ${label.name}` : ""}`}
               style={{ flex: 1, alignItems: "center", paddingTop: 4 }}
             >
               <Text
@@ -196,6 +207,34 @@ export function WeekView({
                       : "transparent",
                 }}
               />
+              {/* Day-label pill — web DayColumn city pill / DayHeader
+                  parity: 3-letter uppercase slice in the label colour.
+                  Rendered after the presence dot so the dot keeps one
+                  height across all columns. */}
+              {label ? (
+                <View
+                  style={{
+                    marginTop: 3,
+                    borderRadius: 999,
+                    paddingHorizontal: 5,
+                    paddingVertical: 1,
+                    backgroundColor: `${label.color}1f`,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: "700",
+                      letterSpacing: 0.5,
+                      textTransform: "uppercase",
+                      color: label.color,
+                    }}
+                  >
+                    {label.name.slice(0, 3)}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         })}
@@ -232,6 +271,7 @@ export function WeekView({
               workStartHour={workStartHour}
               workEndHour={workEndHour}
               workBand={workBandFor?.(formatYMD(d))}
+              tintColor={labelTintFor?.(formatYMD(d)) ?? null}
               bufferMinutes={bufferMinutes}
               nowMinutes={nowMinutes}
             />

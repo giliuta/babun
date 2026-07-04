@@ -311,6 +311,7 @@ export function DayColumn({
   workBand,
   bufferMinutes = 0,
   nowMinutes,
+  tintColor,
 }: {
   dateYmd: string;
   appointments: Appointment[];
@@ -344,6 +345,9 @@ export function DayColumn({
   /** Current time in minutes since midnight (business timezone), ticked
    *  by the parent every minute. Null/undefined → no now-line. */
   nowMinutes?: number | null;
+  /** Day-label (city/tag) colour — washes the whole column very lightly
+   *  (web DayColumn tintByLabel, Phase I41). Null/undefined → no tint. */
+  tintColor?: string | null;
 }) {
   const t = useThemeColors();
   const blockColors = useBlockColors(teamColorFor);
@@ -406,6 +410,9 @@ export function DayColumn({
         position: "relative",
         borderLeftWidth: 1,
         borderLeftColor: t.separator,
+        // ~5% alpha of the label colour — reads as a hue, not a fill, so
+        // gridlines / washes / blocks above keep their contrast.
+        backgroundColor: tintColor ? `${tintColor}0d` : undefined,
       }}
     >
       {/* off-hours wash: before work start / after work end */}
@@ -763,6 +770,7 @@ export function DayView({
   workStartHour,
   workEndHour,
   workBandFor,
+  labelTintFor,
   bufferMinutes,
   nowMinutes,
   scrollToHour,
@@ -790,6 +798,9 @@ export function DayView({
   workEndHour?: number;
   /** Per-date work band from team_schedules (see DayColumn.workBand). */
   workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Per-date day-label colour → light column wash; undefined resolver
+   *  when team.tint_days_by_label is off (see DayColumn.tintColor). */
+  labelTintFor?: (dateYmd: string) => string | null;
   /** Buffer after each appointment (team ?? global), minutes. */
   bufferMinutes?: number;
   nowMinutes?: number | null;
@@ -853,6 +864,7 @@ export function DayView({
             workStartHour={workStartHour}
             workEndHour={workEndHour}
             workBand={workBandFor?.(dateYmd)}
+            tintColor={labelTintFor?.(dateYmd) ?? null}
             bufferMinutes={bufferMinutes}
             nowMinutes={nowMinutes}
           />

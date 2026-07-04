@@ -40,6 +40,7 @@ import { CalendarHeader } from "@/features/calendar/CalendarHeader";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { TeamChips } from "@/features/calendar/TeamChips";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
+import { CalendarOnboardingCard } from "@/features/calendar/CalendarOnboardingCard";
 import { CityPickerSheet } from "@/features/calendar/CityPickerSheet";
 import {
   dayCityKey,
@@ -232,6 +233,9 @@ export default function CalendarTab() {
   const [teamChoice, setTeamChoice] = useState<string | null>(null);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // First-run onboarding card — session-only dismissal (web persists to
+  // localStorage, STORY-060 §F1.1; the card self-clears once data appears).
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
   const [editing, setEditing] = useState<Appointment | null>(null);
   const [bookDefaults, setBookDefaults] = useState<
     {
@@ -355,19 +359,32 @@ export default function CalendarTab() {
   const setDayCityMut = useSetDayCity();
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const dayYmdForLabel = formatYMD(day);
-  // Метка дня: явная (day_cities) → основная метка команды (default_city).
-  const dayLabelName = activeTeamId
-    ? dayCities[dayCityKey(activeTeamId, dayYmdForLabel)] ??
-      activeTeam?.default_city ??
-      ""
-    : "";
-  const dayLabel = dayLabelName
-    ? {
-        name: dayLabelName,
-        color:
-          cities.find((c) => c.name === dayLabelName)?.color ?? t.accent,
-      }
-    : null;
+  // Date-label resolver: explicit (day_cities) → team default_city (web
+  // getCityFor parity). Shared by the day-header pill, the week header
+  // pills and the label-tint column wash below.
+  const labelFor = useCallback(
+    (dateYmd: string): { name: string; color: string } | null => {
+      if (!activeTeamId) return null;
+      const name =
+        dayCities[dayCityKey(activeTeamId, dateYmd)] ??
+        activeTeam?.default_city ??
+        "";
+      if (!name) return null;
+      return {
+        name,
+        color: cities.find((c) => c.name === name)?.color ?? t.accent,
+      };
+    },
+    [activeTeamId, activeTeam?.default_city, dayCities, cities, t.accent],
+  );
+  const dayLabel = labelFor(dayYmdForLabel);
+  // Label tint — the label colour washes the day columns very lightly (web
+  // DayColumn tintByLabel, Phase I41). The brigade «Метки» setting
+  // team.tint_days_by_label (default on) drops the resolver entirely.
+  const labelTintFor = useMemo(() => {
+    if (!(activeTeam?.tint_days_by_label ?? true)) return undefined;
+    return (dateYmd: string) => labelFor(dateYmd)?.color ?? null;
+  }, [activeTeam?.tint_days_by_label, labelFor]);
   const labelOptions = useMemo(
     () =>
       (activeTeam ? teamCities(activeTeam) : []).map((name) => ({
@@ -601,6 +618,7 @@ export default function CalendarTab() {
     workStartHour: calSettings?.workStartHour,
     workEndHour: calSettings?.workEndHour,
     workBandFor,
+    labelTintFor,
     bufferMinutes,
     nowMinutes,
     scrollToHour,
@@ -703,6 +721,7 @@ export default function CalendarTab() {
               days={gridDays}
               appointments={gridAppts}
               today={now}
+              labelFor={labelFor}
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
@@ -761,6 +780,20 @@ export default function CalendarTab() {
           </View>
         </GestureDetector>
       )}
+
+      {/* First-run onboarding — web CalendarOnboardingCard (STORY-060 §F1.1):
+          floats over the grid for a truly fresh tenant (0 clients, 0 services,
+          0 appointments); box-none overlay keeps everything around tappable. */}
+      {!onboardingDismissed &&
+      !isLoading &&
+      !error &&
+      clients.length === 0 &&
+      services.length === 0 &&
+      appts.length === 0 ? (
+        <CalendarOnboardingCard
+          onDismiss={() => setOnboardingDismissed(true)}
+        />
+      ) : null}
 
       {/* Пикер метки дня (web CityPickerModal): метки бригады + «Убрать». */}
       <CityPickerSheet
