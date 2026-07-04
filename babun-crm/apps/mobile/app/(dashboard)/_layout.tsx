@@ -1,4 +1,4 @@
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import {
   Calendar,
   LayoutGrid,
@@ -9,14 +9,31 @@ import {
 import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
+import { useSession } from "@/providers/SessionProvider";
+import { useOnboardingGate } from "@/lib/tenant";
 
 export default function DashboardLayout() {
   const t = useThemeColors();
+  const { session } = useSession();
+  // Onboarding gate — web parity with apps/web/src/app/dashboard/layout.tsx
+  // (STORY-040). Fail-open: "unknown" (a transient lookup error) stays in the
+  // dashboard so a configured user is never bounced onto the wizard.
+  const gate = useOnboardingGate();
   // Unread badge on the «Чаты» tab icon (web parity: the unread chip in
   // the chats nav title, chats/page.tsx:256–260). Reads the same ["chats"]
   // query the screens mutate, so it updates live.
   const { data: chats = [] } = useChats();
   const unread = getTotalUnread(chats);
+
+  // Route guard rendered as <Redirect> (not an effect): a signed-out user is
+  // sent to /login before the calendar can ever paint — no startup flash. The
+  // root layout has already resolved the session, so `session` here is final.
+  if (!session) return <Redirect href="/login" />;
+  if (gate.status === "loading") return null;
+  if (gate.status === "needs-onboarding" || gate.status === "no-tenant") {
+    return <Redirect href="/onboarding" />;
+  }
+
   return (
     <Tabs
       screenOptions={{
