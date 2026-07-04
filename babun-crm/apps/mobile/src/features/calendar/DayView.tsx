@@ -597,6 +597,64 @@ export function usePinchZoom({
   return { pinch, onScroll, onLayout };
 }
 
+// Sticky date header above the day grid — web parity (DayColumn header):
+// the user must always see WHICH day is open. Same visual language as the
+// WeekView days-row: uppercase weekday, 26pt date circle (cobalt = today),
+// red weekends. `label` reserves the slot for the per-day city tag.
+const WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+function DayHeader({ dateYmd, isToday }: { dateYmd: string; isToday: boolean }) {
+  const t = useThemeColors();
+  const [y, m, d] = dateYmd.split("-").map(Number);
+  const date = new Date(y, (m || 1) - 1, d || 1);
+  const weekend = date.getDay() === 0 || date.getDay() === 6;
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        paddingBottom: 4,
+        paddingTop: 2,
+        borderBottomWidth: 1,
+        borderBottomColor: t.separator,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 11,
+          fontWeight: "600",
+          color: weekend ? t.danger : t.faint,
+          textTransform: "uppercase",
+        }}
+      >
+        {WEEKDAYS_RU[(date.getDay() + 6) % 7]}
+      </Text>
+      <View
+        style={{
+          marginTop: 2,
+          height: 26,
+          minWidth: 26,
+          borderRadius: 13,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: isToday ? t.accent : "transparent",
+          paddingHorizontal: 6,
+        }}
+      >
+        <Text
+          className="tabular-nums"
+          style={{
+            fontSize: 15,
+            fontWeight: "700",
+            color: isToday ? "#fff" : weekend ? t.danger : t.ink,
+          }}
+        >
+          {date.getDate()}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 // Single-day grid: hour rail + one day column, vertically scrollable.
 export function DayView({
   dateYmd,
@@ -662,7 +720,9 @@ export function DayView({
       else if (e.translationX < -55 && onNext) runOnJS(onNext)();
     });
   return (
-    <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
+    <View style={{ flex: 1 }}>
+      <DayHeader dateYmd={dateYmd} isToday={isToday} />
+      <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -693,6 +753,7 @@ export function DayView({
           />
         </View>
       </ScrollView>
-    </GestureDetector>
+      </GestureDetector>
+    </View>
   );
 }
