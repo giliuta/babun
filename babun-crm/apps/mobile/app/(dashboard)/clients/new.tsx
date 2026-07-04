@@ -15,6 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -23,14 +24,22 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { Check, ChevronLeft } from "lucide-react-native";
+import { Check, ChevronDown, ChevronLeft } from "lucide-react-native";
+import type { CountryCode } from "libphonenumber-js";
 import type { Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
 import { useBookingNav } from "@/features/clients/card-booking";
 import { useCreateClient } from "@/features/clients/queries";
-import { tryToE164 } from "@/features/clients/phone";
+import {
+  COUNTRY_NAMES_RU,
+  countryDialCode,
+  countryFlag,
+  DEFAULT_COUNTRY,
+  SUPPORTED_COUNTRIES,
+  tryToE164,
+} from "@/features/clients/phone";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
@@ -43,10 +52,14 @@ export default function NewClientScreen() {
   const book = useBookingNav();
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  // Web parity (clients-99 F2.7, CountryPhoneInput): страна выбирается,
+  // +357 — лишь дефолт. Влияет на E.164-нормализацию и дедуп.
+  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
+  const [countryOpen, setCountryOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<Client | null>(null);
 
-  const e164 = tryToE164(phone.trim());
+  const e164 = tryToE164(phone.trim(), country);
 
   // ── Live dedup: debounce the E.164 lookup while the user types. A
   // sequence guard drops stale responses (fast typing across two numbers).
@@ -171,6 +184,20 @@ export default function NewClientScreen() {
               big title, name the quiet subtitle. */}
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
             <View className="flex-row items-center gap-2">
+              {/* Флаг + код — пикер страны (web CountryPhoneInput). */}
+              <Pressable
+                onPress={() => setCountryOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Страна: ${COUNTRY_NAMES_RU[country] ?? country}`}
+                className="min-h-[44px] flex-row items-center gap-1 rounded-xl px-2 active:opacity-70"
+                style={{ backgroundColor: t.fill }}
+              >
+                <Text className="text-lg">{countryFlag(country)}</Text>
+                <Text className="text-sm" style={{ color: t.sub }}>
+                  {countryDialCode(country)}
+                </Text>
+                <ChevronDown color={t.chevron} size={14} strokeWidth={2} />
+              </Pressable>
               <TextInput
                 value={phone}
                 // Сброс дубля на КАЖДЫЙ ввод: стейл-баннер прошлого номера
@@ -263,6 +290,53 @@ export default function NewClientScreen() {
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Пикер страны — нижний лист со списком (web CountryPhoneInput). */}
+      <Modal
+        visible={countryOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCountryOpen(false)}
+      >
+        <Pressable
+          className="flex-1"
+          style={{ backgroundColor: t.scrim }}
+          onPress={() => setCountryOpen(false)}
+        />
+        <View
+          className="max-h-[60%] rounded-t-3xl pb-8 pt-2"
+          style={{ backgroundColor: t.surface }}
+        >
+          <ScrollView>
+            {SUPPORTED_COUNTRIES.map((cc) => {
+              const active = cc === country;
+              return (
+                <Pressable
+                  key={cc}
+                  onPress={() => {
+                    setCountry(cc);
+                    setCountryOpen(false);
+                  }}
+                  accessibilityRole="button"
+                  className="flex-row items-center gap-3 px-5 py-3 active:opacity-60"
+                  style={active ? { backgroundColor: `${t.accent}14` } : undefined}
+                >
+                  <Text className="text-lg">{countryFlag(cc)}</Text>
+                  <Text
+                    className="flex-1 text-base"
+                    style={{ color: active ? t.accent : t.ink }}
+                  >
+                    {COUNTRY_NAMES_RU[cc] ?? cc}
+                  </Text>
+                  <Text className="text-sm" style={{ color: t.sub }}>
+                    {countryDialCode(cc)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
     </Screen>
   );
 }

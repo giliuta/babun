@@ -12,12 +12,49 @@
 // hoisting accidents.
 
 import {
+  getCountryCallingCode,
   parsePhoneNumberFromString,
   type CountryCode,
 } from "libphonenumber-js";
 
 /** Tenant default country — Cyprus today (mirrors the web default). */
 export const DEFAULT_COUNTRY: CountryCode = "CY";
+
+// Country-picker data — web parity (apps/web/src/lib/phone/normalize.ts,
+// clients-99 F2.7 «drop the hardcoded +357»).
+export const SUPPORTED_COUNTRIES: readonly CountryCode[] = [
+  "CY", "GR", "RU", "UA", "GB", "DE", "FR", "IT", "ES", "PT",
+  "PL", "RO", "BG", "TR", "IL", "CZ", "SK", "HU", "NL", "BE",
+  "AT", "CH", "DK", "SE", "NO", "FI", "LV", "LT", "EE",
+] as const;
+
+/** Flag emoji: each ASCII letter → regional-indicator symbol. */
+export function countryFlag(code: CountryCode): string {
+  const base = 0x1f1e6 - "A".charCodeAt(0);
+  return [...code]
+    .map((c) => String.fromCodePoint(base + c.charCodeAt(0)))
+    .join("");
+}
+
+/** «+357»-style dial code; never throws. */
+export function countryDialCode(code: CountryCode): string {
+  try {
+    return `+${getCountryCallingCode(code)}`;
+  } catch {
+    return "+";
+  }
+}
+
+/** Human-readable country name (RU); falls back to the ISO code. */
+export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> = {
+  CY: "Кипр", GR: "Греция", RU: "Россия", UA: "Украина",
+  GB: "Великобритания", DE: "Германия", FR: "Франция", IT: "Италия",
+  ES: "Испания", PT: "Португалия", PL: "Польша", RO: "Румыния",
+  BG: "Болгария", TR: "Турция", IL: "Израиль", CZ: "Чехия",
+  SK: "Словакия", HU: "Венгрия", NL: "Нидерланды", BE: "Бельгия",
+  AT: "Австрия", CH: "Швейцария", DK: "Дания", SE: "Швеция",
+  NO: "Норвегия", FI: "Финляндия", LV: "Латвия", LT: "Литва", EE: "Эстония",
+};
 
 /**
  * Returns the canonical E.164 form of `raw` or `null` if the number
