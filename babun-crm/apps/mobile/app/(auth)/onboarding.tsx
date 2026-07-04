@@ -72,7 +72,7 @@ const TEAM_CHECKLIST: readonly { emoji: string; title: string; body: string }[] 
   {
     emoji: "📲",
     title: "Подключите SMS-уведомления",
-    body: "Настройки → Автоматические SMS. Возвраты за 24 ч / 2 ч до визита.",
+    body: "Кабинет → SMS-шаблоны — готовые тексты напоминаний и подтверждений для клиентов.",
   },
 ];
 
