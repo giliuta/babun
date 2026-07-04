@@ -12,7 +12,16 @@ import {
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Check, ChevronLeft, Minus, Plus, Repeat, Search, X } from "lucide-react-native";
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  Minus,
+  Plus,
+  Repeat,
+  Search,
+  X,
+} from "lucide-react-native";
 import {
   appointmentTotal,
   globalDiscountAmount,
@@ -34,6 +43,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
@@ -71,6 +81,17 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "cancelled", label: "Отменено" },
 ];
 
+// "HH:MM" → minutes since midnight (sheet-local; shared helpers untouched).
+const hmToMin = (hm: string) => {
+  const [h, m] = hm.split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+// Shallow id+qty+price signature — service-list equality for the dirty check.
+const svcSignature = (
+  list: { serviceId: string; quantity: number; pricePerUnit: number }[],
+) => JSON.stringify(list.map((s) => [s.serviceId, s.quantity, s.pricePerUnit]));
+
 export function AppointmentSheet({
   visible,
   onClose,
@@ -100,6 +121,9 @@ export function AppointmentSheet({
   const deleteMut = useDeleteAppointment();
   const createReminder = useCreateReminder();
   const toast = useToast();
+  // Grid step drives the initial slot length for a new record (web parity:
+  // the team's slot minutes size the tap-created slot, not a fixed hour).
+  const { data: calSettings } = useCalendarSettings();
 
   const catalog = useMemo(
     () => new Map(services.map((s) => [s.id, s])),
@@ -225,13 +249,17 @@ export function AppointmentSheet({
       setCancelReason(appointment.cancel_reason ?? "");
       setKind(appointment.kind === "work" ? "work" : "event");
       setEventColor(appointment.color_override ?? null);
-      setDurationTouched(true);
+      // Web parity: the flag resets on EVERY open (edit too), so adding
+      // services keeps auto-extending the end — the grow-only recalc
+      // below never shrinks the stored end anyway.
+      setDurationTouched(false);
     } else {
       const today = formatYMD(new Date());
+      const start = defaults?.time_start ?? "10:00";
       setClientId(defaults?.client_id ?? null);
       setDate(defaults?.date ?? today);
-      setTimeStart(defaults?.time_start ?? "10:00");
-      setTimeEnd(addMinutesHM(defaults?.time_start ?? "10:00", 60));
+      setTimeStart(start);
+      setTimeEnd(addMinutesHM(start, calSettings?.gridStep ?? 60));
       setServiceIds([]);
       // Умный дефолт: команда последней созданной записи (записи одной
       // бригаде обычно набивают подряд). Явный defaults?.team_id
@@ -276,11 +304,19 @@ export function AppointmentSheet({
     [selectedServices],
   );
 
-  // Auto-extend end time from service duration unless the operator set it.
+  // Live end-time recalc (web parity): end ≥ start + Σ service durations,
+  // grow-only — a manually-set or stored end is never shrunk back. Clamped
+  // at 23:59 with a toast: a cross-midnight visit is booked as two records.
   useEffect(() => {
-    if (durationTouched) return;
-    setTimeEnd(addMinutesHM(timeStart, computedDuration || 60));
-  }, [timeStart, computedDuration, durationTouched]);
+    if (durationTouched || computedDuration <= 0) return;
+    const wanted = hmToMin(timeStart) + computedDuration;
+    const requiredEnd = Math.min(23 * 60 + 59, wanted);
+    if (requiredEnd > hmToMin(timeEnd)) {
+      setTimeEnd(addMinutesHM("00:00", requiredEnd));
+      if (wanted > requiredEnd)
+        toast("Запись выходит за полночь — конец обрезан до 23:59", "info");
+    }
+  }, [timeStart, timeEnd, computedDuration, durationTouched, toast]);
 
   // Keep total in sync with catalog unless the operator overrode it.
   useEffect(() => {
@@ -311,6 +347,90 @@ export function AppointmentSheet({
       : comment.trim().length > 0) &&
     !createMut.isPending &&
     !updateMut.isPending;
+
+  // Double-booking warn (web OverlapWarning parity): another record of the
+  // same team on the same date whose half-open time range intersects the
+  // draft's. Warning only — overlaps happen by accident in HVAC and the
+  // dispatcher must SEE them, never be blocked from saving.
+  const overlap = useMemo<Appointment | null>(() => {
+    if (kind === "event" || !teamId || !date || timeStart >= timeEnd)
+      return null;
+    return (
+      allAppts.find(
+        (a) =>
+          a.id !== appointment?.id &&
+          a.status !== "cancelled" &&
+          a.date === date &&
+          a.team_id === teamId &&
+          timeStart < a.time_end &&
+          a.time_start < timeEnd,
+      ) ?? null
+    );
+  }, [allAppts, appointment?.id, kind, teamId, date, timeStart, timeEnd]);
+  const overlapWho = overlap
+    ? overlap.client_id
+      ? clients.find((c) => c.id === overlap.client_id)?.full_name || "Запись"
+      : overlap.comment || "Запись"
+    : null;
+
+  // Dirty draft for the close guard: create — any meaningful field beyond
+  // the opening defaults (slot tap / «Записать сюда» prefills are not dirt);
+  // edit — the draft differs from the stored record (web v619 field set,
+  // extended with the fields this sheet edits).
+  const dirty = useMemo(() => {
+    if (!isEdit || !appointment) {
+      return (
+        clientId !== (defaults?.client_id ?? null) ||
+        serviceIds.length > 0 ||
+        comment.trim().length > 0 ||
+        globalDiscount !== null ||
+        customTotal ||
+        masterId !== null ||
+        eventColor !== null ||
+        payMethod !== null
+      );
+    }
+    return (
+      clientId !== appointment.client_id ||
+      date !== appointment.date ||
+      timeStart !== appointment.time_start ||
+      timeEnd !== appointment.time_end ||
+      teamId !== appointment.team_id ||
+      masterId !== (appointment.master_id ?? null) ||
+      status !== appointment.status ||
+      comment.trim() !== (appointment.comment ?? "").trim() ||
+      cancelReason.trim() !== (appointment.cancel_reason ?? "").trim() ||
+      locationId !== (appointment.location_id ?? null) ||
+      eventColor !== (appointment.color_override ?? null) ||
+      customTotal !== !!appointment.custom_total ||
+      (customTotal && (Number(total) || 0) !== (appointment.total_amount ?? 0)) ||
+      svcSignature(selectedServices) !== svcSignature(appointment.services ?? []) ||
+      JSON.stringify(globalDiscount) !==
+        JSON.stringify(appointment.global_discount ?? null) ||
+      payMethod !== null
+    );
+  }, [
+    isEdit,
+    appointment,
+    defaults?.client_id,
+    clientId,
+    serviceIds.length,
+    comment,
+    globalDiscount,
+    customTotal,
+    total,
+    masterId,
+    eventColor,
+    payMethod,
+    date,
+    timeStart,
+    timeEnd,
+    teamId,
+    status,
+    cancelReason,
+    locationId,
+    selectedServices,
+  ]);
 
   const buildPatch = (): Partial<Appointment> => {
     const cancel =
@@ -417,6 +537,27 @@ export function AppointmentSheet({
     }
   };
 
+  // Dirty-close guard (web v667, owner-locked): ✕ and the backdrop never
+  // silently drop an edited draft — the operator decides explicitly.
+  const requestClose = () => {
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    Alert.alert("Сохранить изменения?", "В форме есть несохранённые изменения.", [
+      {
+        text: "Сохранить",
+        onPress: () => {
+          // Not savable yet (нет клиента/услуги) — stay on the sheet so
+          // the draft survives instead of half-saving or dropping it.
+          if (canSave) void save();
+        },
+      },
+      { text: "Не сохранять", style: "destructive", onPress: onClose },
+      { text: "Отмена", style: "cancel" },
+    ]);
+  };
+
   const remove = () => {
     if (!appointment) return;
     Alert.alert("Удалить запись?", "Действие необратимо.", [
@@ -437,18 +578,18 @@ export function AppointmentSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} />
+        <Pressable className="flex-1" onPress={requestClose} />
         <View className="h-[88%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.canvas }}>
           {/* header */}
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: t.separator, backgroundColor: t.surface }}>
             <Pressable
-              onPress={onClose}
+              onPress={requestClose}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Закрыть"
@@ -533,6 +674,23 @@ export function AppointmentSheet({
             ) : null}
 
               </>
+            ) : null}
+
+            {/* double-booking warn — visible, never blocks save (web
+                OverlapWarning parity) */}
+            {overlap ? (
+              <View
+                className="mx-3 mt-2 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
+                style={{
+                  backgroundColor: `${t.warning}14`,
+                  borderColor: `${t.warning}33`,
+                }}
+              >
+                <AlertTriangle color={t.warning} size={ICON.sm} />
+                <Text className="flex-1 text-[13px] font-medium" style={{ color: t.warning }}>
+                  Пересекается с {overlap.time_start}–{overlap.time_end} · {overlapWho}
+                </Text>
+              </View>
             ) : null}
 
             {/* date + time */}
