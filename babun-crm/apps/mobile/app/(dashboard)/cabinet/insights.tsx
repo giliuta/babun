@@ -280,7 +280,7 @@ export default function InsightsScreen() {
         <View className="flex-row gap-2.5 px-4">
           <KpiTile label="Записей" value={String(currentApts.length)} delta={toDeltaPct(countDelta)} color={t.accent} t={t} />
           <KpiTile label="Выручка" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
-          <KpiTile label="Завершено" value={String(completedApts.length)} delta={toDeltaPct(completedDelta)} color={t.ink} t={t} />
+          <KpiTile label="Завершено" value={String(completedApts.length)} delta={toDeltaPct(completedDelta)} color={t.accent} t={t} />
         </View>
 
         <LeaderCard title="Топ команды" items={topTeams} t={t} />
