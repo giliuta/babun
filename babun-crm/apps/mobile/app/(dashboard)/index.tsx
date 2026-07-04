@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -159,6 +160,12 @@ export default function CalendarTab() {
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (apt.time_start === newStart) return;
+    // Виртуальное вхождение повтора двигать нельзя — правится только seed
+    // (id виртуала синтетический, мутация по нему невалидна).
+    if ((apt as { virtualParentId?: string }).virtualParentId) {
+      toast("Повтор события — измените исходную запись");
+      return;
+    }
     updateAppt.mutate(
       { id: apt.id, patch: { time_start: newStart, time_end: newEnd } },
       {
@@ -300,11 +307,28 @@ export default function CalendarTab() {
     (activeTeamId ? a.team_id === activeTeamId : true) &&
     (!hideCancelled || a.status !== "cancelled");
 
+  // Web parity (dashboard/page.tsx, STORY-091): recurring seeds expand into
+  // virtual occurrences inside a −30/+60-day window around the visible
+  // anchor (month cursor in month mode, focused day otherwise). Virtuals
+  // carry virtualParentId — openEdit routes their tap back to the seed.
+  const expandAnchor = mode === "month" ? cursor : day;
+  const expandedAppts = useMemo(() => {
+    const fromKey = formatYMD(addDays(expandAnchor, -30));
+    const toKey = formatYMD(addDays(expandAnchor, 60));
+    const out: Appointment[] = [];
+    for (const a of appts) {
+      const rule = a.event_repeat;
+      if (!rule || rule.kind === "none") out.push(a);
+      else out.push(...expandRepeat(a, fromKey, toKey));
+    }
+    return out;
+  }, [appts, expandAnchor]);
+
   // Team-scoped set — MonthView counts every visible cell (incl. the
   // prev/next-month tails) and the MiniCalendar dots from this.
   const visibleAppts = useMemo(
-    () => appts.filter(byTeam),
-    [appts, activeTeamId, hideCancelled],
+    () => expandedAppts.filter(byTeam),
+    [expandedAppts, activeTeamId, hideCancelled],
   );
 
   const dayYmd = formatYMD(day);
@@ -385,7 +409,10 @@ export default function CalendarTab() {
     );
   };
   const openEdit = (apt: Appointment) => {
-    setEditing(apt);
+    // Виртуальное вхождение повтора редактируем через его seed-запись —
+    // у виртуала синтетический id, мутации по нему невалидны (web parity).
+    const parentId = (apt as { virtualParentId?: string }).virtualParentId;
+    setEditing(parentId ? appts.find((a) => a.id === parentId) ?? apt : apt);
     setBookDefaults(undefined);
     setSheetOpen(true);
   };
