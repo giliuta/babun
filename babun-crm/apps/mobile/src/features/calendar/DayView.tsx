@@ -603,7 +603,18 @@ export function usePinchZoom({
 // red weekends. `label` reserves the slot for the per-day city tag.
 const WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-function DayHeader({ dateYmd, isToday }: { dateYmd: string; isToday: boolean }) {
+function DayHeader({
+  dateYmd,
+  isToday,
+  label,
+  onLabelTap,
+}: {
+  dateYmd: string;
+  isToday: boolean;
+  /** Метка дня (город бригады) — web parity DayColumn city pill. */
+  label?: { name: string; color: string } | null;
+  onLabelTap?: () => void;
+}) {
   const t = useThemeColors();
   const [y, m, d] = dateYmd.split("-").map(Number);
   const date = new Date(y, (m || 1) - 1, d || 1);
@@ -651,6 +662,30 @@ function DayHeader({ dateYmd, isToday }: { dateYmd: string; isToday: boolean }) 
           {date.getDate()}
         </Text>
       </View>
+      {/* Пилл метки дня: короткое имя (3 буквы, web parity slice(0,3));
+          без метки — тихий «+ метка». Тап открывает пикер. */}
+      {onLabelTap ? (
+        <Pressable
+          onPress={onLabelTap}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={label ? `Метка дня: ${label.name}` : "Задать метку дня"}
+          className="mt-1 rounded-full px-2 py-0.5 active:opacity-70"
+          style={{ backgroundColor: label ? `${label.color}1f` : t.fill }}
+        >
+          <Text
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
+              color: label ? label.color : t.faint,
+            }}
+          >
+            {label ? label.name.slice(0, 3) : "+ метка"}
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -677,6 +712,8 @@ export function DayView({
   workEndHour,
   nowMinutes,
   scrollToHour,
+  dayLabel,
+  onDayLabelTap,
 }: {
   dateYmd: string;
   appointments: Appointment[];
@@ -700,6 +737,9 @@ export function DayView({
   nowMinutes?: number | null;
   /** Auto-scroll target on open (settings.scrollOpenHour). */
   scrollToHour?: number;
+  /** Метка дня для шапки (город бригады). */
+  dayLabel?: { name: string; color: string } | null;
+  onDayLabelTap?: () => void;
 }) {
   const scrollRef = useRef<ScrollView>(null);
   useEffect(() => {
@@ -721,7 +761,12 @@ export function DayView({
     });
   return (
     <View style={{ flex: 1 }}>
-      <DayHeader dateYmd={dateYmd} isToday={isToday} />
+      <DayHeader
+        dateYmd={dateYmd}
+        isToday={isToday}
+        label={dayLabel}
+        onLabelTap={onDayLabelTap}
+      />
       <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
       <ScrollView
         ref={scrollRef}

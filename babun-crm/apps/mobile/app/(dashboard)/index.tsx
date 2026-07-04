@@ -36,6 +36,12 @@ import { CalendarHeader } from "@/features/calendar/CalendarHeader";
 import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { TeamChips } from "@/features/calendar/TeamChips";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
+import { CityPickerSheet } from "@/features/calendar/CityPickerSheet";
+import {
+  dayCityKey,
+  useDayCities,
+  useSetDayCity,
+} from "@/features/calendar/day-cities";
 import { MonthView } from "@/features/calendar/MonthView";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
@@ -43,7 +49,12 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useServices } from "@/features/services/queries";
-import { useCreateTeam, useTeams } from "@/features/reference/queries";
+import {
+  teamCities,
+  useCities,
+  useCreateTeam,
+  useTeams,
+} from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { TEAM_COLORS } from "@babun/shared/local/masters";
 
@@ -151,6 +162,7 @@ export default function CalendarTab() {
   const updateAppt = useUpdateAppointment();
   const createTeam = useCreateTeam();
   const toast = useToast();
+  const t = useThemeColors();
 
   // Pull-to-refresh (agenda list). Invalidates the shared ['appointments']
   // key so the query refetches from the repo (authoritative, network-fresh —
@@ -319,6 +331,35 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? null;
 
+  // ─── Метки дней (web parity: city pill в шапке дня) ─────────────────
+  const { data: cities = [] } = useCities();
+  const { data: dayCities = {} } = useDayCities();
+  const setDayCityMut = useSetDayCity();
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+  const dayYmdForLabel = formatYMD(day);
+  // Метка дня: явная (day_cities) → основная метка команды (default_city).
+  const dayLabelName = activeTeamId
+    ? dayCities[dayCityKey(activeTeamId, dayYmdForLabel)] ??
+      activeTeam?.default_city ??
+      ""
+    : "";
+  const dayLabel = dayLabelName
+    ? {
+        name: dayLabelName,
+        color:
+          cities.find((c) => c.name === dayLabelName)?.color ?? t.accent,
+      }
+    : null;
+  const labelOptions = useMemo(
+    () =>
+      (activeTeam ? teamCities(activeTeam) : []).map((name) => ({
+        name,
+        color: cities.find((c) => c.name === name)?.color ?? t.accent,
+      })),
+    [activeTeam, cities, t.accent],
+  );
+
   const hideCancelled = !!calSettings?.hideCancelled;
   const byTeam = (a: Appointment) =>
     (activeTeamId ? a.team_id === activeTeamId : true) &&
@@ -433,8 +474,6 @@ export default function CalendarTab() {
     setBookDefaults(undefined);
     setSheetOpen(true);
   };
-
-  const t = useThemeColors();
 
   const headerTitle = (
     mode === "week" ? weekDays[3] : mode === "month" ? monthAnchor : day
@@ -614,6 +653,10 @@ export default function CalendarTab() {
               dateYmd={dayYmd}
               appointments={dayAppts}
               isToday={dayYmd === todayYmd}
+              dayLabel={dayLabel}
+              onDayLabelTap={
+                activeTeamId ? () => setCityPickerOpen(true) : undefined
+              }
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
@@ -644,6 +687,43 @@ export default function CalendarTab() {
           </View>
         </GestureDetector>
       )}
+
+      {/* Пикер метки дня (web CityPickerModal): метки бригады + «Убрать». */}
+      <CityPickerSheet
+        visible={cityPickerOpen}
+        dateLabel={day.toLocaleDateString("ru-RU", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+        })}
+        options={labelOptions}
+        selected={
+          activeTeamId
+            ? dayCities[dayCityKey(activeTeamId, dayYmdForLabel)] ?? ""
+            : ""
+        }
+        onPick={(name) => {
+          if (activeTeamId) {
+            setDayCityMut.mutate({
+              teamId: activeTeamId,
+              date: dayYmdForLabel,
+              city: name,
+            });
+          }
+          setCityPickerOpen(false);
+        }}
+        onClear={() => {
+          if (activeTeamId) {
+            setDayCityMut.mutate({
+              teamId: activeTeamId,
+              date: dayYmdForLabel,
+              city: "",
+            });
+          }
+          setCityPickerOpen(false);
+        }}
+        onClose={() => setCityPickerOpen(false)}
+      />
 
       <MiniCalendar
         visible={miniCalOpen}
