@@ -185,8 +185,12 @@ export default function CalendarTab() {
   }>();
 
   const [mode, setMode] = useState<CalMode>("week");
-  const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
+  // ЕДИНЫЙ якорь даты для всех видов (web parity: один currentMonday).
+  // Раньше было два стейта (day + cursor месяца) — они рассинхронивались:
+  // свайп месяца двигал только cursor, выбор дня — только day, и переход
+  // Месяц↔День «прыгал» на устаревшую дату. Месяц теперь ДЕРИВАТ от day.
   const [day, setDay] = useState(() => startOfDay(new Date()));
+  const monthAnchor = useMemo(() => startOfMonth(day), [day]);
   // Pixels-per-hour for the time grid — pinch-to-zoom (session-only, web
   // parity: web resets zoom on reload too). Shared by Day + Week grids.
   const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
@@ -244,9 +248,11 @@ export default function CalendarTab() {
         teamId: undefined,
       });
     } else if (params.date) {
+      // Переход по дате (карточка клиента, визиты мастера) = «покажи этот
+      // день»: открываем именно День (web ?view=day&date= parity).
       const d = parseYMD(params.date);
-      setCursor(startOfMonth(d));
       setDay(startOfDay(d));
+      setMode("day");
       router.setParams({ date: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -311,7 +317,7 @@ export default function CalendarTab() {
   // virtual occurrences inside a −30/+60-day window around the visible
   // anchor (month cursor in month mode, focused day otherwise). Virtuals
   // carry virtualParentId — openEdit routes their tap back to the seed.
-  const expandAnchor = mode === "month" ? cursor : day;
+  const expandAnchor = day;
   const expandedAppts = useMemo(() => {
     const fromKey = formatYMD(addDays(expandAnchor, -30));
     const toKey = formatYMD(addDays(expandAnchor, 60));
@@ -420,32 +426,30 @@ export default function CalendarTab() {
   const t = useThemeColors();
 
   const headerTitle = (
-    mode === "week" ? weekDays[3] : mode === "month" ? cursor : day
+    mode === "week" ? weekDays[3] : mode === "month" ? monthAnchor : day
   )
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
     .replace(/\s*г\.?\s*$/i, "");
 
   const isOnToday =
     mode === "month"
-      ? cursor.getFullYear() === now.getFullYear() &&
-        cursor.getMonth() === now.getMonth()
+      ? monthAnchor.getFullYear() === now.getFullYear() &&
+        monthAnchor.getMonth() === now.getMonth()
       : mode === "week" || mode === "3days"
         ? gridYmds.includes(todayYmd)
         : dayYmd === todayYmd;
 
-  const goToday = () => {
-    setDay(startOfDay(now));
-    setCursor(startOfMonth(now));
-  };
+  const goToday = () => setDay(startOfDay(now));
   const jumpToDate = (d: Date) => {
     setDay(startOfDay(d));
-    setCursor(startOfMonth(d));
     setMiniCalOpen(false);
   };
+  // Листание месяца двигает ТОТ ЖЕ якорь: day = 1-е число целевого месяца,
+  // поэтому Месяц→День всегда открывает согласованную дату.
   const prevMonth = () =>
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1));
+    setDay((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () =>
-    setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1));
+    setDay((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
   const monthSwipe = Gesture.Pan()
     .activeOffsetX([-25, 25])
     .failOffsetY([-18, 18])
@@ -610,12 +614,11 @@ export default function CalendarTab() {
         <GestureDetector gesture={monthSwipe}>
           <View className="flex-1">
             <MonthView
-              month={cursor}
+              month={monthAnchor}
               appointments={visibleAppts}
               todayYmd={todayYmd}
               onPickDay={(d) => {
                 setDay(startOfDay(d));
-                setCursor(startOfMonth(d));
                 setMode("day");
               }}
             />
