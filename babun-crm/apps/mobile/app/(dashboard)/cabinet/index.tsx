@@ -2,6 +2,7 @@ import { useMemo, type ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
+  BarChart3,
   Boxes,
   Building2,
   CalendarCheck2,
@@ -142,6 +143,9 @@ export default function CabinetHome() {
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <GroupLabel>Смена</GroupLabel>
         <SectionCard>
+          {/* Веб: АНАЛИТИКА → Сводка (KPI + топы за период). */}
+          <MenuRow icon={BarChart3} label="Сводка" href={"/cabinet/insights" as Href} />
+          <Divider inset={56} />
           <MenuRow icon={CalendarCheck2} label="Закрыть день" href="/cabinet/close-day" />
           <Divider inset={56} />
           {/* Веб: /dashboard/unclosed («Не закрыто») живёт рядом с закрытием
