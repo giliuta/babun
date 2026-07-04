@@ -66,11 +66,16 @@ export default function RegisterScreen() {
       setLoading(false);
       return;
     }
-    if (!data.session) {
-      setPending(true);
-      setCooldown(45);
-      setLoading(false);
+    if (data.session) {
+      // Email confirmation is off — we are signed in already. Go straight to
+      // the onboarding gate (it re-routes onboarded accounts to the dashboard).
+      // Keep the spinner on until navigation unmounts this screen.
+      router.replace("/onboarding");
+      return;
     }
+    setPending(true);
+    setCooldown(45);
+    setLoading(false);
   }
 
   async function resend() {
