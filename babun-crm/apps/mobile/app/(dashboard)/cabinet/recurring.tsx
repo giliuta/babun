@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
-import { Check, Phone, Search, X } from "lucide-react-native";
+import { Check, Phone, Search, StickyNote, X } from "lucide-react-native";
 import {
   addMonthsYYYYMMDD,
   dueReminders,
@@ -166,6 +166,15 @@ export default function RecurringScreen() {
             >
               {tone.label}
             </Text>
+            {/* Web parity: заметка напоминания со StickyNote-иконкой. */}
+            {item.note ? (
+              <View className="mt-1 flex-row items-start gap-1">
+                <StickyNote color={t.sub} size={12} style={{ marginTop: 2 }} />
+                <Text className="flex-1 text-xs" style={{ color: t.sub }}>
+                  {item.note}
+                </Text>
+              </View>
+            ) : null}
           </View>
           {item.phone ? (
             <Pressable
