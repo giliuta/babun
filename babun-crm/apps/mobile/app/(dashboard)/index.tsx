@@ -29,7 +29,11 @@ import {
   parseYMD,
 } from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
-import { DayView, HOUR_H_DEFAULT } from "@/features/calendar/DayView";
+import {
+  DayView,
+  HOUR_H_DEFAULT,
+  type WorkBand,
+} from "@/features/calendar/DayView";
 import { WeekView } from "@/features/calendar/WeekView";
 import { type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { CalendarHeader } from "@/features/calendar/CalendarHeader";
@@ -56,6 +60,8 @@ import {
   useTeams,
 } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useTeamSchedule } from "@/features/reference/team-schedule";
+import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { TEAM_COLORS } from "@babun/shared/local/masters";
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
@@ -84,6 +90,16 @@ function isSameDay(a: Date, b: Date) {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+// "HH:MM" → fractional hours, null on garbage (web dashboard/page.tsx
+// parseHour, :570-575). The team-hub TimeField can persist free text, so
+// every read here falls back to the global setting instead of breaking
+// the grid.
+function parseHourHM(s: string | null | undefined): number | null {
+  if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return null;
+  const [h, m] = s.split(":").map(Number);
+  const val = h + m / 60;
+  return val >= 0 && val <= 24 ? val : null;
 }
 
 function AppointmentRow({
@@ -227,10 +243,20 @@ export default function CalendarTab() {
     } | undefined
   >(undefined);
 
-  // «Now» in the BUSINESS timezone (settings.timezone, web parity), ticked
-  // every minute so the now-line / past-wash / isToday stay live while the
-  // screen is open — including across midnight.
-  const timezone = calSettings?.timezone;
+  // Active team calendar. Derived (not stored) so it self-heals: falls back
+  // to the first team until the user picks one, and re-anchors if the chosen
+  // team disappears. Null only while there are no teams (→ first-run gate).
+  const activeTeamId =
+    teamChoice && teams.some((tm) => tm.id === teamChoice)
+      ? teamChoice
+      : teams[0]?.id ?? null;
+  const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+
+  // «Now» in the BUSINESS timezone, ticked every minute so the now-line /
+  // past-wash / isToday stay live while the screen is open — including
+  // across midnight. Per-brigade timezone wins over the global setting
+  // (web parity: activeBrigadeTimezone, dashboard/page.tsx:752-756).
+  const timezone = activeTeam?.timezone ?? calSettings?.timezone;
   const readNow = useCallback(
     () => (timezone ? getCurrentTimeInZone(timezone) : getCurrentCyprusTime()),
     [timezone],
@@ -323,20 +349,11 @@ export default function CalendarTab() {
     [teamColor],
   );
 
-  // Active team calendar. Derived (not stored) so it self-heals: falls back
-  // to the first team until the user picks one, and re-anchors if the chosen
-  // team disappears. Null only while there are no teams (→ first-run gate).
-  const activeTeamId =
-    teamChoice && teams.some((tm) => tm.id === teamChoice)
-      ? teamChoice
-      : teams[0]?.id ?? null;
-
   // ─── Метки дней (web parity: city pill в шапке дня) ─────────────────
   const { data: cities = [] } = useCities();
   const { data: dayCities = {} } = useDayCities();
   const setDayCityMut = useSetDayCity();
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
-  const activeTeam = teams.find((tm) => tm.id === activeTeamId);
   const dayYmdForLabel = formatYMD(day);
   // Метка дня: явная (day_cities) → основная метка команды (default_city).
   const dayLabelName = activeTeamId
@@ -360,7 +377,10 @@ export default function CalendarTab() {
     [activeTeam, cities, t.accent],
   );
 
-  const hideCancelled = !!calSettings?.hideCancelled;
+  // Скрывать отменённые: настройка бригады побеждает глобальную (web
+  // parity: dashboard/page.tsx:1613 `activeTeam?.hide_cancelled ?? …`).
+  const hideCancelled =
+    activeTeam?.hide_cancelled ?? !!calSettings?.hideCancelled;
   const byTeam = (a: Appointment) =>
     (activeTeamId ? a.team_id === activeTeamId : true) &&
     (!hideCancelled || a.status !== "cancelled");
@@ -508,12 +528,64 @@ export default function CalendarTab() {
       else if (e.translationX < -55) runOnJS(nextMonth)();
     });
 
-  // Visible grid window = settings.startHour/endHour (web parity, default
-  // 0..24). workStartHour/EndHour only paint the grey off-hours wash.
-  const visStartHour = calSettings?.startHour ?? 0;
-  const visEndHour = calSettings?.endHour ?? 24;
+  // Visible grid window: the active team's calendar_window_start/end wins,
+  // else global settings.startHour/endHour (web parity: windowBounds,
+  // dashboard/page.tsx:562-581). The mobile rail is integer-hour, so a
+  // «06:30» window widens outward to whole hours (floor/ceil) — a safe
+  // superset of web's fractional window. workStartHour/EndHour (or the
+  // team schedule below) only paint the grey off-hours wash.
+  const visStartHour = Math.max(
+    0,
+    Math.min(
+      23,
+      Math.floor(
+        parseHourHM(activeTeam?.calendar_window_start) ??
+          calSettings?.startHour ??
+          0,
+      ),
+    ),
+  );
+  const visEndHour = Math.max(
+    visStartHour + 1,
+    Math.min(
+      24,
+      Math.ceil(
+        parseHourHM(activeTeam?.calendar_window_end) ??
+          calSettings?.endHour ??
+          24,
+      ),
+    ),
+  );
+  // «Открывать на»: командное default_scroll_time побеждает глобальный
+  // scrollOpenHour → workStartHour (web parity: dashboard/page.tsx:807-829,
+  // brigade override wins unconditionally).
   const scrollToHour =
-    calSettings?.scrollOpenHour ?? calSettings?.workStartHour ?? 9;
+    parseHourHM(activeTeam?.default_scroll_time) ??
+    calSettings?.scrollOpenHour ??
+    calSettings?.workStartHour ??
+    9;
+  // Буфер после каждой записи (дорога/уборка): team ?? global ?? 0 (web
+  // parity: dashboard/page.tsx:1615), лента рисуется в DayColumn.
+  const bufferMinutes =
+    activeTeam?.buffer_minutes ?? calSettings?.bufferMinutes ?? 0;
+
+  // Рабочие часы бригады по датам (team_schedules: weekday/date overrides,
+  // vacations) — web DayColumn.tsx:231 resolves per date via the shared
+  // getDayScheduleForDate. null = нерабочий день → колонка без wash (web
+  // v473: day-off body stays plain); undefined (нет строки расписания /
+  // мусор в HH:MM) → фолбэк на глобальные workStartHour/EndHour в колонке.
+  const { data: teamSchedule } = useTeamSchedule(activeTeamId ?? undefined);
+  const workBandFor = useMemo(() => {
+    if (!teamSchedule) return undefined;
+    return (dateYmd: string): WorkBand | null | undefined => {
+      const sched = getDayScheduleForDate(teamSchedule, parseYMD(dateYmd));
+      if (!sched.is_working) return null;
+      const start = parseHourHM(sched.start);
+      const end = parseHourHM(sched.end);
+      if (start == null || end == null || end <= start) return undefined;
+      return { startMin: Math.round(start * 60), endMin: Math.round(end * 60) };
+    };
+  }, [teamSchedule]);
 
   const gridProps = {
     clientName,
@@ -528,6 +600,8 @@ export default function CalendarTab() {
     stepMinutes: calSettings?.gridStep ?? 30,
     workStartHour: calSettings?.workStartHour,
     workEndHour: calSettings?.workEndHour,
+    workBandFor,
+    bufferMinutes,
     nowMinutes,
     scrollToHour,
     hourH,

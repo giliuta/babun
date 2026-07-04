@@ -15,6 +15,7 @@ import {
   RAIL_W,
   HOUR_H_DEFAULT,
   usePinchZoom,
+  type WorkBand,
 } from "@/features/calendar/DayView";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -51,6 +52,8 @@ export function WeekView({
   onZoom,
   workStartHour,
   workEndHour,
+  workBandFor,
+  bufferMinutes,
   nowMinutes,
   scrollToHour,
 }: {
@@ -73,6 +76,12 @@ export function WeekView({
   onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
+  /** Per-date work band from team_schedules — resolved per column, so
+   *  weekday overrides / days off differ across the week (web DayColumn
+   *  parity). See DayColumn.workBand for the null/undefined semantics. */
+  workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Buffer after each appointment (team ?? global), minutes. */
+  bufferMinutes?: number;
   nowMinutes?: number | null;
   scrollToHour?: number;
 }) {
@@ -222,6 +231,8 @@ export function WeekView({
               hourH={hourH}
               workStartHour={workStartHour}
               workEndHour={workEndHour}
+              workBand={workBandFor?.(formatYMD(d))}
+              bufferMinutes={bufferMinutes}
               nowMinutes={nowMinutes}
             />
           ))}

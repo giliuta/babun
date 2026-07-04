@@ -51,6 +51,10 @@ const ALL_DAY_GAP = 2;
 
 const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
 
+// Per-date work band (minutes since midnight) resolved from team_schedules
+// by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
+export type WorkBand = { startMin: number; endMin: number };
+
 function Block({
   placed,
   hourH,
@@ -304,6 +308,8 @@ export function DayColumn({
   hourH = HOUR_H_DEFAULT,
   workStartHour,
   workEndHour,
+  workBand,
+  bufferMinutes = 0,
   nowMinutes,
 }: {
   dateYmd: string;
@@ -327,6 +333,14 @@ export function DayColumn({
    *  DayColumn out-of-hours overlays). Defaults to the visible window. */
   workStartHour?: number;
   workEndHour?: number;
+  /** Per-date band from the team schedule; wins over workStartHour/EndHour.
+   *  null = нерабочий день → no wash at all (web v473: day-off body stays
+   *  plain); undefined → fall back to workStartHour/EndHour. */
+  workBand?: WorkBand | null;
+  /** Minutes reserved after each live appointment (дорога/уборка) —
+   *  rendered as a subtle band under the blocks, web DayColumn.tsx:558-580.
+   *  0 = off. */
+  bufferMinutes?: number;
   /** Current time in minutes since midnight (business timezone), ticked
    *  by the parent every minute. Null/undefined → no now-line. */
   nowMinutes?: number | null;
@@ -369,8 +383,19 @@ export function DayColumn({
   const nowTop = nowMin != null ? (nowMin / 60) * hourH : null;
   const halfLine = t.dark ? "rgba(255,255,255,0.05)" : "rgba(60,60,67,0.07)";
 
-  const workStart = Math.max((workStartHour ?? startHour) * 60, winStartMin);
-  const workEnd = Math.min((workEndHour ?? endHour) * 60, winEndMin);
+  // Off-hours wash band: per-date team schedule wins (workBand), else the
+  // global hour props. band === null → нерабочий день, wash suppressed
+  // entirely (workStart/End collapse onto the window edges), matching web
+  // DayColumn v473 (day-off signal lives in the header, body stays plain).
+  const band =
+    workBand === undefined
+      ? {
+          startMin: (workStartHour ?? startHour) * 60,
+          endMin: (workEndHour ?? endHour) * 60,
+        }
+      : workBand;
+  const workStart = band ? Math.max(band.startMin, winStartMin) : winStartMin;
+  const workEnd = band ? Math.min(band.endMin, winEndMin) : winEndMin;
 
   return (
     <View
@@ -482,6 +507,33 @@ export function DayColumn({
           }}
         />
       ))}
+
+      {/* Buffer bands — «забронировано под дорогу/уборку» after each live
+          appointment; rendered before the blocks so colour cards sit on top
+          (web DayColumn.tsx:558-580, cancelled skipped). Placements already
+          exclude all-day strips and carry the parsed endMin. */}
+      {bufferMinutes > 0
+        ? placements.map((p) => {
+            if (p.apt.status === "cancelled") return null;
+            const bandStart = Math.max(p.endMin, winStartMin);
+            const bandEnd = Math.min(p.endMin + bufferMinutes, winEndMin);
+            if (bandEnd <= bandStart) return null;
+            return (
+              <View
+                key={`buffer-${p.apt.id}`}
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: ((bandStart - winStartMin) / 60) * hourH,
+                  left: 0,
+                  right: 0,
+                  height: ((bandEnd - bandStart) / 60) * hourH,
+                  backgroundColor: t.fill,
+                }}
+              />
+            );
+          })
+        : null}
 
       {allDay.map((a, idx) => {
         const c = blockColors(a);
@@ -710,6 +762,8 @@ export function DayView({
   onZoom,
   workStartHour,
   workEndHour,
+  workBandFor,
+  bufferMinutes,
   nowMinutes,
   scrollToHour,
   dayLabel,
@@ -734,6 +788,10 @@ export function DayView({
   onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
+  /** Per-date work band from team_schedules (see DayColumn.workBand). */
+  workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Buffer after each appointment (team ?? global), minutes. */
+  bufferMinutes?: number;
   nowMinutes?: number | null;
   /** Auto-scroll target on open (settings.scrollOpenHour). */
   scrollToHour?: number;
@@ -794,6 +852,8 @@ export function DayView({
             hourH={hourH}
             workStartHour={workStartHour}
             workEndHour={workEndHour}
+            workBand={workBandFor?.(dateYmd)}
+            bufferMinutes={bufferMinutes}
             nowMinutes={nowMinutes}
           />
         </View>
