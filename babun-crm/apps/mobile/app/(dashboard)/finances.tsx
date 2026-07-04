@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, Share } from "react-native";
+import { Alert, Pressable, Share, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Settings } from "lucide-react-native";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -11,7 +11,7 @@ import { getDebtAmount } from "@babun/shared/local/appointments";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Fab } from "@/components/ui/Fab";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
 import { useServices } from "@/features/services/queries";
@@ -306,13 +306,18 @@ export default function FinancesTab() {
         />
       )}
 
-      <Fab
-        onPress={() => {
-          setEditingTx(null);
-          setOpOpen(true);
-        }}
-        accessibilityLabel="Новая операция"
-      />
+      {/* Создание операции — нижняя градиентная кнопка (веб-паритет:
+          apps/web finances «＋ Операция» sticky-футер). Заменила прежний FAB
+          после удаления Fab-примитива; лежит под контентом (фид flex:1). */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}>
+        <GradientButton
+          label="＋ Операция"
+          onPress={() => {
+            setEditingTx(null);
+            setOpOpen(true);
+          }}
+        />
+      </View>
 
       <TransactionPopup
         visible={!!popupTx}

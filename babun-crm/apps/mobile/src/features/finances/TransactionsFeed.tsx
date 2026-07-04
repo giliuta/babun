@@ -231,10 +231,7 @@ export function TransactionsFeed({
         <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
       )}
       ListEmptyComponent={
-        <EmptyState
-          title="Нет операций за период"
-          subtitle="Нажмите + чтобы добавить"
-        />
+        <EmptyState title="Нет операций за период" />
       }
     />
   );

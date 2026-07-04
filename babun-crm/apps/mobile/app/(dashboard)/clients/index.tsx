@@ -20,6 +20,7 @@ import {
   Clock,
   Phone,
   Pin,
+  Plus,
   Search,
   Settings,
   Users,
@@ -36,7 +37,6 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Fab } from "@/components/ui/Fab";
 import { Screen } from "@/components/ui/Screen";
 import { ICON, TYPE } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
@@ -496,8 +496,7 @@ export default function ClientsListScreen() {
             >
               <CircleCheck color={t.body} size={20} />
             </Pressable>
-            {/* Стандарт «добавить»: создание клиента — ТОЛЬКО градиентный FAB
-                (низ-право); кружок «+» из шапки убран, шестерёнка остаётся. */}
+            {/* Настройки клиентов. */}
             <Pressable
               onPress={() =>
                 router.push({
@@ -511,6 +510,17 @@ export default function ClientsListScreen() {
               style={{ backgroundColor: t.fill }}
             >
               <Settings color={t.body} size={20} />
+            </Pressable>
+            {/* Создание клиента — «+» в шапке (веб-паритет: apps/web clients
+                header). Кобальт = основное действие. */}
+            <Pressable
+              onPress={() => router.push("/clients/new")}
+              accessibilityRole="button"
+              accessibilityLabel="Новый клиент"
+              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
+              style={{ backgroundColor: t.fill }}
+            >
+              <Plus color={t.accent} size={22} />
             </Pressable>
           </View>
         </View>
@@ -566,9 +576,9 @@ export default function ClientsListScreen() {
           data={result.filtered}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
-          // Низ списка не должен прятаться под FAB (56 + inset 20) или под
-          // нижней панелью массовых действий в режиме выбора.
-          contentContainerStyle={{ paddingBottom: selecting ? 108 : 96 }}
+          // Низ списка не должен прятаться под нижней панелью массовых
+          // действий в режиме выбора; вне выбора — небольшой отступ.
+          contentContainerStyle={{ paddingBottom: selecting ? 108 : 24 }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
             const teamName = stats?.lastTeamId
@@ -625,20 +635,15 @@ export default function ClientsListScreen() {
         />
       )}
 
-      {/* FAB прячем в режиме выбора — там своя нижняя панель действий. */}
-      {!selecting ? (
-        <Fab
-          onPress={() => router.push("/clients/new")}
-          accessibilityLabel="Новый клиент"
-        />
-      ) : (
+      {/* В режиме выбора — нижняя панель массовых действий. */}
+      {selecting ? (
         <BulkActionBar
           count={selectedIds.size}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
           onDelete={onDelete}
         />
-      )}
+      ) : null}
 
       <ClientsFilterSheet
         visible={sheetOpen}
