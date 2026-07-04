@@ -75,6 +75,12 @@ export default function EventTypesScreen() {
       { types: types.filter((t) => t.id !== id), removeIds: [id] },
       { onError: (e) => Alert.alert("Ошибка", e.message) },
     );
+  // Web parity: confirm before deleting an event type (was an instant tap).
+  const confirmRemove = (id: string, itemLabel: string) =>
+    Alert.alert("Удалить тип события?", itemLabel, [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: () => remove(id) },
+    ]);
 
   return (
     <Screen edges={["top"]}>
@@ -102,7 +108,7 @@ export default function EventTypesScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => remove(item.id)}
+                onPress={() => confirmRemove(item.id, item.label)}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Удалить ${item.label}`}

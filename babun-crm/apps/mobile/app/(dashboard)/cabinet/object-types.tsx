@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -37,6 +38,13 @@ export default function ObjectTypesScreen() {
     setOpen(false);
   };
   const remove = (id: string) => save.mutate(labels.filter((l) => l.id !== id));
+  // Web parity: confirm before deleting a reference type (was an instant,
+  // unrecoverable tap).
+  const confirmRemove = (id: string, itemName: string) =>
+    Alert.alert("Удалить тип объекта?", itemName, [
+      { text: "Отмена", style: "cancel" },
+      { text: "Удалить", style: "destructive", onPress: () => remove(id) },
+    ]);
 
   return (
     <Screen edges={["top"]}>
@@ -53,7 +61,7 @@ export default function ObjectTypesScreen() {
             <View className="flex-row items-center px-4 py-3">
               <Text className="flex-1 text-base" style={{ color: t.ink }}>{item.name}</Text>
               <Pressable
-                onPress={() => remove(item.id)}
+                onPress={() => confirmRemove(item.id, item.name)}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Удалить ${item.name}`}
