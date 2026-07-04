@@ -143,7 +143,34 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     }
   };
 
-  const handleDelete = (id: string) => {
+  // Web parity (teams/[id]/services removeFromBrigade): inside a brigade,
+  // deleting a service that OTHER brigades also use only UNLINKS it from THIS
+  // brigade — it stays live for them. A brigade-exclusive service (or a delete
+  // from the global list) is hidden as before.
+  const handleDelete = (svc: Service) => {
+    const others = serviceBrigadeIds(svc).filter((b) => b !== teamId);
+    if (teamId && others.length > 0) {
+      Alert.alert("Убрать из бригады?", "Услуга останется у других бригад.", [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Убрать",
+          style: "destructive",
+          onPress: () =>
+            handleSave(
+              {
+                name: svc.name,
+                price: svc.price,
+                duration_minutes: svc.duration_minutes,
+                category_id: svc.category_id,
+                color: svc.color,
+                brigade_ids: others,
+              },
+              svc.id,
+            ),
+        },
+      ]);
+      return;
+    }
     Alert.alert("Удалить услугу?", "Услуга будет скрыта из списков.", [
       { text: "Отмена", style: "cancel" },
       {
@@ -151,7 +178,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         style: "destructive",
         onPress: async () => {
           try {
-            await del.mutateAsync(id);
+            await del.mutateAsync(svc.id);
             setEditing(null);
           } catch (e) {
             alertError(e);
@@ -351,7 +378,7 @@ function ServiceSheet({
     },
     serviceId?: string,
   ) => void;
-  onDelete: (id: string) => void;
+  onDelete: (svc: Service) => void;
 }) {
   const t = useThemeColors();
   const service = editing?.mode === "edit" ? editing.service : null;
@@ -529,7 +556,7 @@ function ServiceSheet({
               />
               {service ? (
                 <Pressable
-                  onPress={() => onDelete(service.id)}
+                  onPress={() => onDelete(service)}
                   accessibilityRole="button"
                   accessibilityLabel="Удалить услугу"
                   className="mt-1 items-center py-3 active:opacity-70"
