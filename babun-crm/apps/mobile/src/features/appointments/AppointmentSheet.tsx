@@ -302,7 +302,15 @@ export function AppointmentSheet({
         .join(" · "),
     [serviceIds, catalog],
   );
-  const canSave = !!date && !createMut.isPending && !updateMut.isPending;
+  // Web parity canSave: work needs a client + at least one service,
+  // event needs a title — an empty €0 record must not save.
+  const canSave =
+    !!date &&
+    (kind === "work"
+      ? !!clientId && serviceIds.length > 0
+      : comment.trim().length > 0) &&
+    !createMut.isPending &&
+    !updateMut.isPending;
 
   const buildPatch = (): Partial<Appointment> => {
     const cancel =
@@ -330,6 +338,9 @@ export function AppointmentSheet({
         cancel_reason: cancel,
       };
     }
+    // Web parity: denormalize the picked object's address (address →
+    // label fallback so a link-only object still shows on the calendar).
+    const loc = client?.locations.find((l) => l.id === locationId);
     const patch: Partial<Appointment> = {
       kind: "work",
       client_id: clientId,
@@ -346,6 +357,9 @@ export function AppointmentSheet({
       comment: comment.trim(),
       status,
       location_id: locationId,
+      address: loc
+        ? loc.address.trim() || loc.label.trim() || appointment?.address || ""
+        : appointment?.address ?? "",
       color_override: eventColor,
       global_discount: globalDiscount,
       discount_amount: globalDiscountAmount(selectedServices, globalDiscount),
@@ -375,6 +389,11 @@ export function AppointmentSheet({
   };
 
   const save = async () => {
+    // Guard inverted range (belt-and-braces with the end-picker clamp).
+    if (timeEnd <= timeStart) {
+      Alert.alert("Ошибка", "Время окончания должно быть позже начала");
+      return;
+    }
     try {
       if (isEdit && appointment) {
         await updateMut.mutateAsync({ id: appointment.id, patch: buildPatch() });
@@ -450,16 +469,19 @@ export function AppointmentSheet({
           </View>
 
           <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
-            {/* kind toggle */}
-            <SegmentedControl
-              options={[
-                { value: "work", label: "Работа" },
-                { value: "event", label: "Событие" },
-              ]}
-              value={kind}
-              onChange={setKind}
-              style={{ marginHorizontal: 12, marginTop: 12 }}
-            />
+            {/* kind toggle — create only: kind is fixed for an existing
+                record (flipping work→event would wipe client/services/total) */}
+            {!isEdit ? (
+              <SegmentedControl
+                options={[
+                  { value: "work", label: "Работа" },
+                  { value: "event", label: "Событие" },
+                ]}
+                value={kind}
+                onChange={setKind}
+                style={{ marginHorizontal: 12, marginTop: 12 }}
+              />
+            ) : null}
 
             {kind === "work" ? (
               <>
@@ -542,10 +564,11 @@ export function AppointmentSheet({
                     display="compact"
                     minuteInterval={5}
                     onChange={(_, d) => {
-                      if (d) {
-                        setTimeEnd(formatHM(d));
-                        setDurationTouched(true);
-                      }
+                      if (!d) return;
+                      const end = formatHM(d);
+                      // End must be after start — clamp to start + 15 min.
+                      setTimeEnd(end <= timeStart ? addMinutesHM(timeStart, 15) : end);
+                      setDurationTouched(true);
                     }}
                   />
                 </View>
@@ -656,7 +679,9 @@ export function AppointmentSheet({
                 <ChipRow
                   items={teams.map((t) => ({ id: t.id, label: t.name }))}
                   selected={teamId}
-                  onSelect={(id) => setTeamId(id === teamId ? null : id)}
+                  // Radio-like, no deselect: a record without team_id is
+                  // invisible on every brigade calendar.
+                  onSelect={setTeamId}
                 />
               </SectionCard>
             ) : null}
@@ -935,6 +960,10 @@ export function AppointmentSheet({
         selectedId={clientId}
         onPick={(id) => {
           setClientId(id);
+          // Web parity onClientSelect: switch to the NEW client's primary
+          // object so the previous client's location_id never leaks.
+          const locs = clients.find((c) => c.id === id)?.locations ?? [];
+          setLocationId((locs.find((l) => l.isPrimary) ?? locs[0])?.id ?? null);
           setClientPicker(false);
         }}
         onCreate={async (name, phone) => {
