@@ -3,6 +3,7 @@ import {
   Alert,
   Clipboard,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -173,12 +174,27 @@ const MessageRow = memo(function MessageRow({
             </Text>
           </View>
         ) : null}
-        <Text
-          className="text-base"
-          style={{ color: out ? "#fff" : t.ink }}
-        >
-          {bodyOf(m)}
-        </Text>
+        {/* Web parity (page.tsx): a photo message renders the actual image
+            plus its caption text; only non-photo messages fall back to the
+            bodyOf placeholder («📷 Фото» stays for the list preview only). */}
+        {m.photo ? (
+          <Image
+            source={{ uri: m.photo }}
+            style={{
+              width: 200,
+              height: 200,
+              borderRadius: 12,
+              marginBottom: m.text ? 4 : 0,
+            }}
+            resizeMode="cover"
+            accessibilityLabel="Фото"
+          />
+        ) : null}
+        {m.photo && !m.text ? null : (
+          <Text className="text-base" style={{ color: out ? "#fff" : t.ink }}>
+            {m.photo ? m.text : bodyOf(m)}
+          </Text>
+        )}
       </View>
       <View className={`mt-0.5 flex-row items-center gap-1 px-1 ${out ? "justify-end" : ""}`}>
         {m.is_starred ? (
