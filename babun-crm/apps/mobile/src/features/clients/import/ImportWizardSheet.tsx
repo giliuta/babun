@@ -24,6 +24,11 @@ import { useThemeColors } from "@/theme/colors";
 import type { Client } from "@babun/shared/local/clients";
 import { useClients, useClientTags } from "../queries";
 import { parseCsv, type ParsedCsv } from "./csv-parse";
+
+// Upload guardrails — web parity (UploadStep.tsx).
+const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
+const MAX_ROWS = 5000;
+const ALLOWED_EXT = [".csv", ".txt"];
 import {
   autoMapHeaders,
   COUNTRY_OPTIONS,
@@ -159,6 +164,8 @@ export function ImportWizardSheet({
   }, [parsed, mapping, country, existing, tenantId]);
 
   // ── Step 1: pick + parse ────────────────────────────────────────────
+  // Guardrails — web parity (UploadStep.tsx): ≤10 МБ, .csv/.txt, непустой
+  // файл, ≤5000 строк. Те же RU-тексты ошибок.
   const pick = useCallback(async () => {
     setError(null);
     try {
@@ -175,8 +182,27 @@ export function ImportWizardSheet({
       if (res.canceled || !res.assets?.[0]) return;
       const asset = res.assets[0];
       const name = asset.name ?? "файл.csv";
+      if ((asset.size ?? 0) > MAX_BYTES) {
+        setError("Файл больше 10 МБ — пересохрани как CSV без лишних колонок.");
+        return;
+      }
+      const lower = name.toLowerCase();
+      if (!ALLOWED_EXT.some((ext) => lower.endsWith(ext))) {
+        setError("Только .csv или .txt файлы.");
+        return;
+      }
       const text = await (await fetch(asset.uri)).text();
       const p = parseCsv(text);
+      if (p.rows.length === 0) {
+        setError("Файл пустой или нет строк данных (только заголовок).");
+        return;
+      }
+      if (p.rows.length > MAX_ROWS) {
+        setError(
+          `Слишком много строк (${p.rows.length}). Максимум ${MAX_ROWS} за раз — раздели файл на части.`,
+        );
+        return;
+      }
       setFileName(name);
       setParsed(p);
       setMapping(autoMapHeaders(p.headers));
