@@ -144,6 +144,8 @@ export default function CalendarTab() {
     data: teams = [],
     isLoading: teamsLoading,
     isFetching: teamsFetching,
+    isError: teamsError,
+    refetch: refetchTeams,
   } = useTeams();
   const { data: calSettings } = useCalendarSettings();
   const updateAppt = useUpdateAppointment();
@@ -184,7 +186,8 @@ export default function CalendarTab() {
     date?: string;
   }>();
 
-  const [mode, setMode] = useState<CalMode>("week");
+  // Дефолт — «День»: web на телефонной ширине стартует с дня (innerWidth<1024).
+  const [mode, setMode] = useState<CalMode>("day");
   // ЕДИНЫЙ якорь даты для всех видов (web parity: один currentMonday).
   // Раньше было два стейта (day + cursor месяца) — они рассинхронивались:
   // свайп месяца двигал только cursor, выбор дня — только day, и переход
@@ -233,12 +236,19 @@ export default function CalendarTab() {
   useEffect(() => {
     if (params.new === "1") {
       setEditing(null);
+      // ?date= вместе с new=1 (возвраты: «Записать» на дату ТО) — префилл
+      // даты черновика; валидируем формат, мусор не пускаем (web parity).
+      const draftDate =
+        params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
+          ? params.date
+          : undefined;
       setBookDefaults({
         client_id: params.clientId ?? null,
         // «Записать сюда» / «Записать ТО» с карточки клиента шлют объект —
         // предвыбираем его в шите (LOCKED «Карта-диспетчер»: букинг в 2 тапа).
         location_id: params.locationId ?? null,
         team_id: params.teamId ?? null,
+        ...(draftDate ? { date: draftDate } : {}),
       });
       setSheetOpen(true);
       router.setParams({
@@ -246,6 +256,7 @@ export default function CalendarTab() {
         clientId: undefined,
         locationId: undefined,
         teamId: undefined,
+        date: undefined,
       });
     } else if (params.date) {
       // Переход по дате (карточка клиента, визиты мастера) = «покажи этот
@@ -494,10 +505,18 @@ export default function CalendarTab() {
   // spinner while teams load / the just-created team round-trips so the CTA
   // never flashes back after a successful create.
   if (teams.length === 0) {
+    // Сетевой сбой ≠ «команд нет»: настроенному тенанту нельзя показывать
+    // «Создать календарь» из-за упавшего запроса (риск дубля команды).
     return (
       <Screen>
         {teamsLoading ? (
           <EmptyState state="loading" fill />
+        ) : teamsError ? (
+          <EmptyState
+            state="error"
+            fill
+            action={{ label: "Повторить", onPress: () => void refetchTeams() }}
+          />
         ) : (
           <FirstRunCalendarChoice
             onCreate={createFirstCalendar}

@@ -139,6 +139,9 @@ export default function RecurringScreen() {
         // строка выглядела бы как «клиент с id ""».
         ...(item.client_id ? { clientId: item.client_id } : {}),
         ...(item.team_id ? { teamId: item.team_id } : {}),
+        // Дата ТО → черновик записи открывается сразу на нужный день
+        // (web parity: ?date= префиллит dateKey драфта).
+        ...(item.next_due_date ? { date: item.next_due_date } : {}),
       },
     });
 
