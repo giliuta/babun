@@ -18,18 +18,19 @@ import { useThemeColors } from "@/theme/colors";
 // focused on that visit's date (web pushed /dashboard?date=…; mobile
 // routes to the dashboard tab with the same query param).
 //
-// DEGRADED vs web: the web summary string resolves service NAMES from a
-// `services` catalog prop. Mobile doesn't wire the services catalog into
-// the client card yet, so the summary falls back to a de-duped service
-// COUNT («N услуг») or the appointment comment. The «Повторить» one-tap
-// repeat button is also dropped (it built a /dashboard?new= deep link that
-// the mobile new-appointment flow doesn't accept yet — see composer TODO).
+// Web parity: the summary resolves service NAMES from the `services` catalog
+// (passed by the card composer). Still DEGRADED vs web: the «Повторить»
+// one-tap repeat button is dropped — it built a /dashboard?new= deep link the
+// mobile new-appointment flow doesn't accept yet (see calendar create-flow).
 //
 // `stats` is accepted for prop-contract parity with the other blocks; this
 // block derives everything it shows straight off `appointments`.
 
 interface VisitsBlockProps {
   appointments: Appointment[];
+  // Only id+name are read (catalog lookup) — structural type so both the
+  // Supabase-row service shape (useServices) and the shared Service fit.
+  services?: readonly { id: string; name: string }[];
   stats?: ClientStats;
 }
 
@@ -44,10 +45,22 @@ const LIMIT = 50;
 const VISITS_DEFAULT_OPEN =
   DEFAULT_BLOCK_ORDER.find((b) => b.kind === "visits")?.defaultOpen ?? true;
 
-export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
+export default function VisitsBlock({
+  appointments,
+  services = [],
+  stats,
+}: VisitsBlockProps) {
   const router = useRouter();
   const t = useThemeColors();
   const [showAll, setShowAll] = useState(false);
+
+  // Web parity (apps/web/.../VisitsBlock servicesById): id → name lookup so
+  // each visit row shows the service name instead of a bare count.
+  const servicesById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of services) m.set(s.id, s.name);
+    return m;
+  }, [services]);
 
   const own = useMemo(
     () =>
@@ -84,6 +97,7 @@ export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
             <VisitRow
               key={apt.id}
               apt={apt}
+              servicesById={servicesById}
               onOpen={() =>
                 router.push(
                   `/(dashboard)?date=${encodeURIComponent(apt.date)}`,
@@ -115,15 +129,17 @@ export default function VisitsBlock({ appointments, stats }: VisitsBlockProps) {
 
 function VisitRow({
   apt,
+  servicesById,
   onOpen,
 }: {
   apt: Appointment;
+  servicesById: Map<string, string>;
   onOpen: () => void;
 }) {
   const t = useThemeColors();
   const status = statusPill(apt, t);
   const payment = paymentPill(apt, t);
-  const summary = visitSummary(apt);
+  const summary = visitSummary(apt, servicesById);
 
   return (
     <Pressable
@@ -209,22 +225,20 @@ function paymentPill(
   }
 }
 
-// Web resolves service names from a catalog; mobile lacks that wiring, so we
-// de-dupe service ids and show a count, falling back to the comment.
-function visitSummary(apt: Appointment): string {
-  const ids = new Set(
-    (apt.services ?? []).map((s) => s.serviceId).filter(Boolean),
-  );
-  if (ids.size > 0) {
-    return `${ids.size} ${pluralService(ids.size)}`;
+// Web parity (apps/web/.../VisitsBlock): distinct service NAMES for the visit
+// summary — de-dupe by serviceId (legacy rows can repeat one), «Name» or
+// «Name +N», falling back to the appointment comment.
+function visitSummary(apt: Appointment, servicesById: Map<string, string>): string {
+  const seen = new Set<string>();
+  const named: string[] = [];
+  for (const s of apt.services ?? []) {
+    if (!s.serviceId || seen.has(s.serviceId)) continue;
+    seen.add(s.serviceId);
+    const name = servicesById.get(s.serviceId);
+    if (name) named.push(name);
+  }
+  if (named.length > 0) {
+    return named.length === 1 ? named[0] : `${named[0]} +${named.length - 1}`;
   }
   return apt.comment?.trim() || "—";
-}
-
-function pluralService(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "услуга";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "услуги";
-  return "услуг";
 }

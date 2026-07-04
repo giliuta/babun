@@ -41,6 +41,7 @@ import {
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
+import { useServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
 import ClientNextJob from "@/features/clients/ClientNextJob";
 import CardActions from "@/features/clients/card-actions";
@@ -63,6 +64,8 @@ export default function ClientDetailScreen() {
   const updateClient = useUpdateClient(id);
   const { data: appointments = [] } = useClientAppointments(id);
   const { data: tags = [] } = useClientTags();
+  // Web parity: VisitsBlock resolves service NAMES from the catalog.
+  const { data: services = [] } = useServices();
 
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -241,7 +244,11 @@ export default function ClientDetailScreen() {
           stats={stats}
           update={update}
         />
-        <VisitsBlock appointments={appointments} stats={stats} />
+        <VisitsBlock
+          appointments={appointments}
+          services={services}
+          stats={stats}
+        />
         <FinanceBlock appointments={appointments} stats={stats} />
         <NotesBlock client={client} update={update} />
         <AttachmentsBlock clientId={client.id} />
