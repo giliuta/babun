@@ -22,6 +22,7 @@ import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -66,6 +67,9 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
   const [category, setCategory] = useState("");
   const [serial, setSerial] = useState("");
   const [teamId, setTeamId] = useState<string | null>(null);
+  // Цвет позиции (web parity: инвентарь на вебе красит плитку флота).
+  // "" = без цвета — плитка падает на акцент темы.
+  const [color, setColor] = useState("");
   const [notes, setNotes] = useState("");
 
   const openNew = () => {
@@ -75,6 +79,7 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
     setSerial("");
     // На создании из хаба команды — заранее привязываем бригаду.
     setTeamId(lockedTeamId ?? null);
+    setColor("");
     setNotes("");
     setOpen(true);
   };
@@ -84,6 +89,7 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
     setCategory(e.category ?? "");
     setSerial(e.serial ?? "");
     setTeamId(e.assigned_team_id);
+    setColor(e.color ?? "");
     setNotes(e.notes ?? "");
     setOpen(true);
   };
@@ -97,6 +103,7 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
       category: category.trim() || undefined,
       serial: serial.trim() || undefined,
       assigned_team_id: teamId,
+      color: color || undefined,
       notes: notes.trim() || undefined,
     };
     // Пишем поверх ПОЛНОГО списка (allItems), а не отфильтрованного по
@@ -118,20 +125,25 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
     );
   };
 
-  const remove = (id: string) =>
+  // onConfirm — side effect (закрыть шит редактора) СТРОГО после
+  // подтверждения: «Отмена» в конфирме оставляет редактор открытым и
+  // не теряет несохранённые правки полей.
+  const remove = (id: string, onConfirm?: () => void) =>
     Alert.alert("Удалить позицию?", "", [
       { text: "Отмена", style: "cancel" },
       {
         text: "Удалить",
         style: "destructive",
-        onPress: () =>
+        onPress: () => {
+          onConfirm?.();
           // removeIds carries the explicit deletion — the server must never
           // derive it from a (possibly stale) full snapshot. list=allItems
           // (без удаляемой) сохраняет остальной склад в кэше и позициях.
           save.mutate(
             { list: allItems.filter((i) => i.id !== id), removeIds: [id] },
             { onError: (e) => Alert.alert("Ошибка", e.message) },
-          ),
+          );
+        },
       },
     ]);
 
@@ -248,6 +260,7 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
               </View>
             </>
           ) : null}
+          <ColorPicker value={color || null} onChange={setColor} />
           <Field label="Заметки" value={notes} onChangeText={setNotes} placeholder="—" />
           <Button
             label={editing ? "Сохранить" : "Добавить"}
@@ -257,10 +270,7 @@ export function InventoryList({ lockedTeamId }: { lockedTeamId?: string } = {}) 
           />
           {editing ? (
             <Pressable
-              onPress={() => {
-                remove(editing.id);
-                setOpen(false);
-              }}
+              onPress={() => remove(editing.id, () => setOpen(false))}
               className="mt-1 items-center py-3 active:opacity-70"
             >
               <Text className="text-base font-medium" style={{ color: th.danger }}>Удалить</Text>

@@ -247,6 +247,20 @@ function ToggleRow({
   );
 }
 
+// Normalize free-text time to canonical HH:MM: «9» → «09:00», «9:30» →
+// «09:30»; hours 0–23, minutes 0–59; anything else → null. Web parity: web
+// writes only wheel-picker values into calendar_window_*/default_scroll_time/
+// schedule, and its parseHour silently discards garbage — so mobile must not
+// persist strings that would look saved but be ignored.
+function normalizeTimeInput(raw: string): string | null {
+  const m = /^(\d{1,2})(?::(\d{2}))?$/.exec(raw);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = m[2] ? Number(m[2]) : 0;
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
 // Small HH:MM window input pair (visible calendar band). Empty = auto.
 function TimeField({
   label,
@@ -265,13 +279,29 @@ function TimeField({
     setSeed(value);
     setDraft(value);
   }
+  // Commit only canonical HH:MM (or empty = auto); invalid input reverts
+  // the draft to the last persisted value and skips the patch entirely.
+  const commit = () => {
+    const raw = draft.trim();
+    if (raw === "") {
+      onCommit("");
+      return;
+    }
+    const norm = normalizeTimeInput(raw);
+    if (norm === null) {
+      setDraft(value);
+      return;
+    }
+    setDraft(norm);
+    onCommit(norm);
+  };
   return (
     <View className="flex-row items-center justify-between px-4 py-2.5">
       <Text style={{ fontSize: 16, color: t.ink }}>{label}</Text>
       <TextInput
         value={draft}
         onChangeText={setDraft}
-        onBlur={() => onCommit(draft.trim())}
+        onBlur={commit}
         placeholder="—:—"
         placeholderTextColor={t.placeholder}
         keyboardType="numbers-and-punctuation"
@@ -823,7 +853,10 @@ export default function TeamHubScreen() {
               onPress={() =>
                 Alert.alert(
                   `Удалить команду «${team.name}»?`,
-                  "Команда скроется из списков. Привязку записей к ней нужно будет переназначить вручную.",
+                  // Копия говорит правду о коде ниже: detach сбрасывает
+                  // привязку автоматически (web parity — веб тоже сообщает
+                  // об авто-сбросе, а не о ручном переназначении).
+                  "Команда скроется из списков. Записи и мастера останутся, но их привязка к команде сбросится автоматически.",
                   [
                     { text: "Отмена", style: "cancel" },
                     {

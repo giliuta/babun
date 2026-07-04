@@ -73,6 +73,10 @@ export default function MasterHubScreen() {
   const router = useRouter();
   const { data: master, isLoading } = useMaster(id);
   const { data: teams = [] } = useTeams();
+  // Полный список (включая архивные) — только для delete-свипа: web parity,
+  // handleDelete чистит master.id из ВСЕХ команд, иначе мастер-призрак
+  // воскресает в составе при повторной активации архивной бригады.
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const { data: appointments = [] } = useAppointments();
   const update = useUpdateMaster();
   const del = useDeleteMaster();
@@ -220,11 +224,12 @@ export default function MasterHubScreen() {
           onPress: () =>
             del.mutate(master.id, {
               // web parity: после soft-delete вычистить master.id из
-              // members / lead_ids / helper_ids всех команд, чтобы веб-
-              // финансы/расписание не ссылались на удалённого мастера.
+              // members / lead_ids / helper_ids всех команд (включая
+              // архивные — allTeams), чтобы веб-финансы/расписание не
+              // ссылались на удалённого мастера.
               onSuccess: () =>
                 removeFromTeams.mutate(
-                  { masterId: master.id, teams },
+                  { masterId: master.id, teams: allTeams },
                   {
                     onError: (e) =>
                       Alert.alert("Ошибка", (e as Error).message),

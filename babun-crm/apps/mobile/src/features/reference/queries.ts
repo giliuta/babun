@@ -7,10 +7,12 @@ import type { Database } from "@babun/shared/db/database.types";
 import {
   generateId,
   isLeadRole,
+  LEGACY_LEAD_ROLE_ID,
   type BrigadeMember,
   type BrigadeRole,
   type MasterRole,
 } from "@babun/shared/local/masters";
+import { upsertScheduleEntry } from "@babun/shared/db/repositories/schedule";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -107,13 +109,35 @@ export function useCreateTeam() {
           name: input.name,
           region: input.region || null,
           color: input.color || null,
+          // web parity (teams/page.tsx openNew): creation defaults so a
+          // fresh team behaves the same on both platforms — visible window
+          // 00:00–23:00, auto-scroll to 10:00, payout 30%.
+          calendar_window_start: "00:00",
+          calendar_window_end: "23:00",
+          default_scroll_time: "10:00",
+          payout_percentage: 30,
         })
         .select("*")
         .single();
       if (error) throw new Error(error.message);
+      // web parity: openNew also seeds working hours 10:00–20:00. Best
+      // effort — the team is already created, and a failed seed just leaves
+      // the DEFAULT_SCHEDULE fallback (08:00–22:00) until the hub edits it.
+      try {
+        await upsertScheduleEntry(supabase, tenantId as string, data.id, {
+          start: "10:00",
+          end: "20:00",
+          breaks: [],
+        });
+      } catch {
+        // DEFAULT_SCHEDULE fallback covers a failed seed.
+      }
       return data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["teams"] });
+      qc.invalidateQueries({ queryKey: ["team-schedules"] });
+    },
     meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
 }
@@ -315,8 +339,15 @@ export function deriveLeadHelperIds(
   roles: BrigadeRole[],
   members: BrigadeMember[],
 ): { lead_ids: string[]; helper_ids: string[]; lead_id: string | null } {
+  // LEGACY_LEAD_ROLE_ID counts as lead regardless of display name: the lazy
+  // migration (teams/[id]/masters) names that role «Старший», which isLeadRole
+  // («бригадир») would not match — without this guard the migration write
+  // itself re-derives lead_ids=[] and silently demotes the lead (web parity:
+  // the web migration preserves the legacy arrays).
   const leadRoleIds = new Set(
-    roles.filter((r) => isLeadRole(r)).map((r) => r.id),
+    roles
+      .filter((r) => r.id === LEGACY_LEAD_ROLE_ID || isLeadRole(r))
+      .map((r) => r.id),
   );
   const lead_ids: string[] = [];
   const helper_ids: string[] = [];
