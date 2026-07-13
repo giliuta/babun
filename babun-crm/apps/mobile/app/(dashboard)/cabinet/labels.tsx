@@ -9,11 +9,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { MapPin, Star } from "lucide-react-native";
+import { MapPin } from "lucide-react-native";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { ColorPicker } from "@/components/ui/ColorPicker";
-import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
-import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -22,125 +20,101 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import {
   useCalendarSettings,
   useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
+import { useDayCities, useRenameDayCity } from "@/features/calendar/day-cities";
 import {
+  teamCities,
   useCities,
   useCreateCity,
   useDeleteCity,
   useTeams,
   useUpdateCity,
+  useUpdateTeam,
   type City,
 } from "@/features/reference/queries";
 
-// Метки личного календаря — порт веб-страницы
-// /dashboard/settings/calendar/labels (v492). Список имён живёт в
-// calendar_settings.personal_labels (+ personal_default_label = основная);
-// библиотека имён с цветами — таблица `cities` (метка и город — одна
-// сущность, web parity). Свайпов нет — тап по строке открывает редактор,
-// звезда справа переключает основную.
+// Метки календаря — БИБЛИОТЕКА имён+цветов (таблица `cities`), которую
+// реально потребляет календарь: команды подключают метки в своих
+// настройках, диспетчер вешает метку на день тапом по шапке даты
+// (CityPickerModal → day_cities), цвет тонирует колонку дня.
+//
+// ОТЛИЧИЕ ОТ ВЕБА (осознанное): веб-страница settings/calendar/labels
+// управляет списком «личного календаря» (personalLabels) — поверхности,
+// которой на мобиле нет. Старая версия этого экрана писала personalLabels
+// в никуда (аудит P0-4); теперь экран честно управляет библиотекой.
+//
+// Переименование каскадится по всем местам, где имя хранится строкой:
+// team.cities[] + default_city, day_cities, и personalLabels веба —
+// чтобы метки не сиротели (аудит P1-12).
 
 const FALLBACK_COLOR = "#8E8E93";
 
 type Editing =
   | { mode: "create" }
-  | { mode: "edit"; name: string; color: string };
+  | { mode: "edit"; city: City };
 
 export default function LabelsScreen() {
   const t = useThemeColors();
   const toast = useToast();
-  const { data: settings, isLoading: settingsLoading } = useCalendarSettings();
-  const { data: cities = [], isLoading: citiesLoading } = useCities();
+  const { data: cities = [], isLoading, isError, error, refetch } = useCities();
   const { data: teams = [] } = useTeams();
-  const save = useSaveCalendarSettings();
+  const { data: dayCities = {} } = useDayCities();
+  const { data: settings } = useCalendarSettings();
+  const saveSettings = useSaveCalendarSettings();
   const createCity = useCreateCity();
   const updateCity = useUpdateCity();
   const deleteCity = useDeleteCity();
+  const updateTeam = useUpdateTeam();
+  const renameDays = useRenameDayCity();
 
   const [editing, setEditing] = useState<Editing | null>(null);
 
-  const personalLabels = useMemo(
-    () => settings?.personalLabels ?? [],
-    [settings],
-  );
-  const defaultLabel = settings?.personalDefaultLabel ?? "";
-  const effectiveBase =
-    defaultLabel && personalLabels.includes(defaultLabel) ? defaultLabel : "";
-
-  // Имя → запись библиотеки (цвет). Пропавшие из библиотеки имена получают
-  // серую «призрачную» строку, чтобы её всё ещё можно было открыть/удалить.
-  const rows = useMemo(
-    () =>
-      personalLabels.map((name) => {
-        const hit = cities.find((c) => c.name === name);
-        return {
-          name,
-          color: hit?.color ?? FALLBACK_COLOR,
-        };
-      }),
-    [personalLabels, cities],
-  );
-
-  // Метки, уже используемые бригадами (team.cities), но ещё не добавленные
-  // в личный список — быстрые подсказки в шите «Новая метка» (web parity).
-  const suggestions = useMemo<City[]>(() => {
-    const inUse = new Set<string>();
+  // Использование метки: сколько команд подключили + на скольких днях висит.
+  const usage = useMemo(() => {
+    const m = new Map<string, { teams: number; days: number }>();
+    const bump = (name: string, key: "teams" | "days") => {
+      const cur = m.get(name) ?? { teams: 0, days: 0 };
+      cur[key] += 1;
+      m.set(name, cur);
+    };
     for (const team of teams) {
-      const list = team.cities;
-      if (Array.isArray(list)) {
-        for (const n of list) if (typeof n === "string") inUse.add(n);
-      }
+      const names = new Set(teamCities(team));
+      if (team.default_city) names.add(team.default_city);
+      for (const n of names) bump(n, "teams");
     }
-    return cities
-      .filter(
-        (c) =>
-          inUse.has(c.name) &&
-          !personalLabels.some(
-            (n) => n.toLowerCase() === c.name.toLowerCase(),
-          ),
-      )
-      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
-  }, [cities, teams, personalLabels]);
+    for (const name of Object.values(dayCities)) bump(name, "days");
+    return m;
+  }, [teams, dayCities]);
+
+  const usageLine = (name: string): string => {
+    const u = usage.get(name);
+    if (!u || (u.teams === 0 && u.days === 0)) return "не используется";
+    const parts: string[] = [];
+    if (u.teams > 0) parts.push(`команд: ${u.teams}`);
+    if (u.days > 0) parts.push(`дней: ${u.days}`);
+    return parts.join(" · ");
+  };
 
   const alertError = (e: unknown) =>
     Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
-  const resolveBase = (next: string[], prev: string): string =>
-    prev && next.includes(prev) ? prev : "";
-
-  const persist = async (nextLabels: string[], prevBase: string) => {
-    // Массив уходит как есть (даже пустой) — репозиторий пишет [] как null,
-    // но явная запись нужна, чтобы очистить хвост при удалении последней
-    // метки (v493 web fix).
-    const patch: Partial<CalendarSettings> = {
-      personalLabels: nextLabels,
-      personalDefaultLabel: resolveBase(nextLabels, prevBase),
-    };
-    await save.mutateAsync(patch);
-  };
-
-  const addLabel = async (name: string, color: string) => {
+  const add = async (name: string, color: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      // Совпадение по имени — переиспользуем запись библиотеки; иначе
-      // создаём новую с выбранным цветом.
       const existing = cities.find(
         (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
       );
-      let resolvedName = trimmed;
       if (existing) {
-        resolvedName = existing.name;
+        // Уже в библиотеке — просто обновляем цвет.
+        await updateCity.mutateAsync({ id: existing.id, patch: { color } });
       } else {
         await createCity.mutateAsync({ name: trimmed, color });
-      }
-      if (!personalLabels.includes(resolvedName)) {
-        await persist([...personalLabels, resolvedName], defaultLabel);
       }
       setEditing(null);
       toast("Метка добавлена");
@@ -149,38 +123,76 @@ export default function LabelsScreen() {
     }
   };
 
-  const editLabel = async (oldName: string, newName: string, color: string) => {
+  // Каскад: библиотека → team.cities/default_city → day_cities →
+  // personalLabels (веб). Частичные сбои собираем и показываем одним алертом.
+  const renameEverywhere = async (city: City, next: string) => {
+    const failures: string[] = [];
+    for (const team of teams) {
+      const list = teamCities(team);
+      const usesList = list.includes(city.name);
+      const usesDefault = team.default_city === city.name;
+      if (!usesList && !usesDefault) continue;
+      const patch: Record<string, unknown> = {};
+      if (usesList) patch.cities = list.map((n) => (n === city.name ? next : n));
+      if (usesDefault) patch.default_city = next;
+      try {
+        await updateTeam.mutateAsync({ id: team.id, patch });
+      } catch {
+        failures.push(`команда «${team.name}»`);
+      }
+    }
+    try {
+      await renameDays.mutateAsync({ from: city.name, to: next });
+    } catch {
+      failures.push("метки дней");
+    }
+    const personal = settings?.personalLabels ?? [];
+    if (personal.includes(city.name)) {
+      try {
+        await saveSettings.mutateAsync({
+          personalLabels: personal.map((n) => (n === city.name ? next : n)),
+          personalDefaultLabel:
+            settings?.personalDefaultLabel === city.name
+              ? next
+              : settings?.personalDefaultLabel,
+        });
+      } catch {
+        failures.push("личные метки веба");
+      }
+    }
+    return failures;
+  };
+
+  const edit = async (city: City, newName: string, color: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
     try {
-      const current = cities.find((c) => c.name === oldName);
+      const renamed = trimmed !== city.name;
       const collision =
-        trimmed.toLowerCase() !== oldName.toLowerCase()
+        renamed && trimmed.toLowerCase() !== city.name.toLowerCase()
           ? cities.find((c) => c.name.toLowerCase() === trimmed.toLowerCase())
           : undefined;
+      let target = trimmed;
       if (collision) {
-        // Переименование в уже существующую метку — сливаем: цвет уходит в
-        // целевую запись, старая скрывается (web parity).
+        // Слияние с существующей меткой: цвет уходит в целевую, старая
+        // запись скрывается, ссылки переезжают на целевое имя.
+        target = collision.name;
         await updateCity.mutateAsync({ id: collision.id, patch: { color } });
-        if (current) await deleteCity.mutateAsync(current.id);
-      } else if (current) {
+        await deleteCity.mutateAsync(city.id);
+      } else {
         await updateCity.mutateAsync({
-          id: current.id,
+          id: city.id,
           patch: { name: trimmed, color },
         });
-      } else if (trimmed !== oldName) {
-        // «Призрачная» метка без записи в библиотеке — заводим её.
-        await createCity.mutateAsync({ name: trimmed, color });
       }
-      if (trimmed !== oldName) {
-        const nextLabels = Array.from(
-          new Set(personalLabels.map((n) => (n === oldName ? trimmed : n))),
-        );
-        await save.mutateAsync({
-          personalLabels: nextLabels,
-          personalDefaultLabel:
-            defaultLabel === oldName ? trimmed : defaultLabel,
-        });
+      if (renamed) {
+        const failures = await renameEverywhere(city, target);
+        if (failures.length > 0) {
+          Alert.alert(
+            "Метка переименована частично",
+            `Не удалось обновить: ${failures.join(", ")}. Проверьте сеть и повторите переименование.`,
+          );
+        }
       }
       setEditing(null);
       toast("Метка обновлена");
@@ -189,101 +201,91 @@ export default function LabelsScreen() {
     }
   };
 
-  const removeLabel = (name: string) => {
-    Alert.alert("Убрать метку?", `«${name}» останется в библиотеке городов.`, [
-      { text: "Отмена", style: "cancel" },
-      {
-        text: "Убрать",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await persist(
-              personalLabels.filter((n) => n !== name),
-              defaultLabel === name ? "" : defaultLabel,
-            );
-            setEditing(null);
-          } catch (e) {
-            alertError(e);
-          }
+  const remove = (city: City) => {
+    const u = usage.get(city.name);
+    const used = u && (u.teams > 0 || u.days > 0);
+    Alert.alert(
+      "Удалить метку?",
+      used
+        ? `«${city.name}» исчезнет из выбора. Команды и дни, где она уже назначена, останутся с серой меткой.`
+        : `«${city.name}» будет скрыта из библиотеки.`,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteCity.mutateAsync(city.id);
+              setEditing(null);
+              toast("Метка удалена");
+            } catch (e) {
+              alertError(e);
+            }
+          },
         },
-      },
-    ]);
-  };
-
-  const setBase = (name: string) => {
-    // Toggle: повторный тап по звезде основной метки снимает её.
-    const next = effectiveBase === name ? "" : name;
-    save.mutate(
-      { personalDefaultLabel: next },
-      { onError: alertError },
+      ],
     );
   };
 
-  const isLoading = settingsLoading || citiesLoading;
+  const busy =
+    createCity.isPending ||
+    updateCity.isPending ||
+    deleteCity.isPending ||
+    updateTeam.isPending ||
+    renameDays.isPending ||
+    saveSettings.isPending;
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Метки" subtitle="Личный календарь" />
+      <ScreenHeader title="Метки" subtitle="Календарь" />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
-      ) : rows.length === 0 ? (
+      ) : isError ? (
+        <EmptyState
+          fill
+          state="error"
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={{ label: "Повторить", onPress: () => void refetch() }}
+        />
+      ) : cities.length === 0 ? (
         <EmptyState
           fill
           icon={<MapPin color={t.accent} size={28} />}
-          title="В личном календаре пока нет меток"
-          subtitle="Добавьте пару меток и пометьте одну звездой как основную — она автоматически появится под каждой датой своим цветом."
+          title="Меток пока нет"
+          subtitle="Лимассол, Германия, День ног — метка вешается на день тапом по шапке даты в календаре и красит колонку своим цветом."
           action={{ label: "Добавить метку", onPress: () => setEditing({ mode: "create" }) }}
         />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
           <SectionCard>
-            {rows.map((row, i) => (
-              <View key={row.name}>
+            {cities.map((city, i) => (
+              <View key={city.id}>
                 {i > 0 ? <Divider inset={44} /> : null}
-                <View className="flex-row items-center pl-4 pr-1">
-                  <Pressable
-                    onPress={() =>
-                      setEditing({ mode: "edit", name: row.name, color: row.color })
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Метка ${row.name}, редактировать`}
-                    className="flex-1 flex-row items-center py-3.5 active:opacity-60"
-                  >
-                    <View
-                      style={{
-                        height: 12,
-                        width: 12,
-                        borderRadius: 6,
-                        backgroundColor: row.color,
-                      }}
-                    />
-                    <Text
-                      className="ml-3 flex-1 text-base"
-                      style={{ color: t.ink }}
-                      numberOfLines={1}
-                    >
-                      {row.name}
+                <Pressable
+                  onPress={() => setEditing({ mode: "edit", city })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Метка ${city.name}, редактировать`}
+                  className="flex-row items-center px-4 py-3 active:opacity-60"
+                >
+                  <View
+                    style={{
+                      height: 12,
+                      width: 12,
+                      borderRadius: 6,
+                      backgroundColor: city.color ?? FALLBACK_COLOR,
+                    }}
+                  />
+                  <View className="ml-3 min-w-0 flex-1">
+                    <Text className="text-base" style={{ color: t.ink }} numberOfLines={1}>
+                      {city.name}
                     </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setBase(row.name)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      effectiveBase === row.name
-                        ? `Снять основную метку ${row.name}`
-                        : `Сделать ${row.name} основной`
-                    }
-                    className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-                  >
-                    <Star
-                      color={effectiveBase === row.name ? t.warning : t.chevron}
-                      fill={effectiveBase === row.name ? t.warning : "none"}
-                      size={ICON.sm}
-                    />
-                  </Pressable>
-                </View>
+                    <Text className="text-xs" style={{ color: t.faint }}>
+                      {usageLine(city.name)}
+                    </Text>
+                  </View>
+                </Pressable>
               </View>
             ))}
             <Divider inset={44} />
@@ -294,24 +296,20 @@ export default function LabelsScreen() {
           </SectionCard>
 
           <Text className="mx-4 mt-3 text-xs leading-4" style={{ color: t.faint }}>
-            Основная метка (★) автоматически красит новые даты своим цветом.
+            Метка вешается на день тапом по шапке даты в календаре. Наборы
+            меток команды и её основная метка — в настройках команды
+            (Кабинет → Команды → Метки).
           </Text>
         </ScrollView>
       )}
 
       <LabelSheet
         editing={editing}
-        suggestions={suggestions}
-        busy={
-          save.isPending ||
-          createCity.isPending ||
-          updateCity.isPending ||
-          deleteCity.isPending
-        }
+        busy={busy}
         onClose={() => setEditing(null)}
-        onCreate={addLabel}
-        onUpdate={editLabel}
-        onRemove={removeLabel}
+        onCreate={add}
+        onUpdate={edit}
+        onRemove={remove}
       />
     </Screen>
   );
@@ -319,7 +317,6 @@ export default function LabelsScreen() {
 
 function LabelSheet({
   editing,
-  suggestions,
   busy,
   onClose,
   onCreate,
@@ -327,26 +324,26 @@ function LabelSheet({
   onRemove,
 }: {
   editing: Editing | null;
-  suggestions: City[];
   busy: boolean;
   onClose: () => void;
   onCreate: (name: string, color: string) => void;
-  onUpdate: (oldName: string, newName: string, color: string) => void;
-  onRemove: (name: string) => void;
+  onUpdate: (city: City, newName: string, color: string) => void;
+  onRemove: (city: City) => void;
 }) {
   const t = useThemeColors();
   const isEdit = editing?.mode === "edit";
   // key-remount через editing==null → null; локальный стейт инициализируем
-  // от editing при каждом открытии.
+  // от editing при каждом открытии (паттерн «render-time reset»).
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(FALLBACK_COLOR);
   const [seeded, setSeeded] = useState<Editing | null>(null);
 
   if (editing !== seeded) {
-    // Новый показ шита — засеять поля (паттерн «render-time reset»).
     setSeeded(editing);
-    setName(isEdit ? editing.name : "");
-    setColor(isEdit ? editing.color : PRESET_COLORS[0].value);
+    setName(isEdit ? editing.city.name : "");
+    setColor(
+      isEdit ? editing.city.color ?? FALLBACK_COLOR : PRESET_COLORS[0].value,
+    );
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
@@ -386,52 +383,23 @@ function LabelSheet({
 
           <ColorPicker value={color} onChange={setColor} />
 
-          {!isEdit && suggestions.length > 0 ? (
-            <>
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-                Уже используются в командах
-              </Text>
-              <View className="mb-4 flex-row flex-wrap gap-2">
-                {suggestions.slice(0, 8).map((c) => (
-                  <Chip
-                    key={c.id}
-                    label={c.name}
-                    disabled={busy}
-                    onPress={() => onCreate(c.name, c.color ?? FALLBACK_COLOR)}
-                    accessibilityLabel={`Добавить метку ${c.name}`}
-                    icon={
-                      <View
-                        style={{
-                          height: 8,
-                          width: 8,
-                          borderRadius: 4,
-                          backgroundColor: c.color ?? FALLBACK_COLOR,
-                        }}
-                      />
-                    }
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-
           <Button
             label={isEdit ? "Сохранить" : "Создать"}
             onPress={() =>
-              isEdit ? onUpdate(editing.name, name, color) : onCreate(name, color)
+              isEdit ? onUpdate(editing.city, name, color) : onCreate(name, color)
             }
             disabled={!canSubmit}
             loading={busy}
           />
           {isEdit ? (
             <Pressable
-              onPress={() => onRemove(editing.name)}
+              onPress={() => onRemove(editing.city)}
               accessibilityRole="button"
-              accessibilityLabel="Убрать метку из личного календаря"
+              accessibilityLabel="Удалить метку"
               className="mt-1 items-center py-3 active:opacity-70"
             >
               <Text style={{ fontSize: 16, fontWeight: "500", color: t.danger }}>
-                Убрать из календаря
+                Удалить метку
               </Text>
             </Pressable>
           ) : null}

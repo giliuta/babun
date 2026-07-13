@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listDayCities,
+  renameDayCity,
   setDayCity,
 } from "@babun/shared/db/repositories/day-cities";
 import { dayCityKey } from "@babun/shared/local/day-cities";
@@ -18,6 +19,20 @@ export function useDayCities() {
     queryKey: ["day-cities", tenantId],
     enabled: !!tenantId,
     queryFn: () => listDayCities(supabase, tenantId as string),
+  });
+}
+
+/** Каскад переименования метки по всем дням (rename в библиотеке меток). */
+export function useRenameDayCity() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { from: string; to: string }) => {
+      if (!tenantId) throw new Error("Нет активного тенанта");
+      await renameDayCity(supabase, tenantId, input.from, input.to);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["day-cities"] }),
+    meta: { errorHandled: true }, // экран меток агрегирует ошибки каскада сам
   });
 }
 
