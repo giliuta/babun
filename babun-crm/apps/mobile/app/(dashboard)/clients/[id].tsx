@@ -48,7 +48,18 @@ import {
   MoreHorizontal,
   UserPlus,
 } from "lucide-react-native";
-import * as Contacts from "expo-contacts";
+// expo-contacts — нативный модуль, добавленный ПОСЛЕ текущих dev-билдов:
+// статический import валил ВСЁ приложение на старте («Cannot find native
+// module ExpoContacts», expo-router грузит route-модули при буте). Guarded
+// require: на старых билдах Contacts = null и кнопка «Из контактов» тихо
+// скрыта; после нативной пересборки работает как задумано.
+let Contacts: typeof import("expo-contacts") | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Contacts = require("expo-contacts");
+} catch {
+  Contacts = null;
+}
 import {
   createBlankClient,
   type Client,
@@ -126,6 +137,7 @@ export default function ClientDetailScreen() {
   // не требует полного доступа к книге). Имя + первый номер подставляются
   // в черновик, номер прогоняется через тот же AsYouType.
   const pickFromContacts = async () => {
+    if (!Contacts) return; // старый билд без нативного модуля
     try {
       const contact = await Contacts.presentContactPickerAsync();
       if (!contact) return;
@@ -425,19 +437,23 @@ export default function ClientDetailScreen() {
           // подстраивается под набранный «+код».
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
             {/* «Из контактов» — самый быстрый путь: имя+телефон из
-                телефонной книги одним пиком (нативный privacy-пикер). */}
-            <Pressable
-              onPress={pickFromContacts}
-              accessibilityRole="button"
-              accessibilityLabel="Заполнить из контактов"
-              className="mb-1 flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 active:opacity-70"
-              style={{ backgroundColor: `${t.accent}14` }}
-            >
-              <UserPlus color={t.accent} size={14} strokeWidth={2.2} />
-              <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
-                Из контактов
-              </Text>
-            </Pressable>
+                телефонной книги одним пиком (нативный privacy-пикер).
+                На билдах без нативного модуля кнопка скрыта (см. guarded
+                require выше). */}
+            {Contacts ? (
+              <Pressable
+                onPress={pickFromContacts}
+                accessibilityRole="button"
+                accessibilityLabel="Заполнить из контактов"
+                className="mb-1 flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 active:opacity-70"
+                style={{ backgroundColor: `${t.accent}14` }}
+              >
+                <UserPlus color={t.accent} size={14} strokeWidth={2.2} />
+                <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
+                  Из контактов
+                </Text>
+              </Pressable>
+            ) : null}
             <TextInput
               value={draft.full_name}
               onChangeText={(v) => setDraft((d) => ({ ...d, full_name: v }))}
