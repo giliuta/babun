@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -35,6 +35,7 @@ import {
   type Discount,
 } from "@babun/shared/local/appointments";
 import { generateId } from "@babun/shared/local/masters";
+import { tierForVisits } from "@babun/shared/local/loyalty";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -43,7 +44,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useCalendarSettings, useLoyalty } from "@/features/settings/local-settings";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
@@ -202,6 +203,9 @@ export function AppointmentSheet({
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>({});
   const [discountType, setDiscountType] = useState<"fixed" | "percent" | null>(null);
   const [discountValue, setDiscountValue] = useState("");
+  // Откуда скидка: метка уровня лояльности при автоприменении (пишется в
+  // global_discount.reason — веб-паритет), null после ручной правки.
+  const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [kind, setKind] = useState<"work" | "event">("work");
   const [eventColor, setEventColor] = useState<string | null>(null);
@@ -212,6 +216,29 @@ export function AppointmentSheet({
   // «Выполнено» + долг → предлагаем сразу принять оплату (нал/карта).
   // null = «позже»: сохраняем без платежа, долг остаётся в «Должниках».
   const [payMethod, setPayMethod] = useState<"cash" | "card" | null>(null);
+
+  // Лояльность — автоскидка уровня по числу завершённых визитов клиента
+  // (порт apps/web/src/hooks/useLoyaltyAutoApply.ts): автозначение
+  // заменяет только само себя, ручная скидка диспетчера всегда важнее.
+  const { data: loyalty } = useLoyalty();
+  const clientVisits = useMemo(
+    () =>
+      clientId
+        ? allAppts.reduce(
+            (n, a) =>
+              a.client_id === clientId && a.status === "completed" ? n + 1 : n,
+            0,
+          )
+        : 0,
+    [allAppts, clientId],
+  );
+  const loyaltyAppliedRef = useRef<{ clientId: string; percent: number } | null>(
+    null,
+  );
+  // Зеркало текущей скидки: эффект автоприменения читает свежие значения,
+  // не включая их в deps — иначе он дрался бы с ручной очисткой скидки.
+  const discountRef = useRef({ type: discountType, value: discountValue });
+  discountRef.current = { type: discountType, value: discountValue };
 
   // Hydrate on open.
   useEffect(() => {
@@ -258,6 +285,8 @@ export function AppointmentSheet({
       setDiscountValue(
         appointment.global_discount ? String(appointment.global_discount.value) : "",
       );
+      setDiscountReason(appointment.global_discount?.reason ?? null);
+      loyaltyAppliedRef.current = null;
       setCancelReason(appointment.cancel_reason ?? "");
       setKind(appointment.kind === "work" ? "work" : "event");
       setEventColor(appointment.color_override ?? null);
@@ -288,6 +317,8 @@ export function AppointmentSheet({
       setOverrides({});
       setDiscountType(null);
       setDiscountValue("");
+      setDiscountReason(null);
+      loyaltyAppliedRef.current = null;
       setCancelReason("");
       setKind("work");
       setEventColor(null);
@@ -299,10 +330,48 @@ export function AppointmentSheet({
   const globalDiscount = useMemo<Discount | null>(
     () =>
       discountType && Number(discountValue) > 0
-        ? { type: discountType, value: Number(discountValue) }
+        ? {
+            type: discountType,
+            value: Number(discountValue),
+            ...(discountReason ? { reason: discountReason } : {}),
+          }
         : null,
-    [discountType, discountValue],
+    [discountType, discountValue, discountReason],
   );
+
+  // Автоприменение уровня лояльности при выборе клиента.
+  useEffect(() => {
+    if (!visible) return;
+    const applied = loyaltyAppliedRef.current;
+    const cur = discountRef.current;
+    const isAuto =
+      applied != null &&
+      cur.type === "percent" &&
+      Number(cur.value) === applied.percent;
+    const dropAuto = () => {
+      if (isAuto) {
+        setDiscountType(null);
+        setDiscountValue("");
+        setDiscountReason(null);
+      }
+      loyaltyAppliedRef.current = null;
+    };
+    if (!clientId || !loyalty) {
+      dropAuto();
+      return;
+    }
+    const tier = tierForVisits(clientVisits, loyalty);
+    if (!tier) {
+      dropAuto();
+      return;
+    }
+    // Ручную скидку не перезаписываем (веб-паритет: manual edit wins).
+    if (cur.type != null && Number(cur.value) > 0 && !isAuto) return;
+    setDiscountType("percent");
+    setDiscountValue(String(tier.percent));
+    setDiscountReason(tier.label);
+    loyaltyAppliedRef.current = { clientId, percent: tier.percent };
+  }, [visible, clientId, clientVisits, loyalty]);
   const selectedServices = useMemo(
     () => buildServices(serviceIds, catalog, overrides),
     [serviceIds, catalog, overrides],
@@ -914,13 +983,19 @@ export function AppointmentSheet({
                     label={opt.label}
                     radio
                     selected={discountType === opt.v}
-                    onPress={() => setDiscountType(opt.v)}
+                    onPress={() => {
+                      setDiscountType(opt.v);
+                      setDiscountReason(null);
+                    }}
                   />
                 ))}
                 {discountType ? (
                   <TextInput
                     value={discountValue}
-                    onChangeText={setDiscountValue}
+                    onChangeText={(v) => {
+                      setDiscountValue(v);
+                      setDiscountReason(null);
+                    }}
                     keyboardType="decimal-pad"
                     placeholder={discountType === "percent" ? "10" : "20"}
                     placeholderTextColor={t.placeholder}
@@ -934,6 +1009,9 @@ export function AppointmentSheet({
               {globalDiscount ? (
                 <Text className="px-4 pb-3 text-sm font-medium" style={{ color: t.success }}>
                   −{formatEUR(globalDiscountAmount(selectedServices, globalDiscount))}
+                  {discountReason ? (
+                    <Text style={{ color: t.sub }}>  ·  {discountReason} (лояльность)</Text>
+                  ) : null}
                 </Text>
               ) : null}
             </SectionCard>

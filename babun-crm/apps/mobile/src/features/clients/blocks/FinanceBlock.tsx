@@ -1,12 +1,14 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
-import { Calendar, TrendingUp, Wallet } from "lucide-react-native";
+import { Calendar, Star, TrendingUp, Wallet } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
+import { tierForVisits } from "@babun/shared/local/loyalty";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatVisitDate } from "@/features/clients/format";
+import { useLoyalty } from "@/features/settings/local-settings";
 import { useThemeColors } from "@/theme/colors";
 
 // FinanceBlock (mobile port of apps/web/.../blocks/FinanceBlock.tsx).
@@ -14,15 +16,12 @@ import { useThemeColors } from "@/theme/colors";
 // Reference block — collapsed by default (CollapsibleCard); the closed row
 // shows «долг €N» (red) or the LTV. Expanded: read-only money summary —
 // LTV, средний чек, последняя оплата, последний
-// визит, долг, плюс история транзакций (paid + completed visits). All
-// figures come from the shared `client-stats` selector + the appointments
-// array — same data path as web.
+// визит, долг, loyalty tier pill, плюс история транзакций (paid +
+// completed visits). All figures come from the shared `client-stats`
+// selector + the appointments array — same data path as web; the tier
+// comes from the same useLoyalty() query the settings screen writes.
 //
 // DEGRADED vs web:
-//   * Loyalty tier (Star pill, «−N%») is dropped. Web reads it from a
-//     localStorage `loadLoyalty()` + the `babun:loyalty-changed` window
-//     event; neither exists on the mobile stack. TODO: wire a loyalty
-//     settings query before restoring this row.
 //   * The «Подробнее» → /dashboard/finances?client_id= link is dropped;
 //     the mobile finances screen doesn't take a client filter yet. TODO.
 
@@ -45,6 +44,10 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
   const ltv = Math.round(stats?.totalSpent ?? 0);
   const debt = Math.round(stats?.debt ?? 0);
   const lastVisit = stats?.lastVisitDate ?? "";
+
+  // Beta #53 — уровень лояльности по завершённым визитам (веб-паритет).
+  const { data: loyalty } = useLoyalty();
+  const tier = loyalty ? tierForVisits(stats?.visits ?? 0, loyalty) : null;
 
   // Paid + completed visits, newest-first. Explicit payment_status when
   // present; legacy rows fall back to «completed AND payment !== null».
@@ -110,6 +113,23 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
           t={t}
         />
         {debt > 0 ? <Row label="Долг" value={formatEUR(debt)} tone="bad" t={t} /> : null}
+
+        {tier ? (
+          // Золотой пилл уровня — литеральные цвета веба (не токены DS:
+          // это семантика «лояльность», одинаковая на обеих платформах).
+          <View
+            className="flex-row items-center gap-2 rounded-[10px] px-2 py-2"
+            style={{ backgroundColor: "rgba(255,204,0,0.10)" }}
+          >
+            <Star color="#B78600" size={14} strokeWidth={2.2} />
+            <Text className="flex-1 text-[13px] font-semibold" style={{ color: "#B78600" }}>
+              {tier.label}
+            </Text>
+            <Text className="text-[13px] font-bold tabular-nums" style={{ color: "#B78600" }}>
+              −{tier.percent}%
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {paidVisits.length > 0 ? (

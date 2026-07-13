@@ -23,6 +23,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { AddRow } from "@/components/ui/AddRow";
 import { Divider } from "@/components/ui/Divider";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
@@ -31,7 +32,7 @@ import { useLoyalty, useSaveLoyalty } from "@/features/settings/local-settings";
 
 export default function LoyaltyScreen() {
   const th = useThemeColors();
-  const { data } = useLoyalty();
+  const { data, isLoading } = useLoyalty();
   const save = useSaveLoyalty();
   const [s, setS] = useState<LoyaltySettings>(DEFAULT_LOYALTY);
   const [dirty, setDirty] = useState(false);
@@ -72,6 +73,16 @@ export default function LoyaltyScreen() {
   const removeTier = (id: string) =>
     patch({ tiers: s.tiers.filter((t) => t.id !== id) });
 
+  // Гейт загрузки — иначе до прихода данных мигает выключенный дефолт.
+  if (isLoading) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Лояльность" />
+        <EmptyState state="loading" />
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Лояльность" />
@@ -87,6 +98,10 @@ export default function LoyaltyScreen() {
             />
           </View>
         </SectionCard>
+        <Text className="px-5 pt-2 text-xs" style={{ color: th.faint }}>
+          Скидка уровня применяется автоматически при создании записи и видна
+          в карточке клиента (раздел «Финансы»). Ручная скидка всегда важнее.
+        </Text>
 
         <SectionCard title="Уровни — по числу визитов">
           {s.tiers.length === 0 ? (
