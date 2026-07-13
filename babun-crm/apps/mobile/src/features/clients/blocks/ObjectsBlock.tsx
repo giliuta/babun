@@ -12,7 +12,8 @@
 // from the previous version (promotes a new primary when needed).
 //
 // Presentational: receives props, persists via `update(patch)` — it does
-// NOT fetch.
+// NOT fetch appointments/clients. Единственный запрос — device-local
+// пресеты меток объектов (кабинет «Типы объектов»), чипы в форме добавления.
 
 import { useMemo, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
@@ -37,6 +38,7 @@ import {
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { useLocationLabels } from "@/features/settings/local-settings";
 import { useThemeColors } from "@/theme/colors";
 
 interface ObjectsBlockProps {
@@ -62,6 +64,8 @@ export default function ObjectsBlock({
   const t = useThemeColors();
   const all = client.locations ?? [];
   const book = useBookingNav();
+  // Пресеты меток из кабинета «Типы объектов» — чипы быстрого выбора.
+  const { data: labelPresets = [] } = useLocationLabels();
 
   // Pre-compute per-location visit counts so each object footer can show
   // «N визитов · last date» without re-scanning.
@@ -148,6 +152,25 @@ export default function ObjectsBlock({
 
       {draft ? (
         <View className="mt-2 gap-2 rounded-xl p-3" style={{ backgroundColor: t.fill }}>
+          {labelPresets.length > 0 ? (
+            <View className="flex-row flex-wrap gap-1.5">
+              {labelPresets.map((p) => (
+                <Chip
+                  key={p.id}
+                  label={p.name}
+                  radio
+                  selected={draft.label === p.name}
+                  onPress={() =>
+                    setDraft({
+                      ...draft,
+                      label: draft.label === p.name ? "" : p.name,
+                    })
+                  }
+                  accessibilityLabel={`Метка ${p.name}`}
+                />
+              ))}
+            </View>
+          ) : null}
           <TextInput
             value={draft.label}
             onChangeText={(v) => setDraft({ ...draft, label: v })}

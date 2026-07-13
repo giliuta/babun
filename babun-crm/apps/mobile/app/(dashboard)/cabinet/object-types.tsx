@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Trash2 } from "lucide-react-native";
+import { generateLocationLabelId } from "@babun/shared/local/location-labels";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -33,7 +34,10 @@ export default function ObjectTypesScreen() {
 
   const add = () => {
     if (!name.trim()) return;
-    save.mutate([...labels, { id: `loclbl-${Date.now()}`, name: name.trim() }]);
+    save.mutate([
+      ...labels,
+      { id: generateLocationLabelId(), name: name.trim() },
+    ]);
     setName("");
     setOpen(false);
   };
@@ -83,7 +87,7 @@ export default function ObjectTypesScreen() {
             <EmptyState
               fill
               title="Нет типов"
-              subtitle="Дом, Офис, Вилла… — пресеты для объектов клиента"
+              subtitle="Дом, Офис, Вилла… — чипы метки при добавлении объекта в карточке клиента"
               action={{ label: "Добавить тип", onPress: () => setOpen(true) }}
             />
           }
