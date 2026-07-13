@@ -785,13 +785,23 @@ function DayHeader({
           {date.getDate()}
         </Text>
       </View>
-      {/* Метка — цветной текст (3 буквы) без пилла; цветовой сигнал несёт
-          спайн по нижней кромке (web variant C). */}
+      {/* Метка — тонированный пилл с ПОЛНЫМ именем (в дне ширины хватает).
+          Полноширинный спайн здесь выглядел «колбасой» (фото владельца
+          2026-07-13) — цвет колонке даёт wash, пилл называет метку. */}
       {label ? (
-        <>
+        <View
+          style={{
+            marginTop: 3,
+            borderRadius: 999,
+            paddingHorizontal: 8,
+            paddingVertical: 2,
+            backgroundColor: `${label.color}1f`,
+          }}
+        >
           <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
             style={{
-              marginTop: 1,
               fontSize: 10,
               fontWeight: "700",
               letterSpacing: 0.5,
@@ -799,22 +809,9 @@ function DayHeader({
               color: label.color,
             }}
           >
-            {label.name.slice(0, 3)}
+            {label.name}
           </Text>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              bottom: 0,
-              left: 6,
-              right: 6,
-              height: 3,
-              borderTopLeftRadius: 3,
-              borderTopRightRadius: 3,
-              backgroundColor: label.color,
-            }}
-          />
-        </>
+        </View>
       ) : null}
     </Pressable>
   );

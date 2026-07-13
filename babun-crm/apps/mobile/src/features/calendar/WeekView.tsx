@@ -253,19 +253,25 @@ function WeekHeaderRow({
                 {d.getDate()}
               </Text>
             </View>
-            {/* Presence dot (Apple/Google native): a filled dot when the day
-                has bookings — denser than a raw count that reads like a
-                second date. Exact count lives in the day view + a11y label. */}
-            <View
-              style={{
-                marginTop: 3,
-                height: 5,
-                width: 5,
-                borderRadius: 3,
-                backgroundColor:
-                  count > 0 ? (isToday ? t.accent : t.faint) : "transparent",
-              }}
-            />
+            {/* Счётчик записей — в углу ячейки (web DayColumn top-right,
+                Bumpix headers): точка занятости не давала числа и вместе с
+                меткой не влезала в 64pt (метка резалась — фото владельца). */}
+            {count > 0 ? (
+              <Text
+                className="tabular-nums"
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  position: "absolute",
+                  top: 2,
+                  right: 3,
+                  fontSize: 10,
+                  fontWeight: "600",
+                  color: isToday ? t.accent : t.faint,
+                }}
+              >
+                {count}
+              </Text>
+            ) : null}
             {/* Метка дня — web DayColumn header, variant C: цветной текст
                 (3 буквы) + 3px спайн по нижней кромке (сидит на линии
                 обёртки). Ряд недель читается рядом цветных полосок. */}
@@ -273,6 +279,7 @@ function WeekHeaderRow({
               <>
                 <Text
                   numberOfLines={1}
+                  maxFontSizeMultiplier={1.2}
                   style={{
                     marginTop: 2,
                     fontSize: 9,
