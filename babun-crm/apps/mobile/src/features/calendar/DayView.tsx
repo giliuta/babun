@@ -1,22 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import {
-  Pressable,
-  Text,
-  View,
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from "react-native";
-import {
-  Gesture,
-  GestureDetector,
-  ScrollView,
-} from "react-native-gesture-handler";
+import { useMemo, useState } from "react";
+import { Pressable, Text, View, type DimensionValue } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  type SharedValue,
 } from "react-native-reanimated";
 import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -25,14 +15,8 @@ import { pad2 } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import { useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
+import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 
-// Vertical scale of the time grid (pixels per hour). Threaded as a prop so
-// pinch-to-zoom can change it live; DEFAULT keeps the current mobile density.
-export const HOUR_H_DEFAULT = 64;
-export const HOUR_H_MIN = 28;
-export const HOUR_H_MAX = 200;
-export const clampHourH = (h: number) =>
-  Math.max(HOUR_H_MIN, Math.min(HOUR_H_MAX, h));
 export const RAIL_W = 48;
 const GAP = 3;
 // Visible window fallback — mirrors shared DEFAULT_CALENDAR_SETTINGS
@@ -55,6 +39,47 @@ const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)
 // by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
 export type WorkBand = { startMin: number; endMin: number };
 
+// ZOOM GEOMETRY. Pinch-to-zoom animates ONE value — the grid row height in
+// ZoomableTimeGrid — on the UI thread. Everything inside a column is
+// positioned in PERCENT of the column height (or flex), so Yoga re-derives
+// the whole grid from that single animated height, frame-for-frame, with no
+// per-element animated styles and zero React involvement. Pixel-based
+// derivations (tap→time, drag→minutes, text fit) use the committed `hourH`
+// prop, which the pinch updates once per gesture via onZoom.
+const pct = (part: number, total: number): DimensionValue =>
+  `${(part / total) * 100}%`;
+
+// A horizontal band covering [fromMin, toMin] — off-hours wash, past-time
+// wash, buffer bands.
+function MinuteBand({
+  fromMin,
+  toMin,
+  winStartMin,
+  winEndMin,
+  color,
+}: {
+  fromMin: number;
+  toMin: number;
+  winStartMin: number;
+  winEndMin: number;
+  color: string;
+}) {
+  const totalMin = winEndMin - winStartMin;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        top: pct(fromMin - winStartMin, totalMin),
+        height: pct(toMin - fromMin, totalMin),
+        backgroundColor: color,
+      }}
+    />
+  );
+}
+
 function Block({
   placed,
   hourH,
@@ -71,6 +96,8 @@ function Block({
   onReschedule,
 }: {
   placed: PlacedAppt;
+  /** Committed pixels-per-hour — px math (drag snap, text fit) only;
+   *  the on-screen geometry is percent-based and zoom-independent. */
   hourH: number;
   laneX: number;
   laneW: number;
@@ -91,14 +118,13 @@ function Block({
 
   const winStart = startHour * 60;
   const winEnd = endHour * 60;
+  const totalMin = winEnd - winStart;
   // Clamp into the visible window (web windowStart/windowEnd semantics):
   // a block starting before the window pins to the top instead of getting
   // a negative top and vanishing above the grid.
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
   const colW = laneW / colCount;
-  const top = ((visStart - winStart) / 60) * hourH;
-  const height = Math.max(((visEnd - visStart) / 60) * hourH - 2, 22);
   const left = laneX + colIndex * colW + 1;
   const width = colW - GAP;
   const cancelled = apt.status === "cancelled";
@@ -107,7 +133,7 @@ function Block({
   const commit = (translationY: number) => {
     const duration = Math.max(15, endMin - startMin);
     // Base the move on the UNCLAMPED startMin (like moveBy below), not on
-    // the clamped visual `top`: a block clipped by the visible window
+    // the clamped visual top: a block clipped by the visible window
     // (e.g. 06:30 with startHour=7) must keep its real start, not get
     // silently pinned to the window edge. The DELTA snaps to gridStep so
     // an off-grid start keeps its offset — exactly what the a11y actions
@@ -153,16 +179,23 @@ function Block({
     .onEnd(() => runOnJS(onEdit)(apt));
   const gesture = Gesture.Exclusive(pan, tap);
 
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }, { scale: 1 + active.value * 0.03 }],
+  // The wrapper owns position + stacking (zIndex must live among siblings);
+  // the card owns the drag transform + shadow, so the wrapper's percent
+  // geometry stays untouched by the gesture springs.
+  const wrapperStyle = useAnimatedStyle(() => ({
     zIndex: active.value > 0 ? 20 : 1,
+  }));
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: ty.value }, { scale: 1 + active.value * 0.03 }],
     shadowColor: "#000",
     shadowOpacity: active.value * 0.25,
     shadowRadius: active.value * 8,
     shadowOffset: { width: 0, height: 3 },
   }));
 
-  const tall = height > 34;
+  // Committed-zoom px height (same formula the card renders to via percents;
+  // the min-clamp cancels out) — drives how many text lines fit.
+  const tall = ((visEnd - visStart) / 60) * hourH - 2 > 34;
 
   return (
     <GestureDetector gesture={gesture}>
@@ -184,106 +217,129 @@ function Block({
         style={[
           {
             position: "absolute",
-            top,
             left,
             width,
-            height,
-            backgroundColor: colors.fill,
-            borderLeftColor: colors.stripe,
-            borderLeftWidth: 3,
-            borderRadius: 8,
-            paddingHorizontal: compact ? 3 : 6,
-            paddingVertical: 2,
-            overflow: "hidden",
-            opacity: cancelled ? 0.55 : 1,
+            top: pct(visStart - winStart, totalMin),
+            height: pct(visEnd - visStart, totalMin),
+            // 24px wrapper ⇒ 22px card (bottom:2) — the old readable
+            // minimum for micro-appointments at low zoom.
+            minHeight: 24,
           },
-          style,
+          wrapperStyle,
         ]}
       >
-        <View
-          style={{ position: "absolute", top: 0, left: 3, right: 0, height: 1, backgroundColor: t.highlight }}
-        />
-        <Text
-          style={{ color: t.sub, fontSize: compact ? 9 : 11, fontWeight: "600" }}
-          className="tabular-nums"
-          numberOfLines={1}
-        >
-          {apt.time_start}
-        </Text>
-        <Text
-          style={{
-            color: t.ink,
-            fontSize: compact ? 9 : 11,
-            fontWeight: "700",
-            textDecorationLine: cancelled ? "line-through" : "none",
-          }}
-          numberOfLines={tall ? 2 : 1}
-        >
-          {label}
-        </Text>
-        {tall && !compact && service ? (
-          <Text style={{ color: t.sub, fontSize: 11 }} numberOfLines={1}>
-            {service}
-          </Text>
-        ) : null}
-        {completed && !compact ? (
-          <View
-            style={{
+        <Animated.View
+          style={[
+            {
               position: "absolute",
-              top: 3,
-              right: 3,
-              height: 15,
-              width: 15,
+              top: 0,
+              left: 0,
+              right: 0,
+              // 2px breathing gap to the next block (was `height - 2`).
+              bottom: 2,
+              backgroundColor: colors.fill,
+              borderLeftColor: colors.stripe,
+              borderLeftWidth: 3,
               borderRadius: 8,
-              backgroundColor: t.success,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+              paddingHorizontal: compact ? 3 : 6,
+              paddingVertical: 2,
+              overflow: "hidden",
+              opacity: cancelled ? 0.55 : 1,
+            },
+            cardStyle,
+          ]}
+        >
+          <View
+            style={{ position: "absolute", top: 0, left: 3, right: 0, height: 1, backgroundColor: t.highlight }}
+          />
+          <Text
+            style={{ color: t.sub, fontSize: compact ? 9 : 11, fontWeight: "600" }}
+            className="tabular-nums"
+            numberOfLines={1}
           >
-            <Check color="#fff" size={10} strokeWidth={3} />
-          </View>
-        ) : null}
+            {apt.time_start}
+          </Text>
+          <Text
+            style={{
+              color: t.ink,
+              fontSize: compact ? 9 : 11,
+              fontWeight: "700",
+              textDecorationLine: cancelled ? "line-through" : "none",
+            }}
+            numberOfLines={tall ? 2 : 1}
+          >
+            {label}
+          </Text>
+          {tall && !compact && service ? (
+            <Text style={{ color: t.sub, fontSize: 11 }} numberOfLines={1}>
+              {service}
+            </Text>
+          ) : null}
+          {completed && !compact ? (
+            <View
+              style={{
+                position: "absolute",
+                top: 3,
+                right: 3,
+                height: 15,
+                width: 15,
+                borderRadius: 8,
+                backgroundColor: t.success,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Check color="#fff" size={10} strokeWidth={3} />
+            </View>
+          ) : null}
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
   );
 }
 
-// The fixed hour-label rail on the left of the grid.
+// The fixed hour-label rail on the left of the grid: one flex cell per hour
+// (equal split of the animated grid height), each label riding its cell top.
 export function TimeRail({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
-  hourH = HOUR_H_DEFAULT,
 }: {
   startHour?: number;
   endHour?: number;
-  hourH?: number;
 }) {
   const t = useThemeColors();
   const hours = useMemo(() => {
     const out: number[] = [];
-    for (let h = startHour; h <= endHour; h++) out.push(h);
+    for (let h = startHour; h < endHour; h++) out.push(h);
     return out;
   }, [startHour, endHour]);
+  const labelStyle = {
+    position: "absolute" as const,
+    right: 6,
+    width: RAIL_W - 8,
+    textAlign: "right" as const,
+    color: t.sub,
+    fontSize: 12,
+    fontWeight: "600" as const,
+  };
   return (
-    <View style={{ width: RAIL_W, height: (endHour - startHour) * hourH }}>
+    <View style={{ width: RAIL_W }}>
       {hours.map((h) => (
-        <Text
-          key={h}
-          style={{
-            position: "absolute",
-            top: (h - startHour) * hourH - (h === startHour ? 0 : 7),
-            right: 6,
-            width: RAIL_W - 8,
-            textAlign: "right",
-            color: t.sub,
-            fontSize: 12,
-            fontWeight: "600",
-          }}
-          className="tabular-nums"
-        >
-          {`${pad2(h % 24)}:00`}
-        </Text>
+        <View key={h} style={{ flex: 1 }}>
+          <Text
+            style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
+            className="tabular-nums"
+          >
+            {`${pad2(h % 24)}:00`}
+          </Text>
+        </View>
       ))}
+      {/* endHour label — anchored to the rail bottom, no cell needed. */}
+      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
+        <Text style={[labelStyle, { top: -7 }]} className="tabular-nums">
+          {`${pad2(endHour % 24)}:00`}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -291,6 +347,13 @@ export function TimeRail({
 // One day lane: gridlines, off-hours wash, past-wash, empty-slot tap,
 // positioned blocks, all-day strips, now-line.
 // Reused by both DayView (1 column) and WeekView (N columns).
+//
+// Structure: the hour grid is a column of FLEX cells (one per hour) that
+// carry the hour line (borderTop), the half-hour line (top 50%) and the
+// create-slot Pressable in one node; washes/buffers/blocks/now-line are
+// percent-positioned overlays. The column has NO pixel geometry of its own —
+// it stretches to the animated row height (see zoom module note above), so
+// nothing here renders, measures or animates during a pinch.
 export function DayColumn({
   dateYmd,
   appointments,
@@ -305,7 +368,7 @@ export function DayColumn({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
-  hourH = HOUR_H_DEFAULT,
+  hourH,
   workStartHour,
   workEndHour,
   workBand,
@@ -328,8 +391,9 @@ export function DayColumn({
   /** Snap granularity for drag + empty-slot taps (settings.gridStep) —
    *  web DayColumn `snapMinutes` semantics. */
   stepMinutes?: number;
-  /** Pixels per hour — pinch-zoom scale, threaded from the parent. */
-  hourH?: number;
+  /** Committed pixels-per-hour (post-pinch) — px math only (tap→minutes,
+   *  drag snap, text fit); on-screen geometry is percent/flex. */
+  hourH: number;
   /** Work band — everything outside gets the grey off-hours wash (web
    *  DayColumn out-of-hours overlays). Defaults to the visible window. */
   workStartHour?: number;
@@ -355,12 +419,12 @@ export function DayColumn({
 
   const hours = useMemo(() => {
     const out: number[] = [];
-    for (let h = startHour; h <= endHour; h++) out.push(h);
+    for (let h = startHour; h < endHour; h++) out.push(h);
     return out;
   }, [startHour, endHour]);
-  const totalH = (endHour - startHour) * hourH;
   const winStartMin = startHour * 60;
   const winEndMin = endHour * 60;
+  const totalMin = winEndMin - winStartMin;
 
   // v496 web parity — all-day events are thin strips on the left edge,
   // excluded from the overlap layout so timed events keep full width.
@@ -384,7 +448,6 @@ export function DayColumn({
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
       ? nowMinutes - winStartMin
       : null;
-  const nowTop = nowMin != null ? (nowMin / 60) * hourH : null;
   const halfLine = t.dark ? "rgba(255,255,255,0.05)" : "rgba(60,60,67,0.07)";
 
   // Off-hours wash band: per-date team schedule wins (workBand), else the
@@ -401,12 +464,24 @@ export function DayColumn({
   const workStart = band ? Math.max(band.startMin, winStartMin) : winStartMin;
   const workEnd = band ? Math.min(band.endMin, winEndMin) : winEndMin;
 
+  const onSlotPress = (hour: number, locationY: number) => {
+    // Sub-hour snap by touch position (web handleColumnClick parity):
+    // floor to multiples of gridStep, so a tap at 11:27 with a 30-min step
+    // creates 11:00, at 11:40 → 11:30. Screen-reader activation has no
+    // coordinates → whole hour, matching the accessibilityLabel.
+    const step = Math.max(5, Math.min(60, stepMinutes));
+    const offset = Math.min(
+      60 - step,
+      Math.floor(((locationY / hourH) * 60) / step) * step,
+    );
+    onCreateAt(dateYmd, minToHM(hour * 60 + Math.max(0, offset)));
+  };
+
   return (
     <View
       onLayout={(e) => setLaneW(e.nativeEvent.layout.width)}
       style={{
         flex: 1,
-        height: totalH,
         position: "relative",
         borderLeftWidth: 1,
         borderLeftColor: t.separator,
@@ -417,103 +492,73 @@ export function DayColumn({
     >
       {/* off-hours wash: before work start / after work end */}
       {workStart > winStartMin ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: ((workStart - winStartMin) / 60) * hourH,
-            backgroundColor: t.pressed,
-          }}
+        <MinuteBand
+          fromMin={winStartMin}
+          toMin={workStart}
+          winStartMin={winStartMin}
+          winEndMin={winEndMin}
+          color={t.pressed}
         />
       ) : null}
       {workEnd < winEndMin ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: ((workEnd - winStartMin) / 60) * hourH,
-            left: 0,
-            right: 0,
-            height: ((winEndMin - workEnd) / 60) * hourH,
-            backgroundColor: t.pressed,
-          }}
+        <MinuteBand
+          fromMin={workEnd}
+          toMin={winEndMin}
+          winStartMin={winStartMin}
+          winEndMin={winEndMin}
+          color={t.pressed}
         />
       ) : null}
 
-      {nowTop != null ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: nowTop,
-            // dark: 0.02 неотличима от фона на реальном OLED — 0.055 даёт
-            // едва заметный, но читаемый wash (light не трогаем).
-            backgroundColor: t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)",
-          }}
+      {nowMin != null ? (
+        // dark: 0.02 неотличима от фона на реальном OLED — 0.055 даёт
+        // едва заметный, но читаемый wash (light не трогаем).
+        <MinuteBand
+          fromMin={winStartMin}
+          toMin={winStartMin + nowMin}
+          winStartMin={winStartMin}
+          winEndMin={winEndMin}
+          color={t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)"}
         />
       ) : null}
 
+      {/* hour cells: gridline + half-line + create-slot in one flex node */}
       {hours.map((h) => (
-        <View key={h}>
-          <View
-            style={{
-              position: "absolute",
-              top: (h - startHour) * hourH,
-              left: 0,
-              right: 0,
-              height: 1,
-              backgroundColor: t.separator,
-            }}
-          />
-          {h < endHour ? (
-            <View
-              style={{
-                position: "absolute",
-                top: (h - startHour) * hourH + hourH / 2,
-                left: 0,
-                right: 0,
-                height: 1,
-                backgroundColor: halfLine,
-              }}
-            />
-          ) : null}
-        </View>
-      ))}
-
-      {hours.slice(0, -1).map((h) => (
         <Pressable
-          key={`slot-${h}`}
-          onPress={(e) => {
-            // Sub-hour snap by touch position (web handleColumnClick
-            // parity): floor to multiples of gridStep, so a tap at 11:27
-            // with a 30-min step creates 11:00, at 11:40 → 11:30. Screen-
-            // reader activation has no coordinates → whole hour, matching
-            // the accessibilityLabel.
-            const step = Math.max(5, Math.min(60, stepMinutes));
-            const y = e?.nativeEvent?.locationY ?? 0;
-            const offset = Math.min(
-              60 - step,
-              Math.floor(((y / hourH) * 60) / step) * step,
-            );
-            onCreateAt(dateYmd, minToHM(h * 60 + Math.max(0, offset)));
-          }}
+          key={h}
+          onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
           accessibilityRole="button"
           accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
           style={{
-            position: "absolute",
-            top: (h - startHour) * hourH,
-            left: 0,
-            right: 0,
-            height: hourH,
+            flex: 1,
+            borderTopWidth: 1,
+            borderTopColor: t.separator,
           }}
-        />
+        >
+          <View
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              right: 0,
+              height: 1,
+              backgroundColor: halfLine,
+            }}
+          />
+        </Pressable>
       ))}
+      {/* closing line of the last hour */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 1,
+          backgroundColor: t.separator,
+        }}
+      />
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
           appointment; rendered before the blocks so colour cards sit on top
@@ -526,17 +571,13 @@ export function DayColumn({
             const bandEnd = Math.min(p.endMin + bufferMinutes, winEndMin);
             if (bandEnd <= bandStart) return null;
             return (
-              <View
+              <MinuteBand
                 key={`buffer-${p.apt.id}`}
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  top: ((bandStart - winStartMin) / 60) * hourH,
-                  left: 0,
-                  right: 0,
-                  height: ((bandEnd - bandStart) / 60) * hourH,
-                  backgroundColor: t.fill,
-                }}
+                fromMin={bandStart}
+                toMin={bandEnd}
+                winStartMin={winStartMin}
+                winEndMin={winEndMin}
+                color={t.fill}
               />
             );
           })
@@ -585,17 +626,17 @@ export function DayColumn({
           ))
         : null}
 
-      {nowTop != null ? (
+      {nowMin != null ? (
         <View
+          pointerEvents="none"
           style={{
             position: "absolute",
-            top: nowTop,
+            top: pct(nowMin, totalMin),
             left: -4,
             right: 0,
             flexDirection: "row",
             alignItems: "center",
           }}
-          pointerEvents="none"
         >
           <View style={{ height: 9, width: 9, borderRadius: 5, backgroundColor: t.danger }} />
           <View style={{ height: 1.5, flex: 1, backgroundColor: t.danger, opacity: 0.85 }} />
@@ -603,57 +644,6 @@ export function DayColumn({
       ) : null}
     </View>
   );
-}
-
-// Pinch-to-zoom the time grid: commit a new pixels-per-hour on each update
-// (quantised to whole px) and keep the viewport-centre time fixed. Shared by
-// DayView and WeekView so the gesture behaves identically in both.
-export function usePinchZoom({
-  scrollRef,
-  hourH,
-  startHour,
-  endHour,
-  onZoom,
-}: {
-  scrollRef: RefObject<ScrollView | null>;
-  hourH: number;
-  startHour: number;
-  endHour: number;
-  onZoom?: (next: number) => void;
-}) {
-  const scrollY = useRef(0);
-  const viewportH = useRef(0);
-  const baseH = useRef(hourH);
-  const centerFrac = useRef(0);
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollY.current = e.nativeEvent.contentOffset.y;
-  };
-  const onLayout = (e: LayoutChangeEvent) => {
-    viewportH.current = e.nativeEvent.layout.height;
-  };
-  const begin = () => {
-    baseH.current = hourH;
-    const total = Math.max(1, (endHour - startHour) * hourH);
-    centerFrac.current = (scrollY.current + viewportH.current / 2) / total;
-  };
-  const apply = (scale: number) => {
-    if (!onZoom) return;
-    const next = clampHourH(Math.round(baseH.current * scale));
-    onZoom(next);
-    const y = Math.max(
-      0,
-      centerFrac.current * (endHour - startHour) * next - viewportH.current / 2,
-    );
-    requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y, animated: false }),
-    );
-  };
-  const pinch = Gesture.Pinch()
-    .onStart(() => runOnJS(begin)())
-    .onUpdate((e) => runOnJS(apply)(e.scale));
-
-  return { pinch, onScroll, onLayout };
 }
 
 // Sticky date header above the day grid — web parity (DayColumn header):
@@ -765,7 +755,8 @@ export function DayView({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
-  hourH = HOUR_H_DEFAULT,
+  hourH,
+  hourHSv,
   onZoom,
   workStartHour,
   workEndHour,
@@ -791,8 +782,11 @@ export function DayView({
   startHour?: number;
   endHour?: number;
   stepMinutes?: number;
-  hourH?: number;
-  /** Pinch-zoom commit — new pixels-per-hour. */
+  /** Committed pixels-per-hour (see ZoomableTimeGrid). */
+  hourH: number;
+  /** Live pixels-per-hour shared value (see ZoomableTimeGrid). */
+  hourHSv: SharedValue<number>;
+  /** Pinch-zoom commit — new pixels-per-hour, once per gesture. */
   onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
@@ -810,24 +804,6 @@ export function DayView({
   dayLabel?: { name: string; color: string } | null;
   onDayLabelTap?: () => void;
 }) {
-  const scrollRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    if (scrollToHour == null) return;
-    const y = Math.max(0, (scrollToHour - startHour) * hourH);
-    const raf = requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y, animated: false }),
-    );
-    return () => cancelAnimationFrame(raf);
-  }, [scrollToHour, startHour]);
-
-  const zoom = usePinchZoom({ scrollRef, hourH, startHour, endHour, onZoom });
-  const swipe = Gesture.Pan()
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-18, 18])
-    .onEnd((e) => {
-      if (e.translationX > 55 && onPrev) runOnJS(onPrev)();
-      else if (e.translationX < -55 && onNext) runOnJS(onNext)();
-    });
   return (
     <View style={{ flex: 1 }}>
       <DayHeader
@@ -836,41 +812,38 @@ export function DayView({
         label={dayLabel}
         onLabelTap={onDayLabelTap}
       />
-      <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 6 }}
-        onScroll={zoom.onScroll}
-        onLayout={zoom.onLayout}
-        scrollEventThrottle={16}
+      <ZoomableTimeGrid
+        hourHSv={hourHSv}
+        onZoom={onZoom}
+        startHour={startHour}
+        endHour={endHour}
+        scrollToHour={scrollToHour}
+        onPrev={onPrev}
+        onNext={onNext}
       >
-        <View style={{ flexDirection: "row" }}>
-          <TimeRail startHour={startHour} endHour={endHour} hourH={hourH} />
-          <DayColumn
-            dateYmd={dateYmd}
-            appointments={appointments}
-            clientName={clientName}
-            serviceLabel={serviceLabel}
-            teamColorFor={teamColorFor}
-            isToday={isToday}
-            onEdit={onEdit}
-            onCreateAt={onCreateAt}
-            onReschedule={onReschedule}
-            startHour={startHour}
-            endHour={endHour}
-            stepMinutes={stepMinutes}
-            hourH={hourH}
-            workStartHour={workStartHour}
-            workEndHour={workEndHour}
-            workBand={workBandFor?.(dateYmd)}
-            tintColor={labelTintFor?.(dateYmd) ?? null}
-            bufferMinutes={bufferMinutes}
-            nowMinutes={nowMinutes}
-          />
-        </View>
-      </ScrollView>
-      </GestureDetector>
+        <TimeRail startHour={startHour} endHour={endHour} />
+        <DayColumn
+          dateYmd={dateYmd}
+          appointments={appointments}
+          clientName={clientName}
+          serviceLabel={serviceLabel}
+          teamColorFor={teamColorFor}
+          isToday={isToday}
+          onEdit={onEdit}
+          onCreateAt={onCreateAt}
+          onReschedule={onReschedule}
+          startHour={startHour}
+          endHour={endHour}
+          stepMinutes={stepMinutes}
+          hourH={hourH}
+          workStartHour={workStartHour}
+          workEndHour={workEndHour}
+          workBand={workBandFor?.(dateYmd)}
+          tintColor={labelTintFor?.(dateYmd) ?? null}
+          bufferMinutes={bufferMinutes}
+          nowMinutes={nowMinutes}
+        />
+      </ZoomableTimeGrid>
     </View>
   );
 }

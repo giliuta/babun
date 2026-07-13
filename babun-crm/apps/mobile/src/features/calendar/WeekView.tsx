@@ -1,11 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import {
-  Gesture,
-  GestureDetector,
-  ScrollView,
-} from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
@@ -13,10 +8,9 @@ import {
   DayColumn,
   TimeRail,
   RAIL_W,
-  HOUR_H_DEFAULT,
-  usePinchZoom,
   type WorkBand,
 } from "@/features/calendar/DayView";
+import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
@@ -48,7 +42,8 @@ export function WeekView({
   startHour,
   endHour,
   stepMinutes,
-  hourH = HOUR_H_DEFAULT,
+  hourH,
+  hourHSv,
   onZoom,
   workStartHour,
   workEndHour,
@@ -74,7 +69,11 @@ export function WeekView({
   startHour?: number;
   endHour?: number;
   stepMinutes?: number;
-  hourH?: number;
+  /** Committed pixels-per-hour (see ZoomableTimeGrid). */
+  hourH: number;
+  /** Live pixels-per-hour shared value (see ZoomableTimeGrid). */
+  hourHSv: SharedValue<number>;
+  /** Pinch-zoom commit — new pixels-per-hour, once per gesture. */
   onZoom?: (next: number) => void;
   workStartHour?: number;
   workEndHour?: number;
@@ -96,31 +95,6 @@ export function WeekView({
   scrollToHour?: number;
 }) {
   const t = useThemeColors();
-  const scrollRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    if (scrollToHour == null) return;
-    const y = Math.max(0, (scrollToHour - (startHour ?? 0)) * hourH);
-    const raf = requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y, animated: false }),
-    );
-    return () => cancelAnimationFrame(raf);
-    // hourH intentionally excluded: zoom must NOT re-fire the open-scroll.
-  }, [scrollToHour, startHour]);
-
-  const zoom = usePinchZoom({
-    scrollRef,
-    hourH,
-    startHour: startHour ?? 0,
-    endHour: endHour ?? 24,
-    onZoom,
-  });
-  const swipe = Gesture.Pan()
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-18, 18])
-    .onEnd((e) => {
-      if (e.translationX > 55) runOnJS(onPrev)();
-      else if (e.translationX < -55) runOnJS(onNext)();
-    });
 
   const byDay = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -133,7 +107,6 @@ export function WeekView({
   }, [appointments]);
 
   return (
-    <GestureDetector gesture={Gesture.Race(swipe, zoom.pinch)}>
     <View style={{ flex: 1 }}>
       {/* day headers */}
       <View
@@ -241,44 +214,42 @@ export function WeekView({
       </View>
 
       {/* grid */}
-      <ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 6 }}
-        onScroll={zoom.onScroll}
-        onLayout={zoom.onLayout}
-        scrollEventThrottle={16}
+      <ZoomableTimeGrid
+        hourHSv={hourHSv}
+        onZoom={onZoom}
+        startHour={startHour ?? 0}
+        endHour={endHour ?? 24}
+        scrollToHour={scrollToHour}
+        onPrev={onPrev}
+        onNext={onNext}
       >
-        <View style={{ flexDirection: "row" }}>
-          <TimeRail startHour={startHour} endHour={endHour} hourH={hourH} />
-          {days.map((d) => (
-            <DayColumn
-              key={formatYMD(d)}
-              dateYmd={formatYMD(d)}
-              appointments={byDay.get(formatYMD(d)) ?? []}
-              clientName={clientName}
-              serviceLabel={serviceLabel}
-              teamColorFor={teamColorFor}
-              isToday={sameDay(d, today)}
-              compact={days.length > 3}
-              onEdit={onEdit}
-              onCreateAt={onCreateAt}
-              onReschedule={onReschedule}
-              startHour={startHour}
-              endHour={endHour}
-              stepMinutes={stepMinutes}
-              hourH={hourH}
-              workStartHour={workStartHour}
-              workEndHour={workEndHour}
-              workBand={workBandFor?.(formatYMD(d))}
-              tintColor={labelTintFor?.(formatYMD(d)) ?? null}
-              bufferMinutes={bufferMinutes}
-              nowMinutes={nowMinutes}
-            />
-          ))}
-        </View>
-      </ScrollView>
+        <TimeRail startHour={startHour} endHour={endHour} />
+        {days.map((d) => (
+          <DayColumn
+            key={formatYMD(d)}
+            dateYmd={formatYMD(d)}
+            appointments={byDay.get(formatYMD(d)) ?? []}
+            clientName={clientName}
+            serviceLabel={serviceLabel}
+            teamColorFor={teamColorFor}
+            isToday={sameDay(d, today)}
+            compact={days.length > 3}
+            onEdit={onEdit}
+            onCreateAt={onCreateAt}
+            onReschedule={onReschedule}
+            startHour={startHour}
+            endHour={endHour}
+            stepMinutes={stepMinutes}
+            hourH={hourH}
+            workStartHour={workStartHour}
+            workEndHour={workEndHour}
+            workBand={workBandFor?.(formatYMD(d))}
+            tintColor={labelTintFor?.(formatYMD(d)) ?? null}
+            bufferMinutes={bufferMinutes}
+            nowMinutes={nowMinutes}
+          />
+        ))}
+      </ZoomableTimeGrid>
     </View>
-    </GestureDetector>
   );
 }

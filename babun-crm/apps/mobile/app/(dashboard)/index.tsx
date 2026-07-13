@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS } from "react-native-reanimated";
+import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
@@ -29,11 +29,8 @@ import {
   parseYMD,
 } from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
-import {
-  DayView,
-  HOUR_H_DEFAULT,
-  type WorkBand,
-} from "@/features/calendar/DayView";
+import { DayView, type WorkBand } from "@/features/calendar/DayView";
+import { HOUR_H_DEFAULT } from "@/features/calendar/zoom";
 import { WeekView } from "@/features/calendar/WeekView";
 import { type CalMode } from "@/features/calendar/ViewModeDropdown";
 import { CalendarHeader } from "@/features/calendar/CalendarHeader";
@@ -225,6 +222,10 @@ export default function CalendarTab() {
   const monthAnchor = useMemo(() => startOfMonth(day), [day]);
   // Pixels-per-hour for the time grid — pinch-to-zoom (session-only, web
   // parity: web resets zoom on reload too). Shared by Day + Week grids.
+  // The LIVE value is the shared value (mutated on the UI thread by the
+  // pinch, zero re-renders mid-gesture); the state mirror commits once per
+  // gesture so render-time derivations (block text fit) catch up.
+  const hourHSv = useSharedValue(HOUR_H_DEFAULT);
   const [hourH, setHourH] = useState(HOUR_H_DEFAULT);
   // Web parity (Header.tsx): exactly one team calendar is active at a time —
   // no «all teams» view. `teamChoice` remembers the user's pick; the derived
@@ -623,6 +624,7 @@ export default function CalendarTab() {
     nowMinutes,
     scrollToHour,
     hourH,
+    hourHSv,
     onZoom: setHourH,
   };
 
