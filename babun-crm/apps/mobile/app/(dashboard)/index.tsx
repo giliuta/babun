@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
@@ -38,6 +45,7 @@ import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DaySummaryStrip } from "@/features/calendar/DaySummaryStrip";
 import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
+import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
@@ -167,12 +175,13 @@ export default function CalendarTab() {
   // Вид и команда переживают перезапуск (MMKV): владелец двух бригад в
   // «Неделе» не должен каждый старт возвращаться в «День» первой команды.
   // Дата сознательно НЕ персистится — холодный старт всегда «сегодня».
-  // Дефолт — «День»: web на телефонной ширине стартует с дня (innerWidth<1024).
+  // Дефолт для нового пользователя — «Неделя» (стандарт по решению
+  // владельца 2026-07-13; дальше вид запоминается за пользователем).
   const [mode, setMode] = useState<CalMode>(() => {
     const saved = getStorage().get<{ mode?: CalMode }>(CAL_VIEW_KEY)?.mode;
-    return saved === "week" || saved === "month" || saved === "agenda"
+    return saved === "day" || saved === "month" || saved === "agenda"
       ? saved
-      : "day";
+      : "week";
   });
   // «Сегодня» устройства может отличаться от бизнес-таймзоны бригады (ночь
   // у владельца ≠ ночь бригады): пока пользователь не тронул дату, один раз
@@ -344,8 +353,11 @@ export default function CalendarTab() {
   const { data: cities = [] } = useCities();
   const { data: dayCities = {} } = useDayCities();
   const setDayCityMut = useSetDayCity();
-  const [cityPickerOpen, setCityPickerOpen] = useState(false);
-  const dayYmdForLabel = formatYMD(day);
+  // Дата, чью метку правим (null = пикер закрыт): шапка Дня открывает свой
+  // день, тап по дате в Неделе — свою (долгое нажатие там открывает день).
+  const [cityPickerYmd, setCityPickerYmd] = useState<string | null>(null);
+  // Разбор финансов дня по тапу на футер Доход/Расход (null = закрыт).
+  const [finModalYmd, setFinModalYmd] = useState<string | null>(null);
   // Date-label resolver: explicit (day_cities) → team default_city (web
   // getCityFor parity). Shared by the day-header pill, the week header
   // pills and the label-tint column wash below.
@@ -657,7 +669,10 @@ export default function CalendarTab() {
     scrollToHour,
     hourH,
     hourHSv,
-    onZoom: setHourH,
+    // Коммит зума — низким приоритетом: полный ре-рендер сетки на отпускании
+    // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
+    // и так на UI-потоке; здесь догоняют только «холодные» слои (текст-фит).
+    onZoom: (v: number) => startTransition(() => setHourH(v)),
   };
 
   const pickDay = (d: Date) => {
@@ -744,6 +759,11 @@ export default function CalendarTab() {
                 openCreate({ date: d, time_start: timeStart })
               }
               onPickDay={pickDay}
+              onPickLabelDay={
+                hasLabels && activeTeamId
+                  ? (ymd) => setCityPickerYmd(ymd)
+                  : undefined
+              }
               onCommitPage={(dir) => setDay((d) => addDays(d, dir * 7))}
               {...gridProps}
             />
@@ -753,7 +773,7 @@ export default function CalendarTab() {
             appointments={weekAppts}
             teamId={activeTeamId}
             todayYmd={todayYmd}
-            onTapDay={pickDay}
+            onTapDay={(d) => setFinModalYmd(formatYMD(d))}
           />
         </>
       ) : mode === "day" ? (
@@ -771,7 +791,7 @@ export default function CalendarTab() {
               labelFor={hasLabels ? labelFor : undefined}
               onDayLabelTap={
                 hasLabels && activeTeamId
-                  ? () => setCityPickerOpen(true)
+                  ? () => setCityPickerYmd(dayYmd)
                   : undefined
               }
               onCreateAt={(d, timeStart) =>
@@ -786,6 +806,7 @@ export default function CalendarTab() {
             appointments={dayAppts}
             teamId={activeTeamId}
             todayYmd={todayYmd}
+            onTapDay={(d) => setFinModalYmd(formatYMD(d))}
           />
         </>
       ) : (
@@ -830,42 +851,51 @@ export default function CalendarTab() {
         onOpenUnpaid={() => router.push("/cabinet/unclosed")}
       />
 
+      {/* Разбор финансов дня — тап по футеру Доход/Расход. */}
+      <DayFinanceModal
+        dateYmd={finModalYmd}
+        appointments={finModalYmd ? apptsFor(finModalYmd) : []}
+        teamId={activeTeamId}
+        onClose={() => setFinModalYmd(null)}
+      />
+
       {/* Пикер метки дня — центрированная карточка (web CityPickerModal);
-          тап по активной строке снимает метку. */}
+          тап по активной строке снимает метку. Целевую дату задаёт
+          открывшая шапка (День — свой день, Неделя — тапнутая дата). */}
       <CityPickerModal
-        visible={cityPickerOpen}
-        dateKey={dayYmdForLabel}
+        visible={cityPickerYmd != null}
+        dateKey={cityPickerYmd ?? todayYmd}
         options={labelOptions}
         selected={
-          activeTeamId
-            ? dayCities[dayCityKey(activeTeamId, dayYmdForLabel)] ?? ""
+          activeTeamId && cityPickerYmd
+            ? dayCities[dayCityKey(activeTeamId, cityPickerYmd)] ?? ""
             : ""
         }
         onPick={(name) => {
-          if (activeTeamId) {
+          if (activeTeamId && cityPickerYmd) {
             setDayCityMut.mutate({
               teamId: activeTeamId,
-              date: dayYmdForLabel,
+              date: cityPickerYmd,
               city: name,
             });
           }
-          setCityPickerOpen(false);
+          setCityPickerYmd(null);
         }}
         onClear={() => {
-          if (activeTeamId) {
+          if (activeTeamId && cityPickerYmd) {
             setDayCityMut.mutate({
               teamId: activeTeamId,
-              date: dayYmdForLabel,
+              date: cityPickerYmd,
               city: "",
             });
           }
-          setCityPickerOpen(false);
+          setCityPickerYmd(null);
         }}
-        onClose={() => setCityPickerOpen(false)}
+        onClose={() => setCityPickerYmd(null)}
         onSettings={
           activeTeamId
             ? () => {
-                setCityPickerOpen(false);
+                setCityPickerYmd(null);
                 router.push(`/cabinet/teams/${activeTeamId}/cities`);
               }
             : undefined

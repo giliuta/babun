@@ -177,6 +177,11 @@ export function ZoomableTimeGrid({
         <Animated.ScrollView
           ref={scrollRef}
           style={{ flex: 1 }}
+          // Сетка упирается в края окна и НЕ тянется резинкой (запрос
+          // владельца: «упирается в 24:00 и всё») — пустота за последним
+          // часом читалась как баг.
+          bounces={false}
+          overScrollMode="never"
           contentContainerStyle={{
             paddingTop: PAD_TOP,
             paddingBottom: PAD_BOTTOM,

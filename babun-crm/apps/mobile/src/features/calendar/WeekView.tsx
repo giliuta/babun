@@ -45,6 +45,7 @@ export function WeekView({
   onCreateAt,
   onReschedule,
   onPickDay,
+  onPickLabelDay,
   onCommitPage,
   startHour,
   endHour,
@@ -72,7 +73,11 @@ export function WeekView({
   onEdit: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
+  /** Долгое нажатие по шапке даты — открыть день. */
   onPickDay: (d: Date) => void;
+  /** Тап по шапке даты — попап метки этой даты (undefined, когда у бригады
+   *  нет меток: тап тогда ничего не делает — решение владельца 2026-07-13). */
+  onPickLabelDay?: (dateYmd: string) => void;
   /** Палец долистал страницу: родитель сдвигает неделю на ±7 дней. */
   onCommitPage: (dir: 1 | -1) => void;
   startHour?: number;
@@ -132,6 +137,7 @@ export function WeekView({
               apptsFor={apptsFor}
               labelFor={labelFor}
               onPickDay={onPickDay}
+              onPickLabelDay={onPickLabelDay}
               t={t}
             />
           )}
@@ -195,14 +201,16 @@ export function WeekView({
   );
 }
 
-// Одна страница полосы шапок: 7 ячеек (день недели, число, точка занятости,
-// метка + спайн). Тап по ячейке открывает день.
+// Одна страница полосы шапок: 7 ячеек (день недели, число, счётчик,
+// метка + спайн). Тап — попап метки этой даты (если метки есть),
+// долгое нажатие — открыть день (решение владельца 2026-07-13).
 function WeekHeaderRow({
   days,
   today,
   apptsFor,
   labelFor,
   onPickDay,
+  onPickLabelDay,
   t,
 }: {
   days: Date[];
@@ -210,6 +218,7 @@ function WeekHeaderRow({
   apptsFor: (dateYmd: string) => Appointment[];
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onPickDay: (d: Date) => void;
+  onPickLabelDay?: (dateYmd: string) => void;
   t: ThemeColors;
 }) {
   return (
@@ -223,9 +232,18 @@ function WeekHeaderRow({
         return (
           <Pressable
             key={ymd}
-            onPress={() => onPickDay(d)}
+            onPress={
+              onPickLabelDay ? () => onPickLabelDay(ymd) : undefined
+            }
+            onLongPress={() => onPickDay(d)}
+            delayLongPress={350}
             accessibilityRole="button"
             accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+            accessibilityHint={
+              onPickLabelDay
+                ? "Нажатие меняет метку, долгое нажатие открывает день"
+                : "Долгое нажатие открывает день"
+            }
             style={{ flex: 1, alignItems: "center", paddingTop: 4 }}
           >
             <Text

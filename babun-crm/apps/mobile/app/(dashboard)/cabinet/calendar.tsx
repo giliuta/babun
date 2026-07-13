@@ -205,6 +205,53 @@ export default function CalendarSettingsScreen() {
         right={<SavedIndicator tick={savedTick} />}
       />
 
+      <SectionEyebrow>Видимое время</SectionEyebrow>
+      <SectionCard padded>
+        <Row
+          label="Начало"
+          right={
+            <Stepper
+              value={s.startHour ?? 0}
+              min={0}
+              max={(s.endHour ?? 24) - 1}
+              onChange={(v) => patch({ startHour: v })}
+            />
+          }
+        />
+        <Divider />
+        <Row
+          label="Конец"
+          right={
+            <Stepper
+              value={s.endHour ?? 24}
+              min={(s.startHour ?? 0) + 1}
+              max={24}
+              onChange={(v) => patch({ endHour: v })}
+            />
+          }
+        />
+        <Divider />
+        <Row
+          label="Открывается на"
+          right={
+            <Stepper
+              value={Math.min(
+                Math.max(s.scrollOpenHour ?? 8, s.startHour ?? 0),
+                (s.endHour ?? 24) - 1,
+              )}
+              min={s.startHour ?? 0}
+              max={(s.endHour ?? 24) - 1}
+              onChange={(v) => patch({ scrollOpenHour: v })}
+            />
+          }
+        />
+      </SectionCard>
+      <SectionFooter>
+        Какие часы показывает сетка. «Открывается на» — час, который стоит
+        сверху при входе в календарь. У команды со своими значениями
+        (шестерёнка календаря) действуют её значения.
+      </SectionFooter>
+
       <SectionEyebrow>Рабочие часы по умолчанию</SectionEyebrow>
       <SectionCard padded>
         <Row

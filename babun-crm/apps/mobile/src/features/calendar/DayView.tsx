@@ -408,7 +408,16 @@ export function TimeRail({
     fontWeight: "600" as const,
   };
   return (
-    <View style={{ width: RAIL_W, backgroundColor: t.surface }}>
+    <View
+      // Жирный разделитель рельса и сетки (запрос владельца 2026-07-13):
+      // левая колонка времени отчётливо отделена от происходящего.
+      style={{
+        width: RAIL_W,
+        backgroundColor: t.surface,
+        borderRightWidth: 2,
+        borderRightColor: `${t.ink}4d`,
+      }}
+    >
       {hours.map((h) => (
         <View key={h} style={{ flex: 1 }}>
           {nearNow(h) ? null : (
@@ -495,7 +504,6 @@ export function DayColumn({
   bufferMinutes = 0,
   nowMinutes,
   tintColor,
-  emptyCtaHour,
 }: {
   dateYmd: string;
   appointments: Appointment[];
@@ -536,9 +544,6 @@ export function DayColumn({
   /** Day-label (city/tag) colour — washes the whole column very lightly
    *  (web DayColumn tintByLabel, Phase I41). Null/undefined → no tint. */
   tintColor?: string | null;
-  /** Час ghost-слота «+ Записать на HH:00» для пустого рабочего дня —
-   *  передаёт только режим «День» (в неделе это шум). */
-  emptyCtaHour?: number;
 }) {
   const t = useThemeColors();
   const blockColors = useBlockColors(teamColorFor);
@@ -750,47 +755,6 @@ export function DayColumn({
             Выходной
           </Text>
         </View>
-      ) : null}
-
-      {/* Ghost-слот пустого рабочего дня: один пунктирный час на открытии —
-          первый шаг без обучения («куда тапать»). Только режим «День». */}
-      {emptyCtaHour != null &&
-      appointments.length === 0 &&
-      workBand !== null ? (
-        (() => {
-          const ghostMin = Math.max(
-            winStartMin,
-            Math.min(emptyCtaHour * 60, winEndMin - 60),
-          );
-          return (
-            <Pressable
-              onPress={() => onCreateAt(dateYmd, minToHM(ghostMin))}
-              accessibilityRole="button"
-              accessibilityLabel={`Записать на ${minToHM(ghostMin)}`}
-              className="active:opacity-60"
-              style={{
-                position: "absolute",
-                left: 8,
-                right: 8,
-                top: pct(ghostMin - winStartMin, totalMin),
-                height: pct(60, totalMin),
-                borderRadius: 8,
-                borderWidth: 1.5,
-                borderStyle: "dashed",
-                borderColor: `${t.accent}66`,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
-              >
-                {`+ Записать на ${minToHM(ghostMin)}`}
-              </Text>
-            </Pressable>
-          );
-        })()
       ) : null}
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
@@ -1126,7 +1090,6 @@ export function DayView({
                 teamColorFor={teamColorFor}
                 isToday={d === todayYmd}
                 todayYmd={todayYmd}
-                emptyCtaHour={scrollToHour}
                 onEdit={onEdit}
                 onCreateAt={onCreateAt}
                 onReschedule={onReschedule}
