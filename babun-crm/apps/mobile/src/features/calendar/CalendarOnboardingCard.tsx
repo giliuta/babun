@@ -58,7 +58,7 @@ export function CalendarOnboardingCard({
           borderWidth: 1,
           borderColor: t.separator,
           padding: 20,
-          boxShadow: "0px 12px 32px rgba(11,18,32,0.18)",
+          boxShadow: t.cardShadow,
         }}
       >
         <Pressable

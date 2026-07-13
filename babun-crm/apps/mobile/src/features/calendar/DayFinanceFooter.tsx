@@ -95,6 +95,7 @@ export function DayFinanceFooter({
               style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
             >
               {formatEUR(income)}
             </Text>
@@ -102,6 +103,7 @@ export function DayFinanceFooter({
               style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: totals.spent !== 0 ? t.danger : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
             >
               {formatEUR(totals.spent)}
             </Text>

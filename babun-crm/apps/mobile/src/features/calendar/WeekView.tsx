@@ -246,7 +246,7 @@ function WeekHeaderRow({
                 style={{
                   fontSize: 15,
                   fontWeight: "700",
-                  color: isToday ? "#fff" : weekend ? t.danger : t.ink,
+                  color: isToday ? t.onAccent : weekend ? t.danger : t.ink,
                 }}
                 className="tabular-nums"
               >

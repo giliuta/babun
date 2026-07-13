@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { Check } from "lucide-react-native";
@@ -126,6 +127,7 @@ function Block({
   const { apt, startMin, endMin, colIndex, colCount } = placed;
   const ty = useSharedValue(0);
   const active = useSharedValue(0);
+  const pressed = useSharedValue(1);
 
   const winStart = startHour * 60;
   const winEnd = endHour * 60;
@@ -158,8 +160,17 @@ function Block({
     const lo = Math.min(startMin, winStart);
     const hi = Math.max(endMin, winEnd) - duration;
     newStart = Math.max(lo, Math.min(hi, newStart));
-    if (newStart === startMin) return;
+    if (newStart === startMin) {
+      // Некуда двигать — мягко возвращаем карточку на место.
+      ty.value = withSpring(0);
+      return;
+    }
     onReschedule(apt, minToHM(newStart), minToHM(newStart + duration));
+    // Оптимистический кеш переписан синхронно внутри onReschedule → база
+    // блока уже на новом слоте. Мгновенный сброс смещения приземляется тем
+    // же кадром — блок остаётся под пальцем. Прежний withSpring(0) 300 мс
+    // вёз карточку к СТАРОМУ слоту и она «дёргалась» после ребейза.
+    ty.value = 0;
   };
 
   const moveBy = (deltaMin: number) => {
@@ -181,12 +192,21 @@ function Block({
       ty.value = e.translationY;
     })
     .onEnd((e) => {
+      // Сброс ty решает commit на JS: перенос состоялся → мгновенно (база
+      // уже переписана оптимистически), нет → пружиной домой.
       runOnJS(commit)(e.translationY);
-      ty.value = withSpring(0);
       active.value = withSpring(0);
     });
+  // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
+  // с onBegin, возврат в onFinalize — раньше блок «молчал» до открытия шита.
   const tap = Gesture.Tap()
     .maxDuration(250)
+    .onBegin(() => {
+      pressed.value = withTiming(0.7, { duration: 60 });
+    })
+    .onFinalize(() => {
+      pressed.value = withTiming(1, { duration: 150 });
+    })
     .onEnd(() => runOnJS(onEdit)(apt));
   const gesture = Gesture.Exclusive(pan, tap);
 
@@ -198,6 +218,7 @@ function Block({
   }));
   const cardStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: ty.value }, { scale: 1 + active.value * 0.03 }],
+    opacity: pressed.value,
     shadowColor: "#000",
     shadowOpacity: active.value * 0.25,
     shadowRadius: active.value * 8,
@@ -263,10 +284,14 @@ function Block({
           <View
             style={{ position: "absolute", top: 0, left: 3, right: 0, height: 1, backgroundColor: t.highlight }}
           />
+          {/* maxFontSizeMultiplier: крупный системный шрифт не должен
+              выталкивать время/клиента из узкого блока (numberOfLines
+              срезал бы САМУ информацию). */}
           <Text
             style={{ color: t.sub, fontSize: compact ? 9 : 11, fontWeight: "600" }}
             className="tabular-nums"
             numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
           >
             {apt.time_start}
           </Text>
@@ -278,11 +303,16 @@ function Block({
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
             numberOfLines={tall ? 2 : 1}
+            maxFontSizeMultiplier={1.3}
           >
             {label}
           </Text>
           {tall && !compact && service ? (
-            <Text style={{ color: t.sub, fontSize: 11 }} numberOfLines={1}>
+            <Text
+              style={{ color: t.sub, fontSize: 11 }}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
               {service}
             </Text>
           ) : null}
@@ -300,7 +330,7 @@ function Block({
                 justifyContent: "center",
               }}
             >
-              <Check color="#fff" size={10} strokeWidth={3} />
+              <Check color={t.onAccent} size={10} strokeWidth={3} />
             </View>
           ) : null}
         </Animated.View>
@@ -342,6 +372,7 @@ export function TimeRail({
           <Text
             style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
             className="tabular-nums"
+            maxFontSizeMultiplier={1.3}
           >
             {`${pad2(h % 24)}:00`}
           </Text>
@@ -349,8 +380,12 @@ export function TimeRail({
       ))}
       {/* endHour label — anchored to the rail bottom, no cell needed. */}
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
-        <Text style={[labelStyle, { top: -7 }]} className="tabular-nums">
-          {`${pad2(endHour % 24)}:00`}
+        <Text
+          style={[labelStyle, { top: -7 }]}
+          className="tabular-nums"
+          maxFontSizeMultiplier={1.3}
+        >
+          {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
         </Text>
       </View>
     </View>
@@ -612,6 +647,9 @@ export function DayColumn({
           <Pressable
             key={a.id}
             onPress={() => onEdit(a)}
+            // Полоска 8pt — визуально тонкая, но тап-мишень расширена до
+            // ~24pt (аудит: было фактически некликабельно).
+            hitSlop={{ left: 6, right: 10, top: 4, bottom: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Весь день, ${clientName(a) || a.comment || "Событие"}`}
             style={{
@@ -702,7 +740,7 @@ function DayHeader({
       accessibilityRole={onLabelTap ? "button" : undefined}
       accessibilityLabel={
         onLabelTap
-          ? `${label ? `Метка дня: ${label.name}` : "Без метки"} — сменить метку`
+          ? `${date.getDate()} ${date.toLocaleDateString("ru-RU", { month: "long" })}, ${label ? `метка: ${label.name}` : "без метки"} — сменить метку`
           : undefined
       }
       className="active:opacity-70"
@@ -741,7 +779,7 @@ function DayHeader({
           style={{
             fontSize: 15,
             fontWeight: "700",
-            color: isToday ? "#fff" : weekend ? t.danger : t.ink,
+            color: isToday ? t.onAccent : weekend ? t.danger : t.ink,
           }}
         >
           {date.getDate()}

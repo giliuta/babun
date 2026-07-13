@@ -228,7 +228,7 @@ export function MiniCalendar({
               borderRadius: 10,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: t.dark ? "rgba(90,134,255,0.18)" : "rgba(44,91,224,0.10)",
+              backgroundColor: `${t.accent}1a`,
               opacity: pressed ? 0.7 : 1,
             })}
           >

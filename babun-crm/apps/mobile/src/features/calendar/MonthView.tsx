@@ -1,8 +1,11 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
+import {
+  computeDayFinance,
+  type DayFinanceTotals,
+} from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { useThemeColors } from "@/theme/colors";
@@ -19,7 +22,9 @@ const ymd = (d: Date) =>
 // weekend numbers red, appointment-count chip top-right, and the per-day
 // money mini-list (planned / earned / spent / profit) from the same
 // day-summary source as the week footer, so the two can never disagree.
-export function MonthView({
+// memo: три страницы месяца живут в пейджере — соседи не должны
+// пересчитываться на каждый тик родителя.
+export const MonthView = memo(function MonthView({
   month,
   appointments,
   teamId,
@@ -57,13 +62,39 @@ export function MonthView({
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
 
+  // Финансы всех дней одной мемоизацией (аудит: computeDayFinance гонялся
+  // по 42 клеткам в каждом рендере). Дни без записей, но с ручными
+  // операциями (extras) тоже попадают в карту.
+  const totalsByDay = useMemo(() => {
+    const m = new Map<string, DayFinanceTotals>();
+    const dates = new Set(byDay.keys());
+    if (teamId) {
+      const prefix = `${teamId}:`;
+      for (const k of Object.keys(extrasMap)) {
+        if (k.startsWith(prefix)) dates.add(k.slice(prefix.length));
+      }
+    }
+    for (const date of dates) {
+      m.set(
+        date,
+        computeDayFinance(
+          byDay.get(date) ?? [],
+          services,
+          getDayExtras(extrasMap, teamId, date),
+        ),
+      );
+    }
+    return m;
+  }, [byDay, services, extrasMap, teamId]);
+
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());
-  const accentTint = t.dark ? "rgba(44,91,224,0.22)" : "rgba(44,91,224,0.12)";
+  const accentTint = `${t.accent}1f`;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.surface }}>
-      {/* weekday header — weekend columns red (web: red at 60%) */}
+      {/* weekday header — weekend columns red (полный danger, без
+          приглушения: принцип «из чёрного, не серого» + контраст AA). */}
       <View
         className="flex-row"
         style={{
@@ -82,7 +113,6 @@ export function MonthView({
               letterSpacing: 0.6,
               textTransform: "uppercase",
               color: i >= 5 ? t.danger : t.sub,
-              opacity: i >= 5 ? 0.6 : 1,
             }}
           >
             {w}
@@ -97,13 +127,8 @@ export function MonthView({
               const inMonth = d.getMonth() === month.getMonth();
               const isToday = key === todayStr;
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-              const dayAppts = byDay.get(key);
-              const count = dayAppts?.length ?? 0;
-              const extras = getDayExtras(extrasMap, teamId, key);
-              const totals =
-                count > 0 || extras.length > 0
-                  ? computeDayFinance(dayAppts ?? [], services, extras)
-                  : null;
+              const count = byDay.get(key)?.length ?? 0;
+              const totals = totalsByDay.get(key) ?? null;
               return (
                 <Pressable
                   key={key}
@@ -126,7 +151,7 @@ export function MonthView({
                         className="h-6 w-6 items-center justify-center rounded-full"
                         style={{ backgroundColor: t.accent }}
                       >
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: t.onAccent }}>
                           {d.getDate()}
                         </Text>
                       </View>
@@ -182,7 +207,7 @@ export function MonthView({
       </View>
     </View>
   );
-}
+});
 
 // One line of the in-cell money mini-list. Zero rows are dropped (web
 // parity) — except profit, which always renders when the day has numbers.
@@ -200,6 +225,7 @@ function MoneyRow({
     <Text
       className="tabular-nums"
       numberOfLines={1}
+      maxFontSizeMultiplier={1.3}
       style={{ fontSize: 10, fontWeight: "600", lineHeight: 13, color }}
     >
       {formatEUR(v)}

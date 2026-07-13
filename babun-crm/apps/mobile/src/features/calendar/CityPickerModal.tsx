@@ -88,6 +88,7 @@ export function CityPickerModal({
             {onSettings ? (
               <Pressable
                 onPress={onSettings}
+                hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Настройки меток"
                 className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
@@ -139,7 +140,7 @@ export function CityPickerModal({
                             backgroundColor: o.color,
                           }}
                         >
-                          <MapPin color="#fff" size={16} strokeWidth={2.2} />
+                          <MapPin color={t.onAccent} size={16} strokeWidth={2.2} />
                         </View>
                         <Text
                           className="flex-1"

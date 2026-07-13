@@ -37,6 +37,7 @@ export function ViewModeDropdown({
     <>
       <Pressable
         onPress={() => setOpen(true)}
+        hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={`Режим просмотра: ${LABEL[mode]}`}
         accessibilityState={{ expanded: open }}

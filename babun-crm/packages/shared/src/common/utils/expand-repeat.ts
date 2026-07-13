@@ -17,6 +17,12 @@
 import type { Appointment, PersonalEventRepeat } from "../../local/appointments";
 
 const MAX_OCCURRENCES = 365;
+// Жёсткий предохранитель прохода по дням (~55 лет). Именно ДНИ ПРОХОДА,
+// а не вхождения: раньше кап 365 стоял на днях от seed, и еженедельное
+// событие старше года «не доходило» до текущего окна и молча исчезало
+// из календаря. Прогулка тривиальной арифметикой на 20k итераций —
+// микросекунды; смысловые лимиты ниже (count / MAX_OCCURRENCES) не тронуты.
+const HARD_WALK_DAYS = 20000;
 
 interface VirtualAppointment extends Appointment {
   virtualParentId: string;
@@ -63,13 +69,15 @@ export function expandRepeat(
   const countLimit = rule.count && rule.count > 0 ? rule.count : MAX_OCCURRENCES;
 
   // Walk forward day-by-day from seed until we exit the window or hit
-  // the rule's terminator. Day-by-day is simple to reason about; the
-  // 365 cap protects us from pathological inputs.
+  // the rule's terminator. Day-by-day is simple to reason about; emitted
+  // ДО окна тоже считается (count = «N вхождений от seed»), поэтому
+  // прематч-часть не перепрыгиваем, а просто дёшево проходим.
   const cursor = new Date(seedDate);
   let emitted = 0;
   let iterations = 0;
   while (
-    iterations < MAX_OCCURRENCES &&
+    iterations < HARD_WALK_DAYS &&
+    out.length < MAX_OCCURRENCES &&
     emitted < countLimit &&
     cursor <= toDate &&
     (!untilDate || cursor <= untilDate)

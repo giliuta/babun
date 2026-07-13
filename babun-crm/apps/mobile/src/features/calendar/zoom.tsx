@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   Gesture,
   GestureDetector,
@@ -79,16 +79,22 @@ export function ZoomableTimeGrid({
   const baseH = useSharedValue(HOUR_H_DEFAULT);
   const anchorTime = useSharedValue(0);
 
-  useEffect(() => {
+  // Открывающий скролл к scrollOpenHour выполняется ПОСЛЕ первого layout
+  // (см. onLayout ниже): до него зум-пол мог поднять hourHSv выше дефолта,
+  // и посчитанный заранее y промахивался на сотни px (аудит). Смена
+  // настройки после маунта докручивает через этот эффект.
+  const didOpenScroll = useRef(false);
+  const openScroll = () => {
     if (scrollToHour == null) return;
     const y = Math.max(0, (scrollToHour - startHour) * hourHSv.value);
-    const raf = requestAnimationFrame(() =>
-      scrollRef.current?.scrollTo({ y, animated: false }),
-    );
-    return () => cancelAnimationFrame(raf);
+    scrollRef.current?.scrollTo({ y, animated: false });
+  };
+  useEffect(() => {
+    if (didOpenScroll.current) openScroll();
     // hourHSv is read imperatively on purpose: zoom must NOT re-fire the
     // open-scroll (web parity with the old views' `hourH` exclusion).
-  }, [scrollToHour, startHour, hourHSv, scrollRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrollToHour, startHour]);
 
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
@@ -195,6 +201,10 @@ export function ZoomableTimeGrid({
             if (hourHSv.value < fit) {
               hourHSv.value = fit;
               onZoom?.(fit);
+            }
+            if (!didOpenScroll.current) {
+              didOpenScroll.current = true;
+              openScroll();
             }
           }}
           scrollEventThrottle={16}
