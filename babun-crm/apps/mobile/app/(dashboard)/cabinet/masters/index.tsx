@@ -34,7 +34,23 @@ import {
 export default function MastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
-  const { data: masters = [], isLoading } = useMasters();
+  // Включая архивных: «Вернуть из архива» живёт в хабе мастера, и без
+  // архивного хвоста в списке он недостижим (аудит P1-10). Активные
+  // сверху, архив серым снизу.
+  const {
+    data: allMasters = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useMasters({ includeInactive: true });
+  const masters = useMemo(
+    () => [
+      ...allMasters.filter((m) => m.is_active),
+      ...allMasters.filter((m) => !m.is_active),
+    ],
+    [allMasters],
+  );
   const { data: teams = [] } = useTeams();
   const create = useCreateMaster();
 
@@ -79,6 +95,13 @@ export default function MastersScreen() {
 
       {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : isError ? (
+        <EmptyState
+          fill
+          state="error"
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={{ label: "Повторить", onPress: () => void refetch() }}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}
@@ -165,25 +188,34 @@ function MasterRow({
   onPress: () => void;
 }) {
   const t = useThemeColors();
+  const archived = !master.is_active;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityLabel={`${master.full_name || "Мастер"}${archived ? ", в архиве" : ""}`}
       className="flex-row items-center px-4 py-3 active:opacity-60"
     >
       <View
         className="mr-3 h-10 w-10 items-center justify-center rounded-full"
-        style={{ backgroundColor: tint }}
+        style={{ backgroundColor: archived ? t.faint : tint }}
       >
         <Text style={{ fontSize: 14, fontWeight: "700", color: t.onAccent }}>
           {getInitials(master.full_name)}
         </Text>
       </View>
       <View className="flex-1">
-        <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
+        <Text
+          style={{ fontSize: 16, fontWeight: "600", color: archived ? t.faint : t.ink }}
+          numberOfLines={1}
+        >
           {master.full_name || "Без имени"}
         </Text>
-        {master.phone ? (
+        {archived ? (
+          <Text style={{ fontSize: 14, color: t.faint }} numberOfLines={1}>
+            В архиве — открыть, чтобы вернуть
+          </Text>
+        ) : master.phone ? (
           <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
             {master.phone}
           </Text>

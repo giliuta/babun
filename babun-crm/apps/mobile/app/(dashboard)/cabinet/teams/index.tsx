@@ -15,7 +15,18 @@ import {
 export default function TeamsScreen() {
   const th = useThemeColors();
   const router = useRouter();
-  const { data: teams = [], isLoading } = useTeams();
+  // Включая архивные: иначе архивация — билет в один конец (веб показывает
+  // архив, аудит P1-10). Активные сверху, архив серым хвостом.
+  const { data: allTeams = [], isLoading, isError, error, refetch } = useTeams({
+    includeInactive: true,
+  });
+  const teams = useMemo(
+    () => [
+      ...allTeams.filter((t) => t.is_active),
+      ...allTeams.filter((t) => !t.is_active),
+    ],
+    [allTeams],
+  );
   const create = useCreateTeam();
 
   // Web parity: colour is mandatory from creation (teams/page.tsx picks
@@ -38,6 +49,8 @@ export default function TeamsScreen() {
       title="Команды"
       items={teams}
       isLoading={isLoading}
+      error={isError ? error : undefined}
+      onRetry={() => void refetch()}
       emptyText="Нет команд"
       addLabel="Добавить команду"
       fields={[
@@ -85,18 +98,32 @@ export default function TeamsScreen() {
         <Pressable
           onPress={() => router.push(`/cabinet/teams/${item.id}`)}
           accessibilityRole="button"
-          accessibilityLabel={`Команда ${item.name}`}
+          accessibilityLabel={`Команда ${item.name}${item.is_active ? "" : ", в архиве"}`}
           className="flex-row items-center px-4 py-3 active:opacity-60"
         >
           <View
             className="mr-3 h-4 w-4 rounded-full"
-            style={{ backgroundColor: item.color ?? th.faint }}
+            style={{
+              backgroundColor: item.is_active
+                ? item.color ?? th.faint
+                : th.faint,
+            }}
           />
           <View className="flex-1">
-            <Text style={{ fontSize: 16, fontWeight: "600", color: th.ink }}>
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: item.is_active ? th.ink : th.faint,
+              }}
+            >
               {item.name}
             </Text>
-            {item.region ? (
+            {!item.is_active ? (
+              <Text style={{ fontSize: 14, color: th.faint }}>
+                В архиве — открыть, чтобы вернуть
+              </Text>
+            ) : item.region ? (
               <Text style={{ fontSize: 14, color: th.sub }}>{item.region}</Text>
             ) : null}
           </View>

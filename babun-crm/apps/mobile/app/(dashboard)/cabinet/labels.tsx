@@ -22,11 +22,8 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
-import {
-  useCalendarSettings,
-  useSaveCalendarSettings,
-} from "@/features/settings/local-settings";
-import { useDayCities, useRenameDayCity } from "@/features/calendar/day-cities";
+import { useDayCities } from "@/features/calendar/day-cities";
+import { useRenameLabelCascade } from "@/features/reference/label-cascade";
 import {
   teamCities,
   useCities,
@@ -34,7 +31,6 @@ import {
   useDeleteCity,
   useTeams,
   useUpdateCity,
-  useUpdateTeam,
   type City,
 } from "@/features/reference/queries";
 
@@ -48,9 +44,8 @@ import {
 // которой на мобиле нет. Старая версия этого экрана писала personalLabels
 // в никуда (аудит P0-4); теперь экран честно управляет библиотекой.
 //
-// Переименование каскадится по всем местам, где имя хранится строкой:
-// team.cities[] + default_city, day_cities, и personalLabels веба —
-// чтобы метки не сиротели (аудит P1-12).
+// Переименование каскадится по всем местам, где имя хранится строкой
+// (useRenameLabelCascade) — чтобы метки не сиротели (аудит P1-12).
 
 const FALLBACK_COLOR = "#8E8E93";
 
@@ -64,13 +59,10 @@ export default function LabelsScreen() {
   const { data: cities = [], isLoading, isError, error, refetch } = useCities();
   const { data: teams = [] } = useTeams();
   const { data: dayCities = {} } = useDayCities();
-  const { data: settings } = useCalendarSettings();
-  const saveSettings = useSaveCalendarSettings();
   const createCity = useCreateCity();
   const updateCity = useUpdateCity();
   const deleteCity = useDeleteCity();
-  const updateTeam = useUpdateTeam();
-  const renameDays = useRenameDayCity();
+  const cascade = useRenameLabelCascade();
 
   const [editing, setEditing] = useState<Editing | null>(null);
 
@@ -123,46 +115,6 @@ export default function LabelsScreen() {
     }
   };
 
-  // Каскад: библиотека → team.cities/default_city → day_cities →
-  // personalLabels (веб). Частичные сбои собираем и показываем одним алертом.
-  const renameEverywhere = async (city: City, next: string) => {
-    const failures: string[] = [];
-    for (const team of teams) {
-      const list = teamCities(team);
-      const usesList = list.includes(city.name);
-      const usesDefault = team.default_city === city.name;
-      if (!usesList && !usesDefault) continue;
-      const patch: Record<string, unknown> = {};
-      if (usesList) patch.cities = list.map((n) => (n === city.name ? next : n));
-      if (usesDefault) patch.default_city = next;
-      try {
-        await updateTeam.mutateAsync({ id: team.id, patch });
-      } catch {
-        failures.push(`команда «${team.name}»`);
-      }
-    }
-    try {
-      await renameDays.mutateAsync({ from: city.name, to: next });
-    } catch {
-      failures.push("метки дней");
-    }
-    const personal = settings?.personalLabels ?? [];
-    if (personal.includes(city.name)) {
-      try {
-        await saveSettings.mutateAsync({
-          personalLabels: personal.map((n) => (n === city.name ? next : n)),
-          personalDefaultLabel:
-            settings?.personalDefaultLabel === city.name
-              ? next
-              : settings?.personalDefaultLabel,
-        });
-      } catch {
-        failures.push("личные метки веба");
-      }
-    }
-    return failures;
-  };
-
   const edit = async (city: City, newName: string, color: string) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
@@ -186,7 +138,7 @@ export default function LabelsScreen() {
         });
       }
       if (renamed) {
-        const failures = await renameEverywhere(city, target);
+        const failures = await cascade.run(city.name, target);
         if (failures.length > 0) {
           Alert.alert(
             "Метка переименована частично",
@@ -232,9 +184,7 @@ export default function LabelsScreen() {
     createCity.isPending ||
     updateCity.isPending ||
     deleteCity.isPending ||
-    updateTeam.isPending ||
-    renameDays.isPending ||
-    saveSettings.isPending;
+    cascade.pending;
 
   return (
     <Screen edges={["top"]}>

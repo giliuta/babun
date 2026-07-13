@@ -42,6 +42,8 @@ export function RefListScreen<T extends { id: string }>({
   title,
   items,
   isLoading,
+  error,
+  onRetry,
   fields,
   onCreate,
   onUpdate,
@@ -54,6 +56,9 @@ export function RefListScreen<T extends { id: string }>({
   title: string;
   items: T[];
   isLoading: boolean;
+  /** Ошибка загрузки списка — сбой сети не должен выглядеть как «пусто». */
+  error?: unknown;
+  onRetry?: () => void;
   fields: RefField[];
   onCreate: (values: Record<string, string>) => Promise<void>;
   onUpdate?: (id: string, values: Record<string, string>) => Promise<void>;
@@ -135,6 +140,13 @@ export function RefListScreen<T extends { id: string }>({
 
       {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : error != null ? (
+        <EmptyState
+          fill
+          state="error"
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={onRetry ? { label: "Повторить", onPress: onRetry } : undefined}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}

@@ -143,18 +143,23 @@ export function useCreateTeam() {
 }
 
 // ─── Masters ─────────────────────────────────────────────────────────
-export function useMasters() {
+// `includeInactive` — список мастеров показывает архив (иначе «Вернуть из
+// архива» в хабе недостижим); пикеры зовут без опции (паттерн useTeams).
+export function useMasters(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
+  const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: ["masters", tenantId],
+    queryKey: includeInactive
+      ? ["masters", tenantId, "all"]
+      : ["masters", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("masters")
         .select("*")
-        .eq("tenant_id", tenantId as string)
-        .eq("is_active", true)
-        .order("position");
+        .eq("tenant_id", tenantId as string);
+      if (!includeInactive) q = q.eq("is_active", true);
+      const { data, error } = await q.order("position");
       if (error) throw new Error(error.message);
       return data;
     },
@@ -220,18 +225,24 @@ export function useCreateMaster() {
 }
 
 // ─── Cities ──────────────────────────────────────────────────────────
-export function useCities() {
+// `includeInactive` — экран «Города» показывает и выключенные (тумблер
+// активности + реактивация); пикеры/метки зовут без опции и видят
+// только активные (паттерн useTeams).
+export function useCities(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
+  const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: ["cities", tenantId],
+    queryKey: includeInactive
+      ? ["cities", tenantId, "all"]
+      : ["cities", tenantId],
     enabled: !!tenantId,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("cities")
         .select("*")
-        .eq("tenant_id", tenantId as string)
-        .eq("is_active", true)
-        .order("position");
+        .eq("tenant_id", tenantId as string);
+      if (!includeInactive) q = q.eq("is_active", true);
+      const { data, error } = await q.order("position");
       if (error) throw new Error(error.message);
       return data;
     },
