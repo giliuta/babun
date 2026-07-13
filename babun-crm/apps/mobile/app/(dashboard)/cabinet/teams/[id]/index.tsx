@@ -12,31 +12,19 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Bell,
-  Camera,
   ChevronDown,
   ChevronRight,
   ChevronUp,
-  CreditCard,
   MapPin,
-  MessageSquare,
   Minus,
   Package,
   Plus,
-  Receipt,
-  Smartphone,
-  StickyNote,
   Trash2,
   Users as UsersIcon,
-  Wallet,
   Wrench,
-  type LucideIcon,
 } from "lucide-react-native";
 import { TIMEZONE_OPTIONS } from "@babun/shared/local/calendar-settings";
-import {
-  TEAM_COLORS,
-  type BrigadeAppointmentBlocks,
-} from "@babun/shared/local/masters";
+import { TEAM_COLORS } from "@babun/shared/local/masters";
 import {
   DEFAULT_SCHEDULE,
   WEEKDAY_KEYS,
@@ -71,94 +59,6 @@ import {
 // a collapsed «Календарь бригады» section (hours / buffer / behaviour
 // toggles / timezone — commits straight to the team columns), an «активна»
 // toggle and a destructive delete.
-
-// Опциональные блоки формы записи (parity с web appointment-blocks/page.tsx).
-// Клиент + услуги всегда включены и НЕ входят сюда (это правило, не тумблер).
-type BlockKey = Exclude<keyof BrigadeAppointmentBlocks, "order">;
-
-interface BlockMeta {
-  key: BlockKey;
-  label: string;
-  description: string;
-  defaultOn: boolean;
-  icon: LucideIcon;
-  tone: string;
-}
-
-const OPTIONAL_BLOCKS: BlockMeta[] = [
-  {
-    key: "show_address",
-    label: "Адрес",
-    description: "Поле адреса визита отдельно от клиента.",
-    defaultOn: true,
-    icon: MapPin,
-    tone: "#f0473c",
-  },
-  {
-    key: "show_address_note",
-    label: "Заметка к адресу",
-    description: "«Зелёная дверь, звонок» — подсказка у порога.",
-    defaultOn: true,
-    icon: StickyNote,
-    tone: "#f5a623",
-  },
-  {
-    key: "show_comment",
-    label: "Комментарий",
-    description: "Свободный текст к записи.",
-    defaultOn: true,
-    icon: MessageSquare,
-    tone: "#1fb47a",
-  },
-  {
-    key: "show_photos",
-    label: "Фото до / после",
-    description: "Блок загрузки фото по визиту.",
-    defaultOn: true,
-    icon: Camera,
-    tone: "#5a5ee0",
-  },
-  {
-    key: "show_prepaid",
-    label: "Аванс / предоплата",
-    description: "Сумма, внесённая заранее.",
-    defaultOn: false,
-    icon: Wallet,
-    tone: "#f08a24",
-  },
-  {
-    key: "show_payment",
-    label: "Способы оплаты",
-    description: "Нал / карта / раздельно при закрытии.",
-    defaultOn: true,
-    icon: CreditCard,
-    tone: "#1fb47a",
-  },
-  {
-    key: "show_expenses",
-    label: "Расходы",
-    description: "Материалы, транспорт, издержки визита.",
-    defaultOn: true,
-    icon: Receipt,
-    tone: "#3e84ff",
-  },
-  {
-    key: "show_reminder",
-    label: "Напоминание клиенту",
-    description: "SMS за X минут до начала.",
-    defaultOn: false,
-    icon: Bell,
-    tone: "#9b59d0",
-  },
-  {
-    key: "show_source",
-    label: "Источник заявки",
-    description: "Откуда пришёл клиент.",
-    defaultOn: false,
-    icon: Smartphone,
-    tone: "#5a5ee0",
-  },
-];
 
 function SectionEyebrow({ children }: { children: string }) {
   const t = useThemeColors();
@@ -377,7 +277,6 @@ export default function TeamHubScreen() {
 
   const [colorOpen, setColorOpen] = useState(false);
   const [calOpen, setCalOpen] = useState(false);
-  const [blocksOpen, setBlocksOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
 
   if (isLoading) {
@@ -438,18 +337,6 @@ export default function TeamHubScreen() {
       },
     });
   };
-
-  // Блоки формы записи (team.appointment_blocks jsonb). Клиент+услуги всегда
-  // вкл (не тумблеры). Сброс = appointment_blocks:null (вернуться к дефолтам).
-  const blocks: BrigadeAppointmentBlocks =
-    (team.appointment_blocks as BrigadeAppointmentBlocks | null) ?? {};
-  const blockOn = (b: BlockMeta): boolean => blocks[b.key] ?? b.defaultOn;
-  const toggleBlock = (b: BlockMeta, next: boolean) => {
-    patch({ appointment_blocks: { ...blocks, [b.key]: next } });
-  };
-  const anyBlockCustomised = OPTIONAL_BLOCKS.some(
-    (b) => blocks[b.key] !== undefined,
-  );
 
   const nameDraft = name ?? team.name;
 
@@ -720,119 +607,6 @@ export default function TeamHubScreen() {
                     ))}
                   </View>
                 </View>
-              </>
-            ) : null}
-          </SectionCard>
-
-          {/* Блоки формы записи — collapsed. team.appointment_blocks jsonb. */}
-          <SectionEyebrow>Блоки формы записи</SectionEyebrow>
-          <SectionCard>
-            <Pressable
-              onPress={() => setBlocksOpen((o) => !o)}
-              accessibilityRole="button"
-              accessibilityLabel="Блоки формы записи"
-              className="flex-row items-center px-4 py-3 active:opacity-60"
-            >
-              <View className="flex-1 pr-2">
-                <Text style={{ fontSize: 16, color: t.ink }}>
-                  Что показывать в записи
-                </Text>
-                <Text style={{ fontSize: 12, color: t.faint, marginTop: 1 }}>
-                  {`Клиент и услуги · всегда${anyBlockCustomised ? " · изменено" : ""}`}
-                </Text>
-              </View>
-              {blocksOpen ? (
-                <ChevronUp color={t.chevron} size={ICON.sm} />
-              ) : (
-                <ChevronDown color={t.chevron} size={ICON.sm} />
-              )}
-            </Pressable>
-            {blocksOpen ? (
-              <>
-                <Divider />
-                {/* Sticky-правило: клиент + услуги всегда включены. */}
-                <View className="flex-row items-center px-4 py-2.5">
-                  <View
-                    className="mr-3 h-8 w-8 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: t.fill }}
-                  >
-                    <UsersIcon color={t.sub} size={ICON.sm} />
-                  </View>
-                  <View className="flex-1 pr-3">
-                    <Text style={{ fontSize: 15, color: t.ink }}>
-                      Клиент и услуги
-                    </Text>
-                    <Text style={{ fontSize: 12, color: t.faint, marginTop: 1 }}>
-                      Всегда в форме — основа записи.
-                    </Text>
-                  </View>
-                  <Switch
-                    value
-                    disabled
-                    trackColor={{ true: t.accent }}
-                    accessibilityLabel="Клиент и услуги — всегда включены"
-                  />
-                </View>
-                {OPTIONAL_BLOCKS.map((b) => {
-                  const Icon = b.icon;
-                  return (
-                    <View key={b.key}>
-                      <Divider inset={16} />
-                      <View className="flex-row items-center px-4 py-2.5">
-                        <View
-                          className="mr-3 h-8 w-8 items-center justify-center rounded-lg"
-                          style={{ backgroundColor: b.tone }}
-                        >
-                          <Icon color={t.onAccent} size={ICON.sm} />
-                        </View>
-                        <View className="flex-1 pr-3">
-                          <Text style={{ fontSize: 15, color: t.ink }}>
-                            {b.label}
-                          </Text>
-                          <Text
-                            style={{ fontSize: 12, color: t.faint, marginTop: 1 }}
-                          >
-                            {b.description}
-                          </Text>
-                        </View>
-                        <Switch
-                          value={blockOn(b)}
-                          onValueChange={(next) => toggleBlock(b, next)}
-                          trackColor={{ true: t.accent }}
-                          accessibilityLabel={b.label}
-                        />
-                      </View>
-                    </View>
-                  );
-                })}
-                {anyBlockCustomised ? (
-                  <>
-                    <Divider inset={16} />
-                    <Pressable
-                      onPress={() =>
-                        Alert.alert(
-                          "Сбросить блоки?",
-                          "Форма записи вернётся к настройкам по умолчанию.",
-                          [
-                            { text: "Отмена", style: "cancel" },
-                            {
-                              text: "Сбросить",
-                              style: "destructive",
-                              onPress: () => patch({ appointment_blocks: null }),
-                            },
-                          ],
-                        )
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel="Сбросить блоки формы записи"
-                      className="px-4 py-3 active:opacity-60"
-                    >
-                      <Text style={{ fontSize: 15, color: t.danger }}>
-                        Сбросить по умолчанию
-                      </Text>
-                    </Pressable>
-                  </>
-                ) : null}
               </>
             ) : null}
           </SectionCard>

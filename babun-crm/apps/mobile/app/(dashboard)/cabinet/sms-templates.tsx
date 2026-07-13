@@ -315,15 +315,18 @@ export default function SmsTemplatesScreen() {
                   </Text>
                 </Pressable>
                 <Divider inset={16} />
+                {/* Честная подпись: автоотправки на мобиле нет — флаг
+                    enabled лишь показывает шаблон в палитре чата/рассылки
+                    и в выборе долгового SMS (аудит P0-5). */}
                 <View className="flex-row items-center justify-between px-4 py-1.5">
                   <Text className="text-xs" style={{ color: t.sub }}>
-                    Отправлять автоматически
+                    Показывать в палитре SMS
                   </Text>
                   <Switch
                     value={item.enabled}
                     onValueChange={() => toggleEnabled(item)}
                     trackColor={{ true: t.accent }}
-                    accessibilityLabel={`Автоотправка: ${item.name}`}
+                    accessibilityLabel={`Показывать шаблон: ${item.name}`}
                   />
                 </View>
               </Card>
@@ -591,14 +594,19 @@ function TemplateEditor({
               </View>
 
               <View className="mt-4 flex-row items-center justify-between">
-                <Text className="text-base" style={{ color: t.ink }}>
-                  Отправлять автоматически
-                </Text>
+                <View className="mr-3 flex-1">
+                  <Text className="text-base" style={{ color: t.ink }}>
+                    Показывать в палитре SMS
+                  </Text>
+                  <Text className="mt-0.5 text-xs" style={{ color: t.faint }}>
+                    Выключенный шаблон скрыт из чата и рассылки
+                  </Text>
+                </View>
                 <Switch
                   value={draft.enabled}
                   onValueChange={(v) => setDraft((d) => ({ ...d, enabled: v }))}
                   trackColor={{ true: t.accent }}
-                  accessibilityLabel="Отправлять автоматически"
+                  accessibilityLabel="Показывать в палитре SMS"
                 />
               </View>
 
