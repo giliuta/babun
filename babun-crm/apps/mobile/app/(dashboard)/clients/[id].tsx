@@ -66,9 +66,9 @@ import {
   countryFlag,
   countryFromDialPrefix,
   DEFAULT_COUNTRY,
+  formatPhoneAsYouType,
   tryToE164,
 } from "@/features/clients/phone";
-import { useBookingNav } from "@/features/clients/card-booking";
 import { useServices } from "@/features/services/queries";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
@@ -90,7 +90,6 @@ export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const tenantId = useTenantId();
-  const book = useBookingNav();
 
   // «new» → черновик без запросов; иначе обычная карточка с сервера.
   const isDraft = id === "new";
@@ -210,22 +209,11 @@ export default function ClientDetailScreen() {
         full_name: draft.full_name.trim(),
         phone_e164: e164,
       });
-      // Успех → выбор следующего шага: сразу записать (частый сценарий
-      // диспетчера) или остаться на карточке. Обе ветки заменяют
-      // черновик этой же страницей, уже привязанной к серверу.
-      Alert.alert("Клиент создан", draft.full_name.trim() || trimmedPhone, [
-        {
-          text: "Записать",
-          onPress: () => {
-            router.replace(`/clients/${created.id}`);
-            book({ clientId: created.id });
-          },
-        },
-        {
-          text: "К карточке",
-          onPress: () => router.replace(`/clients/${created.id}`),
-        },
-      ]);
+      // «Максимально просто» (владелец): без промежуточного диалога —
+      // черновик заменяется той же страницей, уже привязанной к серверу.
+      // «Записать» тут же ждёт первым hero-действием карточки, так что
+      // диспетчерский сценарий остаётся в один тап, но не навязан.
+      router.replace(`/clients/${created.id}`);
     } catch (e) {
       setCreateError((e as Error).message);
     }
@@ -427,10 +415,17 @@ export default function ClientDetailScreen() {
               ) : null}
               <TextInput
                 value={draft.phone}
-                // Сброс дубля на КАЖДЫЙ ввод: стейл-баннер прошлого номера
-                // иначе отключал бы дедуп-проверку в handleCreate.
+                // Живое форматирование по маске страны (+357 99 123 456).
+                // При УДАЛЕНИИ (новая строка короче) не переформатируем —
+                // иначе AsYouType тут же возвращал бы стёртый пробел и
+                // backspace «залипал». Сброс дубля на каждый ввод: стейл-
+                // баннер иначе отключал бы дедуп-проверку в handleCreate.
                 onChangeText={(v) => {
-                  setDraft((d) => ({ ...d, phone: v }));
+                  setDraft((d) => ({
+                    ...d,
+                    phone:
+                      v.length < d.phone.length ? v : formatPhoneAsYouType(v),
+                  }));
                   setDuplicate(null);
                 }}
                 placeholder="Телефон"

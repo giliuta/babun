@@ -12,6 +12,7 @@
 // hoisting accidents.
 
 import {
+  AsYouType,
   getCountryCallingCode,
   parsePhoneNumberFromString,
   type CountryCode,
@@ -88,6 +89,27 @@ export function tryToE164(
   if (!trimmed) return null;
   if ((trimmed.match(/\d/g) ?? []).length < 3) return null;
   return toE164(trimmed, defaultCountry);
+}
+
+/** Живое форматирование по мере ввода (libphonenumber AsYouType):
+ *  «+35799123456» → «+357 99 123 456», локальный «99123456» → по маске
+ *  страны по умолчанию. Ведущий «+» сохраняется даже до кода страны,
+ *  чтобы пользователь мог стереть код и набрать свой. Пустая строка —
+ *  как есть (не навязываем «+»). */
+export function formatPhoneAsYouType(
+  raw: string,
+  defaultCountry: CountryCode = DEFAULT_COUNTRY,
+): string {
+  const s = raw ?? "";
+  if (s.trim() === "") return s;
+  // Международный (с «+») форматируем без страны — код в самом номере;
+  // локальный (без «+») — по маске defaultCountry.
+  const intl = s.trimStart().startsWith("+");
+  const formatted = new AsYouType(intl ? undefined : defaultCountry).input(s);
+  // AsYouType может «съесть» одинокий «+» в начале — вернём его, иначе
+  // поле дёргается при наборе кода страны с нуля.
+  if (intl && !formatted.startsWith("+")) return `+${formatted}`;
+  return formatted;
 }
 
 /** Страна по НАБРАННОМУ коду: «+35799…» → CY, «+7 999…» → RU. Живёт на
