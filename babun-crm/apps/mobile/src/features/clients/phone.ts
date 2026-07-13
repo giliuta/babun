@@ -89,3 +89,22 @@ export function tryToE164(
   if ((trimmed.match(/\d/g) ?? []).length < 3) return null;
   return toE164(trimmed, defaultCountry);
 }
+
+/** Страна по НАБРАННОМУ коду: «+35799…» → CY, «+7 999…» → RU. Живёт на
+ *  каждый ввод (частичный номер ещё не парсится libphonenumber), поэтому
+ *  матчим самый длинный dial-код из поддержанных стран. Не начинается с
+ *  «+» → undefined (локальный формат, действует страна по умолчанию). */
+export function countryFromDialPrefix(raw: string): CountryCode | undefined {
+  const s = (raw ?? "").trim().replace(/[\s()\-]/g, "");
+  if (!s.startsWith("+")) return undefined;
+  let best: CountryCode | undefined;
+  let bestLen = 0;
+  for (const cc of SUPPORTED_COUNTRIES) {
+    const code = countryDialCode(cc);
+    if (code.length > bestLen && s.startsWith(code)) {
+      best = cc;
+      bestLen = code.length;
+    }
+  }
+  return best;
+}

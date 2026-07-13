@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import Animated, {
   cancelAnimation,
@@ -80,8 +80,8 @@ export function GradientButton({
           {
             // minHeight + padding (not a fixed height) so Dynamic Type can
             // grow the label without clipping — same recipe as PillButton.
-            minHeight: 52,
-            paddingVertical: 14,
+            minHeight: 50,
+            paddingVertical: 13,
             borderRadius: t.radius.pill,
             overflow: "hidden",
             alignItems: "center",
@@ -95,13 +95,31 @@ export function GradientButton({
         {filled ? (
           <Svg style={FILL} width="100%" height="100%" pointerEvents="none">
             <Defs>
-              <LinearGradient id="gbtn" x1="0" y1="0" x2="0" y2="1">
+              {/* Диагональ 135° вместо вертикали — объёмнее на длинной
+                  пилюле; вершина чуть светлее за счёт хайлайта ниже. */}
+              <LinearGradient id="gbtn" x1="0" y1="0" x2="1" y2="1">
                 <Stop offset="0" stopColor={t.accentFrom} />
                 <Stop offset="1" stopColor={t.accentTo} />
               </LinearGradient>
             </Defs>
             <Rect width="100%" height="100%" fill="url(#gbtn)" />
           </Svg>
+        ) : null}
+        {filled ? (
+          // Внутренний верхний хайлайт — «стеклянная» кромка премиальной
+          // кнопки: волосяная светлая линия по верхнему краю пилюли.
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 12,
+              right: 12,
+              height: 1,
+              borderRadius: 1,
+              backgroundColor: "rgba(255,255,255,0.35)",
+            }}
+          />
         ) : null}
         {filled && animate ? (
           <Animated.View
@@ -117,7 +135,12 @@ export function GradientButton({
         ) : (
           <Text
             maxFontSizeMultiplier={1.3}
-            style={{ fontSize: 17, fontWeight: "600", color: filled ? t.onAccent : t.sub }}
+            style={{
+              fontSize: 17,
+              fontWeight: "600",
+              letterSpacing: 0.2,
+              color: filled ? t.onAccent : t.sub,
+            }}
           >
             {label}
           </Text>

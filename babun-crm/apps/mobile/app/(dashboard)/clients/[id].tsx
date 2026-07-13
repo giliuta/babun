@@ -33,7 +33,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -43,13 +42,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  MoreHorizontal,
-} from "lucide-react-native";
-import type { CountryCode } from "libphonenumber-js";
+import { Check, ChevronLeft, MoreHorizontal } from "lucide-react-native";
 import {
   createBlankClient,
   type Client,
@@ -69,11 +62,10 @@ import {
 } from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
 import {
-  COUNTRY_NAMES_RU,
   countryDialCode,
   countryFlag,
+  countryFromDialPrefix,
   DEFAULT_COUNTRY,
-  SUPPORTED_COUNTRIES,
   tryToE164,
 } from "@/features/clients/phone";
 import { useBookingNav } from "@/features/clients/card-booking";
@@ -114,13 +106,24 @@ export default function ClientDetailScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // ── Draft (create) state ───────────────────────────────────────────
-  const [draft, setDraft] = useState<Client>(() => createBlankClient({}));
-  const [country, setCountry] = useState<CountryCode>(DEFAULT_COUNTRY);
-  const [countryOpen, setCountryOpen] = useState(false);
+  // Телефон предзаполнен кодом страны по умолчанию — код РЕДАКТИРУЕТСЯ
+  // прямо в поле (решение владельца: не пикер): стёр «+357», написал
+  // «+49…» — страна распозналась сама (countryFromDialPrefix), флаг
+  // рядом с полем подстраивается. Локальный формат без «+» продолжает
+  // считаться страной по умолчанию.
+  const [draft, setDraft] = useState<Client>(() =>
+    createBlankClient({ phone: `${countryDialCode(DEFAULT_COUNTRY)} ` }),
+  );
   const [duplicate, setDuplicate] = useState<Client | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  const e164 = isDraft ? tryToE164(draft.phone.trim(), country) : null;
+  const e164 = isDraft ? tryToE164(draft.phone.trim(), DEFAULT_COUNTRY) : null;
+  const draftCountry = isDraft
+    ? (countryFromDialPrefix(draft.phone) ??
+      (draft.phone.trim() && !draft.phone.trim().startsWith("+")
+        ? DEFAULT_COUNTRY
+        : undefined))
+    : undefined;
 
   // Live-дедуп телефона (debounce + sequence guard) — как в старом
   // /clients/new, clients-99 F1.5.
@@ -173,8 +176,12 @@ export default function ClientDetailScreen() {
     return serviceDue.overdue[0]?.unitId ?? serviceDue.soon[0]?.unitId ?? null;
   }, [serviceDue, stats]);
 
-  // ── Create («Готово») — save-gate по телефону ──────────────────────
-  const canSave = isDraft && draft.phone.trim().length > 0 && !create.isPending;
+  // ── Create («Готово») — save-gate по телефону. Поле предзаполнено
+  // кодом страны, поэтому «непустое» — не критерий: требуем либо валидный
+  // E.164, либо ≥5 цифр (короткий локальный формат).
+  const draftDigits = isDraft ? draft.phone.replace(/\D/g, "").length : 0;
+  const canSave =
+    isDraft && (e164 !== null || draftDigits >= 5) && !create.isPending;
 
   async function handleCreate() {
     if (!canSave) return;
@@ -395,23 +402,29 @@ export default function ClientDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {isDraft ? (
-          // Шапка создания: ТЕЛЕФОН — большой заголовок с пикером страны
-          // и live-дедупом, имя — тихая строка ниже (LOCKED add-client).
+          // Шапка создания в порядке карточки (решение владельца
+          // 2026-07-13): ИМЯ первой строкой — крупно, как заголовок
+          // готовой карточки; ТЕЛЕФОН второй, с автофокусом. Код страны
+          // не пикер: он часть номера, редактируется прямо в поле, флаг
+          // подстраивается под набранный «+код».
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
+            <TextInput
+              value={draft.full_name}
+              onChangeText={(v) => setDraft((d) => ({ ...d, full_name: v }))}
+              placeholder="Имя (можно позже)"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance={t.dark ? "dark" : "light"}
+              accessibilityLabel="Имя клиента"
+              className="min-h-[44px] py-1 text-xl font-bold"
+              style={{ color: t.ink }}
+            />
             <View className="flex-row items-center gap-2">
-              <Pressable
-                onPress={() => setCountryOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Страна: ${COUNTRY_NAMES_RU[country] ?? country}`}
-                className="min-h-[44px] flex-row items-center gap-1 rounded-xl px-2 active:opacity-70"
-                style={{ backgroundColor: t.fill }}
-              >
-                <Text className="text-lg">{countryFlag(country)}</Text>
-                <Text className="text-sm" style={{ color: t.sub }}>
-                  {countryDialCode(country)}
+              {draftCountry ? (
+                <Text className="text-lg" accessibilityLabel={`Страна: ${draftCountry}`}>
+                  {countryFlag(draftCountry)}
                 </Text>
-                <ChevronDown color={t.chevron} size={14} strokeWidth={2} />
-              </Pressable>
+              ) : null}
               <TextInput
                 value={draft.phone}
                 // Сброс дубля на КАЖДЫЙ ввод: стейл-баннер прошлого номера
@@ -427,24 +440,13 @@ export default function ClientDetailScreen() {
                 keyboardType="phone-pad"
                 autoFocus
                 accessibilityLabel="Телефон клиента"
-                className="min-h-[44px] flex-1 py-1 text-[22px] font-bold"
-                style={{ color: t.ink }}
+                className="min-h-[44px] flex-1 py-1 text-[17px] font-semibold"
+                style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
               />
               {e164 ? (
                 <Check color={t.accent} size={20} strokeWidth={2.5} />
               ) : null}
             </View>
-            <TextInput
-              value={draft.full_name}
-              onChangeText={(v) => setDraft((d) => ({ ...d, full_name: v }))}
-              placeholder="Имя (можно позже)"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
-              accessibilityLabel="Имя клиента"
-              className="min-h-[40px] py-1 text-[15px]"
-              style={{ color: t.sub }}
-            />
 
             {/* Inline dedup — «Открыть» существующего вместо дубля */}
             {duplicate ? (
@@ -545,54 +547,6 @@ export default function ClientDetailScreen() {
       </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Пикер страны — нижний лист со списком (web CountryPhoneInput). */}
-      {isDraft ? (
-        <Modal
-          visible={countryOpen}
-          transparent
-          animationType="slide"
-          onRequestClose={() => setCountryOpen(false)}
-        >
-          <Pressable
-            className="flex-1"
-            style={{ backgroundColor: t.scrim }}
-            onPress={() => setCountryOpen(false)}
-          />
-          <View
-            className="max-h-[60%] rounded-t-3xl pb-8 pt-2"
-            style={{ backgroundColor: t.surface }}
-          >
-            <ScrollView>
-              {SUPPORTED_COUNTRIES.map((cc) => {
-                const active = cc === country;
-                return (
-                  <Pressable
-                    key={cc}
-                    onPress={() => {
-                      setCountry(cc);
-                      setCountryOpen(false);
-                    }}
-                    accessibilityRole="button"
-                    className="flex-row items-center gap-3 px-5 py-3 active:opacity-60"
-                    style={active ? { backgroundColor: `${t.accent}14` } : undefined}
-                  >
-                    <Text className="text-lg">{countryFlag(cc)}</Text>
-                    <Text
-                      className="flex-1 text-base"
-                      style={{ color: active ? t.accent : t.ink }}
-                    >
-                      {COUNTRY_NAMES_RU[cc] ?? cc}
-                    </Text>
-                    <Text className="text-sm" style={{ color: t.sub }}>
-                      {countryDialCode(cc)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </Modal>
-      ) : null}
     </Screen>
   );
 }

@@ -19,6 +19,8 @@ import {
   Bell,
   Check,
   Clock,
+  MessageCircle,
+  MessageSquare,
   Phone,
   Pin,
   Search,
@@ -26,6 +28,8 @@ import {
   Users,
 } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
+import { CHANNEL_COLORS } from "@babun/shared/local/chats";
+import { whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import {
   buildStatsMap,
   type ClientStats,
@@ -65,6 +69,7 @@ import {
   reminderBadge,
   ymdInDays,
 } from "@/features/clients/format";
+import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
@@ -279,22 +284,26 @@ function ClientRow({
     </Pressable>
   );
 
-  // Свайп-звонок — тривиальный дубль тап-звонка (RN-GH уже стоит, паттерн
-  // из chats/index.tsx). Отключён в режиме выбора (свайп мешал бы тапу-
-  // тоглу) и без телефона. Видимый дубль жеста — та же зелёная «Позвонить».
+  // Свайпы (RN-GH, паттерн из chats/index.tsx): влево → «Позвонить»
+  // (кнопка справа), вправо → «SMS» и «WhatsApp» (кнопки слева).
+  // Отключены в режиме выбора (мешали бы тапу-тоглу) и без телефона.
   if (selectionMode || !phoneDigits) return row;
+  const wa = whatsappUrl(client.whatsapp_phone || client.phone);
+  const swipeAction = (url: string) => {
+    swipeRef.current?.close();
+    Linking.openURL(url);
+  };
   return (
     <ReanimatedSwipeable
       ref={swipeRef}
       friction={2}
       rightThreshold={44}
+      leftThreshold={44}
       overshootRight={false}
+      overshootLeft={false}
       renderRightActions={() => (
         <Pressable
-          onPress={() => {
-            swipeRef.current?.close();
-            Linking.openURL(`tel:${phoneDigits}`);
-          }}
+          onPress={() => swipeAction(`tel:${phoneDigits}`)}
           accessibilityRole="button"
           accessibilityLabel="Позвонить"
           className="w-[88px] items-center justify-center gap-1"
@@ -305,6 +314,36 @@ function ClientRow({
             Позвонить
           </Text>
         </Pressable>
+      )}
+      renderLeftActions={() => (
+        <View className="flex-row">
+          <Pressable
+            onPress={() => swipeAction(`sms:${phoneDigits}`)}
+            accessibilityRole="button"
+            accessibilityLabel="Сообщение"
+            className="w-[88px] items-center justify-center gap-1"
+            style={{ backgroundColor: t.accent }}
+          >
+            <MessageSquare color="#fff" size={ICON.sm} />
+            <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+              SMS
+            </Text>
+          </Pressable>
+          {wa ? (
+            <Pressable
+              onPress={() => swipeAction(wa)}
+              accessibilityRole="button"
+              accessibilityLabel="WhatsApp"
+              className="w-[88px] items-center justify-center gap-1"
+              style={{ backgroundColor: CHANNEL_COLORS.whatsapp }}
+            >
+              <MessageCircle color="#fff" size={ICON.sm} />
+              <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+                WhatsApp
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       )}
     >
       {row}
@@ -397,9 +436,10 @@ export default function ClientsListScreen() {
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
-  // ── Long-press меню клиента (web v313 parity: Сообщение · Звонок ·
-  // Выбрать несколько · Закрепить · Напомнить · Удалить). «Открыть
-  // карточку» из веб-меню опущено — тап и так открывает карточку.
+  // ── Long-press меню клиента (web v313 parity) — нижний лист
+  // ClientActionsSheet; здесь только состояние и обработчики.
+  const [menuClient, setMenuClient] = useState<Client | null>(null);
+
   const openRemindMenu = (c: Client) => {
     Alert.alert("Напомнить о клиенте", c.full_name || undefined, [
       {
@@ -453,40 +493,11 @@ export default function ClientsListScreen() {
     );
   };
 
-  const openClientMenu = (c: Client) => {
-    const digits = c.phone?.replace(/\D/g, "") ?? "";
-    const pinned = Boolean(c.pinned_at);
-    Alert.alert(c.full_name || "Клиент", undefined, [
-      ...(digits
-        ? [
-            {
-              text: "Позвонить",
-              onPress: () => Linking.openURL(`tel:${digits}`),
-            },
-            {
-              text: "Сообщение",
-              onPress: () => Linking.openURL(`sms:${digits}`),
-            },
-          ]
-        : []),
-      { text: "Выбрать несколько", onPress: () => enterSelection(c.id) },
-      {
-        text: pinned ? "Открепить" : "Закрепить",
-        onPress: () =>
-          updateById.mutate({
-            id: c.id,
-            patch: { pinned_at: pinned ? null : new Date().toISOString() },
-          }),
-      },
-      { text: "Напомнить", onPress: () => openRemindMenu(c) },
-      {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () => confirmDeleteOne(c),
-      },
-      { text: "Отмена", style: "cancel" },
-    ]);
-  };
+  const onTogglePin = (c: Client) =>
+    updateById.mutate({
+      id: c.id,
+      patch: { pinned_at: c.pinned_at ? null : new Date().toISOString() },
+    });
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
   const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
@@ -733,7 +744,7 @@ export default function ClientsListScreen() {
                     : router.push(`/clients/${item.id}`)
                 }
                 onLongPress={() =>
-                  selecting ? toggleId(item.id) : openClientMenu(item)
+                  selecting ? toggleId(item.id) : setMenuClient(item)
                 }
               />
             );
@@ -787,7 +798,7 @@ export default function ClientsListScreen() {
           onDelete={onDelete}
         />
       ) : (
-        <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
           <GradientButton
             label="＋ Клиент"
             onPress={() => router.push("/clients/new")}
@@ -795,6 +806,14 @@ export default function ClientsListScreen() {
         </View>
       )}
 
+      <ClientActionsSheet
+        client={menuClient}
+        onClose={() => setMenuClient(null)}
+        onSelectMany={(c) => enterSelection(c.id)}
+        onTogglePin={onTogglePin}
+        onRemind={openRemindMenu}
+        onDelete={confirmDeleteOne}
+      />
       <ClientsFilterSheet
         visible={sheetOpen}
         filter={filter}

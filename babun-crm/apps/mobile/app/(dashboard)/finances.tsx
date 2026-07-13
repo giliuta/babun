@@ -309,7 +309,7 @@ export default function FinancesTab() {
       {/* Создание операции — нижняя градиентная кнопка (веб-паритет:
           apps/web finances «＋ Операция» sticky-футер). Заменила прежний FAB
           после удаления Fab-примитива; лежит под контентом (фид flex:1). */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         <GradientButton
           label="＋ Операция"
           onPress={() => {
