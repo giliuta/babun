@@ -1,13 +1,10 @@
 #!/bin/sh
-# Запуск Babun на физическом iPhone с текущим адресом Metro.
+# Запуск Babun Dev на физическом iPhone, нацеленный на текущий Metro.
 #
-# Лечит красный экран «No script URL provided»: dev-билд собран без
-# expo-dev-client, поэтому адрес Metro зашит в бандл на момент сборки
-# (ios/build/.../Babun.app/ip.txt) и протухает при смене сети Mac.
-# Аргумент -RCT_jsLocation (NSArgumentDomain → RCTBundleURLProvider)
-# переопределяет адрес на ОДИН запуск — холодный старт с иконки снова
-# читает зашитый. Постоянное лечение: пересборка на текущей сети или
-# expo-dev-client.
+# Dev-вариант живёт под СВОИМ id (com.babun.crm.dev, имя «Babun Dev»,
+# scheme babundev) и не конфликтует с боевым TestFlight-Babun
+# (com.babun.crm). Deep link открывает expo-dev-launcher сразу на
+# адресе Metro этого Mac.
 #
 # Использование: scripts/launch-iphone.sh [coredevice-UUID]
 set -e
@@ -21,6 +18,7 @@ if [ -z "$IP" ]; then
 fi
 
 xcrun devicectl device process launch --terminate-existing \
-  --device "$DEVICE" com.babun.crm -- -RCT_jsLocation "$IP:8081"
+  --payload-url "babundev://expo-development-client/?url=http%3A%2F%2F${IP}%3A8081" \
+  --device "$DEVICE" com.babun.crm.dev
 
-echo "Babun запущен → Metro http://$IP:8081"
+echo "Babun Dev запущен → Metro http://$IP:8081"
