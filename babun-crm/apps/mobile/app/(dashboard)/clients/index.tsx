@@ -21,7 +21,6 @@ import {
   Clock,
   Phone,
   Pin,
-  Plus,
   Search,
   Settings,
   Users,
@@ -38,6 +37,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
@@ -678,23 +678,6 @@ export default function ClientsListScreen() {
           >
             <BarChart3 color={t.sub} size={21} strokeWidth={2} />
           </Pressable>
-
-          <Pressable
-            onPress={() => router.push("/clients/new")}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Новый клиент"
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 22,
-              backgroundColor: pressed ? t.pressed : "transparent",
-            })}
-          >
-            <Plus color={t.accent} size={24} strokeWidth={2.2} />
-          </Pressable>
         </View>
       )}
 
@@ -793,7 +776,9 @@ export default function ClientsListScreen() {
         />
       )}
 
-      {/* В режиме выбора — нижняя панель массовых действий. */}
+      {/* В режиме выбора — нижняя панель массовых действий; вне выбора —
+          полноценная кнопка создания внизу (стандарт «Добавить»: как
+          «＋ Операция» в Финансах, вместо глифа «+» в шапке). */}
       {selecting ? (
         <BulkActionBar
           count={selectedIds.size}
@@ -801,7 +786,14 @@ export default function ClientsListScreen() {
           onExport={onExport}
           onDelete={onDelete}
         />
-      ) : null}
+      ) : (
+        <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 6 }}>
+          <GradientButton
+            label="＋ Клиент"
+            onPress={() => router.push("/clients/new")}
+          />
+        </View>
+      )}
 
       <ClientsFilterSheet
         visible={sheetOpen}
