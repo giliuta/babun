@@ -6,12 +6,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { Text, View } from "react-native";
+import { ActionSheetIOS, Linking, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { Appointment } from "@babun/shared/local/appointments";
+import type {
+  Appointment,
+  PaymentMethod,
+} from "@babun/shared/local/appointments";
+import { duplicateAppointment } from "@babun/shared/local/appointments";
+import { formatEUR } from "@babun/shared/common/utils/money";
+import { randomUuid } from "@babun/shared/sync";
 import { getStorage } from "@babun/shared/storage";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import { findOverlap } from "@babun/shared/common/utils/appointment-overlap";
@@ -48,7 +54,11 @@ import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
-import { useUpdateAppointment } from "@/features/calendar/mutations";
+import {
+  useCreateAppointment,
+  useDeleteAppointment,
+  useUpdateAppointment,
+} from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useServices } from "@/features/services/queries";
@@ -530,6 +540,195 @@ export default function CalendarTab() {
     setSheetOpen(true);
   };
 
+  // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
+  // Web parity ActionMenuModal (dashboard/page.tsx:1752): «только действия,
+  // которыми реально пользуются». Нативный ActionSheetIOS — HIG-вид без
+  // кастомного UI. Разрушаемые действия обратимы Undo-тостом.
+  const createAppt = useCreateAppointment();
+  const deleteAppt = useDeleteAppointment();
+
+  const quickStatus = (apt: Appointment, status: Appointment["status"]) => {
+    const prev = apt.status;
+    const done =
+      status === "completed"
+        ? "Выполнена"
+        : status === "in_progress"
+          ? "В работе"
+          : "Возвращена в план";
+    updateAppt.mutate(
+      { id: apt.id, patch: { status } },
+      {
+        onSuccess: () =>
+          toast(done, "success", {
+            label: "Отменить",
+            onPress: () =>
+              updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
+          }),
+        onError: () => toast("Не удалось изменить статус", "error"),
+      },
+    );
+  };
+
+  const cancelToggle = (apt: Appointment) => {
+    const to = apt.status === "cancelled" ? "scheduled" : "cancelled";
+    const prev = apt.status;
+    updateAppt.mutate(
+      { id: apt.id, patch: { status: to } },
+      {
+        onSuccess: () =>
+          toast(
+            to === "cancelled" ? "Запись отменена" : "Запись восстановлена",
+            "info",
+            {
+              label: "Отменить",
+              onPress: () =>
+                updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
+            },
+          ),
+        onError: () => toast("Не удалось изменить запись", "error"),
+      },
+    );
+  };
+
+  const deleteWithUndo = (apt: Appointment) => {
+    // Снапшот до удаления: «Вернуть» ре-инсертит ту же запись с тем же id.
+    const snapshot = { ...apt };
+    deleteAppt.mutate(apt.id, {
+      onSuccess: () =>
+        toast("Запись удалена", "info", {
+          label: "Вернуть",
+          onPress: () =>
+            createAppt.mutate(snapshot, {
+              onError: () => toast("Не удалось вернуть", "error"),
+            }),
+        }),
+      onError: () => toast("Не удалось удалить", "error"),
+    });
+  };
+
+  const openPaymentMenu = (apt: Appointment) => {
+    const methods: { label: string; m: PaymentMethod }[] = [
+      { label: "Наличные", m: "cash" },
+      { label: "Карта", m: "card" },
+      { label: "Перевод", m: "transfer" },
+    ];
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: `Оплата ${formatEUR(apt.total_amount)}`,
+        options: [...methods.map((x) => x.label), "Отмена"],
+        cancelButtonIndex: methods.length,
+      },
+      (i) => {
+        const method = methods[i]?.m;
+        if (!method) return;
+        // Web PaymentSheet parity: Payment в payments[] + completed.
+        const prev = { status: apt.status, payments: apt.payments };
+        updateAppt.mutate(
+          {
+            id: apt.id,
+            patch: {
+              status: "completed",
+              payments: [
+                ...apt.payments,
+                {
+                  id: `pay-${Date.now()}`,
+                  method,
+                  amount: apt.total_amount,
+                  paid_at: new Date().toISOString(),
+                },
+              ],
+            },
+          },
+          {
+            onSuccess: () =>
+              toast(`Оплата ${formatEUR(apt.total_amount)} принята`, "success", {
+                label: "Отменить",
+                onPress: () => updateAppt.mutate({ id: apt.id, patch: prev }),
+              }),
+            onError: () => toast("Не удалось отметить оплату", "error"),
+          },
+        );
+      },
+    );
+  };
+
+  const copyAppointment = (apt: Appointment) => {
+    const copy = { ...duplicateAppointment(apt), id: randomUuid() };
+    createAppt.mutate(copy, {
+      onSuccess: () => {
+        // Открываем копию на правку сразу — web parity (page.tsx:1786).
+        setEditing(copy);
+        setBookDefaults(undefined);
+        setSheetOpen(true);
+      },
+      onError: () => toast("Не удалось скопировать", "error"),
+    });
+  };
+
+  const openActionMenu = (apt: Appointment) => {
+    // Виртуальное вхождение повтора: быстрые действия валидны только для
+    // seed — открываем карточку (openEdit сам маршрутизирует на исходную).
+    if ((apt as { virtualParentId?: string }).virtualParentId) {
+      openEdit(apt);
+      return;
+    }
+    const client = apt.client_id
+      ? clients.find((c) => c.id === apt.client_id)
+      : undefined;
+    const phone = (client?.phone ?? "").trim();
+    const address = (apt.address || client?.address || "").trim();
+
+    type Item = { label: string; run: () => void; destructive?: boolean };
+    const items: Item[] = [];
+    if (apt.status === "scheduled" && apt.kind === "work")
+      items.push({ label: "Отметить оплату", run: () => openPaymentMenu(apt) });
+    if (apt.status !== "completed")
+      items.push({ label: "Выполнена", run: () => quickStatus(apt, "completed") });
+    if (apt.status !== "in_progress")
+      items.push({ label: "В работе", run: () => quickStatus(apt, "in_progress") });
+    if (apt.status !== "scheduled" && apt.status !== "cancelled")
+      items.push({
+        label: "Вернуть в план",
+        run: () => quickStatus(apt, "scheduled"),
+      });
+    if (phone)
+      items.push({
+        label: "Позвонить",
+        run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
+      });
+    if (address)
+      items.push({
+        label: "Маршрут",
+        run: () =>
+          Linking.openURL(
+            `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
+          ),
+      });
+    items.push({ label: "Копировать", run: () => copyAppointment(apt) });
+    items.push({
+      label: apt.status === "cancelled" ? "Восстановить" : "Отменить запись",
+      run: () => cancelToggle(apt),
+    });
+    items.push({
+      label: "Удалить",
+      destructive: true,
+      run: () => deleteWithUndo(apt),
+    });
+
+    const destructiveIdx = items.findIndex((i) => i.destructive);
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: `${apt.time_start}–${apt.time_end} · ${
+          clientName(apt) || apt.comment || "Запись"
+        }`,
+        options: [...items.map((i) => i.label), "Отмена"],
+        cancelButtonIndex: items.length,
+        destructiveButtonIndex: destructiveIdx >= 0 ? destructiveIdx : undefined,
+      },
+      (i) => items[i]?.run(),
+    );
+  };
+
   const headerTitle = (
     mode === "week" ? weekDays[3] : mode === "month" ? monthAnchor : day
   )
@@ -758,6 +957,7 @@ export default function CalendarTab() {
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
+              onMenu={openActionMenu}
               onPickDay={pickDay}
               onPickLabelDay={
                 hasLabels && activeTeamId
@@ -794,6 +994,7 @@ export default function CalendarTab() {
                   ? () => setCityPickerYmd(dayYmd)
                   : undefined
               }
+              onMenu={openActionMenu}
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }

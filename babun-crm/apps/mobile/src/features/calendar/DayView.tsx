@@ -127,6 +127,7 @@ function Block({
   compact,
   overdue = false,
   onEdit,
+  onMenu,
   onReschedule,
 }: {
   placed: PlacedAppt;
@@ -146,6 +147,9 @@ function Block({
    *  время предупреждающим цветом (недополученные деньги). */
   overdue?: boolean;
   onEdit: (a: Appointment) => void;
+  /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
+   *  с движением — перенос, как раньше. */
+  onMenu?: (a: Appointment) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
 }) {
   const t = useThemeColors();
@@ -217,9 +221,16 @@ function Block({
       ty.value = e.translationY;
     })
     .onEnd((e) => {
-      // Сброс ty решает commit на JS: перенос состоялся → мгновенно (база
-      // уже переписана оптимистически), нет → пружиной домой.
-      runOnJS(commit)(e.translationY);
+      // Отпустил, не сдвинув (<8px) — это «подержал» → контекстное меню
+      // (web ActionMenuModal). Сдвинул — перенос: сброс ty решает commit
+      // на JS (перенос состоялся → мгновенно, база уже переписана
+      // оптимистически; нет → пружиной домой).
+      if (Math.abs(e.translationY) < 8 && onMenu) {
+        ty.value = withSpring(0);
+        runOnJS(onMenu)(apt);
+      } else {
+        runOnJS(commit)(e.translationY);
+      }
       active.value = withSpring(0);
     });
   // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
@@ -492,6 +503,7 @@ export function DayColumn({
   todayYmd,
   compact = false,
   onEdit,
+  onMenu,
   onCreateAt,
   onReschedule,
   startHour = DEFAULT_START,
@@ -516,6 +528,8 @@ export function DayColumn({
   todayYmd?: string;
   compact?: boolean;
   onEdit: (a: Appointment) => void;
+  /** Долгое нажатие без движения по блоку — контекстное меню записи. */
+  onMenu?: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, newStart: string, newEnd: string) => void;
   startHour?: number;
@@ -820,6 +834,7 @@ export function DayColumn({
               label={clientName(p.apt) || p.apt.comment || "Запись"}
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
               compact={compact}
+              onMenu={onMenu}
               overdue={
                 todayYmd != null &&
                 p.apt.status === "scheduled" &&
@@ -974,6 +989,7 @@ export function DayView({
   serviceLabel,
   teamColorFor,
   onEdit,
+  onMenu,
   onCreateAt,
   onReschedule,
   onCommitPage,
@@ -1003,6 +1019,8 @@ export function DayView({
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   onEdit: (a: Appointment) => void;
+  /** Долгое нажатие без движения по блоку — контекстное меню записи. */
+  onMenu?: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, newStart: string, newEnd: string) => void;
   /** Палец долистал страницу: родитель сдвигает день на ±1. */
@@ -1091,6 +1109,7 @@ export function DayView({
                 isToday={d === todayYmd}
                 todayYmd={todayYmd}
                 onEdit={onEdit}
+                onMenu={onMenu}
                 onCreateAt={onCreateAt}
                 onReschedule={onReschedule}
                 startHour={startHour}

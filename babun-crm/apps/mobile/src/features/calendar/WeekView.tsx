@@ -42,6 +42,7 @@ export function WeekView({
   teamColorFor,
   today,
   onEdit,
+  onMenu,
   onCreateAt,
   onReschedule,
   onPickDay,
@@ -71,6 +72,8 @@ export function WeekView({
   teamColorFor?: (a: Appointment) => string | null;
   today: Date;
   onEdit: (a: Appointment) => void;
+  /** Долгое нажатие без движения по блоку — контекстное меню записи. */
+  onMenu?: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
   /** Долгое нажатие по шапке даты — открыть день. */
@@ -178,6 +181,7 @@ export function WeekView({
                     todayYmd={formatYMD(today)}
                     compact
                     onEdit={onEdit}
+                    onMenu={onMenu}
                     onCreateAt={onCreateAt}
                     onReschedule={onReschedule}
                     startHour={startHour}
