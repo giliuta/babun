@@ -6,6 +6,7 @@ import Animated, {
   cancelAnimation,
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -23,7 +24,8 @@ import Animated, {
 // сбросов translateX → мигание невозможно по построению, независимо от
 // того, когда React успеет закоммитить.
 
-const SETTLE = { duration: 220, easing: Easing.out(Easing.cubic) };
+const SETTLE_MS = 220;
+const SETTLE_EASING = Easing.out(Easing.cubic);
 // Доля ширины / скорость (px/s), после которых отпускание листает период.
 const DIST_RATIO = 0.35;
 const FLING_V = 600;
@@ -59,6 +61,9 @@ export function usePeriodPager({
   const dragFrom = useSharedValue(0);
   // Различает смену periodKey от собственного коммита и от внешнего прыжка.
   const internal = useRef(false);
+  // Reduce Motion: доводка мгновенная (сам drag — прямое манипулирование,
+  // его не трогаем).
+  const reducedMotion = useReducedMotion();
 
   const commitJS = (dir: 1 | -1) => {
     internal.current = true;
@@ -112,11 +117,15 @@ export function usePeriodPager({
             ? -1
             : 0;
       const target = -(idxSv.value + dir) * w;
-      axisX.value = withTiming(target, SETTLE, (finished) => {
-        if (!finished || dir === 0) return;
-        idxSv.value = idxSv.value + dir;
-        runOnJS(commitJS)(dir);
-      });
+      axisX.value = withTiming(
+        target,
+        { duration: reducedMotion ? 0 : SETTLE_MS, easing: SETTLE_EASING },
+        (finished) => {
+          if (!finished || dir === 0) return;
+          idxSv.value = idxSv.value + dir;
+          runOnJS(commitJS)(dir);
+        },
+      );
     });
 
   return { axisX, idx, pan, width, onLayoutWidth };

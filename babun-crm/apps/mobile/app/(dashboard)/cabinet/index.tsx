@@ -331,7 +331,7 @@ export default function CabinetHome() {
             icon={CalendarClock}
             tone={TILE.orange}
             title="Календарь"
-            desc="Рабочие часы, шаг сетки"
+            desc="Часы и шаг сетки по умолчанию для всех команд"
             href="/cabinet/calendar"
           />
           <Divider inset={58} />

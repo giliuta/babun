@@ -25,11 +25,17 @@ export function TeamChips({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={{ flexGrow: 0, backgroundColor: t.surface }}
+      // Единственный шов под всем хромом шапки живёт здесь (CalendarHeader
+      // своего borderBottom не имеет — иначе две линии подряд).
+      style={{
+        flexGrow: 0,
+        backgroundColor: t.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: t.separator,
+      }}
       contentContainerStyle={{
-        paddingHorizontal: 12,
-        paddingTop: 6,
-        paddingBottom: 7,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
         gap: 8,
         alignItems: "center",
       }}

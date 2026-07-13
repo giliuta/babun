@@ -73,7 +73,8 @@ export function ViewModeDropdown({
               right: 12,
               minWidth: 180,
               backgroundColor: t.surface,
-              borderRadius: 12,
+              // 14 — единый радиус поповеров шапки (MiniCalendar такой же).
+              borderRadius: 14,
               borderWidth: 1,
               borderColor: t.separator,
               paddingVertical: 4,

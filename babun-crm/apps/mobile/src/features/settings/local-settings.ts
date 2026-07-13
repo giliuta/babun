@@ -82,6 +82,23 @@ export function useSaveCalendarSettings() {
       }
       return merged;
     },
+    // Оптимистичный мерж патча в кэш запроса: instant-commit экран шлёт
+    // серию быстрых патчей (степперы часов), и без него второй тап считал
+    // бы «+1» от ещё не обновлённой базы. Откат не нужен: mutationFn до
+    // первого await уже записал merged в MMKV, так что UI и device-кэш
+    // согласованы, даже если сетевой апсерт упал.
+    onMutate: (patch) => {
+      const prev = qc.getQueryData<CalendarSettings>([
+        "calendar-settings",
+        tenantId,
+      ]);
+      if (prev) {
+        qc.setQueryData(["calendar-settings", tenantId], {
+          ...prev,
+          ...patch,
+        });
+      }
+    },
     onSuccess: (s) => qc.setQueryData(["calendar-settings", tenantId], s),
     meta: { errorHandled: true }, // call sites alert themselves
   });

@@ -169,6 +169,7 @@ export function WeekView({
                     serviceLabel={serviceLabel}
                     teamColorFor={teamColorFor}
                     isToday={sameDay(d, today)}
+                    todayYmd={formatYMD(today)}
                     compact
                     onEdit={onEdit}
                     onCreateAt={onCreateAt}

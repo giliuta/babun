@@ -45,33 +45,40 @@ export default function DashboardLayout() {
           backgroundColor: t.surface,
           borderTopColor: t.separator,
         },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "500" },
       }}
     >
+      {/* Активная вкладка выделяется весом штриха (2.4 vs 2), не второй
+          заливкой — у lucide нет filled-вариантов, а цвета уже хватает. */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Календарь",
-          tabBarIcon: ({ color, size }) => <Calendar color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Calendar color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="clients"
         options={{
           title: "Клиенты",
-          tabBarIcon: ({ color, size }) => <Users color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Users color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: "Чаты",
-          tabBarIcon: ({ color, size }) => (
-            <MessageCircle color={color} size={size} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <MessageCircle color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
           ),
           tabBarBadge: unread > 0 ? (unread > 99 ? "99+" : unread) : undefined,
           tabBarBadgeStyle: {
             backgroundColor: t.danger,
-            color: "#fff",
+            color: t.onAccent,
             fontSize: 11,
             fontWeight: "600",
           },
@@ -81,15 +88,17 @@ export default function DashboardLayout() {
         name="finances"
         options={{
           title: "Финансы",
-          tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Wallet color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
+          ),
         }}
       />
       <Tabs.Screen
         name="cabinet"
         options={{
           title: "Кабинет",
-          tabBarIcon: ({ color, size }) => (
-            <LayoutGrid color={color} size={size} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <LayoutGrid color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
           ),
         }}
       />

@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getStorage } from "@babun/shared/storage";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
+import { findOverlap } from "@babun/shared/common/utils/appointment-overlap";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -34,6 +35,9 @@ import {
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
+import { DaySummaryStrip } from "@/features/calendar/DaySummaryStrip";
+import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
+import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
@@ -131,10 +135,21 @@ export default function CalendarTab() {
       toast("Повтор события — измените исходную запись");
       return;
     }
+    // Дабл-букинг бригады — предупреждаем, но НЕ блокируем (web parity:
+    // findOverlap перед записью; диспетчер иногда ставит внахлёст сознательно).
+    const clash = findOverlap(
+      { ...apt, time_start: newStart, time_end: newEnd },
+      visibleAppts,
+    );
     updateAppt.mutate(
       { id: apt.id, patch: { time_start: newStart, time_end: newEnd } },
       {
-        onSuccess: () => toast(`Перенесено на ${newStart}`),
+        onSuccess: () =>
+          toast(
+            clash
+              ? `Перенесено. Пересечение с ${clash.time_start}–${clash.time_end}`
+              : `Перенесено на ${newStart}`,
+          ),
         onError: () => toast("Не удалось перенести"),
       },
     );
@@ -428,6 +443,11 @@ export default function CalendarTab() {
     (ymd: string) => apptsByDate.get(ymd) ?? [],
     [apptsByDate],
   );
+  // Записи бизнес-СЕГОДНЯ (не просматриваемого дня) — вечерний баннер долгов.
+  const todayAppts = useMemo(
+    () => apptsByDate.get(todayYmd) ?? [],
+    [apptsByDate, todayYmd],
+  );
 
   const weekDays = useMemo(() => {
     const mon = mondayOf(day);
@@ -598,7 +618,22 @@ export default function CalendarTab() {
       const start = parseHourHM(sched.start);
       const end = parseHourHM(sched.end);
       if (start == null || end == null || end <= start) return undefined;
-      return { startMin: Math.round(start * 60), endMin: Math.round(end * 60) };
+      // Перерывы бригады (обед и т.п.) — серые полосы на сетке, чтобы
+      // диспетчер не записывал клиента на обед (web DayColumn breaks).
+      const breaks = sched.breaks
+        .map((b) => {
+          const bs = parseHourHM(b.start);
+          const be = parseHourHM(b.end);
+          return bs != null && be != null && be > bs
+            ? { startMin: Math.round(bs * 60), endMin: Math.round(be * 60) }
+            : null;
+        })
+        .filter((b): b is { startMin: number; endMin: number } => b !== null);
+      return {
+        startMin: Math.round(start * 60),
+        endMin: Math.round(end * 60),
+        breaks,
+      };
     };
   }, [teamSchedule]);
 
@@ -681,7 +716,7 @@ export default function CalendarTab() {
       <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
 
       {isLoading ? (
-        <EmptyState state="loading" fill />
+        <CalendarSkeleton />
       ) : error ? (
         <EmptyState state="error" fill subtitle={(error as Error).message} />
       ) : mode === "agenda" ? (
@@ -723,6 +758,11 @@ export default function CalendarTab() {
         </>
       ) : mode === "day" ? (
         <>
+          {/* «Утренний взгляд» — сводка просматриваемого дня (web parity). */}
+          <DaySummaryStrip
+            appointments={dayAppts}
+            onUnpaidTap={() => router.push("/cabinet/unclosed")}
+          />
           <View className="flex-1">
             <DayView
               dateYmd={dayYmd}
@@ -780,6 +820,15 @@ export default function CalendarTab() {
           onDismiss={() => setOnboardingDismissed(true)}
         />
       ) : null}
+
+      {/* Вечерний контроль денег: после 18:00 выполненные СЕГОДНЯ с долгом
+          (web EndOfDayBanner) — плавающая карточка над футером. */}
+      <EndOfDayBanner
+        appointments={todayAppts}
+        todayYmd={todayYmd}
+        nowHour={now.getHours()}
+        onOpenUnpaid={() => router.push("/cabinet/unclosed")}
+      />
 
       {/* Пикер метки дня — центрированная карточка (web CityPickerModal);
           тап по активной строке снимает метку. */}

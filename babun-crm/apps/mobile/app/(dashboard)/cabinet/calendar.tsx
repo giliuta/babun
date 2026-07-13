@@ -1,5 +1,13 @@
-import { useState } from "react";
-import { Alert, Pressable, Switch, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  AccessibilityInfo,
+  Alert,
+  Animated,
+  Pressable,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import { Minus, Plus } from "lucide-react-native";
 import {
   DEFAULT_CALENDAR_SETTINGS,
@@ -8,9 +16,9 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SectionFooter } from "@/components/ui/SectionFooter";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Divider } from "@/components/ui/Divider";
-import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCalendarSettings,
@@ -92,29 +100,69 @@ function Stepper({
   );
 }
 
+// «✓ Сохранено» у заголовка — тихий отклик instant-commit'а: тост на каждый
+// тап степпера слишком шумный (перекрывает контент сверху), поэтому микро-
+// индикатор в right-слоте ScreenHeader, гаснущий сам через ~1.5 с. Каждый
+// новый tick переустанавливает таймер — серия быстрых тапов держит одну
+// надпись, а не мигает.
+function SavedIndicator({ tick }: { tick: number }) {
+  const t = useThemeColors();
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!tick) return;
+    opacity.setValue(1);
+    // Индикатор pointerEvents не ловит и гаснет сам — VoiceOver без
+    // явного анонса не узнал бы, что настройка сохранилась (как в Toast).
+    AccessibilityInfo.announceForAccessibility("Сохранено");
+    const timer = setTimeout(() => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }).start();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [tick, opacity]);
+  if (!tick) return null;
+  return (
+    <Animated.Text
+      style={{ opacity, fontSize: 13, fontWeight: "600", color: t.success }}
+    >
+      ✓ Сохранено
+    </Animated.Text>
+  );
+}
+
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const { data: settings } = useCalendarSettings();
   const save = useSaveCalendarSettings();
-  // Only the fields the user touched. Saving sends THIS object as a
-  // targeted patch, so unloaded / web-managed fields can never be pushed
-  // as DEFAULT_CALENDAR_SETTINGS; a late query resolve refreshes the base
-  // values underneath without discarding unsaved edits.
-  const [changes, setChanges] = useState<Partial<CalendarSettings>>({});
-  const dirty = Object.keys(changes).length > 0;
-  const s: CalendarSettings = {
-    ...(settings ?? DEFAULT_CALENDAR_SETTINGS),
-    ...changes,
-  };
+  // Тик последнего успешного коммита — кормит SavedIndicator.
+  const [savedTick, setSavedTick] = useState(0);
+  const s: CalendarSettings = settings ?? DEFAULT_CALENDAR_SETTINGS;
 
-  const patch = (p: Partial<CalendarSettings>) =>
-    setChanges((prev) => ({ ...prev, ...p }));
+  // Instant-commit (web parity — «Мой календарь» в вебе тоже без кнопки):
+  // каждый контрол шлёт частичный патч сразу. Мутация и так targeted
+  // (updateCalendarSettings пишет поле-в-поле), так что незагруженные /
+  // web-managed поля дефолтами не затираются. До резолва запроса патчи
+  // игнорируем: контролы ещё показывают неподтверждённые дефолты, и «+1»
+  // степпера записал бы значение не от той базы.
+  const patch = (p: Partial<CalendarSettings>) => {
+    if (!settings) return;
+    save.mutate(p, {
+      onSuccess: () => setSavedTick(Date.now()),
+      onError: (e) => Alert.alert("Ошибка", e.message),
+    });
+  };
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Календарь" />
+      <ScreenHeader
+        title="Календарь"
+        right={<SavedIndicator tick={savedTick} />}
+      />
 
-      <SectionEyebrow>Рабочие часы (сетка «День»)</SectionEyebrow>
+      <SectionEyebrow>Рабочие часы по умолчанию</SectionEyebrow>
       <SectionCard padded>
         <Row
           label="Начало"
@@ -140,6 +188,10 @@ export default function CalendarSettingsScreen() {
           }
         />
       </SectionCard>
+      <SectionFooter>
+        У команды с собственным расписанием действует её расписание
+        (шестерёнка календаря).
+      </SectionFooter>
 
       <SectionEyebrow>Шаг сетки</SectionEyebrow>
       <SectionCard padded>
@@ -167,22 +219,6 @@ export default function CalendarSettingsScreen() {
           }
         />
       </SectionCard>
-
-      <View className="mx-3 mt-5">
-        <Button
-          label="Сохранить"
-          onPress={() =>
-            save.mutate(changes, {
-              onSuccess: () => setChanges({}),
-              onError: (e) => Alert.alert("Ошибка", e.message),
-            })
-          }
-          // `!settings` — no saving until the settings query resolved at
-          // least once; before that the form shows unconfirmed defaults.
-          disabled={!settings || !dirty || save.isPending}
-          loading={save.isPending}
-        />
-      </View>
     </Screen>
   );
 }

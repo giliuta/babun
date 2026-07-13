@@ -73,7 +73,9 @@ export const light: ThemeColors = {
   warning: "#f5a623",
   fill: "#eef1f5",
   separator: "#e7ebf0",
-  chevron: "#c4c4c4",
+  // «Из чёрного, не серого»: прозрачный ink вместо плоского #c4c4c4 — шевроны
+  // читаемы, но остаются самым тихим слоем иерархии.
+  chevron: "rgba(11,18,32,0.24)",
   highlight: "rgba(255,255,255,0.9)",
   pressed: "rgba(11,18,32,0.04)",
   scrim: "rgba(11,18,32,0.30)",

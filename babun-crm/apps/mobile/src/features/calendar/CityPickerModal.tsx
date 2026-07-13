@@ -67,10 +67,11 @@ export function CityPickerModal({
         {/* stopPropagation: тап по карточке не закрывает модалку */}
         <Pressable
           onPress={() => {}}
+          // 20 = radius.card: центрированная модалка — карточка, не поповер.
           style={{
             width: "100%",
             maxWidth: 340,
-            borderRadius: 14,
+            borderRadius: 20,
             overflow: "hidden",
             paddingBottom: 12,
             backgroundColor: t.canvas,
@@ -109,7 +110,7 @@ export function CityPickerModal({
           <View className="mx-3 mt-3 overflow-hidden rounded-[14px]" style={{ backgroundColor: t.surface }}>
             <ScrollView style={{ maxHeight: 380 }} bounces={false}>
               {options.length === 0 ? (
-                <Text className="px-4 py-3 text-sm" style={{ color: t.faint }}>
+                <Text className="px-4 py-3" style={{ fontSize: 13, color: t.faint }}>
                   У команды пока нет меток — добавьте их через шестерёнку
                   выше.
                 </Text>
@@ -119,7 +120,11 @@ export function CityPickerModal({
                   return (
                     <View key={o.name}>
                       {i > 0 ? (
-                        <View style={{ height: 1, backgroundColor: t.separator }} />
+                        // 56 = 16 + 28 + 12: разделитель в линию с текстом
+                        // после плитки-пина (iOS inset separator).
+                        <View
+                          style={{ height: 1, marginLeft: 56, backgroundColor: t.separator }}
+                        />
                       ) : null}
                       <Pressable
                         onPress={() => handlePick(o.name)}
@@ -136,7 +141,7 @@ export function CityPickerModal({
                           style={{
                             height: 28,
                             width: 28,
-                            borderRadius: 7,
+                            borderRadius: 8,
                             backgroundColor: o.color,
                           }}
                         >

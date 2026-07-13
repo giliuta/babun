@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { Calendar, ChevronDown, Settings } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ViewModeDropdown, type CalMode } from "@/features/calendar/ViewModeDropdown";
@@ -31,6 +32,8 @@ export function CalendarHeader({
   const t = useThemeColors();
   return (
     <View
+      // Без своего borderBottom: единый шов под хромом шапки несёт полоса
+      // TeamChips ниже — две линии подряд читались бы как случайный зазор.
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -38,8 +41,6 @@ export function CalendarHeader({
         paddingHorizontal: 8,
         minHeight: 48,
         backgroundColor: t.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: t.separator,
       }}
     >
       <Pressable
@@ -74,13 +75,24 @@ export function CalendarHeader({
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
-        <Text
-          style={{ fontSize: 17, fontWeight: "700", color: t.ink, textTransform: "capitalize" }}
-          numberOfLines={1}
-        >
-          {monthTitle}
-        </Text>
-        <ChevronDown color={t.faint} size={15} strokeWidth={2.5} />
+        {/* key=title: смена месяца мягко въезжает (150 мс) — единственный
+            сигнал смены месяца в «Дне»; Reduce Motion гасит сам reanimated. */}
+        <Animated.View key={monthTitle} entering={FadeIn.duration(150)}>
+          <Text
+            // 17/600/-0.2 — вес и трекинг iOS-навбара; 700 спорил с контентом.
+            style={{
+              fontSize: 17,
+              fontWeight: "600",
+              letterSpacing: -0.2,
+              color: t.ink,
+              textTransform: "capitalize",
+            }}
+            numberOfLines={1}
+          >
+            {monthTitle}
+          </Text>
+        </Animated.View>
+        <ChevronDown color={t.faint} size={16} strokeWidth={2.5} />
       </Pressable>
 
       {!isOnToday ? (
@@ -89,12 +101,13 @@ export function CalendarHeader({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={`Сегодня, ${todayNumber}`}
+          // 44×44 — минимальная нажимаемая область HIG (была 40 шириной).
           style={({ pressed }) => ({
-            width: 40,
+            width: 44,
             height: 44,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 20,
+            borderRadius: 22,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >

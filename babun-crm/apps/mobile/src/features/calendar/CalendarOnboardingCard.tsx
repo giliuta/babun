@@ -50,9 +50,12 @@ export function CalendarOnboardingCard({
     >
       <View
         accessibilityLiveRegion="polite"
+        // marginBottom: оптический центр чуть выше геометрического — карточка
+        // не липнет взглядом к таб-бару.
         style={{
           width: "100%",
           maxWidth: 420,
+          marginBottom: 16,
           backgroundColor: t.surface,
           borderRadius: t.radius.card,
           borderWidth: 1,
@@ -83,11 +86,13 @@ export function CalendarOnboardingCard({
         </Pressable>
 
         <Text
+          // paddingRight: длинный заголовок не налезает на кнопку ✕.
           style={{
             fontSize: 17,
             fontWeight: "600",
             color: t.ink,
             marginBottom: 14,
+            paddingRight: 28,
           }}
         >
           Начните за 3 шага

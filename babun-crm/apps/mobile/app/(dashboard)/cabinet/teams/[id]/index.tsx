@@ -16,9 +16,7 @@ import {
   ChevronRight,
   ChevronUp,
   MapPin,
-  Minus,
   Package,
-  Plus,
   Trash2,
   Users as UsersIcon,
   Wrench,
@@ -35,6 +33,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SectionFooter } from "@/components/ui/SectionFooter";
 import { Divider } from "@/components/ui/Divider";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { Chip } from "@/components/ui/Chip";
@@ -42,12 +41,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
+  teamCities,
   teamMembers,
   useDetachTeamReferences,
   useMasters,
   useTeam,
   useUpdateTeam,
 } from "@/features/reference/queries";
+import { serviceBrigadeIds, useServices } from "@/features/services/queries";
 import {
   useTeamSchedule,
   useUpsertTeamSchedule,
@@ -84,11 +85,14 @@ function NavRow({
   icon,
   title,
   value,
+  warning,
   onPress,
 }: {
   icon: React.ReactNode;
   title: string;
   value?: string;
+  /** Подсветить value как «требует внимания» (web parity BrigadeNavRow). */
+  warning?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -105,7 +109,10 @@ function NavRow({
           {title}
         </Text>
         {value ? (
-          <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
+          <Text
+            style={{ fontSize: 14, color: warning ? t.warning : t.sub }}
+            numberOfLines={1}
+          >
             {value}
           </Text>
         ) : null}
@@ -224,45 +231,19 @@ function TimeField({
   );
 }
 
-function BufferStepper({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View className="flex-row items-center gap-3">
-      <Pressable
-        onPress={() => onChange(Math.max(0, value - 5))}
-        style={{ backgroundColor: t.fill }}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityLabel="Меньше буфер"
-        className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
-      >
-        <Minus color={t.body} size={16} />
-      </Pressable>
-      <Text
-        style={{ color: t.ink }}
-        className="w-16 text-center text-base font-semibold tabular-nums"
-      >
-        {value} мин
-      </Text>
-      <Pressable
-        onPress={() => onChange(Math.min(120, value + 5))}
-        style={{ backgroundColor: t.fill }}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityLabel="Больше буфер"
-        className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
-      >
-        <Plus color={t.body} size={16} />
-      </Pressable>
-    </View>
-  );
-}
+// Буфер между записями — фиксированный ряд вариантов (web parity: чипы
+// 0/10/…/60 в teams/[id]/calendar). null = наследовать глобальную настройку
+// из «Мой календарь» (web-семантика undefined) — пишем null, а не 0, иначе
+// команда навсегда пришпилена и глобальное значение перестаёт действовать.
+const BUFFER_OPTIONS: { label: string; v: number | null }[] = [
+  { label: "Нет", v: null },
+  { label: "10 м", v: 10 },
+  { label: "15 м", v: 15 },
+  { label: "20 м", v: 20 },
+  { label: "30 м", v: 30 },
+  { label: "45 м", v: 45 },
+  { label: "60 м", v: 60 },
+];
 
 export default function TeamHubScreen() {
   const t = useThemeColors();
@@ -270,6 +251,10 @@ export default function TeamHubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: team, isLoading } = useTeam(id);
   const { data: masters = [] } = useMasters();
+  // Для value-превью «Услуги» — тот же источник, что у веб-хаба
+  // (servicesPreview в teams/[id]/page.tsx): привязка живёт в
+  // services.brigade_ids, у команды своей колонки нет.
+  const { data: services = [] } = useServices();
   const { data: schedule } = useTeamSchedule(id);
   const update = useUpdateTeam();
   const upsertSchedule = useUpsertTeamSchedule();
@@ -377,6 +362,33 @@ export default function TeamHubScreen() {
         ? memberNames.join(" · ")
         : `${memberNames[0]} · ${memberNames[1]} и ещё ${memberNames.length - 2}`;
 
+  // ── Услуги preview — web parity servicesPreview (teams/[id]/page.tsx):
+  // ноль привязанных услуг = «доступны все» (валидная настройка бригады,
+  // сознательно НЕ warning). useServices уже отдаёт только is_active.
+  const teamServicesCount = services.filter((s) =>
+    serviceBrigadeIds(s).includes(team.id),
+  ).length;
+  const servicesPreview =
+    teamServicesCount === 0
+      ? "не заданы — доступны все"
+      : `выбрано: ${teamServicesCount}`;
+
+  // ── Метки preview — web parity citiesPreview (teams/[id]/calendar):
+  // без меток И без города по умолчанию календарь не подскажет город —
+  // это warning; иначе имена через запятую (длинный хвост обрезает
+  // numberOfLines у NavRow).
+  const cityNames = teamCities(team);
+  const effectiveCityNames =
+    cityNames.length === 0 && team.default_city
+      ? [team.default_city]
+      : cityNames;
+  const citiesPreview =
+    effectiveCityNames.length === 0
+      ? null
+      : effectiveCityNames.length <= 3
+        ? effectiveCityNames.join(", ")
+        : `${effectiveCityNames.slice(0, 2).join(", ")} и ещё ${effectiveCityNames.length - 2}`;
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
@@ -459,9 +471,12 @@ export default function TeamHubScreen() {
             <NavRow
               icon={<Wrench color={t.accent} size={ICON.md} />}
               title="Услуги"
+              value={servicesPreview}
               onPress={() => router.push(`/cabinet/teams/${team.id}/services`)}
             />
             <Divider inset={52} />
+            {/* Оборудование без превью: данных на этом экране нет, а грузить
+                каталог ради одной цифры — лишний запрос. */}
             <NavRow
               icon={<Package color={t.accent} size={ICON.md} />}
               title="Оборудование"
@@ -475,6 +490,8 @@ export default function TeamHubScreen() {
             <NavRow
               icon={<MapPin color={t.accent} size={ICON.md} />}
               title="Метки"
+              value={citiesPreview ?? "не заданы"}
+              warning={!citiesPreview}
               onPress={() => router.push(`/cabinet/teams/${team.id}/cities`)}
             />
           </SectionCard>
@@ -501,7 +518,7 @@ export default function TeamHubScreen() {
               <>
                 <Divider />
                 <TimeField
-                  label="Начало дня"
+                  label="Видимое время: с"
                   value={team.calendar_window_start ?? ""}
                   onCommit={(v) =>
                     patch({ calendar_window_start: v || null })
@@ -509,24 +526,36 @@ export default function TeamHubScreen() {
                 />
                 <Divider inset={16} />
                 <TimeField
-                  label="Конец дня"
+                  label="Видимое время: до"
                   value={team.calendar_window_end ?? ""}
                   onCommit={(v) => patch({ calendar_window_end: v || null })}
                 />
+                <SectionFooter>
+                  Видимое время — какие часы показывает сетка. Рабочее время —
+                  часы смены бригады; вне их сетка серая.
+                </SectionFooter>
                 <Divider inset={16} />
-                <View className="flex-row items-center justify-between px-4 py-2.5">
-                  <Text style={{ fontSize: 16, color: t.ink }}>
+                <View className="px-4 pt-2.5">
+                  <Text style={{ fontSize: 12, color: t.sub, marginBottom: 8 }}>
                     Буфер между записями
                   </Text>
-                  {/* Выкл/0 = НАСЛЕДОВАТЬ глобальную настройку (web-семантика:
-                      undefined). Пишем null, а не false/0 — иначе тумблер
-                      навсегда пришпиливал команду и глобальный «Мой календарь»
-                      переставал действовать. */}
-                  <BufferStepper
-                    value={team.buffer_minutes ?? 0}
-                    onChange={(v) => patch({ buffer_minutes: v > 0 ? v : null })}
-                  />
+                  <View className="flex-row flex-wrap gap-2">
+                    {BUFFER_OPTIONS.map((o) => (
+                      <Chip
+                        key={o.label}
+                        label={o.label}
+                        radio
+                        selected={(team.buffer_minutes ?? 0) === (o.v ?? 0)}
+                        onPress={() => patch({ buffer_minutes: o.v })}
+                        accessibilityLabel={`Буфер ${o.label}`}
+                      />
+                    ))}
+                  </View>
                 </View>
+                <SectionFooter>
+                  Автоматический зазор после каждого визита — дорога, уборка
+                  инструмента.
+                </SectionFooter>
                 <Divider inset={16} />
                 <ToggleRow
                   label="Скрывать отменённые"
@@ -536,7 +565,7 @@ export default function TeamHubScreen() {
                 <Divider inset={16} />
                 <ToggleRow
                   label="Разрешить переработку"
-                  hint="Записи можно ставить вне рабочих часов"
+                  hint="Последний визит может закончиться после конца рабочего времени"
                   value={!!team.allow_overtime}
                   onChange={(v) => patch({ allow_overtime: v || null })}
                 />
@@ -568,7 +597,7 @@ export default function TeamHubScreen() {
                   <Text style={{ fontSize: 12, color: t.sub }}>Рабочие часы</Text>
                 </View>
                 <TimeField
-                  label="Начало смены"
+                  label="Рабочее время: с"
                   value={sched.start ?? ""}
                   onCommit={(v) =>
                     patchSchedule({ start: v || DEFAULT_SCHEDULE.start })
@@ -576,7 +605,7 @@ export default function TeamHubScreen() {
                 />
                 <Divider inset={16} />
                 <TimeField
-                  label="Конец смены"
+                  label="Рабочее время: до"
                   value={sched.end ?? ""}
                   onCommit={(v) =>
                     patchSchedule({ end: v || DEFAULT_SCHEDULE.end })
@@ -584,7 +613,7 @@ export default function TeamHubScreen() {
                 />
                 <Divider inset={16} />
                 <TimeField
-                  label="Автопрокрутка к"
+                  label="Открывается на"
                   value={team.default_scroll_time ?? ""}
                   onCommit={(v) => patch({ default_scroll_time: v || null })}
                 />
@@ -610,6 +639,14 @@ export default function TeamHubScreen() {
               </>
             ) : null}
           </SectionCard>
+          {/* Футнот всей группы — только когда контролы видны: текст
+              объясняет пустые поля/выключенные тумблеры выше. */}
+          {calOpen ? (
+            <SectionFooter>
+              Действует только для этой команды. Пустое поле или выключенный
+              тумблер — используется глобальная настройка из «Мой календарь».
+            </SectionFooter>
+          ) : null}
 
           {/* Активна */}
           <SectionCard className="mt-5">

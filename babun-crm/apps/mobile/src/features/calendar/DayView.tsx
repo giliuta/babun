@@ -49,7 +49,12 @@ const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)
 
 // Per-date work band (minutes since midnight) resolved from team_schedules
 // by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
-export type WorkBand = { startMin: number; endMin: number };
+// breaks — перерывы бригады (обед и т.п.): серые полосы на сетке.
+export type WorkBand = {
+  startMin: number;
+  endMin: number;
+  breaks?: { startMin: number; endMin: number }[];
+};
 
 // ZOOM GEOMETRY. Pinch-to-zoom animates ONE value — the grid row height in
 // ZoomableTimeGrid — on the UI thread. Everything inside a column is
@@ -62,20 +67,24 @@ const pct = (part: number, total: number): DimensionValue =>
   `${(part / total) * 100}%`;
 
 // A horizontal band covering [fromMin, toMin] — off-hours wash, past-time
-// wash, buffer bands.
+// wash, buffer bands, breaks. `label` — тихая подпись по центру полосы
+// (например «Перерыв»); в узких колонках недели не передаётся.
 function MinuteBand({
   fromMin,
   toMin,
   winStartMin,
   winEndMin,
   color,
+  label,
 }: {
   fromMin: number;
   toMin: number;
   winStartMin: number;
   winEndMin: number;
   color: string;
+  label?: string;
 }) {
+  const t = useThemeColors();
   const totalMin = winEndMin - winStartMin;
   return (
     <View
@@ -87,8 +96,20 @@ function MinuteBand({
         top: pct(fromMin - winStartMin, totalMin),
         height: pct(toMin - fromMin, totalMin),
         backgroundColor: color,
+        alignItems: "center",
+        justifyContent: "center",
       }}
-    />
+    >
+      {label ? (
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 11, fontWeight: "500", color: t.faint }}
+        >
+          {label}
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -104,6 +125,7 @@ function Block({
   label,
   service,
   compact,
+  overdue = false,
   onEdit,
   onReschedule,
 }: {
@@ -120,6 +142,9 @@ function Block({
   label: string;
   service: string | null;
   compact: boolean;
+  /** Запланирована, а время уже прошло — незакрытая работа: полоска и
+   *  время предупреждающим цветом (недополученные деньги). */
+  overdue?: boolean;
   onEdit: (a: Appointment) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
 }) {
@@ -270,7 +295,7 @@ function Block({
               // 2px breathing gap to the next block (was `height - 2`).
               bottom: 2,
               backgroundColor: colors.fill,
-              borderLeftColor: colors.stripe,
+              borderLeftColor: overdue ? t.warning : colors.stripe,
               borderLeftWidth: 3,
               borderRadius: 8,
               paddingHorizontal: compact ? 3 : 6,
@@ -288,12 +313,16 @@ function Block({
               выталкивать время/клиента из узкого блока (numberOfLines
               срезал бы САМУ информацию). */}
           <Text
-            style={{ color: t.sub, fontSize: compact ? 9 : 11, fontWeight: "600" }}
+            style={{
+              color: overdue ? t.warning : t.sub,
+              fontSize: compact ? 9 : 11,
+              fontWeight: overdue ? "700" : "600",
+            }}
             className="tabular-nums"
             numberOfLines={1}
             maxFontSizeMultiplier={1.3}
           >
-            {apt.time_start}
+            {overdue && !compact ? `! ${apt.time_start}` : apt.time_start}
           </Text>
           <Text
             style={{
@@ -451,6 +480,7 @@ export function DayColumn({
   serviceLabel,
   teamColorFor,
   isToday,
+  todayYmd,
   compact = false,
   onEdit,
   onCreateAt,
@@ -465,6 +495,7 @@ export function DayColumn({
   bufferMinutes = 0,
   nowMinutes,
   tintColor,
+  emptyCtaHour,
 }: {
   dateYmd: string;
   appointments: Appointment[];
@@ -472,6 +503,9 @@ export function DayColumn({
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   isToday: boolean;
+  /** Бизнес-сегодня (YYYY-MM-DD) — просрочка записей и затемнение
+   *  прошедших дней. Не задан → оба сигнала выключены. */
+  todayYmd?: string;
   compact?: boolean;
   onEdit: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
@@ -502,6 +536,9 @@ export function DayColumn({
   /** Day-label (city/tag) colour — washes the whole column very lightly
    *  (web DayColumn tintByLabel, Phase I41). Null/undefined → no tint. */
   tintColor?: string | null;
+  /** Час ghost-слота «+ Записать на HH:00» для пустого рабочего дня —
+   *  передаёт только режим «День» (в неделе это шум). */
+  emptyCtaHour?: number;
 }) {
   const t = useThemeColors();
   const blockColors = useBlockColors(teamColorFor);
@@ -620,12 +657,39 @@ export function DayColumn({
         />
       ) : null}
 
+      {/* Перерывы бригады (обед и т.п.) — тот же серый, что нерабочие часы:
+          «сюда не записываем». Подпись только в широком дне. */}
+      {band?.breaks?.map((b, i) =>
+        b.endMin > winStartMin && b.startMin < winEndMin ? (
+          <MinuteBand
+            key={`break-${i}`}
+            fromMin={Math.max(b.startMin, winStartMin)}
+            toMin={Math.min(b.endMin, winEndMin)}
+            winStartMin={winStartMin}
+            winEndMin={winEndMin}
+            color={offHoursFill}
+            label={compact ? undefined : "Перерыв"}
+          />
+        ) : null,
+      )}
+
       {nowMin != null ? (
         // dark: 0.02 неотличима от фона на реальном OLED — 0.055 даёт
         // едва заметный, но читаемый wash (light не трогаем).
         <MinuteBand
           fromMin={winStartMin}
           toMin={winStartMin + nowMin}
+          winStartMin={winStartMin}
+          winEndMin={winEndMin}
+          color={t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)"}
+        />
+      ) : null}
+      {/* Прошедшие дни (неделя) — лёгкое затемнение всей колонки: «что уже
+          позади» видно при сканировании, тем же слоем, что «до сейчас». */}
+      {todayYmd && dateYmd < todayYmd ? (
+        <MinuteBand
+          fromMin={winStartMin}
+          toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
           color={t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)"}
@@ -659,6 +723,75 @@ export function DayColumn({
           backgroundColor: gridLine,
         }}
       />
+
+      {/* Нерабочий день — тихая подпись по центру (web v473: сигнал в
+          шапке, тело чистое; подпись убирает «мёртвую пустоту»). */}
+      {workBand === null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{
+              fontSize: compact ? 11 : 13,
+              fontWeight: "500",
+              color: t.faint,
+            }}
+          >
+            Выходной
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Ghost-слот пустого рабочего дня: один пунктирный час на открытии —
+          первый шаг без обучения («куда тапать»). Только режим «День». */}
+      {emptyCtaHour != null &&
+      appointments.length === 0 &&
+      workBand !== null ? (
+        (() => {
+          const ghostMin = Math.max(
+            winStartMin,
+            Math.min(emptyCtaHour * 60, winEndMin - 60),
+          );
+          return (
+            <Pressable
+              onPress={() => onCreateAt(dateYmd, minToHM(ghostMin))}
+              accessibilityRole="button"
+              accessibilityLabel={`Записать на ${minToHM(ghostMin)}`}
+              className="active:opacity-60"
+              style={{
+                position: "absolute",
+                left: 8,
+                right: 8,
+                top: pct(ghostMin - winStartMin, totalMin),
+                height: pct(60, totalMin),
+                borderRadius: 8,
+                borderWidth: 1.5,
+                borderStyle: "dashed",
+                borderColor: `${t.accent}66`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
+              >
+                {`+ Записать на ${minToHM(ghostMin)}`}
+              </Text>
+            </Pressable>
+          );
+        })()
+      ) : null}
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
           appointment; rendered before the blocks so colour cards sit on top
@@ -723,6 +856,13 @@ export function DayColumn({
               label={clientName(p.apt) || p.apt.comment || "Запись"}
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
               compact={compact}
+              overdue={
+                todayYmd != null &&
+                p.apt.status === "scheduled" &&
+                p.apt.kind === "work" &&
+                (dateYmd < todayYmd ||
+                  (isToday && nowMinutes != null && p.endMin < nowMinutes))
+              }
               onEdit={onEdit}
               onReschedule={onReschedule}
             />
@@ -985,6 +1125,8 @@ export function DayView({
                 serviceLabel={serviceLabel}
                 teamColorFor={teamColorFor}
                 isToday={d === todayYmd}
+                todayYmd={todayYmd}
+                emptyCtaHour={scrollToHour}
                 onEdit={onEdit}
                 onCreateAt={onCreateAt}
                 onReschedule={onReschedule}

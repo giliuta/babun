@@ -143,11 +143,13 @@ export function MiniCalendar({
             {DAY_HEADERS.map((d) => (
               <Text
                 key={d}
+                // 11/700/+0.6 — канон iOS-капса для подписей дней недели.
                 style={{
                   width: CELL,
                   textAlign: "center",
                   fontSize: 11,
-                  fontWeight: "600",
+                  fontWeight: "700",
+                  letterSpacing: 0.6,
                   textTransform: "uppercase",
                   color: t.sub,
                   paddingVertical: 4,
@@ -232,10 +234,11 @@ export function MiniCalendar({
               onSelectDate(new Date(y, (m || 1) - 1, d || 1));
             }}
             accessibilityRole="button"
+            // 44 — минимальная высота нажимаемой области HIG; радиус 14 = input.
             style={({ pressed }) => ({
               marginTop: 8,
-              height: 36,
-              borderRadius: 10,
+              height: 44,
+              borderRadius: 14,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: `${t.accent}1a`,
