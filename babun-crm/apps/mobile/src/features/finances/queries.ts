@@ -14,6 +14,8 @@ import {
   deleteFinanceCategory,
   insertFinanceCategory,
   listFinanceCategories,
+  updateFinanceCategory,
+  type FinanceCategoryPatch,
   type NewFinanceCategory,
 } from "@babun/shared/db/repositories/finance-categories";
 import { supabase } from "@/lib/supabase";
@@ -128,6 +130,16 @@ export function useInsertCategory() {
   return useMutation({
     mutationFn: (draft: NewFinanceCategory) =>
       insertFinanceCategory(supabase, tenantId as string, draft),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+export function useUpdateCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: FinanceCategoryPatch }) =>
+      updateFinanceCategory(supabase, id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });

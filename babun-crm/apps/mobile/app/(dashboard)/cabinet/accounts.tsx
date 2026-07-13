@@ -41,6 +41,7 @@ import {
   useCreateTransfer,
   useInsertAccount,
   useSoftCloseAccount,
+  useUpdateAccount,
   type AccountWithBalance,
 } from "@/features/finances/accounts";
 
@@ -66,6 +67,7 @@ export default function AccountsScreen() {
   const { data: teams = [] } = useTeams();
   const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const insert = useInsertAccount();
+  const updateAcc = useUpdateAccount();
   const closeAcc = useSoftCloseAccount();
   const transfer = useCreateTransfer();
 
@@ -79,6 +81,11 @@ export default function AccountsScreen() {
   );
 
   const [open, setOpen] = useState(false);
+  // Правка счёта (имя/тип/бригада) — раньше опечатку можно было исправить
+  // только «закрыть и создать заново» (аудит P1-9). Начальный баланс после
+  // создания не редактируем: баланс = opening + леджер, задним числом его
+  // меняет только корректирующая операция.
+  const [editingAcc, setEditingAcc] = useState<AccountWithBalance | null>(null);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AccountKind>("cash");
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
@@ -86,9 +93,18 @@ export default function AccountsScreen() {
 
   // Умный дефолт: одна команда — значит счёт её; выбирать нечего.
   const openCreate = (presetBrigadeId?: string) => {
+    setEditingAcc(null);
     setBrigadeId(
       presetBrigadeId ?? (teams.length === 1 ? teams[0].id : null),
     );
+    setOpen(true);
+  };
+  const openEdit = (a: AccountWithBalance) => {
+    setEditingAcc(a);
+    setName(a.name);
+    setKind(a.kind);
+    setBrigadeId(a.brigade_id);
+    setOpening("");
     setOpen(true);
   };
 
@@ -135,6 +151,7 @@ export default function AccountsScreen() {
   };
 
   const reset = () => {
+    setEditingAcc(null);
     setName("");
     setKind("cash");
     setBrigadeId(null);
@@ -147,17 +164,25 @@ export default function AccountsScreen() {
     setOpen(false);
     reset();
   };
-  const canSave = !!name.trim() && !!brigadeId && !insert.isPending;
+  const canSave =
+    !!name.trim() && !!brigadeId && !insert.isPending && !updateAcc.isPending;
 
-  const add = async () => {
+  const submitAccount = async () => {
     if (!brigadeId) return;
     try {
-      await insert.mutateAsync({
-        name: name.trim(),
-        kind,
-        brigade_id: brigadeId,
-        opening_balance: Number(opening.replace(",", ".")) || 0,
-      });
+      if (editingAcc) {
+        await updateAcc.mutateAsync({
+          id: editingAcc.id,
+          patch: { name: name.trim(), kind, brigade_id: brigadeId },
+        });
+      } else {
+        await insert.mutateAsync({
+          name: name.trim(),
+          kind,
+          brigade_id: brigadeId,
+          opening_balance: Number(opening.replace(",", ".")) || 0,
+        });
+      }
       reset();
       setOpen(false);
     } catch (e) {
@@ -166,7 +191,12 @@ export default function AccountsScreen() {
   };
 
   const confirmClose = (a: AccountWithBalance) =>
-    Alert.alert("Закрыть счёт?", `${a.name} — история сохранится`, [
+    Alert.alert(
+      "Закрыть счёт?",
+      a.balance !== 0
+        ? `${a.name} — история сохранится, но остаток ${formatEUR(a.balance)} исчезнет из «Всего на счетах». Сначала переведите деньги на другой счёт.`
+        : `${a.name} — история сохранится`,
+      [
       { text: "Отмена", style: "cancel" },
       {
         text: "Закрыть",
@@ -224,13 +254,14 @@ export default function AccountsScreen() {
             const teamLabel = team?.name ?? "Без бригады";
             return (
               <Pressable
-                // A plain tap must never be destructive — everywhere else in
-                // the app a row tap means «открыть». Closing stays on
-                // long-press, mirrored as an explicit accessibility action so
-                // VoiceOver users (who can't long-press) still reach it.
+                // Тап = открыть редактор (имя/тип/бригада + «Закрыть счёт»
+                // внутри); long-press остаётся быстрым закрытием, зеркален
+                // accessibility-экшеном для VoiceOver.
+                onPress={() => openEdit(item)}
                 onLongPress={() => confirmClose(item)}
+                accessibilityRole="button"
                 accessibilityLabel={`${item.name}, ${teamLabel}, ${formatEUR(item.balance)}`}
-                accessibilityHint="Долгое нажатие закрывает счёт"
+                accessibilityHint="Открывает редактор счёта; долгое нажатие закрывает счёт"
                 accessibilityActions={[
                   { name: "close-account", label: "Закрыть счёт" },
                 ]}
@@ -300,7 +331,9 @@ export default function AccountsScreen() {
         >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={closeCreate} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>Новый счёт</Text>
+          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
+            {editingAcc ? "Счёт" : "Новый счёт"}
+          </Text>
           <Field
             label="Название"
             value={name}
@@ -338,19 +371,37 @@ export default function AccountsScreen() {
               ))}
             </View>
           )}
-          <Field
-            label="Начальный баланс €"
-            value={opening}
-            onChangeText={setOpening}
-            placeholder="0"
-            keyboardType="decimal-pad"
-          />
+          {!editingAcc ? (
+            <Field
+              label="Начальный баланс €"
+              value={opening}
+              onChangeText={setOpening}
+              placeholder="0"
+              keyboardType="decimal-pad"
+            />
+          ) : null}
           <Button
-            label="Создать"
-            onPress={add}
+            label={editingAcc ? "Сохранить" : "Создать"}
+            onPress={submitAccount}
             disabled={!canSave}
-            loading={insert.isPending}
+            loading={insert.isPending || updateAcc.isPending}
           />
+          {editingAcc ? (
+            <Pressable
+              onPress={() => {
+                const acc = editingAcc;
+                closeCreate();
+                confirmClose(acc);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Закрыть счёт ${editingAcc.name}`}
+              className="mt-1 items-center py-3 active:opacity-70"
+            >
+              <Text style={{ fontSize: 16, fontWeight: "500", color: th.danger }}>
+                Закрыть счёт
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
         </KeyboardAvoidingView>
       </Modal>

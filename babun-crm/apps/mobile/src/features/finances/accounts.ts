@@ -7,6 +7,7 @@ import {
   insertAccount,
   listAccounts,
   softCloseAccount,
+  updateAccount,
   type AccountDraft,
 } from "@babun/shared/db/repositories/accounts";
 import {
@@ -47,6 +48,16 @@ export function useInsertAccount() {
   return useMutation({
     mutationFn: (draft: AccountDraft) =>
       insertAccount(supabase, tenantId as string, draft),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+export function useUpdateAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<AccountDraft> }) =>
+      updateAccount(supabase, id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });
