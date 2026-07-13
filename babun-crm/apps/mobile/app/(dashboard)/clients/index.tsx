@@ -15,6 +15,7 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  Bell,
   Check,
   CircleCheck,
   Clock,
@@ -58,7 +59,7 @@ import {
   useCardFields,
   type CardFieldPrefs,
 } from "@/features/clients/card-prefs";
-import { formatShortDateRu } from "@/features/clients/format";
+import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
@@ -124,9 +125,32 @@ function ClientRow({
   if (cardFields.debt && debt > 0)
     figs.push({ key: "debt", text: `долг ${formatEUR(debt)}`, color: DEBT_GOLD });
 
-  // Meta line — last visit (с иконкой часов, web parity) · team · city ·
-  // tags. Каждое поле гейтится своим тогглом.
+  // Meta line — reminder (колокольчик) · last visit (с иконкой часов,
+  // web parity) · team · city · tags. Напоминание не гейтится тогглами:
+  // как и pin, это сигнал, поставленный владельцем руками, — красный,
+  // когда пора действовать (сегодня/прошло), серый — когда впереди.
   const metaSegs: { key: string; node: React.ReactNode }[] = [];
+  const reminder = reminderBadge(client.reminder_at);
+  if (reminder) {
+    metaSegs.push({
+      key: "reminder",
+      node: (
+        <View className="flex-row items-center gap-1">
+          <Bell
+            color={reminder.due ? t.danger : t.sub}
+            size={11}
+            strokeWidth={2.2}
+          />
+          <Text
+            className={`text-[11px] ${reminder.due ? "font-semibold" : ""}`}
+            style={{ color: reminder.due ? t.danger : t.ink }}
+          >
+            {reminder.label}
+          </Text>
+        </View>
+      ),
+    });
+  }
   if (cardFields.last) {
     metaSegs.push({
       key: "last",
@@ -619,6 +643,13 @@ export default function ClientsListScreen() {
               <EmptyState
                 title="Ничего не найдено"
                 subtitle="Измените запрос или сбросьте фильтры"
+                action={{
+                  label: "Сбросить",
+                  onPress: () => {
+                    setQuery("");
+                    setFilter(resetFilters(filter));
+                  },
+                }}
               />
             ) : (
               <EmptyState

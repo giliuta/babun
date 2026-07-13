@@ -25,7 +25,11 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { formatShortDateRu, visitsWord } from "@/features/clients/format";
+import {
+  formatShortDateRu,
+  reminderBadge,
+  visitsWord,
+} from "@/features/clients/format";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
@@ -154,28 +158,19 @@ function EditableLine({
   );
 }
 
-// «Напомнить» (card-actions) пишет reminder_at — до сих пор дата была
-// невидима на карточке. Будущее напоминание — тихая серая строка;
-// сегодня/прошло — красная (пора действовать).
-function reminderLine(
-  reminderAt: string | null | undefined,
-): { text: string; due: boolean } | null {
-  if (!reminderAt) return null;
-  const d = new Date();
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const date = formatShortDateRu(reminderAt) || reminderAt;
-  if (reminderAt === today) return { text: "Напомнить · сегодня", due: true };
-  if (reminderAt < today) return { text: `Напомнить · ${date}`, due: true };
-  return { text: `Напомнить · ${date}`, due: false };
-}
-
 export default function ClientHeader({ client, stats, update }: ClientHeaderProps) {
   const t = useThemeColors();
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
   const hasPhone = phoneDigits.length > 0;
 
   const debt = stats && stats.debt > 0 ? `Долг ${formatEUR(stats.debt)}` : null;
-  const reminder = reminderLine(client.reminder_at);
+  // «Напомнить» (card-actions) пишет reminder_at — строка делает дату
+  // видимой: серая, когда впереди, красная — сегодня/прошло. Тот же
+  // reminderBadge, что у колокольчика в списке клиентов.
+  const badge = reminderBadge(client.reminder_at);
+  const reminder = badge
+    ? { text: `Напомнить · ${badge.label}`, due: badge.due }
+    : null;
   const trustSegments = (
     stats
       ? [

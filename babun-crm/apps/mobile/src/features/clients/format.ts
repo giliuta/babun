@@ -35,3 +35,20 @@ export function visitsWord(n: number): string {
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "визита";
   return "визитов";
 }
+
+/** reminder_at (YYYY-MM-DD) → метка бейджа напоминания: «сегодня», когда
+ *  день настал, иначе короткая дата; due = сегодня или прошло (пора
+ *  действовать — красный). null — напоминания нет. Один источник для
+ *  строки списка и шапки карточки. */
+export function reminderBadge(
+  reminderAt: string | null | undefined,
+): { label: string; due: boolean } | null {
+  if (!reminderAt) return null;
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (reminderAt === today) return { label: "сегодня", due: true };
+  return {
+    label: formatShortDateRu(reminderAt) || reminderAt,
+    due: reminderAt < today,
+  };
+}
