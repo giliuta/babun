@@ -62,6 +62,7 @@ import {
   formatYMD,
   parseHM,
   parseYMD,
+  unitPriceFor,
   type ServiceOverride,
 } from "./helpers";
 
@@ -236,10 +237,21 @@ export function AppointmentSheet({
       setLocationId(appointment.location_id ?? null);
       setOverrides(
         Object.fromEntries(
-          (appointment.services ?? []).map((s) => [
-            s.serviceId,
-            { qty: s.quantity, price: s.pricePerUnit },
-          ]),
+          (appointment.services ?? []).map((s) => {
+            // Seed a price override only when the stored line really was
+            // overridden (differs from the catalog price of its day) or the
+            // catalog can't reprice it (service deleted / not loaded yet).
+            // Untouched lines stay ladder-priced, so qty edits re-tier —
+            // web parity (appointment-services.ts userOverride check).
+            const keepPrice =
+              catalog.size === 0 ||
+              !catalog.has(s.serviceId) ||
+              s.pricePerUnit !== s.originalPrice;
+            return [
+              s.serviceId,
+              { qty: s.quantity, ...(keepPrice ? { price: s.pricePerUnit } : {}) },
+            ];
+          }),
         ),
       );
       setDiscountType(appointment.global_discount?.type ?? null);
@@ -775,7 +787,9 @@ export function AppointmentSheet({
                   const s = catalog.get(id);
                   const ov = overrides[id] ?? {};
                   const qty = ov.qty ?? 1;
-                  const price = ov.price ?? (s ? Number(s.price) : 0);
+                  // Effective price mirrors buildServices: operator override
+                  // wins, otherwise the bulk ladder reprices per quantity.
+                  const price = ov.price ?? (s ? unitPriceFor(s, qty) : 0);
                   const setOv = (p: ServiceOverride) =>
                     setOverrides((o) => ({ ...o, [id]: { ...o[id], ...p } }));
                   return (

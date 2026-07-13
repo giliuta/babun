@@ -133,7 +133,14 @@ void svc;
 // ladder first — pick the tier with the highest min_qty ≤ qty.
 // Falls back to the legacy single-step bulk_threshold / bulk_price
 // for records that haven't been migrated yet.
-export function pricePerUnit(service: Service, qty: number): number {
+// Accepts just the pricing fields so callers with a different Service
+// shape (mobile's Supabase row) can reuse the same ladder.
+export type ServicePricing = Pick<
+  Service,
+  "price" | "bulk_threshold" | "bulk_price" | "price_tiers"
+>;
+
+export function pricePerUnit(service: ServicePricing, qty: number): number {
   const tiers = service.price_tiers ?? [];
   if (tiers.length > 0) {
     // Sort defensively; the UI writes them sorted but we shouldn't
