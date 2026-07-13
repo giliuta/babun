@@ -42,7 +42,13 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check, ChevronLeft, MoreHorizontal } from "lucide-react-native";
+import {
+  Check,
+  ChevronLeft,
+  MoreHorizontal,
+  UserPlus,
+} from "lucide-react-native";
+import * as Contacts from "expo-contacts";
 import {
   createBlankClient,
   type Client,
@@ -115,6 +121,28 @@ export default function ClientDetailScreen() {
   );
   const [duplicate, setDuplicate] = useState<Client | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // «Из контактов»: нативный пикер одного контакта (privacy-friendly —
+  // не требует полного доступа к книге). Имя + первый номер подставляются
+  // в черновик, номер прогоняется через тот же AsYouType.
+  const pickFromContacts = async () => {
+    try {
+      const contact = await Contacts.presentContactPickerAsync();
+      if (!contact) return;
+      const rawPhone = contact.phoneNumbers?.[0]?.number ?? "";
+      const name =
+        contact.name ||
+        [contact.firstName, contact.lastName].filter(Boolean).join(" ");
+      setDraft((d) => ({
+        ...d,
+        full_name: name || d.full_name,
+        phone: rawPhone ? formatPhoneAsYouType(rawPhone) : d.phone,
+      }));
+      setDuplicate(null);
+    } catch {
+      // Пикер закрыт/недоступен — тихо, ручной ввод всегда рядом.
+    }
+  };
 
   const e164 = isDraft ? tryToE164(draft.phone.trim(), DEFAULT_COUNTRY) : null;
   const draftCountry = isDraft
@@ -396,6 +424,20 @@ export default function ClientDetailScreen() {
           // не пикер: он часть номера, редактируется прямо в поле, флаг
           // подстраивается под набранный «+код».
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 12 }}>
+            {/* «Из контактов» — самый быстрый путь: имя+телефон из
+                телефонной книги одним пиком (нативный privacy-пикер). */}
+            <Pressable
+              onPress={pickFromContacts}
+              accessibilityRole="button"
+              accessibilityLabel="Заполнить из контактов"
+              className="mb-1 flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 active:opacity-70"
+              style={{ backgroundColor: `${t.accent}14` }}
+            >
+              <UserPlus color={t.accent} size={14} strokeWidth={2.2} />
+              <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
+                Из контактов
+              </Text>
+            </Pressable>
             <TextInput
               value={draft.full_name}
               onChangeText={(v) => setDraft((d) => ({ ...d, full_name: v }))}
