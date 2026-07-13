@@ -11,14 +11,25 @@ import Animated, {
 import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
-import { pad2 } from "@/features/appointments/helpers";
+import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import { useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
+import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 
 export const RAIL_W = 48;
+// Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
+// страницы пейджера позиционируются абсолютно, полосе нужна явная высота.
+export const HEADER_H = 64;
 const GAP = 3;
+
+// ymd ± дни без TZ-сюрпризов (parseYMD → локальная полночь).
+function addDaysYmd(ymd: string, days: number): string {
+  const d = parseYMD(ymd);
+  d.setDate(d.getDate() + days);
+  return formatYMD(d);
+}
 // Visible window fallback — mirrors shared DEFAULT_CALENDAR_SETTINGS
 // (startHour 0 / endHour 24): the grid shows the whole day, work hours
 // only drive the grey off-hours wash.
@@ -696,12 +707,11 @@ function DayHeader({
       }
       className="active:opacity-70"
       style={{
+        flex: 1,
         alignItems: "center",
+        justifyContent: "center",
         paddingBottom: 4,
         paddingTop: 2,
-        borderBottomWidth: 1,
-        // В тон линиям сетки (20% ink) — шапка «прошита» той же сеткой.
-        borderBottomColor: `${t.ink}33`,
       }}
     >
       <Text
@@ -772,19 +782,20 @@ function DayHeader({
   );
 }
 
-// Single-day grid: hour rail + one day column, vertically scrollable.
+// Single-day grid: hour rail + a live-paged day column (prev/cur/next dates
+// ride the shared pager axis — swipe drags the neighbouring day in under the
+// finger, web/Bumpix-style). Header pages in lockstep with the column.
 export function DayView({
   dateYmd,
-  appointments,
+  apptsFor,
+  todayYmd,
   clientName,
   serviceLabel,
   teamColorFor,
-  isToday,
   onEdit,
   onCreateAt,
   onReschedule,
-  onPrev,
-  onNext,
+  onCommitPage,
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
@@ -798,20 +809,23 @@ export function DayView({
   bufferMinutes,
   nowMinutes,
   scrollToHour,
-  dayLabel,
+  labelFor,
   onDayLabelTap,
 }: {
+  /** Центральная (закоммиченная) дата. Соседние страницы — ±1 день. */
   dateYmd: string;
-  appointments: Appointment[];
+  /** Записи по дате — страницы пейджера сами берут свой день. */
+  apptsFor: (dateYmd: string) => Appointment[];
+  /** Бизнес-сегодня (now-line и заливка даты по страницам). */
+  todayYmd: string;
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
-  isToday: boolean;
   onEdit: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, newStart: string, newEnd: string) => void;
-  onPrev?: () => void;
-  onNext?: () => void;
+  /** Палец долистал страницу: родитель сдвигает день на ±1. */
+  onCommitPage: (dir: 1 | -1) => void;
   startHour?: number;
   endHour?: number;
   stepMinutes?: number;
@@ -833,48 +847,79 @@ export function DayView({
   nowMinutes?: number | null;
   /** Auto-scroll target on open (settings.scrollOpenHour). */
   scrollToHour?: number;
-  /** Метка дня для шапки (город бригады). */
-  dayLabel?: { name: string; color: string } | null;
+  /** Метка дня по дате (undefined — у бригады нет меток, шапки чистые). */
+  labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onDayLabelTap?: () => void;
 }) {
+  const t = useThemeColors();
+  const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
+  const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
+
   return (
     <View style={{ flex: 1 }}>
-      <DayHeader
-        dateYmd={dateYmd}
-        isToday={isToday}
-        label={dayLabel}
-        onLabelTap={onDayLabelTap}
-      />
+      {/* Полоса шапки — страницы дат едут в локстепе с колонками; линия
+          сетки живёт на обёртке и не скользит. */}
+      <View
+        style={{
+          flexDirection: "row",
+          borderBottomWidth: 1,
+          borderBottomColor: `${t.ink}33`,
+        }}
+      >
+        <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
+        <PagedStrip
+          pager={pager}
+          style={{ height: HEADER_H }}
+          renderPage={(off) => {
+            const d = dateAt(off);
+            return (
+              <DayHeader
+                dateYmd={d}
+                isToday={d === todayYmd}
+                label={labelFor?.(d) ?? null}
+                onLabelTap={off === 0 ? onDayLabelTap : undefined}
+              />
+            );
+          }}
+        />
+      </View>
       <ZoomableTimeGrid
         hourHSv={hourHSv}
         onZoom={onZoom}
         startHour={startHour}
         endHour={endHour}
         scrollToHour={scrollToHour}
-        onPrev={onPrev}
-        onNext={onNext}
+        pageGesture={pager.pan}
       >
         <TimeRail startHour={startHour} endHour={endHour} />
-        <DayColumn
-          dateYmd={dateYmd}
-          appointments={appointments}
-          clientName={clientName}
-          serviceLabel={serviceLabel}
-          teamColorFor={teamColorFor}
-          isToday={isToday}
-          onEdit={onEdit}
-          onCreateAt={onCreateAt}
-          onReschedule={onReschedule}
-          startHour={startHour}
-          endHour={endHour}
-          stepMinutes={stepMinutes}
-          hourH={hourH}
-          workStartHour={workStartHour}
-          workEndHour={workEndHour}
-          workBand={workBandFor?.(dateYmd)}
-          tintColor={labelTintFor?.(dateYmd) ?? null}
-          bufferMinutes={bufferMinutes}
-          nowMinutes={nowMinutes}
+        <PagedStrip
+          pager={pager}
+          renderPage={(off) => {
+            const d = dateAt(off);
+            return (
+              <DayColumn
+                dateYmd={d}
+                appointments={apptsFor(d)}
+                clientName={clientName}
+                serviceLabel={serviceLabel}
+                teamColorFor={teamColorFor}
+                isToday={d === todayYmd}
+                onEdit={onEdit}
+                onCreateAt={onCreateAt}
+                onReschedule={onReschedule}
+                startHour={startHour}
+                endHour={endHour}
+                stepMinutes={stepMinutes}
+                hourH={hourH}
+                workStartHour={workStartHour}
+                workEndHour={workEndHour}
+                workBand={workBandFor?.(d)}
+                tintColor={labelTintFor?.(d) ?? null}
+                bufferMinutes={bufferMinutes}
+                nowMinutes={nowMinutes}
+              />
+            );
+          }}
         />
       </ZoomableTimeGrid>
     </View>

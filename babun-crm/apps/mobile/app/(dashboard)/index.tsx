@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS, useSharedValue } from "react-native-reanimated";
+import { GestureDetector } from "react-native-gesture-handler";
+import { useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
@@ -36,6 +36,7 @@ import {
 } from "@/features/calendar/day-cities";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
+import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
@@ -315,7 +316,6 @@ export default function CalendarTab() {
     },
     [activeTeamId, activeTeam?.default_city, dayCities, cities, t.accent],
   );
-  const dayLabel = labelFor(dayYmdForLabel);
   // Phase I38 web parity — есть ли у бригады вообще метки (default_city или
   // список меток). Нет → чип и тап по шапке скрыты полностью, никаких
   // «+ метка»; метки заводятся в настройках команды.
@@ -379,6 +379,21 @@ export default function CalendarTab() {
   const dayAppts = useMemo(
     () => visibleAppts.filter((a) => a.date === dayYmd),
     [visibleAppts, dayYmd],
+  );
+  // Резолвер «записи дня» для страниц пейджера (prev/cur/next день или
+  // неделя) — окно visibleAppts (−30/+60д вокруг якоря) покрывает соседей.
+  const apptsByDate = useMemo(() => {
+    const m = new Map<string, Appointment[]>();
+    for (const a of visibleAppts) {
+      const arr = m.get(a.date) ?? [];
+      arr.push(a);
+      m.set(a.date, arr);
+    }
+    return m;
+  }, [visibleAppts]);
+  const apptsFor = useCallback(
+    (ymd: string) => apptsByDate.get(ymd) ?? [],
+    [apptsByDate],
   );
 
   const weekDays = useMemo(() => {
@@ -475,13 +490,13 @@ export default function CalendarTab() {
     setDay((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const nextMonth = () =>
     setDay((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
-  const monthSwipe = Gesture.Pan()
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-18, 18])
-    .onEnd((e) => {
-      if (e.translationX > 55) runOnJS(prevMonth)();
-      else if (e.translationX < -55) runOnJS(nextMonth)();
-    });
+  // Живой пейджер месяца (та же механика, что в Дне/Неделе — pager.tsx).
+  const monthPager = usePeriodPager({
+    periodKey: `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`,
+    onCommit: (dir) => (dir === 1 ? nextMonth() : prevMonth()),
+  });
+  const monthAt = (off: number) =>
+    new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + off, 1);
 
   // Visible grid window: the active team's calendar_window_start/end wins,
   // else global settings.startHour/endHour (web parity: windowBounds,
@@ -642,15 +657,14 @@ export default function CalendarTab() {
           <View className="flex-1">
             <WeekView
               days={weekDays}
-              appointments={weekAppts}
+              apptsFor={apptsFor}
               today={now}
               labelFor={hasLabels ? labelFor : undefined}
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
               onPickDay={pickDay}
-              onPrev={() => setDay((d) => addDays(d, -7))}
-              onNext={() => setDay((d) => addDays(d, 7))}
+              onCommitPage={(dir) => setDay((d) => addDays(d, dir * 7))}
               {...gridProps}
             />
           </View>
@@ -667,9 +681,9 @@ export default function CalendarTab() {
           <View className="flex-1">
             <DayView
               dateYmd={dayYmd}
-              appointments={dayAppts}
-              isToday={dayYmd === todayYmd}
-              dayLabel={hasLabels ? dayLabel : null}
+              apptsFor={apptsFor}
+              todayYmd={todayYmd}
+              labelFor={hasLabels ? labelFor : undefined}
               onDayLabelTap={
                 hasLabels && activeTeamId
                   ? () => setCityPickerOpen(true)
@@ -678,8 +692,7 @@ export default function CalendarTab() {
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
-              onPrev={() => setDay((d) => addDays(d, -1))}
-              onNext={() => setDay((d) => addDays(d, 1))}
+              onCommitPage={(dir) => setDay((d) => addDays(d, dir))}
               {...gridProps}
             />
           </View>
@@ -691,17 +704,22 @@ export default function CalendarTab() {
           />
         </>
       ) : (
-        <GestureDetector gesture={monthSwipe}>
+        <GestureDetector gesture={monthPager.pan}>
           <View className="flex-1">
-            <MonthView
-              month={monthAnchor}
-              appointments={visibleAppts}
-              teamId={activeTeamId}
-              todayYmd={todayYmd}
-              onPickDay={(d) => {
-                setDay(startOfDay(d));
-                setMode("day");
-              }}
+            <PagedStrip
+              pager={monthPager}
+              renderPage={(off) => (
+                <MonthView
+                  month={monthAt(off)}
+                  appointments={visibleAppts}
+                  teamId={activeTeamId}
+                  todayYmd={todayYmd}
+                  onPickDay={(d) => {
+                    setDay(startOfDay(d));
+                    setMode("day");
+                  }}
+                />
+              )}
             />
           </View>
         </GestureDetector>

@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from "react";
 import {
   Gesture,
   GestureDetector,
+  type PanGesture,
 } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -53,8 +54,7 @@ export function ZoomableTimeGrid({
   startHour,
   endHour,
   scrollToHour,
-  onPrev,
-  onNext,
+  pageGesture,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -65,8 +65,9 @@ export function ZoomableTimeGrid({
   endHour: number;
   /** Auto-scroll target on open (settings.scrollOpenHour). */
   scrollToHour?: number;
-  onPrev?: () => void;
-  onNext?: () => void;
+  /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
+   *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
+  pageGesture?: PanGesture;
   children: ReactNode;
 }) {
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -153,24 +154,17 @@ export function ZoomableTimeGrid({
       if (onZoom) runOnJS(onZoom)(snapped);
     });
 
-  // Horizontal swipe = prev/next period — same thresholds the views always
-  // used. One finger only, so a sloppy pinch release can never page the
-  // calendar. Race: whichever of swipe/pinch activates first wins the touch.
-  const swipe = Gesture.Pan()
-    .maxPointers(1)
-    .activeOffsetX([-25, 25])
-    .failOffsetY([-18, 18])
-    .onEnd((e) => {
-      if (e.translationX > 55 && onPrev) runOnJS(onPrev)();
-      else if (e.translationX < -55 && onNext) runOnJS(onNext)();
-    });
-
   const rowStyle = useAnimatedStyle(() => ({
     height: (endHour - startHour) * hourHSv.value,
   }));
 
+  // Один палец вбок = живой пейджинг периода (pan из pager.tsx, maxPointers 1
+  // + failOffsetY — вертикаль уходит скроллу); два пальца = пинч. Race:
+  // кто активировался первым, тот и владеет касанием.
+  const grid = pageGesture ? Gesture.Race(pageGesture, pinch) : pinch;
+
   return (
-    <GestureDetector gesture={Gesture.Race(swipe, pinch)}>
+    <GestureDetector gesture={grid}>
       {/* Inner detector binds the scroll view's native recognizer into RNGH —
           the handle the pinch's simultaneousWithExternalGesture points at. */}
       <GestureDetector gesture={nativeScroll}>
