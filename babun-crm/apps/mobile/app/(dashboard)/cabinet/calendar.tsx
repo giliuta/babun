@@ -100,6 +100,49 @@ function Stepper({
   );
 }
 
+// Степпер минут (±5) — буфер между записями. Тот же язык, что часовой
+// Stepper выше, но с шагом 5 и подписью «N мин».
+function MinuteStepper({
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+}) {
+  const t = useThemeColors();
+  return (
+    <View className="flex-row items-center gap-3">
+      <Pressable
+        onPress={() => onChange(Math.max(min, value - 5))}
+        style={{ backgroundColor: t.fill }}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Меньше буфер"
+        className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
+      >
+        <Minus color={t.body} size={16} />
+      </Pressable>
+      <Text style={{ color: t.ink }} className="w-16 text-center text-base font-semibold tabular-nums">
+        {value} мин
+      </Text>
+      <Pressable
+        onPress={() => onChange(Math.min(max, value + 5))}
+        style={{ backgroundColor: t.fill }}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Больше буфер"
+        className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
+      >
+        <Plus color={t.body} size={16} />
+      </Pressable>
+    </View>
+  );
+}
+
 // «✓ Сохранено» у заголовка — тихий отклик instant-commit'а: тост на каждый
 // тап степпера слишком шумный (перекрывает контент сверху), поэтому микро-
 // индикатор в right-слоте ScreenHeader, гаснущий сам через ~1.5 с. Каждый
@@ -206,6 +249,24 @@ export default function CalendarSettingsScreen() {
         />
       </SectionCard>
 
+      <SectionEyebrow>Буфер между записями</SectionEyebrow>
+      <SectionCard padded>
+        <Row
+          label="Минимальный зазор"
+          right={
+            <MinuteStepper
+              value={s.bufferMinutes ?? 0}
+              min={0}
+              max={120}
+              onChange={(v) => patch({ bufferMinutes: v })}
+            />
+          }
+        />
+      </SectionCard>
+      <SectionFooter>
+        Слоты ближе буфера к соседней записи бригады закрыты для брони.
+      </SectionFooter>
+
       <SectionEyebrow>Отображение</SectionEyebrow>
       <SectionCard padded>
         <Row
@@ -219,6 +280,10 @@ export default function CalendarSettingsScreen() {
           }
         />
       </SectionCard>
+      <SectionFooter>
+        Если у активной команды задано своё «Скрывать отменённые»
+        (шестерёнка календаря), действует настройка команды.
+      </SectionFooter>
     </Screen>
   );
 }

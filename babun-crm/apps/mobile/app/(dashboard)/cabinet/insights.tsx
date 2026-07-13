@@ -6,6 +6,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu, FORMS_RAZ } from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
@@ -197,7 +198,16 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
 export default function InsightsScreen() {
   const t = useThemeColors();
   const [period, setPeriod] = useState<PeriodKey>("week");
-  const { data: appointments = [] } = useAppointments();
+  // Записи — становой хребет всех KPI: их загрузку/ошибку показываем
+  // честно (раньше сбой сети выглядел как нулевая сводка, аудит P2-21).
+  // Остальные три запроса только резолвят имена — их сбой не нулит цифры.
+  const {
+    data: appointments = [],
+    isLoading: apptsLoading,
+    isError: apptsError,
+    error: apptsErrorObj,
+    refetch: refetchAppts,
+  } = useAppointments();
   const { data: clients = [] } = useClients();
   const { data: teams = [] } = useTeams();
   const { data: services = [] } = useServices();
@@ -266,6 +276,26 @@ export default function InsightsScreen() {
       .slice(0, 3)
       .map(([id, val]) => ({ id, name: clientName.get(id) ?? "—", value: val, valueLabel: formatEUR(val) }));
   }, [completedApts, clientName]);
+
+  if (apptsLoading || apptsError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Сводка" />
+        {apptsLoading ? (
+          <EmptyState state="loading" fill />
+        ) : (
+          <EmptyState
+            fill
+            state="error"
+            subtitle={
+              apptsErrorObj instanceof Error ? apptsErrorObj.message : undefined
+            }
+            action={{ label: "Повторить", onPress: () => void refetchAppts() }}
+          />
+        )}
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={["top"]}>

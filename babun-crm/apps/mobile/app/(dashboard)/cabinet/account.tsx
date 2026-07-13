@@ -187,10 +187,28 @@ function PasswordSection({ email }: { email: string | null }) {
   );
 }
 
-// ─── Устройства: глобальный выход (spec: signOut scope global) ───────
+// ─── Устройства: выход на других / глобальный выход ─────────────────
 function DevicesSection() {
   const t = useThemeColors();
   const [busy, setBusy] = useState(false);
+
+  // Веб-паритет (DevicesSection scope:"others"): гасит чужие сессии,
+  // текущая остаётся жить — «потерял старый телефон», не «паника».
+  const signOutOthers = async () => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "others" });
+      if (error) throw new Error(error.message);
+      Alert.alert("Готово", "Сессии на других устройствах завершены.");
+    } catch (e) {
+      Alert.alert(
+        "Не удалось выйти",
+        e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const signOutEverywhere = () => {
     Alert.alert(
@@ -250,6 +268,22 @@ function DevicesSection() {
         </View>
       </View>
       <Divider inset={56} />
+      <Pressable
+        onPress={() => void signOutOthers()}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel="Выйти на других устройствах"
+        className="px-4 py-3.5 active:opacity-60"
+        style={{ minHeight: 44, opacity: busy ? 0.5 : 1 }}
+      >
+        <Text className="text-base" style={{ color: t.ink }}>
+          Выйти на других устройствах
+        </Text>
+        <Text className="mt-0.5 text-xs" style={{ color: t.sub }}>
+          Это устройство останется в системе
+        </Text>
+      </Pressable>
+      <Divider inset={16} />
       <Pressable
         onPress={signOutEverywhere}
         disabled={busy}

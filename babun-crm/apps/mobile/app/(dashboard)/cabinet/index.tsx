@@ -169,10 +169,12 @@ function GroupLabel({ children }: { children: string }) {
 }
 
 // Герой-карта аккаунта (веб AccountHero): градиент accent→indigo→purple
-// 135°, кольцо-аватар с инициалами компании, имя + email. Display-only —
-// поля редактируются в «Личной информации» одним тапом ниже.
+// 135°, кольцо-аватар с инициалами компании, имя + email. Тап ведёт в
+// «Личную информацию» — карту с именем компании естественно тыкают,
+// чтобы это имя поменять.
 function AccountHero() {
   const t = useThemeColors();
+  const router = useRouter();
   const { session } = useSession();
   const { data: tenant } = useTenant();
 
@@ -189,7 +191,13 @@ function AccountHero() {
       .slice(0, 2) || "B";
 
   return (
-    <View className="mx-3 mt-2 overflow-hidden rounded-[20px]">
+    <Pressable
+      onPress={() => router.push("/cabinet/business")}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, открыть личную информацию`}
+      className="mx-3 mt-2 overflow-hidden rounded-[20px]"
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+    >
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
           {/* 135° как в вебе: var(--accent) → --system-indigo 60% → --system-purple */}
@@ -230,7 +238,7 @@ function AccountHero() {
           ) : null}
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

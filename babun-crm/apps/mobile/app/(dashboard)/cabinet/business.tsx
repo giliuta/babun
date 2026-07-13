@@ -104,7 +104,7 @@ export default function BusinessScreen() {
   if (isLoading || error) {
     return (
       <Screen edges={["top"]}>
-        <ScreenHeader title="Бизнес" />
+        <ScreenHeader title="Личная информация" />
         {isLoading ? (
           <EmptyState state="loading" fill />
         ) : (
@@ -116,7 +116,7 @@ export default function BusinessScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Бизнес" />
+      <ScreenHeader title="Личная информация" />
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === "ios" ? "padding" : undefined}
