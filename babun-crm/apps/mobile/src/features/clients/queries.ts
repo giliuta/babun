@@ -83,6 +83,31 @@ export function useUpdateClient(id: string) {
   });
 }
 
+// Как useUpdateClient, но id приходит с вызовом — для действий по строке
+// СПИСКА (long-press меню: закрепить, напомнить), где хук на каждый ряд
+// не заведёшь. Семантика кэша и ошибок — та же.
+export function useUpdateClientById() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<Client> }) => {
+      if (!tenantId) throw new Error("Нет активного тенанта");
+      return updateClient(supabase, id, patch, tenantId);
+    },
+    onSuccess: (updated, { id }) => {
+      qc.setQueryData(["client", id], updated);
+      qc.invalidateQueries({ queryKey: ["client", id] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: (e) => {
+      Alert.alert(
+        "Не удалось сохранить",
+        (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
+      );
+    },
+  });
+}
+
 export function useCreateClient() {
   const tenantId = useTenantId();
   const qc = useQueryClient();

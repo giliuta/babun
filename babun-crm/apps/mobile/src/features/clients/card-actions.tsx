@@ -36,19 +36,13 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { useChats } from "@/features/chats/store";
 import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
 import { useBookingNav } from "@/features/clients/card-booking";
-import { formatShortDateRu } from "@/features/clients/format";
+import { formatShortDateRu, ymdInDays } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 
 interface CardActionsProps {
   client: Client;
   stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => void;
-}
-
-function ymdInDays(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export default function CardActions({ client, stats, update }: CardActionsProps) {

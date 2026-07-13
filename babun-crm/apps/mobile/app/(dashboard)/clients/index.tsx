@@ -15,9 +15,9 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  BarChart3,
   Bell,
   Check,
-  CircleCheck,
   Clock,
   Phone,
   Pin,
@@ -39,12 +39,13 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
-import { ICON, TYPE } from "@/components/ui/tokens";
+import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import {
   useClients,
   useClientTags,
   useDeleteClients,
+  useUpdateClientById,
 } from "@/features/clients/queries";
 import {
   buildSegmentCounts,
@@ -59,7 +60,11 @@ import {
   useCardFields,
   type CardFieldPrefs,
 } from "@/features/clients/card-prefs";
-import { formatShortDateRu, reminderBadge } from "@/features/clients/format";
+import {
+  formatShortDateRu,
+  reminderBadge,
+  ymdInDays,
+} from "@/features/clients/format";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
@@ -323,6 +328,7 @@ export default function ClientsListScreen() {
   const { data: teams = [] } = useTeams();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   const deleteClients = useDeleteClients();
+  const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -390,6 +396,97 @@ export default function ClientsListScreen() {
   };
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;
+
+  // ── Long-press меню клиента (web v313 parity: Сообщение · Звонок ·
+  // Выбрать несколько · Закрепить · Напомнить · Удалить). «Открыть
+  // карточку» из веб-меню опущено — тап и так открывает карточку.
+  const openRemindMenu = (c: Client) => {
+    Alert.alert("Напомнить о клиенте", c.full_name || undefined, [
+      {
+        text: "Завтра",
+        onPress: () =>
+          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(1) } }),
+      },
+      {
+        text: "Через неделю",
+        onPress: () =>
+          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(7) } }),
+      },
+      {
+        text: "Через месяц",
+        onPress: () =>
+          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(30) } }),
+      },
+      ...(c.reminder_at
+        ? [
+            {
+              text: "Убрать напоминание",
+              style: "destructive" as const,
+              onPress: () =>
+                updateById.mutate({ id: c.id, patch: { reminder_at: null } }),
+            },
+          ]
+        : []),
+      { text: "Отмена", style: "cancel" as const },
+    ]);
+  };
+
+  const confirmDeleteOne = (c: Client) => {
+    Alert.alert(
+      "Удалить клиента?",
+      `${c.full_name || "Клиент"} и вся его история будут удалены безвозвратно.`,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { deleted } = await deleteClients.mutateAsync([c.id]);
+              if (deleted > 0) toast("Клиент удалён", "success");
+            } catch (e) {
+              Alert.alert("Не удалось удалить", (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const openClientMenu = (c: Client) => {
+    const digits = c.phone?.replace(/\D/g, "") ?? "";
+    const pinned = Boolean(c.pinned_at);
+    Alert.alert(c.full_name || "Клиент", undefined, [
+      ...(digits
+        ? [
+            {
+              text: "Позвонить",
+              onPress: () => Linking.openURL(`tel:${digits}`),
+            },
+            {
+              text: "Сообщение",
+              onPress: () => Linking.openURL(`sms:${digits}`),
+            },
+          ]
+        : []),
+      { text: "Выбрать несколько", onPress: () => enterSelection(c.id) },
+      {
+        text: pinned ? "Открепить" : "Закрепить",
+        onPress: () =>
+          updateById.mutate({
+            id: c.id,
+            patch: { pinned_at: pinned ? null : new Date().toISOString() },
+          }),
+      },
+      { text: "Напомнить", onPress: () => openRemindMenu(c) },
+      {
+        text: "Удалить",
+        style: "destructive",
+        onPress: () => confirmDeleteOne(c),
+      },
+      { text: "Отмена", style: "cancel" },
+    ]);
+  };
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
   const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
@@ -507,81 +604,111 @@ export default function ClientsListScreen() {
           </Pressable>
         </View>
       ) : (
-        <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
-          <Text style={{ ...TYPE.display, color: t.ink }}>Клиенты</Text>
-          <View className="flex-row items-center gap-1">
-            {/* Видимый дубль long-press — вход в мультивыбор из шапки. */}
-            <Pressable
-              onPress={() => enterSelection()}
-              accessibilityRole="button"
-              accessibilityLabel="Выбрать несколько"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-              style={{ backgroundColor: t.fill }}
-            >
-              <CircleCheck color={t.body} size={20} />
-            </Pressable>
-            {/* Настройки клиентов. */}
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: "/clients/settings",
-                  params: { sort: filter.sort },
-                })
-              }
-              accessibilityRole="button"
-              accessibilityLabel="Настройки клиентов"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-              style={{ backgroundColor: t.fill }}
-            >
-              <Settings color={t.body} size={20} />
-            </Pressable>
-            {/* Создание клиента — «+» в шапке (веб-паритет: apps/web clients
-                header). Кобальт = основное действие. */}
-            <Pressable
-              onPress={() => router.push("/clients/new")}
-              accessibilityRole="button"
-              accessibilityLabel="Новый клиент"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-80"
-              style={{ backgroundColor: t.fill }}
-            >
-              <Plus color={t.accent} size={22} />
-            </Pressable>
-          </View>
-        </View>
-      )}
+        // Шапка в анатомии CalendarHeader (правило единого стиля): полоса
+        // на surface с нижним разделителем, шестерёнка СЛЕВА (44×44,
+        // t.sub 21/2), по центру — поиск (заголовок-дубль «Клиенты»
+        // убран: имя вкладки уже в таб-баре), справа — аналитика и «+».
+        // Вход в мультивыбор переехал в long-press меню строки (web v313).
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            paddingHorizontal: 8,
+            minHeight: 48,
+            backgroundColor: t.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: t.separator,
+          }}
+        >
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/clients/settings",
+                params: { sort: filter.sort },
+              })
+            }
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Настройки клиентов"
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 22,
+              backgroundColor: pressed ? t.pressed : "transparent",
+            })}
+          >
+            <Settings color={t.sub} size={21} strokeWidth={2} />
+          </Pressable>
 
-      {/* Поиск и фильтры прячем в режиме выбора — фокус на наборе. */}
-      {!selecting ? (
-        <>
           <View
-            className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
+            className="h-9 flex-1 flex-row items-center gap-1.5 rounded-[10px] px-2.5"
             style={{ backgroundColor: t.fill }}
           >
-            <Search color={t.faint} size={18} />
+            <Search color={t.faint} size={16} />
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Поиск по имени, телефону, адресу"
+              placeholder="Имя, телефон, адрес"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
               keyboardAppearance={t.dark ? "dark" : "light"}
               autoCapitalize="none"
               clearButtonMode="while-editing"
-              className="flex-1 py-2.5 text-base"
-              style={{ color: t.ink }}
+              className="flex-1 text-[15px]"
+              style={{ color: t.ink, paddingVertical: 0 }}
             />
           </View>
 
-          <ClientsFilterBar
-            totalCount={clients.length}
-            foundCount={result.filtered.length}
-            activeCount={result.activeCount}
-            tokens={result.activeTokens}
-            onOpen={() => setSheetOpen(true)}
-            onRemoveToken={removeToken}
-            onReset={() => setFilter(resetFilters(filter))}
-          />
-        </>
+          <Pressable
+            onPress={() => router.push("/cabinet/insights")}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Аналитика по клиентам"
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 22,
+              backgroundColor: pressed ? t.pressed : "transparent",
+            })}
+          >
+            <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => router.push("/clients/new")}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Новый клиент"
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 22,
+              backgroundColor: pressed ? t.pressed : "transparent",
+            })}
+          >
+            <Plus color={t.accent} size={24} strokeWidth={2.2} />
+          </Pressable>
+        </View>
+      )}
+
+      {/* Фильтры прячем в режиме выбора — фокус на наборе. */}
+      {!selecting ? (
+        <ClientsFilterBar
+          totalCount={clients.length}
+          foundCount={result.filtered.length}
+          activeCount={result.activeCount}
+          tokens={result.activeTokens}
+          onOpen={() => setSheetOpen(true)}
+          onRemoveToken={removeToken}
+          onReset={() => setFilter(resetFilters(filter))}
+        />
       ) : null}
 
       {isLoading ? (
@@ -623,7 +750,7 @@ export default function ClientsListScreen() {
                     : router.push(`/clients/${item.id}`)
                 }
                 onLongPress={() =>
-                  selecting ? toggleId(item.id) : enterSelection(item.id)
+                  selecting ? toggleId(item.id) : openClientMenu(item)
                 }
               />
             );

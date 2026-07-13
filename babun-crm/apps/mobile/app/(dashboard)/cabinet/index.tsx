@@ -17,6 +17,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import {
   BarChart3,
+  BookUser,
   Boxes,
   CalendarCheck2,
   CalendarClock,
@@ -373,6 +374,16 @@ export default function CabinetHome() {
 
         <GroupLabel>Справочники</GroupLabel>
         <SectionCard>
+          {/* Настройки списка клиентов — тот же экран, что за шестерёнкой
+              на вкладке Клиенты (правило: меню настроек живёт в Кабинете). */}
+          <MenuRow
+            icon={BookUser}
+            tone={TILE.indigo}
+            title="Клиенты"
+            desc="Что показывать, сортировка, импорт"
+            href={"/clients/settings" as Href}
+          />
+          <Divider inset={58} />
           <MenuRow
             icon={Scissors}
             tone={TILE.blue}

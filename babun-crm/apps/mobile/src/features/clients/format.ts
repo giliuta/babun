@@ -52,3 +52,11 @@ export function reminderBadge(
     due: reminderAt < today,
   };
 }
+
+/** YYYY-MM-DD через n дней (локальная TZ) — пресеты «Напомнить»
+ *  (карточка и long-press меню списка). */
+export function ymdInDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
