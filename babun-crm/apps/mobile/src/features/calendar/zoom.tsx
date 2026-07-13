@@ -111,7 +111,20 @@ export function ZoomableTimeGrid({
     return Math.min(HOUR_H_MAX, Math.max(HOUR_H_MIN, fit));
   };
 
+  // The scroll view's own (native) pan recognizer, wrapped into RNGH so the
+  // pinch can declare a relation with it. Without the explicit relation the
+  // native pan claims any sloppy two-finger touch (real fingers always drift
+  // the centroid) and the pinch is cancelled before it activates — zoom
+  // «worked» with the simulator's perfectly symmetric Option-pinch and never
+  // on a device.
+  const nativeScroll = Gesture.Native();
+
   const pinch = Gesture.Pinch()
+    // Recognize alongside the native scroll instead of losing to it. The
+    // first pinch frame sets `pinching` → scrollEnabled(false) cancels the
+    // native pan mid-gesture, so exactly one writer (the scrollTo below)
+    // drives the offset for the rest of the gesture.
+    .simultaneousWithExternalGesture(nativeScroll)
     .onStart((e) => {
       pinching.value = true;
       baseH.value = hourHSv.value;
@@ -141,8 +154,10 @@ export function ZoomableTimeGrid({
     });
 
   // Horizontal swipe = prev/next period — same thresholds the views always
-  // used. Race: whichever of swipe/pinch activates first wins the touch.
+  // used. One finger only, so a sloppy pinch release can never page the
+  // calendar. Race: whichever of swipe/pinch activates first wins the touch.
   const swipe = Gesture.Pan()
+    .maxPointers(1)
     .activeOffsetX([-25, 25])
     .failOffsetY([-18, 18])
     .onEnd((e) => {
@@ -156,41 +171,45 @@ export function ZoomableTimeGrid({
 
   return (
     <GestureDetector gesture={Gesture.Race(swipe, pinch)}>
-      <Animated.ScrollView
-        ref={scrollRef}
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: PAD_TOP,
-          paddingBottom: PAD_BOTTOM,
-        }}
-        onScroll={onScroll}
-        animatedProps={scrollProps}
-        onLayout={(e) => {
-          viewportH.value = e.nativeEvent.layout.height;
-          // A viewport/window change can push the fit floor above the
-          // current zoom (e.g. wider visible hours in settings) — snap up
-          // so the grid never sits detached above a void.
-          const fit = Math.min(
-            HOUR_H_MAX,
-            Math.max(
-              HOUR_H_MIN,
-              Math.ceil(
-                (e.nativeEvent.layout.height - PAD_TOP - PAD_BOTTOM) /
-                  (endHour - startHour),
+      {/* Inner detector binds the scroll view's native recognizer into RNGH —
+          the handle the pinch's simultaneousWithExternalGesture points at. */}
+      <GestureDetector gesture={nativeScroll}>
+        <Animated.ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingTop: PAD_TOP,
+            paddingBottom: PAD_BOTTOM,
+          }}
+          onScroll={onScroll}
+          animatedProps={scrollProps}
+          onLayout={(e) => {
+            viewportH.value = e.nativeEvent.layout.height;
+            // A viewport/window change can push the fit floor above the
+            // current zoom (e.g. wider visible hours in settings) — snap up
+            // so the grid never sits detached above a void.
+            const fit = Math.min(
+              HOUR_H_MAX,
+              Math.max(
+                HOUR_H_MIN,
+                Math.ceil(
+                  (e.nativeEvent.layout.height - PAD_TOP - PAD_BOTTOM) /
+                    (endHour - startHour),
+                ),
               ),
-            ),
-          );
-          if (hourHSv.value < fit) {
-            hourHSv.value = fit;
-            onZoom?.(fit);
-          }
-        }}
-        scrollEventThrottle={16}
-      >
-        <Animated.View style={[{ flexDirection: "row" }, rowStyle]}>
-          {children}
-        </Animated.View>
-      </Animated.ScrollView>
+            );
+            if (hourHSv.value < fit) {
+              hourHSv.value = fit;
+              onZoom?.(fit);
+            }
+          }}
+          scrollEventThrottle={16}
+        >
+          <Animated.View style={[{ flexDirection: "row" }, rowStyle]}>
+            {children}
+          </Animated.View>
+        </Animated.ScrollView>
+      </GestureDetector>
     </GestureDetector>
   );
 }
