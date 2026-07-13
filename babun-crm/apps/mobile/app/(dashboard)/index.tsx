@@ -1,30 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Pressable,
-  RefreshControl,
-  SectionList,
-  Text,
-  View,
-} from "react-native";
+import { Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { getDebtAmount } from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
-import { StatusBadge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatYMD,
-  humanDay,
   pad2,
   parseYMD,
 } from "@/features/appointments/helpers";
@@ -45,6 +35,7 @@ import {
   useSetDayCity,
 } from "@/features/calendar/day-cities";
 import { MonthView } from "@/features/calendar/MonthView";
+import { AgendaView } from "@/features/calendar/AgendaView";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
@@ -98,60 +89,6 @@ function parseHourHM(s: string | null | undefined): number | null {
   const [h, m] = s.split(":").map(Number);
   const val = h + m / 60;
   return val >= 0 && val <= 24 ? val : null;
-}
-
-function AppointmentRow({
-  apt,
-  clientName,
-  serviceSummary,
-  onPress,
-}: {
-  apt: Appointment;
-  clientName: string;
-  serviceSummary: string;
-  onPress: () => void;
-}) {
-  const th = useThemeColors();
-  const debt = getDebtAmount(apt);
-  return (
-    <Pressable
-      onPress={onPress}
-      className="flex-row items-center px-4 py-3 active:opacity-60"
-      style={{ backgroundColor: th.surface }}
-    >
-      <View className="w-14">
-        <Text className="text-sm font-semibold tabular-nums" style={{ color: th.ink }}>
-          {apt.time_start}
-        </Text>
-        <Text className="text-xs tabular-nums" style={{ color: th.sub }}>{apt.time_end}</Text>
-      </View>
-      <View className="ml-2 flex-1 border-l pl-3" style={{ borderColor: th.separator }}>
-        <Text className="text-base font-semibold" style={{ color: th.ink }} numberOfLines={1}>
-          {clientName || apt.comment || "Запись"}
-        </Text>
-        {serviceSummary || apt.comment ? (
-          <Text className="text-sm" style={{ color: th.sub }} numberOfLines={1}>
-            {serviceSummary || apt.comment}
-          </Text>
-        ) : null}
-        <View className="mt-1 flex-row items-center gap-2">
-          <StatusBadge status={apt.status} />
-        </View>
-      </View>
-      {apt.total_amount ? (
-        <View className="ml-2 items-end">
-          <Text className="text-sm font-semibold tabular-nums" style={{ color: th.ink }}>
-            {formatEUR(apt.total_amount)}
-          </Text>
-          {debt > 0 ? (
-            <Text className="text-xs tabular-nums" style={{ color: th.danger }}>
-              {formatEUR(debt)} к оплате
-            </Text>
-          ) : null}
-        </View>
-      ) : null}
-    </Pressable>
-  );
 }
 
 export default function CalendarTab() {
@@ -469,12 +406,6 @@ export default function CalendarTab() {
     return [...byDate.entries()].map(([d, data]) => ({ title: d, data }));
   }, [visibleAppts, day]);
 
-  const agendaHeader = (ymdStr: string) => {
-    if (ymdStr === todayYmd) return "Сегодня";
-    if (ymdStr === tomorrowYmd) return "Завтра";
-    return humanDay(ymdStr);
-  };
-
   const openCreate = (defaults?: typeof bookDefaults) => {
     setEditing(null);
     // New records belong to the team calendar currently open (web parity:
@@ -682,39 +613,17 @@ export default function CalendarTab() {
       ) : error ? (
         <EmptyState state="error" fill subtitle={(error as Error).message} />
       ) : mode === "agenda" ? (
-        <SectionList
-          style={{ flex: 1 }}
+        <AgendaView
           sections={agendaSections}
-          keyExtractor={(item) => item.id}
-          stickySectionHeadersEnabled
-          contentContainerStyle={{ paddingBottom: 96, flexGrow: 1 }}
-          refreshControl={
-            <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />
-          }
-          renderSectionHeader={({ section }) => (
-            <Text
-              className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wider"
-              style={{ backgroundColor: t.canvas, color: t.sub }}
-            >
-              {agendaHeader(section.title)}
-            </Text>
-          )}
-          renderItem={({ item }) => (
-            <AppointmentRow
-              apt={item}
-              clientName={clientName(item)}
-              serviceSummary={serviceSummaryFor(item)}
-              onPress={() => openEdit(item)}
-            />
-          )}
-          ItemSeparatorComponent={() => <View className="h-px" style={{ backgroundColor: t.separator }} />}
-          ListEmptyComponent={
-            <EmptyState
-              title="Записей не запланировано"
-              subtitle={`Ближайшие ${AGENDA_HORIZON_DAYS} дней пусты`}
-              action={{ label: "Новая запись", onPress: () => openCreate() }}
-            />
-          }
+          todayYmd={todayYmd}
+          tomorrowYmd={tomorrowYmd}
+          horizonDays={AGENDA_HORIZON_DAYS}
+          clientName={clientName}
+          serviceSummary={serviceSummaryFor}
+          onEdit={openEdit}
+          onCreateNew={() => openCreate()}
+          refreshing={isRefetching}
+          onRefresh={onRefresh}
         />
       ) : mode === "week" || mode === "3days" ? (
         <>
@@ -773,6 +682,7 @@ export default function CalendarTab() {
             <MonthView
               month={monthAnchor}
               appointments={visibleAppts}
+              teamId={activeTeamId}
               todayYmd={todayYmd}
               onPickDay={(d) => {
                 setDay(startOfDay(d));

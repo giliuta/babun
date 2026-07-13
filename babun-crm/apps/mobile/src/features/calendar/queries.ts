@@ -1,9 +1,12 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listAppointments as listAppointmentsCached } from "@babun/shared/sync/appointmentsCached";
 import { listDayExtras } from "@babun/shared/db/repositories/day-extras";
 import type { Appointment } from "@babun/shared/local/appointments";
+import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useServices } from "@/features/services/queries";
 
 // PostgREST silently caps every response at 1000 rows (Supabase default
 // max-rows), so an unordered, unlimited listAppointments truncates a busy
@@ -127,4 +130,20 @@ export function useDayExtras() {
     enabled: !!tenantId,
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });
+}
+
+// Services in the runtime shape computeDayFinance expects (shared local
+// Service — it only touches id + material_costs). DB rows carry the same
+// shape with material_costs as jsonb; guard it in case of bad rows. Shared
+// by the day-finance footer and the month money mini-list.
+export function useFinanceServices(): Service[] {
+  const { data: services = [] } = useServices();
+  return useMemo(
+    () =>
+      services.map((s) => ({
+        ...s,
+        material_costs: Array.isArray(s.material_costs) ? s.material_costs : [],
+      })) as unknown as Service[],
+    [services],
+  );
 }

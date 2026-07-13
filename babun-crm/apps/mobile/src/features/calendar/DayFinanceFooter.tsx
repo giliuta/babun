@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { Service } from "@babun/shared/local/services";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   computeDayFinance,
@@ -11,8 +10,7 @@ import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
-import { useServices } from "@/features/services/queries";
-import { useDayExtras } from "@/features/calendar/queries";
+import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -39,7 +37,7 @@ export function DayFinanceFooter({
   onTapDay?: (d: Date) => void;
 }) {
   const t = useThemeColors();
-  const { data: services = [] } = useServices();
+  const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
 
   const byDate = useMemo(() => {
@@ -51,18 +49,6 @@ export function DayFinanceFooter({
     }
     return m;
   }, [appointments]);
-
-  // DB service rows carry the same runtime shape as the shared local
-  // Service (material_costs is a jsonb array) — computeDayFinance only
-  // touches id + material_costs. Guard the jsonb in case of bad rows.
-  const sharedServices = useMemo(
-    () =>
-      services.map((s) => ({
-        ...s,
-        material_costs: Array.isArray(s.material_costs) ? s.material_costs : [],
-      })) as unknown as Service[],
-    [services],
-  );
 
   return (
     <View

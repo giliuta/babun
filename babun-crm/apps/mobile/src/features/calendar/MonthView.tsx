@@ -1,6 +1,10 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { formatEUR } from "@babun/shared/common/utils/money";
+import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
+import { getDayExtras } from "@babun/shared/local/day-extras";
+import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { useThemeColors } from "@/theme/colors";
 
 const WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -10,16 +14,23 @@ const ymd = (d: Date) =>
     d.getDate(),
   ).padStart(2, "0")}`;
 
-// Month overview: 6×7 grid (Monday-first), each cell shows the day number and
-// an appointment-count chip. Tapping a day opens it in the Day view.
+// Month overview — web MonthView parity: bordered 6×7 grid (Monday-first),
+// out-of-month cells on the grouped canvas, today = filled accent pill,
+// weekend numbers red, appointment-count chip top-right, and the per-day
+// money mini-list (planned / earned / spent / profit) from the same
+// day-summary source as the week footer, so the two can never disagree.
 export function MonthView({
   month,
   appointments,
+  teamId,
   todayYmd,
   onPickDay,
 }: {
   month: Date; // first of the displayed month
   appointments: Appointment[];
+  /** Active team — day extras are stored per (team, date); with no team
+   *  selected extras are skipped (same as the day-finance footer). */
+  teamId: string | null;
   /** Business-timezone today (YYYY-MM-DD); falls back to device time. */
   todayYmd?: string;
   onPickDay: (d: Date) => void;
@@ -33,23 +44,46 @@ export function MonthView({
     return out;
   }, [month]);
 
-  const countByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const a of appointments) map.set(a.date, (map.get(a.date) ?? 0) + 1);
+  const byDay = useMemo(() => {
+    const map = new Map<string, Appointment[]>();
+    for (const a of appointments) {
+      const arr = map.get(a.date) ?? [];
+      arr.push(a);
+      map.set(a.date, arr);
+    }
     return map;
   }, [appointments]);
 
+  const services = useFinanceServices();
+  const { data: extrasMap = {} } = useDayExtras();
+
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());
+  const accentTint = t.dark ? "rgba(44,91,224,0.22)" : "rgba(44,91,224,0.12)";
 
   return (
-    <View className="flex-1 px-1.5 pt-1">
-      <View className="flex-row">
-        {WD.map((w) => (
+    <View style={{ flex: 1, backgroundColor: t.surface }}>
+      {/* weekday header — weekend columns red (web: red at 60%) */}
+      <View
+        className="flex-row"
+        style={{
+          backgroundColor: t.canvas,
+          borderBottomWidth: 1,
+          borderBottomColor: t.separator,
+        }}
+      >
+        {WD.map((w, i) => (
           <Text
             key={w}
-            className="flex-1 py-1 text-center text-xs font-medium"
-            style={{ color: t.faint }}
+            className="flex-1 py-2 text-center"
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: i >= 5 ? t.danger : t.sub,
+              opacity: i >= 5 ? 0.6 : 1,
+            }}
           >
             {w}
           </Text>
@@ -62,49 +96,84 @@ export function MonthView({
               const key = ymd(d);
               const inMonth = d.getMonth() === month.getMonth();
               const isToday = key === todayStr;
-              const count = countByDay.get(key) ?? 0;
+              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+              const dayAppts = byDay.get(key);
+              const count = dayAppts?.length ?? 0;
+              const extras = getDayExtras(extrasMap, teamId, key);
+              const totals =
+                count > 0 || extras.length > 0
+                  ? computeDayFinance(dayAppts ?? [], services, extras)
+                  : null;
               return (
                 <Pressable
                   key={key}
                   onPress={() => onPickDay(d)}
                   accessibilityRole="button"
                   accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
-                  className="flex-1 items-center pt-1.5 active:opacity-60"
-                  style={{ borderTopWidth: 1, borderTopColor: t.separator }}
+                  className="flex-1 active:opacity-60"
+                  style={{
+                    padding: 4,
+                    borderRightWidth: 1,
+                    borderBottomWidth: 1,
+                    borderColor: t.separator,
+                    backgroundColor: inMonth ? t.surface : t.canvas,
+                    overflow: "hidden",
+                  }}
                 >
-                  <View
-                    className="h-7 w-7 items-center justify-center rounded-full"
-                    style={isToday ? { backgroundColor: t.accent } : undefined}
-                  >
-                    <Text
-                      className="text-sm"
-                      style={{
-                        color: isToday
-                          ? "#fff"
-                          : inMonth
-                            ? t.ink
-                            : t.faint,
-                        fontWeight: isToday ? "700" : undefined,
-                      }}
-                    >
-                      {d.getDate()}
-                    </Text>
-                  </View>
-                  {count > 0 ? (
-                    <View
-                      className="mt-0.5 rounded-full px-1.5"
-                      style={{ backgroundColor: t.dark ? "rgba(44,91,224,0.22)" : "rgba(44,91,224,0.12)" }}
-                    >
-                      <Text
-                        className="text-[10px] font-semibold"
-                        style={{ color: t.accent }}
+                  <View className="w-full flex-row items-center justify-between">
+                    {isToday ? (
+                      <View
+                        className="h-6 w-6 items-center justify-center rounded-full"
+                        style={{ backgroundColor: t.accent }}
                       >
-                        {count}
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: "#fff" }}>
+                          {d.getDate()}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "600",
+                          color: inMonth
+                            ? isWeekend
+                              ? t.danger
+                              : t.ink
+                            : t.faint,
+                        }}
+                      >
+                        {d.getDate()}
                       </Text>
+                    )}
+                    {count > 0 ? (
+                      <View
+                        className="rounded-full px-1.5"
+                        style={{ backgroundColor: accentTint }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            lineHeight: 16,
+                            color: t.accent,
+                          }}
+                        >
+                          {count}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {totals?.hasAny ? (
+                    <View className="mt-0.5 w-full">
+                      <MoneyRow v={totals.planned} color={t.sub} skipZero />
+                      <MoneyRow v={totals.earned} color={t.success} skipZero />
+                      <MoneyRow v={totals.spent} color={t.danger} skipZero />
+                      <MoneyRow
+                        v={totals.profit}
+                        color={totals.profit < 0 ? t.danger : t.accent}
+                      />
                     </View>
-                  ) : (
-                    <View className="mt-0.5 h-3.5" />
-                  )}
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -112,5 +181,28 @@ export function MonthView({
         ))}
       </View>
     </View>
+  );
+}
+
+// One line of the in-cell money mini-list. Zero rows are dropped (web
+// parity) — except profit, which always renders when the day has numbers.
+function MoneyRow({
+  v,
+  color,
+  skipZero,
+}: {
+  v: number;
+  color: string;
+  skipZero?: boolean;
+}) {
+  if (skipZero && v === 0) return null;
+  return (
+    <Text
+      className="tabular-nums"
+      numberOfLines={1}
+      style={{ fontSize: 10, fontWeight: "600", lineHeight: 13, color }}
+    >
+      {formatEUR(v)}
+    </Text>
   );
 }
