@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import {
   Alert,
   FlatList,
@@ -6,11 +6,38 @@ import {
   Modal,
   Platform,
   Pressable,
+  Switch,
   Text,
   View,
 } from "react-native";
-import { Trash2 } from "lucide-react-native";
-import { generatePersonalEventTypeId } from "@babun/shared/local/personal-event-types";
+import {
+  Bell,
+  Book,
+  Briefcase,
+  Calendar,
+  Car,
+  Coffee,
+  Dumbbell,
+  Gift,
+  GraduationCap,
+  Heart,
+  Home,
+  Moon,
+  Music,
+  Navigation,
+  Phone,
+  Plane,
+  ShoppingBag,
+  Star,
+  Stethoscope,
+  Tag,
+  Trash2,
+  Users,
+} from "lucide-react-native";
+import {
+  generatePersonalEventTypeId,
+  type PersonalEventTypeIcon,
+} from "@babun/shared/local/personal-event-types";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ColorPicker } from "@/components/ui/ColorPicker";
@@ -31,6 +58,34 @@ import {
 // local SWATCHES list is gone — default stays синий.
 const DEFAULT_COLOR = PRESET_COLORS[1].value;
 
+type IconCmp = ComponentType<{ color?: string; size?: number; strokeWidth?: number }>;
+
+// Полный набор иконок модели PersonalEventTypeIcon (веб-паритет пикера).
+const EVENT_ICONS: Record<PersonalEventTypeIcon, IconCmp> = {
+  coffee: Coffee,
+  briefcase: Briefcase,
+  navigation: Navigation,
+  moon: Moon,
+  plane: Plane,
+  bell: Bell,
+  heart: Heart,
+  star: Star,
+  dumbbell: Dumbbell,
+  book: Book,
+  music: Music,
+  "graduation-cap": GraduationCap,
+  stethoscope: Stethoscope,
+  car: Car,
+  home: Home,
+  users: Users,
+  phone: Phone,
+  "shopping-bag": ShoppingBag,
+  gift: Gift,
+  calendar: Calendar,
+  tag: Tag,
+};
+const ICON_KEYS = Object.keys(EVENT_ICONS) as PersonalEventTypeIcon[];
+
 export default function EventTypesScreen() {
   const t = useThemeColors();
   const { data: types = [], isLoading } = usePersonalEventTypes();
@@ -38,6 +93,8 @@ export default function EventTypesScreen() {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [icon, setIcon] = useState<PersonalEventTypeIcon>("tag");
+  const [allDay, setAllDay] = useState(false);
   const [duration, setDuration] = useState("60");
 
   const add = () => {
@@ -49,10 +106,10 @@ export default function EventTypesScreen() {
           {
             id: generatePersonalEventTypeId(),
             label: label.trim(),
-            icon: "tag",
+            icon,
             color,
-            defaultDuration: Number(duration) || 60,
-            allDay: false,
+            defaultDuration: allDay ? 720 : Number(duration) || 60,
+            allDay,
             order: types.length,
           },
         ],
@@ -62,6 +119,8 @@ export default function EventTypesScreen() {
         onSuccess: () => {
           setLabel("");
           setDuration("60");
+          setIcon("tag");
+          setAllDay(false);
           setOpen(false);
         },
         onError: (e) => Alert.alert("Ошибка", e.message),
@@ -93,12 +152,16 @@ export default function EventTypesScreen() {
           data={types}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const Icon = EVENT_ICONS[item.icon] ?? Tag;
+            return (
             <View className="flex-row items-center px-4 py-3">
               <View
-                className="mr-3 h-7 w-7 rounded-full"
+                className="mr-3 h-7 w-7 items-center justify-center rounded-full"
                 style={{ backgroundColor: item.color }}
-              />
+              >
+                <Icon color="#fff" size={15} strokeWidth={2.2} />
+              </View>
               <View className="flex-1">
                 <Text className="text-base font-semibold" style={{ color: t.ink }}>
                   {item.label}
@@ -116,7 +179,8 @@ export default function EventTypesScreen() {
                 <Trash2 color={t.danger} size={ICON.sm} />
               </Pressable>
             </View>
-          )}
+            );
+          }}
           ItemSeparatorComponent={() => <Divider inset={56} />}
           ListFooterComponent={
             types.length > 0 ? (
@@ -130,7 +194,7 @@ export default function EventTypesScreen() {
             <EmptyState
               fill
               title="Нет типов событий"
-              subtitle="Обед, выходной, личное — типы для событий в личном календаре"
+              subtitle="Обед, встреча, выходной — чипы быстрого применения при создании события в календаре"
               action={{ label: "Добавить тип", onPress: () => setOpen(true) }}
             />
           }
@@ -147,13 +211,47 @@ export default function EventTypesScreen() {
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип события</Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Обед" autoFocus />
           <ColorPicker value={color} onChange={setColor} />
-          <Field
-            label="Длительность, мин"
-            value={duration}
-            onChangeText={setDuration}
-            placeholder="60"
-            keyboardType="number-pad"
-          />
+          <Text className="mb-1.5 mt-3 text-[13px] font-medium" style={{ color: t.sub }}>
+            Иконка
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {ICON_KEYS.map((key) => {
+              const Icon = EVENT_ICONS[key];
+              const selected = icon === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => setIcon(key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Иконка ${key}`}
+                  accessibilityState={{ selected }}
+                  className="h-9 w-9 items-center justify-center rounded-full"
+                  style={{
+                    backgroundColor: selected ? color : t.fill,
+                  }}
+                >
+                  <Icon color={selected ? "#fff" : t.sub} size={16} strokeWidth={2.2} />
+                </Pressable>
+              );
+            })}
+          </View>
+          <View className="mt-4 flex-row items-center justify-between">
+            <Text className="text-base" style={{ color: t.ink }}>Весь день</Text>
+            <Switch
+              value={allDay}
+              onValueChange={setAllDay}
+              trackColor={{ true: t.accent }}
+            />
+          </View>
+          {!allDay ? (
+            <Field
+              label="Длительность, мин"
+              value={duration}
+              onChangeText={setDuration}
+              placeholder="60"
+              keyboardType="number-pad"
+            />
+          ) : null}
           <Button
             label="Добавить"
             onPress={add}

@@ -44,7 +44,12 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { useCalendarSettings, useLoyalty } from "@/features/settings/local-settings";
+import {
+  useCalendarSettings,
+  useLoyalty,
+  usePersonalEventTypes,
+} from "@/features/settings/local-settings";
+import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
@@ -209,6 +214,8 @@ export function AppointmentSheet({
   const [cancelReason, setCancelReason] = useState("");
   const [kind, setKind] = useState<"work" | "event">("work");
   const [eventColor, setEventColor] = useState<string | null>(null);
+  // Настроенный тип события (Обед, Выходной…) — кабинет «Типы событий».
+  const [eventTypeId, setEventTypeId] = useState<string | null>(null);
 
   const [clientPicker, setClientPicker] = useState(false);
   const [servicePicker, setServicePicker] = useState(false);
@@ -234,6 +241,12 @@ export function AppointmentSheet({
   );
   const loyaltyAppliedRef = useRef<{ clientId: string; percent: number } | null>(
     null,
+  );
+  // Типы событий из кабинета — чипы быстрого применения в режиме «Событие».
+  const { data: rawEventTypes = [] } = usePersonalEventTypes();
+  const eventTypes = useMemo(
+    () => [...rawEventTypes].sort((a, b) => a.order - b.order),
+    [rawEventTypes],
   );
   // Зеркало текущей скидки: эффект автоприменения читает свежие значения,
   // не включая их в deps — иначе он дрался бы с ручной очисткой скидки.
@@ -290,6 +303,7 @@ export function AppointmentSheet({
       setCancelReason(appointment.cancel_reason ?? "");
       setKind(appointment.kind === "work" ? "work" : "event");
       setEventColor(appointment.color_override ?? null);
+      setEventTypeId(appointment.event_type_id ?? null);
       // Web parity: the flag resets on EVERY open (edit too), so adding
       // services keeps auto-extending the end — the grow-only recalc
       // below never shrinks the stored end anyway.
@@ -322,6 +336,7 @@ export function AppointmentSheet({
       setCancelReason("");
       setKind("work");
       setEventColor(null);
+      setEventTypeId(null);
       setDurationTouched(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -464,14 +479,18 @@ export function AppointmentSheet({
         clientId !== (defaults?.client_id ?? null) ||
         serviceIds.length > 0 ||
         comment.trim().length > 0 ||
-        globalDiscount !== null ||
+        // Автоскидка лояльности (reason задан) — не грязь: она приезжает
+        // сама при предвыбранном клиенте («Записать сюда»).
+        (globalDiscount !== null && !discountReason) ||
         customTotal ||
         masterId !== null ||
         eventColor !== null ||
+        eventTypeId !== null ||
         payMethod !== null
       );
     }
     return (
+      eventTypeId !== (appointment.event_type_id ?? null) ||
       clientId !== appointment.client_id ||
       date !== appointment.date ||
       timeStart !== appointment.time_start ||
@@ -498,10 +517,12 @@ export function AppointmentSheet({
     serviceIds.length,
     comment,
     globalDiscount,
+    discountReason,
     customTotal,
     total,
     masterId,
     eventColor,
+    eventTypeId,
     payMethod,
     date,
     timeStart,
@@ -513,6 +534,26 @@ export function AppointmentSheet({
     selectedServices,
   ]);
 
+  // Чип типа события: применяет цвет + длительность/весь-день + название
+  // (пустое или равное метке другого типа — заменяем; свой текст оператора
+  // не трогаем). Повторный тап снимает связь с типом, оставляя значения.
+  const applyEventType = (et: PersonalEventType) => {
+    if (eventTypeId === et.id) {
+      setEventTypeId(null);
+      return;
+    }
+    setEventTypeId(et.id);
+    setEventColor(et.color);
+    const cur = comment.trim();
+    if (!cur || eventTypes.some((x) => x.label === cur)) setComment(et.label);
+    if (et.allDay) {
+      setTimeStart("00:00");
+      setTimeEnd("23:59");
+    } else {
+      setTimeEnd(addMinutesHM(timeStart, et.defaultDuration));
+    }
+  };
+
   const buildPatch = (): Partial<Appointment> => {
     const cancel =
       status === "cancelled" ? cancelReason.trim() || null : null;
@@ -520,6 +561,7 @@ export function AppointmentSheet({
       // Personal/team event (meeting, lunch, break) — no client/services/money.
       return {
         kind: "event",
+        event_type_id: eventTypeId,
         date,
         time_start: timeStart,
         time_end: timeEnd,
@@ -1017,6 +1059,24 @@ export function AppointmentSheet({
             </SectionCard>
 
               </>
+            ) : null}
+
+            {/* event type chips (event only) — типы из кабинета */}
+            {kind === "event" && eventTypes.length > 0 ? (
+              <SectionCard title="Тип">
+                <View className="flex-row flex-wrap gap-2 p-3">
+                  {eventTypes.map((et) => (
+                    <Chip
+                      key={et.id}
+                      label={et.label}
+                      radio
+                      color={et.color}
+                      selected={eventTypeId === et.id}
+                      onPress={() => applyEventType(et)}
+                    />
+                  ))}
+                </View>
+              </SectionCard>
             ) : null}
 
             {/* event color (event only) */}
