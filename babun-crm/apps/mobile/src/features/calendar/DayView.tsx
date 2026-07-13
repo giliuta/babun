@@ -313,17 +313,19 @@ export function TimeRail({
     for (let h = startHour; h < endHour; h++) out.push(h);
     return out;
   }, [startHour, endHour]);
+  // Чёрные цифры на белом рельсе — принцип «из чёрного, не серого»
+  // (Bumpix-эталон): подписи осей не приглушаем.
   const labelStyle = {
     position: "absolute" as const,
     right: 6,
     width: RAIL_W - 8,
     textAlign: "right" as const,
-    color: t.sub,
+    color: t.ink,
     fontSize: 12,
     fontWeight: "600" as const,
   };
   return (
-    <View style={{ width: RAIL_W }}>
+    <View style={{ width: RAIL_W, backgroundColor: t.surface }}>
       {hours.map((h) => (
         <View key={h} style={{ flex: 1 }}>
           <Text
@@ -349,7 +351,7 @@ export function TimeRail({
 // Reused by both DayView (1 column) and WeekView (N columns).
 //
 // Structure: the hour grid is a column of FLEX cells (one per hour) that
-// carry the hour line (borderTop), the half-hour line (top 50%) and the
+// carry the hour line (borderTop) and the
 // create-slot Pressable in one node; washes/buffers/blocks/now-line are
 // percent-positioned overlays. The column has NO pixel geometry of its own —
 // it stretches to the animated row height (see zoom module note above), so
@@ -448,7 +450,12 @@ export function DayColumn({
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
       ? nowMinutes - winStartMin
       : null;
-  const halfLine = t.dark ? "rgba(255,255,255,0.05)" : "rgba(60,60,67,0.07)";
+  // Сетка «как в Bumpix» (принцип «из чёрного, не серого»): линии и серый
+  // нерабочих часов — альфа от ink поверх белого поля («прикрываем, не
+  // скрываем»), а не бледные отдельные серые. 20% — отчётливая линия часа,
+  // 12% — плоский, явно читаемый wash нерабочего времени.
+  const gridLine = `${t.ink}33`;
+  const offHoursFill = `${t.ink}1f`;
 
   // Off-hours wash band: per-date team schedule wins (workBand), else the
   // global hour props. band === null → нерабочий день, wash suppressed
@@ -484,12 +491,27 @@ export function DayColumn({
         flex: 1,
         position: "relative",
         borderLeftWidth: 1,
-        borderLeftColor: t.separator,
-        // ~5% alpha of the label colour — reads as a hue, not a fill, so
-        // gridlines / washes / blocks above keep their contrast.
-        backgroundColor: tintColor ? `${tintColor}0d` : undefined,
+        borderLeftColor: gridLine,
+        // Рабочее поле — чистый белый (Bumpix): серый нерабочих часов и
+        // плёнка метки ложатся ПОВЕРХ, а не вместо.
+        backgroundColor: t.surface,
       }}
     >
+      {tintColor ? (
+        // ~5% alpha of the label colour — reads as a hue, not a fill, so
+        // gridlines / washes / blocks above keep their contrast.
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: `${tintColor}0d`,
+          }}
+        />
+      ) : null}
       {/* off-hours wash: before work start / after work end */}
       {workStart > winStartMin ? (
         <MinuteBand
@@ -497,7 +519,7 @@ export function DayColumn({
           toMin={workStart}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.pressed}
+          color={offHoursFill}
         />
       ) : null}
       {workEnd < winEndMin ? (
@@ -506,7 +528,7 @@ export function DayColumn({
           toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.pressed}
+          color={offHoursFill}
         />
       ) : null}
 
@@ -522,7 +544,8 @@ export function DayColumn({
         />
       ) : null}
 
-      {/* hour cells: gridline + half-line + create-slot in one flex node */}
+      {/* hour cells: gridline + create-slot in one flex node. Ровно одна
+          линия на час, без получасовой (Bumpix) — чистые часовые ряды. */}
       {hours.map((h) => (
         <Pressable
           key={h}
@@ -532,20 +555,9 @@ export function DayColumn({
           style={{
             flex: 1,
             borderTopWidth: 1,
-            borderTopColor: t.separator,
+            borderTopColor: gridLine,
           }}
-        >
-          <View
-            style={{
-              position: "absolute",
-              top: "50%",
-              left: 0,
-              right: 0,
-              height: 1,
-              backgroundColor: halfLine,
-            }}
-          />
-        </Pressable>
+        />
       ))}
       {/* closing line of the last hour */}
       <View
@@ -556,7 +568,7 @@ export function DayColumn({
           left: 0,
           right: 0,
           height: 1,
-          backgroundColor: t.separator,
+          backgroundColor: gridLine,
         }}
       />
 
@@ -675,7 +687,8 @@ function DayHeader({
         paddingBottom: 4,
         paddingTop: 2,
         borderBottomWidth: 1,
-        borderBottomColor: t.separator,
+        // В тон линиям сетки (20% ink) — шапка «прошита» той же сеткой.
+        borderBottomColor: `${t.ink}33`,
       }}
     >
       <Text

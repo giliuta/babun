@@ -114,7 +114,8 @@ export function WeekView({
           flexDirection: "row",
           paddingBottom: 4,
           borderBottomWidth: 1,
-          borderBottomColor: t.separator,
+          // В тон линиям сетки (20% ink) — шапка «прошита» той же сеткой.
+          borderBottomColor: `${t.ink}33`,
         }}
       >
         <View style={{ width: RAIL_W }} />
