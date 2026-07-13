@@ -7,6 +7,7 @@ import {
   deleteFinanceTemplate,
   insertFinanceTemplate,
   listFinanceTemplates,
+  updateFinanceTemplate,
   type TemplateDraft,
 } from "@babun/shared/db/repositories/finance-templates";
 import { supabase } from "@/lib/supabase";
@@ -29,6 +30,16 @@ export function useInsertTemplate() {
   return useMutation({
     mutationFn: (draft: TemplateDraft) =>
       insertFinanceTemplate(supabase, tenantId as string, draft),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-templates"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+export function useUpdateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<TemplateDraft> }) =>
+      updateFinanceTemplate(supabase, id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-templates"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });

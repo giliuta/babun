@@ -10,9 +10,11 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Lock } from "lucide-react-native";
+import { ROLE_LABELS, type MasterRole } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
+import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { ICON } from "@/components/ui/tokens";
@@ -20,6 +22,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useMaster, useUpdateMaster } from "@/features/reference/queries";
 import {
   getMasterProfile,
+  getMasterRole,
   useUpdateMasterProfile,
   type MasterProfile,
 } from "@/features/reference/master-profile";
@@ -110,6 +113,35 @@ export default function MasterInfoScreen() {
               placeholder="Старший техник"
               onCommit={(v) => commitColumn("title", v)}
             />
+            {/* Глобальная роль — раньше на мобиле не задавалась нигде, из-за
+                чего пресеты прав всегда падали в «Помощник» (аудит P1-11).
+                Веб: MasterSheet. Роль = база для «Сбросить на стандартные»
+                в Доступах. */}
+            <View className="px-1 pt-2">
+              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
+                Роль в системе
+              </Text>
+              <View className="flex-row flex-wrap gap-2 pb-1">
+                {(Object.keys(ROLE_LABELS) as MasterRole[]).map((r) => (
+                  <Chip
+                    key={r}
+                    label={ROLE_LABELS[r]}
+                    radio
+                    selected={getMasterRole(master) === r}
+                    onPress={() =>
+                      updateMaster.mutate(
+                        { id: master.id, patch: { role: r } },
+                        { onError: (e) => alertErr(e) },
+                      )
+                    }
+                  />
+                ))}
+              </View>
+              <Text className="pb-2 text-xs" style={{ color: t.faint }}>
+                Роль задаёт стандартный набор прав — «Доступы → Сбросить на
+                стандартные».
+              </Text>
+            </View>
             <CommitField
               label="День рождения"
               initial={profile.birthday ?? ""}
