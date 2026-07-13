@@ -167,13 +167,17 @@ export function MiniCalendar({
               const date = new Date(viewYear, viewMonth, day);
               const key = formatYMD(date);
               const isToday = key === todayYmd;
+              // Просматриваемый сейчас день (≠ сегодня) — лёгкий акцентный
+              // тинт: джампер открывают, уйдя с сегодня, и точка отсчёта
+              // обязана быть видна (HIG: visibility of current state).
+              const isViewed = !isToday && key === openKey;
               const count = countByDate.get(key) ?? 0;
               return (
                 <Pressable
                   key={day}
                   onPress={() => onSelectDate(date)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${day} ${date.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
+                  accessibilityLabel={`${day} ${date.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
                   style={({ pressed }) => ({
                     width: CELL,
                     height: CELL,
@@ -182,16 +186,22 @@ export function MiniCalendar({
                     borderRadius: CELL / 2,
                     backgroundColor: isToday
                       ? t.accent
-                      : pressed
-                        ? t.pressed
-                        : "transparent",
+                      : isViewed
+                        ? `${t.accent}14`
+                        : pressed
+                          ? t.pressed
+                          : "transparent",
                   })}
                 >
                   <Text
                     style={{
                       fontSize: 14,
-                      fontWeight: isToday ? "700" : "400",
-                      color: isToday ? t.onAccent : t.ink,
+                      fontWeight: isToday || isViewed ? "700" : "400",
+                      color: isToday
+                        ? t.onAccent
+                        : isViewed
+                          ? t.accent
+                          : t.ink,
                     }}
                     className="tabular-nums"
                   >

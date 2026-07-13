@@ -147,7 +147,13 @@ export function WeekView({
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
       >
-        <TimeRail startHour={startHour} endHour={endHour} />
+        <TimeRail
+          startHour={startHour}
+          endHour={endHour}
+          nowMinutes={
+            days.some((d) => sameDay(d, today)) ? nowMinutes : null
+          }
+        />
         <PagedStrip
           pager={pager}
           renderPage={(off) => (

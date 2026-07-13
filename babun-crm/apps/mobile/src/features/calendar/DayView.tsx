@@ -341,12 +341,17 @@ function Block({
 
 // The fixed hour-label rail on the left of the grid: one flex cell per hour
 // (equal split of the animated grid height), each label riding its cell top.
+// `nowMinutes` (только когда видимый период содержит сегодня) рисует красную
+// капсулу текущего времени на высоте now-line — Apple Calendar паттерн;
+// соседний часовой лейбл в ±18 мин прячется, чтобы не слипались.
 export function TimeRail({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
+  nowMinutes,
 }: {
   startHour?: number;
   endHour?: number;
+  nowMinutes?: number | null;
 }) {
   const t = useThemeColors();
   const hours = useMemo(() => {
@@ -354,6 +359,14 @@ export function TimeRail({
     for (let h = startHour; h < endHour; h++) out.push(h);
     return out;
   }, [startHour, endHour]);
+  const winStart = startHour * 60;
+  const winEnd = endHour * 60;
+  const nowInWin =
+    nowMinutes != null && nowMinutes >= winStart && nowMinutes <= winEnd
+      ? nowMinutes
+      : null;
+  const nearNow = (h: number) =>
+    nowInWin != null && Math.abs(h * 60 - nowInWin) < 18;
   // Чёрные цифры на белом рельсе — принцип «из чёрного, не серого»
   // (Bumpix-эталон): подписи осей не приглушаем.
   const labelStyle = {
@@ -369,25 +382,54 @@ export function TimeRail({
     <View style={{ width: RAIL_W, backgroundColor: t.surface }}>
       {hours.map((h) => (
         <View key={h} style={{ flex: 1 }}>
-          <Text
-            style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
-            className="tabular-nums"
-            maxFontSizeMultiplier={1.3}
-          >
-            {`${pad2(h % 24)}:00`}
-          </Text>
+          {nearNow(h) ? null : (
+            <Text
+              style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
+              className="tabular-nums"
+              maxFontSizeMultiplier={1.3}
+            >
+              {`${pad2(h % 24)}:00`}
+            </Text>
+          )}
         </View>
       ))}
       {/* endHour label — anchored to the rail bottom, no cell needed. */}
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
-        <Text
-          style={[labelStyle, { top: -7 }]}
-          className="tabular-nums"
-          maxFontSizeMultiplier={1.3}
-        >
-          {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
-        </Text>
+        {nearNow(endHour) ? null : (
+          <Text
+            style={[labelStyle, { top: -7 }]}
+            className="tabular-nums"
+            maxFontSizeMultiplier={1.3}
+          >
+            {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
+          </Text>
+        )}
       </View>
+      {/* Капсула текущего времени — на высоте now-line колонки сегодня. */}
+      {nowInWin != null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: 3,
+            top: pct(nowInWin - winStart, winEnd - winStart),
+            marginTop: -8,
+            height: 16,
+            borderRadius: 8,
+            paddingHorizontal: 4,
+            justifyContent: "center",
+            backgroundColor: t.danger,
+          }}
+        >
+          <Text
+            className="tabular-nums"
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 10, fontWeight: "700", color: t.onAccent }}
+          >
+            {minToHM(nowInWin)}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -926,7 +968,11 @@ export function DayView({
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
       >
-        <TimeRail startHour={startHour} endHour={endHour} />
+        <TimeRail
+          startHour={startHour}
+          endHour={endHour}
+          nowMinutes={dateYmd === todayYmd ? nowMinutes : null}
+        />
         <PagedStrip
           pager={pager}
           renderPage={(off) => {

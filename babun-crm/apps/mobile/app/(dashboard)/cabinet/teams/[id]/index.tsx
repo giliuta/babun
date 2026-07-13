@@ -631,23 +631,27 @@ export default function TeamHubScreen() {
                   <Text style={{ fontSize: 16, color: t.ink }}>
                     Буфер между записями
                   </Text>
+                  {/* Выкл/0 = НАСЛЕДОВАТЬ глобальную настройку (web-семантика:
+                      undefined). Пишем null, а не false/0 — иначе тумблер
+                      навсегда пришпиливал команду и глобальный «Мой календарь»
+                      переставал действовать. */}
                   <BufferStepper
                     value={team.buffer_minutes ?? 0}
-                    onChange={(v) => patch({ buffer_minutes: v })}
+                    onChange={(v) => patch({ buffer_minutes: v > 0 ? v : null })}
                   />
                 </View>
                 <Divider inset={16} />
                 <ToggleRow
                   label="Скрывать отменённые"
                   value={!!team.hide_cancelled}
-                  onChange={(v) => patch({ hide_cancelled: v })}
+                  onChange={(v) => patch({ hide_cancelled: v || null })}
                 />
                 <Divider inset={16} />
                 <ToggleRow
                   label="Разрешить переработку"
                   hint="Записи можно ставить вне рабочих часов"
                   value={!!team.allow_overtime}
-                  onChange={(v) => patch({ allow_overtime: v })}
+                  onChange={(v) => patch({ allow_overtime: v || null })}
                 />
                 <Divider inset={16} />
                 <View className="px-4 pb-3 pt-2.5">

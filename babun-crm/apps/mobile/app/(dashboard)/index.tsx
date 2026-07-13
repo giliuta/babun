@@ -5,6 +5,7 @@ import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
+import { getStorage } from "@babun/shared/storage";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import {
   getCurrentCyprusTime,
@@ -52,6 +53,8 @@ import { TEAM_COLORS } from "@babun/shared/local/masters";
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 const AGENDA_HORIZON_DAYS = 60;
+// Персист выбранного вида и команды (mode/teamId) между запусками.
+const CAL_VIEW_KEY = "calendar.view";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -146,8 +149,16 @@ export default function CalendarTab() {
     date?: string;
   }>();
 
+  // Вид и команда переживают перезапуск (MMKV): владелец двух бригад в
+  // «Неделе» не должен каждый старт возвращаться в «День» первой команды.
+  // Дата сознательно НЕ персистится — холодный старт всегда «сегодня».
   // Дефолт — «День»: web на телефонной ширине стартует с дня (innerWidth<1024).
-  const [mode, setMode] = useState<CalMode>("day");
+  const [mode, setMode] = useState<CalMode>(() => {
+    const saved = getStorage().get<{ mode?: CalMode }>(CAL_VIEW_KEY)?.mode;
+    return saved === "week" || saved === "month" || saved === "agenda"
+      ? saved
+      : "day";
+  });
   // «Сегодня» устройства может отличаться от бизнес-таймзоны бригады (ночь
   // у владельца ≠ ночь бригады): пока пользователь не тронул дату, один раз
   // перепривязываем якорь к бизнес-сегодня, как только таймзона резолвится.
@@ -169,7 +180,12 @@ export default function CalendarTab() {
   // no «all teams» view. `teamChoice` remembers the user's pick; the derived
   // `activeTeamId` falls back to the first team until they choose and
   // re-anchors if the chosen team is deleted / deactivated.
-  const [teamChoice, setTeamChoice] = useState<string | null>(null);
+  const [teamChoice, setTeamChoice] = useState<string | null>(
+    () => getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId ?? null,
+  );
+  useEffect(() => {
+    getStorage().set(CAL_VIEW_KEY, { mode, teamId: teamChoice });
+  }, [mode, teamChoice]);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — session-only dismissal (web persists to

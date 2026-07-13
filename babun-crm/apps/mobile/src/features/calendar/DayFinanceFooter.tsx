@@ -55,15 +55,18 @@ export function DayFinanceFooter({
       style={{
         flexDirection: "row",
         borderTopWidth: 1,
-        borderTopColor: t.separator,
+        // В тон линиям сетки над футером — один шов, а не два диалекта.
+        borderTopColor: `${t.ink}33`,
         backgroundColor: t.surface,
         paddingVertical: 4,
       }}
     >
-      {/* Лейблы — нейтральный t.sub: семантический цвет несут только суммы. */}
-      <View style={{ width: RAIL_W, paddingRight: 5, alignItems: "flex-end", justifyContent: "center" }}>
-        <Text style={{ fontSize: 9, fontWeight: "600", color: t.sub }}>Доход</Text>
-        <Text style={{ fontSize: 9, fontWeight: "600", color: t.sub }}>Расход</Text>
+      {/* Лейблы — нейтральный t.sub: семантический цвет несут только суммы.
+          11pt — минимум читаемости iOS (было 9pt, владелец читает деньги
+          десятки раз в день). */}
+      <View style={{ width: RAIL_W, paddingRight: 6, alignItems: "flex-end", justifyContent: "center" }}>
+        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
+        <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
       </View>
       {days.map((d, i) => {
         const ymd = formatYMD(d);
@@ -86,13 +89,13 @@ export function DayFinanceFooter({
               alignItems: "center",
               paddingVertical: 1,
               borderLeftWidth: i === 0 ? 0 : 1,
-              borderLeftColor: t.separator,
+              borderLeftColor: `${t.ink}33`,
             }}
           >
             {/* €0 — приглушённый t.faint: зелёный/красный только там, где
                 есть реальные деньги (цвет = смысл). */}
             <Text
-              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
+              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
@@ -100,7 +103,7 @@ export function DayFinanceFooter({
               {formatEUR(income)}
             </Text>
             <Text
-              style={{ fontSize: days.length > 3 ? 10 : 12, fontWeight: "600", color: totals.spent !== 0 ? t.danger : t.faint }}
+              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: totals.spent !== 0 ? t.danger : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}

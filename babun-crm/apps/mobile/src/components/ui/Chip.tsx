@@ -18,6 +18,17 @@ import { useThemeColors } from "@/theme/colors";
 //                     border (team chips — the hue stays visible when idle)
 //   tint              selected → 8–16% hue tint + hue border + hue label;
 //                     idle → t.fill (filter toggles, tag pickers)
+// Тёмный или светлый текст поверх заливки hue: относительная яркость по
+// YIQ — на жёлтой/оранжевой/зелёной бригаде белый onAccent слеп (< 3:1).
+function onHue(hex: string, t: { onAccent: string; ink: string }): string {
+  const m = /^#?([0-9a-f]{6})/i.exec(hex);
+  if (!m) return t.onAccent;
+  const n = parseInt(m[1], 16);
+  const yiq =
+    ((n >> 16) * 299 + (((n >> 8) & 0xff) * 587) + (n & 0xff) * 114) / 1000;
+  return yiq > 165 ? t.ink : t.onAccent;
+}
+
 export function Chip({
   label,
   selected = false,
@@ -66,7 +77,7 @@ export function Chip({
   if (variant === "outline") {
     if (selected) {
       bg = hue;
-      fg = t.onAccent;
+      fg = onHue(hue, t);
       border = hue;
     } else {
       bg = t.surface;
@@ -85,7 +96,7 @@ export function Chip({
   } else {
     if (selected) {
       bg = hue;
-      fg = t.onAccent;
+      fg = onHue(hue, t);
     } else if (idleColor) {
       bg = `${idleColor}24`;
       fg = idleColor;

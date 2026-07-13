@@ -62,6 +62,10 @@ type IconType = ComponentType<{
 // Палитра icon-тайлов — веб-токены --tile-* (apps/web globals.css),
 // один к одному, как в iOS Settings: цвет различает пункты, не несёт
 // смысловой нагрузки.
+// Личный календарь (метки/типы событий не-командного календаря) выключен —
+// зеркало web feature-flags.ts PERSONAL_CALENDAR_ENABLED.
+const PERSONAL_CALENDAR_ENABLED = false;
+
 const TILE = {
   blue: "#3E88F7",
   green: "#4CAF50",
@@ -354,22 +358,30 @@ export default function CabinetHome() {
             desc="Серии регулярных записей"
             href="/cabinet/recurring"
           />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Tags}
-            tone={TILE.purple}
-            title="Типы событий"
-            desc="Чипы быстрого применения: Обед, Встреча…"
-            href="/cabinet/event-types"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Tag}
-            tone={TILE.cyan}
-            title="Метки"
-            desc="Город / тег под датой в календаре"
-            href={"/cabinet/labels" as Href}
-          />
+          {/* Личный календарь спрятан (web feature-flags PERSONAL_CALENDAR_
+              ENABLED=false): эти экраны правят personal_labels/event-types,
+              которые НЕ влияют на командный календарь — метки команд живут в
+              Кабинет → Команды → Метки. Экраны не удалены (deep-link-safe). */}
+          {PERSONAL_CALENDAR_ENABLED ? (
+            <>
+              <Divider inset={58} />
+              <MenuRow
+                icon={Tags}
+                tone={TILE.purple}
+                title="Типы событий"
+                desc="Чипы быстрого применения: Обед, Встреча…"
+                href="/cabinet/event-types"
+              />
+              <Divider inset={58} />
+              <MenuRow
+                icon={Tag}
+                tone={TILE.cyan}
+                title="Метки"
+                desc="Город / тег под датой в календаре"
+                href={"/cabinet/labels" as Href}
+              />
+            </>
+          ) : null}
         </SectionCard>
 
         <GroupLabel>Справочники</GroupLabel>
