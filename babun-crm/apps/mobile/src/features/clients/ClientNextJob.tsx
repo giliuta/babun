@@ -34,6 +34,28 @@ interface ClientNextJobProps {
 
 type Tone = "accent" | "info" | "alert" | "warn";
 
+// WHERE the next job is — the dispatcher's first question after «when».
+// Resolve the appointment the hero names (selector rule: earliest
+// upcoming scheduled/in_progress) and return its object as
+// «Метка · адрес»; null → caller falls back to the generic hint.
+function nextAptPlace(
+  client: Client,
+  appointments: Appointment[],
+  nextApt: { date: string; time: string },
+): string | null {
+  const apt = appointments.find(
+    (a) =>
+      a.date === nextApt.date &&
+      a.time_start === nextApt.time &&
+      (a.status === "scheduled" || a.status === "in_progress"),
+  );
+  const loc = apt?.location_id
+    ? client.locations?.find((l) => l.id === apt.location_id)
+    : undefined;
+  if (!loc) return null;
+  return [loc.label, loc.address].filter(Boolean).join(" · ") || null;
+}
+
 function aptLabel(nextApt: { date: string; time: string }): string {
   const [y, m, d] = nextApt.date.split("-").map(Number);
   if (!y || !m || !d) return `${nextApt.date} · ${nextApt.time}`;
@@ -48,6 +70,7 @@ function aptLabel(nextApt: { date: string; time: string }): string {
 
 export default function ClientNextJob({
   client,
+  appointments,
   stats,
   serviceDue,
 }: ClientNextJobProps) {
@@ -87,7 +110,9 @@ export default function ClientNextJob({
     tone = "info";
     Icon = Calendar;
     title = `Запись · ${aptLabel(stats.nextApt)}`;
-    subtitle = "Открыть в календаре";
+    subtitle =
+      nextAptPlace(client, appointments, stats.nextApt) ??
+      "Открыть в календаре";
     const date = stats.nextApt.date;
     onPress = () => goToDate(date);
   } else if (serviceDue.overdue.length > 0) {

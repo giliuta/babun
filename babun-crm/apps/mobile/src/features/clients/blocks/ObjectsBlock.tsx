@@ -16,7 +16,6 @@
 
 import { useMemo, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   ArrowUpRight,
   ChevronRight,
@@ -24,15 +23,17 @@ import {
   MapPin,
   Plus,
   Trash2,
-  X,
 } from "lucide-react-native";
 import type { ACType, ACUnit, Client, Location } from "@babun/shared/local/clients";
 import { AC_TYPE_LABELS } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { buildMapUrl } from "@babun/shared/common/utils/map-links";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useBookingNav } from "@/features/clients/card-booking";
+import {
+  normalizeYMD,
+  OptionalDateField,
+} from "@/features/clients/OptionalDateField";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
@@ -425,67 +426,6 @@ function UnitRow({ unit, onPress }: { unit: ACUnit; onPress: () => void }) {
         </Text>
       ) : null}
     </Pressable>
-  );
-}
-
-// ─── Optional service date (DateTimePicker + clear) ────────────────────
-
-/** Строгий YYYY-MM-DD или «не указано» — мусор от старого свободного
- *  TextInput приводим к пустому значению. */
-function normalizeYMD(v: string | undefined): string {
-  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return "";
-  return Number.isNaN(parseYMD(v).getTime()) ? "" : v;
-}
-
-function OptionalDateField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  /** "" = не указано; иначе валидный YYYY-MM-DD. */
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View className="flex-1">
-      <Text className="mb-1 text-[11px]" style={{ color: t.sub }}>
-        {label}
-      </Text>
-      {value ? (
-        <View className="flex-row items-center">
-          <DateTimePicker
-            value={parseYMD(value)}
-            mode="date"
-            display="compact"
-            maximumDate={new Date()}
-            onChange={(_, d) => d && onChange(formatYMD(d))}
-          />
-          <Pressable
-            onPress={() => onChange("")}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Очистить дату: ${label}`}
-            className="ml-1 h-7 w-7 items-center justify-center rounded-full active:opacity-60"
-          >
-            <X color={t.faint} size={13} />
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable
-          onPress={() => onChange(formatYMD(new Date()))}
-          accessibilityRole="button"
-          accessibilityLabel={`Указать дату: ${label}`}
-          className="self-start rounded-lg px-2.5 py-2 active:opacity-60"
-          style={{ backgroundColor: t.fill }}
-        >
-          <Text className="text-[13px] font-medium" style={{ color: t.accent }}>
-            Указать
-          </Text>
-        </Pressable>
-      )}
-    </View>
   );
 }
 

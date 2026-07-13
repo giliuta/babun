@@ -3,9 +3,9 @@
 //
 // Reference block — collapsed by default (CollapsibleCard); the closed row
 // shows the file count. Expanded: 3-column grid of thumbnails (images via
-// 5-min signed URLs) / doc tiles, «Добавить фото» через expo-image-picker,
-// long-press-free delete via an ✕ badge with Alert confirm, tap opens the
-// original through Linking.
+// 5-min signed URLs) / doc tiles, «Добавить фото» (галерея) + камера —
+// оба через expo-image-picker, long-press-free delete via an ✕ badge with
+// Alert confirm, tap opens the original through Linking.
 //
 // Data path lives in card-attachments.ts (Supabase Storage bucket
 // client-attachments + public.client_attachments), the block itself only
@@ -22,7 +22,7 @@ import {
   View,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import { FileText, Paperclip, Plus, X } from "lucide-react-native";
+import { Camera, FileText, Paperclip, Plus, X } from "lucide-react-native";
 import {
   formatBytes,
   getSignedUrl,
@@ -49,6 +49,16 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
   const items = data?.items ?? [];
   const thumbs = data?.thumbs ?? {};
 
+  const uploadAssets = (assets: ImagePicker.ImagePickerAsset[]) =>
+    upload.mutate(
+      assets.map((a) => ({
+        uri: a.uri,
+        fileName: a.fileName,
+        mimeType: a.mimeType,
+        fileSize: a.fileSize,
+      })),
+    );
+
   const pick = async () => {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
@@ -57,14 +67,27 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
       quality: 0.8,
     });
     if (res.canceled || res.assets.length === 0) return;
-    upload.mutate(
-      res.assets.map((a) => ({
-        uri: a.uri,
-        fileName: a.fileName,
-        mimeType: a.mimeType,
-        fileSize: a.fileSize,
-      })),
-    );
+    uploadAssets(res.assets);
+  };
+
+  // Снять «до/после» прямо на объекте — ключевой полевой сценарий.
+  // NSCameraUsageDescription уже в dev-билде (плагин expo-image-picker),
+  // пересборка не нужна.
+  const shoot = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(
+        "Нет доступа к камере",
+        "Разрешите камеру: Настройки → Babun → Камера.",
+      );
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+    if (res.canceled || res.assets.length === 0) return;
+    uploadAssets(res.assets);
   };
 
   const confirmDelete = (a: ClientAttachment) => {
@@ -112,6 +135,16 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
             >
               {upload.isPending ? "Загрузка…" : "Добавить фото"}
             </Text>
+          </Pressable>
+          <Pressable
+            onPress={shoot}
+            disabled={upload.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Снять фото"
+            className="h-[33px] w-[33px] items-center justify-center rounded-[10px] active:opacity-70"
+            style={{ backgroundColor: t.fill }}
+          >
+            <Camera color={upload.isPending ? t.faint : t.ink} size={16} strokeWidth={2.2} />
           </Pressable>
           <Text className="flex-1 text-[11px]" style={{ color: t.faint }}>
             До 10 МБ. Фото «до/после», договоры.

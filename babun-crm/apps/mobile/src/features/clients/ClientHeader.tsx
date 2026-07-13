@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import {
   Ban,
+  Bell,
   Cake,
   Calendar,
   MessageCircle,
@@ -153,12 +154,28 @@ function EditableLine({
   );
 }
 
+// «Напомнить» (card-actions) пишет reminder_at — до сих пор дата была
+// невидима на карточке. Будущее напоминание — тихая серая строка;
+// сегодня/прошло — красная (пора действовать).
+function reminderLine(
+  reminderAt: string | null | undefined,
+): { text: string; due: boolean } | null {
+  if (!reminderAt) return null;
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const date = formatShortDateRu(reminderAt) || reminderAt;
+  if (reminderAt === today) return { text: "Напомнить · сегодня", due: true };
+  if (reminderAt < today) return { text: `Напомнить · ${date}`, due: true };
+  return { text: `Напомнить · ${date}`, due: false };
+}
+
 export default function ClientHeader({ client, stats, update }: ClientHeaderProps) {
   const t = useThemeColors();
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
   const hasPhone = phoneDigits.length > 0;
 
   const debt = stats && stats.debt > 0 ? `Долг ${formatEUR(stats.debt)}` : null;
+  const reminder = reminderLine(client.reminder_at);
   const trustSegments = (
     stats
       ? [
@@ -222,6 +239,19 @@ export default function ClientHeader({ client, stats, update }: ClientHeaderProp
       {/* Debt atom (red, only when долг>0) */}
       {debt ? (
         <Text className="mt-1.5 text-sm font-semibold" style={{ color: t.danger }}>{debt}</Text>
+      ) : null}
+
+      {/* Reminder atom — grey upcoming, red when due */}
+      {reminder ? (
+        <View className="mt-1.5 flex-row items-center gap-1">
+          <Bell color={reminder.due ? t.danger : t.sub} size={12} strokeWidth={2.2} />
+          <Text
+            className={`text-[13px] ${reminder.due ? "font-semibold" : ""}`}
+            style={{ color: reminder.due ? t.danger : t.sub }}
+          >
+            {reminder.text}
+          </Text>
+        </View>
       ) : null}
 
       {/* Trust line «N визитов · €LTV · был дата» */}

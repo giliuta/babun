@@ -1,6 +1,8 @@
 // PersonalBlock (mobile port of apps/web/.../blocks/PersonalBlock.tsx)
 // STORY-034 — Личное: Город · ДР · Email · Язык. Reference data for
-// SMS templates and birthday reminders; nothing here drives behavior.
+// SMS templates and birthday reminders; nothing here drives behavior
+// except birthday → stats.birthdayInDays (badge «ДР на неделе»), which
+// is why the date goes through OptionalDateField, not free text.
 // Collapsed by default (CollapsibleCard) — the closed row shows
 // «{город} · ДР {дата}». Presentational only — receives client +
 // update(), persists via the composer's Supabase mutation.
@@ -11,6 +13,10 @@ import type { Client } from "@babun/shared/local/clients";
 import { Chip } from "@/components/ui/Chip";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatShortDateRu } from "@/features/clients/format";
+import {
+  normalizeYMD,
+  OptionalDateField,
+} from "@/features/clients/OptionalDateField";
 import { useThemeColors } from "@/theme/colors";
 
 interface PersonalBlockProps {
@@ -34,7 +40,7 @@ function EditableField({
   value: string;
   onSave: (v: string) => void;
   placeholder?: string;
-  keyboardType?: "default" | "email-address" | "numbers-and-punctuation";
+  keyboardType?: "default" | "email-address";
 }) {
   const t = useThemeColors();
   const [draft, setDraft] = useState(value);
@@ -93,13 +99,12 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
           />
         </Row>
         <Row label="День рождения">
-          {/* No native date picker dependency assumed — plain YYYY-MM-DD
-              text input, matching the [id].tsx birthday field. */}
-          <EditableField
-            value={client.birthday}
-            onSave={(v) => update({ birthday: v })}
-            placeholder="ГГГГ-ММ-ДД"
-            keyboardType="numbers-and-punctuation"
+          {/* Native compact date picker (OptionalDateField, как даты ТО в
+              ObjectsBlock) — свободный «ГГГГ-ММ-ДД» кормил мусором
+              birthdayInDays и бейдж «ДР на неделе». */}
+          <OptionalDateField
+            value={normalizeYMD(client.birthday)}
+            onChange={(v) => update({ birthday: v })}
           />
         </Row>
         <Row label="Email">

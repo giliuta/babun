@@ -25,7 +25,13 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
-import { Phone as PhoneIcon, Plus, Send, X } from "lucide-react-native";
+import {
+  Instagram,
+  Phone as PhoneIcon,
+  Plus,
+  Send,
+  X,
+} from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import {
@@ -219,7 +225,7 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             value={client.instagram_username}
             onChange={(v) => update({ instagram_username: v })}
             url={instagramUrl(ig)}
-            icon={<Send color={CHANNEL_COLORS.instagram} size={13} />}
+            icon={<Instagram color={CHANNEL_COLORS.instagram} size={13} />}
             tintColor={CHANNEL_COLORS.instagram}
             t={t}
             inputFill={inputFill}
