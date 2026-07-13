@@ -181,23 +181,16 @@ export function WeekView({
                       : "transparent",
                 }}
               />
-              {/* Day-label pill — web DayColumn city pill / DayHeader
-                  parity: 3-letter uppercase slice in the label colour.
-                  Rendered after the presence dot so the dot keeps one
-                  height across all columns. */}
+              {/* Метка дня — web DayColumn header, variant C: цветной текст
+                  (3 буквы) + 3px спайн по нижней кромке колонки. Скана
+                  недели читается рядом цветных полосок. Рендерится после
+                  точки занятости, чтобы точка держала одну высоту. */}
               {label ? (
-                <View
-                  style={{
-                    marginTop: 3,
-                    borderRadius: 999,
-                    paddingHorizontal: 5,
-                    paddingVertical: 1,
-                    backgroundColor: `${label.color}1f`,
-                  }}
-                >
+                <>
                   <Text
                     numberOfLines={1}
                     style={{
+                      marginTop: 2,
                       fontSize: 9,
                       fontWeight: "700",
                       letterSpacing: 0.5,
@@ -207,7 +200,20 @@ export function WeekView({
                   >
                     {label.name.slice(0, 3)}
                   </Text>
-                </View>
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      bottom: -4,
+                      left: 6,
+                      right: 6,
+                      height: 3,
+                      borderTopLeftRadius: 3,
+                      borderTopRightRadius: 3,
+                      backgroundColor: label.color,
+                    }}
+                  />
+                </>
               ) : null}
             </Pressable>
           );

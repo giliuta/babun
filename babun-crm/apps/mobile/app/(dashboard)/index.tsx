@@ -28,7 +28,7 @@ import { MiniCalendar } from "@/features/calendar/MiniCalendar";
 import { TeamChips } from "@/features/calendar/TeamChips";
 import { FirstRunCalendarChoice } from "@/features/calendar/FirstRunCalendarChoice";
 import { CalendarOnboardingCard } from "@/features/calendar/CalendarOnboardingCard";
-import { CityPickerSheet } from "@/features/calendar/CityPickerSheet";
+import { CityPickerModal } from "@/features/calendar/CityPickerModal";
 import {
   dayCityKey,
   useDayCities,
@@ -316,6 +316,13 @@ export default function CalendarTab() {
     [activeTeamId, activeTeam?.default_city, dayCities, cities, t.accent],
   );
   const dayLabel = labelFor(dayYmdForLabel);
+  // Phase I38 web parity — есть ли у бригады вообще метки (default_city или
+  // список меток). Нет → чип и тап по шапке скрыты полностью, никаких
+  // «+ метка»; метки заводятся в настройках команды.
+  const hasLabels = Boolean(
+    activeTeam?.default_city?.trim() ||
+      (activeTeam ? teamCities(activeTeam).length > 0 : false),
+  );
   // Label tint — the label colour washes the day columns very lightly (web
   // DayColumn tintByLabel, Phase I41). The brigade «Метки» setting
   // team.tint_days_by_label (default on) drops the resolver entirely.
@@ -323,14 +330,18 @@ export default function CalendarTab() {
     if (!(activeTeam?.tint_days_by_label ?? true)) return undefined;
     return (dateYmd: string) => labelFor(dateYmd)?.color ?? null;
   }, [activeTeam?.tint_days_by_label, labelFor]);
-  const labelOptions = useMemo(
-    () =>
-      (activeTeam ? teamCities(activeTeam) : []).map((name) => ({
-        name,
-        color: cities.find((c) => c.name === name)?.color ?? t.accent,
-      })),
-    [activeTeam, cities, t.accent],
-  );
+  // Web CityPickerModal pickerList: активные метки справочника, суженные до
+  // меток бригады, когда они заданы; пустой список бригады при заданном
+  // default_city → весь активный справочник (web parity).
+  const labelOptions = useMemo(() => {
+    const source = cities
+      .filter((c) => c.is_active)
+      .map((c) => ({ name: c.name, color: c.color ?? t.accent }));
+    const brigade = activeTeam ? teamCities(activeTeam) : [];
+    return brigade.length > 0
+      ? source.filter((c) => brigade.includes(c.name))
+      : source;
+  }, [activeTeam, cities, t.accent]);
 
   // Скрывать отменённые: настройка бригады побеждает глобальную (web
   // parity: dashboard/page.tsx:1613 `activeTeam?.hide_cancelled ?? …`).
@@ -374,15 +385,10 @@ export default function CalendarTab() {
     const mon = mondayOf(day);
     return Array.from({ length: 7 }, (_, i) => addDays(mon, i));
   }, [day]);
-  const threeDays = useMemo(
-    () => Array.from({ length: 3 }, (_, i) => addDays(day, i)),
-    [day],
-  );
-  const gridDays = mode === "3days" ? threeDays : weekDays;
-  const gridYmds = useMemo(() => gridDays.map(formatYMD), [gridDays]);
-  const gridAppts = useMemo(
-    () => visibleAppts.filter((a) => gridYmds.includes(a.date)),
-    [visibleAppts, gridYmds],
+  const weekYmds = useMemo(() => weekDays.map(formatYMD), [weekDays]);
+  const weekAppts = useMemo(
+    () => visibleAppts.filter((a) => weekYmds.includes(a.date)),
+    [visibleAppts, weekYmds],
   );
 
   // Agenda — «what's next»: from the selected day forward 60 days
@@ -454,8 +460,8 @@ export default function CalendarTab() {
     mode === "month"
       ? monthAnchor.getFullYear() === now.getFullYear() &&
         monthAnchor.getMonth() === now.getMonth()
-      : mode === "week" || mode === "3days"
-        ? gridYmds.includes(todayYmd)
+      : mode === "week"
+        ? weekYmds.includes(todayYmd)
         : dayYmd === todayYmd;
 
   const goToday = () => setDay(startOfDay(now));
@@ -602,7 +608,13 @@ export default function CalendarTab() {
         todayNumber={now.getDate()}
         isOnToday={isOnToday}
         onModeChange={setMode}
-        onGear={() => router.push("/cabinet/calendar")}
+        // Web parity (Header.tsx): календарь = команда, шестерёнка ведёт в
+        // полноценные настройки открытой команды; без команд — в список.
+        onGear={() =>
+          router.push(
+            activeTeamId ? `/cabinet/teams/${activeTeamId}` : "/cabinet/teams",
+          )
+        }
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
@@ -625,26 +637,26 @@ export default function CalendarTab() {
           refreshing={isRefetching}
           onRefresh={onRefresh}
         />
-      ) : mode === "week" || mode === "3days" ? (
+      ) : mode === "week" ? (
         <>
           <View className="flex-1">
             <WeekView
-              days={gridDays}
-              appointments={gridAppts}
+              days={weekDays}
+              appointments={weekAppts}
               today={now}
-              labelFor={labelFor}
+              labelFor={hasLabels ? labelFor : undefined}
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
               }
               onPickDay={pickDay}
-              onPrev={() => setDay((d) => addDays(d, -gridDays.length))}
-              onNext={() => setDay((d) => addDays(d, gridDays.length))}
+              onPrev={() => setDay((d) => addDays(d, -7))}
+              onNext={() => setDay((d) => addDays(d, 7))}
               {...gridProps}
             />
           </View>
           <DayFinanceFooter
-            days={gridDays}
-            appointments={gridAppts}
+            days={weekDays}
+            appointments={weekAppts}
             teamId={activeTeamId}
             todayYmd={todayYmd}
             onTapDay={pickDay}
@@ -657,9 +669,11 @@ export default function CalendarTab() {
               dateYmd={dayYmd}
               appointments={dayAppts}
               isToday={dayYmd === todayYmd}
-              dayLabel={dayLabel}
+              dayLabel={hasLabels ? dayLabel : null}
               onDayLabelTap={
-                activeTeamId ? () => setCityPickerOpen(true) : undefined
+                hasLabels && activeTeamId
+                  ? () => setCityPickerOpen(true)
+                  : undefined
               }
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
@@ -707,14 +721,11 @@ export default function CalendarTab() {
         />
       ) : null}
 
-      {/* Пикер метки дня (web CityPickerModal): метки бригады + «Убрать». */}
-      <CityPickerSheet
+      {/* Пикер метки дня — центрированная карточка (web CityPickerModal);
+          тап по активной строке снимает метку. */}
+      <CityPickerModal
         visible={cityPickerOpen}
-        dateLabel={day.toLocaleDateString("ru-RU", {
-          weekday: "long",
-          day: "numeric",
-          month: "long",
-        })}
+        dateKey={dayYmdForLabel}
         options={labelOptions}
         selected={
           activeTeamId
@@ -742,6 +753,14 @@ export default function CalendarTab() {
           setCityPickerOpen(false);
         }}
         onClose={() => setCityPickerOpen(false)}
+        onSettings={
+          activeTeamId
+            ? () => {
+                setCityPickerOpen(false);
+                router.push(`/cabinet/teams/${activeTeamId}/cities`);
+              }
+            : undefined
+        }
       />
 
       <MiniCalendar

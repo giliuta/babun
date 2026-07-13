@@ -46,7 +46,7 @@ export function CalendarHeader({
         onPress={onGear}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Настройки календаря"
+        accessibilityLabel="Настройки команды"
         style={({ pressed }) => ({
           width: 44,
           height: 44,

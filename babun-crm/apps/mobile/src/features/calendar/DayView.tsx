@@ -672,8 +672,12 @@ function DayHeader({
 }: {
   dateYmd: string;
   isToday: boolean;
-  /** Метка дня (город бригады) — web parity DayColumn city pill. */
+  /** Метка дня (город бригады) — web parity DayColumn header, variant C:
+   *  цветной текст + 3px спайн по нижней кромке. null при отсутствии —
+   *  шапка чистая, никакого «+ метка» (Phase I38). */
   label?: { name: string; color: string } | null;
+  /** Тап по ВСЕЙ шапке открывает пикер метки (web onCityTap). undefined,
+   *  когда у бригады нет меток — шапка не интерактивна. */
   onLabelTap?: () => void;
 }) {
   const t = useThemeColors();
@@ -681,7 +685,16 @@ function DayHeader({
   const date = new Date(y, (m || 1) - 1, d || 1);
   const weekend = date.getDay() === 0 || date.getDay() === 6;
   return (
-    <View
+    <Pressable
+      onPress={onLabelTap}
+      disabled={!onLabelTap}
+      accessibilityRole={onLabelTap ? "button" : undefined}
+      accessibilityLabel={
+        onLabelTap
+          ? `${label ? `Метка дня: ${label.name}` : "Без метки"} — сменить метку`
+          : undefined
+      }
+      className="active:opacity-70"
       style={{
         alignItems: "center",
         paddingBottom: 4,
@@ -724,31 +737,38 @@ function DayHeader({
           {date.getDate()}
         </Text>
       </View>
-      {/* Пилл метки дня: короткое имя (3 буквы, web parity slice(0,3));
-          без метки — тихий «+ метка». Тап открывает пикер. */}
-      {onLabelTap ? (
-        <Pressable
-          onPress={onLabelTap}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel={label ? `Метка дня: ${label.name}` : "Задать метку дня"}
-          className="mt-1 rounded-full px-2 py-0.5 active:opacity-70"
-          style={{ backgroundColor: label ? `${label.color}1f` : t.fill }}
-        >
+      {/* Метка — цветной текст (3 буквы) без пилла; цветовой сигнал несёт
+          спайн по нижней кромке (web variant C). */}
+      {label ? (
+        <>
           <Text
             style={{
+              marginTop: 1,
               fontSize: 10,
               fontWeight: "700",
               letterSpacing: 0.5,
               textTransform: "uppercase",
-              color: label ? label.color : t.faint,
+              color: label.color,
             }}
           >
-            {label ? label.name.slice(0, 3) : "+ метка"}
+            {label.name.slice(0, 3)}
           </Text>
-        </Pressable>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 6,
+              right: 6,
+              height: 3,
+              borderTopLeftRadius: 3,
+              borderTopRightRadius: 3,
+              backgroundColor: label.color,
+            }}
+          />
+        </>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 

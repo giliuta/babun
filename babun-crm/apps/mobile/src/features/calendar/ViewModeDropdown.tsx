@@ -4,19 +4,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, ChevronDown } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
-export type CalMode = "day" | "3days" | "week" | "month" | "agenda";
+export type CalMode = "day" | "week" | "month" | "agenda";
 
-// Web parity: VIEW_MODE_ORDER = day / 3days / week / month / agenda.
+// День / Неделя / Месяц / Список («3 дня» удалён по решению владельца
+// 2026-07-13 — промежуточный режим не использовался).
 const MODES: { key: CalMode; label: string }[] = [
   { key: "day", label: "День" },
-  { key: "3days", label: "3 дня" },
   { key: "week", label: "Неделя" },
   { key: "month", label: "Месяц" },
   { key: "agenda", label: "Список" },
 ];
 const LABEL: Record<CalMode, string> = {
   day: "День",
-  "3days": "3 дня",
   week: "Неделя",
   month: "Месяц",
   agenda: "Список",
