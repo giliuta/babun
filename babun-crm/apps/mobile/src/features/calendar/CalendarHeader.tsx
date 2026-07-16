@@ -16,6 +16,7 @@ export function CalendarHeader({
   onModeChange,
   onGear,
   onTitlePress,
+  onTitleLongPress,
   onToday,
 }: {
   monthTitle: string;
@@ -27,6 +28,8 @@ export function CalendarHeader({
   onModeChange: (m: CalMode) => void;
   onGear: () => void;
   onTitlePress: () => void;
+  /** ВРЕМЕННО: дев-цикл вариантов ячейки даты (date-header.tsx). */
+  onTitleLongPress?: () => void;
   onToday: () => void;
 }) {
   const t = useThemeColors();
@@ -62,6 +65,8 @@ export function CalendarHeader({
 
       <Pressable
         onPress={onTitlePress}
+        onLongPress={onTitleLongPress}
+        delayLongPress={400}
         accessibilityRole="button"
         accessibilityLabel={`${monthTitle}, выбрать дату`}
         style={({ pressed }) => ({

@@ -58,6 +58,10 @@ import {
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
+import {
+  useDateHeaderVariant,
+  VARIANT_TITLES,
+} from "@/features/calendar/date-header";
 import { DaySummaryStrip } from "@/features/calendar/DaySummaryStrip";
 import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
@@ -257,6 +261,10 @@ export default function CalendarTab() {
     getStorage().set(CAL_VIEW_KEY, { mode, teamId: teamChoice });
   }, [mode, teamChoice]);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
+  // Вариант ячейки даты в шапках (1/2/3) — временный дев-переключатель,
+  // циклится long-press-ом по заголовку месяца (см. date-header.tsx).
+  const { variant: dateVariant, cycle: cycleDateVariant } =
+    useDateHeaderVariant();
   const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
@@ -1125,11 +1133,18 @@ export default function CalendarTab() {
     // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
     // и так на UI-потоке; здесь догоняют только «холодные» слои (текст-фит).
     onZoom: (v: number) => startTransition(() => setHourH(v)),
+    dateVariant,
   };
 
   const pickDay = (d: Date) => {
     setDay(startOfDay(d));
     setMode("day");
+  };
+  // Тап по дате в Неделе — выбор якоря без смены вида (повторный тап по
+  // выбранной откроет День — см. WeekHeaderRow).
+  const selectDay = (d: Date) => {
+    haptics.tap();
+    setDay(startOfDay(d));
   };
 
   // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
@@ -1175,6 +1190,13 @@ export default function CalendarTab() {
         // есть: без команд экран занят first-run гейтом выше).
         onGear={() => router.push(`/cabinet/teams/${activeTeamId}`)}
         onTitlePress={() => setMiniCalOpen(true)}
+        // ВРЕМЕННЫЙ дев-переключатель вариантов ячейки даты (см.
+        // date-header.tsx): убрать после выбора владельцем.
+        onTitleLongPress={() => {
+          const v = cycleDateVariant();
+          haptics.tap();
+          toast(`Даты: вариант ${v} — ${VARIANT_TITLES[v]}`);
+        }}
         onToday={goToday}
       />
       <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
@@ -1195,6 +1217,7 @@ export default function CalendarTab() {
           serviceSummary={serviceSummaryFor}
           onEdit={openEdit}
           onMenu={openActionMenu}
+          labelFor={hasLabels ? labelFor : undefined}
           onCreateNew={() => openCreate()}
           refreshing={isRefetching}
           onRefresh={onRefresh}
@@ -1211,6 +1234,8 @@ export default function CalendarTab() {
                 openCreate({ date: d, time_start: timeStart })
               }
               onMenu={openActionMenu}
+              selectedYmd={dayYmd}
+              onSelectDay={selectDay}
               onPickDay={pickDay}
               onPickLabelDay={
                 hasLabels && activeTeamId
@@ -1281,6 +1306,7 @@ export default function CalendarTab() {
                   financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
+                  labelFor={hasLabels ? labelFor : undefined}
                   onPickDay={openDayFromMonth}
                 />
               )}

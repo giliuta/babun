@@ -28,6 +28,7 @@ export function AgendaView({
   serviceSummary,
   onEdit,
   onMenu,
+  labelFor,
   onCreateNew,
   refreshing,
   onRefresh,
@@ -43,6 +44,9 @@ export function AgendaView({
   onEdit: (a: Appointment) => void;
   /** Long-press контекстное меню записи — как в Day/Week. */
   onMenu?: (a: Appointment) => void;
+  /** Метка дня (город) — чип в заголовке дня: единая система дат со
+   *  шапками Дня/Недели и точками Месяца. */
+  labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onCreateNew: () => void;
   refreshing: boolean;
   onRefresh: () => void;
@@ -66,6 +70,7 @@ export function AgendaView({
         <DaySection
           section={item}
           header={headerRu(item.title, todayYmd, tomorrowYmd)}
+          label={labelFor?.(item.title) ?? null}
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
@@ -88,6 +93,7 @@ export function AgendaView({
 function DaySection({
   section,
   header,
+  label,
   clientName,
   serviceSummary,
   onEdit,
@@ -96,6 +102,7 @@ function DaySection({
 }: {
   section: AgendaSection;
   header: string;
+  label: { name: string; color: string } | null;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -120,18 +127,44 @@ function DaySection({
   return (
     <View>
       <View className="flex-row items-center justify-between px-2 pb-1">
-        <Text
-          accessibilityRole="header"
-          style={{
-            fontSize: 12,
-            fontWeight: "600",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.sub,
-          }}
-        >
-          {header}
-        </Text>
+        <View className="flex-row items-center" style={{ gap: 6 }}>
+          <Text
+            accessibilityRole="header"
+            style={{
+              fontSize: 12,
+              fontWeight: "600",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: t.sub,
+            }}
+          >
+            {header}
+          </Text>
+          {/* Чип метки дня — тот же цвет города, что в шапках сетки. */}
+          {label ? (
+            <View
+              className="flex-row items-center rounded-full"
+              style={{
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                backgroundColor: `${label.color}1f`,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  fontSize: 10,
+                  fontWeight: "700",
+                  letterSpacing: 0.5,
+                  textTransform: "uppercase",
+                  color: label.color,
+                }}
+              >
+                {label.name}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         {mapsUrl ? (
           <Pressable
             onPress={() => Linking.openURL(mapsUrl)}

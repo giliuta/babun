@@ -40,6 +40,7 @@ export const MonthView = memo(function MonthView({
   financeAppointments,
   teamId,
   todayYmd,
+  labelFor,
   onPickDay,
 }: {
   month: Date; // first of the displayed month
@@ -55,6 +56,9 @@ export const MonthView = memo(function MonthView({
   teamId: string | null;
   /** Business-timezone today (YYYY-MM-DD); falls back to device time. */
   todayYmd?: string;
+  /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
+   *  меток так же, как шапки Дня/Недели (единая система дат). */
+  labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onPickDay: (d: Date) => void;
 }) {
   const cells = useMemo(() => {
@@ -142,12 +146,13 @@ export const MonthView = memo(function MonthView({
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
+              const label = inMonth ? labelFor?.(key) ?? null : null;
               return (
                 <Pressable
                   key={key}
                   onPress={() => onPickDay(d)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
+                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
                   className="flex-1 active:opacity-60"
                   style={{
                     padding: 4,
@@ -159,30 +164,44 @@ export const MonthView = memo(function MonthView({
                   }}
                 >
                   <View className="w-full flex-row items-center justify-between">
-                    {isToday ? (
-                      <View
-                        className="h-6 w-6 items-center justify-center rounded-full"
-                        style={{ backgroundColor: t.accent }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: t.onAccent }}>
+                    <View className="flex-row items-center" style={{ gap: 3 }}>
+                      {isToday ? (
+                        <View
+                          className="h-6 w-6 items-center justify-center rounded-full"
+                          style={{ backgroundColor: t.accent }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: t.onAccent }}>
+                            {d.getDate()}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "600",
+                            color: inMonth
+                              ? isWeekend
+                                ? t.danger
+                                : t.ink
+                              : t.faint,
+                          }}
+                        >
                           {d.getDate()}
                         </Text>
-                      </View>
-                    ) : (
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: "600",
-                          color: inMonth
-                            ? isWeekend
-                              ? t.danger
-                              : t.ink
-                            : t.faint,
-                        }}
-                      >
-                        {d.getDate()}
-                      </Text>
-                    )}
+                      )}
+                      {/* Точка метки — тот же цвет города, что в шапках
+                          Дня/Недели: маршрут читается и с высоты месяца. */}
+                      {label ? (
+                        <View
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: label.color,
+                          }}
+                        />
+                      ) : null}
+                    </View>
                     {count > 0 ? (
                       <View
                         className="rounded-full px-1.5"

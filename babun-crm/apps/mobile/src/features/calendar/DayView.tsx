@@ -18,6 +18,7 @@ import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import { missingAddress, useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
+import { DateCell, type DateHeaderVariant } from "@/features/calendar/date-header";
 
 export const RAIL_W = 48;
 // Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
@@ -891,28 +892,27 @@ export function DayColumn({
 // the user must always see WHICH day is open. Same visual language as the
 // WeekView days-row: uppercase weekday, 26pt date circle (cobalt = today),
 // red weekends. `label` reserves the slot for the per-day city tag.
-const WEEKDAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-
 function DayHeader({
   dateYmd,
   isToday,
+  isPast,
   label,
+  variant,
   onLabelTap,
 }: {
   dateYmd: string;
   isToday: boolean;
-  /** Метка дня (город бригады) — web parity DayColumn header, variant C:
-   *  цветной текст + 3px спайн по нижней кромке. null при отсутствии —
-   *  шапка чистая, никакого «+ метка» (Phase I38). */
+  isPast: boolean;
+  /** Метка дня (город бригады). null при отсутствии — шапка чистая,
+   *  никакого «+ метка» (Phase I38). */
   label?: { name: string; color: string } | null;
+  variant: DateHeaderVariant;
   /** Тап по ВСЕЙ шапке открывает пикер метки (web onCityTap). undefined,
    *  когда у бригады нет меток — шапка не интерактивна. */
   onLabelTap?: () => void;
 }) {
-  const t = useThemeColors();
   const [y, m, d] = dateYmd.split("-").map(Number);
   const date = new Date(y, (m || 1) - 1, d || 1);
-  const weekend = date.getDay() === 0 || date.getDay() === 6;
   return (
     <Pressable
       onPress={onLabelTap}
@@ -924,79 +924,16 @@ function DayHeader({
           : undefined
       }
       className="active:opacity-70"
-      style={{
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingBottom: 4,
-        paddingTop: 2,
-      }}
+      style={{ flex: 1 }}
     >
-      {/* Шапка фиксированной высоты (HEADER_H) — крупный Dynamic Type
-          капим на 1.2, иначе три строки не помещаются в 64px. */}
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{
-          fontSize: 11,
-          fontWeight: "600",
-          color: weekend ? t.danger : t.faint,
-          textTransform: "uppercase",
-        }}
-      >
-        {WEEKDAYS_RU[(date.getDay() + 6) % 7]}
-      </Text>
-      <View
-        style={{
-          marginTop: 2,
-          height: 26,
-          minWidth: 26,
-          borderRadius: 13,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: isToday ? t.accent : "transparent",
-          paddingHorizontal: 6,
-        }}
-      >
-        <Text
-          className="tabular-nums"
-          maxFontSizeMultiplier={1.2}
-          style={{
-            fontSize: 15,
-            fontWeight: "700",
-            color: isToday ? t.onAccent : weekend ? t.danger : t.ink,
-          }}
-        >
-          {date.getDate()}
-        </Text>
-      </View>
-      {/* Метка — тонированный пилл с ПОЛНЫМ именем (в дне ширины хватает).
-          Полноширинный спайн здесь выглядел «колбасой» (фото владельца
-          2026-07-13) — цвет колонке даёт wash, пилл называет метку. */}
-      {label ? (
-        <View
-          style={{
-            marginTop: 3,
-            borderRadius: 999,
-            paddingHorizontal: 8,
-            paddingVertical: 2,
-            backgroundColor: `${label.color}1f`,
-          }}
-        >
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.2}
-            style={{
-              fontSize: 10,
-              fontWeight: "700",
-              letterSpacing: 0.5,
-              textTransform: "uppercase",
-              color: label.color,
-            }}
-          >
-            {label.name}
-          </Text>
-        </View>
-      ) : null}
+      <DateCell
+        date={date}
+        size="lg"
+        variant={variant}
+        isToday={isToday}
+        isPast={isPast}
+        label={label}
+      />
     </Pressable>
   );
 }
@@ -1031,6 +968,7 @@ export function DayView({
   scrollToHour,
   labelFor,
   onDayLabelTap,
+  dateVariant,
 }: {
   /** Центральная (закоммиченная) дата. Соседние страницы — ±1 день. */
   dateYmd: string;
@@ -1072,6 +1010,8 @@ export function DayView({
   /** Метка дня по дате (undefined — у бригады нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onDayLabelTap?: () => void;
+  /** Вариант ячейки даты (временный дев-переключатель — date-header.tsx). */
+  dateVariant: DateHeaderVariant;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
@@ -1098,7 +1038,9 @@ export function DayView({
               <DayHeader
                 dateYmd={d}
                 isToday={d === todayYmd}
+                isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
+                variant={dateVariant}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}
               />
             );

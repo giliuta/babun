@@ -1,8 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
-import { useThemeColors, type ThemeColors } from "@/theme/colors";
+import { useThemeColors } from "@/theme/colors";
 import {
   DayColumn,
   TimeRail,
@@ -12,8 +12,7 @@ import {
 } from "@/features/calendar/DayView";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-
-const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+import { DateCell, type DateHeaderVariant } from "@/features/calendar/date-header";
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -45,9 +44,12 @@ export function WeekView({
   onMenu,
   onCreateAt,
   onReschedule,
+  selectedYmd,
+  onSelectDay,
   onPickDay,
   onPickLabelDay,
   onCommitPage,
+  dateVariant,
   startHour,
   endHour,
   stepMinutes,
@@ -76,10 +78,15 @@ export function WeekView({
   onMenu?: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
-  /** Долгое нажатие по шапке даты — открыть день. */
+  /** Выбранный день (якорь календаря) — подсвечивается в шапке; раньше
+   *  выбор в Неделе был невидим вовсе. */
+  selectedYmd: string;
+  /** Тап по НЕвыбранной дате — выбрать её (якорь двигается, вид остаётся). */
+  onSelectDay: (d: Date) => void;
+  /** Повторный тап по выбранной дате — открыть её Днём. */
   onPickDay: (d: Date) => void;
-  /** Тап по шапке даты — попап метки этой даты (undefined, когда у бригады
-   *  нет меток: тап тогда ничего не делает — решение владельца 2026-07-13). */
+  /** Долгое нажатие по шапке даты — попап метки этой даты (undefined,
+   *  когда у бригады нет меток: long-press тогда ничего не делает). */
   onPickLabelDay?: (dateYmd: string) => void;
   /** Палец долистал страницу: родитель сдвигает неделю на ±7 дней. */
   onCommitPage: (dir: 1 | -1) => void;
@@ -110,6 +117,8 @@ export function WeekView({
   bufferMinutes?: number;
   nowMinutes?: number | null;
   scrollToHour?: number;
+  /** Вариант ячейки даты (временный дев-переключатель — date-header.tsx). */
+  dateVariant: DateHeaderVariant;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({
@@ -139,9 +148,11 @@ export function WeekView({
               today={today}
               apptsFor={apptsFor}
               labelFor={labelFor}
+              selectedYmd={selectedYmd}
+              onSelectDay={onSelectDay}
               onPickDay={onPickDay}
               onPickLabelDay={onPickLabelDay}
-              t={t}
+              dateVariant={dateVariant}
             />
           )}
         />
@@ -205,136 +216,68 @@ export function WeekView({
   );
 }
 
-// Одна страница полосы шапок: 7 ячеек (день недели, число, счётчик,
-// метка + спайн). Тап — попап метки этой даты (если метки есть),
-// долгое нажатие — открыть день (решение владельца 2026-07-13).
+// Одна страница полосы шапок: 7 ячеек DateCell. Семантика (редизайн
+// 2026-07-16): тап = выбрать день (якорь), повторный тап по выбранному =
+// открыть его Днём, long-press = попап метки даты (если метки есть).
+// Раньше тап открывал пикер метки — «выбрать дату» тапом было нельзя,
+// а выбранный день в Неделе вообще не подсвечивался.
 function WeekHeaderRow({
   days,
   today,
   apptsFor,
   labelFor,
+  selectedYmd,
+  onSelectDay,
   onPickDay,
   onPickLabelDay,
-  t,
+  dateVariant,
 }: {
   days: Date[];
   today: Date;
   apptsFor: (dateYmd: string) => Appointment[];
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  selectedYmd: string;
+  onSelectDay: (d: Date) => void;
   onPickDay: (d: Date) => void;
   onPickLabelDay?: (dateYmd: string) => void;
-  t: ThemeColors;
+  dateVariant: DateHeaderVariant;
 }) {
+  const todayYmd = formatYMD(today);
   return (
     <View style={{ flex: 1, flexDirection: "row" }}>
       {days.map((d) => {
         const ymd = formatYMD(d);
         const isToday = sameDay(d, today);
-        const weekend = d.getDay() === 0 || d.getDay() === 6;
+        const isSelected = ymd === selectedYmd;
         const count = apptsFor(ymd).length;
         const label = labelFor?.(ymd) ?? null;
         return (
           <Pressable
             key={ymd}
-            onPress={
+            onPress={() => (isSelected ? onPickDay(d) : onSelectDay(d))}
+            onLongPress={
               onPickLabelDay ? () => onPickLabelDay(ymd) : undefined
             }
-            onLongPress={() => onPickDay(d)}
             delayLongPress={350}
             accessibilityRole="button"
-            accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+            accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isSelected ? ", выбран" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
             accessibilityHint={
-              onPickLabelDay
-                ? "Нажатие меняет метку, долгое нажатие открывает день"
-                : "Долгое нажатие открывает день"
+              isSelected
+                ? `Нажатие открывает день${onPickLabelDay ? ", долгое нажатие меняет метку" : ""}`
+                : `Нажатие выбирает день${onPickLabelDay ? ", долгое нажатие меняет метку" : ""}`
             }
-            style={{ flex: 1, alignItems: "center", paddingTop: 4 }}
+            style={{ flex: 1 }}
           >
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: "600",
-                color: weekend ? t.danger : t.faint,
-                textTransform: "uppercase",
-              }}
-            >
-              {WEEKDAYS[(d.getDay() + 6) % 7]}
-            </Text>
-            <View
-              style={{
-                marginTop: 2,
-                height: 26,
-                width: 26,
-                borderRadius: 13,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: isToday ? t.accent : "transparent",
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "700",
-                  color: isToday ? t.onAccent : weekend ? t.danger : t.ink,
-                }}
-                className="tabular-nums"
-              >
-                {d.getDate()}
-              </Text>
-            </View>
-            {/* Счётчик записей — в углу ячейки (web DayColumn top-right,
-                Bumpix headers): точка занятости не давала числа и вместе с
-                меткой не влезала в 64pt (метка резалась — фото владельца). */}
-            {count > 0 ? (
-              <Text
-                className="tabular-nums"
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  position: "absolute",
-                  top: 2,
-                  right: 3,
-                  fontSize: 10,
-                  fontWeight: "600",
-                  color: isToday ? t.accent : t.faint,
-                }}
-              >
-                {count}
-              </Text>
-            ) : null}
-            {/* Метка дня — web DayColumn header, variant C: цветной текст
-                (3 буквы) + 3px спайн по нижней кромке (сидит на линии
-                обёртки). Ряд недель читается рядом цветных полосок. */}
-            {label ? (
-              <>
-                <Text
-                  numberOfLines={1}
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    marginTop: 2,
-                    fontSize: 9,
-                    fontWeight: "700",
-                    letterSpacing: 0.5,
-                    textTransform: "uppercase",
-                    color: label.color,
-                  }}
-                >
-                  {label.name.slice(0, 3)}
-                </Text>
-                <View
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 6,
-                    right: 6,
-                    height: 3,
-                    borderTopLeftRadius: 3,
-                    borderTopRightRadius: 3,
-                    backgroundColor: label.color,
-                  }}
-                />
-              </>
-            ) : null}
+            <DateCell
+              date={d}
+              size="sm"
+              variant={dateVariant}
+              isToday={isToday}
+              isSelected={isSelected}
+              isPast={ymd < todayYmd}
+              count={count}
+              label={label}
+            />
           </Pressable>
         );
       })}
