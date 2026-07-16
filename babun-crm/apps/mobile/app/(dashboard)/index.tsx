@@ -64,6 +64,7 @@ import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { RescheduleSheet } from "@/features/calendar/RescheduleSheet";
+import { SlotConfirmPopup } from "@/features/calendar/SlotConfirmPopup";
 import { scheduleAppointmentReminder } from "@/features/calendar/reminders";
 import { useAppointments } from "@/features/calendar/queries";
 import {
@@ -641,6 +642,13 @@ export default function CalendarTab() {
     setBookDefaults({ team_id: activeTeamId, ...defaults });
     setSheetOpen(true);
   };
+  // Тап по свободному слоту идёт через пре-попап (web SlotConfirmPopup):
+  // уточнить дату/время «тумблерами» и выбрать Клиент/Событие — полная
+  // форма открывается уже с верным черновиком. Пути ?new=/агенды попап
+  // обходят (web parity: FAB-путь без попапа).
+  const [slotConfirm, setSlotConfirm] = useState<
+    { date: string; time_start: string } | null
+  >(null);
 
   // First-run gate CTA — spins up the first team calendar (web parity:
   // /dashboard/teams?new=1 immediately creates a team). Default name +
@@ -1216,7 +1224,7 @@ export default function CalendarTab() {
               today={now}
               labelFor={hasLabels ? labelFor : undefined}
               onCreateAt={(d, timeStart) =>
-                openCreate({ date: d, time_start: timeStart })
+                setSlotConfirm({ date: d, time_start: timeStart })
               }
               onMenu={openActionMenu}
               onPickDay={pickDay}
@@ -1265,7 +1273,7 @@ export default function CalendarTab() {
               onJumpToNow={goToday}
               onMenu={openActionMenu}
               onCreateAt={(d, timeStart) =>
-                openCreate({ date: d, time_start: timeStart })
+                setSlotConfirm({ date: d, time_start: timeStart })
               }
               onCommitPage={(dir) => setDay((d) => addDays(d, dir))}
               {...gridProps}
@@ -1405,6 +1413,22 @@ export default function CalendarTab() {
         appointment={reschedulingApt}
         appointments={visibleAppts}
         onClose={() => setReschedulingApt(null)}
+      />
+
+      {/* Пре-попап тапа по слоту: дата/время «тумблерами» + выбор
+          Клиент/Событие, полная форма открывается уже с верным черновиком.
+          Тип в форме остаётся переключаемым сегментом Работа/Событие. */}
+      <SlotConfirmPopup
+        slot={slotConfirm}
+        // Полный видимый набор: дату в попапе можно сдвигать стрелками,
+        // findOverlap сам сопоставляет по дате черновика.
+        appointments={visibleAppts}
+        durationMin={calSettings?.gridStep ?? 60}
+        onClose={() => setSlotConfirm(null)}
+        onConfirm={(kind, next) => {
+          setSlotConfirm(null);
+          openCreate({ date: next.date, time_start: next.time_start, kind });
+        }}
       />
     </Screen>
   );
