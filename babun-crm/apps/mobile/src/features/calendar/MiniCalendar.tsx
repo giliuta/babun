@@ -41,6 +41,9 @@ export function MiniCalendar({
     setViewYear(currentDate.getFullYear());
     setViewMonth(currentDate.getMonth());
   }
+  // Зеркальная ветка: без сброса якоря повторное открытие на ТОЙ ЖЕ дате
+  // показывало бы пролистанный в прошлый раз месяц.
+  if (!visible && anchorKey !== "") setAnchorKey("");
 
   const countByDate = useMemo(() => {
     const m = new Map<string, number>();
@@ -75,10 +78,17 @@ export function MiniCalendar({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={{ flex: 1, backgroundColor: t.scrim }} onPress={onClose}>
+      {/* accessible={false} на скриме и карточке: иначе VoiceOver схлопывает
+          весь поповер в один безымянный «button» и дни недостижимы. */}
+      <Pressable
+        accessible={false}
+        style={{ flex: 1, backgroundColor: t.scrim }}
+        onPress={onClose}
+      >
         <Pressable
           // Stop taps inside the card from closing the modal.
           onPress={() => {}}
+          accessible={false}
           style={{
             position: "absolute",
             top: insets.top + 52,

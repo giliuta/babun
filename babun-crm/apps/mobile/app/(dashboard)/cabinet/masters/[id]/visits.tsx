@@ -154,7 +154,13 @@ export default function MasterVisitsScreen() {
   };
 
   const openInCalendar = (a: Appointment) => {
-    router.push(`/(dashboard)?date=${encodeURIComponent(a.date)}`);
+    // teamId — календарь переключается на бригаду записи, иначе визит
+    // чужой бригады открывал бы пустой день активной команды.
+    router.push(
+      `/(dashboard)?date=${encodeURIComponent(a.date)}${
+        a.team_id ? `&teamId=${encodeURIComponent(a.team_id)}` : ""
+      }`,
+    );
   };
 
   return (

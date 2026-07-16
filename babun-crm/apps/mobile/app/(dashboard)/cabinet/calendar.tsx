@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   Pressable,
+  ScrollView,
   Switch,
   Text,
   View,
@@ -59,11 +60,15 @@ function Row({ label, right }: { label: string; right: React.ReactNode }) {
 }
 
 function Stepper({
+  label,
   value,
   onChange,
   min,
   max,
 }: {
+  /** Имя настройки для VoiceOver: на экране пять пар ± , без него все
+   *  кнопки звучат одинаково («минус час») и неразличимы. */
+  label: string;
   value: number;
   onChange: (v: number) => void;
   min: number;
@@ -78,7 +83,7 @@ function Stepper({
         style={{ backgroundColor: chipBg }}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Минус час"
+        accessibilityLabel={`${label}: минус час`}
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Minus color={t.body} size={16} />
@@ -91,7 +96,7 @@ function Stepper({
         style={{ backgroundColor: chipBg }}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Плюс час"
+        accessibilityLabel={`${label}: плюс час`}
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Plus color={t.body} size={16} />
@@ -121,7 +126,7 @@ function MinuteStepper({
         style={{ backgroundColor: t.fill }}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Меньше буфер"
+        accessibilityLabel="Буфер: минус 5 минут"
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Minus color={t.body} size={16} />
@@ -134,7 +139,7 @@ function MinuteStepper({
         style={{ backgroundColor: t.fill }}
         hitSlop={6}
         accessibilityRole="button"
-        accessibilityLabel="Больше буфер"
+        accessibilityLabel="Буфер: плюс 5 минут"
         className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
       >
         <Plus color={t.body} size={16} />
@@ -176,6 +181,69 @@ function SavedIndicator({ tick }: { tick: number }) {
   );
 }
 
+// Каскадный кламп веба (settings/calendar/page.tsx, v448): часовые поля
+// сохраняются не поодиночке, а согласованной пятёркой. Рабочие часы /
+// «Открывается на» ВНЕ видимого диапазона расширяют его (ментальная модель
+// «пикер даёт выбрать любой час»), сжатое видимое окно поджимает рабочую
+// полосу внутрь. Без каскада однополевой патч сохранял бы противоречие,
+// которое офлайн-санитайзер потом молча откатывает (флип-флоп значений
+// онлайн/офлайн). Патчи без часовых полей проходят насквозь.
+function cascadeHours(
+  s: CalendarSettings,
+  p: Partial<CalendarSettings>,
+): Partial<CalendarSettings> {
+  if (
+    p.startHour === undefined &&
+    p.endHour === undefined &&
+    p.workStartHour === undefined &&
+    p.workEndHour === undefined &&
+    p.scrollOpenHour === undefined
+  ) {
+    return p;
+  }
+  const next = { ...s, ...p };
+
+  // 1. Видимый диапазон ≥ 1 ч: инверсия двигает ПРОТИВОПОЛОЖНУЮ границу.
+  if (next.endHour <= next.startHour) {
+    if (p.startHour !== undefined) next.endHour = Math.min(24, next.startHour + 1);
+    else if (p.endHour !== undefined) next.startHour = Math.max(0, next.endHour - 1);
+  }
+
+  // 2. Рабочие часы / «Открывается на» вне видимого — расширяют видимое.
+  if (p.workStartHour !== undefined && p.workStartHour < next.startHour) {
+    next.startHour = Math.max(0, p.workStartHour);
+  }
+  if (p.workEndHour !== undefined && p.workEndHour > next.endHour) {
+    next.endHour = Math.min(24, p.workEndHour);
+  }
+  if (p.scrollOpenHour !== undefined) {
+    if (p.scrollOpenHour < next.startHour) next.startHour = Math.max(0, p.scrollOpenHour);
+    if (p.scrollOpenHour > next.endHour) next.endHour = Math.min(24, p.scrollOpenHour);
+  }
+
+  // 3. Рабочая полоса — внутри (возможно расширенного) видимого, минимум 1 ч.
+  let ws = next.workStartHour ?? next.startHour;
+  let we = next.workEndHour ?? next.endHour;
+  ws = Math.max(next.startHour, Math.min(ws, next.endHour - 1));
+  we = Math.min(next.endHour, Math.max(we, next.startHour + 1));
+  if (we <= ws) {
+    if (p.workStartHour !== undefined) we = Math.min(next.endHour, ws + 1);
+    else ws = Math.max(next.startHour, we - 1);
+  }
+
+  // 4. «Открывается на» — внутри видимого; без явного значения — workStart.
+  const open = Math.max(next.startHour, Math.min(next.scrollOpenHour ?? ws, next.endHour));
+
+  return {
+    ...p,
+    startHour: next.startHour,
+    endHour: next.endHour,
+    workStartHour: ws,
+    workEndHour: we,
+    scrollOpenHour: open,
+  };
+}
+
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const { data: settings } = useCalendarSettings();
@@ -192,7 +260,7 @@ export default function CalendarSettingsScreen() {
   // степпера записал бы значение не от той базы.
   const patch = (p: Partial<CalendarSettings>) => {
     if (!settings) return;
-    save.mutate(p, {
+    save.mutate(cascadeHours(s, p), {
       onSuccess: () => setSavedTick(Date.now()),
       onError: (e) => Alert.alert("Ошибка", e.message),
     });
@@ -204,133 +272,150 @@ export default function CalendarSettingsScreen() {
         title="Календарь"
         right={<SavedIndicator tick={savedTick} />}
       />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
+        <SectionEyebrow>Видимое время</SectionEyebrow>
+        <SectionCard padded>
+          <Row
+            label="Начало"
+            right={
+              <Stepper
+                label="Видимое время, начало"
+                value={s.startHour ?? 0}
+                min={0}
+                max={(s.endHour ?? 24) - 1}
+                onChange={(v) => patch({ startHour: v })}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            label="Конец"
+            right={
+              <Stepper
+                label="Видимое время, конец"
+                value={s.endHour ?? 24}
+                min={(s.startHour ?? 0) + 1}
+                max={24}
+                onChange={(v) => patch({ endHour: v })}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            label="Открывается на"
+            right={
+              <Stepper
+                label="Открывается на"
+                // Фолбэк как в календаре (index.tsx scrollToHour):
+                // scrollOpenHour → workStartHour → 9, иначе экран
+                // показывал бы час, на который сетка не откроется.
+                value={Math.min(
+                  Math.max(
+                    s.scrollOpenHour ?? s.workStartHour ?? 9,
+                    s.startHour ?? 0,
+                  ),
+                  (s.endHour ?? 24) - 1,
+                )}
+                min={s.startHour ?? 0}
+                max={(s.endHour ?? 24) - 1}
+                onChange={(v) => patch({ scrollOpenHour: v })}
+              />
+            }
+          />
+        </SectionCard>
+        <SectionFooter>
+          Какие часы показывает сетка. «Открывается на» — час, который стоит
+          сверху при входе в календарь. У команды со своими значениями
+          (шестерёнка календаря) действуют её значения.
+        </SectionFooter>
 
-      <SectionEyebrow>Видимое время</SectionEyebrow>
-      <SectionCard padded>
-        <Row
-          label="Начало"
-          right={
-            <Stepper
-              value={s.startHour ?? 0}
-              min={0}
-              max={(s.endHour ?? 24) - 1}
-              onChange={(v) => patch({ startHour: v })}
-            />
-          }
-        />
-        <Divider />
-        <Row
-          label="Конец"
-          right={
-            <Stepper
-              value={s.endHour ?? 24}
-              min={(s.startHour ?? 0) + 1}
-              max={24}
-              onChange={(v) => patch({ endHour: v })}
-            />
-          }
-        />
-        <Divider />
-        <Row
-          label="Открывается на"
-          right={
-            <Stepper
-              value={Math.min(
-                Math.max(s.scrollOpenHour ?? 8, s.startHour ?? 0),
-                (s.endHour ?? 24) - 1,
-              )}
-              min={s.startHour ?? 0}
-              max={(s.endHour ?? 24) - 1}
-              onChange={(v) => patch({ scrollOpenHour: v })}
-            />
-          }
-        />
-      </SectionCard>
-      <SectionFooter>
-        Какие часы показывает сетка. «Открывается на» — час, который стоит
-        сверху при входе в календарь. У команды со своими значениями
-        (шестерёнка календаря) действуют её значения.
-      </SectionFooter>
+        <SectionEyebrow>Рабочие часы по умолчанию</SectionEyebrow>
+        <SectionCard padded>
+          <Row
+            label="Начало"
+            right={
+              <Stepper
+                label="Рабочие часы, начало"
+                value={s.workStartHour ?? 6}
+                min={0}
+                max={(s.workEndHour ?? 22) - 1}
+                onChange={(v) => patch({ workStartHour: v })}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            label="Конец"
+            right={
+              <Stepper
+                label="Рабочие часы, конец"
+                value={s.workEndHour ?? 22}
+                min={(s.workStartHour ?? 6) + 1}
+                max={24}
+                onChange={(v) => patch({ workEndHour: v })}
+              />
+            }
+          />
+        </SectionCard>
+        <SectionFooter>
+          У команды с собственным расписанием действует её расписание
+          (шестерёнка календаря).
+        </SectionFooter>
 
-      <SectionEyebrow>Рабочие часы по умолчанию</SectionEyebrow>
-      <SectionCard padded>
-        <Row
-          label="Начало"
-          right={
-            <Stepper
-              value={s.workStartHour ?? 6}
-              min={0}
-              max={(s.workEndHour ?? 22) - 1}
-              onChange={(v) => patch({ workStartHour: v })}
-            />
-          }
-        />
-        <Divider />
-        <Row
-          label="Конец"
-          right={
-            <Stepper
-              value={s.workEndHour ?? 22}
-              min={(s.workStartHour ?? 6) + 1}
-              max={24}
-              onChange={(v) => patch({ workEndHour: v })}
-            />
-          }
-        />
-      </SectionCard>
-      <SectionFooter>
-        У команды с собственным расписанием действует её расписание
-        (шестерёнка календаря).
-      </SectionFooter>
+        <SectionEyebrow>Шаг сетки</SectionEyebrow>
+        <SectionCard padded>
+          <SegmentedControl
+            options={[
+              { value: "15", label: "15 мин" },
+              { value: "30", label: "30 мин" },
+              { value: "60", label: "60 мин" },
+            ]}
+            value={String(s.gridStep) as "15" | "30" | "60"}
+            onChange={(v) => patch({ gridStep: Number(v) as 15 | 30 | 60 })}
+          />
+        </SectionCard>
 
-      <SectionEyebrow>Шаг сетки</SectionEyebrow>
-      <SectionCard padded>
-        <SegmentedControl
-          options={[
-            { value: "15", label: "15 мин" },
-            { value: "30", label: "30 мин" },
-            { value: "60", label: "60 мин" },
-          ]}
-          value={String(s.gridStep) as "15" | "30" | "60"}
-          onChange={(v) => patch({ gridStep: Number(v) as 15 | 30 | 60 })}
-        />
-      </SectionCard>
+        <SectionEyebrow>Буфер между записями</SectionEyebrow>
+        <SectionCard padded>
+          <Row
+            label="Минимальный зазор"
+            right={
+              <MinuteStepper
+                value={s.bufferMinutes ?? 0}
+                min={0}
+                max={120}
+                onChange={(v) => patch({ bufferMinutes: v })}
+              />
+            }
+          />
+        </SectionCard>
+        <SectionFooter>
+          Зазор после каждой записи подсвечивается на сетке серым — время на
+          дорогу и уборку.
+        </SectionFooter>
 
-      <SectionEyebrow>Буфер между записями</SectionEyebrow>
-      <SectionCard padded>
-        <Row
-          label="Минимальный зазор"
-          right={
-            <MinuteStepper
-              value={s.bufferMinutes ?? 0}
-              min={0}
-              max={120}
-              onChange={(v) => patch({ bufferMinutes: v })}
-            />
-          }
-        />
-      </SectionCard>
-      <SectionFooter>
-        Слоты ближе буфера к соседней записи бригады закрыты для брони.
-      </SectionFooter>
-
-      <SectionEyebrow>Отображение</SectionEyebrow>
-      <SectionCard padded>
-        <Row
-          label="Скрывать отменённые"
-          right={
-            <Switch
-              value={!!s.hideCancelled}
-              onValueChange={(v) => patch({ hideCancelled: v })}
-              trackColor={{ true: t.accent }}
-            />
-          }
-        />
-      </SectionCard>
-      <SectionFooter>
-        Если у активной команды задано своё «Скрывать отменённые»
-        (шестерёнка календаря), действует настройка команды.
-      </SectionFooter>
+        <SectionEyebrow>Отображение</SectionEyebrow>
+        <SectionCard padded>
+          <Row
+            label="Скрывать отменённые"
+            right={
+              <Switch
+                value={!!s.hideCancelled}
+                onValueChange={(v) => patch({ hideCancelled: v })}
+                trackColor={{ true: t.accent }}
+                accessibilityLabel="Скрывать отменённые"
+              />
+            }
+          />
+        </SectionCard>
+        <SectionFooter>
+          Если у активной команды задано своё «Скрывать отменённые»
+          (шестерёнка календаря), действует настройка команды.
+        </SectionFooter>
+      </ScrollView>
     </Screen>
   );
 }

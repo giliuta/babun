@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   Alert,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   View,
+  type AlertButton,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import {
@@ -17,6 +20,7 @@ import {
   Check,
   ChevronLeft,
   Minus,
+  Phone,
   Plus,
   Repeat,
   Search,
@@ -33,8 +37,10 @@ import {
   type Appointment,
   type AppointmentStatus,
   type Discount,
+  type PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
-import { generateId } from "@babun/shared/local/masters";
+import { findOverlap } from "@babun/shared/common/utils/appointment-overlap";
+import { buildDebtPaidPatch } from "@/features/appointments/payment";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
@@ -51,7 +57,11 @@ import {
 } from "@/features/settings/local-settings";
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import { useServices, type Service } from "@/features/services/queries";
+import {
+  useCreateService,
+  useServices,
+  type Service,
+} from "@/features/services/queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { RepeatReminderSheet } from "@/features/recurring/RepeatReminderSheet";
 import { useCreateReminder } from "@/features/recurring/queries";
@@ -66,7 +76,9 @@ import {
   buildServices,
   formatHM,
   formatYMD,
+  humanDay,
   parseHM,
+  parseMoneyInput,
   parseYMD,
   unitPriceFor,
   type ServiceOverride,
@@ -87,6 +99,30 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "completed", label: "Выполнено" },
   { value: "cancelled", label: "Отменено" },
 ];
+
+// Правила повтора события — те же 7 пресетов, что web RepeatPickerRow
+// (custom_weekdays набирается только с веба, здесь не предлагаем).
+const REPEAT_OPTIONS: {
+  value: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">;
+  label: string;
+}[] = [
+  { value: "none", label: "Не повторять" },
+  { value: "daily", label: "Ежедневно" },
+  { value: "weekdays", label: "По будням" },
+  { value: "weekly", label: "Каждую неделю" },
+  { value: "biweekly", label: "Каждые 2 недели" },
+  { value: "monthly", label: "Каждый месяц" },
+  { value: "yearly", label: "Каждый год" },
+];
+
+// «Ежедневно · до 15 июля» — сводка правила повтора (бейдж + пикер).
+function repeatLabel(r: PersonalEventRepeat): string {
+  const base =
+    REPEAT_OPTIONS.find((o) => o.value === r.kind)?.label ??
+    (r.kind === "custom_weekdays" ? "По дням недели" : "Не повторять");
+  const until = r.kind !== "none" ? r.until : undefined;
+  return until ? `${base} · до ${humanDay(until)}` : base;
+}
 
 // "HH:MM" → minutes since midnight (sheet-local; shared helpers untouched).
 const hmToMin = (hm: string) => {
@@ -114,6 +150,10 @@ export function AppointmentSheet({
     client_id?: string | null;
     location_id?: string | null;
     team_id?: string | null;
+    /** Предвыбор услуг (?new= с карточки клиента / повторное ТО). */
+    service_ids?: string[];
+    /** Тип записи: "event" открывает шит сразу в режиме события. */
+    kind?: Appointment["kind"];
   };
 }) {
   const t = useThemeColors();
@@ -205,7 +245,16 @@ export function AppointmentSheet({
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [comment, setComment] = useState("");
   const [locationId, setLocationId] = useState<string | null>(null);
+  // Адрес денормализован в запись (бригада видит куда ехать даже у
+  // клиента без объектов): предзаполняется из выбранного объекта,
+  // правится руками. address_note — «подъезд, код» рядом с навигацией.
+  const [address, setAddress] = useState("");
+  const [addressNote, setAddressNote] = useState("");
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>({});
+  // Черновики строк цены за услугу: controlled String(price) съедал
+  // десятичный разделитель на каждом нажатии («12,» → 12 → «12»).
+  // Пока поле в фокусе показываем сырую строку, парсим на лету.
+  const [priceDrafts, setPriceDrafts] = useState<Record<string, string>>({});
   const [discountType, setDiscountType] = useState<"fixed" | "percent" | null>(null);
   const [discountValue, setDiscountValue] = useState("");
   // Откуда скидка: метка уровня лояльности при автоприменении (пишется в
@@ -214,8 +263,16 @@ export function AppointmentSheet({
   const [cancelReason, setCancelReason] = useState("");
   const [kind, setKind] = useState<"work" | "event">("work");
   const [eventColor, setEventColor] = useState<string | null>(null);
-  // Настроенный тип события (Обед, Выходной…) — кабинет «Типы событий».
+  // Тип события — ПРЕСЕТ (веб-семантика): выбор чипа применяет цвет и
+  // название, в запись не персистится. Локальный state сессии шита.
   const [eventTypeId, setEventTypeId] = useState<string | null>(null);
+  // «Весь день» — время скрыто, диапазон 00:00–23:59, флаг пишется в
+  // event_all_day (веб EventForm parity).
+  const [allDay, setAllDay] = useState(false);
+  // Правило повтора события (event_repeat, web RepeatPickerRow parity).
+  const [repeat, setRepeat] = useState<PersonalEventRepeat>({ kind: "none" });
+  // Время до включения «весь день» — выключение возвращает его.
+  const preAllDayRef = useRef<{ start: string; end: string } | null>(null);
 
   const [clientPicker, setClientPicker] = useState(false);
   const [servicePicker, setServicePicker] = useState(false);
@@ -242,6 +299,11 @@ export function AppointmentSheet({
   const loyaltyAppliedRef = useRef<{ clientId: string; percent: number } | null>(
     null,
   );
+  // Пара «поколение гидрации»: ref бампится СИНХРОННО в эффекте гидрации,
+  // state догоняет со следующим рендером. Эффект лояльности сравнивает их
+  // и пропускает волны, где стейт формы ещё от прошлой сессии шита.
+  const hydratedSeqRef = useRef(0);
+  const [hydratedSeq, setHydratedSeq] = useState(0);
   // Типы событий из кабинета — чипы быстрого применения в режиме «Событие».
   const { data: rawEventTypes = [] } = usePersonalEventTypes();
   const eventTypes = useMemo(
@@ -275,6 +337,9 @@ export function AppointmentSheet({
       setStatus(appointment.status);
       setComment(appointment.comment ?? "");
       setLocationId(appointment.location_id ?? null);
+      setAddress(appointment.address ?? "");
+      setAddressNote(appointment.address_note ?? "");
+      setPriceDrafts({});
       setOverrides(
         Object.fromEntries(
           (appointment.services ?? []).map((s) => {
@@ -303,7 +368,11 @@ export function AppointmentSheet({
       setCancelReason(appointment.cancel_reason ?? "");
       setKind(appointment.kind === "work" ? "work" : "event");
       setEventColor(appointment.color_override ?? null);
-      setEventTypeId(appointment.event_type_id ?? null);
+      // Пресеты не персистятся — выбранность чипа живёт только в сессии.
+      setEventTypeId(null);
+      setAllDay(appointment.event_all_day ?? false);
+      setRepeat(appointment.event_repeat ?? { kind: "none" });
+      preAllDayRef.current = null;
       // Web parity: the flag resets on EVERY open (edit too), so adding
       // services keeps auto-extending the end — the grow-only recalc
       // below never shrinks the stored end anyway.
@@ -315,7 +384,8 @@ export function AppointmentSheet({
       setDate(defaults?.date ?? today);
       setTimeStart(start);
       setTimeEnd(addMinutesHM(start, calSettings?.gridStep ?? 60));
-      setServiceIds([]);
+      // Предвыбор услуг из ?new= («Записать сюда» / повторное ТО).
+      setServiceIds(defaults?.service_ids ?? []);
       // Умный дефолт: команда последней созданной записи (записи одной
       // бригаде обычно набивают подряд). Явный defaults?.team_id
       // («Записать сюда» с карточки клиента) всегда важнее.
@@ -328,41 +398,60 @@ export function AppointmentSheet({
       // «Записать сюда» с карточки клиента предвыбирает объект (LOCKED
       // «Карта-диспетчер»: букинг в 2 тапа с предвыбранным объектом).
       setLocationId(defaults?.location_id ?? null);
+      const defLoc = clients
+        .find((c) => c.id === defaults?.client_id)
+        ?.locations.find((l) => l.id === defaults?.location_id);
+      setAddress(defLoc ? defLoc.address.trim() || defLoc.label.trim() : "");
+      setAddressNote("");
+      setPriceDrafts({});
       setOverrides({});
       setDiscountType(null);
       setDiscountValue("");
       setDiscountReason(null);
       loyaltyAppliedRef.current = null;
       setCancelReason("");
-      setKind("work");
+      setKind(defaults?.kind && defaults.kind !== "work" ? "event" : "work");
       setEventColor(null);
       setEventTypeId(null);
+      setAllDay(false);
+      setRepeat({ kind: "none" });
+      preAllDayRef.current = null;
       setDurationTouched(false);
     }
+    // Маркер «состояние этого открытия применено». Эффекты той же
+    // волны (лояльность) видят ещё СТАРЫЕ значения стейта прошлой
+    // сессии шита — им нельзя действовать, пока сеты выше не легли.
+    hydratedSeqRef.current += 1;
+    setHydratedSeq(hydratedSeqRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, appointment?.id]);
 
-  const globalDiscount = useMemo<Discount | null>(
-    () =>
-      discountType && Number(discountValue) > 0
-        ? {
-            type: discountType,
-            value: Number(discountValue),
-            ...(discountReason ? { reason: discountReason } : {}),
-          }
-        : null,
-    [discountType, discountValue, discountReason],
-  );
+  const globalDiscount = useMemo<Discount | null>(() => {
+    // parseMoneyInput: запятая — легальный десятичный разделитель
+    // (EU decimal-pad), Number("12,5") молча давал NaN → скидка терялась.
+    const value = parseMoneyInput(discountValue);
+    return discountType && value > 0
+      ? {
+          type: discountType,
+          value,
+          ...(discountReason ? { reason: discountReason } : {}),
+        }
+      : null;
+  }, [discountType, discountValue, discountReason]);
 
-  // Автоприменение уровня лояльности при выборе клиента.
+  // Автоприменение уровня лояльности при выборе клиента. Триггер —
+  // hydratedSeq, НЕ visible: на волне открытия эффект видел бы стейт
+  // прошлой сессии шита (клиент X, его скидка) и, применив её, затирал
+  // сохранённую скидку только что открытой записи. hydratedSeq растёт
+  // ПОСЛЕ того, как сеты гидрации легли, — здесь значения уже свежие.
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || hydratedSeq !== hydratedSeqRef.current) return;
     const applied = loyaltyAppliedRef.current;
     const cur = discountRef.current;
     const isAuto =
       applied != null &&
       cur.type === "percent" &&
-      Number(cur.value) === applied.percent;
+      parseMoneyInput(cur.value) === applied.percent;
     const dropAuto = () => {
       if (isAuto) {
         setDiscountType(null);
@@ -371,6 +460,14 @@ export function AppointmentSheet({
       }
       loyaltyAppliedRef.current = null;
     };
+    // Edit-режим: автоскидка только когда клиент РЕАЛЬНО сменился
+    // относительно сохранённой записи. Иначе каждое открытие молча
+    // уценивало запись и включало ложный «Сохранить изменения?».
+    // Возврат к исходному клиенту снимает только свою автоскидку.
+    if (isEdit && appointment && clientId === appointment.client_id) {
+      dropAuto();
+      return;
+    }
     if (!clientId || !loyalty) {
       dropAuto();
       return;
@@ -381,12 +478,12 @@ export function AppointmentSheet({
       return;
     }
     // Ручную скидку не перезаписываем (веб-паритет: manual edit wins).
-    if (cur.type != null && Number(cur.value) > 0 && !isAuto) return;
+    if (cur.type != null && parseMoneyInput(cur.value) > 0 && !isAuto) return;
     setDiscountType("percent");
     setDiscountValue(String(tier.percent));
     setDiscountReason(tier.label);
     loyaltyAppliedRef.current = { clientId, percent: tier.percent };
-  }, [visible, clientId, clientVisits, loyalty]);
+  }, [hydratedSeq, visible, clientId, clientVisits, loyalty, isEdit, appointment]);
   const selectedServices = useMemo(
     () => buildServices(serviceIds, catalog, overrides),
     [serviceIds, catalog, overrides],
@@ -419,7 +516,7 @@ export function AppointmentSheet({
     if (!customTotal) setTotal(String(computedTotal));
   }, [computedTotal, customTotal]);
 
-  const effectiveTotal = customTotal ? Number(total) || 0 : computedTotal;
+  const effectiveTotal = customTotal ? parseMoneyInput(total) : computedTotal;
   // Долг = сумма минус уже полученное (аванс + платежи). Питает секцию
   // «Оплата» при статусе «Выполнено» (getPaidAmount — как «Должники»).
   const alreadyPaid = appointment ? getPaidAmount(appointment) : 0;
@@ -447,22 +544,24 @@ export function AppointmentSheet({
   // Double-booking warn (web OverlapWarning parity): another record of the
   // same team on the same date whose half-open time range intersects the
   // draft's. Warning only — overlaps happen by accident in HVAC and the
-  // dispatcher must SEE them, never be blocked from saving.
-  const overlap = useMemo<Appointment | null>(() => {
-    if (kind === "event" || !teamId || !date || timeStart >= timeEnd)
-      return null;
-    return (
-      allAppts.find(
-        (a) =>
-          a.id !== appointment?.id &&
-          a.status !== "cancelled" &&
-          a.date === date &&
-          a.team_id === teamId &&
-          timeStart < a.time_end &&
-          a.time_start < timeEnd,
-      ) ?? null
-    );
-  }, [allAppts, appointment?.id, kind, teamId, date, timeStart, timeEnd]);
+  // dispatcher must SEE them, never be blocked from saving. Правила —
+  // shared findOverlap: события (Обед, перерыв) с работами не пересекаются.
+  const overlap = useMemo<Appointment | null>(
+    () =>
+      // findOverlap возвращает элемент allAppts — сужение до Appointment честно.
+      findOverlap(
+        {
+          id: appointment?.id,
+          date,
+          time_start: timeStart,
+          time_end: timeEnd,
+          team_id: teamId,
+          kind,
+        },
+        allAppts,
+      ) as Appointment | null,
+    [allAppts, appointment?.id, kind, teamId, date, timeStart, timeEnd],
+  );
   const overlapWho = overlap
     ? overlap.client_id
       ? clients.find((c) => c.id === overlap.client_id)?.full_name || "Запись"
@@ -477,7 +576,9 @@ export function AppointmentSheet({
     if (!isEdit || !appointment) {
       return (
         clientId !== (defaults?.client_id ?? null) ||
-        serviceIds.length > 0 ||
+        // Предвыбор услуг из ?new= — не грязь, как и предвыбранный клиент.
+        JSON.stringify(serviceIds) !==
+          JSON.stringify(defaults?.service_ids ?? []) ||
         comment.trim().length > 0 ||
         // Автоскидка лояльности (reason задан) — не грязь: она приезжает
         // сама при предвыбранном клиенте («Записать сюда»).
@@ -485,12 +586,17 @@ export function AppointmentSheet({
         customTotal ||
         masterId !== null ||
         eventColor !== null ||
-        eventTypeId !== null ||
+        status !== "scheduled" ||
+        cancelReason.trim().length > 0 ||
+        addressNote.trim().length > 0 ||
+        // Адрес с выбранным объектом — предзаполнение, не грязь; руками
+        // набранный адрес клиента без объектов терять нельзя.
+        (locationId === null && address.trim().length > 0) ||
+        repeat.kind !== "none" ||
         payMethod !== null
       );
     }
     return (
-      eventTypeId !== (appointment.event_type_id ?? null) ||
       clientId !== appointment.client_id ||
       date !== appointment.date ||
       timeStart !== appointment.time_start ||
@@ -501,9 +607,14 @@ export function AppointmentSheet({
       comment.trim() !== (appointment.comment ?? "").trim() ||
       cancelReason.trim() !== (appointment.cancel_reason ?? "").trim() ||
       locationId !== (appointment.location_id ?? null) ||
+      address.trim() !== (appointment.address ?? "").trim() ||
+      addressNote.trim() !== (appointment.address_note ?? "").trim() ||
       eventColor !== (appointment.color_override ?? null) ||
+      allDay !== (appointment.event_all_day ?? false) ||
+      JSON.stringify(repeat) !==
+        JSON.stringify(appointment.event_repeat ?? { kind: "none" }) ||
       customTotal !== !!appointment.custom_total ||
-      (customTotal && (Number(total) || 0) !== (appointment.total_amount ?? 0)) ||
+      (customTotal && parseMoneyInput(total) !== (appointment.total_amount ?? 0)) ||
       svcSignature(selectedServices) !== svcSignature(appointment.services ?? []) ||
       JSON.stringify(globalDiscount) !==
         JSON.stringify(appointment.global_discount ?? null) ||
@@ -513,8 +624,9 @@ export function AppointmentSheet({
     isEdit,
     appointment,
     defaults?.client_id,
+    defaults?.service_ids,
     clientId,
-    serviceIds.length,
+    serviceIds,
     comment,
     globalDiscount,
     discountReason,
@@ -522,7 +634,8 @@ export function AppointmentSheet({
     total,
     masterId,
     eventColor,
-    eventTypeId,
+    allDay,
+    repeat,
     payMethod,
     date,
     timeStart,
@@ -531,12 +644,30 @@ export function AppointmentSheet({
     status,
     cancelReason,
     locationId,
+    address,
+    addressNote,
     selectedServices,
   ]);
 
-  // Чип типа события: применяет цвет + длительность/весь-день + название
-  // (пустое или равное метке другого типа — заменяем; свой текст оператора
-  // не трогаем). Повторный тап снимает связь с типом, оставляя значения.
+  // «Весь день»: вкл — запоминаем время и растягиваем на сутки, выкл —
+  // возвращаем прежний слот (web EventForm handleAllDay parity).
+  const toggleAllDay = (v: boolean) => {
+    if (v) {
+      if (!allDay) preAllDayRef.current = { start: timeStart, end: timeEnd };
+      setAllDay(true);
+      setTimeStart("00:00");
+      setTimeEnd("23:59");
+    } else {
+      setAllDay(false);
+      setTimeStart(preAllDayRef.current?.start ?? "10:00");
+      setTimeEnd(preAllDayRef.current?.end ?? "11:00");
+    }
+  };
+
+  // Чип типа события — ПРЕСЕТ (веб-семантика): применяет цвет +
+  // длительность/весь-день + название (пустое или равное метке другого
+  // типа — заменяем; свой текст оператора не трогаем) и НЕ пишется в
+  // запись. Повторный тап снимает выбранность, оставляя значения.
   const applyEventType = (et: PersonalEventType) => {
     if (eventTypeId === et.id) {
       setEventTypeId(null);
@@ -547,24 +678,51 @@ export function AppointmentSheet({
     const cur = comment.trim();
     if (!cur || eventTypes.some((x) => x.label === cur)) setComment(et.label);
     if (et.allDay) {
-      setTimeStart("00:00");
-      setTimeEnd("23:59");
+      toggleAllDay(true);
     } else {
-      setTimeEnd(addMinutesHM(timeStart, et.defaultDuration));
+      // После «весь день» стартуем с 10:00 — 00:00 бессмысленно для обеда.
+      const base = allDay || timeStart === "00:00" ? "10:00" : timeStart;
+      setAllDay(false);
+      setTimeStart(base);
+      setTimeEnd(addMinutesHM(base, et.defaultDuration));
     }
   };
+
+  // Повтор события: смена периодичности сохраняет до-дату (web
+  // RepeatPickerRow parity); custom_weekdays здесь не предлагается.
+  const repeatUntil = repeat.kind === "none" ? undefined : repeat.until;
+  const setRepeatKind = (
+    k: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">,
+  ) => {
+    if (k === "none") setRepeat({ kind: "none" });
+    else
+      setRepeat({
+        kind: k,
+        ...(repeatUntil ? { until: repeatUntil } : {}),
+      } as PersonalEventRepeat);
+  };
+  const setRepeatUntil = (next?: string) => {
+    if (repeat.kind === "none") return;
+    setRepeat({ ...repeat, until: next });
+  };
+  // Повторяющаяся запись: удаление/отмена бьют по ВСЕЙ серии — виртуальные
+  // вхождения разворачиваются из seed (expandRepeat) и живут только с ним.
+  const isRepeating =
+    !!appointment?.event_repeat && appointment.event_repeat.kind !== "none";
 
   const buildPatch = (): Partial<Appointment> => {
     const cancel =
       status === "cancelled" ? cancelReason.trim() || null : null;
     if (kind === "event") {
-      // Personal/team event (meeting, lunch, break) — no client/services/money.
+      // Personal/team event (meeting, lunch, break) — no client/services/
+      // money. Тип события — пресет, в запись не пишется (веб-семантика).
       return {
         kind: "event",
-        event_type_id: eventTypeId,
         date,
         time_start: timeStart,
         time_end: timeEnd,
+        event_all_day: allDay,
+        event_repeat: repeat,
         team_id: teamId,
         master_id: masterId,
         status,
@@ -581,9 +739,6 @@ export function AppointmentSheet({
         cancel_reason: cancel,
       };
     }
-    // Web parity: denormalize the picked object's address (address →
-    // label fallback so a link-only object still shows on the calendar).
-    const loc = client?.locations.find((l) => l.id === locationId);
     const patch: Partial<Appointment> = {
       kind: "work",
       client_id: clientId,
@@ -600,33 +755,24 @@ export function AppointmentSheet({
       comment: comment.trim(),
       status,
       location_id: locationId,
-      address: loc
-        ? loc.address.trim() || loc.label.trim() || appointment?.address || ""
-        : appointment?.address ?? "",
+      // Адрес денормализован из состояния секции «Адрес» (предзаполнен
+      // объектом, правится руками) — web buildSavedWorkAppointment parity.
+      address: address.trim(),
+      address_note: addressNote.trim(),
       color_override: eventColor,
       global_discount: globalDiscount,
       discount_amount: globalDiscountAmount(selectedServices, globalDiscount),
       cancel_reason: cancel,
     };
     // «Выполнено» + выбран способ → фиксируем оплату остатка (web
-    // buildCompletedAppointment parity). Пишем И legacy payments[] (его
-    // читают getPaidAmount/«Должники»/дневная сводка), И payment-объект
-    // (web PaymentBlock), И зеркальные колонки-мирроры.
+    // buildCompletedAppointment parity). Патч строит общий
+    // buildDebtPaidPatch — тот же, что зовёт тап «Оплачено» на визите в
+    // карточке клиента: пять связанных полей пишутся из одного места.
     if (status === "completed" && payMethod && debt > 0) {
-      const paidAt = new Date().toISOString();
-      patch.payments = [
-        ...(appointment?.payments ?? []),
-        { id: generateId("pay"), method: payMethod, amount: debt, paid_at: paidAt },
-      ];
-      patch.payment = {
-        method: payMethod,
-        cashAmount: payMethod === "cash" ? debt : 0,
-        cardAmount: payMethod === "card" ? debt : 0,
-        paid_at: paidAt,
-      };
-      patch.payment_status = "paid";
-      patch.payment_method = payMethod;
-      patch.paid_amount = alreadyPaid + debt;
+      Object.assign(
+        patch,
+        buildDebtPaidPatch(appointment, { method: payMethod, amount: debt }),
+      );
     }
     return patch;
   };
@@ -660,44 +806,71 @@ export function AppointmentSheet({
     }
   };
 
+  // Почему «Создать» серая — для тоста по тапу на disabled-кнопке и
+  // пояснения в close-попапе без опции «Сохранить». Во время сохранения
+  // кнопка тоже disabled — честная причина «уже сохраняем», а не ложное
+  // «Добавьте услуги» на полностью заполненной форме.
+  const missingHint =
+    createMut.isPending || updateMut.isPending
+      ? "Сохраняем…"
+      : kind === "work"
+        ? !clientId && serviceIds.length === 0
+          ? "Выберите клиента и услуги"
+          : !clientId
+            ? "Выберите клиента"
+            : "Добавьте услуги"
+        : "Введите название события";
+
   // Dirty-close guard (web v667, owner-locked): ✕ and the backdrop never
   // silently drop an edited draft — the operator decides explicitly.
+  // «Сохранить» показываем только когда форма реально сохраняема —
+  // молчаливо-мёртвая кнопка хуже её отсутствия.
   const requestClose = () => {
     if (!dirty) {
       onClose();
       return;
     }
-    Alert.alert("Сохранить изменения?", "В форме есть несохранённые изменения.", [
-      {
-        text: "Сохранить",
-        onPress: () => {
-          // Not savable yet (нет клиента/услуги) — stay on the sheet so
-          // the draft survives instead of half-saving or dropping it.
-          if (canSave) void save();
-        },
-      },
-      { text: "Не сохранять", style: "destructive", onPress: onClose },
-      { text: "Отмена", style: "cancel" },
-    ]);
+    const buttons: AlertButton[] = [
+      ...(canSave
+        ? [{ text: "Сохранить", onPress: () => void save() }]
+        : []),
+      { text: "Не сохранять", style: "destructive" as const, onPress: onClose },
+      { text: "Отмена", style: "cancel" as const },
+    ];
+    Alert.alert(
+      "Сохранить изменения?",
+      canSave
+        ? "В форме есть несохранённые изменения."
+        : `В форме есть несохранённые изменения. ${missingHint} — или закройте без сохранения.`,
+      buttons,
+    );
   };
 
   const remove = () => {
     if (!appointment) return;
-    Alert.alert("Удалить запись?", "Действие необратимо.", [
-      { text: "Отмена", style: "cancel" },
-      {
-        text: "Удалить",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteMut.mutateAsync(appointment.id);
-            onClose();
-          } catch (e) {
-            Alert.alert("Ошибка", (e as Error).message);
-          }
+    // Повторяющаяся запись хранится одной seed-строкой — удаление
+    // стирает ВСЮ серию, и подтверждение обязано сказать это прямо.
+    Alert.alert(
+      isRepeating ? "Удалить серию?" : "Удалить запись?",
+      isRepeating
+        ? "Запись повторяется — удалится вся серия повторов. Действие необратимо."
+        : "Действие необратимо.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: isRepeating ? "Удалить серию" : "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteMut.mutateAsync(appointment.id);
+              onClose();
+            } catch (e) {
+              Alert.alert("Ошибка", (e as Error).message);
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
@@ -742,7 +915,14 @@ export function AppointmentSheet({
                   { value: "event", label: "Событие" },
                 ]}
                 value={kind}
-                onChange={setKind}
+                onChange={(k) => {
+                  setKind(k);
+                  // «Личное» (team_id=null) валидно только для событий:
+                  // возврат в «Работу» обязан вернуть команду, иначе
+                  // запись сохранится невидимой на календарях всех бригад.
+                  if (k === "work" && !teamId)
+                    setTeamId(defaults?.team_id ?? lastTeamId ?? teams[0]?.id ?? null);
+                }}
                 style={{ marginHorizontal: 12, marginTop: 12 }}
               />
             ) : null}
@@ -771,6 +951,24 @@ export function AppointmentSheet({
                     <Text className="text-base" style={{ color: t.accent }}>Выбрать клиента</Text>
                   )}
                 </View>
+                {client?.phone ? (
+                  // Вложенный Pressable перехватывает тап — строка (смена
+                  // клиента) не срабатывает при звонке.
+                  <Pressable
+                    onPress={() =>
+                      void Linking.openURL(
+                        `tel:${client.phone!.replace(/[^+\d]/g, "")}`,
+                      )
+                    }
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Позвонить: ${client.phone}`}
+                    className="mr-3 h-9 w-9 items-center justify-center rounded-full active:opacity-70"
+                    style={{ backgroundColor: `${t.accent}14` }}
+                  >
+                    <Phone color={t.accent} size={ICON.sm} />
+                  </Pressable>
+                ) : null}
                 {client ? (
                   <Text className="text-sm font-medium" style={{ color: t.accent }}>Изменить</Text>
                 ) : null}
@@ -786,15 +984,42 @@ export function AppointmentSheet({
                     label: l.label || "Объект",
                   }))}
                   selected={locationId}
-                  onSelect={(id) => setLocationId(id === locationId ? null : id)}
+                  onSelect={(id) => {
+                    const next = id === locationId ? null : id;
+                    setLocationId(next);
+                    // Выбор объекта предзаполняет «Адрес» (label — фолбэк
+                    // для link-only объекта); снятие набранное не стирает.
+                    const loc = client.locations.find((l) => l.id === next);
+                    if (loc) setAddress(loc.address.trim() || loc.label.trim());
+                  }}
                 />
-                {locationId ? (
-                  <Text className="px-4 pb-3 text-sm" style={{ color: t.sub }}>
-                    {client.locations.find((l) => l.id === locationId)?.address}
-                  </Text>
-                ) : null}
               </SectionCard>
             ) : null}
+
+            {/* address — бригада должна знать куда ехать даже у клиента
+                без объектов (web: address + address_note в buildPatch) */}
+            <SectionCard title="Адрес">
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                placeholder="Улица, дом, город…"
+                placeholderTextColor={t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance={t.dark ? "dark" : "light"}
+                className="px-4 pt-3 pb-1.5 text-base"
+                style={{ color: t.ink }}
+              />
+              <TextInput
+                value={addressNote}
+                onChangeText={setAddressNote}
+                placeholder="Заметка: подъезд, код, этаж…"
+                placeholderTextColor={t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance={t.dark ? "dark" : "light"}
+                className="px-4 pb-3 text-sm"
+                style={{ color: t.sub }}
+              />
+            </SectionCard>
 
               </>
             ) : null}
@@ -827,33 +1052,61 @@ export function AppointmentSheet({
                   onChange={(_, d) => d && setDate(formatYMD(d))}
                 />
               </View>
-              <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
-              <View className="flex-row items-center justify-between px-4 py-2.5">
-                <Text className="text-base" style={{ color: t.ink }}>Время</Text>
-                <View className="flex-row items-center">
-                  <DateTimePicker
-                    value={parseHM(timeStart)}
-                    mode="time"
-                    display="compact"
-                    minuteInterval={5}
-                    onChange={(_, d) => d && setTimeStart(formatHM(d))}
-                  />
-                  <Text className="px-1" style={{ color: t.faint }}>–</Text>
-                  <DateTimePicker
-                    value={parseHM(timeEnd)}
-                    mode="time"
-                    display="compact"
-                    minuteInterval={5}
-                    onChange={(_, d) => {
-                      if (!d) return;
-                      const end = formatHM(d);
-                      // End must be after start — clamp to start + 15 min.
-                      setTimeEnd(end <= timeStart ? addMinutesHM(timeStart, 15) : end);
-                      setDurationTouched(true);
-                    }}
-                  />
+              {kind === "event" && allDay ? null : (
+                <>
+                  <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+                  <View className="flex-row items-center justify-between px-4 py-2.5">
+                    <Text className="text-base" style={{ color: t.ink }}>Время</Text>
+                    <View className="flex-row items-center">
+                      <DateTimePicker
+                        value={parseHM(timeStart)}
+                        mode="time"
+                        display="compact"
+                        minuteInterval={5}
+                        onChange={(_, d) => d && setTimeStart(formatHM(d))}
+                      />
+                      <Text className="px-1" style={{ color: t.faint }}>–</Text>
+                      <DateTimePicker
+                        value={parseHM(timeEnd)}
+                        mode="time"
+                        display="compact"
+                        minuteInterval={5}
+                        onChange={(_, d) => {
+                          if (!d) return;
+                          const end = formatHM(d);
+                          // End must be after start — clamp to start + 15 min.
+                          setTimeEnd(end <= timeStart ? addMinutesHM(timeStart, 15) : end);
+                          setDurationTouched(true);
+                        }}
+                      />
+                    </View>
+                  </View>
+                </>
+              )}
+              {kind === "event" ? (
+                <>
+                  <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+                  <View className="flex-row items-center justify-between px-4 py-2.5">
+                    <Text className="text-base" style={{ color: t.ink }}>Весь день</Text>
+                    <Switch
+                      value={allDay}
+                      onValueChange={toggleAllDay}
+                      trackColor={{ true: t.accent }}
+                      accessibilityLabel="Весь день"
+                    />
+                  </View>
+                </>
+              ) : null}
+              {kind === "work" && isRepeating && appointment?.event_repeat ? (
+                // Бейдж серии: у события повтор виден в секции «Повтор»,
+                // работе достаточно строки — правило задаётся с веба.
+                <View className="flex-row items-center gap-2 px-4 pb-3">
+                  <Repeat color={t.sub} size={ICON.xs} />
+                  <Text className="text-sm" style={{ color: t.sub }}>
+                    Повторяется: {repeatLabel(appointment.event_repeat)}
+                  </Text>
                 </View>
-              </View>
+              ) : null}
             </SectionCard>
 
             {kind === "work" ? (
@@ -912,10 +1165,30 @@ export function AppointmentSheet({
                         {s?.name ?? "Услуга"}
                       </Text>
                       <Pressable
-                        onPress={() => setOv({ qty: Math.max(1, qty - 1) })}
+                        onPress={() => {
+                          // Минус с qty=1 убирает услугу из выбранных —
+                          // выбор легко восстановим пикером, Undo не нужен.
+                          if (qty <= 1) {
+                            setServiceIds((prev) => prev.filter((x) => x !== id));
+                            setOverrides((o) => {
+                              const rest = { ...o };
+                              delete rest[id];
+                              return rest;
+                            });
+                            setPriceDrafts((d) => {
+                              const rest = { ...d };
+                              delete rest[id];
+                              return rest;
+                            });
+                          } else {
+                            setOv({ qty: qty - 1 });
+                          }
+                        }}
                         hitSlop={8}
                         accessibilityRole="button"
-                        accessibilityLabel="Уменьшить количество"
+                        accessibilityLabel={
+                          qty <= 1 ? "Убрать услугу" : "Уменьшить количество"
+                        }
                         className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
                         style={{ backgroundColor: t.fill }}
                       >
@@ -935,9 +1208,19 @@ export function AppointmentSheet({
                         <Plus color={t.body} size={13} />
                       </Pressable>
                       <TextInput
-                        value={String(price)}
-                        onChangeText={(v) =>
-                          setOv({ price: Number(v.replace(",", ".")) || 0 })
+                        // Черновик строки, пока поле в фокусе: controlled
+                        // String(price) съедал «12,» на каждом нажатии.
+                        value={priceDrafts[id] ?? String(price)}
+                        onChangeText={(v) => {
+                          setPriceDrafts((d) => ({ ...d, [id]: v }));
+                          setOv({ price: parseMoneyInput(v) });
+                        }}
+                        onEndEditing={() =>
+                          setPriceDrafts((d) => {
+                            const rest = { ...d };
+                            delete rest[id];
+                            return rest;
+                          })
                         }
                         keyboardType="decimal-pad"
                         className="ml-2 w-14 text-right text-sm tabular-nums"
@@ -962,10 +1245,18 @@ export function AppointmentSheet({
                 <ChipRow
                   items={teams.map((t) => ({ id: t.id, label: t.name }))}
                   selected={teamId}
-                  // Radio-like, no deselect: a record without team_id is
-                  // invisible on every brigade calendar.
-                  onSelect={setTeamId}
+                  // Работа: radio без снятия — запись без team_id невидима
+                  // на календарях бригад. Событие: повторный тап снимает
+                  // команду → личное событие (web parity: team_id=null).
+                  onSelect={(id) =>
+                    setTeamId(kind === "event" && id === teamId ? null : id)
+                  }
                 />
+                {kind === "event" && !teamId ? (
+                  <Text className="px-4 pb-3 text-sm" style={{ color: t.sub }}>
+                    Личное — не привязано к команде
+                  </Text>
+                ) : null}
               </SectionCard>
             ) : null}
             {masters.length > 0 ? (
@@ -1112,7 +1403,63 @@ export function AppointmentSheet({
               </SectionCard>
             ) : null}
 
-            {/* status */}
+            {/* repeat (event only) — правило повтора, web RepeatPickerRow */}
+            {kind === "event" ? (
+              <SectionCard title="Повтор">
+                <View className="flex-row flex-wrap gap-2 p-3">
+                  {REPEAT_OPTIONS.map((opt) => (
+                    <Chip
+                      key={opt.value}
+                      label={opt.label}
+                      radio
+                      selected={repeat.kind === opt.value}
+                      onPress={() => setRepeatKind(opt.value)}
+                    />
+                  ))}
+                </View>
+                {repeat.kind !== "none" ? (
+                  <View className="flex-row items-center justify-between px-4 pb-3">
+                    <Text className="text-base" style={{ color: t.ink }}>
+                      Завершить
+                    </Text>
+                    {repeatUntil ? (
+                      <View className="flex-row items-center gap-3">
+                        <DateTimePicker
+                          value={parseYMD(repeatUntil)}
+                          mode="date"
+                          display="compact"
+                          onChange={(_, d) => d && setRepeatUntil(formatYMD(d))}
+                        />
+                        <Pressable
+                          onPress={() => setRepeatUntil(undefined)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel="Снять дату завершения"
+                        >
+                          <Text className="text-sm font-medium" style={{ color: t.accent }}>
+                            Снять
+                          </Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => setRepeatUntil(date)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Повторять до даты"
+                      >
+                        <Text className="text-base" style={{ color: t.accent }}>
+                          До даты…
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ) : null}
+              </SectionCard>
+            ) : null}
+
+            {/* status — только для работ: у веб-EventForm статуса нет */}
+            {kind === "work" ? (
             <SectionCard title="Статус">
               <View className="flex-row flex-wrap gap-2 p-3">
                 {STATUSES.map((s) => (
@@ -1121,11 +1468,35 @@ export function AppointmentSheet({
                     label={s.label}
                     radio
                     selected={status === s.value}
-                    onPress={() => setStatus(s.value)}
+                    onPress={() => {
+                      // Отмена серии гасит ВСЕ развёрнутые вхождения —
+                      // молча делать это нельзя.
+                      if (
+                        s.value === "cancelled" &&
+                        isRepeating &&
+                        status !== "cancelled"
+                      ) {
+                        Alert.alert(
+                          "Отменить серию?",
+                          "Запись повторяется — статус «Отменено» скроет с календаря всю серию повторов.",
+                          [
+                            { text: "Отмена", style: "cancel" },
+                            {
+                              text: "Отменить серию",
+                              style: "destructive",
+                              onPress: () => setStatus("cancelled"),
+                            },
+                          ],
+                        );
+                        return;
+                      }
+                      setStatus(s.value);
+                    }}
                   />
                 ))}
               </View>
             </SectionCard>
+            ) : null}
 
             {/* payment — появляется сразу после «Выполнено», чтобы цепочка
                 «завершил → получил деньги» не требовала отдельного экрана.
@@ -1169,8 +1540,8 @@ export function AppointmentSheet({
               ) : null
             ) : null}
 
-            {/* cancel reason */}
-            {status === "cancelled" ? (
+            {/* cancel reason — статусная механика работ (у событий её нет) */}
+            {kind === "work" && status === "cancelled" ? (
               <SectionCard title="Причина отмены">
                 <View className="flex-row flex-wrap gap-2 p-3">
                   {CANCEL_REASONS.map((r) => (
@@ -1243,20 +1614,30 @@ export function AppointmentSheet({
 
           {/* sticky footer */}
           <View className="border-t px-4 pb-7 pt-3" style={{ borderColor: t.separator, backgroundColor: t.surface }}>
-            <Button
-              label={
-                kind === "event"
-                  ? isEdit
-                    ? "Сохранить"
-                    : "Создать событие"
-                  : isEdit
-                    ? `Сохранить · ${formatEUR(effectiveTotal)}`
-                    : `Создать · ${formatEUR(effectiveTotal)}`
-              }
-              onPress={save}
-              disabled={!canSave}
-              loading={createMut.isPending || updateMut.isPending}
-            />
+            {/* Серая кнопка обязана объяснять почему: pointerEvents="none"
+                пропускает тап disabled-кнопки на обёртку → тост-подсказка. */}
+            <Pressable
+              onPress={canSave ? undefined : () => toast(missingHint, "info")}
+              accessibilityRole={canSave ? undefined : "button"}
+              accessibilityLabel={canSave ? undefined : missingHint}
+            >
+              <View pointerEvents={canSave ? "auto" : "none"}>
+                <Button
+                  label={
+                    kind === "event"
+                      ? isEdit
+                        ? "Сохранить"
+                        : "Создать событие"
+                      : isEdit
+                        ? `Сохранить · ${formatEUR(effectiveTotal)}`
+                        : `Создать · ${formatEUR(effectiveTotal)}`
+                  }
+                  onPress={save}
+                  disabled={!canSave}
+                  loading={createMut.isPending || updateMut.isPending}
+                />
+              </View>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -1272,8 +1653,12 @@ export function AppointmentSheet({
           setClientId(id);
           // Web parity onClientSelect: switch to the NEW client's primary
           // object so the previous client's location_id never leaks.
+          // Адрес следует за объектом (или чистится — адрес прошлого
+          // клиента в записи хуже пустого).
           const locs = clients.find((c) => c.id === id)?.locations ?? [];
-          setLocationId((locs.find((l) => l.isPrimary) ?? locs[0])?.id ?? null);
+          const loc = locs.find((l) => l.isPrimary) ?? locs[0];
+          setLocationId(loc?.id ?? null);
+          setAddress(loc ? loc.address.trim() || loc.label.trim() : "");
           setClientPicker(false);
         }}
         onCreate={async (name, phone) => {
@@ -1334,9 +1719,82 @@ export function AppointmentSheet({
             prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
           )
         }
+        // Пустой каталог = тупик первой записи: белый лист и серая
+        // «Создать» молча. CTA создаёт услугу и сразу выбирает её.
+        empty={
+          services.length === 0 ? (
+            <InlineServiceCreate
+              onCreated={(id) => setServiceIds((prev) => [...prev, id])}
+            />
+          ) : undefined
+        }
       />
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// Пустой каталог услуг — тупик первой записи: минимальная inline-форма
+// (название + цена, час по умолчанию) прямо в пикере. Созданная услуга
+// сразу выбирается в запись; каталог доредактируют в кабинете.
+function InlineServiceCreate({
+  onCreated,
+}: {
+  onCreated: (id: string) => void;
+}) {
+  const t = useThemeColors();
+  const createService = useCreateService();
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+
+  const submit = async () => {
+    if (!name.trim()) return;
+    try {
+      const svc = await createService.mutateAsync({
+        name: name.trim(),
+        price: parseMoneyInput(price),
+        duration_minutes: 60,
+      });
+      onCreated(svc.id);
+    } catch (e) {
+      Alert.alert("Не удалось создать услугу", (e as Error).message);
+    }
+  };
+
+  return (
+    <View className="px-5 pt-4">
+      <Text className="mb-3 text-sm" style={{ color: t.sub }}>
+        Каталог пуст — создайте первую услугу, она сразу добавится в запись.
+      </Text>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="Название услуги"
+        placeholderTextColor={t.placeholder}
+        selectionColor={t.accent}
+        keyboardAppearance={t.dark ? "dark" : "light"}
+        autoFocus
+        className="mb-2 rounded-[14px] border px-4 py-3 text-base"
+        style={{ borderColor: t.separator, color: t.ink }}
+      />
+      <TextInput
+        value={price}
+        onChangeText={setPrice}
+        placeholder="Цена, €"
+        placeholderTextColor={t.placeholder}
+        selectionColor={t.accent}
+        keyboardType="decimal-pad"
+        keyboardAppearance={t.dark ? "dark" : "light"}
+        className="mb-4 rounded-[14px] border px-4 py-3 text-base"
+        style={{ borderColor: t.separator, color: t.ink }}
+      />
+      <Button
+        label="Создать услугу"
+        onPress={() => void submit()}
+        disabled={!name.trim() || createService.isPending}
+        loading={createService.isPending}
+      />
+    </View>
   );
 }
 
@@ -1382,6 +1840,7 @@ function PickerModal({
   onToggle,
   createLabel,
   onCreateNew,
+  empty,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -1393,6 +1852,8 @@ function PickerModal({
   onToggle?: (id: string) => void;
   createLabel?: string;
   onCreateNew?: (query: string) => void;
+  /** Показывается вместо пустого списка (CTA первого запуска). */
+  empty?: ReactElement;
 }) {
   const th = useThemeColors();
   const [q, setQ] = useState("");
@@ -1451,6 +1912,7 @@ function PickerModal({
             data={filtered}
             keyExtractor={(i) => i.id}
             keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={empty ?? null}
             ListHeaderComponent={
               onCreateNew ? (
                 <Pressable

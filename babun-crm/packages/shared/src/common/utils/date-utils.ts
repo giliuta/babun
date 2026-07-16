@@ -123,17 +123,16 @@ export function getFirstDayOfMonth(year: number, month: number): number {
 }
 
 export function getCurrentCyprusTime(): Date {
-  // Cyprus is UTC+2 (EET) / UTC+3 (EEST in summer)
-  // We approximate with +3 as the user specified GMT+3
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utc + 3 * 3600000);
+  // Кипр — EET (UTC+2) зимой / EEST (UTC+3) летом. Жёсткий +3 зимой
+  // врал на час (линия «сейчас», todayYmd); Intl по IANA-зоне считает
+  // переход EET/EEST сам.
+  return getCurrentTimeInZone("Europe/Nicosia");
 }
 
 // Current wall-clock time in an IANA timezone (e.g. "Europe/Nicosia"),
 // returned as a local Date whose getHours()/getMinutes() read that zone's
 // clock. Used so a brigade calendar can place its "now" line in the
-// brigade's own timezone. Falls back to Cyprus time on a bad zone id.
+// brigade's own timezone. Falls back to device-local time on a bad zone id.
 export function getCurrentTimeInZone(timeZone: string): Date {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
@@ -158,6 +157,8 @@ export function getCurrentTimeInZone(timeZone: string): Date {
       get("second"),
     );
   } catch {
-    return getCurrentCyprusTime();
+    // Самый последний фолбэк — локальное время устройства: любой
+    // «кипрский» суррогат без IANA-данных снова зашил бы смещение.
+    return new Date();
   }
 }

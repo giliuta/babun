@@ -47,13 +47,14 @@ import {
   cacheDelete,
   cacheReplaceTenant,
   cacheGetOne,
+  dequeueAll,
   type CachedAppointment,
   type CachedAppointmentData,
 } from "../db/cache/sql";
 // CachedAppointment (raw Row) is the queue-payload projection; CachedAppointmentData
 // (full domain) is the cache-read projection. Both are used below.
 import { isOnline } from "./network";
-import { kickReplayer } from "./replayer";
+import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -74,6 +75,32 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUuid = (s: string): boolean => UUID_RE.test(s);
 
+// Транспортный сбой vs семантический отказ сервера. supabase-js при
+// обрыве сети отдаёт «TypeError: Failed to fetch» (Chrome) / «Load
+// failed» (Safari/WebKit) / «Network request failed» (RN fetch);
+// таймауты и аборты — той же природы. Всё остальное — ответ Postgres
+// (RLS, constraint, 4xx), который ретраем не лечится: такие ошибки
+// нельзя класть в очередь реплея (вечные ретраи), их должен увидеть
+// пользователь через error-ветку мутации.
+function isTransientNetworkError(err: unknown): boolean {
+  // 5xx шлюза/рестарта проекта — тоже транзиент: 502/503 при живом
+  // NetInfo иначе откатывал вставку вместо очереди (офлайн-first
+  // регресс). PostgrestError несёт числовой status не всегда — ловим
+  // и по коду, и по формулировкам шлюза.
+  const withStatus = err as { status?: unknown; statusCode?: unknown };
+  const httpStatus =
+    typeof withStatus?.status === "number"
+      ? withStatus.status
+      : typeof withStatus?.statusCode === "number"
+        ? withStatus.statusCode
+        : 0;
+  if (httpStatus >= 500) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
+    msg,
+  );
+}
+
 // ─── Read ─────────────────────────────────────────────────────────
 
 export async function listAppointments(
@@ -92,7 +119,11 @@ export async function listAppointments(
     const fresh = await repoListAppointments(supabase, tenantId);
     await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
     return fresh;
-  } catch {
+  } catch (err) {
+    // [] — только для честного офлайна. Онлайн-ошибка сервера обязана
+    // дойти до error-ветки UI: пустая сетка «свободного» дня при живой
+    // сети читается как отсутствие записей — риск дабл-букинга.
+    if (isOnline()) throw err;
     return [];
   }
 }
@@ -124,6 +155,26 @@ async function refreshCacheFromSupabase(
   tenantId: string,
   domain?: Appointment[],
 ): Promise<boolean> {
+  // Гонка выхода в онлайн: пока в очереди висят ещё реплеящиеся
+  // appointment-опы, авторитарный cacheReplaceTenant стёр бы
+  // офлайн-созданную запись раньше, чем реплеер долил её на сервер
+  // (запись «мигает» в календаре). Пропускаем замену — после дренажа
+  // очереди onChanged/realtime ревалидирует заново, уже полным
+  // снапшотом. Навсегда-упавшие опы (attempts ≥ MAX_ATTEMPTS) не
+  // блокируют: их реплей не воскресит, сервер — истина.
+  const pending = await dequeueAll();
+  if (
+    pending.some(
+      (op) => op.table === "appointments" && op.attempts < MAX_ATTEMPTS,
+    )
+  ) {
+    // Пропуск обязан сам подтолкнуть дренаж: кроме флипа сети, старта
+    // приложения и следующей мутации очередь никто не разгребает — один
+    // ранний транзиентный сбой иначе замораживал ревалидацию календаря
+    // навсегда (guard вечно видел бы pending-оп).
+    void kickReplayer({ supabase });
+    return false;
+  }
   const appts = domain ?? (await repoListAppointments(supabase, tenantId));
   const rows = appts.map((a) => makeCachedRow(a, tenantId));
   const before = cacheSignature(await safeCacheReadAppointments(tenantId));
@@ -200,8 +251,14 @@ export async function createAppointment(
       await refetchAndCacheOne(supabase, created.id, tenantId);
       return created;
     } catch (err) {
+      // Семантический отказ сервера (RLS/constraint) при живой сети —
+      // НЕ в очередь (реплей гарантированно упадёт так же): откатываем
+      // оптимистичную строку и пробрасываем в error-ветку мутации.
+      if (isOnline() && !isTransientNetworkError(err)) {
+        await cacheDelete("appointments", id).catch(() => {});
+        throw err;
+      }
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
-      void err;
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "appointments", cachedRow);
       void kickReplayer({ supabase });
       return { ...input, id };
@@ -473,5 +530,15 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.payment_status !== undefined) out.payment_status = patch.payment_status;
   if (patch.payment_method !== undefined) out.payment_method = patch.payment_method ?? null;
   if (patch.paid_amount !== undefined) out.paid_amount = patch.paid_amount;
+  // Event-поля личного календаря — по образцу makeServerRow. Без них
+  // офлайн-правка события молча стирала event_* при реплее (payload
+  // очереди не содержал колонок, а UPDATE у нас replace-семантики).
+  if (patch.event_all_day !== undefined) out.event_all_day = patch.event_all_day;
+  if (patch.event_notes !== undefined) out.event_notes = patch.event_notes;
+  if (patch.event_url !== undefined) out.event_url = patch.event_url;
+  if (patch.event_push_enabled !== undefined) out.event_push_enabled = patch.event_push_enabled;
+  if (patch.event_push_offsets !== undefined) out.event_push_offsets = patch.event_push_offsets as unknown as CachedAppointment["event_push_offsets"];
+  if (patch.event_push_at !== undefined) out.event_push_at = patch.event_push_at;
+  if (patch.event_repeat !== undefined) out.event_repeat = patch.event_repeat as unknown as CachedAppointment["event_repeat"];
   return out;
 }

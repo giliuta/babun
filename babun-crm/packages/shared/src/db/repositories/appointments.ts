@@ -62,8 +62,11 @@ function asObj<T extends object>(v: Json | null | undefined): T {
     : ({} as T);
 }
 
-/** Build an Appointment from a row that MAY OR MAY NOT include photos. */
-function rowToAppointment(r: Row): Appointment {
+/** Build an Appointment from a row that MAY OR MAY NOT include photos.
+ *  Экспортирован для реплеера: его конфликтная ветка кладёт в кэш
+ *  канонический ответ сервера, а кэш хранит ДОМЕННУЮ форму — сырая Row
+ *  (без photos:[], с numeric-строками) ломала бы читателей. */
+export function rowToAppointment(r: Row): Appointment {
   return {
     id: r.id,
     date: r.date,

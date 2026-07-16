@@ -17,6 +17,16 @@ const ymd = (d: Date) =>
     d.getDate(),
   ).padStart(2, "0")}`;
 
+function groupByDate(appointments: Appointment[]) {
+  const map = new Map<string, Appointment[]>();
+  for (const a of appointments) {
+    const arr = map.get(a.date) ?? [];
+    arr.push(a);
+    map.set(a.date, arr);
+  }
+  return map;
+}
+
 // Month overview — web MonthView parity: bordered 6×7 grid (Monday-first),
 // out-of-month cells on the grouped canvas, today = filled accent pill,
 // weekend numbers red, appointment-count chip top-right, and the per-day
@@ -27,12 +37,19 @@ const ymd = (d: Date) =>
 export const MonthView = memo(function MonthView({
   month,
   appointments,
+  financeAppointments,
   teamId,
   todayYmd,
   onPickDay,
 }: {
   month: Date; // first of the displayed month
+  /** Видимый набор (фильтры сетки, вкл. «Скрывать отменённые») —
+   *  счётчики-чипы дней. */
   appointments: Appointment[];
+  /** Денежный набор — БЕЗ «Скрывать отменённые»: визуальная настройка не
+   *  должна менять итоги money-мини-списка (судьбу отменённых в деньгах
+   *  решает сам computeDayFinance). */
+  financeAppointments: Appointment[];
   /** Active team — day extras are stored per (team, date); with no team
    *  selected extras are skipped (same as the day-finance footer). */
   teamId: string | null;
@@ -49,15 +66,11 @@ export const MonthView = memo(function MonthView({
     return out;
   }, [month]);
 
-  const byDay = useMemo(() => {
-    const map = new Map<string, Appointment[]>();
-    for (const a of appointments) {
-      const arr = map.get(a.date) ?? [];
-      arr.push(a);
-      map.set(a.date, arr);
-    }
-    return map;
-  }, [appointments]);
+  const byDay = useMemo(() => groupByDate(appointments), [appointments]);
+  const financeByDay = useMemo(
+    () => groupByDate(financeAppointments),
+    [financeAppointments],
+  );
 
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
@@ -67,7 +80,7 @@ export const MonthView = memo(function MonthView({
   // операциями (extras) тоже попадают в карту.
   const totalsByDay = useMemo(() => {
     const m = new Map<string, DayFinanceTotals>();
-    const dates = new Set(byDay.keys());
+    const dates = new Set(financeByDay.keys());
     if (teamId) {
       const prefix = `${teamId}:`;
       for (const k of Object.keys(extrasMap)) {
@@ -78,14 +91,14 @@ export const MonthView = memo(function MonthView({
       m.set(
         date,
         computeDayFinance(
-          byDay.get(date) ?? [],
+          financeByDay.get(date) ?? [],
           services,
           getDayExtras(extrasMap, teamId, date),
         ),
       );
     }
     return m;
-  }, [byDay, services, extrasMap, teamId]);
+  }, [financeByDay, services, extrasMap, teamId]);
 
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());

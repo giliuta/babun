@@ -68,6 +68,7 @@ export function useSaveCalendarSettings() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    mutationKey: ["calendar-settings", tenantId],
     // Targeted PATCH, not a full-object write: only the fields the user
     // actually changed go to Supabase (updateCalendarSettings upserts
     // field-by-field), so a save fired before the canonical row loaded
@@ -99,7 +100,18 @@ export function useSaveCalendarSettings() {
         });
       }
     },
-    onSuccess: (s) => qc.setQueryData(["calendar-settings", tenantId], s),
+    // Canonical пишем в кэш ТОЛЬКО когда эта мутация — последняя в полёте:
+    // серия быстрых тапов степпера шлёт параллельные апсерты, и canonical
+    // ранней мутации, пришедший после onMutate поздней, откатывал бы её
+    // оптимистичное значение (UI прыгает назад). В момент onSuccess текущая
+    // мутация ещё числится pending — отсюда порог > 1, а не > 0; финальный
+    // onSuccess серии доносит настоящий серверный canonical.
+    onSuccess: (s) => {
+      if (qc.isMutating({ mutationKey: ["calendar-settings", tenantId] }) > 1) {
+        return;
+      }
+      qc.setQueryData(["calendar-settings", tenantId], s);
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }

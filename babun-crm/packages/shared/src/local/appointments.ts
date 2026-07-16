@@ -193,9 +193,9 @@ export interface Appointment {
   reminder_template: string; // шаблон SMS, поддерживает {name} {date} {time} {address}
 
   // ─── Personal-calendar fields (kind="event" + master_id set) ────────
-  /** ID of PersonalEventType. Drives default icon/colour/duration in
-   *  the personal-event sheet. Null = ad-hoc event, no template. */
-  event_type_id?: string | null;
+  // Типы событий — пресеты (цвет/текст применяются при выборе, как
+  // EventPresetChips на вебе), а не персистируемая ссылка: колонки
+  // event_type_id в БД нет и все мапперы её отбрасывали.
   /** Long-form note distinct from `comment` (which doubles as title
    *  for legacy event records). Personal sheet writes notes here. */
   event_notes?: string;
@@ -282,7 +282,6 @@ export function loadAppointments(): Appointment[] {
       total_duration: p.total_duration ?? 0,
       cancel_reason: p.cancel_reason ?? null,
       source: (p.source ?? null) as AppointmentSource | null,
-      event_type_id: p.event_type_id ?? null,
       event_notes: p.event_notes ?? "",
       event_url: p.event_url ?? "",
       event_all_day: p.event_all_day ?? false,
@@ -334,7 +333,23 @@ export function saveAppointments(list: Appointment[]): void {
 // ─── Computed helpers ──────────────────────────────────────────────────
 
 export function getPaidAmount(apt: Appointment): number {
-  return apt.prepaid_amount + apt.payments.reduce((sum, p) => sum + p.amount, 0);
+  // Получено СВЕРХ аванса считается по двум источникам и берётся максимум:
+  // леджер payments[] (мобильные пути: buildDebtPaidPatch, close-day) и
+  // веб-зеркала — payment-объект (нал+карта) либо колонка paid_amount
+  // (actualPaid, web appointment-builders) — оба БЕЗ аванса. Именно max,
+  // а не «леджер вытесняет зеркала»: у смешанных строк первый мобильный
+  // платёж ложится в леджер поверх зеркальной истории веба, и приоритет
+  // леджера «воскрешал» уже погашенный долг. paid_amount при
+  // payment_status 'unpaid' игнорируем: бэкфилл миграции 20260517_001
+  // записал туда prepaid_amount всех старых строк — чтение задваивало бы
+  // аванс (prepaid_amount прибавляется отдельно строкой ниже).
+  const ledger = apt.payments.reduce((sum, p) => sum + p.amount, 0);
+  const mirror = apt.payment
+    ? apt.payment.cashAmount + apt.payment.cardAmount
+    : (apt.payment_status ?? "unpaid") !== "unpaid"
+      ? apt.paid_amount ?? 0
+      : 0;
+  return apt.prepaid_amount + Math.max(ledger, mirror);
 }
 
 export function getDebtAmount(apt: Appointment): number {
@@ -675,16 +690,21 @@ export function createBlankAppointment(overrides: Partial<Appointment> = {}): Ap
 /** Clone an appointment with a fresh ID, blanked-out payments and scheduled status. */
 export function duplicateAppointment(apt: Appointment): Appointment {
   const now = new Date().toISOString();
+  // Состав (services / service_ids / global_discount / total_duration)
+  // приходит спредом целиком — обнуление services при сохранённом
+  // total_amount давало копию с рассинхроном суммы и состава услуг.
+  // Сбрасываются только оплата (включая зеркала) и статус.
   return {
     ...apt,
     id: generateId("apt"),
     prepaid_amount: 0,
     payments: [],
     payment: null,
-    services: [],
-    global_discount: null,
-    total_duration: 0,
+    payment_status: "unpaid",
+    payment_method: undefined,
+    paid_amount: undefined,
     status: "scheduled",
+    cancel_reason: null,
     photos: [],
     created_at: now,
     updated_at: now,

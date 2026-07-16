@@ -84,10 +84,16 @@ export function useUpdateAppointment() {
           previous.map((a) => (a.id === id ? { ...a, ...patch } : a)),
         );
       }
-      return { previous };
+      // Снапшот только своей записи: откат целым списком стирал бы
+      // оптимистичный патч параллельной мутации соседней записи.
+      return { prevRecord: previous?.find((a) => a.id === id) };
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) qc.setQueryData(["appointments", tenantId], ctx.previous);
+    onError: (_err, { id }, ctx) => {
+      const prevRecord = ctx?.prevRecord;
+      if (!prevRecord) return;
+      qc.setQueryData<Appointment[]>(["appointments", tenantId], (cur) =>
+        cur?.map((a) => (a.id === id ? prevRecord : a)),
+      );
     },
     onSuccess: (_data, { patch }) => {
       qc.invalidateQueries({ queryKey: ["appointments"] });

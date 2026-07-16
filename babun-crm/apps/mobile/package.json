@@ -24,8 +24,10 @@
     "expo-contacts": "~15.0.11",
     "expo-dev-client": "~6.0.21",
     "expo-document-picker": "~14.0.8",
+    "expo-haptics": "~15.0.8",
     "expo-image-picker": "~17.0.11",
     "expo-linking": "~8.0.0",
+    "expo-notifications": "~0.32.17",
     "expo-router": "~6.0.0",
     "expo-secure-store": "~15.0.0",
     "expo-splash-screen": "~31.0.0",
@@ -54,6 +56,7 @@
     "@babel/core": "^7.25.0",
     "@tailwindcss/postcss": "^4.3.1",
     "@types/react": "~19.1.0",
+    "eslint-config-expo": "~10.0.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.9.2"

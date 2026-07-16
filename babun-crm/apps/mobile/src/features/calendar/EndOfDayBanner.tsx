@@ -28,6 +28,13 @@ export function EndOfDayBanner({
   const [dismissed, setDismissed] = useState(
     () => getStorage().getRaw(`${DISMISS_PREFIX}${todayYmd}`) === "1",
   );
+  // Экран может жить через полночь: dismiss вчерашнего дня не должен прятать
+  // баннер нового (web перечитывает флаг каждый день).
+  const [seenYmd, setSeenYmd] = useState(todayYmd);
+  if (seenYmd !== todayYmd) {
+    setSeenYmd(todayYmd);
+    setDismissed(getStorage().getRaw(`${DISMISS_PREFIX}${todayYmd}`) === "1");
+  }
 
   const unpaidCount = useMemo(() => {
     let n = 0;
@@ -94,7 +101,14 @@ export function EndOfDayBanner({
         <Pressable
           onPress={() => {
             setDismissed(true);
-            getStorage().setRaw(`${DISMISS_PREFIX}${todayYmd}`, "1");
+            const storage = getStorage();
+            // Ключ нужен только до конца дня — прошлые чистим, чтобы MMKV
+            // не копил по ключу на каждый прожитый день.
+            const todayKey = `${DISMISS_PREFIX}${todayYmd}`;
+            for (const key of storage.list(DISMISS_PREFIX)) {
+              if (key !== todayKey) storage.remove(key);
+            }
+            storage.setRaw(todayKey, "1");
           }}
           accessibilityRole="button"
           accessibilityLabel="Скрыть"

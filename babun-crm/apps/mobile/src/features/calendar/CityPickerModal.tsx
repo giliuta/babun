@@ -54,8 +54,11 @@ export function CityPickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      {/* accessible={false} на скриме и карточке: иначе VoiceOver схлопывает
+          пикер в один безымянный «button» и строки меток недостижимы. */}
       <Pressable
         onPress={onClose}
+        accessible={false}
         style={{
           flex: 1,
           alignItems: "center",
@@ -67,6 +70,7 @@ export function CityPickerModal({
         {/* stopPropagation: тап по карточке не закрывает модалку */}
         <Pressable
           onPress={() => {}}
+          accessible={false}
           // 20 = radius.card: центрированная модалка — карточка, не поповер.
           style={{
             width: "100%",

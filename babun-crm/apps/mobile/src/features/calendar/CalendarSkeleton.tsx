@@ -14,7 +14,25 @@ import { HEADER_H, RAIL_W } from "@/features/calendar/DayView";
 // «блоки» на реалистичных позициях) с мягким пульсом — «это мой календарь,
 // сейчас наполнится», а не безликий спиннер. При Reduce Motion пульс
 // выключен (статичные кости).
-export function CalendarSkeleton() {
+//
+// «Кости»-блоки по колонкам: День — одна широкая колонка, Неделя — 7 узких
+// (иначе скелет обещает не ту сетку, что загрузится).
+const BONES: Record<"day" | "week", { col: number; top: `${number}%`; height: `${number}%` }[]> = {
+  day: [
+    { col: 0, top: "12%", height: "10%" },
+    { col: 0, top: "30%", height: "7%" },
+    { col: 0, top: "52%", height: "16%" },
+  ],
+  week: [
+    { col: 0, top: "12%", height: "10%" },
+    { col: 1, top: "30%", height: "7%" },
+    { col: 3, top: "18%", height: "12%" },
+    { col: 4, top: "52%", height: "16%" },
+    { col: 6, top: "36%", height: "9%" },
+  ],
+};
+
+export function CalendarSkeleton({ mode = "week" }: { mode?: "day" | "week" }) {
   const t = useThemeColors();
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0);
@@ -28,6 +46,7 @@ export function CalendarSkeleton() {
 
   const bone = `${t.ink}0f`;
   const line = `${t.ink}33`;
+  const cols = mode === "week" ? 7 : 1;
 
   return (
     <View style={{ flex: 1 }}>
@@ -41,16 +60,24 @@ export function CalendarSkeleton() {
         }}
       >
         <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
-        <View
-          style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
-        >
+        {Array.from({ length: cols }).map((_, c) => (
           <View
-            style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: bone }}
-          />
-        </View>
+            key={c}
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+          >
+            <View
+              style={{
+                width: mode === "week" ? 22 : 26,
+                height: mode === "week" ? 22 : 26,
+                borderRadius: 13,
+                backgroundColor: bone,
+              }}
+            />
+          </View>
+        ))}
       </View>
       <View style={{ flex: 1, flexDirection: "row" }}>
-        {/* рельс часов */}
+        {/* рельс часов — шов 2px/ink4d как у настоящего TimeRail (DayView) */}
         <View
           style={{
             width: RAIL_W,
@@ -59,6 +86,8 @@ export function CalendarSkeleton() {
             alignItems: "flex-end",
             paddingRight: 6,
             gap: 52,
+            borderRightWidth: 2,
+            borderRightColor: `${t.ink}4d`,
           }}
         >
           {[0, 1, 2, 3, 4, 5, 6].map((i) => (
@@ -68,37 +97,38 @@ export function CalendarSkeleton() {
             />
           ))}
         </View>
-        {/* колонка с «блоками» */}
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: t.surface,
-            borderLeftWidth: 1,
-            borderLeftColor: line,
-          }}
-        >
-          {[
-            { top: "12%", height: "10%" },
-            { top: "30%", height: "7%" },
-            { top: "52%", height: "16%" },
-          ].map((b, i) => (
-            <Animated.View
-              key={i}
-              style={[
-                {
-                  position: "absolute",
-                  left: 8,
-                  right: 8,
-                  top: b.top as `${number}%`,
-                  height: b.height as `${number}%`,
-                  borderRadius: 8,
-                  backgroundColor: bone,
-                },
-                shimmer,
-              ]}
-            />
-          ))}
-        </View>
+        {/* колонки с «блоками» */}
+        {Array.from({ length: cols }).map((_, c) => (
+          <View
+            key={c}
+            style={{
+              flex: 1,
+              backgroundColor: t.surface,
+              borderLeftWidth: c === 0 ? 0 : 1,
+              borderLeftColor: line,
+            }}
+          >
+            {BONES[mode]
+              .filter((b) => b.col === c)
+              .map((b, i) => (
+                <Animated.View
+                  key={i}
+                  style={[
+                    {
+                      position: "absolute",
+                      left: mode === "week" ? 3 : 8,
+                      right: mode === "week" ? 3 : 8,
+                      top: b.top,
+                      height: b.height,
+                      borderRadius: 8,
+                      backgroundColor: bone,
+                    },
+                    shimmer,
+                  ]}
+                />
+              ))}
+          </View>
+        ))}
       </View>
     </View>
   );

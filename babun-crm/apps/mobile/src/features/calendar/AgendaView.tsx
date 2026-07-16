@@ -27,6 +27,7 @@ export function AgendaView({
   clientName,
   serviceSummary,
   onEdit,
+  onMenu,
   onCreateNew,
   refreshing,
   onRefresh,
@@ -40,6 +41,8 @@ export function AgendaView({
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
+  /** Long-press контекстное меню записи — как в Day/Week. */
+  onMenu?: (a: Appointment) => void;
   onCreateNew: () => void;
   refreshing: boolean;
   onRefresh: () => void;
@@ -66,6 +69,7 @@ export function AgendaView({
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
+          onMenu={onMenu}
           t={t}
         />
       )}
@@ -87,6 +91,7 @@ function DaySection({
   clientName,
   serviceSummary,
   onEdit,
+  onMenu,
   t,
 }: {
   section: AgendaSection;
@@ -94,6 +99,7 @@ function DaySection({
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
+  onMenu?: (a: Appointment) => void;
   t: ThemeColors;
 }) {
   // Beta #54 — maps deep-link with the day's addresses as waypoints, in
@@ -158,6 +164,7 @@ function DaySection({
               clientName={clientName(apt)}
               serviceSummary={serviceSummary(apt)}
               onPress={() => onEdit(apt)}
+              onLongPress={onMenu ? () => onMenu(apt) : undefined}
               t={t}
             />
           </View>
@@ -172,12 +179,14 @@ function AgendaRow({
   clientName,
   serviceSummary,
   onPress,
+  onLongPress,
   t,
 }: {
   apt: Appointment;
   clientName: string;
   serviceSummary: string;
   onPress: () => void;
+  onLongPress?: () => void;
   t: ThemeColors;
 }) {
   const statusColor =
@@ -200,6 +209,8 @@ function AgendaRow({
     return (
       <Pressable
         onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={350}
         className="active:opacity-60"
         accessibilityRole="button"
         style={{
@@ -278,6 +289,9 @@ function AgendaRow({
   return (
     <Pressable
       onPress={onPress}
+      // 350 — единый delayLongPress контекстного меню (WeekView такой же).
+      onLongPress={onLongPress}
+      delayLongPress={350}
       className="active:opacity-60"
       accessibilityRole="button"
       style={{

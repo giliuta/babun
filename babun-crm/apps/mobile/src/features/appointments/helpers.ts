@@ -1,4 +1,8 @@
-import type { AppointmentService } from "@babun/shared/local/appointments";
+import type {
+  AppointmentPayment,
+  AppointmentService,
+  Payment,
+} from "@babun/shared/local/appointments";
 import { pricePerUnit, type PriceTier } from "@babun/shared/local/services";
 import type { Service } from "@/features/services/queries";
 
@@ -27,11 +31,47 @@ export function parseHM(s: string, base?: Date): Date {
   return d;
 }
 
+// Конец слота = старт + минуты, БЕЗ заворота через полночь: тап по
+// слоту 23:30 не должен давать конец «00:00» раньше начала (Alert при
+// сохранении). Клампим к 23:59 — визит через полночь бронируется двумя
+// записями (та же семантика, что live-пересчёт конца в шите).
 export function addMinutesHM(hm: string, minutes: number): string {
   const [h, m] = hm.split(":").map(Number);
-  const total = (h || 0) * 60 + (m || 0) + minutes;
-  const norm = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
-  return `${pad2(Math.floor(norm / 60))}:${pad2(norm % 60)}`;
+  const total = Math.max(
+    0,
+    Math.min(23 * 60 + 59, (h || 0) * 60 + (m || 0) + minutes),
+  );
+  return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
+}
+
+// Денежный ввод с клавиатуры: запятая — десятичный разделитель
+// (EU-раскладка decimal-pad шлёт «12,5»), мусор и отрицательные → 0.
+export function parseMoneyInput(s: string): number {
+  const n = Number(s.trim().replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// Зеркало payment-объекта из ПОЛНОГО леджера payments[] (единственный
+// источник правды списка): суммы нал/карта по всем платежам, split когда
+// были оба — та же свёртка, что миграция payments→payment в shared
+// loadAppointments. Зеркалить только последний платёж нельзя: split-
+// история (часть налом раньше, остаток картой сейчас) терялась бы.
+export function paymentMirrorFromLedger(
+  payments: Payment[],
+): AppointmentPayment | null {
+  let cash = 0;
+  let card = 0;
+  for (const p of payments) {
+    if (p.method === "cash") cash += p.amount;
+    else if (p.method === "card") card += p.amount;
+  }
+  if (cash + card === 0) return null;
+  return {
+    method: cash > 0 && card > 0 ? "split" : cash > 0 ? "cash" : "card",
+    cashAmount: cash,
+    cardAmount: card,
+    paid_at: payments[payments.length - 1]?.paid_at ?? new Date().toISOString(),
+  };
 }
 
 export interface ServiceOverride {

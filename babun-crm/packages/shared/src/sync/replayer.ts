@@ -34,7 +34,11 @@ import {
   cacheDelete,
   type QueuedOp,
   type CachedTable,
+  type CachedClient,
+  type CachedTag,
+  type CachedAppointmentData,
 } from "../db/cache/sql";
+import { rowToAppointment } from "../db/repositories/appointments";
 // Go through the emit-wrappers so the OfflineIndicator badge updates the
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
@@ -82,7 +86,9 @@ const isUuid = (s: string): boolean => UUID_RE.test(s);
 
 type DbSupabase = SupabaseClient<Database>;
 
-const MAX_ATTEMPTS = 3;
+// Экспорт: appointmentsCached придерживает авторитарный cacheReplaceTenant,
+// пока в очереди есть ещё реплеящиеся (attempts < MAX_ATTEMPTS) опы.
+export const MAX_ATTEMPTS = 3;
 const BACKOFFS_MS = [1000, 5000, 30000]; // attempts 1, 2, 3
 
 type Toast = (msg: string) => void;
@@ -361,8 +367,11 @@ async function dispatch(
     if (forceErr)
       throw new Error(`replay force-update: ${forceErr.message}`);
     if (forced) {
-      // Cache write-through with the canonical row.
-      await cacheUpsert(op.table as CachedTable, forced);
+      // Cache write-through with the canonical row. Кэш хранит
+      // ДОМЕННУЮ форму (cache-of-domain, slice 5) — сырую серверную
+      // Row прогоняем через тот же row→domain маппер, что и обычное
+      // чтение (иначе строка без photos:[] и с numeric-строками).
+      await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, forced));
     }
     // forced === null → 0 rows: the update is unappliable (row gone /
     // not writable for this user). DROP the op (return true) instead of
@@ -386,6 +395,23 @@ async function dispatch(
 function tableForOp(t: QueuedOp["table"]): "clients" | "appointments" | "client_tags" {
   // UI vocab → DB table. See cache layer header for rationale.
   return t === "tags" ? "client_tags" : t;
+}
+
+/** Каноническая серверная Row из force-update → строка кэша. Кэш
+ *  appointments хранит ДОМЕННУЮ форму + tenant_id (cache-of-domain,
+ *  slice 5) — прогоняем через маппер обычного чтения. clients/tags
+ *  оставлены как были: их row→domain мапперы приватны в своих
+ *  репозиториях, а строка самовосстанавливается на ближайшем полном
+ *  refetch (foreground revalidate / realtime). */
+function toCachedRow(
+  table: QueuedOp["table"],
+  row: Record<string, unknown>,
+): CachedClient | CachedTag | CachedAppointmentData {
+  if (table === "appointments") {
+    const r = row as Database["public"]["Tables"]["appointments"]["Row"];
+    return { ...rowToAppointment(r), tenant_id: r.tenant_id };
+  }
+  return row as CachedClient | CachedTag;
 }
 
 function sleep(ms: number): Promise<void> {

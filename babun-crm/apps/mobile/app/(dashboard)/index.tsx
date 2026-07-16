@@ -6,16 +6,21 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActionSheetIOS, Linking, Text, View } from "react-native";
+import { ActionSheetIOS, Linking, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type {
   Appointment,
-  PaymentMethod,
+  AppointmentKind,
 } from "@babun/shared/local/appointments";
-import { duplicateAppointment } from "@babun/shared/local/appointments";
+import {
+  duplicateAppointment,
+  getDebtAmount,
+} from "@babun/shared/local/appointments";
+import { deleteAutoIncomeForAppointment } from "@babun/shared/db/repositories/finance-transactions";
+import { supabase } from "@/lib/supabase";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { randomUuid } from "@babun/shared/sync";
 import { getStorage } from "@babun/shared/storage";
@@ -30,6 +35,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
+import {
+  buildDebtPaidPatch,
+  PAY_METHOD_LABELS,
+  type PayMethod,
+} from "@/features/appointments/payment";
 import { DayView, type WorkBand } from "@/features/calendar/DayView";
 import { HOUR_H_DEFAULT } from "@/features/calendar/zoom";
 import { WeekView } from "@/features/calendar/WeekView";
@@ -53,6 +63,8 @@ import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
+import { RescheduleSheet } from "@/features/calendar/RescheduleSheet";
+import { scheduleAppointmentReminder } from "@/features/calendar/reminders";
 import { useAppointments } from "@/features/calendar/queries";
 import {
   useCreateAppointment,
@@ -69,6 +81,7 @@ import {
   useTeams,
 } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { haptics } from "@/lib/haptics";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { TEAM_COLORS } from "@babun/shared/local/masters";
@@ -77,6 +90,12 @@ import { TEAM_COLORS } from "@babun/shared/local/masters";
 const AGENDA_HORIZON_DAYS = 60;
 // Персист выбранного вида и команды (mode/teamId) между запусками.
 const CAL_VIEW_KEY = "calendar.view";
+// Онбординг-карточка: «✕» переживает перезапуск (web parity: localStorage).
+const ONBOARDING_DISMISSED_KEY = "calendar.onboardingDismissed";
+// Сентинел «метка явно снята» в day_cities (web v693): день с ним НЕ падает
+// обратно на default_city бригады — пустая строка удалила бы override, и
+// дефолт перекрасил бы день на следующем рендере.
+const CITY_CLEARED = "__NONE__";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -95,13 +114,6 @@ function addDays(d: Date, n: number) {
   x.setDate(x.getDate() + n);
   return x;
 }
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
 // "HH:MM" → fractional hours, null on garbage (web dashboard/page.tsx
 // parseHour, :570-575). The team-hub TimeField can persist free text, so
 // every read here falls back to the global setting instead of breaking
@@ -118,7 +130,6 @@ export default function CalendarTab() {
     data: appts = [],
     isLoading,
     isRefetching,
-    refetch,
     error,
   } = useAppointments();
   const qc = useQueryClient();
@@ -138,12 +149,15 @@ export default function CalendarTab() {
   const t = useThemeColors();
 
   // Pull-to-refresh (agenda list). Invalidates the shared ['appointments']
-  // key so the query refetches from the repo (authoritative, network-fresh —
-  // reads bypass the SWR warm-cache branch, so this actually updates the UI);
-  // the per-client appointment hooks share that key and refresh in lockstep.
-  const onRefresh = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: ["appointments"] });
-  }, [qc]);
+  // key so the query refetches from the repo; the per-client appointment
+  // hooks share that key and refresh in lockstep. The promise is returned
+  // so RefreshControl keeps spinning until the refetch actually settles —
+  // a fire-and-forget invalidate dropped the spinner on a warm cache
+  // before fresh data arrived.
+  const onRefresh = useCallback(
+    () => qc.invalidateQueries({ queryKey: ["appointments"] }),
+    [qc],
+  );
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (apt.time_start === newStart) return;
@@ -159,15 +173,35 @@ export default function CalendarTab() {
       { ...apt, time_start: newStart, time_end: newEnd },
       visibleAppts,
     );
+    // Перерыв / нерабочие часы бригады — то же «предупредить, не блокировать»:
+    // диспетчер иногда сознательно ставит до открытия или в обед.
+    const toMin = (s: string) => {
+      const [h, m] = s.split(":").map(Number);
+      return h * 60 + m;
+    };
+    const startMin = toMin(newStart);
+    const endMin = toMin(newEnd);
+    const band = workBandFor?.(apt.date);
+    const bandWarn =
+      band === null
+        ? "Нерабочий день бригады"
+        : band?.breaks?.some((b) => startMin < b.endMin && endMin > b.startMin)
+          ? "Попадает на перерыв"
+          : band && (startMin < band.startMin || endMin > band.endMin)
+            ? "Вне рабочих часов"
+            : null;
+    const warn = clash
+      ? `Пересечение с ${clash.time_start}–${clash.time_end}`
+      : bandWarn;
     updateAppt.mutate(
       { id: apt.id, patch: { time_start: newStart, time_end: newEnd } },
       {
-        onSuccess: () =>
-          toast(
-            clash
-              ? `Перенесено. Пересечение с ${clash.time_start}–${clash.time_end}`
-              : `Перенесено на ${newStart}`,
-          ),
+        onSuccess: () => {
+          // Физический «удар» на успешное приземление drag-переноса —
+          // блок лёг на слот, рука это чувствует.
+          haptics.impact();
+          toast(warn ? `Перенесено. ${warn}` : `Перенесено на ${newStart}`);
+        },
         onError: () => toast("Не удалось перенести"),
       },
     );
@@ -180,6 +214,8 @@ export default function CalendarTab() {
     locationId?: string;
     teamId?: string;
     date?: string;
+    services?: string; // CSV service-id — префилл услуг («Повторить», ТО)
+    kind?: string; // AppointmentKind черновика
   }>();
 
   // Вид и команда переживают перезапуск (MMKV): владелец двух бригад в
@@ -222,10 +258,21 @@ export default function CalendarTab() {
   }, [mode, teamChoice]);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
-  // First-run onboarding card — session-only dismissal (web persists to
-  // localStorage, STORY-060 §F1.1; the card self-clears once data appears).
-  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+  // First-run onboarding card — «✕» persists across restarts in MMKV
+  // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
+  // once data appears).
+  const [onboardingDismissed, setOnboardingDismissed] = useState(
+    () => getStorage().get<boolean>(ONBOARDING_DISMISSED_KEY) ?? false,
+  );
+  const dismissOnboarding = () => {
+    getStorage().set(ONBOARDING_DISMISSED_KEY, true);
+    setOnboardingDismissed(true);
+  };
   const [editing, setEditing] = useState<Appointment | null>(null);
+  // «Перенести» из контекстного меню — запись в шите переноса (null = закрыт).
+  const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(
+    null,
+  );
   const [bookDefaults, setBookDefaults] = useState<
     {
       date?: string;
@@ -233,6 +280,8 @@ export default function CalendarTab() {
       client_id?: string | null;
       location_id?: string | null;
       team_id?: string | null;
+      service_ids?: string[];
+      kind?: AppointmentKind;
     } | undefined
   >(undefined);
 
@@ -282,13 +331,48 @@ export default function CalendarTab() {
   }, [todayYmd, day]);
 
   useEffect(() => {
+    const clearParams = () =>
+      router.setParams({
+        new: undefined,
+        clientId: undefined,
+        locationId: undefined,
+        teamId: undefined,
+        date: undefined,
+        services: undefined,
+        kind: undefined,
+      });
+    // Гонка с загрузкой команд: на холодном старте по диплинку teams=[]
+    // ещё «не знает» ответа — гасить параметры рано (визит с карточки
+    // молча пропадал). Ждём резолва: эффект перезапустится по
+    // teamsLoading/teams и обработает параметры уже с данными.
+    if (teamsLoading || teamsError) return;
     if (params.new === "1") {
+      // Без единой команды шит бессмысленен (стейл-дефолты), а экран занят
+      // first-run гейтом «Создать календарь» — параметры просто гасим.
+      if (teams.length === 0) {
+        clearParams();
+        return;
+      }
       setEditing(null);
       // ?date= вместе с new=1 (возвраты: «Записать» на дату ТО) — префилл
       // даты черновика; валидируем формат, мусор не пускаем (web parity).
       const draftDate =
         params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)
           ? params.date
+          : undefined;
+      // Букинг в чужую бригаду («Записать» с карточки): активируем её
+      // календарь, чтобы созданная запись не «пропала» из виду.
+      if (params.teamId && teams.some((tm) => tm.id === params.teamId)) {
+        setTeamChoice(params.teamId);
+      }
+      // ?services= (CSV id) / ?kind= — префилл услуг и типа черновика
+      // («Повторить визит», «Записать ТО» шлют состав прошлой записи).
+      const serviceIds = params.services?.split(",").filter(Boolean);
+      const draftKind: AppointmentKind | undefined =
+        params.kind === "work" ||
+        params.kind === "event" ||
+        params.kind === "personal"
+          ? params.kind
           : undefined;
       setBookDefaults({
         client_id: params.clientId ?? null,
@@ -297,25 +381,26 @@ export default function CalendarTab() {
         location_id: params.locationId ?? null,
         team_id: params.teamId ?? null,
         ...(draftDate ? { date: draftDate } : {}),
+        ...(serviceIds?.length ? { service_ids: serviceIds } : {}),
+        ...(draftKind ? { kind: draftKind } : {}),
       });
       setSheetOpen(true);
-      router.setParams({
-        new: undefined,
-        clientId: undefined,
-        locationId: undefined,
-        teamId: undefined,
-        date: undefined,
-      });
+      clearParams();
     } else if (params.date) {
       // Переход по дате (карточка клиента, визиты мастера) = «покажи этот
       // день»: открываем именно День (web ?view=day&date= parity).
       const d = parseYMD(params.date);
       setDay(startOfDay(d));
       setMode("day");
-      router.setParams({ date: undefined });
+      // ?teamId= — бригада записи: без переключения визит чужой бригады
+      // открывал бы пустой день активной команды.
+      if (params.teamId && teams.some((tm) => tm.id === params.teamId)) {
+        setTeamChoice(params.teamId);
+      }
+      router.setParams({ date: undefined, teamId: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.new, params.clientId, params.date]);
+  }, [params.new, params.clientId, params.date, params.teamId, teamsLoading, teamsError, teams]);
 
   const nameById = useMemo(
     () => new Map(clients.map((c) => [c.id, c.full_name])),
@@ -374,10 +459,11 @@ export default function CalendarTab() {
   const labelFor = useCallback(
     (dateYmd: string): { name: string; color: string } | null => {
       if (!activeTeamId) return null;
-      const name =
-        dayCities[dayCityKey(activeTeamId, dateYmd)] ??
-        activeTeam?.default_city ??
-        "";
+      const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
+      // Сентинел CITY_CLEARED = «метка явно снята» — БЕЗ отката на
+      // default_city (web getCityFor, DashboardClientLayout v693).
+      if (assigned === CITY_CLEARED) return null;
+      const name = assigned ?? activeTeam?.default_city ?? "";
       if (!name) return null;
       return {
         name,
@@ -417,39 +503,81 @@ export default function CalendarTab() {
   // parity: dashboard/page.tsx:1613 `activeTeam?.hide_cancelled ?? …`).
   const hideCancelled =
     activeTeam?.hide_cancelled ?? !!calSettings?.hideCancelled;
+  // Записи активного календаря. Личные события без бригады (team_id null,
+  // kind ≠ work) видны в ЛЮБОМ календаре: у мобильного нет веб-таба «Мой
+  // календарь» (web page.tsx:914-936 — personal tab = «mine, by exclusion»),
+  // и без этого правила они не были бы видны нигде.
+  const inTeamCal = useCallback(
+    (a: Appointment) =>
+      activeTeamId
+        ? a.team_id === activeTeamId || (a.team_id == null && a.kind !== "work")
+        : true,
+    [activeTeamId],
+  );
   const byTeam = (a: Appointment) =>
-    (activeTeamId ? a.team_id === activeTeamId : true) &&
-    (!hideCancelled || a.status !== "cancelled");
+    inTeamCal(a) && (!hideCancelled || a.status !== "cancelled");
 
   // Web parity (dashboard/page.tsx, STORY-091): recurring seeds expand into
-  // virtual occurrences inside a −30/+60-day window around the visible
-  // anchor (month cursor in month mode, focused day otherwise). Virtuals
-  // carry virtualParentId — openEdit routes their tap back to the seed.
-  const expandAnchor = day;
+  // virtual occurrences inside a window around the visible anchor. В режиме
+  // «Месяц» пейджер держит соседние страницы целиком, поэтому окно покрывает
+  // prev/next месяцы (+ недельные хвосты их сеток); в остальных видах —
+  // −30/+60 дней вокруг якоря. includeCancelled: отменённая серия остаётся
+  // видимой при выключенном «Скрывать отменённые» (byTeam выше сам фильтрует
+  // по hideCancelled). Virtuals carry virtualParentId — openEdit routes
+  // their tap back to the seed.
   const expandedAppts = useMemo(() => {
-    const fromKey = formatYMD(addDays(expandAnchor, -30));
-    const toKey = formatYMD(addDays(expandAnchor, 60));
+    const monthWindow = mode === "month";
+    const fromKey = formatYMD(
+      monthWindow
+        ? addDays(new Date(day.getFullYear(), day.getMonth() - 1, 1), -7)
+        : addDays(day, -30),
+    );
+    const toKey = formatYMD(
+      monthWindow
+        ? addDays(new Date(day.getFullYear(), day.getMonth() + 2, 0), 7)
+        : addDays(day, 60),
+    );
     const out: Appointment[] = [];
     for (const a of appts) {
       const rule = a.event_repeat;
       if (!rule || rule.kind === "none") out.push(a);
-      else out.push(...expandRepeat(a, fromKey, toKey));
+      else
+        out.push(...expandRepeat(a, fromKey, toKey, { includeCancelled: true }));
     }
     return out;
-  }, [appts, expandAnchor]);
+  }, [appts, day, mode]);
 
   // Team-scoped set — MonthView counts every visible cell (incl. the
   // prev/next-month tails) and the MiniCalendar dots from this.
   const visibleAppts = useMemo(
     () => expandedAppts.filter(byTeam),
-    [expandedAppts, activeTeamId, hideCancelled],
+    [expandedAppts, inTeamCal, hideCancelled],
+  );
+
+  // Денежный набор: «Скрывать отменённые» — визуальная настройка сетки и
+  // итоги дня менять не должна. Судьбу отменённых в деньгах решает сам
+  // computeDayFinance (planned их не считает, earned — только
+  // completed/in_progress), поэтому денежные поверхности получают полный
+  // командный набор.
+  const financeAppts = useMemo(
+    () => expandedAppts.filter(inTeamCal),
+    [expandedAppts, inTeamCal],
+  );
+  const financeByDate = useMemo(() => {
+    const m = new Map<string, Appointment[]>();
+    for (const a of financeAppts) {
+      const arr = m.get(a.date) ?? [];
+      arr.push(a);
+      m.set(a.date, arr);
+    }
+    return m;
+  }, [financeAppts]);
+  const financeFor = useCallback(
+    (ymd: string) => financeByDate.get(ymd) ?? [],
+    [financeByDate],
   );
 
   const dayYmd = formatYMD(day);
-  const dayAppts = useMemo(
-    () => visibleAppts.filter((a) => a.date === dayYmd),
-    [visibleAppts, dayYmd],
-  );
   // Резолвер «записи дня» для страниц пейджера (prev/cur/next день или
   // неделя) — окно visibleAppts (−30/+60д вокруг якоря) покрывает соседей.
   const apptsByDate = useMemo(() => {
@@ -476,9 +604,10 @@ export default function CalendarTab() {
     return Array.from({ length: 7 }, (_, i) => addDays(mon, i));
   }, [day]);
   const weekYmds = useMemo(() => weekDays.map(formatYMD), [weekDays]);
-  const weekAppts = useMemo(
-    () => visibleAppts.filter((a) => weekYmds.includes(a.date)),
-    [visibleAppts, weekYmds],
+  // Финансы недельного футера — денежный набор (см. financeAppts выше).
+  const financeWeekAppts = useMemo(
+    () => financeAppts.filter((a) => weekYmds.includes(a.date)),
+    [financeAppts, weekYmds],
   );
 
   // Agenda — «what's next»: from the selected day forward 60 days
@@ -558,12 +687,14 @@ export default function CalendarTab() {
     updateAppt.mutate(
       { id: apt.id, patch: { status } },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          haptics.success();
           toast(done, "success", {
             label: "Отменить",
             onPress: () =>
               updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
-          }),
+          });
+        },
         onError: () => toast("Не удалось изменить статус", "error"),
       },
     );
@@ -575,7 +706,8 @@ export default function CalendarTab() {
     updateAppt.mutate(
       { id: apt.id, patch: { status: to } },
       {
-        onSuccess: () =>
+        onSuccess: () => {
+          haptics.success();
           toast(
             to === "cancelled" ? "Запись отменена" : "Запись восстановлена",
             "info",
@@ -584,7 +716,8 @@ export default function CalendarTab() {
               onPress: () =>
                 updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
             },
-          ),
+          );
+        },
         onError: () => toast("Не удалось изменить запись", "error"),
       },
     );
@@ -594,57 +727,85 @@ export default function CalendarTab() {
     // Снапшот до удаления: «Вернуть» ре-инсертит ту же запись с тем же id.
     const snapshot = { ...apt };
     deleteAppt.mutate(apt.id, {
-      onSuccess: () =>
+      onSuccess: () => {
+        // Warning, не success: удаление — разрушаемое действие, отклик
+        // должен отличаться от «операция удалась».
+        haptics.warning();
         toast("Запись удалена", "info", {
           label: "Вернуть",
           onPress: () =>
             createAppt.mutate(snapshot, {
               onError: () => toast("Не удалось вернуть", "error"),
             }),
-        }),
+        });
+      },
       onError: () => toast("Не удалось удалить", "error"),
     });
   };
 
+  // Быстрая оплата ОСТАТКА из контекстного меню — тот же полный платёжный
+  // патч, что у карточки записи (buildDebtPaidPatch): пять зеркальных полей
+  // сразу, иначе payment_status оставался "unpaid" (income в финансах не
+  // создавался), а сумма брала полный total_amount, считая предоплату
+  // второй раз. «Перевод» не предлагается: способ должны понимать все три
+  // платёжных енума модели (см. payment.ts) — тот же выбор, что в шите.
   const openPaymentMenu = (apt: Appointment) => {
-    const methods: { label: string; m: PaymentMethod }[] = [
-      { label: "Наличные", m: "cash" },
-      { label: "Карта", m: "card" },
-      { label: "Перевод", m: "transfer" },
-    ];
+    const debt = getDebtAmount(apt);
+    const methods = Object.keys(PAY_METHOD_LABELS) as PayMethod[];
     ActionSheetIOS.showActionSheetWithOptions(
       {
-        title: `Оплата ${formatEUR(apt.total_amount)}`,
-        options: [...methods.map((x) => x.label), "Отмена"],
+        title: `Оплата ${formatEUR(debt)}`,
+        options: [...methods.map((m) => PAY_METHOD_LABELS[m]), "Отмена"],
         cancelButtonIndex: methods.length,
       },
       (i) => {
-        const method = methods[i]?.m;
+        const method = methods[i];
         if (!method) return;
-        // Web PaymentSheet parity: Payment в payments[] + completed.
-        const prev = { status: apt.status, payments: apt.payments };
+        // Undo возвращает ВСЕ платёжные поля, не только payments[] —
+        // иначе «Отменить» оставлял запись «оплаченной» в зеркалах.
+        // Значения-«до» коалесцируются к явным null/базам: patchToRow
+        // отбрасывает undefined-ключи, и снапшот с undefined не очищал
+        // бы paid_amount/payment на сервере — запись выглядела бы
+        // оплаченной через фолбэк getPaidAmount. payment_method не
+        // очищаем: тип патча null не выражает, а при payment_status
+        // "unpaid" это инертная метка «последний способ».
+        const prev = {
+          status: apt.status,
+          payments: apt.payments,
+          payment: apt.payment ?? null,
+          payment_status: apt.payment_status ?? ("unpaid" as const),
+          ...(apt.payment_method ? { payment_method: apt.payment_method } : {}),
+          paid_amount: apt.paid_amount ?? 0,
+        };
         updateAppt.mutate(
           {
             id: apt.id,
             patch: {
+              ...buildDebtPaidPatch(apt, { method, amount: debt }),
               status: "completed",
-              payments: [
-                ...apt.payments,
-                {
-                  id: `pay-${Date.now()}`,
-                  method,
-                  amount: apt.total_amount,
-                  paid_at: new Date().toISOString(),
-                },
-              ],
             },
           },
           {
-            onSuccess: () =>
-              toast(`Оплата ${formatEUR(apt.total_amount)} принята`, "success", {
+            onSuccess: () => {
+              haptics.success();
+              toast(`Оплата ${formatEUR(debt)} принята`, "success", {
                 label: "Отменить",
-                onPress: () => updateAppt.mutate({ id: apt.id, patch: prev }),
-              }),
+                onPress: () => {
+                  updateAppt.mutate({ id: apt.id, patch: prev });
+                  // Серверный триггер уже вставил auto-income, а ветки
+                  // paid→unpaid у него нет — прибираем строку сами,
+                  // иначе в финансах остаётся фантомный доход (и
+                  // повторная оплата упёрлась бы в on-conflict).
+                  void deleteAutoIncomeForAppointment(supabase, apt.id)
+                    .then(() =>
+                      qc.invalidateQueries({ queryKey: ["transactions"] }),
+                    )
+                    .catch(() =>
+                      toast("Доход в финансах не снят — проверьте раздел «Финансы»", "error"),
+                    );
+                },
+              });
+            },
             onError: () => toast("Не удалось отметить оплату", "error"),
           },
         );
@@ -665,6 +826,70 @@ export default function CalendarTab() {
     });
   };
 
+  // «Напомнить…» — локальное уведомление о записи, пресеты вторым
+  // ActionSheetIOS. Ограничение v1: время записи — «настенные» часы
+  // бизнеса, а Date строится в таймзоне устройства; владелец живёт в
+  // бизнес-таймзоне (см. решение по бизнес-часам), уехавший в другой пояс
+  // получит напоминание по своим настенным часам.
+  const openReminderMenu = (apt: Appointment) => {
+    const atStartMinus = (offsetMin: number) => {
+      const d = parseYMD(apt.date);
+      const [h, m] = apt.time_start.split(":").map(Number);
+      d.setHours(h || 0, (m || 0) - offsetMin, 0, 0);
+      return d;
+    };
+    const presets: { label: string; when: () => Date }[] = [
+      { label: "За 30 минут", when: () => atStartMinus(30) },
+      { label: "За 1 час", when: () => atStartMinus(60) },
+      {
+        label: "Накануне в 20:00",
+        when: () => {
+          const d = parseYMD(apt.date);
+          d.setDate(d.getDate() - 1);
+          d.setHours(20, 0, 0, 0);
+          return d;
+        },
+      },
+      {
+        label: "Утром в 8:00",
+        when: () => {
+          const d = parseYMD(apt.date);
+          d.setHours(8, 0, 0, 0);
+          return d;
+        },
+      },
+    ];
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: `Напомнить о записи ${apt.time_start}`,
+        options: [...presets.map((p) => p.label), "Отмена"],
+        cancelButtonIndex: presets.length,
+      },
+      (i) => {
+        const preset = presets[i];
+        if (!preset) return;
+        void scheduleAppointmentReminder(
+          apt,
+          preset.when(),
+          preset.label,
+          clientName(apt) || undefined,
+        ).then((res) => {
+          if (res === "scheduled") {
+            // «За 30 минут» → «Напомню за 30 минут».
+            const l = preset.label;
+            toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
+          } else if (res === "denied") {
+            toast("Разрешите уведомления в Настройках", "error");
+          } else if (res === "past") {
+            toast("Это время уже прошло", "info");
+          } else {
+            toast("Появится после обновления приложения", "info");
+          }
+        });
+      },
+    );
+  };
+
   const openActionMenu = (apt: Appointment) => {
     // Виртуальное вхождение повтора: быстрые действия валидны только для
     // seed — открываем карточку (openEdit сам маршрутизирует на исходную).
@@ -672,6 +897,7 @@ export default function CalendarTab() {
       openEdit(apt);
       return;
     }
+    haptics.tap();
     const client = apt.client_id
       ? clients.find((c) => c.id === apt.client_id)
       : undefined;
@@ -680,7 +906,14 @@ export default function CalendarTab() {
 
     type Item = { label: string; run: () => void; destructive?: boolean };
     const items: Item[] = [];
-    if (apt.status === "scheduled" && apt.kind === "work")
+    // Оплата уместна, пока есть остаток — в т.ч. у «Выполнена» и «В работе»
+    // (раньше пункт видели только «Запланирован», а долги висят как раз на
+    // выполненных).
+    if (
+      apt.kind === "work" &&
+      apt.status !== "cancelled" &&
+      getDebtAmount(apt) > 0
+    )
       items.push({ label: "Отметить оплату", run: () => openPaymentMenu(apt) });
     if (apt.status !== "completed")
       items.push({ label: "Выполнена", run: () => quickStatus(apt, "completed") });
@@ -691,6 +924,13 @@ export default function CalendarTab() {
         label: "Вернуть в план",
         run: () => quickStatus(apt, "scheduled"),
       });
+    // Перенос отменённой бессмыслен — сначала «Восстановить».
+    if (apt.status !== "cancelled")
+      items.push({ label: "Перенести", run: () => setReschedulingApt(apt) });
+    // Напоминание — только про предстоящую работу: прошедшие даты, личные
+    // события и отменённые пресетам нечего предложить.
+    if (apt.kind === "work" && apt.status !== "cancelled" && apt.date >= todayYmd)
+      items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
     if (phone)
       items.push({
         label: "Позвонить",
@@ -743,7 +983,20 @@ export default function CalendarTab() {
         ? weekYmds.includes(todayYmd)
         : dayYmd === todayYmd;
 
-  const goToday = () => setDay(startOfDay(now));
+  const goToday = () => {
+    haptics.tap();
+    setDay(startOfDay(now));
+  };
+  // Неделя→День приземляется на СЕГОДНЯ, если оно в видимой неделе (web
+  // parity: handleViewModeChange, page.tsx:1382-1398) — диспетчер, тапнувший
+  // «День» в текущей неделе, ждёт сегодня, а не старый выбранный день.
+  // Чужая неделя — якорь сохраняется: её смотрят сознательно.
+  const changeMode = (m: CalMode) => {
+    if (m === "day" && mode === "week" && weekYmds.includes(todayYmd)) {
+      setDay(startOfDay(now));
+    }
+    setMode(m);
+  };
   const jumpToDate = (d: Date) => {
     setDay(startOfDay(d));
     setMiniCalOpen(false);
@@ -916,21 +1169,20 @@ export default function CalendarTab() {
         mode={mode}
         todayNumber={now.getDate()}
         isOnToday={isOnToday}
-        onModeChange={setMode}
+        onModeChange={changeMode}
         // Web parity (Header.tsx): календарь = команда, шестерёнка ведёт в
-        // полноценные настройки открытой команды; без команд — в список.
-        onGear={() =>
-          router.push(
-            activeTeamId ? `/cabinet/teams/${activeTeamId}` : "/cabinet/teams",
-          )
-        }
+        // полноценные настройки открытой команды (activeTeamId здесь всегда
+        // есть: без команд экран занят first-run гейтом выше).
+        onGear={() => router.push(`/cabinet/teams/${activeTeamId}`)}
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
       <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
 
       {isLoading ? (
-        <CalendarSkeleton />
+        // mode известен синхронно (MMKV) — скелет обязан обещать ту же
+        // геометрию, что придёт после загрузки (день ≠ 7 колонок недели).
+        <CalendarSkeleton mode={mode === "day" ? "day" : "week"} />
       ) : error ? (
         <EmptyState state="error" fill subtitle={(error as Error).message} />
       ) : mode === "agenda" ? (
@@ -942,6 +1194,7 @@ export default function CalendarTab() {
           clientName={clientName}
           serviceSummary={serviceSummaryFor}
           onEdit={openEdit}
+          onMenu={openActionMenu}
           onCreateNew={() => openCreate()}
           refreshing={isRefetching}
           onRefresh={onRefresh}
@@ -970,7 +1223,7 @@ export default function CalendarTab() {
           </View>
           <DayFinanceFooter
             days={weekDays}
-            appointments={weekAppts}
+            appointments={financeWeekAppts}
             teamId={activeTeamId}
             todayYmd={todayYmd}
             onTapDay={(d) => setFinModalYmd(formatYMD(d))}
@@ -978,10 +1231,16 @@ export default function CalendarTab() {
         </>
       ) : mode === "day" ? (
         <>
-          {/* «Утренний взгляд» — сводка просматриваемого дня (web parity). */}
+          {/* «Утренний взгляд» — сводка просматриваемого дня (web parity).
+              CTA ведёт в «Закрыть день» — там живут выполненные с долгом,
+              которые пилл и считает (/cabinet/unclosed показывал только
+              просроченные «Запланирован» — тупик). */}
           <DaySummaryStrip
-            appointments={dayAppts}
-            onUnpaidTap={() => router.push("/cabinet/unclosed")}
+            appointments={financeFor(dayYmd)}
+            teamId={activeTeamId}
+            dateYmd={dayYmd}
+            todayYmd={todayYmd}
+            onUnpaidTap={() => router.push("/cabinet/close-day")}
           />
           <View className="flex-1">
             <DayView
@@ -1004,7 +1263,7 @@ export default function CalendarTab() {
           </View>
           <DayFinanceFooter
             days={[day]}
-            appointments={dayAppts}
+            appointments={financeFor(dayYmd)}
             teamId={activeTeamId}
             todayYmd={todayYmd}
             onTapDay={(d) => setFinModalYmd(formatYMD(d))}
@@ -1019,6 +1278,7 @@ export default function CalendarTab() {
                 <MonthView
                   month={monthPages[off + 1]}
                   appointments={visibleAppts}
+                  financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
                   onPickDay={openDayFromMonth}
@@ -1038,26 +1298,29 @@ export default function CalendarTab() {
       clients.length === 0 &&
       services.length === 0 &&
       appts.length === 0 ? (
-        <CalendarOnboardingCard
-          onDismiss={() => setOnboardingDismissed(true)}
-        />
+        <CalendarOnboardingCard onDismiss={dismissOnboarding} />
       ) : null}
 
       {/* Вечерний контроль денег: после 18:00 выполненные СЕГОДНЯ с долгом
-          (web EndOfDayBanner) — плавающая карточка над футером. */}
+          (web EndOfDayBanner) — плавающая карточка над футером. CTA ведёт
+          в «Закрыть день» (web parity) — экран ровно этих записей;
+          /cabinet/unclosed показывал только просроченные «Запланирован». */}
       <EndOfDayBanner
         appointments={todayAppts}
         todayYmd={todayYmd}
         nowHour={now.getHours()}
-        onOpenUnpaid={() => router.push("/cabinet/unclosed")}
+        onOpenUnpaid={() => router.push("/cabinet/close-day")}
       />
 
       {/* Разбор финансов дня — тап по футеру Доход/Расход. */}
       <DayFinanceModal
         dateYmd={finModalYmd}
-        appointments={finModalYmd ? apptsFor(finModalYmd) : []}
+        appointments={finModalYmd ? financeFor(finModalYmd) : []}
         teamId={activeTeamId}
         onClose={() => setFinModalYmd(null)}
+        // Тап по строке «Ожидается» открывает запись — контракт с волной
+        // day-extras (проп появляется там же).
+        onEditAppointment={openEdit}
       />
 
       {/* Пикер метки дня — центрированная карточка (web CityPickerModal);
@@ -1067,11 +1330,10 @@ export default function CalendarTab() {
         visible={cityPickerYmd != null}
         dateKey={cityPickerYmd ?? todayYmd}
         options={labelOptions}
-        selected={
-          activeTeamId && cityPickerYmd
-            ? dayCities[dayCityKey(activeTeamId, cityPickerYmd)] ?? ""
-            : ""
-        }
+        // Активная строка = разрешённая метка дня (labelFor: явная →
+        // default_city, сентинел CITY_CLEARED = ничего) — web parity:
+        // current={cityForDate(...)}, дефолт бригады показан выбранным.
+        selected={cityPickerYmd ? labelFor(cityPickerYmd)?.name ?? "" : ""}
         onPick={(name) => {
           if (activeTeamId && cityPickerYmd) {
             setDayCityMut.mutate({
@@ -1084,10 +1346,12 @@ export default function CalendarTab() {
         }}
         onClear={() => {
           if (activeTeamId && cityPickerYmd) {
+            // Сентинел, не пустая строка: "" удаляет override, и день тут же
+            // перекрашивал бы default_city бригады (web v693 handleCityReset).
             setDayCityMut.mutate({
               teamId: activeTeamId,
               date: cityPickerYmd,
-              city: "",
+              city: CITY_CLEARED,
             });
           }
           setCityPickerYmd(null);
@@ -1117,6 +1381,14 @@ export default function CalendarTab() {
         onClose={() => setSheetOpen(false)}
         appointment={editing}
         defaults={bookDefaults}
+      />
+
+      {/* «Перенести» из контекстного меню — дата + время одним шитом,
+          длительность сохраняется. */}
+      <RescheduleSheet
+        appointment={reschedulingApt}
+        appointments={visibleAppts}
+        onClose={() => setReschedulingApt(null)}
       />
     </Screen>
   );

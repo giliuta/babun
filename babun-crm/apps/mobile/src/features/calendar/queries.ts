@@ -1,7 +1,16 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listAppointments as listAppointmentsCached } from "@babun/shared/sync/appointmentsCached";
-import { listDayExtras } from "@babun/shared/db/repositories/day-extras";
+import {
+  listDayExtras,
+  setDayExtras,
+} from "@babun/shared/db/repositories/day-extras";
+import {
+  getDayExtras,
+  setDayExtrasFor,
+  type DayExtra,
+  type DayExtrasMap,
+} from "@babun/shared/local/day-extras";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
@@ -129,6 +138,43 @@ export function useDayExtras() {
     queryKey: ["day-extras", tenantId],
     enabled: !!tenantId,
     queryFn: () => listDayExtras(supabase, tenantId as string),
+  });
+}
+
+// Замена всего списка ручных операций одной пары (team, date) — тот же
+// shared-репозиторий, что и веб (setDayExtras: delete + reinsert).
+// Оптимистично патчим карту в кэше, чтобы добавленная строка появилась
+// в модалке и в футере без ожидания сервера; при ошибке откатываем
+// ТОЛЬКО свой ключ (не всю карту — образец: useUpdateAppointment).
+export function useSetDayExtras() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      teamId,
+      dateKey,
+      extras,
+    }: {
+      teamId: string;
+      dateKey: string;
+      extras: DayExtra[];
+    }) => setDayExtras(supabase, tenantId as string, teamId, dateKey, extras),
+    onMutate: async ({ teamId, dateKey, extras }) => {
+      const key = ["day-extras", tenantId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<DayExtrasMap>(key);
+      qc.setQueryData<DayExtrasMap>(key, (cur) =>
+        setDayExtrasFor(cur ?? {}, teamId, dateKey, extras),
+      );
+      return { prevExtras: getDayExtras(previous ?? {}, teamId, dateKey) };
+    },
+    onError: (_err, { teamId, dateKey }, ctx) => {
+      if (!ctx) return;
+      qc.setQueryData<DayExtrasMap>(["day-extras", tenantId], (cur) =>
+        setDayExtrasFor(cur ?? {}, teamId, dateKey, ctx.prevExtras),
+      );
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["day-extras"] }),
   });
 }
 

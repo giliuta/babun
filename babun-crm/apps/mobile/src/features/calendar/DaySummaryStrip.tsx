@@ -1,41 +1,67 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  getDebtAmount,
-  getPaidAmount,
-} from "@babun/shared/local/appointments";
+import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { pluralRecord } from "@babun/shared/common/utils/pluralize";
+import {
+  computeDayFinance,
+  getDayMode,
+} from "@babun/shared/local/finance/day-summary";
+import { getDayExtras } from "@babun/shared/local/day-extras";
+import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
 import { useThemeColors } from "@/theme/colors";
 
 // «6 записей · €450 · 3 в работе · 1 без оплаты» — утренний взгляд
 // диспетчера (web DaySummaryStrip, только режим «День»). Тонированные
 // пиллы под шапкой; «без оплаты» тапается.
+//
+// Денежный пилл считается тем же computeDayFinance + getDayMode, что и
+// футер Доход/Расход под сеткой (прошлое → заработано, сегодня/будущее →
+// план): две денежные поверхности одного экрана обязаны сходиться в одну
+// цифру. Web-эталон суммировал оплаченное по всем не-отменённым записям и
+// расходился с футером (аудит 2026-07-14 [ux]) — здесь сознательный отход.
 export function DaySummaryStrip({
   appointments,
+  teamId,
+  dateYmd,
+  todayYmd,
   onUnpaidTap,
 }: {
-  /** Записи ПРОСМАТРИВАЕМОГО дня, уже отфильтрованные по команде. */
+  /** Записи ПРОСМАТРИВАЕМОГО дня — денежный набор команды (без фильтра
+   *  «Скрывать отменённые»: счётчики пропускают отменённые сами). */
   appointments: Appointment[];
+  /** Активная команда — day extras хранятся по (team, date). */
+  teamId: string | null;
+  /** Просматриваемый день (YYYY-MM-DD). */
+  dateYmd: string;
+  /** Бизнес-сегодня (YYYY-MM-DD) — «заработано или план», как в футере. */
+  todayYmd: string;
   onUnpaidTap?: () => void;
 }) {
   const t = useThemeColors();
+  const services = useFinanceServices();
+  const { data: extrasMap = {} } = useDayExtras();
   const stats = useMemo(() => {
     let count = 0;
-    let income = 0;
     let inProgress = 0;
     let unpaid = 0;
     for (const apt of appointments) {
       if (apt.status === "cancelled") continue;
       if (apt.kind !== "work") continue;
       count++;
-      income += getPaidAmount(apt);
       if (apt.status === "in_progress") inProgress++;
       if (apt.status === "completed" && getDebtAmount(apt) > 0) unpaid++;
     }
+    const totals = computeDayFinance(
+      appointments,
+      services,
+      getDayExtras(extrasMap, teamId, dateYmd),
+    );
+    const income =
+      getDayMode(dateYmd, todayYmd) === "past" ? totals.earned : totals.planned;
     return { count, income, inProgress, unpaid };
-  }, [appointments]);
+  }, [appointments, services, extrasMap, teamId, dateYmd, todayYmd]);
 
   if (stats.count === 0) return null;
 

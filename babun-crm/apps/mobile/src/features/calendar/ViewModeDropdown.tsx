@@ -63,7 +63,13 @@ export function ViewModeDropdown({
         animationType="fade"
         onRequestClose={() => setOpen(false)}
       >
-        <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)}>
+        {/* accessible={false}: Pressable-подложка иначе группирует меню в
+            один безымянный «button» для VoiceOver — пункты недостижимы. */}
+        <Pressable
+          accessible={false}
+          style={{ flex: 1 }}
+          onPress={() => setOpen(false)}
+        >
           <View
             style={{
               position: "absolute",

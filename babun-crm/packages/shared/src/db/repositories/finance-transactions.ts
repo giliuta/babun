@@ -198,6 +198,27 @@ export async function deleteTransaction(
   if (error) throw new Error(`deleteTransaction: ${error.message}`);
 }
 
+// Компенсация Undo оплаты: серверный триггер sync_appointment_finance
+// вставляет auto-income на переходе в (completed,'paid'), но обратной
+// ветки paid→unpaid у него нет — откат оплаты обязан прибрать строку
+// сам, иначе в финансах навсегда остаётся фантомный доход. Удаление
+// снимает и конфликт (appointment_id,type), так что повторная оплата
+// после отката снова создаст честный income. Трогаем только source
+// 'auto' — ручные операции не наши.
+export async function deleteAutoIncomeForAppointment(
+  supabase: DbSupabase,
+  appointmentId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("finance_transactions")
+    .delete()
+    .eq("appointment_id", appointmentId)
+    .eq("type", "income")
+    .eq("source", "auto");
+  if (error)
+    throw new Error(`deleteAutoIncomeForAppointment: ${error.message}`);
+}
+
 export interface TransferDraft {
   from_account_id: string;
   to_account_id: string;

@@ -13,23 +13,23 @@ import {
   listScheduleEntries,
   upsertScheduleEntry,
 } from "@babun/shared/db/repositories/schedule";
-import {
-  DEFAULT_SCHEDULE,
-  type TeamSchedule,
-} from "@babun/shared/local/schedule";
+import { type TeamSchedule } from "@babun/shared/local/schedule";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-/** The schedule for one team. Returns DEFAULT_SCHEDULE when the team has no
- *  row yet, so callers always get a valid, editable object (never null). */
+/** The schedule for one team, or null when the team has no row yet. NOT
+ *  coalesced to DEFAULT_SCHEDULE here: that hard-coded 08–22 band made the
+ *  global «Рабочие часы по умолчанию» setting dead — DayView never reached
+ *  its workStartHour/EndHour fallback. Callers pick their own fallback
+ *  (grid → global work hours, hub editor → DEFAULT_SCHEDULE). */
 export function useTeamSchedule(teamId: string | undefined) {
   const tenantId = useTenantId();
-  return useQuery<TeamSchedule>({
+  return useQuery<TeamSchedule | null>({
     queryKey: ["team-schedules", tenantId, teamId],
     enabled: !!tenantId && !!teamId,
     queryFn: async () => {
       const map = await listScheduleEntries(supabase, tenantId as string);
-      return map[teamId as string] ?? DEFAULT_SCHEDULE;
+      return map[teamId as string] ?? null;
     },
   });
 }

@@ -61,11 +61,28 @@ export function usePeriodPager({
   const dragFrom = useSharedValue(0);
   // Различает смену periodKey от собственного коммита и от внешнего прыжка.
   const internal = useRef(false);
+  // Поколение якоря: растёт на каждом внешнем прыжке. Свайп запоминает его
+  // на старте жеста — догоняющий commitJS с чужим поколением дропается,
+  // иначе завершившаяся во время прыжка доводка сдвинула бы новый якорь
+  // («Сегодня» → внезапно вчера).
+  const gen = useRef(0);
+  const dragGen = useRef(0);
   // Reduce Motion: доводка мгновенная (сам drag — прямое манипулирование,
   // его не трогаем).
   const reducedMotion = useReducedMotion();
 
+  const markDragStart = () => {
+    dragGen.current = gen.current;
+  };
+
   const commitJS = (dir: 1 | -1) => {
+    if (dragGen.current !== gen.current) {
+      // Якорь уже сменился извне: откатываем UI-инкремент доводки и ставим
+      // ось на слот — прыжковый эффект ниже видел уже сдвинутый idxSv.
+      idxSv.value = idxSv.value - dir;
+      axisX.value = -idxSv.value * wSv.value;
+      return;
+    }
     internal.current = true;
     setIdx((i) => i + dir);
     onCommit(dir);
@@ -77,6 +94,7 @@ export function usePeriodPager({
       return;
     }
     // Внешний прыжок даты: ось мгновенно на текущий слот (без доводки).
+    gen.current++;
     cancelAnimation(axisX);
     axisX.value = -idxSv.value * wSv.value;
   }, [periodKey, axisX, idxSv, wSv]);
@@ -97,6 +115,7 @@ export function usePeriodPager({
       // Перехват мидл-доводки: замораживаем ось, коммит не успел — idx цел.
       cancelAnimation(axisX);
       dragFrom.value = axisX.value;
+      runOnJS(markDragStart)();
     })
     .onUpdate((e) => {
       const w = wSv.value;

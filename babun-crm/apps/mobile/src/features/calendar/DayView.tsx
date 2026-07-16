@@ -9,13 +9,13 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import { Check } from "lucide-react-native";
+import { AlertTriangle, Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
-import { useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
+import { missingAddress, useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 
@@ -171,6 +171,9 @@ function Block({
   const width = colW - GAP;
   const cancelled = apt.status === "cancelled";
   const completed = apt.status === "completed";
+  // «Нет адреса» показываем только будущим: у просроченных приоритет —
+  // оранжевое «!» незакрытой работы (web: past побеждает no_address).
+  const noAddress = !overdue && missingAddress(apt);
 
   const commit = (translationY: number) => {
     const duration = Math.max(15, endMin - startMin);
@@ -235,8 +238,10 @@ function Block({
     });
   // Мгновенный отклик на обычный тап (iOS-подсветка): лёгкое притухание
   // с onBegin, возврат в onFinalize — раньше блок «молчал» до открытия шита.
+  // maxDuration не задаём: до порога long-press отпускание — всегда тап,
+  // после — pan уже активен и Exclusive отменяет tap сам; явный
+  // maxDuration(250) оставлял мёртвое окно 250–300 мс без реакции.
   const tap = Gesture.Tap()
-    .maxDuration(250)
     .onBegin(() => {
       pressed.value = withTiming(0.7, { duration: 60 });
     })
@@ -371,6 +376,13 @@ function Block({
               }}
             >
               <Check color={t.onAccent} size={10} strokeWidth={3} />
+            </View>
+          ) : null}
+          {noAddress && !compact ? (
+            // Веб-паритет (AppointmentBlock: AlertTriangle при no_address):
+            // куда ехать — неизвестно. Тихий красный значок, без заливки.
+            <View style={{ position: "absolute", top: 3, right: 3 }}>
+              <AlertTriangle color={t.danger} size={11} strokeWidth={2.5} />
             </View>
           ) : null}
         </Animated.View>
@@ -612,8 +624,13 @@ export function DayColumn({
           endMin: (workEndHour ?? endHour) * 60,
         }
       : workBand;
-  const workStart = band ? Math.max(band.startMin, winStartMin) : winStartMin;
-  const workEnd = band ? Math.min(band.endMin, winEndMin) : winEndMin;
+  // Клэмп с ОБЕИХ сторон: рабочее окно целиком вне видимого давало
+  // MinuteBand с top<0 / height>100% — теперь весь видимый день просто
+  // корректно серый.
+  const clampWin = (min: number) =>
+    Math.min(Math.max(min, winStartMin), winEndMin);
+  const workStart = band ? clampWin(band.startMin) : winStartMin;
+  const workEnd = band ? clampWin(band.endMin) : winEndMin;
 
   const onSlotPress = (hour: number, locationY: number) => {
     // Sub-hour snap by touch position (web handleColumnClick parity):
@@ -800,6 +817,8 @@ export function DayColumn({
           <Pressable
             key={a.id}
             onPress={() => onEdit(a)}
+            // То же контекстное меню, что у таймированных блоков.
+            onLongPress={onMenu ? () => onMenu(a) : undefined}
             // Полоска 8pt — визуально тонкая, но тап-мишень расширена до
             // ~24pt (аудит: было фактически некликабельно).
             hitSlop={{ left: 6, right: 10, top: 4, bottom: 4 }}
@@ -913,7 +932,10 @@ function DayHeader({
         paddingTop: 2,
       }}
     >
+      {/* Шапка фиксированной высоты (HEADER_H) — крупный Dynamic Type
+          капим на 1.2, иначе три строки не помещаются в 64px. */}
       <Text
+        maxFontSizeMultiplier={1.2}
         style={{
           fontSize: 11,
           fontWeight: "600",
@@ -937,6 +959,7 @@ function DayHeader({
       >
         <Text
           className="tabular-nums"
+          maxFontSizeMultiplier={1.2}
           style={{
             fontSize: 15,
             fontWeight: "700",
@@ -961,7 +984,7 @@ function DayHeader({
         >
           <Text
             numberOfLines={1}
-            maxFontSizeMultiplier={1.3}
+            maxFontSizeMultiplier={1.2}
             style={{
               fontSize: 10,
               fontWeight: "700",

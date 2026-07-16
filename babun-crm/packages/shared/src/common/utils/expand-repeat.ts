@@ -10,7 +10,9 @@
 //     edits / cancellations back to the seed record. Original `id`
 //     stays unchanged on the seed; virtuals get synthesised ids of
 //     the form `${seed.id}@${dateKey}`.
-//   · Cancelled seeds expand to nothing.
+//   · Cancelled seeds expand to nothing by default; a caller that
+//     shows cancelled records (hideCancelled off) passes
+//     `includeCancelled: true` and filters on its own side.
 //   · `kind === "none"` returns just the seed itself when it falls
 //     inside the window.
 
@@ -53,8 +55,16 @@ export function expandRepeat(
   seed: Appointment,
   fromKey: string,
   toKey: string,
+  opts?: {
+    /** Разворачивать и отменённый seed. Судьбу отменённых решает
+     *  вызывающий (мобильный byTeam фильтрует по hideCancelled) —
+     *  безусловное короткое замыкание здесь прятало отменённую серию
+     *  даже при «показывать отменённые», и восстановить её из сетки
+     *  было нельзя. Дефолт false = прежнее поведение веба. */
+    includeCancelled?: boolean;
+  },
 ): (Appointment | VirtualAppointment)[] {
-  if (seed.status === "cancelled") return [];
+  if (seed.status === "cancelled" && !opts?.includeCancelled) return [];
   const rule: PersonalEventRepeat = seed.event_repeat ?? { kind: "none" };
 
   // No recurrence — seed appears once (if in window).
@@ -66,6 +76,9 @@ export function expandRepeat(
   const seedDate = parseDate(seed.date);
   const toDate = parseDate(toKey);
   const untilDate = rule.until ? parseDate(rule.until) : null;
+  // until раньше даты seed не должен прятать событие целиком: исходное
+  // вхождение рисуется всегда, поэтому терминатор не бывает раньше seed.
+  if (untilDate && untilDate < seedDate) untilDate.setTime(seedDate.getTime());
   const countLimit = rule.count && rule.count > 0 ? rule.count : MAX_OCCURRENCES;
 
   // Walk forward day-by-day from seed until we exit the window or hit

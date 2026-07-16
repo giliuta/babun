@@ -20,6 +20,17 @@ function statusColor(t: ThemeColors, status: Appointment["status"]): string {
   }
 }
 
+// «Нет адреса» — валидационный сигнал веба (shared getAppointmentColorKind →
+// "no_address" + AlertTriangle в AppointmentBlock): запланированная работа,
+// а бригада не знает, куда ехать. Порог trim < 3 — как в shared.
+export function missingAddress(apt: Appointment): boolean {
+  return (
+    apt.kind === "work" &&
+    apt.status === "scheduled" &&
+    (apt.address ?? "").trim().length < 3
+  );
+}
+
 // Returns a resolver so callers can also pass a team-color lookup (the stripe
 // prefers the team/override hue, matching «this one's brigade Y, this one's X»).
 export function useBlockColors(

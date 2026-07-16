@@ -96,6 +96,30 @@ export function ZoomableTimeGrid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollToHour, startHour]);
 
+  // Поднять текущий зум до fit-пола (сетка обязана заполнять вьюпорт).
+  // Вызывается из onLayout И при смене видимого окна часов: сужение окна в
+  // настройках не перезамеряет вьюпорт, но поднимает пол — без этого сетка
+  // отлипала от низа на уже смонтированном экране.
+  const applyFitFloor = (vh: number) => {
+    if (vh <= 0) return;
+    const fit = Math.min(
+      HOUR_H_MAX,
+      Math.max(
+        HOUR_H_MIN,
+        Math.ceil((vh - PAD_TOP - PAD_BOTTOM) / (endHour - startHour)),
+      ),
+    );
+    if (hourHSv.value < fit) {
+      hourHSv.value = fit;
+      onZoom?.(fit);
+    }
+  };
+  useEffect(() => {
+    applyFitFloor(viewportH.value);
+    // applyFitFloor намеренно вне deps: пересчёт нужен только при смене окна.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startHour, endHour]);
+
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
@@ -191,22 +215,9 @@ export function ZoomableTimeGrid({
           onLayout={(e) => {
             viewportH.value = e.nativeEvent.layout.height;
             // A viewport/window change can push the fit floor above the
-            // current zoom (e.g. wider visible hours in settings) — snap up
+            // current zoom (e.g. taller viewport after rotation) — snap up
             // so the grid never sits detached above a void.
-            const fit = Math.min(
-              HOUR_H_MAX,
-              Math.max(
-                HOUR_H_MIN,
-                Math.ceil(
-                  (e.nativeEvent.layout.height - PAD_TOP - PAD_BOTTOM) /
-                    (endHour - startHour),
-                ),
-              ),
-            );
-            if (hourHSv.value < fit) {
-              hourHSv.value = fit;
-              onZoom?.(fit);
-            }
+            applyFitFloor(e.nativeEvent.layout.height);
             if (!didOpenScroll.current) {
               didOpenScroll.current = true;
               openScroll();

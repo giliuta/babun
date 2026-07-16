@@ -50,6 +50,37 @@ export function DayFinanceFooter({
     return m;
   }, [appointments]);
 
+  // computeDayFinance проходит записи+услуги каждого дня — без мемо это
+  // пересчитывалось на каждый кадр зума/пейджинга.
+  const rows = useMemo(
+    () =>
+      days.map((d) => {
+        const ymd = formatYMD(d);
+        const totals = computeDayFinance(
+          byDate.get(ymd) ?? [],
+          sharedServices,
+          getDayExtras(extrasMap, teamId, ymd),
+        );
+        return {
+          d,
+          ymd,
+          // Past → actually earned; today/future → planned revenue.
+          income:
+            getDayMode(ymd, todayYmd) === "past"
+              ? totals.earned
+              : totals.planned,
+          spent: totals.spent,
+          // VoiceOver: «пятница, 18 июля», а не сырое YYYY-MM-DD.
+          dateLabel: d.toLocaleDateString("ru-RU", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          }),
+        };
+      }),
+    [days, byDate, sharedServices, extrasMap, teamId, todayYmd],
+  );
+
   return (
     <View
       style={{
@@ -68,22 +99,13 @@ export function DayFinanceFooter({
         <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Доход</Text>
         <Text style={{ fontSize: 11, fontWeight: "600", color: t.sub }} maxFontSizeMultiplier={1.3}>Расход</Text>
       </View>
-      {days.map((d, i) => {
-        const ymd = formatYMD(d);
-        const totals = computeDayFinance(
-          byDate.get(ymd) ?? [],
-          sharedServices,
-          getDayExtras(extrasMap, teamId, ymd),
-        );
-        // Past → actually earned; today/future → planned revenue.
-        const income =
-          getDayMode(ymd, todayYmd) === "past" ? totals.earned : totals.planned;
+      {rows.map(({ d, ymd, income, spent, dateLabel }, i) => {
         return (
           <Pressable
             key={ymd}
             onPress={() => onTapDay?.(d)}
             accessibilityRole="button"
-            accessibilityLabel={`Финансы за ${ymd}: доход ${formatEUR(income)}, расход ${formatEUR(totals.spent)}`}
+            accessibilityLabel={`Финансы за ${dateLabel}: доход ${formatEUR(income)}, расход ${formatEUR(spent)}`}
             style={{
               flex: 1,
               alignItems: "center",
@@ -103,12 +125,12 @@ export function DayFinanceFooter({
               {formatEUR(income)}
             </Text>
             <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: totals.spent !== 0 ? t.danger : t.faint }}
+              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
               className="tabular-nums"
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
-              {formatEUR(totals.spent)}
+              {formatEUR(spent)}
             </Text>
           </Pressable>
         );
