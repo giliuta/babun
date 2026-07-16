@@ -12,7 +12,7 @@ import {
 } from "@/features/calendar/DayView";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-import { DateCell, type DateHeaderVariant } from "@/features/calendar/date-header";
+import { DateCell } from "@/features/calendar/date-header";
 
 function sameDay(a: Date, b: Date) {
   return (
@@ -44,12 +44,10 @@ export function WeekView({
   onMenu,
   onCreateAt,
   onReschedule,
-  selectedYmd,
-  onSelectDay,
   onPickDay,
   onPickLabelDay,
   onCommitPage,
-  dateVariant,
+  onJumpToNow,
   startHour,
   endHour,
   stepMinutes,
@@ -78,15 +76,10 @@ export function WeekView({
   onMenu?: (a: Appointment) => void;
   onCreateAt: (dateYmd: string, timeStart: string) => void;
   onReschedule: (a: Appointment, s: string, e: string) => void;
-  /** Выбранный день (якорь календаря) — подсвечивается в шапке; раньше
-   *  выбор в Неделе был невидим вовсе. */
-  selectedYmd: string;
-  /** Тап по НЕвыбранной дате — выбрать её (якорь двигается, вид остаётся). */
-  onSelectDay: (d: Date) => void;
-  /** Повторный тап по выбранной дате — открыть её Днём. */
+  /** Долгий тап по шапке даты — открыть её Днём. */
   onPickDay: (d: Date) => void;
-  /** Долгое нажатие по шапке даты — попап метки этой даты (undefined,
-   *  когда у бригады нет меток: long-press тогда ничего не делает). */
+  /** Тап по шапке даты — попап метки этой даты (undefined, когда у бригады
+   *  нет меток: тогда и обычный тап открывает День). */
   onPickLabelDay?: (dateYmd: string) => void;
   /** Палец долистал страницу: родитель сдвигает неделю на ±7 дней. */
   onCommitPage: (dir: 1 | -1) => void;
@@ -117,8 +110,8 @@ export function WeekView({
   bufferMinutes?: number;
   nowMinutes?: number | null;
   scrollToHour?: number;
-  /** Вариант ячейки даты (временный дев-переключатель — date-header.tsx). */
-  dateVariant: DateHeaderVariant;
+  /** Стрелка «к сейчас» на чужой неделе — прыжок якоря на сегодня. */
+  onJumpToNow?: () => void;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({
@@ -130,12 +123,13 @@ export function WeekView({
   return (
     <View style={{ flex: 1 }}>
       {/* Полоса шапок дат — страницы недель едут в локстепе с колонками;
-          линия сетки живёт на обёртке и не скользит. */}
+          линия сетки живёт на обёртке и не скользит. Граница волосяная:
+          шапка должна читаться продолжением сетки, а не отдельной плитой. */}
       <View
         style={{
           flexDirection: "row",
           borderBottomWidth: 1,
-          borderBottomColor: `${t.ink}33`,
+          borderBottomColor: `${t.ink}1a`,
         }}
       >
         <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
@@ -148,11 +142,8 @@ export function WeekView({
               today={today}
               apptsFor={apptsFor}
               labelFor={labelFor}
-              selectedYmd={selectedYmd}
-              onSelectDay={onSelectDay}
               onPickDay={onPickDay}
               onPickLabelDay={onPickLabelDay}
-              dateVariant={dateVariant}
             />
           )}
         />
@@ -166,6 +157,15 @@ export function WeekView({
         endHour={endHour ?? 24}
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
+        nowMinutes={nowMinutes}
+        todayOffset={
+          days.some((d) => sameDay(d, today))
+            ? 0
+            : formatYMD(today) < formatYMD(days[0])
+              ? -1
+              : 1
+        }
+        onJumpToNow={onJumpToNow}
       >
         <TimeRail
           startHour={startHour}
@@ -173,6 +173,7 @@ export function WeekView({
           nowMinutes={
             days.some((d) => sameDay(d, today)) ? nowMinutes : null
           }
+          hourH={hourH}
         />
         <PagedStrip
           pager={pager}
@@ -217,30 +218,23 @@ export function WeekView({
 }
 
 // Одна страница полосы шапок: 7 ячеек DateCell. Семантика (редизайн
-// 2026-07-16): тап = выбрать день (якорь), повторный тап по выбранному =
-// открыть его Днём, long-press = попап метки даты (если метки есть).
-// Раньше тап открывал пикер метки — «выбрать дату» тапом было нельзя,
-// а выбранный день в Неделе вообще не подсвечивался.
+// 2026-07-16 v2, по владельцу): тап = попап метки дня (когда метки есть,
+// иначе сразу День), долгий тап = провалиться в День. «Выбранного дня»
+// в Неделе нет — ничего не выделяется.
 function WeekHeaderRow({
   days,
   today,
   apptsFor,
   labelFor,
-  selectedYmd,
-  onSelectDay,
   onPickDay,
   onPickLabelDay,
-  dateVariant,
 }: {
   days: Date[];
   today: Date;
   apptsFor: (dateYmd: string) => Appointment[];
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
-  selectedYmd: string;
-  onSelectDay: (d: Date) => void;
   onPickDay: (d: Date) => void;
   onPickLabelDay?: (dateYmd: string) => void;
-  dateVariant: DateHeaderVariant;
 }) {
   const todayYmd = formatYMD(today);
   return (
@@ -248,32 +242,29 @@ function WeekHeaderRow({
       {days.map((d) => {
         const ymd = formatYMD(d);
         const isToday = sameDay(d, today);
-        const isSelected = ymd === selectedYmd;
         const count = apptsFor(ymd).length;
         const label = labelFor?.(ymd) ?? null;
         return (
           <Pressable
             key={ymd}
-            onPress={() => (isSelected ? onPickDay(d) : onSelectDay(d))}
-            onLongPress={
-              onPickLabelDay ? () => onPickLabelDay(ymd) : undefined
+            onPress={() =>
+              onPickLabelDay ? onPickLabelDay(ymd) : onPickDay(d)
             }
+            onLongPress={() => onPickDay(d)}
             delayLongPress={350}
             accessibilityRole="button"
-            accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isSelected ? ", выбран" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+            accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
             accessibilityHint={
-              isSelected
-                ? `Нажатие открывает день${onPickLabelDay ? ", долгое нажатие меняет метку" : ""}`
-                : `Нажатие выбирает день${onPickLabelDay ? ", долгое нажатие меняет метку" : ""}`
+              onPickLabelDay
+                ? "Нажатие меняет метку, долгое нажатие открывает день"
+                : "Нажатие открывает день"
             }
             style={{ flex: 1 }}
           >
             <DateCell
               date={d}
               size="sm"
-              variant={dateVariant}
               isToday={isToday}
-              isSelected={isSelected}
               isPast={ymd < todayYmd}
               count={count}
               label={label}

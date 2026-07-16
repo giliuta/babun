@@ -18,7 +18,7 @@ import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import { missingAddress, useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-import { DateCell, type DateHeaderVariant } from "@/features/calendar/date-header";
+import { DateCell } from "@/features/calendar/date-header";
 
 export const RAIL_W = 48;
 // Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
@@ -45,6 +45,11 @@ const DEFAULT_STEP = 30;
 // (web DayColumn v496) instead of joining the overlap layout.
 const ALL_DAY_W = 8;
 const ALL_DAY_GAP = 2;
+// Получасовые отметки (линия в колонке + «HH:30» на рельсе) появляются,
+// когда час достаточно высок, чтобы они читались, а не сливались в шум —
+// запрос владельца: «не вижу 23:30 по графику». Порог по КОММИЧЕННОМУ
+// hourH — как и текст-фит блоков, отметки догоняют зум на отпускании.
+const HALF_MARK_MIN_H = 52;
 
 const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
 
@@ -401,10 +406,13 @@ export function TimeRail({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   nowMinutes,
+  hourH,
 }: {
   startHour?: number;
   endHour?: number;
   nowMinutes?: number | null;
+  /** Коммиченные px/час — гейт получасовых подписей (HALF_MARK_MIN_H). */
+  hourH?: number;
 }) {
   const t = useThemeColors();
   const hours = useMemo(() => {
@@ -453,6 +461,21 @@ export function TimeRail({
               {`${pad2(h % 24)}:00`}
             </Text>
           )}
+          {/* Получас — вторичная подпись: мельче и тише часовой, чтобы
+              рельс не превратился в частокол (23:30 и т.п. видны, когда
+              зум даёт им место). */}
+          {(hourH ?? 0) >= HALF_MARK_MIN_H && !nearNow(h + 0.5) ? (
+            <Text
+              className="tabular-nums"
+              maxFontSizeMultiplier={1.3}
+              style={[
+                labelStyle,
+                { top: "50%", marginTop: -6, fontSize: 10, color: t.sub },
+              ]}
+            >
+              {`${pad2(h % 24)}:30`}
+            </Text>
+          ) : null}
         </View>
       ))}
       {/* endHour label — anchored to the rail bottom, no cell needed. */}
@@ -711,17 +734,18 @@ export function DayColumn({
       )}
 
       {nowMin != null ? (
-        // dark: 0.02 неотличима от фона на реальном OLED — 0.055 даёт
-        // едва заметный, но читаемый wash (light не трогаем).
+        // Прошедшее время затемняется ОТЧЁТЛИВО (запрос владельца
+        // 2026-07-16: «затемним участки, которые прошли») — 0.05 читается
+        // сразу, но остаётся легче серых нерабочих часов (0.12).
         <MinuteBand
           fromMin={winStartMin}
           toMin={winStartMin + nowMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)"}
+          color={t.dark ? "rgba(255,255,255,0.09)" : "rgba(11,18,32,0.05)"}
         />
       ) : null}
-      {/* Прошедшие дни (неделя) — лёгкое затемнение всей колонки: «что уже
+      {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
           позади» видно при сканировании, тем же слоем, что «до сейчас». */}
       {todayYmd && dateYmd < todayYmd ? (
         <MinuteBand
@@ -729,12 +753,13 @@ export function DayColumn({
           toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.dark ? "rgba(255,255,255,0.055)" : "rgba(11,18,32,0.02)"}
+          color={t.dark ? "rgba(255,255,255,0.09)" : "rgba(11,18,32,0.05)"}
         />
       ) : null}
 
-      {/* hour cells: gridline + create-slot in one flex node. Ровно одна
-          линия на час, без получасовой (Bumpix) — чистые часовые ряды. */}
+      {/* hour cells: gridline + create-slot in one flex node. Часовые ряды
+          чистые (Bumpix); получасовая волосяная линия появляется только на
+          достаточном зуме (HALF_MARK_MIN_H) — иначе частокол. */}
       {hours.map((h) => (
         <Pressable
           key={h}
@@ -746,7 +771,21 @@ export function DayColumn({
             borderTopWidth: 1,
             borderTopColor: gridLine,
           }}
-        />
+        >
+          {hourH >= HALF_MARK_MIN_H ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: 0,
+                right: 0,
+                height: 1,
+                backgroundColor: `${t.ink}14`,
+              }}
+            />
+          ) : null}
+        </Pressable>
       ))}
       {/* closing line of the last hour */}
       <View
@@ -889,15 +928,14 @@ export function DayColumn({
 }
 
 // Sticky date header above the day grid — web parity (DayColumn header):
-// the user must always see WHICH day is open. Same visual language as the
-// WeekView days-row: uppercase weekday, 26pt date circle (cobalt = today),
-// red weekends. `label` reserves the slot for the per-day city tag.
+// the user must always see WHICH day is open. Same visual grammar as the
+// WeekView days-row («Маршрут»): дата всегда в круге (кобальт = сегодня,
+// ink = остальные), город — пилл с полным именем.
 function DayHeader({
   dateYmd,
   isToday,
   isPast,
   label,
-  variant,
   onLabelTap,
 }: {
   dateYmd: string;
@@ -906,7 +944,6 @@ function DayHeader({
   /** Метка дня (город бригады). null при отсутствии — шапка чистая,
    *  никакого «+ метка» (Phase I38). */
   label?: { name: string; color: string } | null;
-  variant: DateHeaderVariant;
   /** Тап по ВСЕЙ шапке открывает пикер метки (web onCityTap). undefined,
    *  когда у бригады нет меток — шапка не интерактивна. */
   onLabelTap?: () => void;
@@ -929,7 +966,6 @@ function DayHeader({
       <DateCell
         date={date}
         size="lg"
-        variant={variant}
         isToday={isToday}
         isPast={isPast}
         label={label}
@@ -968,7 +1004,7 @@ export function DayView({
   scrollToHour,
   labelFor,
   onDayLabelTap,
-  dateVariant,
+  onJumpToNow,
 }: {
   /** Центральная (закоммиченная) дата. Соседние страницы — ±1 день. */
   dateYmd: string;
@@ -1010,8 +1046,8 @@ export function DayView({
   /** Метка дня по дате (undefined — у бригады нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onDayLabelTap?: () => void;
-  /** Вариант ячейки даты (временный дев-переключатель — date-header.tsx). */
-  dateVariant: DateHeaderVariant;
+  /** Стрелка «к сейчас» на чужой дате — прыжок якоря на сегодня. */
+  onJumpToNow?: () => void;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
@@ -1020,12 +1056,13 @@ export function DayView({
   return (
     <View style={{ flex: 1 }}>
       {/* Полоса шапки — страницы дат едут в локстепе с колонками; линия
-          сетки живёт на обёртке и не скользит. */}
+          сетки живёт на обёртке и не скользит. Граница волосяная — шапка
+          читается продолжением сетки (как в Неделе). */}
       <View
         style={{
           flexDirection: "row",
           borderBottomWidth: 1,
-          borderBottomColor: `${t.ink}33`,
+          borderBottomColor: `${t.ink}1a`,
         }}
       >
         <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
@@ -1040,7 +1077,6 @@ export function DayView({
                 isToday={d === todayYmd}
                 isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
-                variant={dateVariant}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}
               />
             );
@@ -1054,11 +1090,17 @@ export function DayView({
         endHour={endHour}
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
+        nowMinutes={nowMinutes}
+        todayOffset={
+          dateYmd === todayYmd ? 0 : dateYmd > todayYmd ? -1 : 1
+        }
+        onJumpToNow={onJumpToNow}
       >
         <TimeRail
           startHour={startHour}
           endHour={endHour}
           nowMinutes={dateYmd === todayYmd ? nowMinutes : null}
+          hourH={hourH}
         />
         <PagedStrip
           pager={pager}

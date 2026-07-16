@@ -58,10 +58,6 @@ import {
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-import {
-  useDateHeaderVariant,
-  VARIANT_TITLES,
-} from "@/features/calendar/date-header";
 import { DaySummaryStrip } from "@/features/calendar/DaySummaryStrip";
 import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
@@ -261,10 +257,6 @@ export default function CalendarTab() {
     getStorage().set(CAL_VIEW_KEY, { mode, teamId: teamChoice });
   }, [mode, teamChoice]);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  // Вариант ячейки даты в шапках (1/2/3) — временный дев-переключатель,
-  // циклится long-press-ом по заголовку месяца (см. date-header.tsx).
-  const { variant: dateVariant, cycle: cycleDateVariant } =
-    useDateHeaderVariant();
   const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
@@ -473,12 +465,14 @@ export default function CalendarTab() {
       if (assigned === CITY_CLEARED) return null;
       const name = assigned ?? activeTeam?.default_city ?? "";
       if (!name) return null;
+      // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
+      // метки сливалась с кругом «сегодня» и читалась как второй маркер.
       return {
         name,
-        color: cities.find((c) => c.name === name)?.color ?? t.accent,
+        color: cities.find((c) => c.name === name)?.color ?? t.faint,
       };
     },
-    [activeTeamId, activeTeam?.default_city, dayCities, cities, t.accent],
+    [activeTeamId, activeTeam?.default_city, dayCities, cities, t.faint],
   );
   // Phase I38 web parity — есть ли у бригады вообще метки (default_city или
   // список меток). Нет → чип и тап по шапке скрыты полностью, никаких
@@ -1030,9 +1024,12 @@ export default function CalendarTab() {
       ),
     [monthAnchor],
   );
-  const openDayFromMonth = useCallback((d: Date) => {
+  // Долгий тап по дню Месяца — провалиться в Неделю этого дня (тап —
+  // попап метки, см. MonthView).
+  const openWeekFromMonth = useCallback((d: Date) => {
+    haptics.tap();
     setDay(startOfDay(d));
-    setMode("day");
+    setMode("week");
   }, []);
 
   // Visible grid window: the active team's calendar_window_start/end wins,
@@ -1133,18 +1130,13 @@ export default function CalendarTab() {
     // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
     // и так на UI-потоке; здесь догоняют только «холодные» слои (текст-фит).
     onZoom: (v: number) => startTransition(() => setHourH(v)),
-    dateVariant,
   };
 
+  // Долгий тап по дате в Неделе — провалиться в День (см. WeekHeaderRow).
   const pickDay = (d: Date) => {
-    setDay(startOfDay(d));
-    setMode("day");
-  };
-  // Тап по дате в Неделе — выбор якоря без смены вида (повторный тап по
-  // выбранной откроет День — см. WeekHeaderRow).
-  const selectDay = (d: Date) => {
     haptics.tap();
     setDay(startOfDay(d));
+    setMode("day");
   };
 
   // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
@@ -1190,13 +1182,6 @@ export default function CalendarTab() {
         // есть: без команд экран занят first-run гейтом выше).
         onGear={() => router.push(`/cabinet/teams/${activeTeamId}`)}
         onTitlePress={() => setMiniCalOpen(true)}
-        // ВРЕМЕННЫЙ дев-переключатель вариантов ячейки даты (см.
-        // date-header.tsx): убрать после выбора владельцем.
-        onTitleLongPress={() => {
-          const v = cycleDateVariant();
-          haptics.tap();
-          toast(`Даты: вариант ${v} — ${VARIANT_TITLES[v]}`);
-        }}
         onToday={goToday}
       />
       <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
@@ -1234,9 +1219,8 @@ export default function CalendarTab() {
                 openCreate({ date: d, time_start: timeStart })
               }
               onMenu={openActionMenu}
-              selectedYmd={dayYmd}
-              onSelectDay={selectDay}
               onPickDay={pickDay}
+              onJumpToNow={goToday}
               onPickLabelDay={
                 hasLabels && activeTeamId
                   ? (ymd) => setCityPickerYmd(ymd)
@@ -1278,6 +1262,7 @@ export default function CalendarTab() {
                   ? () => setCityPickerYmd(dayYmd)
                   : undefined
               }
+              onJumpToNow={goToday}
               onMenu={openActionMenu}
               onCreateAt={(d, timeStart) =>
                 openCreate({ date: d, time_start: timeStart })
@@ -1307,7 +1292,12 @@ export default function CalendarTab() {
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
                   labelFor={hasLabels ? labelFor : undefined}
-                  onPickDay={openDayFromMonth}
+                  onPickDay={openWeekFromMonth}
+                  onPickLabelDay={
+                    hasLabels && activeTeamId
+                      ? (ymd) => setCityPickerYmd(ymd)
+                      : undefined
+                  }
                 />
               )}
             />

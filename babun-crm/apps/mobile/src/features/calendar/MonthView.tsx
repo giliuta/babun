@@ -42,6 +42,7 @@ export const MonthView = memo(function MonthView({
   todayYmd,
   labelFor,
   onPickDay,
+  onPickLabelDay,
 }: {
   month: Date; // first of the displayed month
   /** Видимый набор (фильтры сетки, вкл. «Скрывать отменённые») —
@@ -59,7 +60,12 @@ export const MonthView = memo(function MonthView({
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** Долгий тап по дню — провалиться в Неделю этого дня (тап без меток —
+   *  тоже, см. onPickLabelDay). */
   onPickDay: (d: Date) => void;
+  /** Тап по дню — попап метки (undefined, когда у бригады нет меток:
+   *  тогда и обычный тап открывает Неделю). */
+  onPickLabelDay?: (dateYmd: string) => void;
 }) {
   const cells = useMemo(() => {
     const y = month.getFullYear();
@@ -150,9 +156,18 @@ export const MonthView = memo(function MonthView({
               return (
                 <Pressable
                   key={key}
-                  onPress={() => onPickDay(d)}
+                  onPress={() =>
+                    onPickLabelDay ? onPickLabelDay(key) : onPickDay(d)
+                  }
+                  onLongPress={() => onPickDay(d)}
+                  delayLongPress={350}
                   accessibilityRole="button"
                   accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityHint={
+                    onPickLabelDay
+                      ? "Нажатие меняет метку, долгое нажатие открывает неделю"
+                      : "Нажатие открывает неделю"
+                  }
                   className="flex-1 active:opacity-60"
                   style={{
                     padding: 4,
@@ -165,30 +180,23 @@ export const MonthView = memo(function MonthView({
                 >
                   <View className="w-full flex-row items-center justify-between">
                     <View className="flex-row items-center" style={{ gap: 3 }}>
-                      {isToday ? (
-                        <View
-                          className="h-6 w-6 items-center justify-center rounded-full"
-                          style={{ backgroundColor: t.accent }}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "700", color: t.onAccent }}>
-                            {d.getDate()}
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "600",
-                            color: inMonth
+                      {/* Сегодня — кобальтовое число (единая грамматика с
+                          шапками Дня/Недели: цвет вместо фигур). */}
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: isToday ? "700" : "600",
+                          color: isToday
+                            ? t.accent
+                            : inMonth
                               ? isWeekend
                                 ? t.danger
                                 : t.ink
                               : t.faint,
-                          }}
-                        >
-                          {d.getDate()}
-                        </Text>
-                      )}
+                        }}
+                      >
+                        {d.getDate()}
+                      </Text>
                       {/* Точка метки — тот же цвет города, что в шапках
                           Дня/Недели: маршрут читается и с высоты месяца. */}
                       {label ? (

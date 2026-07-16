@@ -1,19 +1,25 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Pressable, View } from "react-native";
 import {
   Gesture,
   GestureDetector,
   type PanGesture,
 } from "react-native-gesture-handler";
 import Animated, {
+  FadeIn,
+  FadeOut,
   runOnJS,
   scrollTo,
   useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
+import { ChevronDown, ChevronUp } from "lucide-react-native";
+import { useThemeColors } from "@/theme/colors";
 
 // Vertical scale of the time grid (pixels per hour). The LIVE value is a
 // Reanimated shared value (`hourHSv`) owned by the calendar screen: the
@@ -55,6 +61,9 @@ export function ZoomableTimeGrid({
   endHour,
   scrollToHour,
   pageGesture,
+  nowMinutes,
+  todayOffset,
+  onJumpToNow,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -68,8 +77,18 @@ export function ZoomableTimeGrid({
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
   pageGesture?: PanGesture;
+  /** Текущее время (минуты от полуночи, бизнес-таймзона) — цель стрелки
+   *  «к сейчас». null/undefined вместе с todayOffset → стрелки нет. */
+  nowMinutes?: number | null;
+  /** Где сегодня относительно видимого периода: 0 — внутри, -1 — раньше
+   *  (стрелка вверх), 1 — позже (вниз). undefined → стрелка выключена. */
+  todayOffset?: -1 | 0 | 1;
+  /** Прыжок периода на сегодня (родитель двигает якорь); после коммита
+   *  сетка сама докручивает к линии «сейчас». */
+  onJumpToNow?: () => void;
   children: ReactNode;
 }) {
+  const t = useThemeColors();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollY = useSharedValue(0);
   const viewportH = useSharedValue(0);
@@ -78,6 +97,23 @@ export function ZoomableTimeGrid({
   // start) under the initial focal point.
   const baseH = useSharedValue(HOUR_H_DEFAULT);
   const anchorTime = useSharedValue(0);
+  // Высота, которой живёт LAYOUT. Во время пинча она ЗАМОРОЖЕНА: жест
+  // рисуется чистыми GPU-трансформами (scaleY+translateY) поверх готовой
+  // сетки — ни одного прогона Yoga на кадр. Прежняя схема анимировала
+  // height напрямую: полный релэйаут сотен узлов каждый кадр + scrollTo,
+  // приземляющийся в соседний кадр, — календарь «трясся» под пальцами.
+  // Вне жеста следует за hourHSv (fit-пол, смена окна в настройках).
+  const layoutH = useSharedValue(HOUR_H_DEFAULT);
+  const gestureScale = useSharedValue(1);
+  const gestureTy = useSharedValue(0);
+  const scrollY0 = useSharedValue(0);
+  useAnimatedReaction(
+    () => hourHSv.value,
+    (v) => {
+      if (!pinching.value && layoutH.value !== v) layoutH.value = v;
+    },
+    [],
+  );
 
   // Открывающий скролл к scrollOpenHour выполняется ПОСЛЕ первого layout
   // (см. onLayout ниже): до него зум-пол мог поднять hourHSv выше дефолта,
@@ -123,6 +159,62 @@ export function ZoomableTimeGrid({
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
   });
+
+  // ── Стрелка «к сейчас» ──────────────────────────────────────────────
+  // Появляется, когда красная линия текущего времени вне вьюпорта (или
+  // открыт другой день/неделя); направление — куда до неё крутить.
+  // Видимость считается на UI-потоке от scrollY/viewportH/hourHSv, в React
+  // уходит только смена состояния (up/down/нет).
+  const [nowArrow, setNowArrow] = useState<"up" | "down" | null>(null);
+  useAnimatedReaction(
+    () => {
+      if (todayOffset === undefined || nowMinutes == null) return 0;
+      if (todayOffset !== 0) return todayOffset < 0 ? 1 : 2;
+      // Сейчас вне видимого окна часов — линии нет, докрутить не к чему.
+      if (nowMinutes < startHour * 60 || nowMinutes > endHour * 60) return 0;
+      const y = PAD_TOP + (nowMinutes / 60 - startHour) * hourHSv.value;
+      const margin = 28; // линия «почти у края» — уже считается скрытой
+      if (y < scrollY.value + margin) return 1;
+      if (y > scrollY.value + viewportH.value - margin) return 2;
+      return 0;
+    },
+    (v, prev) => {
+      if (v !== prev)
+        runOnJS(setNowArrow)(v === 1 ? "up" : v === 2 ? "down" : null);
+    },
+    [todayOffset, nowMinutes, startHour, endHour],
+  );
+  const scrollToNow = () => {
+    if (nowMinutes == null) return;
+    const h = hourHSv.value;
+    const contentH = PAD_TOP + (endHour - startHour) * h + PAD_BOTTOM;
+    const maxY = Math.max(0, contentH - viewportH.value);
+    const target =
+      PAD_TOP + (nowMinutes / 60 - startHour) * h - viewportH.value / 2;
+    scrollRef.current?.scrollTo({
+      y: Math.min(maxY, Math.max(0, target)),
+      animated: true,
+    });
+  };
+  // Чужой период: сначала родитель прыгает на сегодня, докрутка к линии —
+  // после коммита (todayOffset станет 0).
+  const pendingNowScroll = useRef(false);
+  const onNowPress = () => {
+    if (todayOffset !== 0) {
+      pendingNowScroll.current = true;
+      onJumpToNow?.();
+    } else {
+      scrollToNow();
+    }
+  };
+  useEffect(() => {
+    if (todayOffset === 0 && pendingNowScroll.current) {
+      pendingNowScroll.current = false;
+      scrollToNow();
+    }
+    // scrollToNow намеренно вне deps — важен только момент коммита периода.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayOffset]);
   // Two fingers down would otherwise ALSO pan the scroll view (iOS scrolls
   // on any touch count) — the native pan and the anchor scrollTo below then
   // fight over the offset. Disabling scroll for the pinch's lifetime keeps
@@ -153,12 +245,13 @@ export function ZoomableTimeGrid({
   const pinch = Gesture.Pinch()
     // Recognize alongside the native scroll instead of losing to it. The
     // first pinch frame sets `pinching` → scrollEnabled(false) cancels the
-    // native pan mid-gesture, so exactly one writer (the scrollTo below)
-    // drives the offset for the rest of the gesture.
+    // native pan mid-gesture, so exactly one writer drives the geometry
+    // for the rest of the gesture.
     .simultaneousWithExternalGesture(nativeScroll)
     .onStart((e) => {
       pinching.value = true;
-      baseH.value = hourHSv.value;
+      baseH.value = layoutH.value;
+      scrollY0.value = scrollY.value;
       anchorTime.value =
         (scrollY.value + e.focalY - PAD_TOP) / baseH.value;
     })
@@ -168,24 +261,52 @@ export function ZoomableTimeGrid({
         Math.max(minHourH(), baseH.value * e.scale),
       );
       hourHSv.value = h;
-      // Same-frame scroll correction: keep the anchored time under the
-      // CURRENT focal point (drift = two-finger pan). Clamped so zooming
-      // out at the edges never overscrolls.
-      const contentH = PAD_TOP + (endHour - startHour) * h + PAD_BOTTOM;
-      const maxY = Math.max(0, contentH - viewportH.value);
-      const y = PAD_TOP + anchorTime.value * h - e.focalY;
-      scrollTo(scrollRef, 0, Math.min(maxY, Math.max(0, y)), false);
+      // Кадр жеста = два числа трансформа, БЕЗ layout и БЕЗ scrollTo.
+      // eff — «эффективный» offset, который показывал бы настоящий скролл
+      // при высоте h: якорное время держится под текущим фокусом пальцев
+      // (дрейф = двухпальцевый пан), края клампятся как bounces=false.
+      const span = endHour - startHour;
+      const maxY = Math.max(
+        0,
+        PAD_TOP + span * h + PAD_BOTTOM - viewportH.value,
+      );
+      const eff = Math.min(
+        maxY,
+        Math.max(0, PAD_TOP + anchorTime.value * h - e.focalY),
+      );
+      gestureScale.value = h / baseH.value;
+      gestureTy.value = scrollY0.value - eff;
     })
     .onFinalize(() => {
       if (!pinching.value) return;
-      pinching.value = false;
+      // Единый кадр отпускания: настоящая высота, сброс трансформов и
+      // реальный offset согласованы — сетка приземляется ровно там, где
+      // была под пальцами, один relayout на весь жест.
       const snapped = Math.round(hourHSv.value);
+      const span = endHour - startHour;
+      const maxY = Math.max(
+        0,
+        PAD_TOP + span * snapped + PAD_BOTTOM - viewportH.value,
+      );
+      const eff = Math.min(
+        maxY,
+        Math.max(0, scrollY0.value - gestureTy.value),
+      );
+      layoutH.value = snapped;
       hourHSv.value = snapped;
+      gestureScale.value = 1;
+      gestureTy.value = 0;
+      scrollTo(scrollRef, 0, eff, false);
+      pinching.value = false;
       if (onZoom) runOnJS(onZoom)(snapped);
     });
 
   const rowStyle = useAnimatedStyle(() => ({
-    height: (endHour - startHour) * hourHSv.value,
+    height: (endHour - startHour) * layoutH.value,
+    transform: [
+      { translateY: gestureTy.value },
+      { scaleY: gestureScale.value },
+    ],
   }));
 
   // Один палец вбок = живой пейджинг периода (pan из pager.tsx, maxPointers 1
@@ -194,7 +315,8 @@ export function ZoomableTimeGrid({
   const grid = pageGesture ? Gesture.Race(pageGesture, pinch) : pinch;
 
   return (
-    <GestureDetector gesture={grid}>
+    <View style={{ flex: 1 }}>
+      <GestureDetector gesture={grid}>
       {/* Inner detector binds the scroll view's native recognizer into RNGH —
           the handle the pinch's simultaneousWithExternalGesture points at. */}
       <GestureDetector gesture={nativeScroll}>
@@ -225,11 +347,54 @@ export function ZoomableTimeGrid({
           }}
           scrollEventThrottle={16}
         >
-          <Animated.View style={[{ flexDirection: "row" }, rowStyle]}>
+          {/* transformOrigin top: scaleY жеста растягивает сетку от верхней
+              кромки — формула якоря считает визуальную y как ty + s·y. */}
+          <Animated.View
+            style={[{ flexDirection: "row", transformOrigin: "top" }, rowStyle]}
+          >
             {children}
           </Animated.View>
         </Animated.ScrollView>
       </GestureDetector>
-    </GestureDetector>
+      </GestureDetector>
+
+      {/* Плавающая стрелка «к сейчас» — цвет линии текущего времени. */}
+      {nowArrow ? (
+        <Animated.View
+          entering={FadeIn.duration(150)}
+          exiting={FadeOut.duration(150)}
+          style={{ position: "absolute", right: 12, bottom: 12 }}
+        >
+          <Pressable
+            onPress={onNowPress}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="К текущему времени"
+            style={({ pressed }) => ({
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.surface,
+              borderWidth: 1,
+              borderColor: `${t.ink}1a`,
+              shadowColor: "#000",
+              shadowOpacity: 0.14,
+              shadowRadius: 8,
+              shadowOffset: { width: 0, height: 2 },
+              elevation: 4,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            {nowArrow === "up" ? (
+              <ChevronUp color={t.danger} size={22} strokeWidth={2.5} />
+            ) : (
+              <ChevronDown color={t.danger} size={22} strokeWidth={2.5} />
+            )}
+          </Pressable>
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }
