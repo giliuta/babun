@@ -28,7 +28,6 @@ import {
   Users,
 } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
-import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import { whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import {
   buildStatsMap,
@@ -48,7 +47,7 @@ import { useToast } from "@/components/ui/Toast";
 import {
   useClients,
   useClientTags,
-  useDeleteClients,
+  useArchiveClients,
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
@@ -70,6 +69,7 @@ import {
   ymdInDays,
 } from "@/features/clients/format";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
+import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
@@ -78,10 +78,9 @@ import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
-
-// v811 gold for the debt figure — matches the web card literal.
-const DEBT_GOLD = "#b78600";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
@@ -124,6 +123,7 @@ function ClientRow({
         ? Math.abs(client.balance)
         : 0;
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
+  const avatarColor = getAvatarColor(client.full_name);
 
   const figs: { key: string; text: string; color: string }[] = [];
   if (cardFields.exp && exp > 0)
@@ -133,7 +133,11 @@ function ClientRow({
   // «долг €450», не голый цветовой код: золото без подписи в списке
   // не читается, а должника надо находить по слову, не по памяти.
   if (cardFields.debt && debt > 0)
-    figs.push({ key: "debt", text: `долг ${formatEUR(debt)}`, color: DEBT_GOLD });
+    figs.push({
+      key: "debt",
+      text: `долг ${formatEUR(debt)}`,
+      color: t.warning,
+    });
 
   // Meta line — reminder (колокольчик) · last visit (с иконкой часов,
   // web parity) · team · city · tags. Напоминание не гейтится тогглами:
@@ -152,6 +156,7 @@ function ClientRow({
             strokeWidth={2.2}
           />
           <Text
+            maxFontSizeMultiplier={1.3}
             className={`text-[11px] ${reminder.due ? "font-semibold" : ""}`}
             style={{ color: reminder.due ? t.danger : t.ink }}
           >
@@ -167,12 +172,12 @@ function ClientRow({
       node: stats?.lastVisitDate ? (
         <View className="flex-row items-center gap-1">
           <Clock color={t.sub} size={11} strokeWidth={2.2} />
-          <Text className="text-[11px]" style={{ color: t.ink }}>
+          <Text maxFontSizeMultiplier={1.3} className="text-[11px]" style={{ color: t.ink }}>
             {formatShortDateRu(stats.lastVisitDate)}
           </Text>
         </View>
       ) : (
-        <Text className="text-[11px]" style={{ color: t.faint }}>
+        <Text maxFontSizeMultiplier={1.3} className="text-[11px]" style={{ color: t.faint }}>
           нет записей
         </Text>
       ),
@@ -183,7 +188,12 @@ function ClientRow({
       metaSegs.push({
         key,
         node: (
-          <Text className="text-[11px]" style={{ color: t.ink }} numberOfLines={1}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-[11px]"
+            style={{ color: t.ink }}
+            numberOfLines={1}
+          >
             {text}
           </Text>
         ),
@@ -198,15 +208,21 @@ function ClientRow({
   }
 
   const row = (
-    <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={280}
-      accessibilityRole="button"
-      accessibilityState={selectionMode ? { selected: picked } : undefined}
-      className="flex-row items-center px-4 py-3 active:opacity-60"
-      style={{ backgroundColor: t.canvas }}
-    >
+    <View className="flex-row items-stretch" style={{ backgroundColor: t.canvas }}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={280}
+        accessibilityRole="button"
+        accessibilityLabel={[client.full_name || "Без имени", client.phone]
+          .filter(Boolean)
+          .join(". ")}
+        accessibilityHint={
+          selectionMode ? "Переключить выбор клиента" : "Открыть карточку клиента"
+        }
+        accessibilityState={selectionMode ? { selected: picked } : undefined}
+        className={`min-h-[68px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
+      >
       {selectionMode ? (
         // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
         <View
@@ -220,11 +236,20 @@ function ClientRow({
           {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
         </View>
       ) : (
+        // Мягкий аватар: заливка = цвет клиента при ~18%, инициалы —
+        // чёрные (ink). Насыщенный круг был самым громким элементом
+        // экрана и не нёс смысла (просто хеш имени); тихий тон даёт
+        // идентичность, не перебивая имя и деньги. Зелёным на строке
+        // остаётся только кнопка звонка = действие.
         <View
           className="h-11 w-11 items-center justify-center rounded-full"
-          style={{ backgroundColor: getAvatarColor(client.full_name) }}
+          style={{ backgroundColor: `${avatarColor}2e` }}
         >
-          <Text className="text-sm font-bold" style={{ color: "#fff" }}>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-sm font-bold"
+            style={{ color: t.ink }}
+          >
             {getInitials(client.full_name || "?")}
           </Text>
         </View>
@@ -235,6 +260,7 @@ function ClientRow({
             <Pin color={t.accent} size={12} strokeWidth={2.5} />
           ) : null}
           <Text
+            maxFontSizeMultiplier={1.3}
             className="shrink text-base font-semibold"
             style={{ color: t.ink }}
             numberOfLines={1}
@@ -246,6 +272,7 @@ function ClientRow({
           <View className="mt-0.5 flex-row flex-wrap items-center gap-2.5">
             {figs.map((f) => (
               <Text
+                maxFontSizeMultiplier={1.3}
                 key={f.key}
                 className="text-[11px] font-semibold"
                 style={{ color: f.color, fontVariant: ["tabular-nums"] }}
@@ -260,7 +287,11 @@ function ClientRow({
             {metaSegs.map((seg, i) => (
               <View key={seg.key} className="flex-row items-center">
                 {i > 0 ? (
-                  <Text className="mx-[5px] text-[11px]" style={{ color: t.faint }}>
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    className="mx-[5px] text-[11px]"
+                    style={{ color: t.faint }}
+                  >
                     ·
                   </Text>
                 ) : null}
@@ -270,18 +301,19 @@ function ClientRow({
           </View>
         ) : null}
       </View>
+      </Pressable>
       {phoneDigits && !selectionMode ? (
         <Pressable
           onPress={() => Linking.openURL(`tel:${phoneDigits}`)}
-          hitSlop={6}
+          accessibilityRole="button"
           accessibilityLabel="Позвонить"
-          className="ml-2 h-9 w-9 items-center justify-center rounded-full active:opacity-70"
+          className="mx-4 my-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
           style={{ backgroundColor: `${t.success}1a` }}
         >
           <Phone color={t.success} size={16} />
         </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 
   // Свайпы (RN-GH, паттерн из chats/index.tsx): влево → «Позвонить»
@@ -325,7 +357,11 @@ function ClientRow({
             style={{ backgroundColor: t.accent }}
           >
             <MessageSquare color="#fff" size={ICON.sm} />
-            <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="text-[11px] font-semibold"
+              style={{ color: "#fff" }}
+            >
               SMS
             </Text>
           </Pressable>
@@ -335,10 +371,13 @@ function ClientRow({
               accessibilityRole="button"
               accessibilityLabel="WhatsApp"
               className="w-[88px] items-center justify-center gap-1"
-              style={{ backgroundColor: CHANNEL_COLORS.whatsapp }}
+              style={{ backgroundColor: MOBILE_CHANNEL_COLORS.whatsapp }}
             >
               <MessageCircle color="#fff" size={ICON.sm} />
-              <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
+              <Text
+                className="text-[11px] font-semibold"
+                style={{ color: "#fff" }}
+              >
                 WhatsApp
               </Text>
             </Pressable>
@@ -355,6 +394,7 @@ export default function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
+  const { data: role } = useCurrentRole();
   // Экран настроек возвращается сюда с nonce-параметрами: «Фильтры /
   // Сортировка» → openFilters, «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
@@ -366,7 +406,7 @@ export default function ClientsListScreen() {
   const { data: appointments = [] } = useAppointments();
   const { data: teams = [] } = useTeams();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
-  const deleteClients = useDeleteClients();
+  const archiveClients = useArchiveClients();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
@@ -385,7 +425,7 @@ export default function ClientsListScreen() {
     if (params.openImport) setImportOpen(true);
   }, [params.openImport]);
 
-  const clients = data ?? [];
+  const clients = useMemo(() => data ?? [], [data]);
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
@@ -455,7 +495,10 @@ export default function ClientsListScreen() {
       {
         text: "Через месяц",
         onPress: () =>
-          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(30) } }),
+          updateById.mutate({
+            id: c.id,
+            patch: { reminder_at: ymdInDays(30) },
+          }),
       },
       ...(c.reminder_at
         ? [
@@ -471,21 +514,21 @@ export default function ClientsListScreen() {
     ]);
   };
 
-  const confirmDeleteOne = (c: Client) => {
+  const confirmArchiveOne = (c: Client) => {
     Alert.alert(
-      "Удалить клиента?",
-      `${c.full_name || "Клиент"} и вся его история будут удалены безвозвратно.`,
+      "Архивировать клиента?",
+      `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится, клиента можно будет восстановить.`,
       [
         { text: "Отмена", style: "cancel" },
         {
-          text: "Удалить",
+          text: "Архивировать",
           style: "destructive",
           onPress: async () => {
             try {
-              const { deleted } = await deleteClients.mutateAsync([c.id]);
-              if (deleted > 0) toast("Клиент удалён", "success");
+              const { archived } = await archiveClients.mutateAsync([c.id]);
+              if (archived > 0) toast("Клиент перемещён в архив", "success");
             } catch (e) {
-              Alert.alert("Не удалось удалить", (e as Error).message);
+              Alert.alert("Не удалось архивировать", (e as Error).message);
             }
           },
         },
@@ -501,8 +544,7 @@ export default function ClientsListScreen() {
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
   const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
-  const allSelected =
-    visible.length > 0 && selectedIds.size === visible.length;
+  const allSelected = visible.length > 0 && selectedIds.size === visible.length;
 
   const enterSelection = (seedId?: string) => {
     setSelecting(true);
@@ -540,40 +582,37 @@ export default function ClientsListScreen() {
     }
   };
 
-  const onDelete = () => {
+  const onArchive = () => {
     const n = selectedClients.length;
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     Alert.alert(
-      `Удалить ${n} ${word}?`,
-      "Это действие необратимо. Связанные записи будут откреплены.",
+      `Архивировать ${n} ${word}?`,
+      "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; клиентов можно восстановить.",
       [
         { text: "Отмена", style: "cancel" },
         {
-          text: "Удалить",
+          text: "Архивировать",
           style: "destructive",
           onPress: async () => {
             try {
-              const { deleted, failed } = await deleteClients.mutateAsync(
+              const { archived, failed } = await archiveClients.mutateAsync(
                 selectedClients.map((c) => c.id),
               );
-              if (failed > 0 && deleted > 0) {
-                toast(
-                  `Удалено: ${deleted}, не удалось: ${failed}`,
-                  "error",
-                );
+              if (failed > 0 && archived > 0) {
+                toast(`В архиве: ${archived}, не удалось: ${failed}`, "error");
               } else if (failed > 0) {
                 Alert.alert(
-                  "Не удалось удалить",
-                  `Ни один из ${failed} клиентов не удалён. Проверьте соединение и попробуйте ещё раз.`,
+                  "Не удалось архивировать",
+                  `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
                 );
                 return;
               } else {
-                toast(`Удалено: ${deleted}`, "success");
+                toast(`Перемещено в архив: ${archived}`, "success");
               }
               exitSelection();
             } catch (e) {
-              Alert.alert("Не удалось удалить", (e as Error).message);
+              Alert.alert("Не удалось архивировать", (e as Error).message);
             }
           },
         },
@@ -593,7 +632,10 @@ export default function ClientsListScreen() {
             accessibilityLabel="Отменить выбор"
             className="active:opacity-60"
           >
-            <Text className="text-base font-semibold" style={{ color: t.accent }}>
+            <Text
+              className="text-base font-semibold"
+              style={{ color: t.accent }}
+            >
               Отмена
             </Text>
           </Pressable>
@@ -609,7 +651,10 @@ export default function ClientsListScreen() {
             accessibilityLabel={allSelected ? "Снять всё" : "Выбрать всё"}
             className="active:opacity-60"
           >
-            <Text className="text-base font-semibold" style={{ color: t.accent }}>
+            <Text
+              className="text-base font-semibold"
+              style={{ color: t.accent }}
+            >
               {allSelected ? "Снять" : "Всё"}
             </Text>
           </Pressable>
@@ -663,32 +708,37 @@ export default function ClientsListScreen() {
               value={query}
               onChangeText={setQuery}
               placeholder="Имя, телефон, адрес"
+              accessibilityLabel="Поиск клиентов"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               autoCapitalize="none"
+              returnKeyType="search"
               clearButtonMode="while-editing"
+              maxFontSizeMultiplier={1.3}
               className="flex-1 text-[15px]"
               style={{ color: t.ink, paddingVertical: 0 }}
             />
           </View>
 
-          <Pressable
-            onPress={() => router.push("/cabinet/insights")}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Аналитика по клиентам"
-            style={({ pressed }) => ({
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 22,
-              backgroundColor: pressed ? t.pressed : "transparent",
-            })}
-          >
-            <BarChart3 color={t.sub} size={21} strokeWidth={2} />
-          </Pressable>
+          {role === "owner" ? (
+            <Pressable
+              onPress={() => router.push("/cabinet/insights")}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Аналитика по клиентам"
+              style={({ pressed }) => ({
+                width: 44,
+                height: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 22,
+                backgroundColor: pressed ? t.pressed : "transparent",
+              })}
+            >
+              <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+            </Pressable>
+          ) : null}
         </View>
       )}
 
@@ -707,17 +757,23 @@ export default function ClientsListScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
+          <ActivityIndicator accessibilityLabel="Загрузка клиентов" />
         </View>
       ) : error ? (
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-center text-sm" style={{ color: t.danger }}>
-            {(error as Error).message}
-          </Text>
-        </View>
+        <ClientDataNotice
+          fullScreen
+          title="Не удалось загрузить клиентов"
+          message={
+            (error as Error).message ||
+            "Проверьте соединение и повторите попытку."
+          }
+          onRetry={() => void refetch()}
+          retrying={isRefetching}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}
+          accessibilityLabel="Список клиентов"
           data={result.filtered}
           keyExtractor={(c) => c.id}
           keyboardShouldPersistTaps="handled"
@@ -750,7 +806,10 @@ export default function ClientsListScreen() {
             );
           }}
           ItemSeparatorComponent={() => (
-            <View className="ml-[68px] h-px" style={{ backgroundColor: t.separator }} />
+            <View
+              className="ml-[68px] h-px"
+              style={{ backgroundColor: t.separator }}
+            />
           )}
           refreshControl={
             // В режиме выбора pull-to-refresh отключаем — refetch мог бы
@@ -789,18 +848,20 @@ export default function ClientsListScreen() {
 
       {/* В режиме выбора — нижняя панель массовых действий; вне выбора —
           полноценная кнопка создания внизу (стандарт «Добавить»: как
-          «＋ Операция» в Финансах, вместо глифа «+» в шапке). */}
+          «Добавить операцию» в Финансах, вместо отдельной иконки в шапке). */}
       {selecting ? (
         <BulkActionBar
           count={selectedIds.size}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
-          onDelete={onDelete}
+          onArchive={onArchive}
         />
       ) : (
-        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <View
+          style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
+        >
           <GradientButton
-            label="＋ Клиент"
+            label="Добавить клиента"
             onPress={() => router.push("/clients/new")}
           />
         </View>
@@ -812,7 +873,7 @@ export default function ClientsListScreen() {
         onSelectMany={(c) => enterSelection(c.id)}
         onTogglePin={onTogglePin}
         onRemind={openRemindMenu}
-        onDelete={confirmDeleteOne}
+        onArchive={confirmArchiveOne}
       />
       <ClientsFilterSheet
         visible={sheetOpen}
@@ -822,7 +883,10 @@ export default function ClientsListScreen() {
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
       />
-      <ImportWizardSheet visible={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportWizardSheet
+        visible={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
       <BulkSmsSheet
         visible={smsOpen}
         recipients={selectedClients}
