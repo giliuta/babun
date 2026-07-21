@@ -281,7 +281,9 @@ function ClientRow({
             </Text>
           </View>
         )}
-        <View className="ml-3 flex-1">
+        {/* ml-2: аватар16+44+8 = 68 → колонка текста совпадает с инсетом
+            разделителя (ml-[68px]) и DS-инсетом avatar-рядов. */}
+        <View className="ml-2 flex-1">
           <View className="flex-row items-center gap-1.5">
             {client.pinned_at ? (
               <Pin color={t.accent} size={12} strokeWidth={2.5} />
@@ -400,7 +402,7 @@ function ClientRow({
           <Pressable
             onPress={() => swipeAction(`sms:${phoneDigits}`)}
             accessibilityRole="button"
-            accessibilityLabel="Сообщение"
+            accessibilityLabel={`Сообщение — ${client.full_name || client.phone}`}
             className="w-[88px] items-center justify-center gap-1"
             style={{ backgroundColor: t.accent }}
           >
@@ -417,7 +419,7 @@ function ClientRow({
             <Pressable
               onPress={() => swipeAction(wa)}
               accessibilityRole="button"
-              accessibilityLabel="WhatsApp"
+              accessibilityLabel={`WhatsApp — ${client.full_name || client.phone}`}
               className="w-[88px] items-center justify-center gap-1"
               style={{ backgroundColor: MOBILE_CHANNEL_COLORS.whatsapp }}
             >
@@ -672,16 +674,17 @@ export default function ClientsListScreen() {
   };
 
   return (
-    <Screen>
+    // edges top-only: экран внутри Tabs — нижний safe-area держит таб-бар,
+    // иначе двойной инсет (~34pt зазор над CTA). Паттерн chats/(dashboard).
+    <Screen edges={["top"]}>
       {selecting ? (
         // Селекшн-хедер: Отмена · «Выбрано N» · Выбрать всё/Снять.
         <View className="flex-row items-center justify-between px-4 pb-2 pt-4">
           <Pressable
             onPress={exitSelection}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Отменить выбор"
-            className="active:opacity-60"
+            className="min-h-11 justify-center px-1 active:opacity-60"
           >
             <Text
               className="text-base font-semibold"
@@ -697,10 +700,9 @@ export default function ClientsListScreen() {
           </Text>
           <Pressable
             onPress={toggleAll}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={allSelected ? "Снять всё" : "Выбрать всё"}
-            className="active:opacity-60"
+            className="min-h-11 justify-center px-1 active:opacity-60"
           >
             <Text
               className="text-base font-semibold"

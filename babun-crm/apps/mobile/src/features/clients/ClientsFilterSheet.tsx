@@ -43,6 +43,7 @@ function GridPill({
   active,
   count,
   full,
+  radio,
   onPress,
 }: {
   label: string;
@@ -50,6 +51,8 @@ function GridPill({
   count?: number;
   /** Полноширинная (например «Свой диапазон»). */
   full?: boolean;
+  /** Одиночный выбор (Порядок/Период) — VoiceOver объявит «1 из N». */
+  radio?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -61,6 +64,7 @@ function GridPill({
       count={count}
       variant="tint"
       selected={active}
+      radio={radio}
       onPress={onPress}
       icon={
         active ? <Check color={t.accent} size={14} strokeWidth={2.6} /> : null
@@ -125,7 +129,7 @@ function FacetRow({
         {option.label}
       </Text>
       <Text
-        className="text-xs"
+        className="text-[13px]"
         style={{ color: t.faint, fontVariant: ["tabular-nums"] }}
       >
         {count}
@@ -135,14 +139,17 @@ function FacetRow({
   );
 }
 
-/** Секция с иконкой-плиткой и капс-заголовком (web Section). */
+/** Секция с иконкой-плиткой и капс-заголовком (web Section). Когда в
+ *  секции есть выбор, справа — «Очистить» (сбрасывает только её). */
 function Section({
   icon,
   caption,
+  onClear,
   children,
 }: {
   icon: ReactNode;
   caption: string;
+  onClear?: () => void;
   children: ReactNode;
 }) {
   const t = useThemeColors();
@@ -163,6 +170,25 @@ function Section({
         >
           {caption}
         </Text>
+        {onClear ? (
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              onClear();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`Очистить: ${caption}`}
+            hitSlop={8}
+            className="ml-auto min-h-11 justify-center active:opacity-60"
+          >
+            <Text
+              className="text-[11px] font-bold uppercase tracking-wider"
+              style={{ color: t.accent }}
+            >
+              Очистить
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
       {children}
     </View>
@@ -286,7 +312,7 @@ export function ClientsFilterSheet({
       {/* Шапка листа (диалект Финансов): слева — заголовок, справа —
           «Сбросить». Закрытие: тап по фону или «Показать N». */}
       <View className="flex-row items-center justify-between px-4 pb-2 pt-3">
-        <Text className="text-lg font-bold" style={{ color: t.ink }}>
+        <Text className="text-[17px] font-semibold" style={{ color: t.ink }}>
           Фильтры
         </Text>
         <Pressable
@@ -318,26 +344,15 @@ export function ClientsFilterSheet({
         style={{ flexShrink: 1 }}
         contentContainerStyle={{ paddingVertical: 16, gap: 20 }}
       >
-        <Section
-          icon={<ArrowUpDown color={t.accent} size={15} strokeWidth={2.2} />}
-          caption="Порядок"
-        >
-          <View className="flex-row flex-wrap gap-2">
-            {SORT_ORDER.map((k) => (
-              <GridPill
-                key={k}
-                label={SORT_LABELS[k]}
-                active={filter.sort === k}
-                onPress={() => onChange({ ...filter, sort: k })}
-              />
-            ))}
-          </View>
-        </Section>
-
         {availableSegments.length > 0 ? (
           <Section
             icon={<Sparkles color={t.accent} size={15} strokeWidth={2.2} />}
             caption="Статус"
+            onClear={
+              filter.segments.length > 0
+                ? () => onChange({ ...filter, segments: [] })
+                : undefined
+            }
           >
             <View className="flex-row flex-wrap gap-2">
               {availableSegments.map((s) => {
@@ -369,6 +384,11 @@ export function ClientsFilterSheet({
           <Section
             icon={<Users color={t.accent} size={15} strokeWidth={2.2} />}
             caption="Команда"
+            onClear={
+              filter.selectedTeams.length > 0
+                ? () => onChange({ ...filter, selectedTeams: [] })
+                : undefined
+            }
           >
             <View className="gap-1.5">
               {teamOptions.map((o) => (
@@ -394,6 +414,11 @@ export function ClientsFilterSheet({
           <Section
             icon={<MapPin color={t.accent} size={15} strokeWidth={2.2} />}
             caption="Метка"
+            onClear={
+              filter.selectedCities.length > 0
+                ? () => onChange({ ...filter, selectedCities: [] })
+                : undefined
+            }
           >
             <View className="gap-1.5">
               {cityOptions.map((o) => (
@@ -419,6 +444,11 @@ export function ClientsFilterSheet({
           <Section
             icon={<Tag color={t.accent} size={15} strokeWidth={2.2} />}
             caption="Тег"
+            onClear={
+              filter.activeTags.length > 0
+                ? () => onChange({ ...filter, activeTags: [] })
+                : undefined
+            }
           >
             <View className="gap-1.5">
               {tagOptions.map((o) => (
@@ -448,6 +478,7 @@ export function ClientsFilterSheet({
             <GridPill
               label="Всё время"
               active={isAll}
+              radio
               onPress={() => {
                 setCustomOpen(false);
                 onChange({ ...filter, period: null });
@@ -458,6 +489,7 @@ export function ClientsFilterSheet({
                 key={p.key}
                 label={p.label}
                 active={!isCustom && filter.period?.preset === p.key}
+                radio
                 onPress={() => {
                   setCustomOpen(false);
                   onChange({
@@ -475,6 +507,7 @@ export function ClientsFilterSheet({
               }
               active={isCustom}
               full
+              radio
               onPress={openCustom}
             />
           </View>
@@ -513,6 +546,26 @@ export function ClientsFilterSheet({
               </View>
             </View>
           ) : null}
+        </Section>
+
+        {/* Сортировка — не фильтр (не даёт токен, не в бейдже), поэтому
+            уводится под все фильтры и отделяется тонкой линией. */}
+        <View style={{ height: 1, backgroundColor: t.separator }} />
+        <Section
+          icon={<ArrowUpDown color={t.accent} size={15} strokeWidth={2.2} />}
+          caption="Сортировка"
+        >
+          <View className="flex-row flex-wrap gap-2">
+            {SORT_ORDER.map((k) => (
+              <GridPill
+                key={k}
+                label={SORT_LABELS[k]}
+                active={filter.sort === k}
+                radio
+                onPress={() => onChange({ ...filter, sort: k })}
+              />
+            ))}
+          </View>
         </Section>
       </ScrollView>
 

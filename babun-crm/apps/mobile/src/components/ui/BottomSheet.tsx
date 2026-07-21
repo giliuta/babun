@@ -1,5 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Dimensions, Modal, Pressable, View } from "react-native";
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import Animated, {
   Easing,
   runOnJS,
@@ -90,6 +95,23 @@ export function BottomSheet({
     transform: [{ translateY: ty.value }],
   }));
 
+  // Свайп вниз по граберу закрывает лист (грабер это и обещает). Жест
+  // живёт только на верхней зоне — не конфликтует со скроллом тела.
+  // Тянем лист за пальцем; отпустили за порогом (или рывком) — закрываем,
+  // иначе пружиной возвращаем на место.
+  const drag = Gesture.Pan()
+    .onChange((e) => {
+      ty.value = Math.max(0, ty.value + e.changeY);
+    })
+    .onEnd((e) => {
+      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      if (ty.value > h * 0.3 || e.velocityY > 800) {
+        runOnJS(onClose)();
+      } else {
+        ty.value = withSpring(0, SPRING);
+      }
+    });
+
   if (!mounted) return null;
 
   return (
@@ -100,7 +122,10 @@ export function BottomSheet({
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View className="flex-1 justify-end">
+      {/* GestureHandlerRootView внутри Modal обязателен — иначе жест
+          перетаскивания грабера не долетает (RN Modal — отдельное окно).
+          style, не className: NativeWind v5 не красит компоненты-обёртки. */}
+      <GestureHandlerRootView style={{ flex: 1, justifyContent: "flex-end" }}>
         <AnimatedPressable
           onPress={onClose}
           accessibilityRole="button"
@@ -128,20 +153,22 @@ export function BottomSheet({
           ]}
         >
           {grabber ? (
-            <View className="items-center pt-2.5">
-              <View
-                style={{
-                  width: 36,
-                  height: 5,
-                  borderRadius: 3,
-                  backgroundColor: t.separator,
-                }}
-              />
-            </View>
+            <GestureDetector gesture={drag}>
+              <View className="items-center pb-1 pt-2.5">
+                <View
+                  style={{
+                    width: 36,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: t.separator,
+                  }}
+                />
+              </View>
+            </GestureDetector>
           ) : null}
           {children}
         </Animated.View>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

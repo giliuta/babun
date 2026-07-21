@@ -84,7 +84,7 @@ export function ClientsFilterBar({
               {tokens.map((tok) => (
                 <View
                   key={`${tok.key}:${tok.val}`}
-                  className="min-h-11 flex-row items-center gap-1 rounded-full border pl-3"
+                  className="min-h-[34px] flex-row items-center gap-1 rounded-full border pl-3"
                   style={{
                     backgroundColor: t.surface,
                     borderColor: t.separator,
@@ -112,9 +112,10 @@ export function ClientsFilterBar({
                     onPress={() => onRemoveToken(tok)}
                     accessibilityRole="button"
                     accessibilityLabel={`Убрать ${tok.label}`}
-                    className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+                    hitSlop={8}
+                    className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
                   >
-                    <X color={t.faint} size={12} strokeWidth={2.6} />
+                    <X color={t.faint} size={13} strokeWidth={2.6} />
                   </Pressable>
                 </View>
               ))}

@@ -159,7 +159,6 @@ export function Chip({
             fontSize: 13,
             fontWeight: "600",
             color: fg,
-            opacity: 0.7,
             fontVariant: ["tabular-nums"],
           }}
         >
