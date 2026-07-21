@@ -32,6 +32,7 @@ export function Chip({
   dimmed,
   idleColor,
   radio,
+  checkbox,
   accessibilityLabel,
   numberOfLines = 1,
   style,
@@ -54,6 +55,8 @@ export function Chip({
   idleColor?: string;
   /** Announce as a radio option instead of a button (single-choice groups). */
   radio?: boolean;
+  /** Announce as a checkbox (multi-choice groups) — VoiceOver «отмечено». */
+  checkbox?: boolean;
   accessibilityLabel?: string;
   numberOfLines?: number;
   style?: StyleProp<ViewStyle>;
@@ -113,9 +116,21 @@ export function Chip({
       disabled={disabled || !onPress}
       hitSlop={onPress ? { top: 6, bottom: 6 } : undefined}
       accessible={!!onPress}
-      accessibilityRole={onPress ? (radio ? "radio" : "button") : undefined}
+      accessibilityRole={
+        onPress
+          ? radio
+            ? "radio"
+            : checkbox
+              ? "checkbox"
+              : "button"
+          : undefined
+      }
       accessibilityState={
-        onPress ? { selected, disabled: !!disabled } : undefined
+        onPress
+          ? checkbox
+            ? { checked: selected, disabled: !!disabled }
+            : { selected, disabled: !!disabled }
+          : undefined
       }
       accessibilityLabel={
         accessibilityLabel ??

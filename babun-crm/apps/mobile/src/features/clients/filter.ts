@@ -14,12 +14,22 @@ import {
 
 export type SortKey = "recent" | "name" | "revenue" | "equipment";
 
-/** Короткие подписи pills в панели (web SortPills). */
+/** Короткие подписи строк сортировки. «A/C» → «По технике» (внятно и в
+ *  одно слово с фильтром «Тип техники» / метрикой acCount). */
 export const SORT_LABELS: Record<SortKey, string> = {
   recent: "Недавние",
   name: "Имя",
   revenue: "Доход",
-  equipment: "A/C",
+  equipment: "По технике",
+};
+
+/** Подсказка-направление справа в строке сортировки — снимает любую
+ *  двусмысленность («что и куда сортируем»). */
+export const SORT_HINTS: Record<SortKey, string> = {
+  recent: "у кого недавно был визит",
+  name: "по алфавиту, А–Я",
+  revenue: "кто больше платит",
+  equipment: "у кого больше техники",
 };
 
 /** Длинные подписи для строки «Сортировка списка» в настройках (web
@@ -36,23 +46,40 @@ export const SORT_ORDER: SortKey[] = ["recent", "name", "revenue", "equipment"];
 // ── Segments (Статус) ──────────────────────────────────────────────
 
 export type Segment =
-  "all" | "debt" | "birthday" | "blacklist" | "silent" | "new" | "loyal";
+  | "all"
+  | "debt"
+  | "noUpcoming"
+  | "reminderDue"
+  | "silent"
+  | "birthday"
+  | "new"
+  | "loyal"
+  | "blacklist";
 
 /** Конкретный статус (без служебного «all») — единица мультивыбора. */
 export type SegmentKey = Exclude<Segment, "all">;
 
-/** Канонический порядок + RU-подписи — точно как web SEGMENT_OPTIONS. */
+/** Порядок (деньги/действие вперёд) + RU-подписи. «Без записи» и
+ *  «Напомнить» — «дела»: кого дозаписать и по кому сработало напоминание. */
 export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
   { key: "debt", label: "Должники" },
-  { key: "birthday", label: "Дни рождения" },
-  { key: "blacklist", label: "Чёрный список" },
+  { key: "noUpcoming", label: "Без записи" },
+  { key: "reminderDue", label: "Напомнить" },
   { key: "silent", label: "Давно не были" },
+  { key: "birthday", label: "Дни рождения" },
   { key: "new", label: "Новые" },
   { key: "loyal", label: "Постоянные" },
+  { key: "blacklist", label: "Чёрный список" },
 ];
 
+function todayYMD(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 /** Проходит ли клиент один конкретный статус — единый предикат для
- *  фильтра (AND по выбранным) и счётчиков. */
+ *  фильтра (AND по выбранным) и счётчиков-гейтов видимости. */
 export function matchesSegment(
   c: Client,
   key: SegmentKey,
@@ -61,42 +88,52 @@ export function matchesSegment(
   switch (key) {
     case "debt":
       return (s?.debt ?? 0) > 0 || c.balance < 0;
+    case "noUpcoming":
+      // Был визит, но следующего нет — кого дозаписать (реактивация).
+      return (s?.visits ?? 0) > 0 && (s?.nextApt ?? null) === null;
+    case "reminderDue":
+      // Напоминание, поставленное руками, уже сработало (сегодня/прошло).
+      return !!c.reminder_at && c.reminder_at <= todayYMD();
+    case "silent":
+      return s ? isLongSilence(s) : false;
     case "birthday": {
       const dd = s?.birthdayInDays ?? null;
       return dd !== null && dd <= 14;
     }
-    case "blacklist":
-      return c.blacklisted;
-    case "silent":
-      return s ? isLongSilence(s) : false;
     case "new":
       return s ? isNewClient(s) : false;
     case "loyal":
       return s ? isLoyalClient(s) : false;
+    case "blacklist":
+      return c.blacklisted;
   }
 }
 
 export interface SegmentCounts {
   debt: number;
-  birthday: number;
-  blacklist: number;
+  noUpcoming: number;
+  reminderDue: number;
   silent: number;
+  birthday: number;
   new: number;
   loyal: number;
+  blacklist: number;
 }
 
-/** Счётчики авто-сегментов (web page.tsx segmentCounts, без hero-полей). */
+/** Счётчики авто-сегментов — теперь только гейт видимости чипов. */
 export function buildSegmentCounts(
   clients: Client[],
   statsMap: Map<string, ClientStats>,
 ): SegmentCounts {
   const counts: SegmentCounts = {
     debt: 0,
-    birthday: 0,
-    blacklist: 0,
+    noUpcoming: 0,
+    reminderDue: 0,
     silent: 0,
+    birthday: 0,
     new: 0,
     loyal: 0,
+    blacklist: 0,
   };
   for (const c of clients) {
     const s = statsMap.get(c.id);

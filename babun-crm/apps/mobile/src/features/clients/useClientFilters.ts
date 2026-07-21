@@ -227,9 +227,10 @@ export function useClientFilters(
 
   const passesTag = useMemo(() => {
     const sel = activeTags;
-    // AND-семантика — каждый выбранный тег обязателен (web parity).
+    // OR-внутри фасета — единая семантика с Команда/Метка: показать
+    // клиентов с ЛЮБЫМ из выбранных тегов (между секциями остаётся AND).
     return (c: Client): boolean =>
-      sel.length === 0 || sel.every((t) => c.tag_ids.includes(t));
+      sel.length === 0 || sel.some((t) => c.tag_ids.includes(t));
   }, [activeTags]);
 
   // ── Сортировка ОТДЕЛЬНО от предикатов ────────────────────────────
