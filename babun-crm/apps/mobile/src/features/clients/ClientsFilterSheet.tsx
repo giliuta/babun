@@ -210,10 +210,10 @@ export function ClientsFilterSheet({
       ? "Ничего не найдено"
       : `Показать ${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
 
-  // Пилюля статуса рендерится при совпадениях ИЛИ когда она активна —
-  // иначе активный сегмент с упавшим до 0 счётчиком нельзя снять.
+  // Пилюля статуса рендерится при совпадениях ИЛИ когда она выбрана —
+  // иначе выбранный сегмент с упавшим до 0 счётчиком нельзя снять.
   const availableSegments = SEGMENT_OPTIONS.filter(
-    (s) => segmentCounts[s.key] > 0 || s.key === filter.segment,
+    (s) => segmentCounts[s.key] > 0 || filter.segments.includes(s.key),
   );
 
   const isAll = filter.period === null;
@@ -341,7 +341,9 @@ export function ClientsFilterSheet({
           >
             <View className="flex-row flex-wrap gap-2">
               {availableSegments.map((s) => {
-                const on = filter.segment === s.key;
+                // Мультивыбор (AND): «Должники» + «Постоянные» = должники
+                // из постоянных. Пусто = все.
+                const on = filter.segments.includes(s.key);
                 return (
                   <GridPill
                     key={s.key}
@@ -349,7 +351,12 @@ export function ClientsFilterSheet({
                     count={segmentCounts[s.key]}
                     active={on}
                     onPress={() =>
-                      onChange({ ...filter, segment: on ? "all" : s.key })
+                      onChange({
+                        ...filter,
+                        segments: on
+                          ? filter.segments.filter((x) => x !== s.key)
+                          : [...filter.segments, s.key],
+                      })
                     }
                   />
                 );

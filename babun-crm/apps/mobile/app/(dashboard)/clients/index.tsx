@@ -519,7 +519,10 @@ export default function ClientsListScreen() {
       }));
     else if (token.key === "period") setFilter((f) => ({ ...f, period: null }));
     else if (token.key === "segment")
-      setFilter((f) => ({ ...f, segment: "all" }));
+      setFilter((f) => ({
+        ...f,
+        segments: f.segments.filter((x) => x !== token.val),
+      }));
   };
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;

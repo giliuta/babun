@@ -36,24 +36,45 @@ export const SORT_ORDER: SortKey[] = ["recent", "name", "revenue", "equipment"];
 // ── Segments (Статус) ──────────────────────────────────────────────
 
 export type Segment =
-  | "all"
-  | "debt"
-  | "birthday"
-  | "blacklist"
-  | "silent"
-  | "new"
-  | "loyal";
+  "all" | "debt" | "birthday" | "blacklist" | "silent" | "new" | "loyal";
+
+/** Конкретный статус (без служебного «all») — единица мультивыбора. */
+export type SegmentKey = Exclude<Segment, "all">;
 
 /** Канонический порядок + RU-подписи — точно как web SEGMENT_OPTIONS. */
-export const SEGMENT_OPTIONS: { key: Exclude<Segment, "all">; label: string }[] =
-  [
-    { key: "debt", label: "Должники" },
-    { key: "birthday", label: "Дни рождения" },
-    { key: "blacklist", label: "Чёрный список" },
-    { key: "silent", label: "Давно не были" },
-    { key: "new", label: "Новые" },
-    { key: "loyal", label: "Постоянные" },
-  ];
+export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
+  { key: "debt", label: "Должники" },
+  { key: "birthday", label: "Дни рождения" },
+  { key: "blacklist", label: "Чёрный список" },
+  { key: "silent", label: "Давно не были" },
+  { key: "new", label: "Новые" },
+  { key: "loyal", label: "Постоянные" },
+];
+
+/** Проходит ли клиент один конкретный статус — единый предикат для
+ *  фильтра (AND по выбранным) и счётчиков. */
+export function matchesSegment(
+  c: Client,
+  key: SegmentKey,
+  s: ClientStats | undefined,
+): boolean {
+  switch (key) {
+    case "debt":
+      return (s?.debt ?? 0) > 0 || c.balance < 0;
+    case "birthday": {
+      const dd = s?.birthdayInDays ?? null;
+      return dd !== null && dd <= 14;
+    }
+    case "blacklist":
+      return c.blacklisted;
+    case "silent":
+      return s ? isLongSilence(s) : false;
+    case "new":
+      return s ? isNewClient(s) : false;
+    case "loyal":
+      return s ? isLoyalClient(s) : false;
+  }
+}
 
 export interface SegmentCounts {
   debt: number;
@@ -79,13 +100,9 @@ export function buildSegmentCounts(
   };
   for (const c of clients) {
     const s = statsMap.get(c.id);
-    if ((s?.debt ?? 0) > 0 || c.balance < 0) counts.debt += 1;
-    const dd = s?.birthdayInDays ?? null;
-    if (dd !== null && dd <= 14) counts.birthday += 1;
-    if (c.blacklisted) counts.blacklist += 1;
-    if (s && isLongSilence(s)) counts.silent += 1;
-    if (s && isNewClient(s)) counts.new += 1;
-    if (s && isLoyalClient(s)) counts.loyal += 1;
+    for (const opt of SEGMENT_OPTIONS) {
+      if (matchesSegment(c, opt.key, s)) counts[opt.key] += 1;
+    }
   }
   return counts;
 }
@@ -93,14 +110,7 @@ export function buildSegmentCounts(
 // ── Period ─────────────────────────────────────────────────────────
 
 export type PeriodPreset =
-  | "today"
-  | "7d"
-  | "30d"
-  | "90d"
-  | "month"
-  | "prevMonth"
-  | "year"
-  | "custom";
+  "today" | "7d" | "30d" | "90d" | "month" | "prevMonth" | "year" | "custom";
 
 /** Активный период. null везде = «Всё время» (нет фильтра).
  *  from/to — включительные YYYY-MM-DD. */
@@ -225,7 +235,8 @@ export interface ActiveToken {
 
 export interface ClientsFilter {
   sort: SortKey;
-  segment: Segment;
+  /** Выбранные статусы — AND-семантика (как теги). Пусто = все. */
+  segments: SegmentKey[];
   selectedTeams: string[];
   selectedCities: string[];
   activeTags: string[];
@@ -234,7 +245,7 @@ export interface ClientsFilter {
 
 export const EMPTY_FILTER: ClientsFilter = {
   sort: "recent",
-  segment: "all",
+  segments: [],
   selectedTeams: [],
   selectedCities: [],
   activeTags: [],
@@ -248,7 +259,7 @@ export function filterActiveCount(f: ClientsFilter): number {
     f.selectedCities.length +
     f.activeTags.length +
     (f.period ? 1 : 0) +
-    (f.segment !== "all" ? 1 : 0)
+    f.segments.length
   );
 }
 

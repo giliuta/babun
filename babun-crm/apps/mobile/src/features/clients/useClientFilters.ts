@@ -1,16 +1,12 @@
 import { useMemo } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  type ClientStats,
-  isLongSilence,
-  isLoyalClient,
-  isNewClient,
-} from "@babun/shared/local/selectors/client-stats";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient } from "@babun/shared/local/selectors/client-search";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   acCount,
+  matchesSegment,
   periodLabel,
   SEGMENT_OPTIONS,
   type ActiveToken,
@@ -55,7 +51,7 @@ const EMPTY_FACET_COUNTS: ClientFilterResult["facetCounts"] = {
   tag: {},
 };
 
-interface ApptIndex {
+export interface ClientAppointmentIndex {
   /** clientId → множество team_id по записям клиента. */
   clientTeams: Map<string, Set<string>>;
   /** clientId → список дат записей (YYYY-MM-DD). */
@@ -64,13 +60,17 @@ interface ApptIndex {
 
 /** Один проход по записям — два индекса по клиенту. Включая fallback по
  *  имени в comment для seed-записей с client_id:null (как buildStatsMap). */
-function buildApptIndex(
+export function buildClientAppointmentIndex(
   clients: Client[],
   appointments: Appointment[],
-): ApptIndex {
+): ClientAppointmentIndex {
   const byId = new Map<string, Appointment[]>();
   const orphanByName = new Map<string, Appointment[]>();
   for (const a of appointments) {
+    // A cancelled visit is not part of the relationship history. Counting
+    // it here made clients appear under a team/period even when their only
+    // record in that facet had been cancelled.
+    if (a.status === "cancelled") continue;
     if (a.client_id) {
       const arr = byId.get(a.client_id);
       if (arr) arr.push(a);
@@ -131,11 +131,11 @@ export function useClientFilters(
   /** Счётчики фасетов нужны только открытой панели — иначе пропускаем. */
   panelOpen: boolean,
 ): ClientFilterResult {
-  const { sort, segment, selectedTeams, selectedCities, activeTags, period } =
+  const { sort, segments, selectedTeams, selectedCities, activeTags, period } =
     filter;
 
   const index = useMemo(
-    () => buildApptIndex(clients, appointments),
+    () => buildClientAppointmentIndex(clients, appointments),
     [clients, appointments],
   );
 
@@ -164,7 +164,11 @@ export function useClientFilters(
     }
     return [...set]
       .sort((a, b) => a.localeCompare(b, "ru"))
-      .map((city) => ({ value: city, label: city, color: getAvatarColor(city) }));
+      .map((city) => ({
+        value: city,
+        label: city,
+        color: getAvatarColor(city),
+      }));
   }, [clients]);
 
   const tagOptions = useMemo<FacetOption[]>(() => {
@@ -184,21 +188,15 @@ export function useClientFilters(
   }, [search]);
 
   const passesSegment = useMemo(() => {
+    // AND по выбранным статусам (как теги): клиент обязан пройти КАЖДЫЙ.
+    // Пусто = без фильтра. Противоречивые пары (Новые+Постоянные) просто
+    // дают 0 — счётчик это показывает, пользователь не выберет обе.
     return (c: Client): boolean => {
-      if (segment === "all") return true;
+      if (segments.length === 0) return true;
       const s = statsMap.get(c.id);
-      if (segment === "debt") return (s?.debt ?? 0) > 0 || c.balance < 0;
-      if (segment === "birthday") {
-        const dd = s?.birthdayInDays ?? null;
-        return dd !== null && dd <= 14;
-      }
-      if (segment === "blacklist") return c.blacklisted;
-      if (segment === "silent") return s ? isLongSilence(s) : false;
-      if (segment === "new") return s ? isNewClient(s) : false;
-      if (segment === "loyal") return s ? isLoyalClient(s) : false;
-      return true;
+      return segments.every((seg) => matchesSegment(c, seg, s));
     };
-  }, [segment, statsMap]);
+  }, [segments, statsMap]);
 
   const passesPeriod = useMemo(() => {
     return (c: Client): boolean => {
@@ -344,16 +342,16 @@ export function useClientFilters(
   // ── Токены summary-бара ──────────────────────────────────────────
   const activeTokens = useMemo<ActiveToken[]>(() => {
     const tokens: ActiveToken[] = [];
-    if (segment !== "all") {
-      const seg = SEGMENT_OPTIONS.find((o) => o.key === segment);
-      if (seg) {
-        tokens.push({ key: "segment", val: segment, label: seg.label, color: "" });
-      }
+    for (const seg of segments) {
+      const o = SEGMENT_OPTIONS.find((x) => x.key === seg);
+      if (o)
+        tokens.push({ key: "segment", val: seg, label: o.label, color: "" });
     }
     const teamLabel = new Map(teamOptions.map((o) => [o.value, o]));
     for (const id of selectedTeams) {
       const o = teamLabel.get(id);
-      if (o) tokens.push({ key: "team", val: id, label: o.label, color: o.color });
+      if (o)
+        tokens.push({ key: "team", val: id, label: o.label, color: o.color });
     }
     for (const city of selectedCities) {
       tokens.push({
@@ -366,7 +364,8 @@ export function useClientFilters(
     const tagLabel = new Map(tagOptions.map((o) => [o.value, o]));
     for (const id of activeTags) {
       const o = tagLabel.get(id);
-      if (o) tokens.push({ key: "tag", val: id, label: o.label, color: o.color });
+      if (o)
+        tokens.push({ key: "tag", val: id, label: o.label, color: o.color });
     }
     if (period) {
       tokens.push({
@@ -377,14 +376,22 @@ export function useClientFilters(
       });
     }
     return tokens;
-  }, [segment, selectedTeams, selectedCities, activeTags, period, teamOptions, tagOptions]);
+  }, [
+    segments,
+    selectedTeams,
+    selectedCities,
+    activeTags,
+    period,
+    teamOptions,
+    tagOptions,
+  ]);
 
   const activeCount =
     selectedTeams.length +
     selectedCities.length +
     activeTags.length +
     (period ? 1 : 0) +
-    (segment !== "all" ? 1 : 0);
+    segments.length;
 
   return {
     filtered,
