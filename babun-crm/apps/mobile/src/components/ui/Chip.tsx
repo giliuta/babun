@@ -7,6 +7,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useThemeColors } from "@/theme/colors";
+import { haptics } from "@/lib/haptics";
+import { readableColorOnTint, readableTextOnColor } from "./color-contrast";
 
 // «Halo Cobalt» chip — the ONE pill for every selectable token in the app
 // (DS §5): 32pt pill + vertical hitSlop to a 44pt target.
@@ -18,17 +20,6 @@ import { useThemeColors } from "@/theme/colors";
 //                     border (team chips — the hue stays visible when idle)
 //   tint              selected → 8–16% hue tint + hue border + hue label;
 //                     idle → t.fill (filter toggles, tag pickers)
-// Тёмный или светлый текст поверх заливки hue: относительная яркость по
-// YIQ — на жёлтой/оранжевой/зелёной бригаде белый onAccent слеп (< 3:1).
-function onHue(hex: string, t: { onAccent: string; ink: string }): string {
-  const m = /^#?([0-9a-f]{6})/i.exec(hex);
-  if (!m) return t.onAccent;
-  const n = parseInt(m[1], 16);
-  const yiq =
-    ((n >> 16) * 299 + (((n >> 8) & 0xff) * 587) + (n & 0xff) * 114) / 1000;
-  return yiq > 165 ? t.ink : t.onAccent;
-}
-
 export function Chip({
   label,
   selected = false,
@@ -77,17 +68,17 @@ export function Chip({
   if (variant === "outline") {
     if (selected) {
       bg = hue;
-      fg = onHue(hue, t);
+      fg = readableTextOnColor(hue, t.ink, t.onAccent);
       border = hue;
     } else {
       bg = t.surface;
-      fg = color ? hue : t.ink;
+      fg = color ? readableColorOnTint(hue, t.surface, t.ink, 0) : t.ink;
       border = color ? hue : t.separator;
     }
   } else if (variant === "tint") {
     if (selected) {
-      bg = hue + (t.dark ? "29" : "14");
-      fg = hue;
+      bg = `${hue}14`;
+      fg = readableColorOnTint(hue, t.surface, t.ink, 0x14 / 255);
       border = hue;
     } else {
       bg = t.fill;
@@ -96,25 +87,39 @@ export function Chip({
   } else {
     if (selected) {
       bg = hue;
-      fg = onHue(hue, t);
+      fg = readableTextOnColor(hue, t.ink, t.onAccent);
     } else if (idleColor) {
       bg = `${idleColor}24`;
-      fg = idleColor;
+      fg = readableColorOnTint(idleColor, t.surface, t.ink, 0x24 / 255);
     } else {
       bg = t.fill;
       fg = t.sub;
     }
   }
 
+  // Лёгкий «тик» выбора на каждый тап пилюли — единый премиальный отклик
+  // для всех чипов приложения (no-op до нативного ребилда expo-haptics).
+  const press =
+    disabled || !onPress
+      ? undefined
+      : () => {
+          haptics.tap();
+          onPress();
+        };
+
   return (
     <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      hitSlop={{ top: 6, bottom: 6 }}
-      accessibilityRole={radio ? "radio" : "button"}
-      accessibilityState={{ selected, disabled: !!disabled }}
+      onPress={press}
+      disabled={disabled || !onPress}
+      hitSlop={onPress ? { top: 6, bottom: 6 } : undefined}
+      accessible={!!onPress}
+      accessibilityRole={onPress ? (radio ? "radio" : "button") : undefined}
+      accessibilityState={
+        onPress ? { selected, disabled: !!disabled } : undefined
+      }
       accessibilityLabel={
-        accessibilityLabel ?? (count !== undefined ? `${label}, ${count}` : label)
+        accessibilityLabel ??
+        (count !== undefined ? `${label}, ${count}` : label)
       }
       style={({ pressed }) => [
         {
@@ -135,6 +140,9 @@ export function Chip({
     >
       {icon}
       <Text
+        maxFontSizeMultiplier={1.3}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
         numberOfLines={numberOfLines}
         style={[
           { fontSize: 13, fontWeight: "600", color: fg, flexShrink: 1 },
@@ -145,6 +153,8 @@ export function Chip({
       </Text>
       {count !== undefined ? (
         <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
           style={{
             fontSize: 13,
             fontWeight: "600",

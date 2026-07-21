@@ -36,8 +36,9 @@ export function ClientsFilterBar({
   return (
     <View className="mx-4 mb-2">
       <View
-        className="min-h-11 rounded-xl border px-3 py-1.5"
-        style={
+        className="min-h-11 border px-3 py-1.5"
+        style={[
+          { borderRadius: t.radius.card },
           active
             ? {
                 backgroundColor: `${t.accent}14`,
@@ -46,8 +47,8 @@ export function ClientsFilterBar({
             : // Idle — без карточной обводки/заливки: строка «Фильтры ·
               // Всего N» ложится прямо на канвас, а не второй белой коробкой
               // под шапкой. Активное состояние остаётся сгруппированным.
-              { backgroundColor: "transparent", borderColor: "transparent" }
-        }
+              { backgroundColor: "transparent", borderColor: "transparent" },
+        ]}
       >
         {active ? (
           <View className="gap-1.5">
@@ -70,7 +71,11 @@ export function ClientsFilterBar({
                   {activeCount}
                 </Text>
               </View>
-              <Text maxFontSizeMultiplier={1.3} className="flex-1 text-sm font-semibold" style={{ color: t.ink }}>
+              <Text
+                maxFontSizeMultiplier={1.3}
+                className="flex-1 text-sm font-semibold"
+                style={{ color: t.ink }}
+              >
                 Фильтры
               </Text>
               <ChevronDown color={t.faint} size={16} strokeWidth={2.2} />
@@ -80,7 +85,10 @@ export function ClientsFilterBar({
                 <View
                   key={`${tok.key}:${tok.val}`}
                   className="min-h-11 flex-row items-center gap-1 rounded-full border pl-3"
-                  style={{ backgroundColor: t.surface, borderColor: t.separator }}
+                  style={{
+                    backgroundColor: t.surface,
+                    borderColor: t.separator,
+                  }}
                 >
                   {tok.color ? (
                     <View
@@ -120,7 +128,11 @@ export function ClientsFilterBar({
             className="min-h-11 flex-row items-center gap-2 active:opacity-80"
           >
             <Filter color={t.sub} size={16} strokeWidth={2.2} />
-            <Text maxFontSizeMultiplier={1.3} className="text-sm font-semibold" style={{ color: t.ink }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="text-sm font-semibold"
+              style={{ color: t.ink }}
+            >
               Фильтры
             </Text>
             <View className="flex-1" />
@@ -132,8 +144,9 @@ export function ClientsFilterBar({
               className="text-[13px]"
               style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
             >
-              Всего {totalCount}{" "}
-              {countWordRu(totalCount, "клиент", "клиента", "клиентов")}
+              {foundCount < totalCount
+                ? `Найдено ${foundCount} из ${totalCount}`
+                : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`}
             </Text>
             <ChevronDown color={t.faint} size={16} strokeWidth={2.2} />
           </Pressable>
@@ -148,7 +161,11 @@ export function ClientsFilterBar({
             style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
           >
             Найдено:{" "}
-            <Text maxFontSizeMultiplier={1.3} className="font-semibold" style={{ color: t.ink }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="font-semibold"
+              style={{ color: t.ink }}
+            >
               {foundCount}
             </Text>
           </Text>
@@ -158,7 +175,11 @@ export function ClientsFilterBar({
             accessibilityLabel="Сбросить фильтры"
             className="min-h-11 justify-center px-1 active:opacity-60"
           >
-            <Text maxFontSizeMultiplier={1.3} className="text-xs font-semibold" style={{ color: t.accent }}>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="text-xs font-semibold"
+              style={{ color: t.accent }}
+            >
               Сбросить
             </Text>
           </Pressable>

@@ -34,7 +34,7 @@ import {
   type ClientStats,
 } from "@babun/shared/local/selectors/client-stats";
 import {
-  getAvatarColor,
+  getAvatarHue,
   getInitials,
 } from "@babun/shared/common/utils/avatar-color";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -79,6 +79,7 @@ import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
@@ -123,37 +124,40 @@ function ClientRow({
         ? Math.abs(client.balance)
         : 0;
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
-  const avatarColor = getAvatarColor(client.full_name);
+  const avatarColor = getAvatarHue(client.full_name);
 
+  // Порядок долг → доход → ожидается: должник — самый срочный сигнал,
+  // читается первым. «долг €450» словом (не голым цветом): золото без
+  // подписи в списке не читается, должника ищут по слову, не по памяти.
   const figs: { key: string; text: string; color: string }[] = [];
-  if (cardFields.exp && exp > 0)
-    figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
-  if (cardFields.inc && income > 0)
-    figs.push({ key: "inc", text: formatEUR(income), color: t.success });
-  // «долг €450», не голый цветовой код: золото без подписи в списке
-  // не читается, а должника надо находить по слову, не по памяти.
   if (cardFields.debt && debt > 0)
     figs.push({
       key: "debt",
       text: `долг ${formatEUR(debt)}`,
       color: t.warning,
     });
+  if (cardFields.inc && income > 0)
+    figs.push({ key: "inc", text: formatEUR(income), color: t.success });
+  if (cardFields.exp && exp > 0)
+    figs.push({ key: "exp", text: formatEUR(exp), color: t.sub });
 
-  // Meta line — reminder (колокольчик) · last visit (с иконкой часов,
-  // web parity) · team · city · tags. Напоминание не гейтится тогглами:
-  // как и pin, это сигнал, поставленный владельцем руками, — красный,
-  // когда пора действовать (сегодня/прошло), серый — когда впереди.
-  const metaSegs: { key: string; node: React.ReactNode }[] = [];
+  // Мета — ОДНА строка с эллипсисом: [🔔 напоминание] · [🕐 посл. визит] ·
+  // команда · город · теги (первые 2 + «+N»). Иконки-сигналы (напоминание,
+  // визит) идут ведущими и не сжимаются; хвост (команда/город/теги) —
+  // единый обрезаемый текст, чтобы ряд не пух в 3 строки и ничего не
+  // наезжало. Напоминание не гейтится тогглами: сигнал, поставленный
+  // руками, — красный, когда пора (сегодня/прошло), серый — когда впереди.
   const reminder = reminderBadge(client.reminder_at);
+  const metaLead: { key: string; node: React.ReactNode }[] = [];
   if (reminder) {
-    metaSegs.push({
+    metaLead.push({
       key: "reminder",
       node: (
         <View className="flex-row items-center gap-1">
           <Bell
             color={reminder.due ? t.danger : t.sub}
-            size={11}
-            strokeWidth={2.2}
+            size={12}
+            strokeWidth={2}
           />
           <Text
             maxFontSizeMultiplier={1.3}
@@ -167,146 +171,190 @@ function ClientRow({
     });
   }
   if (cardFields.last) {
-    metaSegs.push({
+    metaLead.push({
       key: "last",
       node: stats?.lastVisitDate ? (
         <View className="flex-row items-center gap-1">
-          <Clock color={t.sub} size={11} strokeWidth={2.2} />
-          <Text maxFontSizeMultiplier={1.3} className="text-[11px]" style={{ color: t.ink }}>
+          <Clock color={t.sub} size={12} strokeWidth={2} />
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-[11px]"
+            style={{ color: t.ink }}
+          >
             {formatShortDateRu(stats.lastVisitDate)}
           </Text>
         </View>
       ) : (
-        <Text maxFontSizeMultiplier={1.3} className="text-[11px]" style={{ color: t.faint }}>
+        <Text
+          maxFontSizeMultiplier={1.3}
+          className="text-[11px]"
+          style={{ color: t.faint }}
+        >
           нет записей
         </Text>
       ),
     });
   }
+  const tagNames = cardFields.meta
+    ? (client.tag_ids
+        .map((tid) => tags.find((x) => x.id === tid)?.name)
+        .filter(Boolean) as string[])
+    : [];
+  let metaTail = "";
   if (cardFields.meta) {
-    const push = (key: string, text: string) =>
-      metaSegs.push({
-        key,
-        node: (
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-[11px]"
-            style={{ color: t.ink }}
-            numberOfLines={1}
-          >
-            {text}
-          </Text>
-        ),
-      });
-    if (teamName) push("team", teamName);
+    const parts: string[] = [];
+    if (teamName) parts.push(teamName);
     const city = (client.city ?? "").trim();
-    if (city) push("city", city);
-    for (const tid of client.tag_ids) {
-      const tag = tags.find((x) => x.id === tid);
-      if (tag) push(`tag-${tid}`, tag.name);
-    }
+    if (city) parts.push(city);
+    parts.push(...tagNames.slice(0, 2));
+    if (tagNames.length > 2) parts.push(`+${tagNames.length - 2}`);
+    metaTail = parts.join(" · ");
   }
 
+  // VoiceOver: строка зачитывает реально показанные бизнес-сигналы в
+  // порядке экрана, а не только имя+телефон.
+  const a11yLabel = [
+    client.full_name || "Без имени",
+    client.pinned_at ? "закреплён" : "",
+    cardFields.debt && debt > 0 ? `долг ${formatEUR(debt)}` : "",
+    cardFields.inc && income > 0 ? `доход ${formatEUR(income)}` : "",
+    cardFields.exp && exp > 0 ? `ожидается ${formatEUR(exp)}` : "",
+    reminder ? `напоминание ${reminder.label}` : "",
+    cardFields.last
+      ? stats?.lastVisitDate
+        ? `последний визит ${formatShortDateRu(stats.lastVisitDate)}`
+        : "нет записей"
+      : "",
+    metaTail,
+    client.phone ?? "",
+  ]
+    .filter(Boolean)
+    .join(". ");
+
   const row = (
-    <View className="flex-row items-stretch" style={{ backgroundColor: t.canvas }}>
+    <View
+      className="flex-row items-stretch"
+      style={{ backgroundColor: t.canvas }}
+    >
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
         delayLongPress={280}
         accessibilityRole="button"
-        accessibilityLabel={[client.full_name || "Без имени", client.phone]
-          .filter(Boolean)
-          .join(". ")}
+        accessibilityLabel={a11yLabel}
         accessibilityHint={
-          selectionMode ? "Переключить выбор клиента" : "Открыть карточку клиента"
+          selectionMode
+            ? "Переключить выбор клиента"
+            : "Открыть карточку клиента"
         }
         accessibilityState={selectionMode ? { selected: picked } : undefined}
         className={`min-h-[68px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60 ${phoneDigits && !selectionMode ? "" : "pr-4"}`}
       >
-      {selectionMode ? (
-        // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
-        <View
-          className="h-11 w-11 items-center justify-center rounded-full"
-          style={{
-            backgroundColor: picked ? t.accent : t.fill,
-            borderWidth: picked ? 0 : 2,
-            borderColor: t.separator,
-          }}
-        >
-          {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
-        </View>
-      ) : (
-        // Мягкий аватар: заливка = цвет клиента при ~18%, инициалы —
-        // чёрные (ink). Насыщенный круг был самым громким элементом
-        // экрана и не нёс смысла (просто хеш имени); тихий тон даёт
-        // идентичность, не перебивая имя и деньги. Зелёным на строке
-        // остаётся только кнопка звонка = действие.
-        <View
-          className="h-11 w-11 items-center justify-center rounded-full"
-          style={{ backgroundColor: `${avatarColor}2e` }}
-        >
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-sm font-bold"
-            style={{ color: t.ink }}
+        {selectionMode ? (
+          // Чекбокс замещает аватар (web parity) — ряд не разъезжается.
+          <View
+            className="h-11 w-11 items-center justify-center rounded-full"
+            style={{
+              backgroundColor: picked ? t.accent : t.fill,
+              borderWidth: picked ? 0 : 2,
+              borderColor: t.separator,
+            }}
           >
-            {getInitials(client.full_name || "?")}
-          </Text>
-        </View>
-      )}
-      <View className="ml-3 flex-1">
-        <View className="flex-row items-center gap-1.5">
-          {client.pinned_at ? (
-            <Pin color={t.accent} size={12} strokeWidth={2.5} />
-          ) : null}
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="shrink text-base font-semibold"
-            style={{ color: t.ink }}
-            numberOfLines={1}
-          >
-            {client.full_name || "Без имени"}
-          </Text>
-        </View>
-        {figs.length > 0 ? (
-          <View className="mt-0.5 flex-row flex-wrap items-center gap-2.5">
-            {figs.map((f) => (
-              <Text
-                maxFontSizeMultiplier={1.3}
-                key={f.key}
-                className="text-[11px] font-semibold"
-                style={{ color: f.color, fontVariant: ["tabular-nums"] }}
-              >
-                {f.text}
-              </Text>
-            ))}
+            {picked ? <Check color="#fff" size={20} strokeWidth={3} /> : null}
           </View>
-        ) : null}
-        {metaSegs.length > 0 ? (
-          <View className="mt-0.5 flex-row flex-wrap items-center">
-            {metaSegs.map((seg, i) => (
-              <View key={seg.key} className="flex-row items-center">
-                {i > 0 ? (
+        ) : (
+          // Мягкий аватар: заливка = цвет клиента при ~18%, инициалы —
+          // чёрные (ink). Насыщенный круг был самым громким элементом
+          // экрана и не нёс смысла (просто хеш имени); тихий тон даёт
+          // идентичность, не перебивая имя и деньги. Зелёным на строке
+          // остаётся только кнопка звонка = действие.
+          <View
+            className="h-11 w-11 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${avatarColor}2e` }}
+          >
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="text-sm font-bold"
+              style={{ color: t.ink }}
+            >
+              {getInitials(client.full_name || "?")}
+            </Text>
+          </View>
+        )}
+        <View className="ml-3 flex-1">
+          <View className="flex-row items-center gap-1.5">
+            {client.pinned_at ? (
+              <Pin color={t.accent} size={12} strokeWidth={2.5} />
+            ) : null}
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="shrink text-base font-semibold"
+              style={{ color: t.ink }}
+              numberOfLines={1}
+            >
+              {client.full_name || "Без имени"}
+            </Text>
+          </View>
+          {figs.length > 0 ? (
+            <View className="mt-1 flex-row items-center gap-2.5">
+              {figs.map((f) => (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  key={f.key}
+                  className="text-[13px] font-semibold"
+                  style={{ color: f.color, fontVariant: ["tabular-nums"] }}
+                >
+                  {f.text}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+          {metaLead.length > 0 || metaTail ? (
+            <View className="mt-0.5 flex-row items-center">
+              {metaLead.map((seg, i) => (
+                <View key={seg.key} className="flex-row items-center">
+                  {i > 0 ? (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      className="mx-[5px] text-[11px]"
+                      style={{ color: t.faint }}
+                    >
+                      ·
+                    </Text>
+                  ) : null}
+                  {seg.node}
+                </View>
+              ))}
+              {metaTail ? (
+                <View className="flex-1 flex-row items-center">
+                  {metaLead.length > 0 ? (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      className="mx-[5px] text-[11px]"
+                      style={{ color: t.faint }}
+                    >
+                      ·
+                    </Text>
+                  ) : null}
                   <Text
                     maxFontSizeMultiplier={1.3}
-                    className="mx-[5px] text-[11px]"
-                    style={{ color: t.faint }}
+                    numberOfLines={1}
+                    className="flex-1 text-[11px]"
+                    style={{ color: t.ink }}
                   >
-                    ·
+                    {metaTail}
                   </Text>
-                ) : null}
-                {seg.node}
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
       </Pressable>
       {phoneDigits && !selectionMode ? (
         <Pressable
           onPress={() => Linking.openURL(`tel:${phoneDigits}`)}
           accessibilityRole="button"
-          accessibilityLabel="Позвонить"
+          accessibilityLabel={`Позвонить — ${client.full_name || client.phone}`}
           className="mx-4 my-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
           style={{ backgroundColor: `${t.success}1a` }}
         >
@@ -700,8 +748,8 @@ export default function ClientsListScreen() {
           </Pressable>
 
           <View
-            className="h-9 flex-1 flex-row items-center gap-1.5 rounded-[10px] px-2.5"
-            style={{ backgroundColor: t.fill }}
+            className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
+            style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
           >
             <Search color={t.faint} size={16} />
             <TextInput
@@ -749,7 +797,10 @@ export default function ClientsListScreen() {
           foundCount={result.filtered.length}
           activeCount={result.activeCount}
           tokens={result.activeTokens}
-          onOpen={() => setSheetOpen(true)}
+          onOpen={() => {
+            haptics.tap();
+            setSheetOpen(true);
+          }}
           onRemoveToken={removeToken}
           onReset={() => setFilter(resetFilters(filter))}
         />
