@@ -6,17 +6,17 @@
 import { Linking, Modal, Pressable, Text, View } from "react-native";
 import {
   Bell,
+  Archive,
   Check,
   MessageCircle,
   MessageSquare,
   Phone,
   Pin,
-  Trash2,
 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import { whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 interface ClientActionsSheetProps {
   /** null → лист закрыт. */
@@ -25,7 +25,7 @@ interface ClientActionsSheetProps {
   onSelectMany: (c: Client) => void;
   onTogglePin: (c: Client) => void;
   onRemind: (c: Client) => void;
-  onDelete: (c: Client) => void;
+  onArchive: (c: Client) => void;
 }
 
 export function ClientActionsSheet({
@@ -34,7 +34,7 @@ export function ClientActionsSheet({
   onSelectMany,
   onTogglePin,
   onRemind,
-  onDelete,
+  onArchive,
 }: ClientActionsSheetProps) {
   const t = useThemeColors();
   if (!client) return null;
@@ -86,6 +86,8 @@ export function ClientActionsSheet({
         className="flex-1"
         style={{ backgroundColor: t.scrim }}
         onPress={onClose}
+        accessible={false}
+        accessibilityRole="button"
         accessibilityLabel="Закрыть меню"
       />
       <View
@@ -103,7 +105,7 @@ export function ClientActionsSheet({
         {digits ? (
           <>
             <Row
-              icon={<Phone color={t.success} size={16} />}
+              icon={<Phone color={t.accent} size={16} />}
               label="Позвонить"
               onPress={run(() => Linking.openURL(`tel:${digits}`))}
             />
@@ -116,7 +118,9 @@ export function ClientActionsSheet({
         ) : null}
         {wa ? (
           <Row
-            icon={<MessageCircle color={CHANNEL_COLORS.whatsapp} size={16} />}
+            icon={
+              <MessageCircle color={MOBILE_CHANNEL_COLORS.whatsapp} size={16} />
+            }
             label="WhatsApp"
             onPress={run(() => Linking.openURL(wa))}
           />
@@ -137,20 +141,24 @@ export function ClientActionsSheet({
           onPress={run(() => onRemind(client))}
         />
         <Row
-          icon={<Trash2 color={t.danger} size={16} />}
-          label="Удалить"
+          icon={<Archive color={t.danger} size={16} />}
+          label="Архивировать"
           danger
-          onPress={run(() => onDelete(client))}
+          onPress={run(() => onArchive(client))}
         />
 
         <View className="px-4 pt-2">
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
+            accessibilityLabel="Отмена"
             className="items-center rounded-2xl py-3.5 active:opacity-70"
             style={{ backgroundColor: t.fill }}
           >
-            <Text className="text-[15px] font-semibold" style={{ color: t.ink }}>
+            <Text
+              className="text-[15px] font-semibold"
+              style={{ color: t.ink }}
+            >
               Отмена
             </Text>
           </Pressable>

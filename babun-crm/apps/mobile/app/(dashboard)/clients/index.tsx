@@ -356,9 +356,9 @@ function ClientRow({
           accessibilityRole="button"
           accessibilityLabel={`Позвонить — ${client.full_name || client.phone}`}
           className="mx-4 my-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
-          style={{ backgroundColor: `${t.success}1a` }}
+          style={{ backgroundColor: `${t.accent}1a` }}
         >
-          <Phone color={t.success} size={16} />
+          <Phone color={t.accent} size={16} />
         </Pressable>
       ) : null}
     </View>
@@ -387,7 +387,7 @@ function ClientRow({
           accessibilityRole="button"
           accessibilityLabel="Позвонить"
           className="w-[88px] items-center justify-center gap-1"
-          style={{ backgroundColor: t.success }}
+          style={{ backgroundColor: t.accent }}
         >
           <Phone color="#fff" size={ICON.sm} />
           <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
