@@ -3,13 +3,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
   type KeyboardTypeOptions,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
-import { Lock } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { ChevronRight, ShieldCheck } from "lucide-react-native";
 import { ROLE_LABELS, type MasterRole } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -17,6 +18,7 @@ import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMaster, useUpdateMaster } from "@/features/reference/queries";
@@ -32,13 +34,15 @@ import {
 // blur (как на вебе): плоские поля (имя/телефон/должность) пишутся в колонки
 // masters через useUpdateMaster; богатые (день рождения, наём, мессенджеры,
 // адрес, банк) — в profile jsonb через useUpdateMasterProfile (merge, без
-// затирания незнакомых ключей). Аккаунт-логин и Документы — read-only «скоро»
-// (BLOCKED-5: Supabase Auth admin / Storage не трогаем).
+// затирания незнакомых ключей). Доступ к CRM управляется в едином экране
+// приглашений, чтобы профиль сотрудника и его учётная запись не расходились.
 
 export default function MasterInfoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const t = useThemeColors();
-  const { data: master, isLoading } = useMaster(id);
+  const masterQuery = useMaster(id);
+  const { data: master, isLoading } = masterQuery;
   const updateMaster = useUpdateMaster();
   const updateProfile = useUpdateMasterProfile();
 
@@ -47,6 +51,25 @@ export default function MasterInfoScreen() {
       <Screen edges={["top"]}>
         <ScreenHeader title="Информация" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+
+  if (masterQuery.isError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Информация" />
+        <EmptyState
+          state="error"
+          title="Не удалось загрузить мастера"
+          subtitle={
+            masterQuery.error instanceof Error
+              ? masterQuery.error.message
+              : undefined
+          }
+          action={{ label: "Повторить", onPress: () => void masterQuery.refetch() }}
+          fill
+        />
       </Screen>
     );
   }
@@ -75,14 +98,18 @@ export default function MasterInfoScreen() {
     );
   };
 
-  // Богатое поле в profile jsonb — patch с merge (read-before-write внутри
-  // хука защищает от гонки быстрых правок).
+  // Богатое поле в profile jsonb — атомарный shallow merge внутри Postgres.
   const commitProfile = (field: keyof MasterProfile, next: string) => {
     const trimmed = next.trim();
     const current = ((profile[field] as string | undefined) ?? "").trim();
     if (trimmed === current) return;
     updateProfile.mutate(
-      { id: master.id, patch: { [field]: trimmed || undefined } as MasterProfile },
+      {
+        id: master.id,
+        // JSON null intentionally clears a field; undefined would disappear
+        // during serialization and turn the patch into a no-op.
+        patch: { [field]: trimmed || null } as unknown as MasterProfile,
+      },
       { onError: (e) => alertErr(e) },
     );
   };
@@ -214,23 +241,43 @@ export default function MasterInfoScreen() {
               placeholder="TIN / АФМ"
               onCommit={(v) => commitProfile("tax_number", v)}
             />
+            <View className="-mx-4">
+              <SwitchRow
+                label="Налоговый резидент Кипра"
+                hint="Учитывается при расчёте налогов и выплат сотруднику."
+                value={profile.tax_resident === true}
+                onChange={(taxResident) =>
+                  updateProfile.mutate(
+                    {
+                      id: master.id,
+                      patch: { tax_resident: taxResident },
+                    },
+                    { onError: (e) => alertErr(e) },
+                  )
+                }
+              />
+            </View>
           </Section>
 
-          {/* BLOCKED-5: аккаунт-логин (пароль) и документы требуют Supabase
-              Auth admin / Storage — пока read-only плашка «скоро». */}
           <View className="mx-3 mt-4">
             <Card>
-              <View className="flex-row items-center gap-3 px-4 py-4">
-                <Lock color={t.faint} size={ICON.sm} />
+              <Pressable
+                onPress={() => router.push("/cabinet/team-access")}
+                accessibilityRole="button"
+                accessibilityLabel="Управлять доступом сотрудника к CRM"
+                className="flex-row items-center gap-3 px-4 py-4 active:opacity-60"
+              >
+                <ShieldCheck color={t.accent} size={ICON.sm} />
                 <View className="flex-1">
                   <Text style={{ fontSize: 15, color: t.ink }}>
-                    Аккаунт и документы
+                    Доступ к CRM
                   </Text>
                   <Text style={{ fontSize: 12, color: t.faint, marginTop: 2 }}>
-                    Логин, пароль и файлы — скоро.
+                    Приглашение, роль и отзыв доступа
                   </Text>
                 </View>
-              </View>
+                <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} />
+              </Pressable>
             </Card>
           </View>
         </ScrollView>

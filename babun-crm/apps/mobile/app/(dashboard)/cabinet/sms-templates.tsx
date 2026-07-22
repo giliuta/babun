@@ -48,12 +48,12 @@ import {
 
 // P2 #40 — стартовые пресеты в пустом состоянии: черновик открывается сразу
 // в редакторе, чтобы оператор увидел переменные в деле.
-const STARTER_PRESETS: ReadonlyArray<{
+const STARTER_PRESETS: readonly {
   id: string;
   kind: TemplateKind;
   name: string;
   body: string;
-}> = [
+}[] = [
   {
     id: "preset-reminder",
     kind: "reminder",
@@ -396,7 +396,7 @@ function TemplateEditor({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-          <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Закрыть" />
+          <Pressable className="flex-1" onPress={onClose} accessible={false} />
           <View
             className="h-[88%] overflow-hidden rounded-t-3xl"
             style={{ backgroundColor: t.canvas }}
@@ -466,8 +466,9 @@ function TemplateEditor({
                   {encInfo.encoding === "ucs2" ? " · UCS-2" : ""}
                 </Text>
               </View>
-              <TextInput
-                ref={bodyRef}
+          <TextInput
+            ref={bodyRef}
+            accessibilityLabel="Текст шаблона"
                 value={draft.body}
                 onChangeText={(v) => setDraft((d) => ({ ...d, body: v }))}
                 onSelectionChange={(e) => {
@@ -477,7 +478,7 @@ function TemplateEditor({
                 placeholder="Введите текст шаблона…"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="rounded-xl px-4 py-3 text-base"
                 style={{
                   minHeight: 110,
@@ -551,11 +552,9 @@ function TemplateEditor({
                     onPress={() => insertToken(token)}
                     accessibilityRole="button"
                     accessibilityLabel={`Вставить: ${label}`}
-                    className="rounded-full px-3 py-2 active:opacity-60"
+                    className="min-h-11 justify-center rounded-full px-3 py-2 active:opacity-60"
                     style={{
-                      backgroundColor: t.dark
-                        ? "rgba(90,134,255,0.16)"
-                        : "rgba(44,91,224,0.10)",
+                      backgroundColor: "rgba(44,91,224,0.10)",
                     }}
                   >
                     <Text className="text-xs font-medium" style={{ color: t.accent }}>
@@ -573,13 +572,9 @@ function TemplateEditor({
               <View
                 className="rounded-xl px-3 py-3"
                 style={{
-                  backgroundColor: t.dark
-                    ? "rgba(47,211,154,0.10)"
-                    : "rgba(52,199,89,0.08)",
+                  backgroundColor: "rgba(52,199,89,0.08)",
                   borderWidth: 1,
-                  borderColor: t.dark
-                    ? "rgba(47,211,154,0.25)"
-                    : "rgba(52,199,89,0.2)",
+                  borderColor: "rgba(52,199,89,0.2)",
                 }}
               >
                 <Text
@@ -623,7 +618,7 @@ function TemplateEditor({
                   onPress={() => onDelete(template.id)}
                   accessibilityRole="button"
                   accessibilityLabel="Удалить шаблон"
-                  className="mt-1 items-center py-3 active:opacity-70"
+                  className="mt-1 min-h-11 items-center justify-center py-3 active:opacity-70"
                 >
                   <Text style={{ fontSize: 16, fontWeight: "500", color: t.danger }}>
                     Удалить

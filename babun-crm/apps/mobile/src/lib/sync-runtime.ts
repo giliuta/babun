@@ -4,18 +4,11 @@
 // drain trigger to connectivity. This is the RN equivalent of the web app's
 // `online` listener + realtime onResync callback that kick the replayer.
 //
-// IMPORTANT (slice 3 boundary): mounting this does NOT change any mutation
-// path. The cached-wrappers exist and the replayer can drain the queue, but
-// the calendar/clients/tags mutationFns still call the repositories directly
-// (that switch is slice 4). So on a fresh install the queue is always empty
-// and kickReplayer is a no-op — this file only lights up once slice 4 starts
-// enqueuing offline writes. Wiring it now keeps the subscription lifecycle in
-// place and lets us smoke-test the drain end-to-end.
-//
 // What it wires:
 //   • ReplayerOptions.supabase   — the app's authed client (lib/supabase)
-//   • ReplayerOptions.quota      — the no-op gate (lib/quota); the mobile app
-//                                  doesn't enforce tier quota on device
+//   • ReplayerOptions.tenantId   — the active workspace; stale-tenant queue
+//                                  entries are never replayed in this session
+//   • ReplayerOptions.quota      — live server-backed tier-limit checks
 //   • ReplayerOptions.onConflict — Alert «Конфликт синхронизации»: the LWW
 //                                  force-update applied the local edit over a
 //                                  newer server row
@@ -27,20 +20,35 @@
 
 import { Alert } from "react-native";
 import { onlineManager } from "@tanstack/react-query";
-import { kickReplayer, type QuotaGate } from "@babun/shared/sync";
+import {
+  kickReplayer,
+  setReplayerDefaults,
+  setSyncToast,
+  type QuotaGate,
+} from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
-import { quotaGate } from "@/lib/quota";
+import { quotaGate } from "@/lib/quota-gate";
 
-// A ReplayerOptions object without re-importing the interface (it isn't
-// exported from the barrel — we only need the shape kickReplayer accepts).
-function buildReplayerOptions(): Parameters<typeof kickReplayer>[0] {
+// Infer the options from the public function so this host adapter stays in
+// lockstep with the shared replayer contract.
+function buildReplayerOptions(
+  tenantId: string,
+): Parameters<typeof kickReplayer>[0] {
   const quota: QuotaGate = quotaGate;
   return {
     supabase,
+    tenantId,
     quota,
     onConflict: (msg: string) => {
       Alert.alert("Конфликт синхронизации", msg);
+    },
+    onPermanentFailure: (op) => {
+      Alert.alert(
+        "Изменение не синхронизировано",
+        op.last_error ||
+          "Сервер окончательно отклонил offline-изменение. Обновите данные и повторите действие.",
+      );
     },
     onChanged: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
@@ -52,15 +60,31 @@ function buildReplayerOptions(): Parameters<typeof kickReplayer>[0] {
 
 let started = false;
 let unsubscribe: (() => void) | null = null;
+let activeTenantId: string | null = null;
 
 /** Idempotent. Subscribes the replayer to connectivity and kicks one drain
  *  at startup. Safe to call more than once (guards against double-mount in
  *  React strict/dev). */
-export function startSyncRuntime(): () => void {
+export function startSyncRuntime(tenantId: string): () => void {
   if (started) return unsubscribe ?? (() => {});
   started = true;
+  activeTenantId = tenantId;
 
-  const opts = buildReplayerOptions();
+  const opts = buildReplayerOptions(tenantId);
+  // Cached wrappers also kick the shared replayer directly after a transient
+  // write failure. Register the host policy once so those kicks cannot bypass
+  // quota checks or permanent-failure feedback.
+  setReplayerDefaults({
+    tenantId: opts.tenantId,
+    quota: opts.quota,
+    onConflict: opts.onConflict,
+    onChanged: opts.onChanged,
+    onPermanentFailure: opts.onPermanentFailure,
+  });
+  // The clients wrapper intentionally refuses junction-table tag edits while
+  // offline. Its warning adapter used to remain the default no-op on mobile,
+  // making the Save action look successful. Make the limitation explicit.
+  setSyncToast((message) => Alert.alert("Изменение не сохранено", message));
 
   // Drain whenever connectivity flips to online. onlineManager is already
   // bound to NetInfo in query-client.ts, so this covers airplane-mode
@@ -79,5 +103,29 @@ export function startSyncRuntime(): () => void {
     unsubscribe?.();
     unsubscribe = null;
     started = false;
+    activeTenantId = null;
+    setReplayerDefaults(null);
+    setSyncToast(() => {});
+  };
+}
+
+/** Stop queue drains during an active-tenant switch. Clearing SQLite while a
+ * replayer is being triggered by NetInfo could otherwise repopulate it with
+ * the old tenant after the wipe. The returned callback restores the prior
+ * runtime only when the switch fails; a successful switch is remounted by the
+ * tenant-scoped React effect with the new tenant id. */
+export function pauseSyncRuntimeForTenantSwitch(): () => void {
+  const wasStarted = started;
+  const previousTenantId = activeTenantId;
+  unsubscribe?.();
+  unsubscribe = null;
+  started = false;
+  activeTenantId = null;
+  setReplayerDefaults(null);
+  setSyncToast(() => {});
+  return () => {
+    if (wasStarted && previousTenantId && !started) {
+      startSyncRuntime(previousTenantId);
+    }
   };
 }

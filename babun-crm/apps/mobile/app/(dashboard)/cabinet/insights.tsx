@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
+import {
+  getRecognizedRevenue,
+  type Appointment,
+} from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { formatCountRu, FORMS_RAZ } from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
@@ -226,9 +229,15 @@ export default function InsightsScreen() {
   );
 
   // KPI + PoP-дельты (web parity: count / revenue / completed).
-  const revenue = completedApts.reduce((s, a) => s + (a.total_amount ?? 0), 0);
+  const revenue = completedApts.reduce(
+    (sum, appointment) => sum + getRecognizedRevenue(appointment),
+    0,
+  );
   const prevCompleted = prevApts.filter((a) => a.status === "completed");
-  const prevRevenue = prevCompleted.reduce((s, a) => s + (a.total_amount ?? 0), 0);
+  const prevRevenue = prevCompleted.reduce(
+    (sum, appointment) => sum + getRecognizedRevenue(appointment),
+    0,
+  );
   const countDelta = deltaOf(currentApts.length, prevApts.length);
   const revenueDelta = deltaOf(revenue, prevRevenue);
   const completedDelta = deltaOf(completedApts.length, prevCompleted.length);
@@ -237,7 +246,10 @@ export default function InsightsScreen() {
     const map = new Map<string, number>();
     for (const a of completedApts) {
       if (!a.team_id) continue;
-      map.set(a.team_id, (map.get(a.team_id) ?? 0) + (a.total_amount ?? 0));
+      map.set(
+        a.team_id,
+        (map.get(a.team_id) ?? 0) + getRecognizedRevenue(a),
+      );
     }
     return [...map.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -269,7 +281,10 @@ export default function InsightsScreen() {
     const map = new Map<string, number>();
     for (const a of completedApts) {
       if (!a.client_id) continue;
-      map.set(a.client_id, (map.get(a.client_id) ?? 0) + (a.total_amount ?? 0));
+      map.set(
+        a.client_id,
+        (map.get(a.client_id) ?? 0) + getRecognizedRevenue(a),
+      );
     }
     return [...map.entries()]
       .sort((a, b) => b[1] - a[1])

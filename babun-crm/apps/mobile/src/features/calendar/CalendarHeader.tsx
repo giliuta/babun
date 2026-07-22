@@ -25,7 +25,7 @@ export function CalendarHeader({
   /** Hide the today button when the view is already on today. */
   isOnToday: boolean;
   onModeChange: (m: CalMode) => void;
-  onGear: () => void;
+  onGear?: () => void;
   onTitlePress: () => void;
   onToday: () => void;
 }) {
@@ -43,22 +43,24 @@ export function CalendarHeader({
         backgroundColor: t.surface,
       }}
     >
-      <Pressable
-        onPress={onGear}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityLabel="Настройки команды"
-        style={({ pressed }) => ({
-          width: 44,
-          height: 44,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: 22,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-      >
-        <Settings color={t.sub} size={21} strokeWidth={2} />
-      </Pressable>
+      {onGear ? (
+        <Pressable
+          onPress={onGear}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Настройки календаря"
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 22,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
+        >
+          <Settings color={t.sub} size={21} strokeWidth={2} />
+        </Pressable>
+      ) : null}
 
       <Pressable
         onPress={onTitlePress}

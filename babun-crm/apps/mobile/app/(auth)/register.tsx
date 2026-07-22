@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Text, TextInput } from "react-native";
+import { Alert, Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   AuthCard,
@@ -13,13 +13,13 @@ import {
   PillButton,
   SwitchLink,
 } from "@/components/auth/AuthCard";
-import { OrDivider, SocialButtons } from "@/components/auth/SocialAuthButtons";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
+import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
-// «Создать аккаунт» — minimal sign-up: brand, Apple + Google, then name/email/
-// password inline (chained return key). Terms is a one-line legal note. The
+// «Создать аккаунт» — name/email/password inline (chained return key).
+// Non-functional OAuth placeholders are not shown. Terms is a one-line legal note. The
 // «Проверьте почту» state is an actionable hub (resend / open mail / fix email).
 export default function RegisterScreen() {
   const router = useRouter();
@@ -33,6 +33,7 @@ export default function RegisterScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -56,10 +57,20 @@ export default function RegisterScreen() {
     if (!valid || loading) return;
     setLoading(true);
     setError(null);
+    const pendingInviteToken = await getPendingInvitationToken().catch(
+      () => null,
+    );
     const { data, error: e } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          ...(pendingInviteToken
+            ? { pending_invitation_token: pendingInviteToken }
+            : {}),
+        },
+      },
     });
     if (e) {
       setError(mapAuthError(e, "signup"));
@@ -79,7 +90,8 @@ export default function RegisterScreen() {
   }
 
   async function resend() {
-    if (cooldown > 0) return;
+    if (cooldown > 0 || resending) return;
+    setResending(true);
     const { error: e } = await supabase.auth.resend({
       type: "signup",
       email: email.trim(),
@@ -88,19 +100,29 @@ export default function RegisterScreen() {
       // Rate limit / network — don't restart the cooldown and don't let the
       // user believe the email went out.
       setError(mapAuthError(e, "signup"));
+      setResending(false);
       return;
     }
     setError(null);
     setCooldown(45);
+    setResending(false);
   }
 
-  const openMail = () => Linking.openURL("message://").catch(() => undefined);
+  const openMail = () =>
+    Linking.openURL("message://").catch(() => {
+      Alert.alert(
+        "Почта недоступна",
+        "Откройте приложение почты вручную и найдите письмо от Babun.",
+      );
+    });
 
-  const soon = (name: string) =>
-    Alert.alert(
-      name,
-      `Регистрация через ${name} подключаем в следующей сборке. Пока создайте аккаунт по почте.`,
-    );
+  const openLegal = (url: string) =>
+    Linking.openURL(url).catch(() => {
+      Alert.alert(
+        "Не удалось открыть ссылку",
+        "Проверьте интернет и повторите.",
+      );
+    });
 
   if (pending) {
     return (
@@ -113,8 +135,15 @@ export default function RegisterScreen() {
         <FormError message={error} />
         <PillButton label="Открыть Почту" onPress={openMail} />
         <GhostLink
-          label={cooldown > 0 ? `Отправить снова (${cooldown})` : "Отправить ещё раз"}
-          muted={cooldown > 0}
+          label={
+            resending
+              ? "Отправляем…"
+              : cooldown > 0
+                ? `Отправить снова (${cooldown})`
+                : "Отправить ещё раз"
+          }
+          muted={cooldown > 0 || resending}
+          disabled={cooldown > 0 || resending}
           onPress={resend}
         />
         <GhostLink label="Изменить email" muted onPress={() => setPending(false)} />
@@ -125,10 +154,6 @@ export default function RegisterScreen() {
 
   return (
     <AuthCard title="Создать аккаунт">
-      <SocialButtons onApple={() => soon("Apple")} onGoogle={() => soon("Google")} />
-
-      <OrDivider />
-
       <InputCard>
         <AuthField
           value={fullName}
@@ -198,15 +223,47 @@ export default function RegisterScreen() {
           color: t.sub,
         }}
       >
-        Создавая аккаунт, вы принимаете{" "}
-        <Text style={{ color: t.accent }} onPress={() => Linking.openURL("https://babun.app/terms")}>
-          Условия
-        </Text>{" "}
-        и{" "}
-        <Text style={{ color: t.accent }} onPress={() => Linking.openURL("https://babun.app/privacy")}>
-          Конфиденциальность
-        </Text>
+        Создавая аккаунт, вы принимаете документы:
       </Text>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Pressable
+          onPress={() => void openLegal("https://babun.app/terms")}
+          accessibilityRole="link"
+          accessibilityLabel="Условия использования"
+          style={({ pressed }) => ({
+            minHeight: 44,
+            justifyContent: "center",
+            paddingHorizontal: 8,
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "500", color: t.accent }}>
+            Условия
+          </Text>
+        </Pressable>
+        <Text style={{ fontSize: 13, color: t.sub }}>и</Text>
+        <Pressable
+          onPress={() => void openLegal("https://babun.app/privacy")}
+          accessibilityRole="link"
+          accessibilityLabel="Политика конфиденциальности"
+          style={({ pressed }) => ({
+            minHeight: 44,
+            justifyContent: "center",
+            paddingHorizontal: 8,
+            opacity: pressed ? 0.65 : 1,
+          })}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "500", color: t.accent }}>
+            Конфиденциальность
+          </Text>
+        </Pressable>
+      </View>
     </AuthCard>
   );
 }

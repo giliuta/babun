@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Babun — Новая запись · экран создания (галерея)</title>
+<style>
+  :root{
+    /* Halo Cobalt — реальные токены из theme/colors.ts */
+    --canvas:#f4f6f9; --surface:#ffffff; --accent:#2c5be0; --accentFrom:#3e84ff; --accentTo:#1f4fcc;
+    --ink:#0b1220; --body:#39414e; --sub:#5b6678; --faint:#66707e; --placeholder:#8b94a3;
+    --success:#1fb47a; --danger:#f0473c; --warning:#f5a623;
+    --fill:#eef1f5; --separator:#e7ebf0; --chevron:rgba(11,18,32,.24);
+    --cardShadow:0px 1px 2px rgba(11,18,32,.04),0px 8px 24px rgba(11,18,32,.06);
+    --brandShadow:0px 10px 26px rgba(44,91,224,.30);
+    --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --team1:#2c5be0; --team2:#0f9d8f;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  html,body{margin:0;}
+  body{font-family:var(--font);background:radial-gradient(1200px 900px at 50% -10%,#fbfcfe 0%,#e9edf3 55%,#dfe4ec 100%);
+    min-height:100vh;color:var(--ink);font-variant-numeric:tabular-nums;padding:34px 20px 70px;}
+  .wrap{max-width:1500px;margin:0 auto;}
+  .lede{text-align:center;margin:0 auto 6px;max-width:720px;}
+  .lede h1{font-size:26px;font-weight:800;letter-spacing:-.5px;margin:0 0 8px;}
+  .lede p{font-size:14px;line-height:1.5;color:var(--sub);margin:0;}
+  .lede .k{color:var(--accent);font-weight:600;}
+  .grid{display:flex;flex-wrap:wrap;gap:30px 26px;justify-content:center;align-items:flex-start;margin-top:30px;}
+  .col{width:340px;display:flex;flex-direction:column;gap:10px;}
+  .cap{font-size:13px;line-height:1.4;color:var(--sub);padding:0 6px;min-height:34px;}
+  .cap b{color:var(--ink);font-weight:700;}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;color:var(--accent);background:rgba(44,91,224,.10);
+    border-radius:6px;padding:2px 7px;margin-bottom:5px;text-transform:uppercase;}
+  .tag.ev{color:#7a5cff;background:rgba(122,92,255,.11);}
+  .tag.role{color:var(--success);background:rgba(31,180,122,.12);}
+
+  /* device */
+  .dev{width:340px;border:11px solid #0b0b0d;border-radius:50px;background:#0b0b0d;box-shadow:0 46px 90px -34px rgba(15,23,42,.55);}
+  .scr{width:318px;background:var(--canvas);border-radius:39px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+  .sb{height:44px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 7px 24px;background:var(--surface);}
+  .sb .time{font-size:14.5px;font-weight:600;letter-spacing:.2px;}
+  .sb .rgt{display:flex;align-items:center;gap:5px;}
+  .island{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:98px;height:26px;background:#000;border-radius:16px;z-index:5;}
+  .nav{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--separator);}
+  .nav .side{font-size:15px;min-width:66px;}
+  .nav .cancel{color:var(--body);}
+  .nav .title{font-size:16px;font-weight:600;color:var(--ink);}
+  .nav .r{min-width:66px;text-align:right;}
+  .body{background:var(--canvas);overflow:hidden;}
+  .pad{padding:9px 12px 14px;display:flex;flex-direction:column;gap:11px;}
+
+  /* segmented */
+  .seg{display:flex;background:var(--fill);border-radius:11px;padding:3px;gap:3px;}
+  .seg b{flex:1;text-align:center;font-size:14px;font-weight:600;color:var(--sub);padding:8px 0;border-radius:8px;}
+  .seg b.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(11,18,32,.10);}
+
+  /* card */
+  .card{background:var(--surface);border-radius:18px;box-shadow:var(--cardShadow);overflow:hidden;}
+  .ch{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--faint);text-transform:uppercase;padding:12px 15px 0;display:flex;justify-content:space-between;align-items:center;}
+  .ch .edit{color:var(--accent);font-weight:600;font-size:13px;letter-spacing:0;text-transform:none;}
+  .row{display:flex;align-items:center;gap:11px;padding:12px 15px;}
+  .row+.row{border-top:1px solid var(--separator);}
+  .rl{font-size:14px;color:var(--sub);}
+  .rv{font-size:15px;color:var(--ink);margin-left:auto;text-align:right;display:flex;align-items:center;gap:7px;}
+  .mut{color:var(--placeholder);}
+  .chev{color:var(--chevron);flex:none;}
+
+  /* client hero */
+  .hero{display:flex;align-items:center;gap:12px;padding:13px 15px;}
+  .av{width:44px;height:44px;border-radius:50%;background:linear-gradient(150deg,#eef2fb,#dfe7f8);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex:none;}
+  .hero .nm{font-size:16px;font-weight:600;line-height:1.15;}
+  .hero .ph{font-size:14px;color:var(--sub);margin-top:2px;}
+  .telbtn{margin-left:auto;width:38px;height:38px;border-radius:50%;background:rgba(44,91,224,.10);display:flex;align-items:center;justify-content:center;flex:none;}
+  .addrow{display:flex;align-items:center;gap:9px;padding:13px 15px;color:var(--accent);font-size:15px;}
+  .addrow .plus{width:22px;height:22px;border-radius:50%;background:rgba(44,91,224,.12);display:flex;align-items:center;justify-content:center;}
+
+  /* when */
+  .whenrow{display:flex;align-items:center;gap:11px;padding:12px 15px;}
+  .when-main{font-size:15px;font-weight:600;color:var(--ink);}
+  .when-sub{font-size:13px;color:var(--sub);margin-top:2px;}
+  .to{margin-left:auto;text-align:right;}
+  .to .big{font-size:15px;font-weight:600;color:var(--ink);}
+  .to .dur{font-size:12.5px;color:var(--placeholder);margin-top:1px;}
+  /* mini timeline */
+  .tl{padding:4px 15px 13px;}
+  .tltrack{position:relative;height:30px;background:var(--fill);border-radius:8px;overflow:hidden;}
+  .blk{position:absolute;top:4px;height:22px;border-radius:5px;font-size:0;}
+  .blk.busy{background:rgba(11,18,32,.10);}
+  .blk.ghost{background:var(--accent);box-shadow:0 2px 6px rgba(44,91,224,.35);border:1px solid #fff;}
+  .blk.warnb{background:rgba(245,166,35,.22);border:1px solid var(--warning);}
+  .tlx{display:flex;justify-content:space-between;font-size:10.5px;color:var(--placeholder);margin-top:5px;padding:0 1px;}
+
+  /* service line */
+  .svc{display:flex;align-items:center;gap:11px;padding:12px 15px;}
+  .svc .nm{font-size:15px;color:var(--ink);}
+  .svc .sub{font-size:12.5px;color:var(--placeholder);margin-top:1px;}
+  .step{margin-left:auto;display:flex;align-items:center;gap:0;background:var(--fill);border-radius:9px;}
+  .step b{width:30px;height:30px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:18px;font-weight:500;}
+  .step .q{width:26px;text-align:center;font-size:14px;font-weight:600;color:var(--ink);}
+  .price{font-size:15px;font-weight:600;color:var(--ink);min-width:52px;text-align:right;}
+  .price s{color:var(--placeholder);font-weight:400;font-size:12.5px;}
+
+  /* chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;padding:12px 15px;}
+  .chip{font-size:13.5px;font-weight:600;padding:8px 13px;border-radius:999px;border:1.4px solid var(--separator);color:var(--sub);background:var(--surface);display:flex;align-items:center;gap:6px;}
+  .chip.on{border-color:var(--accent);color:var(--accent);background:rgba(44,91,224,.07);}
+  .chip.t2.on{border-color:var(--team2);color:var(--team2);background:rgba(15,157,143,.08);}
+  .chip .dot{width:9px;height:9px;border-radius:50%;}
+  .chip.lock{opacity:.9;}
+
+  /* address */
+  .field{padding:11px 15px;}
+  .field .lab{font-size:12px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px;}
+  .field .val{font-size:15px;color:var(--ink);}
+  .field .note{font-size:13.5px;color:var(--sub);margin-top:3px;}
+  .pin{color:var(--accent);}
+
+  /* pay / value rows / banners */
+  .badge{font-size:12.5px;font-weight:600;padding:3px 9px;border-radius:7px;}
+  .b-un{color:var(--sub);background:var(--fill);}
+  .b-debt{color:var(--danger);background:rgba(240,71,60,.10);}
+  .b-paid{color:var(--success);background:rgba(31,180,122,.12);}
+  .banner{display:flex;gap:8px;align-items:flex-start;margin:0 12px;padding:10px 12px;border-radius:13px;font-size:13px;font-weight:500;line-height:1.35;}
+  .banner.warn{background:rgba(245,166,35,.10);border:1px solid rgba(245,166,35,.30);color:#9a6a10;}
+  .banner.info{background:rgba(44,91,224,.07);border:1px solid rgba(44,91,224,.18);color:var(--accent);}
+
+  .disc{display:flex;align-items:center;gap:10px;padding:13px 15px;background:var(--surface);border-radius:18px;box-shadow:var(--cardShadow);color:var(--body);font-size:15px;font-weight:600;}
+  .disc .chev{margin-left:auto;}
+
+  /* footer */
+  .foot{padding:11px 14px 12px;background:linear-gradient(180deg,rgba(244,246,249,0),var(--canvas) 34%);}
+  .cta{height:52px;border-radius:15px;background:linear-gradient(180deg,var(--accentFrom),var(--accentTo));color:#fff;font-size:16.5px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:var(--brandShadow);}
+  .cta.off{background:var(--fill);color:var(--placeholder);box-shadow:none;}
+  .home{height:5px;width:130px;background:#0b0b0d;opacity:.85;border-radius:3px;margin:5px auto 8px;}
+
+  /* picker sheet (frame B) */
+  .search{margin:2px 12px 10px;display:flex;align-items:center;gap:9px;background:var(--fill);border-radius:12px;padding:11px 13px;}
+  .search .q{font-size:16px;color:var(--ink);}
+  .search .cur{width:2px;height:19px;background:var(--accent);border-radius:2px;animation:bl 1s steps(1) infinite;}
+  @keyframes bl{50%{opacity:0}}
+  .grouphd{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--faint);text-transform:uppercase;padding:6px 18px 6px;}
+  .prow{display:flex;align-items:center;gap:12px;padding:11px 16px;background:var(--surface);}
+  .prow+.prow{border-top:1px solid var(--separator);}
+  .prow .nm{font-size:15px;font-weight:500;color:var(--ink);}
+  .prow .meta{font-size:12.5px;color:var(--sub);margin-top:2px;display:flex;gap:7px;align-items:center;}
+  .create{display:flex;align-items:center;gap:11px;padding:14px 16px;color:var(--accent);font-size:15px;font-weight:600;background:rgba(44,91,224,.05);}
+  .swm{width:22px;height:22px;border-radius:6px;flex:none;}
+
+  /* annotations for roles */
+  .note-card{width:340px;background:rgba(255,255,255,.75);backdrop-filter:blur(6px);border:1px solid var(--separator);border-radius:16px;padding:15px 16px;box-shadow:var(--cardShadow);}
+  .note-card h3{margin:0 0 10px;font-size:14px;font-weight:800;color:var(--ink);}
+  .note-card .r{display:flex;gap:9px;padding:8px 0;border-top:1px solid var(--separator);font-size:12.8px;line-height:1.42;color:var(--sub);}
+  .note-card .r:first-of-type{border-top:0;}
+  .note-card .r b{color:var(--ink);display:block;font-size:13px;margin-bottom:1px;}
+  .rc{width:9px;height:9px;border-radius:50%;margin-top:5px;flex:none;}
+  svg{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="lede">
+    <h1>Новая запись — одна страница вместо двух шторок</h1>
+    <p>Тап по слоту открывает <span class="k">отдельный экран</span> (а не попап поверх попапа). Время уже подставлено из тапа,
+    команда — из активной бригады. Обязателен только <span class="k">клиент</span>. Всё остальное — умные значения и «Дополнительно».
+    Одна страница адаптируется под директора, диспетчера, бригадира.</p>
+  </div>
+
+  <div class="grid">
+
+  <!-- ============ FRAME A — 80% случай, готово к записи ============ -->
+  <div class="col">
+    <div><span class="tag">80% случай</span></div>
+    <div class="cap"><b>Записать клиента @ тапнутый слот.</b> Открылось заполненным: клиент из «Недавних», время из тапа, услуга задала длительность → до 12:30. 3 решения: клиент · услуга · Записать.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt">
+        <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg>
+        <svg width="22" height="12" viewBox="0 0 24 12"><rect x="1" y="1" width="19" height="10" rx="3" fill="none" stroke="#0b1220" stroke-opacity=".4"/><rect x="3" y="3" width="14" height="6" rx="1.5" fill="#0b1220"/><rect x="21" y="4" width="2" height="4" rx="1" fill="#0b1220" opacity=".4"/></svg>
+      </span></div>
+      <div class="nav">
+        <span class="side cancel">Отмена</span>
+        <span class="title">Новая запись</span>
+        <span class="side r"></span>
+      </div>
+      <div class="body"><div class="pad">
+
+        <div class="seg"><b class="on">Клиент</b><b>Событие</b></div>
+
+        <div class="card">
+          <div class="hero">
+            <div class="av">К</div>
+            <div><div class="nm">Константин Петров</div><div class="ph">+357 95 11 481 · Лимассол</div></div>
+            <div class="telbtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.5.56 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .56 3.5 1 1 0 0 1-.24 1z" fill="#2c5be0"/></svg></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ch">Когда</div>
+          <div class="whenrow">
+            <div><div class="when-main">Сегодня, 18 июл</div><div class="when-sub">Пятница</div></div>
+            <div class="to"><div class="big">11:00 → 12:30</div><div class="dur">1 ч 30 мин · авто</div></div>
+          </div>
+          <div class="tl">
+            <div class="tltrack">
+              <div class="blk busy" style="left:9%;width:16%"></div>
+              <div class="blk ghost" style="left:33%;width:19%"></div>
+              <div class="blk busy" style="left:66%;width:13%"></div>
+            </div>
+            <div class="tlx"><span>8</span><span>11</span><span>14</span><span>17</span><span>20</span></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="ch">Услуга</div>
+          <div class="svc">
+            <div><div class="nm">Установка кондиционера</div><div class="sub">1 ч 30 мин</div></div>
+            <div class="step"><b>−</b><span class="q">1</span><b>+</b></div>
+            <div class="price">€120</div>
+          </div>
+          <div class="addrow" style="border-top:1px solid var(--separator)"><span class="plus"><svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="#2c5be0" stroke-width="2.4" stroke-linecap="round"/></svg></span>Добавить услугу</div>
+        </div>
+
+        <div class="card">
+          <div class="chips">
+            <div class="chip on"><span class="dot" style="background:var(--team1)"></span>Бригада 1</div>
+            <div class="chip t2"><span class="dot" style="background:var(--team2)"></span>Бригада 2</div>
+            <div class="chip">Андрей В. · мастер</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <div class="lab">Объект · адрес выезда</div>
+            <div class="val">Дом — Лимассол, Agios Tychonas 21</div>
+            <div class="note"><span class="pin">◍</span> Зелёная дверь, звонок 2, 3 этаж</div>
+          </div>
+        </div>
+
+        <div class="card"><div class="row"><span class="rl">Оплата · предоплата</span><span class="rv"><span class="badge b-un">Не оплачено</span><span class="chev"><svg width="8" height="13" viewBox="0 0 8 13"><path d="M1 1l6 5.5L1 12" stroke="#0b1220" stroke-opacity=".24" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span></span></div></div>
+
+        <div class="disc">Дополнительно <span class="mut" style="font-weight:400;font-size:13px">скидка · статус · SMS · повтор ТО</span><span class="chev"><svg width="8" height="13" viewBox="0 0 8 13"><path d="M1 1l6 5.5L1 12" stroke="#0b1220" stroke-opacity=".24" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span></div>
+
+      </div></div>
+      <div class="foot"><div class="cta">Записать клиента</div><div class="home"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ FRAME B — выбор клиента (телефон-first + создать) ============ -->
+  <div class="col">
+    <div><span class="tag">1 движение</span></div>
+    <div class="cap"><b>Клиент: выбрать или создать — одним жестом.</b> Поиск по телефону. Если номер новый — снизу «Создать клиента» прямо тут, без ухода на другой экран.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt"><svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg></span></div>
+      <div class="nav"><span class="side cancel">Отмена</span><span class="title">Клиент</span><span class="side r"></span></div>
+      <div class="body"><div style="padding:12px 0 14px">
+        <div class="search"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#8b94a3" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="#8b94a3" stroke-width="2" stroke-linecap="round"/></svg><span class="q">+357 95</span><span class="cur"></span></div>
+
+        <div class="grouphd">Недавние</div>
+        <div>
+          <div class="prow"><div class="av" style="width:38px;height:38px;font-size:15px">К</div><div style="flex:1"><div class="nm">Константин Петров</div><div class="meta">+357 95 11 481 <span style="color:var(--danger)">· долг €58</span></div></div></div>
+          <div class="prow"><div class="av" style="width:38px;height:38px;font-size:15px;background:linear-gradient(150deg,#fdeef2,#f8dfe6);color:#c2416a">А</div><div style="flex:1"><div class="nm">Анна Петрова</div><div class="meta">+357 99 12 34 56 · 3 визита · VIP</div></div></div>
+          <div class="prow"><div class="av" style="width:38px;height:38px;font-size:15px;background:linear-gradient(150deg,#eafaf3,#d6f2e6);color:#12946e">М</div><div style="flex:1"><div class="nm">Мария Иоанну</div><div class="meta">+357 96 44 12 09 · Ларнака</div></div></div>
+        </div>
+
+        <div style="height:8px"></div>
+        <div class="create"><span class="plus" style="width:26px;height:26px"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="#2c5be0" stroke-width="2.4" stroke-linecap="round"/></svg></span>Создать клиента «+357 95…»</div>
+
+        <div class="banner info" style="margin-top:12px">Имя добавите потом — телефон уже делает клиента. Дубль по номеру ловится сразу.</div>
+      </div></div>
+      <div class="home" style="margin-top:8px"></div>
+    </div></div>
+  </div>
+
+  <!-- ============ FRAME C — выезд на дом, 2 объекта ============ -->
+  <div class="col">
+    <div><span class="tag">Выездной сервис</span></div>
+    <div class="cap"><b>«Куда едем?» — когда у клиента несколько объектов.</b> Адрес, заметка и оборудование подставляются из объекта. Бригада не набирает адрес руками.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt"><svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg></span></div>
+      <div class="nav"><span class="side cancel">Отмена</span><span class="title">Новая запись</span><span class="side r"></span></div>
+      <div class="body"><div class="pad">
+        <div class="card"><div class="hero"><div class="av" style="background:linear-gradient(150deg,#fdeef2,#f8dfe6);color:#c2416a">А</div><div><div class="nm">Анна Петрова</div><div class="ph">+357 99 12 34 56 · VIP</div></div><div class="telbtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.5.56 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .56 3.5 1 1 0 0 1-.24 1z" fill="#2c5be0"/></svg></div></div></div>
+
+        <div class="card">
+          <div class="ch">Объект · куда едем?</div>
+          <div class="chips">
+            <div class="chip on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-right:1px"><path d="M3 11l9-8 9 8M5 9.5V21h14V9.5" stroke="#2c5be0" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>Дом</div>
+            <div class="chip">Офис</div>
+            <div class="chip">Дача</div>
+          </div>
+          <div class="field" style="border-top:1px solid var(--separator)">
+            <div class="lab">Адрес выезда</div>
+            <div class="val">Лимассол, Agios Tychonas 21</div>
+            <div class="note"><span class="pin">◍</span> Зелёная дверь, звонок 2 · <span style="color:var(--accent)">Открыть в картах</span></div>
+          </div>
+          <div class="row"><span class="rl">Оборудование</span><span class="rv" style="font-size:14px">Daikin FTXS35<span class="mut"> · ТО через 20 дн</span></span></div>
+        </div>
+
+        <div class="banner info">Спальня · Daikin FTXS35 — сезонное ТО подходит. Предложить клиенту?</div>
+
+        <div class="card">
+          <div class="ch">Услуга</div>
+          <div class="svc"><div><div class="nm">Чистка кондиционера</div><div class="sub">45 мин</div></div><div class="step"><b>−</b><span class="q">1</span><b>+</b></div><div class="price">€40</div></div>
+          <div class="svc" style="border-top:1px solid var(--separator)"><div><div class="nm">Диагностика</div><div class="sub">20 мин</div></div><div class="step"><b>−</b><span class="q">1</span><b>+</b></div><div class="price">€25</div></div>
+        </div>
+
+        <div class="card"><div class="chips"><div class="chip on"><span class="dot" style="background:var(--team1)"></span>Бригада 1</div><div class="chip">Андрей В.</div></div></div>
+
+      </div></div>
+      <div class="foot"><div class="cta">Записать клиента · €65</div><div class="home"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ FRAME D — деньги + дополнительно раскрыто ============ -->
+  <div class="col">
+    <div><span class="tag">Деньги · раскрыто</span></div>
+    <div class="cap"><b>Оплата и «Дополнительно» — по требованию.</b> Предоплата €50 → долг €58 считается на глазах. Лояльность −€12 показана, а не спрятана. SMS-напоминание с живым превью.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt"><svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg></span></div>
+      <div class="nav"><span class="side cancel">Отмена</span><span class="title">Новая запись</span><span class="side r"></span></div>
+      <div class="body"><div class="pad">
+
+        <div class="card">
+          <div class="ch">Сумма</div>
+          <div class="row"><span class="rl">Услуги</span><span class="rv">€120</span></div>
+          <div class="row"><span class="rl">Скидка · Постоянный 10%</span><span class="rv" style="color:var(--success)">−€12</span></div>
+          <div class="row"><span class="rl" style="font-weight:600;color:var(--ink)">Итого</span><span class="rv" style="font-weight:700">€108</span></div>
+        </div>
+
+        <div class="card">
+          <div class="ch">Оплата</div>
+          <div class="field"><div class="lab">Предоплата сейчас</div><div style="display:flex;align-items:center;gap:10px;margin-top:2px"><span style="font-size:26px;font-weight:700">€50</span><div class="chips" style="padding:0;margin-left:auto"><div class="chip on" style="padding:7px 12px">Наличные</div><div class="chip" style="padding:7px 12px">Карта</div></div></div></div>
+          <div class="row" style="background:rgba(240,71,60,.04)"><span class="rl">Останется долг</span><span class="rv"><span class="badge b-debt">долг €58</span></span></div>
+        </div>
+
+        <div class="disc" style="border-radius:18px 18px 0 0">Дополнительно<span class="chev" style="transform:rotate(90deg)"><svg width="8" height="13" viewBox="0 0 8 13"><path d="M1 1l6 5.5L1 12" stroke="#0b1220" stroke-opacity=".24" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span></div>
+        <div class="card" style="border-radius:0 0 18px 18px;margin-top:-11px">
+          <div class="row"><span class="rl">Статус</span><span class="rv" style="font-size:14px">Запланировано<span class="chev" style="margin-left:6px"><svg width="8" height="13" viewBox="0 0 8 13"><path d="M1 1l6 5.5L1 12" stroke="#0b1220" stroke-opacity=".24" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span></span></div>
+          <div class="row"><span class="rl">Канал</span><span class="rv" style="font-size:14px">Повторный</span></div>
+          <div class="field" style="border-top:1px solid var(--separator)">
+            <div class="lab" style="display:flex;justify-content:space-between"><span>SMS-напоминание клиенту</span><span style="color:var(--success);text-transform:none;letter-spacing:0">вкл · за 1 день</span></div>
+            <div class="banner info" style="margin:6px 0 0;font-size:12.5px">«Константин, напоминаем: завтра 11:00 приедет мастер, Agios Tychonas 21»</div>
+          </div>
+          <div class="row"><span class="rl">Повторить ТО</span><span class="rv" style="font-size:14px">через 12 мес</span></div>
+        </div>
+
+      </div></div>
+      <div class="foot"><div class="cta">Записать · внесено €50</div><div class="home"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ FRAME E — событие ============ -->
+  <div class="col">
+    <div><span class="tag ev">Событие</span></div>
+    <div class="cap"><b>Личное событие — та же страница, свёрнутая.</b> Переключатель «Событие» прячет клиента/адрес/услуги/деньги. Остаётся название, время, цвет, повтор. Обязательны только название и время.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt"><svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg></span></div>
+      <div class="nav"><span class="side cancel">Отмена</span><span class="title">Событие</span><span class="side r"></span></div>
+      <div class="body"><div class="pad">
+        <div class="seg"><b>Клиент</b><b class="on" style="color:#7a5cff;box-shadow:0 1px 3px rgba(122,92,255,.18)">Событие</b></div>
+
+        <div class="card"><div class="field"><div class="lab">Название</div><div style="font-size:20px;font-weight:600;margin-top:2px;display:flex;align-items:center">Обед<span class="cur" style="height:22px;margin-left:2px;background:#7a5cff"></span></div></div></div>
+
+        <div class="card">
+          <div class="whenrow"><div><div class="when-main">Сегодня, 18 июл</div><div class="when-sub">Пятница</div></div><div class="to"><div class="big">13:00 → 14:00</div><div class="dur">1 ч</div></div></div>
+          <div class="row" style="border-top:1px solid var(--separator)"><span class="rl">Весь день</span><span class="rv"><span style="width:44px;height:27px;border-radius:999px;background:var(--fill);display:inline-flex;align-items:center;padding:2px"><span style="width:23px;height:23px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></span></span></div>
+        </div>
+
+        <div class="card"><div class="chips">
+          <div class="chip"><span class="dot" style="background:var(--team1)"></span>Бригада 1</div>
+          <div class="chip on" style="border-color:#7a5cff;color:#7a5cff;background:rgba(122,92,255,.07)">Личное</div>
+        </div></div>
+
+        <div class="card">
+          <div class="ch">Цвет</div>
+          <div class="chips" style="gap:12px">
+            <span class="swm" style="background:#7a5cff;border-radius:50%;width:26px;height:26px;box-shadow:0 0 0 2px #fff,0 0 0 4px #7a5cff"></span>
+            <span class="swm" style="background:#2c5be0;border-radius:50%;width:26px;height:26px"></span>
+            <span class="swm" style="background:#1fb47a;border-radius:50%;width:26px;height:26px"></span>
+            <span class="swm" style="background:#f5a623;border-radius:50%;width:26px;height:26px"></span>
+            <span class="swm" style="background:#f0473c;border-radius:50%;width:26px;height:26px"></span>
+            <span class="swm" style="background:#5b6678;border-radius:50%;width:26px;height:26px"></span>
+          </div>
+        </div>
+
+        <div class="card"><div class="row"><span class="rl">Повтор</span><span class="rv" style="font-size:14px">Каждый будний день<span class="chev" style="margin-left:6px"><svg width="8" height="13" viewBox="0 0 8 13"><path d="M1 1l6 5.5L1 12" stroke="#0b1220" stroke-opacity=".24" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span></span></div></div>
+
+      </div></div>
+      <div class="foot"><div class="cta" style="background:linear-gradient(180deg,#9a80ff,#6a4cf0);box-shadow:0 10px 26px rgba(122,92,255,.30)">Создать событие</div><div class="home"></div></div>
+    </div></div>
+  </div>
+
+  <!-- ============ FRAME F — роль: бригадир + аннотации ============ -->
+  <div class="col">
+    <div><span class="tag role">Роль · бригадир</span></div>
+    <div class="cap"><b>Одна страница — тихо адаптируется под роль.</b> У бригадира бригада/мастер свёрнуты в «Вы», нет скидки и маржи, зато цена и оплата на месте — приехал, сделал, закрыл.</div>
+    <div class="dev"><div class="scr">
+      <div class="island"></div>
+      <div class="sb"><span class="time">9:41</span><span class="rgt"><svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7" width="3" height="5" rx="1" fill="#0b1220"/><rect x="5" y="4" width="3" height="8" rx="1" fill="#0b1220"/><rect x="10" y="1" width="3" height="11" rx="1" fill="#0b1220"/><rect x="15" y="1" width="3" height="11" rx="1" fill="#0b1220" opacity=".3"/></svg></span></div>
+      <div class="nav"><span class="side cancel">Отмена</span><span class="title">Новая запись</span><span class="side r"></span></div>
+      <div class="body"><div class="pad">
+        <div class="card"><div class="hero"><div class="av">К</div><div><div class="nm">Константин Петров</div><div class="ph">+357 95 11 481</div></div><div class="telbtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.5.56 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .56 3.5 1 1 0 0 1-.24 1z" fill="#2c5be0"/></svg></div></div></div>
+
+        <div class="card"><div class="whenrow"><div><div class="when-main">Сегодня, 18 июл</div><div class="when-sub">Пятница</div></div><div class="to"><div class="big">11:00 → 12:30</div><div class="dur">1 ч 30 мин</div></div></div></div>
+
+        <div class="card"><div class="svc"><div><div class="nm">Установка кондиционера</div><div class="sub">1 ч 30 мин</div></div><div class="price" style="min-width:auto">€120</div></div></div>
+
+        <div class="card"><div class="row"><span class="rl">Бригада</span><span class="rv"><span class="chip on lock" style="padding:6px 11px;font-size:13px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="margin-right:2px"><rect x="5" y="11" width="14" height="9" rx="2" stroke="#2c5be0" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="#2c5be0" stroke-width="2"/></svg>Вы · Бригада 1</span></span></div></div>
+
+        <div class="card"><div class="field"><div class="lab">Адрес выезда</div><div class="val">Лимассол, Agios Tychonas 21</div><div class="note"><span class="pin">◍</span> Зелёная дверь · <span style="color:var(--accent)">Маршрут</span></div></div></div>
+
+        <div class="card"><div class="row"><span class="rl">Оплата на месте</span><span class="rv"><span class="chip" style="padding:6px 11px;font-size:13px">Наличные</span><span class="chip" style="padding:6px 11px;font-size:13px">Карта</span></span></div></div>
+
+      </div></div>
+      <div class="foot"><div class="cta">Записать клиента</div><div class="home"></div></div>
+    </div></div>
+
+    <div class="note-card">
+      <h3>Та же страница по ролям</h3>
+      <div class="r"><span class="rc" style="background:var(--accent)"></span><span><b>Директор</b>Всё: любые бригады и клиенты, цена и маржа, скидка правится прямо тут.</span></div>
+      <div class="r"><span class="rc" style="background:var(--success)"></span><span><b>Диспетчер</b>Бригада обязательна (видит занятость), цена видна, маржа скрыта, скидка — «нужен директор».</span></div>
+      <div class="r"><span class="rc" style="background:var(--warning)"></span><span><b>Бригадир</b>Бригада/мастер = «Вы», без скидки/маржи, цена + оплата на месте.</span></div>
+      <div class="r"><span class="rc" style="background:var(--placeholder)"></span><span><b>Помощник</b>Только «Событие» / чтение — без денег и скидок (если нет права записи).</span></div>
+    </div>
+  </div>
+
+  </div>
+
+  <div class="lede" style="margin-top:44px">
+    <p style="font-size:12.5px;color:var(--placeholder)">Токены: Halo Cobalt (accent #2c5be0, canvas #f4f6f9, radius 18–20). Данные — реальная модель Appointment (клиент · объект · услуги · бригада · мастер · оплата нал/карта/аванс · напоминания · повтор ТО).</p>
+  </div>
+</div>
+</body>
+</html>

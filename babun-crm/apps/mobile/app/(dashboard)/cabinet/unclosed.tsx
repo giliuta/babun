@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -10,14 +10,17 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Check, PartyPopper, XCircle } from "lucide-react-native";
 import {
   getDebtAmount,
-  getPaidAmount,
   type Appointment,
 } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import {
+  getCurrentCyprusTime,
+  getCurrentTimeInZone,
+} from "@babun/shared/common/utils/date-utils";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
@@ -29,6 +32,8 @@ import { formatYMD, humanDay } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
+import { buildDebtPaidPatch } from "@/features/appointments/payment";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // «Незакрытые дни» — port of web /dashboard/unclosed: past days whose
 // work visits are still «Запланирован». The dispatcher works through the
@@ -45,12 +50,12 @@ const CANCEL_REASON_PRESETS = [
   "Адрес недоступен",
 ] as const;
 
-function daysSince(dateKey: string): number {
+function daysSince(dateKey: string, todayKey: string): number {
   const [y, m, d] = dateKey.split("-").map(Number);
-  const past = new Date(y, (m ?? 1) - 1, d ?? 1).getTime();
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.round((now.getTime() - past) / 86_400_000));
+  const [ty, tm, td] = todayKey.split("-").map(Number);
+  const past = Date.UTC(y, (m ?? 1) - 1, d ?? 1);
+  const today = Date.UTC(ty, (tm ?? 1) - 1, td ?? 1);
+  return Math.max(0, Math.round((today - past) / 86_400_000));
 }
 
 function countWord(n: number, one: string, few: string, many: string): string {
@@ -68,8 +73,26 @@ export default function UnclosedScreen() {
   const toast = useToast();
   const { data: appts = [], isLoading, error } = useAppointments();
   const { data: clients = [] } = useClients();
+  const { data: calendarSettings } = useCalendarSettings();
   const update = useUpdateAppointment();
   const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
+  const readBusinessToday = useCallback(
+    () =>
+      formatYMD(
+        calendarSettings?.timezone
+          ? getCurrentTimeInZone(calendarSettings.timezone)
+          : getCurrentCyprusTime(),
+      ),
+    [calendarSettings?.timezone],
+  );
+  const [todayKey, setTodayKey] = useState(() =>
+    formatYMD(getCurrentCyprusTime()),
+  );
+  useFocusEffect(
+    useCallback(() => {
+      setTodayKey(readBusinessToday());
+    }, [readBusinessToday]),
+  );
 
   const nameById = useMemo(
     () => new Map(clients.map((c) => [c.id, c.full_name])),
@@ -79,7 +102,6 @@ export default function UnclosedScreen() {
     (a.client_id && nameById.get(a.client_id)) || a.comment?.trim() || "—";
 
   const unclosed = useMemo(() => {
-    const todayKey = formatYMD(new Date());
     return appts
       .filter(
         (a) =>
@@ -88,7 +110,7 @@ export default function UnclosedScreen() {
           a.date < todayKey,
       )
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [appts]);
+  }, [appts, todayKey]);
 
   const totalAtRisk = useMemo(
     () => unclosed.reduce((sum, a) => sum + (a.total_amount ?? 0), 0),
@@ -98,29 +120,13 @@ export default function UnclosedScreen() {
   // Цепочка «после завершения — оплата»: визит с непогашенной суммой сразу
   // спрашивает про деньги, иначе должник появился бы молча (Финансы → Долги).
   // Способ оплаты влияет на сверку кассы, поэтому предлагаем нал/карту —
-  // как секция «Оплата» в AppointmentSheet, не только наличные. Пишем И
-  // payments[], И зеркальные колонки (payment_status → серверный триггер
-  // дохода; иначе визит остаётся неоплаченным для веба и триггер молчит).
+  // как секция «Оплата» в AppointmentSheet, не только наличные. Общий builder
+  // пишет ledger и зеркальные колонки одним контрактом и не задваивает аванс.
   const markPaid = (apt: Appointment, debt: number, method: "cash" | "card") => {
-    const paidAt = new Date().toISOString();
-    const alreadyPaid = getPaidAmount(apt);
     update.mutate(
       {
         id: apt.id,
-        patch: {
-          payments: [
-            ...(apt.payments ?? []),
-            {
-              id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              method,
-              amount: debt,
-              paid_at: paidAt,
-            },
-          ],
-          payment_status: "paid",
-          payment_method: method,
-          paid_amount: alreadyPaid + debt,
-        },
+        patch: buildDebtPaidPatch(apt, { method, amount: debt }),
       },
       {
         onSuccess: () => toast("Оплата отмечена"),
@@ -226,6 +232,7 @@ export default function UnclosedScreen() {
           renderItem={({ item }) => (
             <UnclosedCard
               apt={item}
+              todayKey={todayKey}
               clientName={clientNameOf(item)}
               busy={update.isPending}
               onComplete={() => handleComplete(item)}
@@ -254,6 +261,7 @@ export default function UnclosedScreen() {
 
 function UnclosedCard({
   apt,
+  todayKey,
   clientName,
   busy,
   onComplete,
@@ -261,6 +269,7 @@ function UnclosedCard({
   onOpenClient,
 }: {
   apt: Appointment;
+  todayKey: string;
   clientName: string;
   busy: boolean;
   onComplete: () => void;
@@ -268,7 +277,7 @@ function UnclosedCard({
   onOpenClient: () => void;
 }) {
   const t = useThemeColors();
-  const days = daysSince(apt.date);
+  const days = daysSince(apt.date, todayKey);
   const amount = apt.total_amount ?? 0;
   return (
     <Card>
@@ -387,7 +396,7 @@ function CancelReasonSheet({
         className="flex-1 justify-end"
         style={{ backgroundColor: t.scrim }}
       >
-        <Pressable className="flex-1" onPress={close} accessibilityLabel="Закрыть" />
+        <Pressable className="flex-1" onPress={close} accessible={false} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="text-lg font-bold" style={{ color: t.ink }}>
             Отменить визит
@@ -423,7 +432,7 @@ function CancelReasonSheet({
               placeholder="Опишите причину"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               accessibilityLabel="Причина отмены"
               className="mt-3 rounded-[10px] px-3.5 text-[15px]"
               style={{

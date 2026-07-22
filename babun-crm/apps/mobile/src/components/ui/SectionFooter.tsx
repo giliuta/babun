@@ -10,7 +10,10 @@ export function SectionFooter({ children }: { children: string }) {
   return (
     <Text
       style={{
-        paddingHorizontal: 16,
+        // 20 = левая базовая линия SectionEyebrow: заголовок над карточкой и
+        // футнот под ней стоят в одной колонке. На 16 они расходились, и
+        // группа читалась как два случайно соседствующих текста.
+        paddingHorizontal: 20,
         paddingTop: 6,
         paddingBottom: 2,
         fontSize: 13,

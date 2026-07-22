@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pencil, Plus, Search, Users } from "lucide-react-native";
+import { ChevronRight, Pencil, Search, Users } from "lucide-react-native";
 import {
   LEGACY_HELPER_ROLE_ID,
   LEGACY_LEAD_ROLE_ID,
@@ -75,21 +75,28 @@ export default function BrigadeMastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: team, isLoading } = useTeam(id);
-  const { data: masters = [] } = useMasters();
+  const teamQuery = useTeam(id);
+  const mastersQuery = useMasters();
+  const { data: team } = teamQuery;
+  const masters = useMemo(() => mastersQuery.data ?? [], [mastersQuery.data]);
   const save = useUpdateTeamMembers();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDraft | null>(null);
 
-  const roles = team ? teamRoles(team) : [];
-  const members = team ? teamMembers(team) : [];
+  const roles = useMemo(() => (team ? teamRoles(team) : []), [team]);
+  const members = useMemo(() => (team ? teamMembers(team) : []), [team]);
 
   // Persist через updateTeamMembers — синхронно обновит lead_ids/helper_ids.
   const persist = (nextRoles: BrigadeRole[], nextMembers: BrigadeMember[]) => {
     if (!team) return;
     save.mutate(
-      { teamId: team.id, roles: nextRoles, members: nextMembers },
+      {
+        teamId: team.id,
+        expectedUpdatedAt: team.updated_at,
+        roles: nextRoles,
+        members: nextMembers,
+      },
       { onError: (e) => Alert.alert("Ошибка", e.message) },
     );
   };
@@ -142,6 +149,7 @@ export default function BrigadeMastersScreen() {
     save.mutate(
       {
         teamId: team.id,
+        expectedUpdatedAt: team.updated_at,
         roles: [...existingRoles, ...migratedRoles],
         members: migratedMembers,
       },
@@ -244,11 +252,30 @@ export default function BrigadeMastersScreen() {
     router.push(`/cabinet/teams/${team.id}/masters/${master.id}`);
   };
 
-  if (isLoading) {
+  if (teamQuery.isLoading || mastersQuery.isLoading) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Мастера" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+  const readError = teamQuery.error || mastersQuery.error;
+  if (readError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Мастера" />
+        <EmptyState
+          state="error"
+          title="Не удалось загрузить состав команды"
+          subtitle={readError instanceof Error ? readError.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([teamQuery.refetch(), mastersQuery.refetch()]),
+          }}
+          fill
+        />
       </Screen>
     );
   }
@@ -268,17 +295,6 @@ export default function BrigadeMastersScreen() {
       <ScreenHeader
         title="Мастера"
         subtitle={team.name}
-        right={
-          <Pressable
-            onPress={() => setEditingRole({ id: null })}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Новая роль"
-            className="h-11 w-11 items-center justify-center active:opacity-60"
-          >
-            <Plus color={t.accent} size={ICON.md} />
-          </Pressable>
-        }
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {isEmpty ? (
@@ -321,6 +337,11 @@ export default function BrigadeMastersScreen() {
               }
               setPickerOpen(true);
             }}
+          />
+          <Divider inset={16} />
+          <AddRow
+            label="Создать роль"
+            onPress={() => setEditingRole({ id: null })}
           />
         </SectionCard>
       </ScrollView>
@@ -499,7 +520,7 @@ function RoleSheet({
           <Pressable
             className="flex-1"
             onPress={onClose}
-            accessibilityLabel="Закрыть"
+            accessible={false}
           />
           <View
             className="max-h-[88%] rounded-t-3xl"
@@ -517,13 +538,14 @@ function RoleSheet({
               >
                 Название
               </Text>
-              <TextInput
-                value={name}
+          <TextInput
+            value={name}
+            accessibilityLabel="Название роли"
                 onChangeText={setName}
                 placeholder="Установщик"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 autoFocus={!existing}
                 style={{
                   borderRadius: t.radius.input,
@@ -609,7 +631,7 @@ function AddMemberPicker({
           <Pressable
             className="flex-1"
             onPress={onClose}
-            accessibilityLabel="Закрыть"
+            accessible={false}
           />
           <View
             className="max-h-[88%] rounded-t-3xl"
@@ -648,13 +670,14 @@ function AddMemberPicker({
                 style={{ backgroundColor: t.fill }}
               >
                 <Search color={t.faint} size={ICON.sm} />
-                <TextInput
-                  value={query}
+          <TextInput
+            value={query}
+            accessibilityLabel="Поиск мастера"
                   onChangeText={setQuery}
                   placeholder="Поиск мастера"
                   placeholderTextColor={t.placeholder}
                   selectionColor={t.accent}
-                  keyboardAppearance={t.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                   style={{
                     flex: 1,
                     paddingVertical: 10,
@@ -706,7 +729,7 @@ function AddMemberPicker({
                           </Text>
                         ) : null}
                       </View>
-                      <Plus color={t.accent} size={ICON.sm} />
+                      <ChevronRight color={t.chevron} size={ICON.sm} />
                     </Pressable>
                   </View>
                 ))
@@ -718,4 +741,3 @@ function AddMemberPicker({
     </Modal>
   );
 }
-

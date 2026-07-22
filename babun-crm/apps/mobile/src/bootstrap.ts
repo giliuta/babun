@@ -16,10 +16,8 @@ import { setStorage, WebKVStorage } from "@babun/shared/storage";
 import { setSql, setNetwork } from "@babun/shared/storage/sql";
 import { initSentry } from "@/lib/sentry";
 
-// The app is light-only. Lock the scheme at runtime so native chrome (system
-// alerts, keyboard, date pickers) never follows the device into dark mode —
-// the JS palette is already light-only (src/theme/colors.ts). Belt-and-braces
-// with app.json «userInterfaceStyle: light» (which applies on native rebuild).
+// Babun is intentionally light-only. Keep the native appearance pinned even
+// when the device changes its system theme.
 Appearance.setColorScheme("light");
 
 // Storage backend is platform-split. The `@/` alias goes through tsconfig
@@ -37,6 +35,9 @@ if (Platform.OS === "web") {
   // on native code paths) and let getNetwork() fall back to its
   // navigator.onLine default. Behaviour on web is unchanged.
 } else {
+  // Metro must keep these native-only modules out of the web bundle, so the
+  // runtime branch intentionally uses lazy CommonJS loading.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { MMKVStorage } = require("@/storage/mmkv") as typeof import("@/storage/mmkv");
   setStorage(new MMKVStorage());
 
@@ -44,10 +45,10 @@ if (Platform.OS === "web") {
   // their module-eval stays off the web bundle path, matching the MMKV
   // treatment above. Injected right after setStorage so the offline cache
   // has a backend before any store/sync call can run.
-  const { ExpoSqliteAdapter } =
-    require("@/storage/sqlite") as typeof import("@/storage/sqlite");
-  const { NetInfoNetwork } =
-    require("@/storage/netinfo") as typeof import("@/storage/netinfo");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ExpoSqliteAdapter } = require("@/storage/sqlite") as typeof import("@/storage/sqlite");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { NetInfoNetwork } = require("@/storage/netinfo") as typeof import("@/storage/netinfo");
   setSql(new ExpoSqliteAdapter());
   setNetwork(new NetInfoNetwork());
 }

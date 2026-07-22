@@ -1,0 +1,25 @@
+# Local Supabase project metadata and deploy-time Edge Function policy.
+# Remote linking remains in the ignored supabase/.temp directory.
+project_id = "babun-crm"
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = false
+
+# These two functions are called by pg_net. Their handlers authenticate the
+# database request with secrets stored in public.edge_cron_secrets.
+[functions.send_sms]
+verify_jwt = false
+
+[functions.send_push]
+verify_jwt = false
+
+# The mobile client invokes this function with its signed-in user JWT.
+[functions.account-delete]
+verify_jwt = true
+
+# Internal retry worker called by pg_net with x-cleanup-secret.
+[functions.account-delete-cleanup]
+verify_jwt = false

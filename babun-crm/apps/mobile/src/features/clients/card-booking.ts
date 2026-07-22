@@ -1,9 +1,9 @@
 // card-booking — one shared «записать» deep-link for every surface on the
-// client card (NEXT-JOB hero, 5-action row, «Обслуживание» spine, per-object
-// «Записать сюда»). Mirrors the web buildBookingHref: navigate to the
-// calendar tab with `new=1` + client/location/team so the booking sheet
-// opens pre-aimed at this client — the `?new=` handler in
-// app/(dashboard)/index.tsx reads all three and pre-selects the object.
+// client card (NEXT-JOB hero, ряд действий card-actions, «Обслуживание»
+// spine, per-object «Записать сюда»). Navigates to the calendar tab with `new=1` +
+// client/location/team; the `?new=` handler in app/(dashboard)/index.tsx
+// switches to that client's team calendar (so the new record is visible on
+// return) and then pushes the separate /book screen pre-aimed at the client.
 
 import { useRouter } from "expo-router";
 

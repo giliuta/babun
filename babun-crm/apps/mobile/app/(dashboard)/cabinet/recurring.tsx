@@ -142,6 +142,11 @@ export default function RecurringScreen() {
         // Дата ТО → черновик записи открывается сразу на нужный день
         // (web parity: ?date= префиллит dateKey драфта).
         ...(item.next_due_date ? { date: item.next_due_date } : {}),
+        // The booking screen marks this exact reminder as booked only after
+        // the appointment INSERT is server/offline-queue confirmed. Keeping
+        // the id through the calendar forwarding route prevents the same ТО
+        // from remaining in «Пора» and being booked twice.
+        reminderId: item.id,
       },
     });
 
@@ -418,7 +423,7 @@ function NewReminderSheet({
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="h-[80%] rounded-t-3xl p-5 pb-8"
@@ -440,7 +445,7 @@ function NewReminderSheet({
                   placeholder="Клиент"
                   placeholderTextColor={t.placeholder}
                   selectionColor={t.accent}
-                  keyboardAppearance={t.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                   className="flex-1 py-2.5 text-base"
                   style={{ color: t.ink }}
                   accessibilityLabel="Поиск клиента"
@@ -500,6 +505,7 @@ function NewReminderSheet({
                   Последнее ТО
                 </Text>
                 <DateTimePicker
+                  themeVariant="light"
                   value={parseYMD(lastDate)}
                   mode="date"
                   display="compact"

@@ -91,8 +91,9 @@ export function EndOfDayBanner({
         <Pressable
           onPress={onOpenUnpaid}
           accessibilityRole="button"
+          accessibilityLabel="Открыть записи без оплаты"
           className="rounded-full px-3 active:opacity-70"
-          style={{ height: 32, justifyContent: "center", backgroundColor: t.accent }}
+          style={{ minHeight: 44, justifyContent: "center", backgroundColor: t.accent }}
         >
           <Text style={{ fontSize: 13, fontWeight: "600", color: t.onAccent }}>
             Открыть
@@ -113,7 +114,7 @@ export function EndOfDayBanner({
           accessibilityRole="button"
           accessibilityLabel="Скрыть"
           className="items-center justify-center rounded-full active:opacity-70"
-          style={{ width: 32, height: 32, backgroundColor: t.fill }}
+          style={{ width: 44, height: 44, backgroundColor: t.fill }}
         >
           <X color={t.sub} size={14} strokeWidth={2.5} />
         </Pressable>

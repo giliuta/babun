@@ -12,14 +12,19 @@ export function Screen({
   children,
   className = "",
   edges,
+  bg,
 }: {
   children: ReactNode;
   className?: string;
   edges?: readonly Edge[];
+  /** Ground colour override (defaults to the neutral canvas). The booking
+   *  screen feeds it a soft identity wash so the whole page — including the
+   *  top safe area — lifts in the appointment's colour. */
+  bg?: string;
 }) {
   const t = useThemeColors();
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: t.canvas }} edges={edges}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg ?? t.canvas }} edges={edges}>
       <StatusBar style={t.statusBar} />
       <View className={`flex-1 ${className}`}>{children}</View>
     </SafeAreaView>

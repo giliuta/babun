@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, Share, View } from "react-native";
-import { useRouter } from "expo-router";
-import { Settings } from "lucide-react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  signedAmount,
-  type FinanceTransaction,
-} from "@babun/shared/local/finance/transaction";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Settings, X } from "lucide-react-native";
+import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { getDebtAmount } from "@babun/shared/local/appointments";
+import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
+import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
+import {
+  getCurrentCyprusTime,
+  getCurrentTimeInZone,
+} from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -42,20 +44,58 @@ import {
   useAccountsWithBalances,
   useDeleteTransfer,
 } from "@/features/finances/accounts";
-import { defaultPeriod, type Period } from "@/features/finances/period";
+import {
+  defaultPeriod,
+  makePeriod,
+  type Period,
+} from "@/features/finances/period";
+import { todayYmd } from "@/features/invoices/format";
+import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
+import { InvoiceShortcut } from "@/features/invoices/InvoiceShortcut";
+import { useInvoiceNavigation } from "@/features/invoices/navigation";
+import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
+import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useToast } from "@/components/ui/Toast";
+import { shareCsvFile } from "@/lib/share-csv";
+import { financeTransactionsToCsv } from "@/features/finances/export";
 
-const TYPE_LABEL: Record<FinanceTransaction["type"], string> = {
-  income: "Доход",
-  expense: "Расход",
-  transfer: "Перевод",
-  refund: "Возврат",
-};
-
-export default function FinancesTab() {
+function FinancesContent() {
   const t = useThemeColors();
+  const toast = useToast();
   const router = useRouter();
+  const params = useLocalSearchParams<{ clientId?: string | string[] }>();
+  const requestedClientId = Array.isArray(params.clientId)
+    ? params.clientId[0]
+    : params.clientId;
+  const { openInvoices, openTransactionInvoice } = useInvoiceNavigation();
+  const calendarSettingsQuery = useCalendarSettings();
+  const calendarSettings = calendarSettingsQuery.data;
+  const businessTimezone = calendarSettings?.timezone ?? "Europe/Nicosia";
+  const businessNow = calendarSettings?.timezone
+    ? getCurrentTimeInZone(businessTimezone)
+    : getCurrentCyprusTime();
+  const businessToday = todayYmd(businessTimezone);
 
-  const [period, setPeriod] = useState<Period>(defaultPeriod());
+  const periodTimezoneRef = useRef<string | null>(
+    calendarSettingsQuery.isSuccess ? businessTimezone : null,
+  );
+  const [period, setPeriod] = useState<Period>(() => defaultPeriod(businessNow));
+  // If settings were not cached at mount, the initial fallback may belong to
+  // another month around midnight. Rebase preset ranges once the tenant's
+  // timezone arrives; a hand-picked custom range is never overwritten.
+  useEffect(() => {
+    if (!calendarSettingsQuery.isSuccess) return;
+    if (periodTimezoneRef.current === businessTimezone) return;
+    setPeriod((current) =>
+      current.preset === "custom"
+        ? current
+        : makePeriod(
+            current.preset,
+            getCurrentTimeInZone(businessTimezone),
+          ),
+    );
+    periodTimezoneRef.current = businessTimezone;
+  }, [businessTimezone, calendarSettingsQuery.isSuccess]);
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
   const [scope, setScope] = useState<string | null>(null);
@@ -64,30 +104,85 @@ export default function FinancesTab() {
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
   const [popupTx, setPopupTx] = useState<FinanceTransaction | null>(null);
 
-  const { data: categories = [] } = useFinanceCategories();
-  const { data: teams = [] } = useTeams();
-  const { data: services = [] } = useServices();
-  const { data: appts = [] } = useAppointments();
-  const { data: clients = [] } = useClients();
-  const { data: accounts = [], isLoading: accountsLoading } =
-    useAccountsWithBalances();
+  const categoriesQuery = useFinanceCategories();
+  const teamsQuery = useTeams();
+  const servicesQuery = useServices();
+  const appointmentsQuery = useAppointments();
+  const clientsQuery = useClients();
+  const invoicesQuery = useInvoices();
+  const invoicePaymentsQuery = useInvoicePayments();
+  const accountsQuery = useAccountsWithBalances();
+  const categories = useMemo(
+    () => categoriesQuery.data ?? [],
+    [categoriesQuery.data],
+  );
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const services = useMemo(
+    () => servicesQuery.data ?? [],
+    [servicesQuery.data],
+  );
+  const appts = useMemo(
+    () => appointmentsQuery.data ?? [],
+    [appointmentsQuery.data],
+  );
+  const clients = useMemo(
+    () => clientsQuery.data ?? [],
+    [clientsQuery.data],
+  );
+  const invoices = useMemo(
+    () => invoicesQuery.data ?? [],
+    [invoicesQuery.data],
+  );
+  const invoicePayments = useMemo(
+    () => invoicePaymentsQuery.data ?? {},
+    [invoicePaymentsQuery.data],
+  );
+  const accounts = useMemo(
+    () => accountsQuery.data ?? [],
+    [accountsQuery.data],
+  );
+  const accountsLoading = accountsQuery.isLoading;
   const delTransfer = useDeleteTransfer();
   const delTx = useDeleteTransaction();
   const insertTx = useInsertTransaction();
 
-  // LOCKED «strict per-team»: no «Все» scope — default to the first team
-  // as soon as the list arrives (web parity: FinancesPage scopeTeamId).
-  useEffect(() => {
-    if (scope === null && teams.length > 0) setScope(teams[0].id);
-  }, [teams, scope]);
+  const selectedClient = useMemo(
+    () => clients.find((client) => client.id === requestedClientId) ?? null,
+    [clients, requestedClientId],
+  );
+  const scopedAppointments = useMemo(
+    () =>
+      requestedClientId
+        ? appts.filter((appointment) => appointment.client_id === requestedClientId)
+        : appts,
+    [appts, requestedClientId],
+  );
+  const scopedInvoices = useMemo(
+    () =>
+      requestedClientId
+        ? invoices.filter((invoice) => invoice.client_id === requestedClientId)
+        : invoices,
+    [invoices, requestedClientId],
+  );
 
-  const {
-    data: txs = [],
-    isLoading,
-    error,
-  } = useTransactions(period.from, period.to, scope ? [scope] : undefined);
+  const transactionsQuery = useTransactions(
+    period.from,
+    period.to,
+    scope ? [scope] : undefined,
+  );
+  const txs = useMemo(
+    () => transactionsQuery.data ?? [],
+    [transactionsQuery.data],
+  );
 
-  // Accounts are strictly per-team too (LOCKED: one account = one team).
+  const scopedTransactions = useMemo(
+    () =>
+      requestedClientId
+        ? txs.filter((transaction) => transaction.client_id === requestedClientId)
+        : txs,
+    [requestedClientId, txs],
+  );
+
   const scopedAccounts = useMemo(
     () => (scope ? accounts.filter((a) => a.brigade_id === scope) : accounts),
     [accounts, scope],
@@ -97,14 +192,25 @@ export default function FinancesTab() {
     [scopedAccounts],
   );
 
-  // Web parity: computePeriodTotals (apps/web/src/lib/finance/ledger-compute.ts).
-  // Refunds fold into income as negatives via signedAmount; transfers net to
-  // zero across the pair and are ignored in P&L. Debt = completed-but-unpaid
-  // appointments in the period for the selected brigade.
+  const materialSummary = useMemo(() => {
+    let amount = 0;
+    let appointmentCount = 0;
+    for (const appointment of scopedAppointments) {
+      if (appointment.status !== "completed" && appointment.status !== "in_progress") continue;
+      if (appointment.date < period.from || appointment.date > period.to) continue;
+      if (scope && appointment.team_id !== scope) continue;
+      const cost = appointmentMaterialCost(appointment, services);
+      if (cost <= 0) continue;
+      amount += cost;
+      appointmentCount += 1;
+    }
+    return { amount, appointmentCount };
+  }, [period.from, period.to, scope, scopedAppointments, services]);
+
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
-    for (const tx of txs) {
+    for (const tx of scopedTransactions) {
       if (tx.type === "income" || tx.type === "refund")
         income += signedAmount(tx);
       else if (tx.type === "expense") expense += tx.amount;
@@ -114,29 +220,109 @@ export default function FinancesTab() {
     // repository, so «total − paid_amount» would flag every completed
     // visit as fully unpaid (same helper as close-day / dashboard).
     let debt = 0;
-    for (const a of appts) {
+    for (const a of scopedAppointments) {
       if (a.status !== "completed") continue;
       if (a.date < period.from || a.date > period.to) continue;
       if (scope && a.team_id !== scope) continue;
       debt += getDebtAmount(a);
     }
-    return { income, expense, profit: income - expense, debt };
-  }, [txs, appts, period.from, period.to, scope]);
+    const expenseWithMaterials = expense + materialSummary.amount;
+    return {
+      income,
+      expense: expenseWithMaterials,
+      profit: income - expenseWithMaterials,
+      debt,
+    };
+  }, [
+    scopedTransactions,
+    scopedAppointments,
+    period.from,
+    period.to,
+    scope,
+    materialSummary.amount,
+  ]);
 
   // Σ refunds already issued against each income — caps further refunds.
   // NOT computed from the period-windowed txs: a refund is dated TODAY and
   // can land outside the viewed period (e.g. refunding a June income while
   // browsing «Прошлый месяц» on July 2) — the windowed sum would reset to 0
   // and let repeat refunds silently overdraw the ledger.
-  const { data: refundTotals } = useRefundTotals();
+  const refundTotalsQuery = useRefundTotals();
+  const refundTotals = refundTotalsQuery.data;
+
+  // Every number on this screen combines several independent sources. Do not
+  // render plausible-looking zeroes when one of them is still loading or has
+  // failed: a user can otherwise make a financial decision from an
+  // incomplete ledger without any visible warning.
+  const loading =
+    transactionsQuery.isLoading ||
+    categoriesQuery.isLoading ||
+    teamsQuery.isLoading ||
+    servicesQuery.isLoading ||
+    appointmentsQuery.isLoading ||
+    clientsQuery.isLoading ||
+    invoicesQuery.isLoading ||
+    invoicePaymentsQuery.isLoading ||
+    accountsQuery.isLoading ||
+    refundTotalsQuery.isLoading ||
+    calendarSettingsQuery.isLoading;
+  const loadError =
+    (transactionsQuery.data === undefined ? transactionsQuery.error : null) ||
+    (categoriesQuery.data === undefined ? categoriesQuery.error : null) ||
+    (teamsQuery.data === undefined ? teamsQuery.error : null) ||
+    (servicesQuery.data === undefined ? servicesQuery.error : null) ||
+    (appointmentsQuery.data === undefined ? appointmentsQuery.error : null) ||
+    (clientsQuery.data === undefined ? clientsQuery.error : null) ||
+    (invoicesQuery.data === undefined ? invoicesQuery.error : null) ||
+    (invoicePaymentsQuery.data === undefined ? invoicePaymentsQuery.error : null) ||
+    (accountsQuery.data === undefined ? accountsQuery.error : null) ||
+    (refundTotalsQuery.data === undefined ? refundTotalsQuery.error : null) ||
+    (calendarSettingsQuery.data === undefined ? calendarSettingsQuery.error : null);
+  const refreshAll = () =>
+    void Promise.all([
+      transactionsQuery.refetch(),
+      categoriesQuery.refetch(),
+      teamsQuery.refetch(),
+      servicesQuery.refetch(),
+      appointmentsQuery.refetch(),
+      clientsQuery.refetch(),
+      invoicesQuery.refetch(),
+      invoicePaymentsQuery.refetch(),
+      accountsQuery.refetch(),
+      refundTotalsQuery.refetch(),
+      calendarSettingsQuery.refetch(),
+    ]);
+
+  const invoiceSummary = useMemo(() => {
+    let openCount = 0;
+    let outstanding = 0;
+    let overdue = 0;
+    for (const invoice of scopedInvoices) {
+      if (invoice.status === "void") continue;
+      const settlement = calculateInvoiceSettlement(
+        invoice,
+        invoicePayments[invoice.id] ?? [],
+      );
+      if (settlement.remaining <= 0) continue;
+      openCount += 1;
+      outstanding += settlement.remaining;
+      if (invoice.due_on && invoice.due_on < businessToday) {
+        overdue += settlement.remaining;
+      }
+    }
+    return { openCount, outstanding, overdue };
+  }, [businessToday, invoicePayments, scopedInvoices]);
 
   // Feed filtered by the active overview card (web parity: feedTx).
   const feedTx = useMemo(() => {
     if (view === "income")
-      return txs.filter((tx) => tx.type === "income" || tx.type === "refund");
-    if (view === "expense") return txs.filter((tx) => tx.type === "expense");
-    return txs;
-  }, [txs, view]);
+      return scopedTransactions.filter(
+        (tx) => tx.type === "income" || tx.type === "refund",
+      );
+    if (view === "expense")
+      return scopedTransactions.filter((tx) => tx.type === "expense");
+    return scopedTransactions;
+  }, [scopedTransactions, view]);
 
   const toggleView = (v: HomeView) =>
     setView((prev) => (prev === v ? "all" : v));
@@ -158,8 +344,9 @@ export default function FinancesTab() {
               if (tx.transfer_group_id) {
                 await delTransfer.mutateAsync(tx.transfer_group_id);
               } else {
-                // orphan leg without a group id — remove the single row
-                await delTx.mutateAsync(tx.id);
+                throw new Error(
+                  "У перевода повреждена связь между счетами. Операция не изменена.",
+                );
               }
             } catch (e) {
               Alert.alert("Ошибка", (e as Error).message);
@@ -174,6 +361,9 @@ export default function FinancesTab() {
   // refund_of_id, inheriting its account/team/category/method so the
   // money leaves the same pocket it entered.
   const handleRefund = async (tx: FinanceTransaction, amount: number) => {
+    if (tx.source === "auto") {
+      throw new Error("Возврат этой оплаты оформляется в связанной заявке.");
+    }
     await insertTx.mutateAsync({
       type: "refund",
       amount: -Math.abs(amount),
@@ -182,6 +372,9 @@ export default function FinancesTab() {
       category_id: tx.category_id,
       payment_method: tx.payment_method,
       refund_of_id: tx.id,
+      invoice_id: tx.invoice_id,
+      occurred_on: businessToday,
+      business_today: businessToday,
       notes: `Возврат по операции от ${tx.occurred_on}`,
     });
   };
@@ -196,6 +389,10 @@ export default function FinancesTab() {
         text: "Шаблоны операций",
         onPress: () => router.push("/cabinet/templates"),
       },
+      {
+        text: "Инвойсы",
+        onPress: openInvoices,
+      },
       // Экспорт переехал сюда из шапки: иконка без подписи не читалась.
       // Подпись явно называет и действие, и его границы (текущий период).
       { text: "Экспорт отчёта за период", onPress: () => exportCsv() },
@@ -208,23 +405,24 @@ export default function FinancesTab() {
     // internal money moves, not income/expense — they are excluded, and
     // the amount is the raw t.amount (always positive); the sign
     // semantics live in the «Тип» column, same as the web file.
-    const exportable = txs.filter((tx) => tx.type !== "transfer");
-    if (exportable.length === 0) return;
-    const catName = new Map(categories.map((c) => [c.id, c.name]));
-    const header = "Дата;Тип;Категория;Сумма;Заметка";
-    const rows = exportable.map((tx) =>
-      [
-        tx.occurred_on,
-        TYPE_LABEL[tx.type],
-        tx.category_id ? catName.get(tx.category_id) ?? "" : "",
-        String(tx.amount),
-        (tx.notes ?? "").replace(/[;\n\r]/g, " "),
-      ].join(";"),
-    );
-    await Share.share({
-      message: [header, ...rows].join("\n"),
-      title: `Финансы ${period.from} – ${period.to}`,
-    });
+    const report = financeTransactionsToCsv(scopedTransactions, categories);
+    if (report.count === 0) {
+      toast("За выбранный период нет операций", "info");
+      return;
+    }
+    try {
+      await shareCsvFile({
+        contents: report.contents,
+        filename: `babun-finance-${period.from}-${period.to}.csv`,
+        dialogTitle: `Финансы ${period.from} – ${period.to}`,
+      });
+      toast(`Отчёт подготовлен · ${report.count}`, "success");
+    } catch (error) {
+      Alert.alert(
+        "Не удалось выгрузить отчёт",
+        error instanceof Error ? error.message : "Попробуйте ещё раз.",
+      );
+    }
   };
 
   const headerRight = (
@@ -246,6 +444,29 @@ export default function FinancesTab() {
         ? `Расход · ${feedTx.length}`
         : `Операции · ${feedTx.length}`;
 
+  if (loading) {
+    return (
+      <Screen>
+        <ScreenHeader large title="Финансы" right={headerRight} />
+        <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Screen>
+        <ScreenHeader large title="Финансы" right={headerRight} />
+        <EmptyState
+          state="error"
+          fill
+          subtitle={(loadError as Error).message}
+          action={{ label: "Повторить", onPress: refreshAll }}
+        />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <ScreenHeader large title="Финансы" right={headerRight} />
@@ -263,22 +484,51 @@ export default function FinancesTab() {
         onTap={toggleView}
       />
 
-      {isLoading ? (
-        <EmptyState state="loading" fill />
-      ) : error ? (
-        <EmptyState state="error" fill subtitle={(error as Error).message} />
-      ) : view === "accounts" ? (
+      {requestedClientId ? (
+        <View
+          className="mx-3 mb-2 flex-row items-center rounded-2xl px-4 py-3"
+          style={{ backgroundColor: t.surface }}
+        >
+          <View className="min-w-0 flex-1">
+            <Text className="text-xs font-semibold uppercase tracking-wider" style={{ color: t.faint }}>
+              Финансы клиента
+            </Text>
+            <Text className="mt-0.5 text-[15px] font-semibold" style={{ color: t.ink }} numberOfLines={1}>
+              {selectedClient?.full_name || "Клиент"}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.replace("/finances")}
+            accessibilityRole="button"
+            accessibilityLabel="Показать финансы всех клиентов"
+            hitSlop={8}
+            className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
+            style={{ backgroundColor: t.fill }}
+          >
+            <X color={t.sub} size={18} strokeWidth={2.2} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      <InvoiceShortcut
+        {...invoiceSummary}
+        onPress={openInvoices}
+      />
+
+      {view === "accounts" ? (
         <AccountsPanel accounts={scopedAccounts} isLoading={accountsLoading} />
       ) : view === "profit" ? (
         <ProfitBreakdown
-          transactions={txs}
+          transactions={scopedTransactions}
           categories={categories}
           services={services}
-          appointments={appts}
+          appointments={scopedAppointments}
+          materialCost={materialSummary.amount}
+          materialAppointmentCount={materialSummary.appointmentCount}
         />
       ) : view === "debt" ? (
         <DebtorsList
-          appointments={appts}
+          appointments={scopedAppointments}
           clients={clients}
           teamId={scope}
           fromDate={period.from}
@@ -291,7 +541,7 @@ export default function FinancesTab() {
           teams={teams}
           categories={categories}
           clients={clients}
-          appointments={appts}
+          appointments={scopedAppointments}
           services={services}
           title={feedTitle}
           onReset={view !== "all" ? () => setView("all") : undefined}
@@ -302,16 +552,13 @@ export default function FinancesTab() {
             }
             setPopupTx(tx);
           }}
-          onClientTap={(id) => router.push(`/clients/${id}`)}
         />
       )}
 
-      {/* Создание операции — нижняя градиентная кнопка (веб-паритет:
-          apps/web finances «＋ Операция» sticky-футер). Заменила прежний FAB
-          после удаления Fab-примитива; лежит под контентом (фид flex:1). */}
+      {/* Создание операции — понятная подписанная нижняя кнопка. */}
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         <GradientButton
-          label="＋ Операция"
+          label="Новая операция"
           onPress={() => {
             setEditingTx(null);
             setOpOpen(true);
@@ -341,6 +588,14 @@ export default function FinancesTab() {
           setEditingTx(tx);
           setOpOpen(true);
         }}
+        onInvoice={(tx) => {
+          setPopupTx(null);
+          openTransactionInvoice(tx);
+        }}
+        onClientOpen={(clientId) => {
+          setPopupTx(null);
+          router.push(`/clients/${clientId}`);
+        }}
         onDelete={async (tx) => {
           await delTx.mutateAsync(tx.id);
         }}
@@ -354,12 +609,14 @@ export default function FinancesTab() {
           setEditingTx(null);
         }}
         defaultTeamId={scope}
+        businessToday={businessToday}
         transaction={editingTx}
       />
 
       <PeriodPresetModal
         visible={presetOpen}
         current={period}
+        businessNow={businessNow}
         onClose={() => setPresetOpen(false)}
         onApply={setPeriod}
       />
@@ -370,5 +627,13 @@ export default function FinancesTab() {
         onApply={setPeriod}
       />
     </Screen>
+  );
+}
+
+export default function FinancesTab() {
+  return (
+    <RoleCapabilityBoundary capability="view-finances" title="Финансы">
+      <FinancesContent />
+    </RoleCapabilityBoundary>
   );
 }

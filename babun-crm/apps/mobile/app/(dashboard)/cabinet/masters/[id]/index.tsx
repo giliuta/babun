@@ -25,6 +25,7 @@ import {
   type AccountStatus,
   type MasterPermissions,
 } from "@babun/shared/local/masters";
+import { getRecognizedRevenue } from "@babun/shared/local/appointments";
 import { telUrl, whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -33,6 +34,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { readableForeground } from "@/theme/readable-color";
 import {
   useDeleteMaster,
   useMaster,
@@ -71,13 +73,20 @@ export default function MasterHubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const t = useThemeColors();
   const router = useRouter();
-  const { data: master, isLoading } = useMaster(id);
-  const { data: teams = [] } = useTeams();
+  const masterQuery = useMaster(id);
+  const teamsQuery = useTeams();
+  const { data: master } = masterQuery;
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   // Полный список (включая архивные) — только для delete-свипа: web parity,
   // handleDelete чистит master.id из ВСЕХ команд, иначе мастер-призрак
   // воскресает в составе при повторной активации архивной бригады.
-  const { data: allTeams = [] } = useTeams({ includeInactive: true });
-  const { data: appointments = [] } = useAppointments();
+  const allTeamsQuery = useTeams({ includeInactive: true });
+  const appointmentsQuery = useAppointments();
+  const allTeams = allTeamsQuery.data ?? [];
+  const appointments = useMemo(
+    () => appointmentsQuery.data ?? [],
+    [appointmentsQuery.data],
+  );
   const update = useUpdateMaster();
   const del = useDeleteMaster();
   const removeFromTeams = useRemoveMasterFromTeams();
@@ -122,7 +131,7 @@ export default function MasterHubScreen() {
   }, [master]);
 
   // Мини-статы за текущий месяц по всем командам мастера (на лету, кэш не
-  // нужен): всего / закрыто / выручка Σtotal_amount по completed.
+  // нужен): всего / закрыто / выручка по completed без полных возвратов.
   const perf = useMemo(() => {
     if (!master || assignedTeams.length === 0) {
       return { total: 0, completed: 0, cancelled: 0, revenue: 0 };
@@ -140,7 +149,7 @@ export default function MasterHubScreen() {
       total += 1;
       if (a.status === "completed") {
         completed += 1;
-        revenue += a.total_amount ?? 0;
+        revenue += getRecognizedRevenue(a);
       } else if (a.status === "cancelled") {
         cancelled += 1;
       }
@@ -148,11 +157,46 @@ export default function MasterHubScreen() {
     return { total, completed, cancelled, revenue };
   }, [master, assignedTeams, appointments]);
 
-  if (isLoading) {
+  const loading =
+    masterQuery.isLoading ||
+    teamsQuery.isLoading ||
+    allTeamsQuery.isLoading ||
+    appointmentsQuery.isLoading;
+  const readError =
+    masterQuery.error ||
+    teamsQuery.error ||
+    allTeamsQuery.error ||
+    appointmentsQuery.error;
+
+  if (loading) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Мастер" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+
+  if (readError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Мастер" />
+        <EmptyState
+          state="error"
+          title="Не удалось загрузить мастера"
+          subtitle={readError instanceof Error ? readError.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([
+                masterQuery.refetch(),
+                teamsQuery.refetch(),
+                allTeamsQuery.refetch(),
+                appointmentsQuery.refetch(),
+              ]),
+          }}
+          fill
+        />
       </Screen>
     );
   }
@@ -280,7 +324,13 @@ export default function MasterHubScreen() {
                 className="h-20 w-20 items-center justify-center rounded-full"
                 style={{ backgroundColor: tint }}
               >
-                <Text style={{ fontSize: 24, fontWeight: "700", color: t.onAccent }}>
+                <Text
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: readableForeground(tint),
+                  }}
+                >
                   {getInitials(master.full_name)}
                 </Text>
               </View>
@@ -296,6 +346,7 @@ export default function MasterHubScreen() {
               ) : null}
               <Pressable
                 onPress={onContact}
+                hitSlop={4}
                 accessibilityRole="button"
                 accessibilityLabel="Связаться"
                 className="mt-1 h-9 flex-row items-center gap-1.5 rounded-full px-4 active:opacity-70"
@@ -331,7 +382,9 @@ export default function MasterHubScreen() {
                 <Pressable
                   key={team.id}
                   onPress={() => router.push(`/cabinet/teams/${team.id}`)}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                   accessibilityRole="button"
+                  accessibilityLabel={`Открыть команду ${team.name}`}
                   className="h-8 flex-row items-center gap-1.5 rounded-full px-3 active:opacity-70"
                   style={{ backgroundColor: t.surface, boxShadow: t.cardShadow }}
                 >
@@ -353,7 +406,7 @@ export default function MasterHubScreen() {
           <Card>
             <NavRow
               icon={<Info color={t.onAccent} size={ICON.sm} />}
-              tone="#3e84ff"
+              tone="#2f6fd6"
               title="Информация"
               value={infoPreview(contacts, profile.whatsapp, profile.telegram, contacts.email, status)}
               onPress={() => router.push(`/cabinet/masters/${master.id}/info`)}
@@ -361,7 +414,7 @@ export default function MasterHubScreen() {
             <Divider inset={60} />
             <NavRow
               icon={<ShieldCheck color={t.onAccent} size={ICON.sm} />}
-              tone="#f0473c"
+              tone="#c9372c"
               title="Доступы"
               value={accessPreview}
               onPress={() => router.push(`/cabinet/masters/${master.id}/access`)}
@@ -369,7 +422,7 @@ export default function MasterHubScreen() {
             <Divider inset={60} />
             <NavRow
               icon={<CalendarDays color={t.onAccent} size={ICON.sm} />}
-              tone="#5a86ff"
+              tone="#4b55c7"
               title="Визиты"
               value={
                 perf.total > 0
@@ -381,7 +434,7 @@ export default function MasterHubScreen() {
             <Divider inset={60} />
             <NavRow
               icon={<BarChart3 color={t.onAccent} size={ICON.sm} />}
-              tone="#1fb47a"
+              tone="#087a52"
               title="Статистика"
               value={
                 perf.completed > 0
@@ -424,6 +477,8 @@ export default function MasterHubScreen() {
           <View className="mx-3 mt-4">
             <Pressable
               onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
+              accessibilityRole="button"
+              accessibilityLabel="Открыть статистику за этот месяц"
               className="active:opacity-80"
             >
               <Card>

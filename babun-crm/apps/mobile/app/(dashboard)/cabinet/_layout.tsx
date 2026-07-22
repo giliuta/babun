@@ -1,5 +1,10 @@
 import { Stack } from "expo-router";
+import { CabinetRoleBoundary } from "@/features/settings/CabinetRoleBoundary";
 
 export default function CabinetLayout() {
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <CabinetRoleBoundary>
+      <Stack screenOptions={{ headerShown: false }} />
+    </CabinetRoleBoundary>
+  );
 }

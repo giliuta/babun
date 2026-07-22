@@ -49,6 +49,7 @@ export function RefListScreen<T extends { id: string }>({
   onUpdate,
   onDelete,
   itemToValues,
+  itemAccessibilityLabel,
   renderItem,
   emptyText,
   addLabel,
@@ -64,6 +65,7 @@ export function RefListScreen<T extends { id: string }>({
   onUpdate?: (id: string, values: Record<string, string>) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   itemToValues?: (item: T) => Record<string, string>;
+  itemAccessibilityLabel?: (item: T) => string;
   renderItem: (item: T) => ReactElement;
   emptyText: string;
   /** Подпись строки создания: «Добавить команду», «Добавить город»… */
@@ -155,7 +157,12 @@ export function RefListScreen<T extends { id: string }>({
           contentContainerStyle={{ flexGrow: 1 }}
           renderItem={({ item }) =>
             editable ? (
-              <Pressable onPress={() => openEdit(item)} className="active:opacity-60">
+              <Pressable
+                onPress={() => openEdit(item)}
+                accessibilityRole="button"
+                accessibilityLabel={itemAccessibilityLabel?.(item)}
+                className="active:opacity-60"
+              >
                 {renderItem(item)}
               </Pressable>
             ) : (
@@ -195,7 +202,7 @@ export function RefListScreen<T extends { id: string }>({
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={close}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="rounded-t-3xl p-5 pb-8"
@@ -234,6 +241,8 @@ export function RefListScreen<T extends { id: string }>({
           {editing && onDelete ? (
             <Pressable
               onPress={remove}
+              accessibilityRole="button"
+              accessibilityLabel="Удалить запись"
               className="mt-1 items-center py-3 active:opacity-70"
             >
               <Text style={{ fontSize: 16, fontWeight: "500", color: t.danger }}>Удалить</Text>

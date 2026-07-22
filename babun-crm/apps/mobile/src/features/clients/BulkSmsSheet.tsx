@@ -131,7 +131,12 @@ export function BulkSmsSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={close} />
+      <Pressable
+        className="flex-1"
+        style={{ backgroundColor: t.scrim }}
+        onPress={close}
+        accessible={false}
+      />
       <View
         className="absolute bottom-0 left-0 right-0 max-h-[86%] rounded-t-3xl p-5"
         style={{
@@ -182,7 +187,9 @@ export function BulkSmsSheet({
               />
               <Pressable
                 onPress={close}
-                className="mt-1 items-center py-2 active:opacity-60"
+                accessibilityRole="button"
+                accessibilityLabel="Остановить рассылку"
+                className="mt-1 min-h-11 items-center justify-center py-2 active:opacity-60"
               >
                 <Text className="text-sm" style={{ color: t.sub }}>
                   Остановить рассылку
@@ -210,6 +217,7 @@ export function BulkSmsSheet({
                           backgroundColor: active ? t.accent : t.fill,
                         }}
                         accessibilityRole="button"
+                        accessibilityLabel={`Шаблон ${tpl.name}`}
                         accessibilityState={{ selected: active }}
                       >
                         {active ? <Check color="#fff" size={13} strokeWidth={3} /> : null}
@@ -227,13 +235,14 @@ export function BulkSmsSheet({
               </View>
             ) : null}
 
-            <TextInput
-              value={body}
+          <TextInput
+            value={body}
+            accessibilityLabel="Текст SMS"
               onChangeText={setBody}
               placeholder="Текст сообщения… можно вставить [Имя]"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               multiline
               maxLength={500}
               className="min-h-[92px] rounded-2xl px-3 py-2.5 text-base"

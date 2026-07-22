@@ -131,6 +131,15 @@ function tableName(table: CachedTable): string {
   return name;
 }
 
+const AUTHORITATIVE_SNAPSHOT_PREFIX = "authoritative-snapshot";
+
+function authoritativeSnapshotKey(
+  table: CachedTable,
+  tenantId: string,
+): string {
+  return `${AUTHORITATIVE_SNAPSHOT_PREFIX}:${table}:${tenantId}`;
+}
+
 // ─── Row (de)serialisation ───────────────────────────────────────────
 
 function serializeRow(row: CachedRow): string {
@@ -324,7 +333,28 @@ export async function cacheReplaceTenant<T extends CachedRow>(
     for (const row of rows) {
       await upsertRow(txn, table, row);
     }
+    // Rows alone cannot distinguish «the server authoritatively returned an
+    // empty list» from «this device has never synced the table». Keep the
+    // marker in the SAME transaction as the replacement so cold-offline
+    // readers can safely show a known-empty calendar without treating an
+    // unknown cache miss as free availability.
+    await txn.runAsync(
+      `INSERT INTO sync_meta (key, value, updated_at)
+         VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         value = excluded.value,
+         updated_at = excluded.updated_at`,
+      [authoritativeSnapshotKey(table, tenantId), "1", Date.now()],
+    );
   });
+}
+
+/** True after at least one authoritative server snapshot, including []. */
+export async function hasAuthoritativeTenantSnapshot(
+  table: CachedTable,
+  tenantId: string,
+): Promise<boolean> {
+  return (await readMeta(authoritativeSnapshotKey(table, tenantId))) === "1";
 }
 
 /** Drop every row in `table` for a given tenant. Analogue of the web
@@ -336,10 +366,15 @@ export async function cacheClearTenant(
   tenantId: string,
 ): Promise<void> {
   const sql = await ready();
-  await sql.runAsync(
-    `DELETE FROM ${tableName(table)} WHERE tenant_id = ?`,
-    [tenantId],
-  );
+  await sql.withExclusiveTransactionAsync(async (txn) => {
+    await txn.runAsync(
+      `DELETE FROM ${tableName(table)} WHERE tenant_id = ?`,
+      [tenantId],
+    );
+    await txn.runAsync("DELETE FROM sync_meta WHERE key = ?", [
+      authoritativeSnapshotKey(table, tenantId),
+    ]);
+  });
 }
 
 /** Wipe every table. Called on auth.signOut (cross-tenant leak guard —

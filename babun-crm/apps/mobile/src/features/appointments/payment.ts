@@ -13,26 +13,30 @@
 // зеркала: payment — для web PaymentBlock, payment_status/payment_method/
 // paid_amount — колонки репозитория (W4).
 //
-// ПОЧЕМУ ТОЛЬКО НАЛ/КАРТА. Способ оплаты в модели описан ТРЕМЯ разными
-// енумами, и они не совпадают:
-//   · Payment.method (леджер)      — cash card transfer split invoice
-//   · AppointmentPayment.method    — cash card         split invoice
-//   · payment_method (колонка)     — cash card transfer         other
-// Одна оплата пишется во все три сразу, поэтому честно принять можно
-// только то, что понимают все — пересечение cash|card. Ровно это и
-// предлагает AppointmentSheet. Расширять набор можно лишь после сведения
-// енумов, иначе «Перевод» молча потеряется в payment-объекте.
+// Канонические поля понимают четыре реальных способа оплаты:
+// `payments[]`, `payment_method` и `paid_amount`. Старый JSON `payment`
+// умеет только наличные/карту/сплит и остаётся совместимым зеркалом этих
+// двух способов; перевод и «другое» не выдумываются как наличные.
 
 import { generateId } from "@babun/shared/local/masters";
-import type { Appointment, Payment } from "@babun/shared/local/appointments";
+import type {
+  Appointment,
+  Payment,
+  PaymentMethod as AppointmentLedgerMethod,
+} from "@babun/shared/local/appointments";
 import { paymentMirrorFromLedger } from "./helpers";
 
-/** Способы, которые понимают ВСЕ три енума модели (см. коммент выше). */
-export type PayMethod = "cash" | "card";
+/** Реальные способы приёма денег; split/invoice — состояния, не кассы. */
+export type PayMethod = Exclude<
+  AppointmentLedgerMethod,
+  "split" | "invoice"
+>;
 
 export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
   cash: "Наличные",
   card: "Карта",
+  transfer: "Перевод",
+  other: "Другое",
 };
 
 /** Платёжный срез записи, который нужен buildDebtPaidPatch (create-режим
@@ -50,7 +54,11 @@ export type PaidStateSnapshot = Pick<
  */
 export function buildDebtPaidPatch(
   apt: PaidStateSnapshot | null | undefined,
-  { method, amount }: { method: PayMethod; amount: number },
+  {
+    method,
+    amount,
+    remainingDebt = amount,
+  }: { method: PayMethod; amount: number; remainingDebt?: number },
 ): Partial<Appointment> {
   const paidAt = new Date().toISOString();
   // Зеркально-учтённые деньги веба (payment-объект / колонка paid_amount)
@@ -92,11 +100,11 @@ export function buildDebtPaidPatch(
   ];
   return {
     payments,
-    // Зеркало payment — свёртка ПОЛНОГО леджера, а не последний платёж:
-    // split-история (часть налом раньше, остаток картой сейчас) иначе
-    // терялась бы из web PaymentBlock — у всех входов оплаты разом.
+    // Legacy JSON mirror deliberately folds only cash/card. Canonical
+    // transfer/other rows remain in payments[] + paid_amount and must not
+    // masquerade as physical cash in the old web PaymentBlock.
     payment: paymentMirrorFromLedger(payments),
-    payment_status: "paid",
+    payment_status: amount < remainingDebt ? "partial" : "paid",
     payment_method: method,
     // Зеркало-колонка — actualPaid БЕЗ аванса, как пишет веб
     // (appointment-builders): ровно сумма леджера.

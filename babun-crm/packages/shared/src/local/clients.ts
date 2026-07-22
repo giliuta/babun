@@ -15,7 +15,7 @@ function newClientId(): string {
   }
   return generateId("cli");
 }
-import type { Appointment } from "./appointments";
+import { getDebtAmount, type Appointment } from "./appointments";
 import { MOCK_CLIENTS, type MockClient } from "./mock/seed";
 
 export interface ClientTag {
@@ -155,7 +155,12 @@ export interface Client {
   referred_by_client_id: string | null;
   first_contact_date: string | null;
   address: string;
+  /** Метка клиента — имя из библиотеки меток Кабинета (cities). Пишется
+   *  автоматически из метки дня при записи, пока не выбрана вручную. */
   city: string;
+  /** true — метку выбрали руками, автоприсвоение её не перезаписывает.
+   *  «Убрать метку» сбрасывает во false (возврат в авто-режим). */
+  city_manual?: boolean;
   property_type: PropertyType | "";
   /** DEPRECATED with v309 — equipment moved onto Location. Field kept
    *  for legacy reads; `loadClients` migrates into the primary
@@ -560,10 +565,7 @@ export function getClientDebt(
   for (const apt of appointments) {
     if (apt.client_id !== clientId) continue;
     if (apt.status !== "completed") continue;
-    const paid =
-      (apt.prepaid_amount ?? 0) +
-      (apt.payments ?? []).reduce((s, p) => s + p.amount, 0);
-    total += Math.max(0, apt.total_amount - paid);
+    total += getDebtAmount(apt);
   }
   return Math.round(total);
 }

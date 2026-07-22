@@ -7,14 +7,10 @@
 //      the SQLite first-class single-row read — in place of the web's
 //      `(await getCache()).get(table, id)` (IDBPDatabase API, no SQLite
 //      analogue).
-//   2. The web-only quota gate (`@/lib/quota/check`) is DROPPED from the
-//      online create-path: mobile is web-parity and only caches 3 tables;
-//      quota enforcement lives in the replayer's injected QuotaGate
-//      (offline replays), and the direct-write pre-gate is a web concern
-//      the mobile app doesn't reproduce. Removing it does not change the
-//      queue/cache behaviour — only whether an over-quota INSERT is
-//      rejected before hitting PostgREST (the server + STORY-052b trigger
-//      still backstop it).
+//   2. The web-only quota module (`@/lib/quota/check`) stays out of this
+//      host-neutral wrapper. Mobile performs the live preflight in its create
+//      hook and injects the same policy into the replayer for offline writes;
+//      the database remains the final race-safe authority.
 //   3. `crypto.randomUUID()` → `randomUuid()` (RN-safe; the polyfill has no
 //      crypto.randomUUID — see ./uuid).
 //
@@ -24,7 +20,8 @@
 //            refetchAndCacheOne (on error → enqueue+kick); offline → enqueueOp.
 //   update:  optimistic patch carrying updated_at sentinel; online →
 //            repo.updateClient (on error → enqueue+kick); offline → enqueueOp.
-//   delete:  cacheDelete optimistic; online → repo.deleteClient else enqueueOp.
+//   archive: cacheDelete optimistic; online → repo.softDeleteClient, otherwise
+//            enqueue an UPDATE {deleted_at}; legal/history rows stay linked.
 //
 // Slice 5 — cache-of-DOMAIN. The cache `data` column now stores the FULL
 // `Client` domain object (WITH `tag_ids` + nested phones/locations/notes/
@@ -54,6 +51,8 @@ import {
   createClient as repoCreateClient,
   updateClient as repoUpdateClient,
   deleteClient as repoDeleteClient,
+  softDeleteClient as repoSoftDeleteClient,
+  restoreClient as repoRestoreClient,
 } from "../db/repositories/clients";
 import type { Client } from "../local/clients";
 import {
@@ -62,11 +61,13 @@ import {
   cacheDelete,
   cacheReplaceTenant,
   cacheGetOne,
+  hasAuthoritativeTenantSnapshot,
+  dequeueAll,
   type CachedClient,
   type CachedClientData,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
-import { kickReplayer } from "./replayer";
+import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -74,6 +75,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
+import { ColdOfflineCacheMissError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -83,6 +85,24 @@ let toastWarning: ToastFn = () => {};
  *  user-visible messages without each callsite re-passing it. */
 export function setSyncToast(fn: ToastFn): void {
   toastWarning = fn;
+}
+
+// Only transport failures belong in the offline replay queue. A server-side
+// RLS, validation or business-rule rejection is permanent for this payload;
+// queueing it would make the optimistic UI lie and retry forever.
+function isTransientNetworkError(err: unknown): boolean {
+  const withStatus = err as { status?: unknown; statusCode?: unknown };
+  const status =
+    typeof withStatus?.status === "number"
+      ? withStatus.status
+      : typeof withStatus?.statusCode === "number"
+        ? withStatus.statusCode
+        : 0;
+  if (status >= 500) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
+    message,
+  );
 }
 
 // ─── Read ─────────────────────────────────────────────────────────
@@ -105,18 +125,24 @@ export async function listClients(
     return cached.map(rowToClient);
   }
 
-  // 2. Cold cache — pull the canonical domain list, populate the cache
-  //    with the same objects, return. Cold-OFFLINE guard (offline-plan
-  //    rule 4): with an empty cache AND no network, `repoListClients` throws
-  //    — catch it and return [] so the screen shows an empty state, not an
-  //    error screen (matches tagsCached). Once online, the SWR refresh
-  //    backfills and the revalidate bridge re-reads.
+  // 2. Empty cache — pull the canonical domain list and mark even a genuine
+  //    server [] as authoritative. Without that marker, offline [] means
+  //    «unknown / never synced», not «this tenant has no clients».
   try {
     const fresh = await repoListClients(supabase, tenantId);
     await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
     return fresh;
-  } catch {
-    return [];
+  } catch (err) {
+    // With a live connection, RLS/server failures reach the screen. Offline
+    // may reuse a known-empty authoritative snapshot; a never-synced device
+    // gets a typed blocked state instead of an invitation to create duplicates.
+    if (isOnline()) throw err;
+    const hasSnapshot = await hasAuthoritativeTenantSnapshot(
+      "clients",
+      tenantId,
+    ).catch(() => false);
+    if (hasSnapshot) return [];
+    throw new ColdOfflineCacheMissError("clients");
   }
 }
 
@@ -153,6 +179,19 @@ async function refreshCacheFromSupabase(
   tenantId: string,
   domain?: Client[],
 ): Promise<boolean> {
+  // Never let an authoritative snapshot erase an optimistic client while its
+  // offline mutation is still waiting in the replay queue. Permanently failed
+  // ops stop blocking after MAX_ATTEMPTS, allowing the next server snapshot
+  // to heal a rejected optimistic row.
+  const pending = await dequeueAll();
+  if (
+    pending.some(
+      (op) => op.table === "clients" && op.attempts < MAX_ATTEMPTS,
+    )
+  ) {
+    void kickReplayer({ supabase });
+    return false;
+  }
   const clients = domain ?? (await repoListClients(supabase, tenantId));
   const updatedById = await fetchUpdatedAtById(supabase, tenantId);
   const rows = clients.map((c) =>
@@ -172,14 +211,22 @@ async function fetchUpdatedAtById(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<Map<string, string>> {
-  const { data, error } = await supabase
-    .from("clients")
-    .select("id, updated_at")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`refreshClients meta: ${error.message}`);
   const map = new Map<string, string>();
-  for (const r of data ?? []) {
-    if (r.updated_at) map.set(r.id, r.updated_at);
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, updated_at")
+      .eq("tenant_id", tenantId)
+      .is("deleted_at", null)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(`refreshClients meta: ${error.message}`);
+    const page = data ?? [];
+    for (const r of page) {
+      if (r.updated_at) map.set(r.id, r.updated_at);
+    }
+    if (page.length < pageSize) break;
   }
   return map;
 }
@@ -231,7 +278,14 @@ export async function createClient(
     table: "clients" as const,
     op: "insert" as const,
     row_id: id,
-    payload: serverRow as unknown as Record<string, unknown>,
+    // `__tag_ids` is queue metadata, not a database column. The replayer
+    // strips it before inserting the client and then idempotently upserts the
+    // junction rows. Without this, tags selected on an offline new-client
+    // draft looked saved locally and vanished on the next server refresh.
+    payload: {
+      ...(serverRow as unknown as Record<string, unknown>),
+      __tag_ids: input.tag_ids ?? [],
+    },
     expected_updated_at: null,
   };
 
@@ -246,10 +300,13 @@ export async function createClient(
       await refetchAndCacheOne(supabase, id, tenantId);
       return created;
     } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        await cacheDelete("clients", id).catch(() => {});
+        throw err;
+      }
       // Network blip mid-flight — fall through to queue. ATOMIC (risk #6):
       // the optimistic row + the queued op land in one exclusive tx so a
       // crash between them can't strand one without the other.
-      void err;
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "clients", cachedRow);
       void kickReplayer({ supabase });
       return { ...input, id };
@@ -318,7 +375,10 @@ export async function updateClient(
       await refetchAndCacheOne(supabase, id, tenantId);
       return updated;
     } catch (err) {
-      void err;
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("clients", existing).catch(() => {});
+        throw err;
+      }
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });
       // Optimistic shape — caller sees the merged result; realtime
@@ -357,11 +417,99 @@ async function enqueueUpdate(
 
 // ─── Write — delete ───────────────────────────────────────────────
 
+/** Product-level removal: archive the client while preserving linked jobs,
+ * invoices and ledger history. The active-list cache removes the row, but the
+ * offline queue carries UPDATE deleted_at — never DELETE. */
+export async function archiveClient(
+  supabase: DbSupabase,
+  id: string,
+  tenantId: string,
+): Promise<void> {
+  const existing = await readCachedClient(id, tenantId);
+  const archivedAt = new Date().toISOString();
+  const archiveOp = {
+    table: "clients" as const,
+    op: "update" as const,
+    row_id: id,
+    payload: { deleted_at: archivedAt },
+    expected_updated_at: existing?.updated_at ?? null,
+  };
+
+  if (isOnline()) {
+    await cacheDelete("clients", id);
+    try {
+      await repoSoftDeleteClient(supabase, id, tenantId);
+      return;
+    } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("clients", existing).catch(() => {});
+        throw err;
+      }
+      await enqueueOpWithCacheDeleteAndEmit(archiveOp, "clients", id);
+      void kickReplayer({ supabase });
+      return;
+    }
+  }
+
+  await enqueueOpWithCacheDeleteAndEmit(archiveOp, "clients", id);
+}
+
+/** Restore an archived client into the active-list cache. Supplying the
+ * archived domain row makes the offline result immediately reachable while
+ * the queued UPDATE waits for connectivity. */
+export async function restoreClient(
+  supabase: DbSupabase,
+  client: Client,
+  tenantId: string,
+): Promise<void> {
+  const restoredAt = new Date().toISOString();
+  const cachedRow = makeCachedRow(
+    { ...client, deleted_at: null },
+    tenantId,
+    restoredAt,
+  );
+  const restoreOp = {
+    table: "clients" as const,
+    op: "update" as const,
+    row_id: client.id,
+    payload: { deleted_at: null },
+    expected_updated_at: null,
+  };
+
+  if (isOnline()) {
+    await cacheUpsert("clients", cachedRow);
+    try {
+      await repoRestoreClient(supabase, client.id, tenantId);
+      await refetchAndCacheOne(supabase, client.id, tenantId);
+      return;
+    } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        await cacheDelete("clients", client.id).catch(() => {});
+        throw err;
+      }
+      await enqueueOpWithCacheUpsertAndEmit(
+        restoreOp,
+        "clients",
+        cachedRow,
+      );
+      void kickReplayer({ supabase });
+      return;
+    }
+  }
+
+  await enqueueOpWithCacheUpsertAndEmit(restoreOp, "clients", cachedRow);
+}
+
+/** Low-level physical delete retained for maintenance callers only. Native
+ * product UI must use archiveClient(); the database also rejects deleting a
+ * client that owns operational or legal history. */
+
 export async function deleteClient(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
 ): Promise<void> {
+  const existing = await readCachedClient(id, tenantId);
   const deleteOp = {
     table: "clients" as const,
     op: "delete" as const,
@@ -376,7 +524,10 @@ export async function deleteClient(
       await repoDeleteClient(supabase, id, tenantId);
       return;
     } catch (err) {
-      void err;
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("clients", existing).catch(() => {});
+        throw err;
+      }
       // Fall through to queue — ATOMIC optimistic delete + enqueue (risk
       // #6). The row is already gone from the cache; re-running the delete
       // inside the tx is idempotent and keeps the pair crash-safe.
@@ -396,7 +547,11 @@ async function safeCacheReadClients(
   tenantId: string,
 ): Promise<CachedClientData[]> {
   try {
-    return await cacheRead<CachedClientData>("clients", tenantId);
+    const rows = await cacheRead<CachedClientData>("clients", tenantId);
+    // An archive op deliberately removes the row from the active cache. This
+    // filter is a second wall for legacy/conflict replay rows that may still
+    // contain deleted_at in SQLite.
+    return rows.filter((row) => row.deleted_at == null);
   } catch {
     return [];
   }
@@ -467,6 +622,7 @@ function makeServerRow(
     first_contact_date: input.first_contact_date ?? null,
     address: input.address ?? "",
     city: input.city ?? "",
+    city_manual: input.city_manual ?? false,
     property_type: input.property_type ?? "",
     language: input.language ?? null,
     birthday: input.birthday ?? "",
@@ -505,6 +661,7 @@ function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
   if (patch.first_contact_date !== undefined) out.first_contact_date = patch.first_contact_date;
   if (patch.address !== undefined) out.address = patch.address;
   if (patch.city !== undefined) out.city = patch.city;
+  if (patch.city_manual !== undefined) out.city_manual = patch.city_manual;
   if (patch.property_type !== undefined) out.property_type = patch.property_type;
   if (patch.language !== undefined) out.language = patch.language;
   if (patch.birthday !== undefined) out.birthday = patch.birthday;

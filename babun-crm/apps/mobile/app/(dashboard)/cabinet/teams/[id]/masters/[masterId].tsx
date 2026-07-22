@@ -33,6 +33,7 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { readableForeground } from "@/theme/readable-color";
 import {
   teamMembers,
   teamRoles,
@@ -59,8 +60,10 @@ export default function BrigadeMemberAccessScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const { id, masterId } = useLocalSearchParams<{ id: string; masterId: string }>();
-  const { data: team, isLoading } = useTeam(id);
-  const { data: master, isLoading: masterLoading } = useMaster(masterId);
+  const teamQuery = useTeam(id);
+  const masterQuery = useMaster(masterId);
+  const { data: team } = teamQuery;
+  const { data: master } = masterQuery;
   const save = useUpdateTeamMembers();
 
   const [roleEditorOpen, setRoleEditorOpen] = useState(false);
@@ -78,11 +81,30 @@ export default function BrigadeMemberAccessScreen() {
   );
   const counts = useMemo(() => countEnabled(permissions), [permissions]);
 
-  if (isLoading || masterLoading) {
+  if (teamQuery.isLoading || masterQuery.isLoading) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Доступ" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+  const readError = teamQuery.error || masterQuery.error;
+  if (readError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Доступ" />
+        <EmptyState
+          state="error"
+          title="Не удалось загрузить доступ"
+          subtitle={readError instanceof Error ? readError.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([teamQuery.refetch(), masterQuery.refetch()]),
+          }}
+          fill
+        />
       </Screen>
     );
   }
@@ -103,7 +125,12 @@ export default function BrigadeMemberAccessScreen() {
       mm.master_id === masterId ? { ...mm, permissions: next } : mm,
     );
     save.mutate(
-      { teamId: tm.id, roles, members: nextMembers },
+      {
+        teamId: tm.id,
+        expectedUpdatedAt: tm.updated_at,
+        roles,
+        members: nextMembers,
+      },
       { onError: (e) => Alert.alert("Ошибка", e.message) },
     );
   };
@@ -114,7 +141,12 @@ export default function BrigadeMemberAccessScreen() {
     );
     // lead_ids/helper_ids re-derived inside useUpdateTeamMembers (RISK-2).
     save.mutate(
-      { teamId: tm.id, roles, members: nextMembers },
+      {
+        teamId: tm.id,
+        expectedUpdatedAt: tm.updated_at,
+        roles,
+        members: nextMembers,
+      },
       { onError: (e) => Alert.alert("Ошибка", e.message) },
     );
   };
@@ -144,7 +176,12 @@ export default function BrigadeMemberAccessScreen() {
           onPress: () => {
             const nextMembers = members.filter((mm) => mm.master_id !== masterId);
             save.mutate(
-              { teamId: tm.id, roles, members: nextMembers },
+              {
+                teamId: tm.id,
+                expectedUpdatedAt: tm.updated_at,
+                roles,
+                members: nextMembers,
+              },
               {
                 onError: (e) => Alert.alert("Ошибка", e.message),
                 onSuccess: () =>
@@ -174,7 +211,13 @@ export default function BrigadeMemberAccessScreen() {
                 borderColor: role?.color ?? "transparent",
               }}
             >
-              <Text style={{ fontSize: 22, fontWeight: "700", color: "#fff" }}>
+              <Text
+                style={{
+                  fontSize: 22,
+                  fontWeight: "700",
+                  color: readableForeground(tm.color ?? t.accent),
+                }}
+              >
                 {getInitials(master.full_name)}
               </Text>
             </View>
@@ -186,6 +229,7 @@ export default function BrigadeMemberAccessScreen() {
             </Text>
             <Pressable
               onPress={() => setRoleEditorOpen(true)}
+              hitSlop={7}
               accessibilityRole="button"
               accessibilityLabel="Изменить роль в команде"
               className="mt-3 flex-row items-center gap-2 rounded-full px-3 py-1.5 active:opacity-70"
@@ -304,7 +348,7 @@ function PresetButton({ label, onPress }: { label: string; onPress: () => void }
       accessibilityLabel={label}
       style={{
         flex: 1,
-        height: 40,
+        minHeight: 44,
         borderRadius: 10,
         alignItems: "center",
         justifyContent: "center",
@@ -388,7 +432,7 @@ function RolePickerSheet({
       onRequestClose={onClose}
     >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Закрыть" />
+        <Pressable className="flex-1" onPress={onClose} accessible={false} />
         <View
           className="max-h-[88%] rounded-t-3xl"
           style={{ backgroundColor: t.surface }}

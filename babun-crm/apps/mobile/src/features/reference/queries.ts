@@ -3,7 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Database } from "@babun/shared/db/database.types";
+import type { Database, Json } from "@babun/shared/db/database.types";
 import {
   generateId,
   isLeadRole,
@@ -12,9 +12,13 @@ import {
   type BrigadeRole,
   type MasterRole,
 } from "@babun/shared/local/masters";
-import { upsertScheduleEntry } from "@babun/shared/db/repositories/schedule";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
+import {
+  operationalMasterJsonToMaster,
+  operationalTeamJsonToTeam,
+} from "@/features/settings/master-reference";
 
 type Tables = Database["public"]["Tables"];
 export type Team = Tables["teams"]["Row"];
@@ -51,13 +55,24 @@ export function teamCities(t: Team): string[] {
 // без опции и видят только активные.
 export function useTeams(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
     queryKey: includeInactive
-      ? ["teams", tenantId, "all"]
-      : ["teams", tenantId],
-    enabled: !!tenantId,
+      ? ["teams", tenantId, role ?? "role-pending", "all"]
+      : ["teams", tenantId, role ?? "role-pending"],
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: async () => {
+      if (role === "dispatcher" || role === "master") {
+        const { data, error } = await supabase.rpc(
+          "list_operational_teams_safe",
+        );
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []).map(operationalTeamJsonToTeam);
+        return includeInactive ? rows : rows.filter((row) => row.is_active);
+      }
+      if (role !== "owner") throw new Error("Нет доступа к календарям");
       let q = supabase
         .from("teams")
         .select("*")
@@ -76,9 +91,10 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
 // edit. Keyed by id → its own cache entry, invalidated by the ["teams"] wipe.
 export function useTeam(id: string | undefined) {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
   return useQuery({
-    queryKey: ["teams", tenantId, "one", id],
-    enabled: !!tenantId && !!id,
+    queryKey: ["teams", tenantId, roleQuery.data ?? "role-pending", "one", id],
+    enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("teams")
@@ -94,6 +110,7 @@ export function useTeam(id: string | undefined) {
 
 export function useCreateTeam() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -101,6 +118,9 @@ export function useCreateTeam() {
       region?: string;
       color?: string;
     }) => {
+      if (role !== "owner") {
+        throw new Error("Создавать календари может только владелец.");
+      }
       const { data, error } = await supabase
         .from("teams")
         .insert({
@@ -109,34 +129,22 @@ export function useCreateTeam() {
           name: input.name,
           region: input.region || null,
           color: input.color || null,
-          // web parity (teams/page.tsx openNew): creation defaults so a
-          // fresh team behaves the same on both platforms — visible window
-          // 00:00–23:00, auto-scroll to 10:00, payout 30%.
-          calendar_window_start: "00:00",
-          calendar_window_end: "23:00",
-          default_scroll_time: "10:00",
+          // Календарные колонки НЕ засеваются: null = «как везде». Раньше
+          // здесь прописывались окно 00:00–23:00, скролл 10:00 и строка
+          // расписания 10:00–20:00 — а поскольку читатели резолвят как
+          // `команда ?? общее` ((dashboard)/index.tsx), команды без override
+          // просто не существовало, и ВСЕ общие часы были мертвы у каждого
+          // тенанта. Выходных посев тоже не нёс: он писал только start/end,
+          // без overrides, так что все семь дней и там были рабочими.
           payout_percentage: 30,
         })
         .select("*")
         .single();
       if (error) throw new Error(error.message);
-      // web parity: openNew also seeds working hours 10:00–20:00. Best
-      // effort — the team is already created, and a failed seed just leaves
-      // the DEFAULT_SCHEDULE fallback (08:00–22:00) until the hub edits it.
-      try {
-        await upsertScheduleEntry(supabase, tenantId as string, data.id, {
-          start: "10:00",
-          end: "20:00",
-          breaks: [],
-        });
-      } catch {
-        // DEFAULT_SCHEDULE fallback covers a failed seed.
-      }
       return data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["teams"] });
-      qc.invalidateQueries({ queryKey: ["team-schedules"] });
     },
     meta: { errorHandled: true }, // RefListScreen call sites alert themselves
   });
@@ -147,13 +155,24 @@ export function useCreateTeam() {
 // архива» в хабе недостижим); пикеры зовут без опции (паттерн useTeams).
 export function useMasters(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
     queryKey: includeInactive
-      ? ["masters", tenantId, "all"]
-      : ["masters", tenantId],
-    enabled: !!tenantId,
+      ? ["masters", tenantId, role ?? "role-pending", "all"]
+      : ["masters", tenantId, role ?? "role-pending"],
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: async () => {
+      if (role === "dispatcher" || role === "master") {
+        const { data, error } = await supabase.rpc(
+          "list_operational_masters_safe",
+        );
+        if (error) throw new Error(error.message);
+        const rows = (data ?? []).map(operationalMasterJsonToMaster);
+        return includeInactive ? rows : rows.filter((row) => row.is_active);
+      }
+      if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
       let q = supabase
         .from("masters")
         .select("*")
@@ -169,9 +188,10 @@ export function useMasters(opts?: { includeInactive?: boolean }) {
 // Single-master read for the master hub. See useTeam for the by-id rationale.
 export function useMaster(id: string | undefined) {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
   return useQuery({
-    queryKey: ["masters", tenantId, "one", id],
-    enabled: !!tenantId && !!id,
+    queryKey: ["masters", tenantId, roleQuery.data ?? "role-pending", "one", id],
+    enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("masters")
@@ -187,6 +207,7 @@ export function useMaster(id: string | undefined) {
 
 export function useCreateMaster() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -201,6 +222,9 @@ export function useCreateMaster() {
       team_id?: string | null;
       account_status?: string;
     }) => {
+      if (role !== "owner") {
+        throw new Error("Добавлять сотрудников может только владелец.");
+      }
       const { data, error } = await supabase
         .from("masters")
         .insert({
@@ -251,11 +275,15 @@ export function useCities(opts?: { includeInactive?: boolean }) {
 
 export function useCreateCity() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
     // per-city accent colour that tints the calendar day chip (web parity).
     mutationFn: async (input: { name: string; country?: string; color?: string }) => {
+      if (role !== "owner" && role !== "dispatcher") {
+        throw new Error("Добавлять города может владелец или диспетчер.");
+      }
       const { data, error } = await supabase
         .from("cities")
         .insert({
@@ -280,9 +308,87 @@ export function useCreateCity() {
 // appointments that reference team_id / master_id, and the list filter
 // (is_active=true) hides them.
 type RefTable = "teams" | "masters" | "cities" | "services";
+type RefUpdate<Table extends RefTable> = Tables[Table]["Update"];
 
-function useRefUpdate(table: RefTable) {
+function assertCanWriteReference(
+  table: RefTable,
+  role: ReturnType<typeof useCurrentRole>["data"],
+): void {
+  if (table === "cities") {
+    if (role === "owner" || role === "dispatcher") return;
+    throw new Error("Изменять города может владелец или диспетчер.");
+  }
+  if (role !== "owner") {
+    throw new Error("Изменять этот справочник может только владелец.");
+  }
+}
+
+async function updateRefRow<Table extends RefTable>(args: {
+  table: Table;
+  tenantId: string;
+  id: string;
+  patch: RefUpdate<Table>;
+}): Promise<void> {
+  const confirm = (
+    data: { id: string } | null,
+    error: { message: string } | null,
+  ) => {
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("Запись не найдена или недоступна.");
+  };
+  // supabase-js cannot preserve a correlated generic table/update type
+  // through `from(table)`, so keep the public hook generic and narrow the
+  // four concrete builders here instead of escaping through `any`.
+  switch (args.table) {
+    case "teams": {
+      const { data, error } = await supabase
+        .from("teams")
+        .update(args.patch as Tables["teams"]["Update"])
+        .eq("tenant_id", args.tenantId)
+        .eq("id", args.id)
+        .select("id")
+        .maybeSingle();
+      confirm(data, error);
+      return;
+    }
+    case "masters": {
+      const { data, error } = await supabase
+        .from("masters")
+        .update(args.patch as Tables["masters"]["Update"])
+        .eq("tenant_id", args.tenantId)
+        .eq("id", args.id)
+        .select("id")
+        .maybeSingle();
+      confirm(data, error);
+      return;
+    }
+    case "cities": {
+      const { data, error } = await supabase
+        .from("cities")
+        .update(args.patch as Tables["cities"]["Update"])
+        .eq("tenant_id", args.tenantId)
+        .eq("id", args.id)
+        .select("id")
+        .maybeSingle();
+      confirm(data, error);
+      return;
+    }
+    case "services": {
+      const { data, error } = await supabase
+        .from("services")
+        .update(args.patch as Tables["services"]["Update"])
+        .eq("tenant_id", args.tenantId)
+        .eq("id", args.id)
+        .select("id")
+        .maybeSingle();
+      confirm(data, error);
+    }
+  }
+}
+
+function useRefUpdate<Table extends RefTable>(table: Table) {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -290,13 +396,11 @@ function useRefUpdate(table: RefTable) {
       patch,
     }: {
       id: string;
-      patch: Record<string, unknown>;
+      patch: RefUpdate<Table>;
     }) => {
-      const { error } = await (supabase.from(table) as any)
-        .update(patch)
-        .eq("tenant_id", tenantId as string)
-        .eq("id", id);
-      if (error) throw new Error(error.message);
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      assertCanWriteReference(table, role);
+      await updateRefRow({ table, tenantId, id, patch });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [table] }),
     meta: { errorHandled: true }, // RefListScreen call sites alert themselves
@@ -305,14 +409,18 @@ function useRefUpdate(table: RefTable) {
 
 function useRefDelete(table: RefTable) {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase.from(table) as any)
-        .update({ is_active: false })
-        .eq("tenant_id", tenantId as string)
-        .eq("id", id);
-      if (error) throw new Error(error.message);
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      assertCanWriteReference(table, role);
+      await updateRefRow({
+        table,
+        tenantId,
+        id,
+        patch: { is_active: false } as RefUpdate<typeof table>,
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: [table] }),
     meta: { errorHandled: true }, // RefListScreen call sites alert themselves
@@ -337,13 +445,11 @@ export const useDeleteService = () => useRefDelete("services");
 // everyone else (including role-less members) is a helper. lead_id keeps
 // the first lead for the oldest legacy readers.
 //
-// RISK-3: this overwrites the whole roles/members snapshot taken at render,
-// with no read-before-write or optimistic layer (unlike useUpdateMasterProfile).
-// Two actions fired before the invalidate+refetch settle build off the same
-// stale snapshot and the second wins (lost update). Matches web (parity, not a
-// regression) and every action is gated behind a modal, so the window is small.
-// For slice 3 (per-member permission matrix, higher write frequency) close it
-// with a read-before-write of fresh roles/members or an optimistic useTeam cache.
+// The editor still submits the complete roles/members snapshot because the
+// legacy lead/helper arrays must be derived in the same write. `updated_at`
+// is therefore an optimistic concurrency token: two devices (or two rapid
+// taps) cannot silently overwrite each other; the stale write returns zero
+// rows and the UI asks the user to refresh and retry.
 
 /** Split members into lead/helper id arrays using the role taxonomy. */
 export function deriveLeadHelperIds(
@@ -369,48 +475,19 @@ export function deriveLeadHelperIds(
   return { lead_ids, helper_ids, lead_id: lead_ids[0] ?? null };
 }
 
-// ─── Team deletion side-effects (web parity, handleDelete) ───────────
-// The web soft-delete also detaches every master and appointment that
-// points at the team (team_id → null) so nothing keeps a dangling ref to
-// a hidden brigade (masters would silently rejoin if the «активна» toggle
-// is flipped back; appointments/finances keep reading the archived team).
-// We reset at the source (WHERE team_id = <id>), which also covers archived
-// masters the active-only `useMasters` list never loads. Bulk-keyed, one
-// round-trip per table; the delete flow is already an online direct write.
-export function useDetachTeamReferences() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (teamId: string) => {
-      const { error: mErr } = await (supabase.from("masters") as any)
-        .update({ team_id: null })
-        .eq("tenant_id", tenantId as string)
-        .eq("team_id", teamId);
-      if (mErr) throw new Error(mErr.message);
-      const { error: aErr } = await (supabase.from("appointments") as any)
-        .update({ team_id: null })
-        .eq("tenant_id", tenantId as string)
-        .eq("team_id", teamId);
-      if (aErr) throw new Error(aErr.message);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["masters"] });
-      qc.invalidateQueries({ queryKey: ["appointments"] });
-    },
-    meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
 export function useUpdateTeamMembers() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       teamId,
+      expectedUpdatedAt,
       roles,
       members,
     }: {
       teamId: string;
+      expectedUpdatedAt: string;
       roles: BrigadeRole[];
       members: BrigadeMember[];
     }) => {
@@ -418,17 +495,30 @@ export function useUpdateTeamMembers() {
         roles,
         members,
       );
-      const { error } = await (supabase.from("teams") as any)
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      if (role !== "owner") {
+        throw new Error("Изменять состав команды может только владелец.");
+      }
+      const { data, error } = await supabase
+        .from("teams")
         .update({
-          roles,
-          members,
-          lead_ids,
-          helper_ids,
+          roles: roles as unknown as Json,
+          members: members as unknown as Json,
+          lead_ids: lead_ids as unknown as Json,
+          helper_ids: helper_ids as unknown as Json,
           lead_id,
         })
-        .eq("tenant_id", tenantId as string)
-        .eq("id", teamId);
+        .eq("tenant_id", tenantId)
+        .eq("id", teamId)
+        .eq("updated_at", expectedUpdatedAt)
+        .select("id")
+        .maybeSingle();
       if (error) throw new Error(error.message);
+      if (!data) {
+        throw new Error(
+          "Состав команды уже изменился. Обновите экран и повторите действие.",
+        );
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),
     meta: { errorHandled: true },
@@ -446,6 +536,7 @@ export function useUpdateTeamMembers() {
 // all tenant teams, in-loop per affected team (rare, gated behind delete).
 export function useRemoveMasterFromTeams() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -455,6 +546,10 @@ export function useRemoveMasterFromTeams() {
       masterId: string;
       teams: Team[];
     }) => {
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      if (role !== "owner") {
+        throw new Error("Изменять состав команды может только владелец.");
+      }
       for (const team of teams) {
         const members = teamMembers(team);
         const roles = teamRoles(team);
@@ -501,17 +596,26 @@ export function useRemoveMasterFromTeams() {
           roles,
           nextMembers,
         );
-        const { error } = await (supabase.from("teams") as any)
+        const { data, error } = await supabase
+          .from("teams")
           .update({
-            roles,
-            members: nextMembers,
-            lead_ids,
-            helper_ids,
+            roles: roles as unknown as Json,
+            members: nextMembers as unknown as Json,
+            lead_ids: lead_ids as unknown as Json,
+            helper_ids: helper_ids as unknown as Json,
             lead_id,
           })
-          .eq("tenant_id", tenantId as string)
-          .eq("id", team.id);
+          .eq("tenant_id", tenantId)
+          .eq("id", team.id)
+          .eq("updated_at", team.updated_at)
+          .select("id")
+          .maybeSingle();
         if (error) throw new Error(error.message);
+        if (!data) {
+          throw new Error(
+            `Команда «${team.name}» уже изменилась. Повторите удаление сотрудника.`,
+          );
+        }
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["teams"] }),

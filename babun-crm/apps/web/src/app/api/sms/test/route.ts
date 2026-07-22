@@ -18,8 +18,7 @@ import { isSameOriginRequest } from "@/lib/http/csrf";
 function resolveEdgeUrl(): string | null {
   const explicit = process.env.SEND_SMS_FUNCTION_URL;
   if (explicit) return explicit;
-  const base =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/functions/v1/send_sms`;
 }
@@ -35,6 +34,12 @@ export async function POST(req: Request) {
     error: authErr,
   } = await supabase.auth.getUser();
   if (authErr || !user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -88,16 +93,11 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-  const serviceKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
-    "";
-
   const fnResponse = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: serviceKey ? `Bearer ${serviceKey}` : "",
+      authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
       mode: "test",

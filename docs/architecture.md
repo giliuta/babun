@@ -1,163 +1,126 @@
-# Babun2 Architecture (current state)
+# Babun Architecture — current state
 
-> Snapshot of where we are now. This document reflects reality, not aspiration.
-> When architecture changes, update this file in the same commit.
+> Фактическое состояние на 2026-07-20. Обновлять вместе с архитектурными изменениями.
 
-## High-level
+## Обзор
 
-Babun2 is a **single-tenant prototype** (AirFix) built as a **Turborepo monorepo** with a Next.js 16 web app. All state lives in `localStorage` via React Context providers. There is no backend yet — the plan is to migrate to Supabase in `STORY-001`.
+Babun — multi-tenant CRM для выездного сервиса. Монорепозиторий содержит два
+рабочих клиента поверх одного Supabase backend:
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Browser (PWA)                      │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  Next.js 16 App Router                        │  │
-│  │  ┌─────────────────────────────────────────┐  │  │
-│  │  │  /dashboard (calendar)                  │  │  │
-│  │  │  /dashboard/clients                     │  │  │
-│  │  │  /dashboard/services                    │  │  │
-│  │  │  /dashboard/schedule                    │  │  │
-│  │  │  /dashboard/analytics                   │  │  │
-│  │  │  /dashboard/sms-templates               │  │  │
-│  │  │  /dashboard/income /expenses /reports   │  │  │
-│  │  │  /dashboard/masters /teams              │  │  │
-│  │  └─────────────────────────────────────────┘  │  │
-│  │                                               │  │
-│  │  Context providers (DashboardLayout):         │  │
-│  │  Sidebar, Schedules, Masters, Teams,          │  │
-│  │  Appointments, FormSettings, Services,        │  │
-│  │  Clients, SmsTemplates, ExpenseCategories     │  │
-│  │                                               │  │
-│  │  State → localStorage keys:                   │  │
-│  │  babun-appointments, babun-clients,           │  │
-│  │  babun-services, babun-team-schedules, ...    │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                      │
-│  Service Worker (sw.js — prod only, dev auto-nuke)  │
-└─────────────────────────────────────────────────────┘
-                          │
-                          │ (no backend yet)
-                          ▼
-                     ┌────────┐
-                     │ Vercel │   ← static deploy of Next app
-                     └────────┘
+- `apps/web` — Next.js 16 App Router, PWA и server/API routes;
+- `apps/mobile` — Expo SDK 54 / React Native 0.81, iOS-first интерфейс;
+- `packages/shared` — типы БД, domain helpers, offline cache и sync queue.
+
+```text
+Web (Next.js) ───────┐
+                    ├── Supabase Auth + PostgreSQL/RLS + Realtime + Storage
+Mobile (Expo/RN) ───┘
+       │
+       └── SQLite/MMKV cache + offline mutation queue
 ```
 
-## Package layout
+Supabase — источник истины. Локальное хранилище больше не является primary
+database: web использует его только для отдельных UI-настроек, mobile — для
+кэша, очереди синхронизации и device preferences.
 
-```
+## Структура
+
+```text
 babun-crm/
 ├── apps/
-│   ├── web/                                  # Next.js 16
-│   │   ├── src/
-│   │   │   ├── app/
-│   │   │   │   ├── layout.tsx                # Root layout — viewport, SW register
-│   │   │   │   ├── page.tsx                  # Home redirect
-│   │   │   │   ├── login/
-│   │   │   │   ├── manifest.ts
-│   │   │   │   └── dashboard/
-│   │   │   │       ├── layout.tsx            # 10 context providers
-│   │   │   │       ├── page.tsx              # Calendar + BUILD_TAG
-│   │   │   │       ├── analytics/page.tsx
-│   │   │   │       ├── appointment/[id]/
-│   │   │   │       ├── appointment/new/
-│   │   │   │       ├── clients/page.tsx
-│   │   │   │       ├── expenses/page.tsx
-│   │   │   │       ├── income/page.tsx
-│   │   │   │       ├── master-profile/
-│   │   │   │       ├── masters/page.tsx
-│   │   │   │       ├── reports/page.tsx
-│   │   │   │       ├── schedule/page.tsx
-│   │   │   │       ├── services/page.tsx
-│   │   │   │       ├── settings/
-│   │   │   │       ├── sms-templates/page.tsx
-│   │   │   │       ├── teams/page.tsx
-│   │   │   │       └── waitlist/page.tsx
-│   │   │   ├── components/
-│   │   │   │   ├── appointments/             # AppointmentForm, dialog
-│   │   │   │   ├── calendar/                 # WeekView, DayColumn, Swipeable, TimeColumn, AppointmentBlock, MiniCalendar
-│   │   │   │   ├── clients/                  # ClientCard, dialog
-│   │   │   │   ├── layout/                   # Header, PageHeader, Sidebar
-│   │   │   │   ├── master/
-│   │   │   │   ├── pwa/                      # InstallPrompt, ServiceWorkerRegister
-│   │   │   │   ├── finance/ reports/ settings/ waitlist/
-│   │   │   ├── lib/
-│   │   │   │   ├── appointments.ts           # Appointment type + color kinds + photos + payments
-│   │   │   │   ├── clients.ts                # Client type + acquisition source + segmentation
-│   │   │   │   ├── services.ts               # Service type + categories + material costs
-│   │   │   │   ├── masters.ts                # Master + Team + permission groups
-│   │   │   │   ├── schedule.ts               # Per-weekday TeamSchedule + breaks
-│   │   │   │   ├── sms-templates.ts          # Templates with [Name] [Date] tokens
-│   │   │   │   ├── expense-categories.ts
-│   │   │   │   ├── mock-data.ts              # Seed data
-│   │   │   │   ├── date-utils.ts
-│   │   │   │   └── supabase.ts               # Client stub (not wired yet)
-│   │   └── public/
-│   │       ├── sw.js                         # CACHE_VERSION bump on UI changes
-│   │       ├── manifest.webmanifest
-│   │       └── icon.svg
-│   └── mobile/                               # Planned Expo app (not built yet)
-└── packages/
-    └── shared/                               # Shared types (not populated yet)
+│   ├── web/
+│   │   ├── src/app/                 # pages, layouts, API routes
+│   │   ├── src/components/          # calendar, clients, finance, settings
+│   │   ├── src/lib/supabase/        # browser/server/admin clients
+│   │   └── supabase/migrations/     # schema, RLS, triggers, RPC
+│   └── mobile/
+│       ├── app/                     # Expo Router routes
+│       ├── src/features/            # calendar, appointments, clients, cabinet
+│       ├── src/components/ui/       # canonical mobile primitives
+│       ├── src/theme/               # light-only semantic tokens
+│       └── docs/DESIGN-SYSTEM.md     # visual canon
+├── packages/shared/src/
+│   ├── db/                          # generated Database types + repositories
+│   ├── local/                       # SQLite cache, queue, settings
+│   └── sync/                        # realtime and replay machinery
+├── bun.lock                         # единственный lockfile
+└── .node-version                    # Node 24 for CI/tooling compatibility
 ```
 
-## Data model (localStorage today)
+## Данные и изоляция tenant
 
-Each entity is a TypeScript interface persisted to localStorage under a namespaced key. Every lib/ file exposes `load{X}()` / `save{X}()` helpers.
+- Каждая бизнес-сущность принадлежит `tenant_id`.
+- Доступ ограничивают PostgreSQL RLS policies и membership пользователя.
+- `tenant_members` связывает auth user, tenant и роль.
+- Web server routes используют cookie session; privileged administrative
+  операции используют service role только на сервере.
+- Native self-service deletion передаёт Supabase access token в
+  `Authorization: Bearer …` на `/api/account/delete`; web-вызов сохраняет
+  same-origin CSRF check.
+- Миграции находятся в `apps/web/supabase/migrations`; production schema
+  всегда проверяется перед записью или применением миграции.
 
-| Entity | File | Key | Notes |
-|---|---|---|---|
-| Appointment | `lib/appointments.ts` | `babun-appointments` | has `photos`, `kind`, `is_online_booking`, `payments[]`, `status` |
-| Client | `lib/clients.ts` | `babun-clients` | has `acquisition_source`, `referred_by_client_id`, `tag_ids[]`, `discount`, `balance` |
-| Service | `lib/services.ts` | `babun-services` | has `category_id`, `material_costs[]`, `color`, `available_weekdays[]` |
-| Category | `lib/services.ts` | `babun-service-categories` | service grouping |
-| Client tags | `lib/clients.ts` | `babun-client-tags` | VIP / Regular / New / Problem |
-| Master | `lib/masters.ts` | `babun-masters` | grouped permissions (data/edit/sections) |
-| Team | `lib/masters.ts` | `babun-teams` | brigade with region + color |
-| TeamSchedule | `lib/schedule.ts` | `babun-team-schedules` | per-team base + per-weekday overrides with breaks |
-| SmsTemplate | `lib/sms-templates.ts` | `babun-sms-templates` | kind + body with tokens |
-| ExpenseCategory | `lib/expense-categories.ts` | `babun-expense-categories` | icon + color + name |
+## Mobile runtime
 
-## Calendar architecture (deep-dive)
+Expo Router делит приложение на auth и dashboard route groups. Dashboard
+содержит календарь, клиентов, создание записи `/book` и кабинет. Данные
+загружаются из Supabase через TanStack Query; shared cache позволяет читать
+последний snapshot offline, а mutation queue повторяет изменения после
+восстановления сети. Realtime invalidation синхронизирует tenant tables.
 
-The calendar has been the most complex surface. Key decisions:
+Мобильное приложение намеренно работает только в светлой теме
+(`userInterfaceStyle: light`) и игнорирует системное переключение темы.
+Светлая палитра определена semantic tokens в `src/theme/colors.ts`.
+UI должен соответствовать `apps/mobile/docs/DESIGN-SYSTEM.md`, HIG и правилам
+44 pt minimum target / VoiceOver labels.
 
-1. **Single shared vertical scroller** in `dashboard/page.tsx` wraps `TimeColumn` (outside swipe) + `SwipeableCalendar` (inside swipe). This is why hour labels stay aligned with day cells when zooming.
+React намеренно разделён: Expo SDK 54 работает на React 19.1, web — на React
+19.2. Metro resolver закрепляет mobile imports за локальной React 19.1. Поэтому
+Expo Doctor сообщает один известный duplicate-dependency warning; объединять
+версии до поддержки Expo нельзя.
 
-2. **SwipeableCalendar** renders 3 pages (`-1`, `0`, `+1`) in a track translated by `-width`. On swipe commit, `flushSync` advances parent state + recenters track atomically → no flicker.
+## Web runtime
 
-3. **Zoom** is continuous 30–240px/hour via `hourHeight` state + `hourHeightRef`. Three input paths:
-   - Mouse wheel with `ctrl`/`meta` (desktop)
-   - Touch pinch (2-finger distance delta)
-   - iOS `gesturestart/gesturechange/gestureend` (non-standard but only reliable pinch on Safari)
-   - Listeners are on the scroller div, not document — because iOS gesture events don't bubble to document reliably.
+Next.js App Router разделяет server и client components. Browser Supabase
+client обслуживает интерактивные запросы/realtime, server client читает cookie
+session, API routes выполняют доверенные операции. PWA service worker работает
+только в production; в development регистрации и кэши очищаются защитным
+механизмом `ServiceWorkerRegister`.
 
-4. **Drag-to-reschedule** uses `@dnd-kit/core`:
-   - `MouseSensor` with 5px distance activation (desktop)
-   - `TouchSensor` with 200ms delay + 8px tolerance (mobile, avoids conflict with swipe)
-   - `DragEndEvent.delta.y` → snap to 15-minute steps
-   - HTML5 DnD was replaced because it doesn't work on iOS touch.
+## Toolchain и quality gates
 
-5. **Colors** are computed in `getAppointmentColorKind` with priority: cancelled → event/personal → debt → completed → in_progress → past → online → incomplete → scheduled. Each maps to Tailwind classes in `COLOR_KIND_TAILWIND`.
+Канонический package manager — Bun 1.3.14, runtime CI — Node 24. Используется
+только `bun.lock`; npm lockfile удалён.
 
-6. **Day totals footer** is `position: sticky; bottom: 0` inside each DayColumn, shows income/material cost/profit for that date.
+```bash
+cd babun-crm
+/Users/artem/.bun/bin/bun install --frozen-lockfile
 
-## PWA
+cd apps/mobile
+bun run typecheck
+bun run lint
+bun test src/features/appointments/booking-prefill.test.ts
+bunx expo-doctor
 
-- `sw.js` in `public/` with `CACHE_VERSION = "babun-v{N}"` — bump on every UI release
-- `ServiceWorkerRegister.tsx` auto-detects dev mode (localhost/192.168/10.x hostname) and **unregisters any existing SW + nukes caches + reloads once**
-- In prod: network-first for HTML, cache-first for static, periodic update checks every 60s + on visibility change
-- `BUILD_TAG` constant in `dashboard/page.tsx` shows a small black pill in the bottom-left corner so you can visually confirm which version is live
+cd ../web
+bunx tsc --noEmit
+bun test
+bun run build
 
-## What's NOT yet in the code
+cd ../../packages/shared
+bun test
+```
 
-- Supabase (planned STORY-001)
-- Authentication (login page exists but doesn't auth)
-- Multi-tenancy (single-tenant today, `tenant_id` column planned for every table)
-- Stripe / payments (planned later)
-- Tests (no test runner configured)
-- Public online-booking page
-- WhatsApp / Telegram / Instagram inbox
-- Mobile app (Expo stub only)
-- Route optimization + GPS
-- CI (no GitHub Actions yet)
+CI повторяет эти проверки на Node 24/Bun. Web ESLint имеет исторический debt и
+пока является информационным gate; новые изменения не должны добавлять ошибок.
+
+## Известные ограничения
+
+- Production deployment и migrations выполняются только через обычный
+  review/deploy flow; локальная готовность не означает, что код уже на prod.
+- Expo Doctor: 17/18 из-за намеренного React 19.1/19.2 split.
+- Supply-chain audit может содержать транзитивные advisories, для которых ещё
+  нет совместимого upstream patch; адресные overrides допустимы только после
+  полного typecheck/tests/build.
+- Старые крупные web/mobile компоненты постепенно декомпозируются; новое UI не
+  должно увеличивать этот долг.

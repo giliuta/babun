@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type { FinanceTemplate } from "../../local/finance/template";
 import type { PaymentMethod } from "../../local/finance/transaction";
 
@@ -55,11 +56,21 @@ export interface TemplateDraft {
   position?: number;
 }
 
+function assertTemplateAmount(amount: number | undefined): void {
+  if (amount === undefined) return;
+  if (exactMoneyAmountToCents(amount) == null) {
+    throw new Error(
+      "Введите сумму больше нуля и не больше двух знаков после запятой",
+    );
+  }
+}
+
 export async function insertFinanceTemplate(
   supabase: DbSupabase,
   tenantId: string,
   draft: TemplateDraft,
 ): Promise<FinanceTemplate> {
+  assertTemplateAmount(draft.amount);
   const { data, error } = await supabase
     .from("finance_templates")
     .insert({
@@ -77,7 +88,9 @@ export async function insertFinanceTemplate(
     })
     .select("*")
     .single();
-  if (error || !data) throw new Error(`insertFinanceTemplate: ${error?.message}`);
+  if (error || !data) {
+    throw new Error(error?.message ?? "Не удалось создать шаблон операции");
+  }
   return rowToTemplate(data as Row);
 }
 
@@ -86,6 +99,7 @@ export async function updateFinanceTemplate(
   id: string,
   patch: Partial<TemplateDraft>,
 ): Promise<void> {
+  assertTemplateAmount(patch.amount);
   const update: Partial<Database["public"]["Tables"]["finance_templates"]["Update"]> = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.kind !== undefined) update.kind = patch.kind;
@@ -96,14 +110,28 @@ export async function updateFinanceTemplate(
   if (patch.master_id !== undefined) update.master_id = patch.master_id;
   if (patch.payment_method !== undefined) update.payment_method = patch.payment_method;
   if (patch.position !== undefined) update.position = patch.position;
-  const { error } = await supabase.from("finance_templates").update(update).eq("id", id);
-  if (error) throw new Error(`updateFinanceTemplate: ${error.message}`);
+  const { data, error } = await supabase
+    .from("finance_templates")
+    .update(update)
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Шаблон операции не найден или недоступен");
+  }
 }
 
 export async function deleteFinanceTemplate(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { error } = await supabase.from("finance_templates").delete().eq("id", id);
-  if (error) throw new Error(`deleteFinanceTemplate: ${error.message}`);
+  const { data, error } = await supabase
+    .from("finance_templates")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Шаблон операции не найден или недоступен");
+  }
 }

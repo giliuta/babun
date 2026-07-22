@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { ChevronDown, ChevronRight, Wallet } from "lucide-react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
@@ -18,7 +18,7 @@ export interface OverviewTotals {
 }
 
 // LOCKED v5 overview #6 «grouped-iOS premium» (finances-design.html +
-// web FinanceOverview.tsx): team chips (strict per-team, no «Все») →
+// web FinanceOverview.tsx): company/team scope chips →
 // period row split into NAME and DATES tap targets → «Счета» mini-card →
 // joined Доход/Расход card on subtle tints → «Долги | Прибыль» row.
 // Every card toggles the panel below; прибыль is always brandAccent.
@@ -36,7 +36,7 @@ export function FinanceOverview({
 }: {
   teams: Team[];
   scopeTeamId: string | null;
-  onScopeChange: (id: string) => void;
+  onScopeChange: (id: string | null) => void;
   period: Period;
   onOpenPresets: () => void;
   onOpenCustom: () => void;
@@ -49,7 +49,9 @@ export function FinanceOverview({
 
   return (
     <View>
-      {/* team chips — strict per-team scope (LOCKED: no «Все» chip) */}
+      {/* The owner needs a real company-wide P&L as well as team drill-down.
+          `null` is the aggregate scope; individual chips keep the existing
+          operational view. */}
       {teams.length > 0 ? (
         <ScrollView
           horizontal
@@ -63,6 +65,15 @@ export function FinanceOverview({
             alignItems: "center",
           }}
         >
+          <Chip
+            label="Компания"
+            variant="outline"
+            color={t.accent}
+            radio
+            selected={scopeTeamId === null}
+            onPress={() => onScopeChange(null)}
+            accessibilityLabel="Все команды компании"
+          />
           {teams.map((team) => (
             <Chip
               key={team.id}
@@ -267,7 +278,7 @@ export function FinanceOverview({
               className="ml-auto text-[15px] font-bold tabular-nums"
               style={{ color: t.brandAccent }}
             >
-              {totals.profit >= 0 ? "+" : "−"}
+              {totals.profit >= 0 ? "" : "−"}
               {formatEUR(Math.abs(totals.profit))}
             </Text>
           </Pressable>

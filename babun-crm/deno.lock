@@ -1,0 +1,126 @@
+{
+  "version": "5",
+  "redirects": {
+    "https://esm.sh/@types/web-push@~3.6.4/index.d.ts": "https://esm.sh/@types/web-push@3.6.4/index.d.ts"
+  },
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.110.0": "b99c0ce7729f9de7797f836b93ab9ec94f1cfe079b4f937fa4144fe13525e979",
+    "https://esm.sh/@supabase/supabase-js@2.39.7": "5361671c958daa350e504d9975da64b2d6dc9e81390b985ccdafb2e3572e24e7",
+    "https://esm.sh/web-push@3.6.7?bundle": "8d155b07e025fb85049f5e65985c075ddd733349ac25802b7868dbd066c6a54b"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:turbo@2",
+        "npm:typescript@^5.5.0"
+      ],
+      "overrides": {
+        "lightningcss": "1.30.1"
+      }
+    },
+    "members": {
+      "apps/mobile": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@babel/core@^7.25.0",
+            "npm:@babun/shared@*",
+            "npm:@react-native-community/datetimepicker@8.4.4",
+            "npm:@react-native-community/netinfo@11.4.1",
+            "npm:@supabase/supabase-js@^2.104.0",
+            "npm:@tailwindcss/postcss@^4.3.1",
+            "npm:@tanstack/react-form@^1.33.0",
+            "npm:@tanstack/react-query@^5.62.0",
+            "npm:@types/react@19.1",
+            "npm:eslint-config-expo@10.0",
+            "npm:expo-constants@18.0",
+            "npm:expo-contacts@~15.0.11",
+            "npm:expo-dev-client@~6.0.21",
+            "npm:expo-document-picker@~14.0.8",
+            "npm:expo-file-system@~19.0.23",
+            "npm:expo-haptics@~15.0.8",
+            "npm:expo-image-picker@~17.0.11",
+            "npm:expo-linking@8.0",
+            "npm:expo-notifications@~0.32.17",
+            "npm:expo-print@~15.0.8",
+            "npm:expo-router@6.0",
+            "npm:expo-secure-store@15.0",
+            "npm:expo-sharing@~14.0.8",
+            "npm:expo-splash-screen@31.0",
+            "npm:expo-sqlite@16.0",
+            "npm:expo-status-bar@~3.0.9",
+            "npm:expo@~54.0.35",
+            "npm:libphonenumber-js@^1.13.2",
+            "npm:lucide-react-native@0.468",
+            "npm:mitt@^3.0.1",
+            "npm:nativewind@5.0.0-preview.4",
+            "npm:postcss@^8.4.49",
+            "npm:react-dom@19.1.0",
+            "npm:react-native-css@^3.0.7",
+            "npm:react-native-gesture-handler@2.28",
+            "npm:react-native-get-random-values@1.11",
+            "npm:react-native-mmkv@^3.3.0",
+            "npm:react-native-reanimated@4.1",
+            "npm:react-native-safe-area-context@5.6",
+            "npm:react-native-screens@4.16",
+            "npm:react-native-svg@15.12",
+            "npm:react-native-url-polyfill@2",
+            "npm:react-native-web@0.21",
+            "npm:react-native-worklets@0.5.1",
+            "npm:react-native@0.81.5",
+            "npm:react@19.1.0",
+            "npm:tailwindcss@^4.3.0",
+            "npm:typescript@~5.9.2"
+          ]
+        }
+      },
+      "apps/web": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@dnd-kit/core@^6.3.1",
+            "npm:@dnd-kit/sortable@10",
+            "npm:@dnd-kit/utilities@^3.2.2",
+            "npm:@next/bundle-analyzer@^16.2.4",
+            "npm:@playwright/test@^1.49.0",
+            "npm:@sentry/nextjs@^10.53.1",
+            "npm:@supabase/ssr@~0.10.2",
+            "npm:@supabase/supabase-js@^2.104.0",
+            "npm:@tailwindcss/postcss@4",
+            "npm:@tanstack/react-virtual@^3.13.24",
+            "npm:@types/node@20",
+            "npm:@types/papaparse@^5.5.2",
+            "npm:@types/react-dom@19",
+            "npm:@types/react@19",
+            "npm:@vercel/analytics@^2.0.1",
+            "npm:@vercel/speed-insights@2",
+            "npm:@vitest/ui@2",
+            "npm:date-fns@^4.1.0",
+            "npm:eslint-config-next@16.2.3",
+            "npm:eslint@9",
+            "npm:idb@^8.0.3",
+            "npm:jsdom@25",
+            "npm:jspdf-autotable@^5.0.7",
+            "npm:jspdf@^4.2.1",
+            "npm:libphonenumber-js@^1.13.2",
+            "npm:lucide-react@^1.8.0",
+            "npm:next-intl@^4.12.0",
+            "npm:next@16.2.3",
+            "npm:papaparse@^5.5.3",
+            "npm:react-dom@19.2.4",
+            "npm:react@19.2.4",
+            "npm:stripe@18",
+            "npm:tailwindcss@4",
+            "npm:typescript@5",
+            "npm:vitest@2"
+          ]
+        }
+      },
+      "packages/shared": {
+        "packageJson": {
+          "dependencies": [
+            "npm:@supabase/supabase-js@^2.45.0"
+          ]
+        }
+      }
+    }
+  }
+}

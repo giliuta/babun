@@ -20,7 +20,9 @@ export {
 
 export {
   kickReplayer,
+  setReplayerDefaults,
   type QuotaGate,
+  type ReplayerDefaults,
 } from "./replayer";
 
 // `setSyncToast` is exported identically by all three wrappers (same
@@ -30,6 +32,13 @@ export {
 export { setSyncToast } from "./clientsCached";
 
 export { randomUuid } from "./uuid";
+
+export {
+  COLD_OFFLINE_CACHE_MISS,
+  ColdOfflineCacheMissError,
+  isColdOfflineCacheMissError,
+  type ColdOfflineResource,
+} from "./cache-errors";
 
 export {
   emitQueueChange,

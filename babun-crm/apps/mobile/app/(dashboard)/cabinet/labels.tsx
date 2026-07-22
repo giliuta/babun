@@ -56,9 +56,18 @@ type Editing =
 export default function LabelsScreen() {
   const t = useThemeColors();
   const toast = useToast();
-  const { data: cities = [], isLoading, isError, error, refetch } = useCities();
-  const { data: teams = [] } = useTeams();
-  const { data: dayCities = {} } = useDayCities();
+  const citiesQuery = useCities();
+  const teamsQuery = useTeams();
+  const dayCitiesQuery = useDayCities();
+  const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const dayCities = useMemo(
+    () => dayCitiesQuery.data ?? {},
+    [dayCitiesQuery.data],
+  );
+  const isLoading =
+    citiesQuery.isLoading || teamsQuery.isLoading || dayCitiesQuery.isLoading;
+  const error = citiesQuery.error || teamsQuery.error || dayCitiesQuery.error;
   const createCity = useCreateCity();
   const updateCity = useUpdateCity();
   const deleteCity = useDeleteCity();
@@ -192,12 +201,21 @@ export default function LabelsScreen() {
 
       {isLoading ? (
         <EmptyState state="loading" fill />
-      ) : isError ? (
+      ) : error ? (
         <EmptyState
           fill
           state="error"
           subtitle={error instanceof Error ? error.message : undefined}
-          action={{ label: "Повторить", onPress: () => void refetch() }}
+          action={{
+            label: "Повторить",
+            onPress: () => {
+              void Promise.all([
+                citiesQuery.refetch(),
+                teamsQuery.refetch(),
+                dayCitiesQuery.refetch(),
+              ]);
+            },
+          }}
         />
       ) : cities.length === 0 ? (
         <EmptyState
@@ -313,7 +331,7 @@ function LabelSheet({
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="rounded-t-3xl p-5 pb-8"

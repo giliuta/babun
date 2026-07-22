@@ -16,6 +16,8 @@ import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useServices } from "@/features/services/queries";
+import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { listMasterAppointmentsSafePaged } from "./master-appointments";
 
 // PostgREST silently caps every response at 1000 rows (Supabase default
 // max-rows), so an unordered, unlimited listAppointments truncates a busy
@@ -28,7 +30,8 @@ import { useServices } from "@/features/services/queries";
 // `revalidated`, which the realtime bridge (SyncBridgeMount) turns into a
 // react-query invalidate so pull-to-refresh and focus refetch settle on fresh
 // data. Warm cache serves the last snapshot offline; a cold offline read
-// returns [] (empty grid, not an error). Writes already go through the wrapper.
+// raises a typed blocking error so an unknown calendar cannot look free.
+// Writes already go through the wrapper.
 //
 // PAGING is preserved by threading the self-paging shim BELOW into the wrapper
 // as its supabase client. `listAppointments` uses that client both for the
@@ -39,7 +42,6 @@ import { useServices } from "@/features/services/queries";
 // query-shape drift fails loudly instead of mis-paging.
 const APPT_PAGE_SIZE = 1000;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyResult = { data: any[] | null; error: unknown };
 
 // A client that resolves `from(t).select(cols).eq(col,val)` to ALL pages.
@@ -54,8 +56,7 @@ function pagingClient(): typeof supabase {
   ): Promise<AnyResult> => {
     const all: unknown[] = [];
     for (let offset = 0; ; offset += APPT_PAGE_SIZE) {
-      const { data, error } = await // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ((supabase.from as any)(table)
+      const { data, error } = await ((supabase.from as any)(table)
         .select(columns)
         .eq(column, value)
         // date alone is not unique — without the id tiebreaker PostgREST
@@ -119,14 +120,31 @@ export async function listAppointmentsPaged(
   return listAppointmentsCached(pagingClient(), tenantId);
 }
 
+export function appointmentsQueryKey(
+  tenantId: string | null,
+  role: UserRole | null | undefined,
+) {
+  return ["appointments", tenantId, role ?? "role-pending"] as const;
+}
+
 // All tenant appointments (RLS-scoped) — shared cache key with the per-client
 // hook (which adds a `select` filter on top of the same data).
 export function useAppointments() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["appointments", tenantId],
-    enabled: !!tenantId,
-    queryFn: () => listAppointmentsPaged(tenantId as string),
+    queryKey: appointmentsQueryKey(tenantId, role),
+    // Fail closed: no broad cached list is mounted before the membership role
+    // is confirmed. Masters always bypass the SQLite/SWR wrapper.
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    queryFn: () => {
+      if (role === "master") return listMasterAppointmentsSafePaged();
+      if (role === "owner" || role === "dispatcher") {
+        return listAppointmentsPaged(tenantId as string);
+      }
+      throw new Error("Нет доступа к календарю");
+    },
   });
 }
 
@@ -134,9 +152,11 @@ export function useAppointments() {
 // DayExtrasMap shape). Feeds computeDayFinance in the day-finance footer.
 export function useDayExtras() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["day-extras", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["day-extras", tenantId, role ?? "role-pending"],
+    enabled: !!tenantId && roleQuery.isSuccess && role === "owner",
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });
 }
@@ -148,6 +168,7 @@ export function useDayExtras() {
 // ТОЛЬКО свой ключ (не всю карту — образец: useUpdateAppointment).
 export function useSetDayExtras() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -158,9 +179,14 @@ export function useSetDayExtras() {
       teamId: string;
       dateKey: string;
       extras: DayExtra[];
-    }) => setDayExtras(supabase, tenantId as string, teamId, dateKey, extras),
+    }) => {
+      if (role !== "owner") {
+        throw new Error("Ручные доходы и расходы доступны только владельцу.");
+      }
+      return setDayExtras(supabase, tenantId as string, teamId, dateKey, extras);
+    },
     onMutate: async ({ teamId, dateKey, extras }) => {
-      const key = ["day-extras", tenantId];
+      const key = ["day-extras", tenantId, role ?? "role-pending"];
       await qc.cancelQueries({ queryKey: key });
       const previous = qc.getQueryData<DayExtrasMap>(key);
       qc.setQueryData<DayExtrasMap>(key, (cur) =>
@@ -170,8 +196,9 @@ export function useSetDayExtras() {
     },
     onError: (_err, { teamId, dateKey }, ctx) => {
       if (!ctx) return;
-      qc.setQueryData<DayExtrasMap>(["day-extras", tenantId], (cur) =>
-        setDayExtrasFor(cur ?? {}, teamId, dateKey, ctx.prevExtras),
+      qc.setQueryData<DayExtrasMap>(
+        ["day-extras", tenantId, role ?? "role-pending"],
+        (cur) => setDayExtrasFor(cur ?? {}, teamId, dateKey, ctx.prevExtras),
       );
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["day-extras"] }),

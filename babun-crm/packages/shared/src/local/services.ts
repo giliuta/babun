@@ -141,25 +141,77 @@ export type ServicePricing = Pick<
 >;
 
 export function pricePerUnit(service: ServicePricing, qty: number): number {
-  const tiers = service.price_tiers ?? [];
+  const basePrice =
+    Number.isFinite(service.price) && service.price >= 0 ? service.price : 0;
+  const quantity =
+    Number.isFinite(qty) && qty >= 1 ? Math.max(1, Math.floor(qty)) : 1;
+  const tiers = Array.isArray(service.price_tiers)
+    ? service.price_tiers.filter(
+        (tier): tier is PriceTier =>
+          tier !== null &&
+          typeof tier === "object" &&
+          Number.isSafeInteger(tier.min_qty) &&
+          tier.min_qty >= 2 &&
+          Number.isFinite(tier.price_per_unit) &&
+          tier.price_per_unit >= 0,
+      )
+    : [];
   if (tiers.length > 0) {
     // Sort defensively; the UI writes them sorted but we shouldn't
     // trust storage on that.
     const sorted = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
-    let unit = service.price;
+    let unit = basePrice;
     for (const t of sorted) {
-      if (qty >= t.min_qty) unit = t.price_per_unit;
+      if (quantity >= t.min_qty) unit = t.price_per_unit;
     }
     return unit;
   }
   if (
-    service.bulk_threshold > 0 &&
+    Number.isSafeInteger(service.bulk_threshold) &&
+    service.bulk_threshold >= 2 &&
+    Number.isFinite(service.bulk_price) &&
     service.bulk_price > 0 &&
-    qty >= service.bulk_threshold
+    quantity >= service.bulk_threshold
   ) {
     return service.bulk_price;
   }
-  return service.price;
+  return basePrice;
+}
+
+export type ServiceDuration = Pick<
+  Service,
+  "duration_minutes" | "duration_tiers"
+>;
+
+/** Total visit duration for a selected quantity. A duration tier stores the
+ * total minutes for the whole line; without a matching tier, base minutes are
+ * multiplied by quantity. Runtime checks keep legacy or malformed data safe. */
+export function durationForQuantity(
+  service: ServiceDuration,
+  qty: number,
+): number {
+  const quantity =
+    Number.isFinite(qty) && qty >= 1 ? Math.max(1, Math.floor(qty)) : 1;
+  const baseDuration =
+    Number.isFinite(service.duration_minutes) && service.duration_minutes >= 0
+      ? Math.floor(service.duration_minutes)
+      : 0;
+  const tiers = Array.isArray(service.duration_tiers)
+    ? service.duration_tiers.filter(
+        (tier): tier is DurationTier =>
+          tier !== null &&
+          typeof tier === "object" &&
+          Number.isSafeInteger(tier.min_qty) &&
+          tier.min_qty >= 2 &&
+          Number.isSafeInteger(tier.duration_minutes) &&
+          tier.duration_minutes >= 0,
+      )
+    : [];
+  let total = baseDuration * quantity;
+  for (const tier of [...tiers].sort((a, b) => a.min_qty - b.min_qty)) {
+    if (quantity >= tier.min_qty) total = tier.duration_minutes;
+  }
+  return total;
 }
 
 // ─── Storage ───────────────────────────────────────────────────────────
@@ -266,8 +318,33 @@ export function createBlankService(overrides: Partial<Service> = {}): Service {
   };
 }
 
-export function getServiceMaterialCost(service: Service): number {
-  return service.material_costs.reduce((sum, c) => sum + c.amount, 0);
+export interface ServiceCostSource {
+  cost_per_unit?: unknown;
+  material_costs?: unknown;
+}
+
+/** Cost of materials for one unit. cost_per_unit is the canonical value;
+ * named material rows remain a compatibility fallback for older records. */
+export function getServiceMaterialCost(service: ServiceCostSource): number {
+  const explicit =
+    typeof service.cost_per_unit === "number" &&
+    Number.isFinite(service.cost_per_unit) &&
+    service.cost_per_unit >= 0
+      ? service.cost_per_unit
+      : null;
+  const materialRows = Array.isArray(service.material_costs)
+    ? service.material_costs
+    : [];
+  const rowsTotal = materialRows.reduce((sum, row) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) return sum;
+    const amount = (row as { amount?: unknown }).amount;
+    return typeof amount === "number" && Number.isFinite(amount) && amount >= 0
+      ? sum + amount
+      : sum;
+  }, 0);
+  return explicit !== null && (explicit > 0 || rowsTotal === 0)
+    ? explicit
+    : rowsTotal;
 }
 
 export function getServiceCategoryName(

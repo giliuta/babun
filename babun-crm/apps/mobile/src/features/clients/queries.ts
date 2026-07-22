@@ -1,9 +1,5 @@
-import { Alert } from "react-native";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { Alert, Linking } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // STORY-062 slice 5 — clients + tags READS now go through the shared
 // offline-aware SWR wrappers (listClients / listClientTags). The two slice-4
 // blockers are both closed:
@@ -15,41 +11,168 @@ import {
 //      server-deleted rows (cacheReplaceTenant) and, on a real change, fires
 //      `revalidated`, which the realtime bridge (SyncBridgeMount) turns into a
 //      react-query invalidate so the list re-reads the freshened cache.
-// Offline the warm cache serves the last snapshot; a cold offline read returns
-// [] (empty state, not an error). `getClient` stays a direct repo read — the
+// Offline the warm cache serves the last snapshot; a cold offline read is a
+// typed blocking error, never a false empty customer base. `getClient` stays a direct repo read — the
 // single-client card is not one of the three cached tables and must render the
 // canonical row live.
-import { getClient } from "@babun/shared/db/repositories/clients";
+import {
+  getClient,
+  listClients as listClientsDirect,
+} from "@babun/shared/db/repositories/clients";
 import {
   listClients as listClientsCached,
   createClient as createClientCached,
   updateClient,
-  deleteClient as deleteClientCached,
+  archiveClient as archiveClientCached,
+  restoreClient as restoreClientCached,
 } from "@babun/shared/sync/clientsCached";
-import { listClientTags as listClientTagsCached } from "@babun/shared/sync/tagsCached";
-import { createBlankClient, type Client } from "@babun/shared/local/clients";
-import { randomUuid } from "@babun/shared/sync";
+import {
+  createClientTag as createClientTagCached,
+  deleteClientTag as deleteClientTagCached,
+  listClientTags as listClientTagsCached,
+  updateClientTag as updateClientTagCached,
+} from "@babun/shared/sync/tagsCached";
+import {
+  createBlankClient,
+  type Client,
+  type ClientTag,
+} from "@babun/shared/local/clients";
+import { isOnline, randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { preflightQuotaForCreate } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
+import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { masterClientJsonToClient } from "@/features/settings/master-reference";
+import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
+import {
+  cancelClientReminder,
+  syncClientReminder,
+  type ClientReminderResult,
+} from "@/features/clients/reminders";
+
+function surfaceClientReminderResult(result: ClientReminderResult): void {
+  if (result === "scheduled" || result === "cleared") return;
+  if (result === "denied") {
+    Alert.alert(
+      "Дата сохранена",
+      "Уведомление не запланировано, потому что оно выключено для Babun в настройках iPhone.",
+      [
+        { text: "Позже", style: "cancel" },
+        {
+          text: "Открыть настройки",
+          onPress: () => void Linking.openSettings(),
+        },
+      ],
+    );
+    return;
+  }
+  if (result === "deferred") {
+    Alert.alert(
+      "Дата сохранена",
+      "Напоминание сохранено в очереди и установится, когда на iPhone освободится место.",
+    );
+    return;
+  }
+  if (result === "capacity") {
+    Alert.alert(
+      "Дата сохранена",
+      "Очередь напоминаний переполнена. Удалите ненужные напоминания и сохраните дату ещё раз.",
+    );
+    return;
+  }
+  Alert.alert(
+    "Дата сохранена",
+    result === "past"
+      ? "Эта дата уже прошла, поэтому системное уведомление не создавалось."
+      : "Системное уведомление не удалось создать. Обновите приложение и повторите попытку.",
+  );
+}
+
+function syncClientReminderWithFeedback(client: Client): void {
+  void syncClientReminder(client).then(surfaceClientReminderResult);
+}
+
+/** Экспортирован для label-auto-assign: чтение списка из кэша без хука. */
+export function clientsQueryKey(
+  tenantId: string | null,
+  role: UserRole | null | undefined,
+) {
+  return ["clients", tenantId, role ?? "role-pending"] as const;
+}
+
+function clientQueryKey(
+  id: string,
+  tenantId: string | null,
+  role: UserRole | null | undefined,
+) {
+  return ["client", id, tenantId, role ?? "role-pending"] as const;
+}
+
+function clientTagsQueryKey(
+  tenantId: string | null,
+  role: UserRole | null | undefined,
+) {
+  return ["client-tags", tenantId, role ?? "role-pending"] as const;
+}
+
+async function listMasterClientsSafe(clientId?: string): Promise<Client[]> {
+  const { data, error } = await supabase.rpc("list_master_clients_safe", {
+    ...(clientId ? { p_client_id: clientId } : {}),
+  });
+  if (error) throw new Error(`listMasterClientsSafe: ${error.message}`);
+  return (data ?? []).map(masterClientJsonToClient);
+}
 
 // Clients list — SWR wrapper read (full domain shape incl. tag_ids, served
 // from the SQLite cache when warm, then revalidated). RLS scopes rows to the
 // tenant; we pass tenantId for the query key and the RLS/cache filter.
 export function useClients() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["clients", tenantId],
-    enabled: !!tenantId,
-    queryFn: () => listClientsCached(supabase, tenantId as string),
+    queryKey: clientsQueryKey(tenantId, role),
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    queryFn: () =>
+      role === "master"
+        ? listMasterClientsSafe()
+        : listClientsCached(supabase, tenantId as string),
   });
 }
 
 export function useClient(id: string) {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
+  const qc = useQueryClient();
   return useQuery({
-    queryKey: ["client", id],
-    enabled: !!tenantId && !!id,
-    queryFn: () => getClient(supabase, id, tenantId as string),
+    queryKey: clientQueryKey(id, tenantId, role),
+    enabled: !!tenantId && !!id && roleQuery.isSuccess && role != null,
+    placeholderData: () => {
+      const list = qc.getQueryData<Client[]>(clientsQueryKey(tenantId, role));
+      return list?.find((client) => client.id === id);
+    },
+    queryFn: async () => {
+      if (role === "master") {
+        return (await listMasterClientsSafe(id))[0] ?? null;
+      }
+      try {
+        return await getClient(supabase, id, tenantId as string);
+      } catch (error) {
+        const serverError =
+          error && typeof error === "object"
+            ? (error as { code?: string; message?: string })
+            : { message: String(error) };
+        if (!isConfirmedNetworkUnavailable(serverError)) throw error;
+        // The list is offline-aware and may already have the complete domain
+        // client in SQLite. A connection loss after opening the list should
+        // therefore keep the card usable instead of becoming «not found».
+        const cached = await listClientsCached(supabase, tenantId as string);
+        const client = cached.find((item) => item.id === id);
+        if (client) return client;
+        throw error;
+      }
+    },
   });
 }
 
@@ -63,14 +186,17 @@ export function useUpdateClient(id: string) {
       if (!tenantId) throw new Error("Нет активного тенанта");
       return updateClient(supabase, id, patch, tenantId);
     },
-    onSuccess: (updated) => {
-      qc.setQueryData(["client", id], updated);
+    onSuccess: (updated, patch) => {
+      qc.setQueriesData({ queryKey: ["client", id] }, updated);
       // Blocks fire independent mutations (blur saves), so two PATCHes
       // can resolve out of order and the late response would overwrite
       // the newer field. Refetching settles the cache on the server's
       // authoritative row either way.
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      if (patch.reminder_at !== undefined) {
+        syncClientReminderWithFeedback(updated);
+      }
     },
     onError: (e) => {
       // The blocks keep edits in local drafts and never read isError —
@@ -94,10 +220,13 @@ export function useUpdateClientById() {
       if (!tenantId) throw new Error("Нет активного тенанта");
       return updateClient(supabase, id, patch, tenantId);
     },
-    onSuccess: (updated, { id }) => {
-      qc.setQueryData(["client", id], updated);
+    onSuccess: (updated, { id, patch }) => {
+      qc.setQueriesData({ queryKey: ["client", id] }, updated);
       qc.invalidateQueries({ queryKey: ["client", id] });
       qc.invalidateQueries({ queryKey: ["clients"] });
+      if (patch.reminder_at !== undefined) {
+        syncClientReminderWithFeedback(updated);
+      }
     },
     onError: (e) => {
       Alert.alert(
@@ -112,8 +241,17 @@ export function useCreateClient() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (overrides: Partial<Client>) => {
+    mutationFn: async (overrides: Partial<Client>) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
+      await preflightQuotaForCreate(supabase, tenantId, "clients", {
+        online: isOnline(),
+        isNetworkUnavailable: (error) =>
+          isConfirmedNetworkUnavailable(
+            error && typeof error === "object"
+              ? (error as { code?: string; message?: string; details?: string })
+              : { message: String(error) },
+          ),
+      });
       // Offline-aware: wrapper writes the optimistic row to sqlite and either
       // hits the repo (online) or enqueues an insert op (offline), returning
       // the client-generated UUID either way.
@@ -126,18 +264,21 @@ export function useCreateClient() {
       // permanently-fail its update op (non-uuid row_id). Stamp a real RN-safe
       // UUID up front so the whole create→edit→replay chain stays consistent.
       const blank = createBlankClient(overrides);
-      return createClientCached(supabase, { ...blank, id: randomUuid() }, tenantId);
+      return createClientCached(
+        supabase,
+        { ...blank, id: randomUuid() },
+        tenantId,
+      );
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["clients"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
-// Bulk delete (clients list bulk-mode). Deletes each selected client
-// through the SAME offline-aware wrapper the web «Удалить» uses
-// (clientsCached.deleteClient): online it hits the repo + optimistically
-// drops the cache row, offline it enqueues a delete op — so a bulk delete
-// on a flaky connection degrades gracefully instead of half-failing. Runs
+// Bulk archive (clients list bulk-mode). Every selected client keeps its
+// appointments, invoices and ledger context. Online we soft-delete with
+// deleted_at; offline we enqueue an UPDATE and optimistically remove the row
+// from the active-list cache. Runs
 // in small parallel chunks and invalidates in onSettled, so a mid-batch
 // failure still surfaces the rows that WERE removed. Errors are collected
 // per-row (Promise.allSettled) rather than sinking the whole run on the
@@ -145,51 +286,196 @@ export function useCreateClient() {
 // partial result. The mutation itself never rejects when at least one row
 // succeeded; the caller reads {deleted, failed} and messages accordingly.
 //
-// NB — HARD delete, matching web parity. The shared repo also exposes
-// softDeleteClients (deleted_at), but the app-level «Удалить» on both web
-// and mobile routes through the hard-delete wrapper today; junction rows
-// cascade via FK. Switching the product to soft-delete is a separate,
-// cross-platform decision, not a mobile-only divergence.
-export interface DeleteClientsResult {
-  deleted: number;
+export interface ArchiveClientsResult {
+  archived: number;
   failed: number;
+  archivedIds: string[];
 }
 
-export function useDeleteClients() {
+export function useArchiveClients() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (ids: string[]): Promise<DeleteClientsResult> => {
+    mutationFn: async (ids: string[]): Promise<ArchiveClientsResult> => {
       if (!tenantId) throw new Error("Нет активного тенанта");
-      let deleted = 0;
+      if (role !== "owner" && role !== "dispatcher") {
+        throw new Error("Архивировать клиентов может владелец или диспетчер.");
+      }
+      let archived = 0;
       let failed = 0;
+      const archivedIds: string[] = [];
       const CHUNK = 8;
       for (let i = 0; i < ids.length; i += CHUNK) {
         const chunk = ids.slice(i, i + CHUNK);
         // Settle each so one bad row (repo error / RLS online) doesn't abort
         // the remaining chunks — count fulfilled vs rejected instead.
         const settled = await Promise.allSettled(
-          chunk.map((id) => deleteClientCached(supabase, id, tenantId)),
+          chunk.map((id) => archiveClientCached(supabase, id, tenantId)),
         );
-        for (const res of settled) {
-          if (res.status === "fulfilled") deleted++;
-          else failed++;
+        for (const [index, res] of settled.entries()) {
+          if (res.status === "fulfilled") {
+            archived++;
+            archivedIds.push(chunk[index]);
+          } else failed++;
         }
       }
-      return { deleted, failed };
+      return { archived, failed, archivedIds };
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["clients"] }),
+    onSuccess: ({ archivedIds }) => {
+      void Promise.all(archivedIds.map(cancelClientReminder));
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
+    },
     meta: { errorHandled: true }, // caller messages the partial result itself
+  });
+}
+
+export function useArchivedClients() {
+  const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
+  return useQuery({
+    queryKey: ["archived-clients", tenantId, role ?? "role-pending"],
+    enabled:
+      !!tenantId &&
+      roleQuery.isSuccess &&
+      (role === "owner" || role === "dispatcher"),
+    queryFn: async (): Promise<Client[]> => {
+      const rows = await listClientsDirect(supabase, tenantId as string, {
+        includeDeleted: true,
+      });
+      return rows.filter((client) => client.deleted_at != null);
+    },
+  });
+}
+
+export function useRestoreClient() {
+  const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (client: Client) => {
+      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (role !== "owner" && role !== "dispatcher") {
+        throw new Error("Восстановить клиента может владелец или диспетчер.");
+      }
+      await restoreClientCached(supabase, client, tenantId);
+      return { ...client, deleted_at: null } satisfies Client;
+    },
+    onSuccess: (restored, client) => {
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
+      void qc.invalidateQueries({ queryKey: ["client", client.id] });
+      if (restored.reminder_at) syncClientReminderWithFeedback(restored);
+    },
+    meta: { errorHandled: true },
   });
 }
 
 export function useClientTags() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["client-tags", tenantId],
-    enabled: !!tenantId,
+    queryKey: clientTagsQueryKey(tenantId, role),
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     // SWR wrapper read (same as useClients): warm cache serves instantly, the
     // background revalidate prunes + emits, the realtime bridge re-reads.
-    queryFn: () => listClientTagsCached(supabase, tenantId as string),
+    queryFn: () =>
+      role === "master"
+        ? Promise.resolve([])
+        : listClientTagsCached(supabase, tenantId as string),
+  });
+}
+
+export interface CreateClientTagInput {
+  name: string;
+  color: string;
+}
+
+export interface UpdateClientTagInput {
+  id: string;
+  patch: {
+    name?: string;
+    color?: string;
+  };
+}
+
+function assertCanManageClientTags(
+  tenantId: string | null,
+  role: UserRole | null | undefined,
+): asserts tenantId is string {
+  if (!tenantId) throw new Error("Нет активного тенанта");
+  if (role !== "owner" && role !== "dispatcher") {
+    throw new Error("Управлять тегами может владелец или диспетчер.");
+  }
+}
+
+function invalidateClientTags(qc: ReturnType<typeof useQueryClient>) {
+  // A deleted tag is removed from client_tag_assignments on the server. The
+  // client list/cache also needs a refresh so no stale tag id survives in an
+  // already-open card or CSV export.
+  void qc.invalidateQueries({ queryKey: ["client-tags"] });
+  void qc.invalidateQueries({ queryKey: ["clients"] });
+  void qc.invalidateQueries({ queryKey: ["client"] });
+}
+
+export function useCreateClientTag() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation<ClientTag, Error, CreateClientTagInput>({
+    mutationFn: ({ name, color }) => {
+      assertCanManageClientTags(tenantId, role);
+      const normalizedName = name.trim();
+      if (!normalizedName) throw new Error("Введите название тега.");
+      return createClientTagCached(
+        supabase,
+        { name: normalizedName, color },
+        tenantId,
+      );
+    },
+    onSettled: () => invalidateClientTags(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+export function useUpdateClientTag() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation<ClientTag, Error, UpdateClientTagInput>({
+    mutationFn: ({ id, patch }) => {
+      assertCanManageClientTags(tenantId, role);
+      const normalizedPatch = {
+        ...patch,
+        ...(patch.name != null ? { name: patch.name.trim() } : null),
+      };
+      if (normalizedPatch.name === "") {
+        throw new Error("Введите название тега.");
+      }
+      return updateClientTagCached(supabase, id, normalizedPatch, tenantId);
+    },
+    onSettled: () => invalidateClientTags(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+export function useDeleteClientTag() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => {
+      assertCanManageClientTags(tenantId, role);
+      return deleteClientTagCached(supabase, id, tenantId);
+    },
+    onSettled: () => invalidateClientTags(qc),
+    meta: { errorHandled: true },
   });
 }

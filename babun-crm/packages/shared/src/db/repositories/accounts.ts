@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type { Account, AccountKind } from "../../local/finance/account";
 
 type DbSupabase = SupabaseClient<Database>;
@@ -56,11 +57,26 @@ export interface AccountDraft {
   position?: number;
 }
 
+function assertOpeningBalance(amount: number | undefined): void {
+  if (amount === undefined) return;
+  if (
+    exactMoneyAmountToCents(amount, {
+      allowNegative: true,
+      allowZero: true,
+    }) == null
+  ) {
+    throw new Error(
+      "Введите корректный начальный баланс и не больше двух знаков после запятой",
+    );
+  }
+}
+
 export async function insertAccount(
   supabase: DbSupabase,
   tenantId: string,
   draft: AccountDraft,
 ): Promise<Account> {
+  assertOpeningBalance(draft.opening_balance);
   const { data, error } = await supabase
     .from("accounts")
     .insert({
@@ -77,7 +93,9 @@ export async function insertAccount(
     })
     .select("*")
     .single();
-  if (error || !data) throw new Error(`insertAccount: ${error?.message}`);
+  if (error || !data) {
+    throw new Error(error?.message ?? "Не удалось создать финансовый счёт");
+  }
   return rowToAccount(data as Row);
 }
 
@@ -86,6 +104,7 @@ export async function updateAccount(
   id: string,
   patch: Partial<AccountDraft>,
 ): Promise<void> {
+  assertOpeningBalance(patch.opening_balance);
   const update: Partial<Database["public"]["Tables"]["accounts"]["Update"]> = {};
   if (patch.brigade_id !== undefined) update.brigade_id = patch.brigade_id;
   if (patch.name !== undefined) update.name = patch.name;
@@ -95,8 +114,15 @@ export async function updateAccount(
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
   if (patch.position !== undefined) update.position = patch.position;
-  const { error } = await supabase.from("accounts").update(update).eq("id", id);
-  if (error) throw new Error(`updateAccount: ${error.message}`);
+  const { data, error } = await supabase
+    .from("accounts")
+    .update(update)
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
+  }
 }
 
 /** Soft close — history kept, account hidden from active lists. */
@@ -104,9 +130,13 @@ export async function softCloseAccount(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("accounts")
     .update({ is_active: false })
-    .eq("id", id);
-  if (error) throw new Error(`softCloseAccount: ${error.message}`);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
+  }
 }

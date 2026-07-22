@@ -14,22 +14,25 @@ import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
+import {
+  isConfirmedNetworkUnavailable,
+  isMissingSmsTemplatesContract,
+  type ServerReadError,
+} from "@/features/settings/server-read-fallback";
 
 export type { SmsTemplate, TemplateKind } from "@babun/shared/local/sms-templates";
 
-// SMS-шаблоны не имеют собственной таблицы: на вебе они живут в
-// localStorage и бэкапятся kitchen-sink-блобом в
-// `tenant_state.prototype_state.smsTemplates` (v505). Мобилка использует
-// этот же блоб как канонический источник (кросс-девайс с вебом), а MMKV —
-// как офлайн-кэш по тому же ключу, что и web localStorage. Пишем через
-// fetch→merge→upsert только ключ smsTemplates, чтобы не затирать
-// остальные поля блоба (masters/teams/services/…).
+// SMS-шаблоны исторически лежат одним ключом внутри kitchen-sink блоба
+// tenant_state.prototype_state. Мобильный клиент НИКОГДА не читает весь
+// блоб: узкие RPC отдают/пишут только smsTemplates и атомарно сохраняют все
+// соседние legacy-ключи. MMKV остаётся офлайн-кэшем.
 //
 // NB: shared/local/sms-templates.ts loadTemplates/saveTemplates ходят в
 // window.localStorage напрямую (не через storage seam) — на нативе это
 // no-op, поэтому кэш реализован здесь через getStorage() (MMKV).
 
-const CACHE_KEY = "babun-sms-templates"; // = web STORAGE_KEY (префикс babun- попадает под wipe)
+const cacheKey = (tenantId: string) => `babun-sms-templates:${tenantId}`;
 
 const VALID_KINDS = new Set<string>(Object.keys(KIND_LABELS));
 
@@ -54,79 +57,94 @@ function sanitize(list: unknown): SmsTemplate[] {
   return out;
 }
 
-function loadCache(): SmsTemplate[] {
-  return sanitize(getStorage().get<SmsTemplate[]>(CACHE_KEY));
+function loadCache(tenantId: string): SmsTemplate[] {
+  return sanitize(getStorage().get<SmsTemplate[]>(cacheKey(tenantId)));
 }
 
-function saveCache(list: SmsTemplate[]): void {
-  getStorage().set(CACHE_KEY, list);
+function saveCache(tenantId: string, list: SmsTemplate[]): void {
+  getStorage().set(cacheKey(tenantId), list);
 }
 
-type Blob = Record<string, unknown>;
-
-async function fetchBlob(tenantId: string): Promise<Blob | null> {
-  const { data, error } = await supabase
-    .from("tenant_state")
-    .select("prototype_state")
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const state = data?.prototype_state;
-  return state && typeof state === "object" && !Array.isArray(state)
-    ? (state as Blob)
-    : null;
+async function fetchTemplates(): Promise<{
+  present: boolean;
+  templates: SmsTemplate[];
+}> {
+  const { data, error } = await supabase.rpc("read_sms_templates_safe");
+  if (error) throw error;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Сервер вернул некорректные SMS-шаблоны");
+  }
+  const result = data as Record<string, unknown>;
+  return {
+    present: result.present === true,
+    templates: sanitize(result.templates),
+  };
 }
 
 export function useSmsTemplates() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["sms-templates", tenantId],
+    queryKey: ["sms-templates", tenantId, role ?? "role-pending"],
+    enabled:
+      !!tenantId &&
+      roleQuery.isSuccess &&
+      (role === "owner" || role === "dispatcher"),
     queryFn: async (): Promise<SmsTemplate[]> => {
       if (tenantId) {
         try {
-          const blob = await fetchBlob(tenantId);
+          const remote = await fetchTemplates();
           // Ключ отсутствует вовсе → блоб ещё не писался с шаблонами,
           // оставляем девайсный кэш. Явный [] уважаем (v662 data-loss
           // guard): пользователь мог намеренно удалить все шаблоны.
-          if (blob && "smsTemplates" in blob) {
-            const list = sanitize(blob.smsTemplates);
-            saveCache(list);
-            return list;
+          if (remote.present) {
+            saveCache(tenantId, remote.templates);
+            return remote.templates;
           }
-        } catch {
-          // офлайн / RLS — ниже девайсный кэш
+        } catch (caught) {
+          const error = caught as ServerReadError;
+          if (
+            !isConfirmedNetworkUnavailable(error) &&
+            !isMissingSmsTemplatesContract(error)
+          ) {
+            throw caught;
+          }
+          // Confirmed offline or a rolling-deploy RPC gap: below, use the
+          // tenant-scoped device cache. RLS/validation errors stay visible.
         }
       }
-      return loadCache();
+      return loadCache(tenantId as string);
     },
   });
 }
 
 export function useSaveSmsTemplates() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (list: SmsTemplate[]) => {
-      saveCache(list); // девайс первым — офлайн-безопасность
+      if (role !== "owner" && role !== "dispatcher") {
+        throw new Error("SMS-шаблоны доступны владельцу и диспетчеру.");
+      }
       if (!tenantId) {
-        // Кэш записан (не потеряется), но канонический блоб — нет:
-        // «Шаблон сохранён» здесь было бы враньём кросс-девайс.
         throw new Error("Нет подключения к аккаунту — попробуйте позже");
       }
-      // merge, не replace: web держит в этом блобе ещё 9 сущностей.
-      const blob = (await fetchBlob(tenantId)) ?? {};
-      const { error } = await supabase.from("tenant_state").upsert(
-        {
-          tenant_id: tenantId,
-          prototype_state: { ...blob, smsTemplates: list } as unknown as Json,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "tenant_id" },
-      );
+      const { error } = await supabase.rpc("write_sms_templates_safe", {
+        p_templates: list as unknown as Json,
+      });
       if (error) throw new Error(error.message);
+      // Never show an RLS/validation/server failure as a locally saved value.
+      // The cache mirrors a confirmed server write; it is not an outbox.
+      saveCache(tenantId, list);
       return list;
     },
-    onSuccess: (list) => qc.setQueryData(["sms-templates", tenantId], list),
+    onSuccess: (list) =>
+      qc.setQueryData(
+        ["sms-templates", tenantId, role ?? "role-pending"],
+        list,
+      ),
     meta: { errorHandled: true }, // экран алертит сам
   });
 }

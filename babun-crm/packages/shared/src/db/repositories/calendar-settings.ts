@@ -14,11 +14,36 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import type {
   CalendarSettings,
+  OperationalCalendarSettings,
 } from "../../local/calendar-settings";
-import { DEFAULT_CALENDAR_SETTINGS } from "../../local/calendar-settings";
+import {
+  DEFAULT_CALENDAR_SETTINGS,
+  toOperationalCalendarSettings,
+} from "../../local/calendar-settings";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["calendar_settings"]["Row"];
+type OperationalRow =
+  Database["public"]["Functions"]["read_operational_calendar_settings_safe"]["Returns"][number];
+
+interface RepositoryErrorSource {
+  code?: string;
+  message: string;
+  details?: string;
+  hint?: string;
+}
+
+function repositoryError(
+  operation: string,
+  source: RepositoryErrorSource,
+): Error & RepositoryErrorSource {
+  const error = new Error(`${operation}: ${source.message}`) as Error &
+    RepositoryErrorSource;
+  error.code = source.code;
+  error.details = source.details;
+  error.hint = source.hint;
+  return error;
+}
 
 function rowToSettings(r: Row): CalendarSettings {
   // Validate grid_step at the type boundary — the DB check constraint
@@ -78,9 +103,42 @@ export async function getCalendarSettings(
     .select("*")
     .eq("tenant_id", tenantId)
     .maybeSingle();
-  if (error) throw new Error(`getCalendarSettings: ${error.message}`);
+  if (error) throw repositoryError("getCalendarSettings", error);
   if (!data) return DEFAULT_CALENDAR_SETTINGS;
   return rowToSettings(data);
+}
+
+/**
+ * Reads the server-pinned, non-private company calendar projection. Unlike
+ * getCalendarSettings, this is safe for a master account: the RPC has no
+ * caller-supplied tenant id and never returns personal labels or days-off.
+ */
+export async function getOperationalCalendarSettings(
+  supabase: DbSupabase,
+): Promise<OperationalCalendarSettings> {
+  const { data, error } = await supabase.rpc(
+    "read_operational_calendar_settings_safe",
+  );
+  if (error) {
+    throw repositoryError("getOperationalCalendarSettings", error);
+  }
+  const row: OperationalRow | undefined = data?.[0];
+  if (!row) {
+    return toOperationalCalendarSettings(DEFAULT_CALENDAR_SETTINGS);
+  }
+  return {
+    startHour: row.start_hour,
+    endHour: row.end_hour,
+    gridStep: row.grid_step as 15 | 30 | 60,
+    weekStart: row.week_start as "monday" | "sunday",
+    timezone: row.timezone,
+    bufferMinutes: row.buffer_minutes,
+    hideCancelled: row.hide_cancelled,
+    allowOvertime: row.allow_overtime,
+    workStartHour: row.work_start_hour ?? undefined,
+    workEndHour: row.work_end_hour ?? undefined,
+    scrollOpenHour: row.scroll_open_hour ?? undefined,
+  };
 }
 
 /** Upsert the singleton. Partial updates are fine — caller passes
@@ -114,8 +172,7 @@ export async function updateCalendarSettings(
     (insert as any).scroll_open_hour = patch.scrollOpenHour;
   // v493 — round-trip personalLabels / personalDefaultLabel. Written
   // through an indexed cast since older builds of `database.types`
-  // may not have the columns yet. The graceful-fallback below strips
-  // them on 42703 («column does not exist») and retries.
+  // may not have the columns yet.
   if (patch.personalLabels !== undefined) {
     // Empty array → null so the Supabase column reads as «no
     // personal labels» on next fetch. Without this an explicit
@@ -137,14 +194,6 @@ export async function updateCalendarSettings(
     .select("*")
     .single();
 
-  // v449 — graceful fallback when the 20260507_001 migration hasn't
-  // been applied to the target Supabase project yet. PostgREST
-  // returns 42703 ("column ... does not exist"); strip the new
-  // fields and retry once. localStorage already has the full save,
-  // so the user's edits aren't lost — they just don't cross-sync
-  // until the migration runs.
-  // v493 — same pattern extended to personal_labels / personal_default_label
-  // for tenants on older Supabase deploys.
   if (error) {
     const isMissingCol =
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,26 +202,17 @@ export async function updateCalendarSettings(
         error.message,
       );
     if (isMissingCol) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (insert as any).work_start_hour;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (insert as any).work_end_hour;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (insert as any).scroll_open_hour;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (insert as any).personal_labels;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (insert as any).personal_default_label;
-      const retry = await supabase
-        .from("calendar_settings")
-        .upsert(insert, { onConflict: "tenant_id" })
-        .select("*")
-        .single();
-      if (retry.error)
-        throw new Error(`updateCalendarSettings: ${retry.error.message}`);
-      return rowToSettings(retry.data);
+      // Never strip the requested fields and report success: the UI would
+      // show “saved”, while another device (or the next refresh) loses the
+      // user's calendar hours/labels. A schema gap is an actionable failed
+      // write until the migration is deployed.
+      throw repositoryError("updateCalendarSettings", {
+        ...error,
+        message:
+          "на сервере не хватает колонок настроек календаря; обновите схему и повторите",
+      });
     }
-    throw new Error(`updateCalendarSettings: ${error.message}`);
+    throw repositoryError("updateCalendarSettings", error);
   }
   return rowToSettings(data);
 }

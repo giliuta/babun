@@ -69,6 +69,7 @@ function asObj<T extends object>(v: Json | null | undefined): T {
 export function rowToAppointment(r: Row): Appointment {
   return {
     id: r.id,
+    created_by: r.created_by,
     date: r.date,
     time_start: r.time_start,
     time_end: r.time_end,
@@ -447,10 +448,16 @@ export async function deleteAppointment(
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("appointments")
     .delete()
     .eq("id", id)
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`deleteAppointment: ${error.message}`);
+    .eq("tenant_id", tenantId)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(
+      `deleteAppointment: ${error?.message ?? "заявка не найдена или недоступна"}`,
+    );
+  }
 }

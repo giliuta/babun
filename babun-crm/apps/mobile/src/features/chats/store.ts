@@ -3,12 +3,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   loadChats,
   saveChats,
-  seedDemoChats,
   type Chat,
   type ChatMessage,
   type ConversationStatus,
 } from "@babun/shared/local/chats";
 import { getStorage } from "@babun/shared/storage/provider";
+import {
+  isMessagingReady,
+  requireMessagingReady,
+} from "./readiness";
+
+// This module contains the old device-local interaction prototype so its UI
+// can be reused when the real repository lands. It must never become a live
+// transport: even a future readiness-flag change cannot turn local echoes
+// into apparent provider deliveries.
+const DEVICE_LOCAL_CHAT_TRANSPORT_ENABLED = false;
 
 // STORY-053a — the demo seed MUST NOT auto-fire on empty load: new tenants
 // get an empty inbox (see the contract note in shared/local/chats.ts).
@@ -46,11 +55,14 @@ function loadPurged(): Chat[] {
 const msgId = () =>
   `m_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-export function useChats() {
+export function useChats(enabled = true) {
+  const canHydratePrototype =
+    enabled && isMessagingReady() && DEVICE_LOCAL_CHAT_TRANSPORT_ENABLED;
   return useQuery({
-    queryKey: ["chats"],
+    queryKey: ["chats", canHydratePrototype ? "prototype" : "disabled"],
     queryFn: () => loadPurged(),
     staleTime: Infinity,
+    enabled: canHydratePrototype,
   });
 }
 
@@ -64,6 +76,12 @@ function useChatMutation<V>(fn: (chats: Chat[], v: V) => Chat[]) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (v: V) => {
+      requireMessagingReady();
+      if (!DEVICE_LOCAL_CHAT_TRANSPORT_ENABLED) {
+        // A ready provider-backed inbox must replace this repository. Never
+        // silently fall back to MMKV/local echo for production messages.
+        throw new Error("device_local_chat_transport_disabled");
+      }
       const next = fn(loadChats(), v);
       saveChats(next);
       return next;
@@ -129,6 +147,7 @@ export function usePersistDraft() {
   const qc = useQueryClient();
   return useCallback(
     (chatId: string, draft: string) => {
+      if (!isMessagingReady() || !DEVICE_LOCAL_CHAT_TRANSPORT_ENABLED) return;
       const trimmed = draft.trim();
       const chats = loadChats();
       const current = chats.find((c) => c.id === chatId);
@@ -184,18 +203,3 @@ export function useSetChatStatus() {
 // shared seed OVERWRITES the stored list, so refuse to run when any real
 // dialogs exist — the call site only shows the button on an empty inbox,
 // this is the belt to that suspender.
-export function useSeedDemoChats() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const existing = loadChats();
-      if (existing.length > 0) return existing;
-      const seeded = seedDemoChats();
-      // Requested demos are user data — make sure the one-shot purge of
-      // old auto-seeded builds never eats them on the next cold start.
-      getStorage().set(DEMO_PURGE_KEY, true);
-      return seeded;
-    },
-    onSuccess: (next) => qc.setQueryData(["chats"], next),
-  });
-}

@@ -160,7 +160,9 @@ export function BottomSheet({
                     width: 36,
                     height: 5,
                     borderRadius: 3,
-                    backgroundColor: t.separator,
+                    // «Чёрное не серое»: separator на surface ~1.1:1 — жест
+                    // обещан, а язычка не видно. Ink+alpha, как у системного.
+                    backgroundColor: "rgba(11,18,32,0.14)",
                   }}
                 />
               </View>

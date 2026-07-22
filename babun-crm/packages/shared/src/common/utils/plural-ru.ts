@@ -72,7 +72,7 @@ export const FORMS_MASTER: PluralFormsRu = ["мастер", "мастера", "�
  * for the user.
  *
  *   formatGrowth(150, 0)       → "—"
- *   formatGrowth(150, 100)     → "+50%"
+ *   formatGrowth(150, 100)     → "↑50%"
  *   formatGrowth(50, 100)      → "−50%"
  *   formatGrowth(100, 100)     → "0%"
  *   formatGrowth(null, 100)    → "—"
@@ -87,5 +87,5 @@ export function formatGrowth(
   if (!Number.isFinite(pct)) return "—";
   const rounded = Math.round(pct);
   if (rounded === 0) return "0%";
-  return `${rounded > 0 ? "+" : "−"}${Math.abs(rounded)}%`;
+  return `${rounded > 0 ? "↑" : "−"}${Math.abs(rounded)}%`;
 }

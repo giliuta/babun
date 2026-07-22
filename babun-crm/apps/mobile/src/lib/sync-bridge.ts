@@ -56,6 +56,16 @@ function invalidate(qc: QueryClient, table: CachedTable): void {
   }
 }
 
+type ActiveBridge = {
+  tenantId: string | null;
+  qc: QueryClient;
+  pause: () => void;
+  resume: () => void;
+  dispose: () => void;
+};
+
+let activeBridge: ActiveBridge | null = null;
+
 /** Wire both freshness bridges for the given tenant. Returns an unsubscribe
  *  fn that drops the revalidate listener AND tears down every realtime
  *  channel. Re-called with a new tenant id on tenant change / logout. */
@@ -63,25 +73,61 @@ export function startSyncBridge(
   tenantId: string | null,
   qc: QueryClient = queryClient,
 ): () => void {
-  // 1. Revalidate bridge — tenant-agnostic (the emit already reflects the
-  //    active tenant's cache), but we scope the subscription to the bridge's
-  //    lifetime so it's torn down with the realtime channels on tenant change.
-  const unsubRevalidate = subscribeRevalidated((table) =>
-    invalidate(qc, table),
-  );
+  // AppProviders owns one bridge. Defensive replacement also prevents a
+  // strict-mode remount from leaving two realtime subscriptions alive.
+  activeBridge?.dispose();
+  let disposed = false;
+  let subscriptions: (() => void) | null = null;
 
-  // 2. Realtime bridge — tenant-scoped channels. No-ops on a null tenant.
-  const unsubRealtime = startRealtimeTenantSync({
-    supabase,
+  const mount = () => {
+    if (disposed || subscriptions) return;
+    // 1. Revalidate bridge — tenant-agnostic (the emit already reflects the
+    // active tenant's cache), scoped to this bridge lifetime.
+    const unsubRevalidate = subscribeRevalidated((table) =>
+      invalidate(qc, table),
+    );
+    // 2. Realtime bridge — tenant-scoped channels. No-op for null tenant.
+    const unsubRealtime = startRealtimeTenantSync({
+      supabase,
+      tenantId,
+      onChange: (table) => invalidate(qc, table),
+      onResync: (table) => invalidate(qc, table),
+    });
+    subscriptions = () => {
+      unsubRevalidate();
+      unsubRealtime();
+    };
+  };
+
+  const controller: ActiveBridge = {
     tenantId,
-    onChange: (table) => invalidate(qc, table),
-    // Reconnect backfill: a plain invalidate is enough — the wrapper's
-    // revalidate re-reads the full server list and prunes deleted rows.
-    onResync: (table) => invalidate(qc, table),
-  });
+    qc,
+    pause: () => {
+      subscriptions?.();
+      subscriptions = null;
+    },
+    resume: mount,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      subscriptions?.();
+      subscriptions = null;
+      if (activeBridge === controller) activeBridge = null;
+    },
+  };
+  activeBridge = controller;
+  mount();
+  return controller.dispose;
+}
 
+/** Temporarily stop old-tenant realtime/revalidate callbacks while local
+ * stores and the JWT are being switched. On failure call the returned resume
+ * function; on success SessionProvider changes tenantId and the React effect
+ * mounts a fresh bridge itself. */
+export function pauseSyncBridgeForTenantSwitch(): () => void {
+  const previous = activeBridge;
+  previous?.pause();
   return () => {
-    unsubRevalidate();
-    unsubRealtime();
+    if (previous && activeBridge === previous) previous.resume();
   };
 }

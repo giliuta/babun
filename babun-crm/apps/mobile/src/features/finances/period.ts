@@ -45,7 +45,7 @@ export const PERIOD_LABELS: Record<PeriodKind, string> = {
 
 /** Paired current/previous presets for the preset-list popup blocks
  *  (web PERIOD_BLOCKS). */
-export const PERIOD_BLOCKS: Array<[PeriodKind, PeriodKind]> = [
+export const PERIOD_BLOCKS: [PeriodKind, PeriodKind][] = [
   ["today", "yesterday"],
   ["week", "lastweek"],
   ["month", "lastmonth"],
@@ -98,8 +98,8 @@ export function makePeriod(preset: PeriodKind, base?: Date): Period {
   return { preset, ...presetRange(preset, base) };
 }
 
-export function defaultPeriod(): Period {
-  return makePeriod("month");
+export function defaultPeriod(base?: Date): Period {
+  return makePeriod("month", base);
 }
 
 /** Semantic name for the header's LEFT tap target («Текущий месяц»). */
@@ -135,8 +135,8 @@ const RU_MONTHS_SHORT = [
 
 /** Friendly short range hint for a preset row («1–30 июн», year → «2026»).
  *  Mirrors the web PeriodPicker's presetHint. */
-export function presetHint(kind: PeriodKind): string {
-  const r = presetRange(kind);
+export function presetHint(kind: PeriodKind, base?: Date): string {
+  const r = presetRange(kind, base);
   const a = parseYmd(r.from);
   if (kind === "year" || kind === "lastyear") return String(a.getFullYear());
   const b = parseYmd(r.to);

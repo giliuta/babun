@@ -7,8 +7,9 @@
 //         image thumbnails render straight from the cache entry.
 // Writes: insert metadata row + upload bytes in two steps; if the second
 //         fails the orphan row is rolled back (web parity). RN has no
-//         `File`, so uploads take an expo-image-picker asset: we fetch the
-//         local uri into an ArrayBuffer (supabase-js accepts it natively).
+//         `File`, so uploads take a small common shape from ImagePicker or
+//         DocumentPicker: we fetch the local uri into an ArrayBuffer
+//         (supabase-js accepts it natively).
 //
 // TanStack hooks live here too (the block stays presentational-ish):
 // useClientAttachments / useUploadAttachments / useDeleteAttachment with
@@ -16,17 +17,21 @@
 // (meta.errorHandled — same pattern as queries.ts).
 
 import { Alert } from "react-native";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
 const BUCKET = "client-attachments";
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 const SIGNED_URL_TTL = 5 * 60; // seconds
+const ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+]);
 
 export interface ClientAttachment {
   id: string;
@@ -49,14 +54,14 @@ export interface PickedFile {
 export class AttachmentError extends Error {}
 
 function genAttachmentId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `att_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  // Hermes only guarantees getRandomValues in the current native build;
+  // shared.randomUuid provides a real UUID in both RN and web runtimes.
+  return randomUuid();
 }
 
 function extFromMime(mime: string, fallback: string): string {
-  if (mime.startsWith("image/")) return mime.split("/")[1].replace("jpeg", "jpg");
+  if (mime.startsWith("image/"))
+    return mime.split("/")[1].replace("jpeg", "jpg");
   if (mime === "application/pdf") return "pdf";
   if (mime.startsWith("text/")) return "txt";
   return fallback;
@@ -65,6 +70,20 @@ function extFromMime(mime: string, fallback: string): string {
 function safeExtFromName(name: string): string {
   const m = name.match(/\.([a-z0-9]{1,6})$/i);
   return m ? m[1].toLowerCase() : "bin";
+}
+
+function normalizeMime(reported: string | undefined, name: string): string {
+  const mime = reported?.toLowerCase();
+  if (mime && ALLOWED_MIME_TYPES.has(mime)) return mime;
+  const ext = safeExtFromName(name);
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "txt") return "text/plain";
+  throw new AttachmentError(
+    "Поддерживаются JPEG, PNG, WebP, PDF и текстовые файлы.",
+  );
 }
 
 export function isImage(att: { mime_type: string }): boolean {
@@ -105,13 +124,20 @@ async function uploadAttachment(args: {
   // Read the local asset into bytes first — also gives us the real size
   // when the picker didn't report one.
   const resp = await fetch(file.uri);
+  if (!resp.ok && /^https?:/i.test(file.uri)) {
+    throw new AttachmentError("Не удалось прочитать выбранный файл");
+  }
   const bytes = await resp.arrayBuffer();
-  const size = file.fileSize ?? bytes.byteLength;
-  if (size > MAX_BYTES) {
+  const size = bytes.byteLength;
+  if (size === 0) {
+    throw new AttachmentError("Выбранный файл пуст или недоступен");
+  }
+  if ((file.fileSize ?? 0) > MAX_BYTES || size > MAX_BYTES) {
     throw new AttachmentError("Файл слишком большой (макс. 10 МБ)");
   }
 
-  const mime = file.mimeType || "application/octet-stream";
+  const fallbackName = file.fileName || "photo.jpg";
+  const mime = normalizeMime(file.mimeType, fallbackName);
   const name = file.fileName || `photo.${extFromMime(mime, "jpg")}`;
   const id = genAttachmentId();
   const ext = extFromMime(mime, safeExtFromName(name));
@@ -144,7 +170,16 @@ async function uploadAttachment(args: {
   if (uploadErr) {
     // Roll back the metadata row — orphan rows are worse than a missing
     // file (UI would show a thumbnail that 404s forever).
-    await supabase.from("client_attachments").delete().eq("id", id);
+    const { error: rollbackErr } = await supabase
+      .from("client_attachments")
+      .delete()
+      .eq("id", id)
+      .eq("tenant_id", tenantId);
+    if (rollbackErr) {
+      throw new AttachmentError(
+        `upload: ${uploadErr.message}; cleanup: ${rollbackErr.message}`,
+      );
+    }
     throw new AttachmentError(`upload: ${uploadErr.message}`);
   }
 
@@ -156,22 +191,26 @@ async function deleteAttachment(args: {
   tenantId: string;
 }): Promise<void> {
   const { attachment, tenantId } = args;
-  // Storage first — if metadata delete fails after, we have an orphan row
-  // the UI can re-cleanup. The reverse leaves a mystery file the user
-  // can't see or remove. A FAILED storage remove aborts the whole delete:
-  // dropping the row anyway would leave an invisible, undeletable file.
-  const { error: storageErr } = await supabase.storage
-    .from(BUCKET)
-    .remove([attachment.storage_path]);
-  if (storageErr) {
-    throw new AttachmentError(`removeStorage: ${storageErr.message}`);
-  }
-  const { error } = await supabase
+  // Delete the authorized metadata row first and use its RETURNING value as
+  // the only storage target. A stale/crafted path supplied by the UI must
+  // never be able to delete another client's object from the same tenant.
+  const { data: deleted, error } = await supabase
     .from("client_attachments")
     .delete()
     .eq("id", attachment.id)
-    .eq("tenant_id", tenantId);
-  if (error) throw new AttachmentError(`delete: ${error.message}`);
+    .eq("tenant_id", tenantId)
+    .select("storage_path")
+    .maybeSingle();
+  if (error || !deleted) {
+    throw new AttachmentError(
+      `delete: ${error?.message ?? "файл не найден или недоступен"}`,
+    );
+  }
+
+  // Storage cleanup is best effort after the row is gone. A failed cleanup
+  // leaves an unreachable blob, not a broken visible attachment or a way to
+  // target caller-controlled paths.
+  await supabase.storage.from(BUCKET).remove([deleted.storage_path]);
 }
 
 export async function getSignedUrl(
@@ -197,7 +236,7 @@ export interface AttachmentsData {
 export function useClientAttachments(clientId: string) {
   const tenantId = useTenantId();
   return useQuery<AttachmentsData>({
-    queryKey: ["client-attachments", clientId],
+    queryKey: ["client-attachments", tenantId, clientId],
     enabled: !!tenantId && !!clientId,
     // Signed URLs die after 5 min — keep the cache honest.
     staleTime: 4 * 60 * 1000,
@@ -237,7 +276,9 @@ export function useUploadAttachments(clientId: string) {
     // onSettled (not onSuccess): a mid-batch failure still surfaces the
     // files that WERE uploaded.
     onSettled: () =>
-      qc.invalidateQueries({ queryKey: ["client-attachments", clientId] }),
+      qc.invalidateQueries({
+        queryKey: ["client-attachments", tenantId, clientId],
+      }),
     onError: (e) => {
       Alert.alert(
         "Не удалось загрузить",
@@ -257,7 +298,9 @@ export function useDeleteAttachment(clientId: string) {
       return deleteAttachment({ attachment, tenantId });
     },
     onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["client-attachments", clientId] }),
+      qc.invalidateQueries({
+        queryKey: ["client-attachments", tenantId, clientId],
+      }),
     onError: (e) => {
       Alert.alert(
         "Не удалось удалить",

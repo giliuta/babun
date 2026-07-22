@@ -32,7 +32,8 @@ import { useLoyalty, useSaveLoyalty } from "@/features/settings/local-settings";
 
 export default function LoyaltyScreen() {
   const th = useThemeColors();
-  const { data, isLoading } = useLoyalty();
+  const loyaltyQuery = useLoyalty();
+  const data = loyaltyQuery.data;
   const save = useSaveLoyalty();
   const [s, setS] = useState<LoyaltySettings>(DEFAULT_LOYALTY);
   const [dirty, setDirty] = useState(false);
@@ -41,6 +42,7 @@ export default function LoyaltyScreen() {
   const [label, setLabel] = useState("");
   const [threshold, setThreshold] = useState("");
   const [percent, setPercent] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (data) {
@@ -54,15 +56,48 @@ export default function LoyaltyScreen() {
     setDirty(true);
   };
 
-  const addTier = () => {
+  const openNewTier = () => {
+    setEditingId(null);
+    setLabel("");
+    setThreshold("");
+    setPercent("");
+    setOpen(true);
+  };
+
+  const openTier = (tier: LoyaltyTier) => {
+    setEditingId(tier.id);
+    setLabel(tier.label);
+    setThreshold(String(tier.threshold));
+    setPercent(String(tier.percent));
+    setOpen(true);
+  };
+
+  const saveTier = () => {
+    const thresholdValue = Number(threshold.replace(",", "."));
+    const percentValue = Number(percent.replace(",", "."));
+    if (!Number.isInteger(thresholdValue) || thresholdValue < 1) {
+      Alert.alert("Проверьте уровень", "Количество визитов должно быть целым числом от 1.");
+      return;
+    }
+    if (!Number.isFinite(percentValue) || percentValue <= 0 || percentValue > 100) {
+      Alert.alert("Проверьте скидку", "Скидка должна быть больше 0 и не превышать 100 процентов.");
+      return;
+    }
+    if (s.tiers.some((tier) => tier.id !== editingId && tier.threshold === thresholdValue)) {
+      Alert.alert("Такой порог уже есть", "Для одного количества визитов можно задать только один уровень.");
+      return;
+    }
     const t: LoyaltyTier = {
-      id: generateLoyaltyTierId(),
+      id: editingId ?? generateLoyaltyTierId(),
       label: label.trim() || "Уровень",
-      threshold: Number(threshold) || 0,
-      percent: Number(percent) || 0,
+      threshold: thresholdValue,
+      percent: percentValue,
     };
     patch({
-      tiers: [...s.tiers, t].sort((a, b) => a.threshold - b.threshold),
+      tiers: [
+        ...s.tiers.filter((tier) => tier.id !== editingId),
+        t,
+      ].sort((a, b) => a.threshold - b.threshold),
     });
     setLabel("");
     setThreshold("");
@@ -74,11 +109,32 @@ export default function LoyaltyScreen() {
     patch({ tiers: s.tiers.filter((t) => t.id !== id) });
 
   // Гейт загрузки — иначе до прихода данных мигает выключенный дефолт.
-  if (isLoading) {
+  if (loyaltyQuery.isLoading) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Лояльность" />
         <EmptyState state="loading" />
+      </Screen>
+    );
+  }
+
+  if (loyaltyQuery.isError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Лояльность" />
+        <EmptyState
+          state="error"
+          fill
+          subtitle={
+            loyaltyQuery.error instanceof Error
+              ? loyaltyQuery.error.message
+              : undefined
+          }
+          action={{
+            label: "Повторить",
+            onPress: () => void loyaltyQuery.refetch(),
+          }}
+        />
       </Screen>
     );
   }
@@ -124,7 +180,7 @@ export default function LoyaltyScreen() {
                   </Text>
                 </Pressable>
                 <Pressable
-                  onPress={() => setOpen(true)}
+                  onPress={openNewTier}
                   accessibilityRole="button"
                   accessibilityLabel="Добавить уровень"
                   className="active:opacity-70"
@@ -140,15 +196,20 @@ export default function LoyaltyScreen() {
               {s.tiers.map((t, i) => (
                 <View key={t.id}>
                   {i > 0 ? <Divider inset={16} /> : null}
-                  <View className="flex-row items-center px-4 py-3">
-                    <View className="flex-1">
+                  <View className="flex-row items-center px-4 py-1">
+                    <Pressable
+                      onPress={() => openTier(t)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Редактировать уровень ${t.label}`}
+                      className="flex-1 py-2 active:opacity-60"
+                    >
                       <Text className="text-base font-semibold" style={{ color: th.ink }}>
                         {t.label}
                       </Text>
                       <Text className="text-sm" style={{ color: th.sub }}>
                         от {t.threshold} визитов
                       </Text>
-                    </View>
+                    </Pressable>
                     <Text className="mr-3 text-base font-bold" style={{ color: th.success }}>
                       −{t.percent}%
                     </Text>
@@ -164,7 +225,7 @@ export default function LoyaltyScreen() {
                 </View>
               ))}
               <Divider inset={16} />
-              <AddRow label="Добавить уровень" onPress={() => setOpen(true)} />
+              <AddRow label="Добавить уровень" onPress={openNewTier} />
             </>
           )}
         </SectionCard>
@@ -189,9 +250,11 @@ export default function LoyaltyScreen() {
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
+        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>Новый уровень</Text>
+          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
+            {editingId ? "Редактирование уровня" : "Новый уровень"}
+          </Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Серебро" autoFocus />
           <View className="flex-row gap-3">
             <View className="flex-1">
@@ -213,7 +276,11 @@ export default function LoyaltyScreen() {
               />
             </View>
           </View>
-          <Button label="Добавить" onPress={addTier} disabled={!threshold.trim()} />
+          <Button
+            label={editingId ? "Сохранить изменения" : "Добавить"}
+            onPress={saveTier}
+            disabled={!threshold.trim() || !percent.trim()}
+          />
         </View>
         </KeyboardAvoidingView>
       </Modal>

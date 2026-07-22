@@ -39,6 +39,77 @@ type ClientInsert = Database["public"]["Tables"]["clients"]["Insert"];
 type ClientUpdate = Database["public"]["Tables"]["clients"]["Update"];
 type TagRow = Database["public"]["Tables"]["client_tags"]["Row"];
 
+// PostgREST installations commonly cap a response at 1000 rows. Client
+// lists and tag assignments are long-lived CRM data, so a single unpaged
+// select would make older customers (and some of their tags) disappear
+// without returning an error.
+const CLIENT_PAGE_SIZE = 1000;
+
+async function listClientRows(
+  supabase: DbSupabase,
+  tenantId: string,
+  includeDeleted: boolean,
+): Promise<ClientRow[]> {
+  const rows: ClientRow[] = [];
+  for (let offset = 0; ; offset += CLIENT_PAGE_SIZE) {
+    let query = supabase
+      .from("clients")
+      .select("*")
+      .eq("tenant_id", tenantId);
+    if (!includeDeleted) query = query.is("deleted_at", null);
+    const { data, error } = await query
+      .order("id", { ascending: true })
+      .range(offset, offset + CLIENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listClients: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < CLIENT_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function listClientTagAssignments(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Array<{ client_id: string; tag_id: string }>> {
+  const rows: Array<{ client_id: string; tag_id: string }> = [];
+  for (let offset = 0; ; offset += CLIENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("client_tag_assignments")
+      .select("client_id, tag_id")
+      .eq("tenant_id", tenantId)
+      .order("client_id", { ascending: true })
+      .order("tag_id", { ascending: true })
+      .range(offset, offset + CLIENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listClients tags: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < CLIENT_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
+async function listClientTagRows(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<TagRow[]> {
+  const rows: TagRow[] = [];
+  for (let offset = 0; ; offset += CLIENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("client_tags")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + CLIENT_PAGE_SIZE - 1);
+    if (error) throw new Error(`listClientTags: ${error.message}`);
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < CLIENT_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 // ─── Adapters ──────────────────────────────────────────────────
 
 function asArray<T>(v: Json | null | undefined): T[] {
@@ -66,6 +137,7 @@ function rowToClient(r: ClientRow): Client {
 
     address: r.address,
     city: r.city,
+    city_manual: r.city_manual,
     property_type: (r.property_type ?? "") as PropertyType | "",
 
     language: r.language ?? "",
@@ -146,6 +218,7 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
 
     address: c.address ?? "",
     city: c.city ?? "",
+    city_manual: c.city_manual ?? false,
     property_type: c.property_type || "",
 
     language: c.language ?? null,
@@ -188,6 +261,7 @@ function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   if (patch.first_contact_date !== undefined) out.first_contact_date = patch.first_contact_date;
   if (patch.address !== undefined) out.address = patch.address;
   if (patch.city !== undefined) out.city = patch.city;
+  if (patch.city_manual !== undefined) out.city_manual = patch.city_manual;
   if (patch.property_type !== undefined) out.property_type = patch.property_type || "";
   if (patch.language !== undefined) out.language = patch.language || null;
   if (patch.birthday !== undefined) out.birthday = patch.birthday;
@@ -205,6 +279,94 @@ function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   return out;
 }
 
+type ClientWriteRpcName =
+  | "create_client_with_tags"
+  | "update_client_with_tags";
+
+type PostgrestErrorLike = {
+  code?: string;
+  message?: string;
+  status?: number;
+  statusCode?: number;
+};
+
+/** Rolling deployment compatibility is deliberately narrow. Only a missing
+ * RPC/schema-cache contract may use the legacy multi-request path; validation,
+ * authorization and database errors must surface unchanged so callers never
+ * turn a rejected atomic write into a partial one. */
+function isMissingClientWriteRpc(
+  error: PostgrestErrorLike,
+  rpcName: ClientWriteRpcName,
+): boolean {
+  const message = error.message ?? "";
+  const namesRequestedRpc = message.toLowerCase().includes(rpcName);
+  if (!namesRequestedRpc) return false;
+  return (
+    error.code === "PGRST202"
+    || (
+      error.code === "42883"
+      && /does not exist|undefined function/i.test(message)
+    )
+    || /could not find the function|schema cache/i.test(message)
+  );
+}
+
+function clientWriteError(
+  prefix: string,
+  error: PostgrestErrorLike,
+): Error {
+  const wrapped = new Error(`${prefix}: ${error.message ?? "unknown error"}`);
+  Object.assign(wrapped, {
+    code: error.code,
+    status: error.status,
+    statusCode: error.statusCode,
+  });
+  return wrapped;
+}
+
+function atomicClientTagsUnavailable(operation: "create" | "update"): Error {
+  const action = operation === "create" ? "создать клиента с тегами" : "изменить теги клиента";
+  const error = new Error(
+    `Сейчас нельзя безопасно ${action}: серверная схема ещё не обновлена. Остальные данные не изменены.`,
+  );
+  Object.assign(error, { code: "CLIENT_TAGS_ATOMIC_RPC_REQUIRED" });
+  return error;
+}
+
+function toClientWritePayload(
+  value: ClientInsert | ClientUpdate,
+): Json {
+  const {
+    id: _id,
+    tenant_id: _tenantId,
+    updated_at: _updatedAt,
+    ...payload
+  } = value;
+  void _id;
+  void _tenantId;
+  void _updatedAt;
+  return payload as Json;
+}
+
+function atomicWriteResultToClient(
+  data: Json,
+  operation: "createClient" | "updateClient",
+): Client {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error(`${operation}: atomic RPC returned an invalid client`);
+  }
+  const record = data as unknown as ClientRow & { tag_ids?: unknown };
+  if (typeof record.id !== "string" || typeof record.full_name !== "string") {
+    throw new Error(`${operation}: atomic RPC returned an invalid client`);
+  }
+  return {
+    ...rowToClient(record),
+    tag_ids: Array.isArray(record.tag_ids)
+      ? record.tag_ids.filter((id): id is string => typeof id === "string")
+      : [],
+  };
+}
+
 // ─── Public API ────────────────────────────────────────────────
 
 export async function listClients(
@@ -212,27 +374,19 @@ export async function listClients(
   tenantId: string,
   options: { includeDeleted?: boolean } = {},
 ): Promise<Client[]> {
-  let query = supabase.from("clients").select("*").eq("tenant_id", tenantId);
-  if (!options.includeDeleted) {
-    query = query.is("deleted_at", null);
-  }
-  const { data: rows, error } = await query;
-  if (error) throw new Error(`listClients: ${error.message}`);
-
-  const { data: assigns, error: assignErr } = await supabase
-    .from("client_tag_assignments")
-    .select("client_id, tag_id")
-    .eq("tenant_id", tenantId);
-  if (assignErr) throw new Error(`listClients tags: ${assignErr.message}`);
+  const [rows, assigns] = await Promise.all([
+    listClientRows(supabase, tenantId, !!options.includeDeleted),
+    listClientTagAssignments(supabase, tenantId),
+  ]);
 
   const tagsByClient = new Map<string, string[]>();
-  for (const a of assigns ?? []) {
+  for (const a of assigns) {
     const arr = tagsByClient.get(a.client_id) ?? [];
     arr.push(a.tag_id);
     tagsByClient.set(a.client_id, arr);
   }
 
-  return (rows ?? []).map((r) => ({
+  return rows.map((r) => ({
     ...rowToClient(r),
     tag_ids: tagsByClient.get(r.id) ?? [],
   }));
@@ -271,6 +425,35 @@ export async function createClient(
   tenantId: string,
 ): Promise<Client> {
   const insert = clientToInsert(input, tenantId);
+  const desiredTagIds = [...new Set(input.tag_ids ?? [])];
+  const { data: atomic, error: atomicError } = await supabase.rpc(
+    "create_client_with_tags",
+    {
+      p_tenant_id: tenantId,
+      p_client_id: input.id || null,
+      p_client: toClientWritePayload(insert),
+      p_tag_ids: desiredTagIds,
+    },
+  );
+  if (!atomicError) {
+    return atomicWriteResultToClient(atomic, "createClient");
+  }
+  if (!isMissingClientWriteRpc(atomicError, "create_client_with_tags")) {
+    throw clientWriteError("createClient", atomicError);
+  }
+
+  // A rolling old schema can safely create an untagged client with one
+  // INSERT. It cannot atomically create the aggregate when tags were chosen:
+  // INSERT + junction writes may split on a network/RLS failure and leave a
+  // client that the UI reported as unsaved. Fail before the first write; the
+  // completed draft remains available for retry after migration _012 lands.
+  if (desiredTagIds.length > 0) {
+    throw atomicClientTagsUnavailable("create");
+  }
+
+  // Rolling deploy only: the old schema has no aggregate RPC yet. Keep the
+  // single-write untagged path until PostgREST sees migration _012; semantic
+  // RPC errors never reach this branch.
   const { data: row, error } = await supabase
     .from("clients")
     .insert(insert)
@@ -278,8 +461,8 @@ export async function createClient(
     .single();
   if (error) throw new Error(`createClient: ${error.message}`);
 
-  if (input.tag_ids?.length) {
-    const rows = input.tag_ids.map((tag_id) => ({
+  if (desiredTagIds.length) {
+    const rows = desiredTagIds.map((tag_id) => ({
       client_id: row.id,
       tag_id,
       tenant_id: tenantId,
@@ -290,7 +473,7 @@ export async function createClient(
     if (tagErr) throw new Error(`createClient tags: ${tagErr.message}`);
   }
 
-  return { ...rowToClient(row), tag_ids: input.tag_ids ?? [] };
+  return { ...rowToClient(row), tag_ids: desiredTagIds };
 }
 
 export async function updateClient(
@@ -300,6 +483,33 @@ export async function updateClient(
   tenantId: string,
 ): Promise<Client> {
   const update = clientToUpdate(patch);
+  const desiredTagIds = patch.tag_ids === undefined
+    ? undefined
+    : [...new Set(patch.tag_ids)];
+  const atomicArgs: Database["public"]["Functions"]["update_client_with_tags"]["Args"] = {
+    p_tenant_id: tenantId,
+    p_client_id: id,
+    p_patch: toClientWritePayload(update),
+    ...(desiredTagIds === undefined ? {} : { p_tag_ids: desiredTagIds }),
+  };
+  const { data: atomic, error: atomicError } = await supabase.rpc(
+    "update_client_with_tags",
+    atomicArgs,
+  );
+  if (!atomicError) {
+    return atomicWriteResultToClient(atomic, "updateClient");
+  }
+  if (!isMissingClientWriteRpc(atomicError, "update_client_with_tags")) {
+    throw clientWriteError("updateClient", atomicError);
+  }
+  // Updating ordinary client fields is still one safe server write on a
+  // rolling schema. Any explicit tag replacement is a multi-table aggregate,
+  // so refuse it before PATCH instead of risking a half-applied profile.
+  if (desiredTagIds !== undefined) {
+    throw atomicClientTagsUnavailable("update");
+  }
+
+  // Rolling deploy only; removed naturally once every environment has _012.
   const { data: row, error } = await supabase
     .from("clients")
     .update(update)
@@ -308,44 +518,6 @@ export async function updateClient(
     .select("*")
     .single();
   if (error) throw new Error(`updateClient: ${error.message}`);
-
-  // Tag diff — only if caller supplied tag_ids on the patch.
-  if (patch.tag_ids !== undefined) {
-    const desired = new Set(patch.tag_ids);
-    const { data: current, error: curErr } = await supabase
-      .from("client_tag_assignments")
-      .select("tag_id")
-      .eq("client_id", id)
-      .eq("tenant_id", tenantId);
-    if (curErr) throw new Error(`updateClient tags read: ${curErr.message}`);
-
-    const currentSet = new Set((current ?? []).map((c) => c.tag_id));
-    const toAdd = [...desired].filter((t) => !currentSet.has(t));
-    const toRemove = [...currentSet].filter((t) => !desired.has(t));
-
-    if (toRemove.length) {
-      const { error: delErr } = await supabase
-        .from("client_tag_assignments")
-        .delete()
-        .eq("client_id", id)
-        .eq("tenant_id", tenantId)
-        .in("tag_id", toRemove);
-      if (delErr) throw new Error(`updateClient tags delete: ${delErr.message}`);
-    }
-    if (toAdd.length) {
-      const insertRows = toAdd.map((tag_id) => ({
-        client_id: id,
-        tag_id,
-        tenant_id: tenantId,
-      }));
-      const { error: insErr } = await supabase
-        .from("client_tag_assignments")
-        .insert(insertRows);
-      if (insErr) throw new Error(`updateClient tags add: ${insErr.message}`);
-    }
-
-    return { ...rowToClient(row), tag_ids: [...desired] };
-  }
 
   // Tags untouched — re-read for completeness.
   const { data: assigns } = await supabase
@@ -359,17 +531,38 @@ export async function updateClient(
   };
 }
 
+/** Каскад переименования метки библиотеки по клиентам — clients.city
+ *  хранит имя строкой (как day_cities/teams.cities[]), поэтому rename в
+ *  библиотеке обязан дойти и сюда, иначе метки клиентов тихо осиротеют.
+ *  city_manual не трогаем: переименование не меняет авто/ручной режим. */
+export async function renameClientCity(
+  supabase: DbSupabase,
+  tenantId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("clients")
+    .update({ city: to })
+    .eq("tenant_id", tenantId)
+    .eq("city", from);
+  if (error) throw new Error(`renameClientCity: ${error.message}`);
+}
+
 export async function deleteClient(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .delete()
     .eq("id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .select("id")
+    .single();
   if (error) throw new Error(`deleteClient: ${error.message}`);
+  if (data.id !== id) throw new Error("deleteClient: клиент не найден");
   // Junction rows cascade via FK.
 }
 
@@ -380,12 +573,15 @@ export async function softDeleteClient(
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .select("id")
+    .single();
   if (error) throw new Error(`softDeleteClient: ${error.message}`);
+  if (data.id !== id) throw new Error("softDeleteClient: клиент не найден");
 }
 
 export async function softDeleteClients(
@@ -394,12 +590,17 @@ export async function softDeleteClients(
   tenantId: string,
 ): Promise<void> {
   if (!ids.length) return;
-  const { error } = await supabase
+  const uniqueIds = [...new Set(ids)];
+  const { data, error } = await supabase
     .from("clients")
     .update({ deleted_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("tenant_id", tenantId);
+    .in("id", uniqueIds)
+    .eq("tenant_id", tenantId)
+    .select("id");
   if (error) throw new Error(`softDeleteClients: ${error.message}`);
+  if ((data ?? []).length !== uniqueIds.length) {
+    throw new Error("softDeleteClients: часть клиентов не найдена");
+  }
 }
 
 export async function restoreClient(
@@ -407,12 +608,15 @@ export async function restoreClient(
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("clients")
     .update({ deleted_at: null })
     .eq("id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .select("id")
+    .single();
   if (error) throw new Error(`restoreClient: ${error.message}`);
+  if (data.id !== id) throw new Error("restoreClient: клиент не найден");
 }
 
 export async function restoreClients(
@@ -421,12 +625,17 @@ export async function restoreClients(
   tenantId: string,
 ): Promise<void> {
   if (!ids.length) return;
-  const { error } = await supabase
+  const uniqueIds = [...new Set(ids)];
+  const { data, error } = await supabase
     .from("clients")
     .update({ deleted_at: null })
-    .in("id", ids)
-    .eq("tenant_id", tenantId);
+    .in("id", uniqueIds)
+    .eq("tenant_id", tenantId)
+    .select("id");
   if (error) throw new Error(`restoreClients: ${error.message}`);
+  if ((data ?? []).length !== uniqueIds.length) {
+    throw new Error("restoreClients: часть клиентов не найдена");
+  }
 }
 
 // ─── Duplicate guard (clients-99 F1.5) ─────────────────────────
@@ -459,23 +668,22 @@ export async function listClientTags(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<ClientTag[]> {
-  const { data, error } = await supabase
-    .from("client_tags")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("name");
-  if (error) throw new Error(`listClientTags: ${error.message}`);
-  return (data ?? []).map(rowToTag);
+  return (await listClientTagRows(supabase, tenantId)).map(rowToTag);
 }
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { name: string; color: string },
+  input: { id?: string; name: string; color: string },
   tenantId: string,
 ): Promise<ClientTag> {
   const { data, error } = await supabase
     .from("client_tags")
-    .insert({ tenant_id: tenantId, name: input.name, color: input.color })
+    .insert({
+      ...(input.id ? { id: input.id } : {}),
+      tenant_id: tenantId,
+      name: input.name,
+      color: input.color,
+    })
     .select("*")
     .single();
   if (error) throw new Error(`createClientTag: ${error.message}`);
@@ -504,10 +712,13 @@ export async function deleteClientTag(
   id: string,
   tenantId: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("client_tags")
     .delete()
     .eq("id", id)
-    .eq("tenant_id", tenantId);
+    .eq("tenant_id", tenantId)
+    .select("id")
+    .single();
   if (error) throw new Error(`deleteClientTag: ${error.message}`);
+  if (data.id !== id) throw new Error("deleteClientTag: тег не найден");
 }

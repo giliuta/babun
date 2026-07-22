@@ -44,12 +44,17 @@ export function ColorPicker({
       ) : null}
       <View className="flex-row flex-wrap gap-3" accessibilityRole="radiogroup">
         {palette.map((c) => {
+          // Reanimated's Babel check treats every `object.value` used inside
+          // an inline style as a SharedValue, even though this is a plain
+          // colour preset. Alias it before the style so development builds
+          // do not emit one false warning for every swatch.
+          const hex = c.value;
           const selected =
-            (value ?? "").toLowerCase() === c.value.toLowerCase();
+            (value ?? "").toLowerCase() === hex.toLowerCase();
           return (
             <Pressable
-              key={c.value}
-              onPress={disabled ? undefined : () => onChange(c.value)}
+              key={hex}
+              onPress={disabled ? undefined : () => onChange(hex)}
               disabled={disabled}
               hitSlop={4}
               accessibilityRole="radio"
@@ -57,7 +62,7 @@ export function ColorPicker({
               accessibilityState={{ selected, disabled: !!disabled }}
               className="h-9 w-9 items-center justify-center rounded-full"
               style={{
-                backgroundColor: c.value,
+                backgroundColor: hex,
                 borderWidth: selected ? 2 : 0,
                 borderColor: t.ink,
               }}

@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { CalendarPlus } from "lucide-react-native";
+import { CalendarDays } from "lucide-react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 
@@ -29,7 +29,7 @@ export function FirstRunCalendarChoice({
       }}
     >
       <View style={{ width: "100%", maxWidth: 360, alignItems: "center" }}>
-        {/* Brand-gradient mark with the CalendarPlus glyph — same cobalt
+        {/* Brand-gradient calendar mark — same cobalt
             gradient recipe as the primary button (DS: the only gradients). */}
         <View
           style={{
@@ -52,7 +52,7 @@ export function FirstRunCalendarChoice({
             </Defs>
             <Rect width="100%" height="100%" fill="url(#cal-mark)" />
           </Svg>
-          <CalendarPlus color={t.onAccent} size={30} strokeWidth={2} />
+          <CalendarDays color={t.onAccent} size={30} strokeWidth={2} />
         </View>
 
         <Text

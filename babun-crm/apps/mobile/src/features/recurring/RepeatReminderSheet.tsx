@@ -76,11 +76,15 @@ export function RepeatReminderSheet({
           className="flex-1 items-center justify-center px-6"
           style={{ backgroundColor: t.scrim }}
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          // The explicit «Отмена» button below is the VoiceOver dismissal
+          // path. Keeping the scrim out of the accessibility tree prevents
+          // it from grouping the whole form into one giant button.
+          accessible={false}
         >
           <Pressable
             // Останавливает закрытие по тапу внутри карточки.
             onPress={() => {}}
+            accessible={false}
             className="w-full max-w-[360px] overflow-hidden rounded-3xl"
             style={{ backgroundColor: t.surface }}
           >
@@ -120,9 +124,7 @@ export function RepeatReminderSheet({
                       minHeight: 48,
                       borderColor: active ? t.accent : t.separator,
                       backgroundColor: active
-                        ? t.dark
-                          ? "rgba(90,134,255,0.16)"
-                          : "rgba(44,91,224,0.10)"
+                        ? "rgba(44,91,224,0.10)"
                         : t.surface,
                     }}
                   >
@@ -155,7 +157,7 @@ export function RepeatReminderSheet({
                 placeholder="например: проверить пульт"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="rounded-xl px-3.5 py-2.5 text-base"
                 style={{
                   color: t.ink,

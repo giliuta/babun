@@ -15,8 +15,11 @@ export interface CalendarSettings {
   weekStart: "monday" | "sunday";
   timezone: string;           // default "Europe/Nicosia"
   // Sprint 033 Phase I35 — Bumpix-inspired calendar toggles.
-  /** Minutes reserved after every appointment for travel / cleanup.
-   *  New bookings can't land inside this buffer. 0 = off. */
+  /** Minutes reserved after every appointment for travel / cleanup. The
+   *  grid paints the gap as a band, and creating / rescheduling into it
+   *  warns (never blocks — a dispatcher sometimes double-books on
+   *  purpose, same rule as out-of-hours). 0 = off.
+   *  Per-team override: `teams.buffer_minutes` (null = inherit this). */
   bufferMinutes?: number;
   /** Hide status=cancelled appointments from the calendar grid. */
   hideCancelled?: boolean;
@@ -47,7 +50,18 @@ export interface CalendarSettings {
   personalDefaultLabel?: string;
 }
 
+/**
+ * Company-wide fields required to render and operate a work calendar.
+ * Personal labels are deliberately absent: masters receive this projection
+ * through a SECURITY DEFINER RPC instead of reading the raw settings row.
+ */
+export type OperationalCalendarSettings = Omit<
+  CalendarSettings,
+  "personalLabels" | "personalDefaultLabel"
+>;
+
 const STORAGE_KEY = "babun2:settings:calendar";
+const OPERATIONAL_STORAGE_PREFIX = "babun2:settings:calendar:operational";
 
 export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   // v439 — visible range covers the whole day (00:00 → 24:00) so the
@@ -121,9 +135,13 @@ function sanitizeCalendarSettings(s: CalendarSettings): CalendarSettings {
     next.endHour,
     Math.max(we, next.startHour + 1),
   );
+  // endHour - 1, а не endHour: «Открывается на» — час, который встаёт СВЕРХУ
+  // сетки при входе. На endHour сетка проскроллена в самый низ и показывает
+  // пустой край. Раньше здесь стоял endHour, а форма предлагала максимум
+  // endHour-1 — экран рисовал одно, база хранила другое.
   next.scrollOpenHour = Math.max(
     next.startHour,
-    Math.min(open, next.endHour),
+    Math.min(open, next.endHour - 1),
   );
 
   return next;
@@ -133,39 +151,55 @@ export function saveCalendarSettings(settings: CalendarSettings): void {
   getStorage().set(STORAGE_KEY, settings);
 }
 
-export function validateCalendarSettings(s: CalendarSettings): string | null {
-  // endHour can be 24 — treated as "midnight at the end of day".
-  if (s.endHour <= s.startHour) {
-    return "Конец видимого диапазона должен быть позже начала";
-  }
-  if (s.endHour > 24 || s.startHour < 0) {
-    return "Часы вне диапазона 00–24";
-  }
-  const ws = s.workStartHour ?? s.startHour;
-  const we = s.workEndHour ?? s.endHour;
-  if (we <= ws) {
-    return "Конец рабочих часов должен быть позже начала";
-  }
-  // v448 — visible range is auto-expanded to include work / scroll-
-  // open by the patcher + sanitizer. We no longer reject when work /
-  // scroll-open fall outside visible; that situation is repaired on
-  // load instead of blocking Save.
-  return null;
+/** Explicit allow-list so adding a private field to CalendarSettings later
+ * cannot silently expose it through the master projection or its cache. */
+export function toOperationalCalendarSettings(
+  settings: CalendarSettings,
+): OperationalCalendarSettings {
+  return {
+    startHour: settings.startHour,
+    endHour: settings.endHour,
+    gridStep: settings.gridStep,
+    weekStart: settings.weekStart,
+    timezone: settings.timezone,
+    bufferMinutes: settings.bufferMinutes,
+    hideCancelled: settings.hideCancelled,
+    allowOvertime: settings.allowOvertime,
+    workStartHour: settings.workStartHour,
+    workEndHour: settings.workEndHour,
+    scrollOpenHour: settings.scrollOpenHour,
+  };
 }
 
-// Helper for event/appointment forms: returns true when an event
-// scheduled at `startMin` (minutes from midnight) lasting
-// `durationMin` either starts before workStartHour, ends after
-// workEndHour, or both. The form reads this on Save and shows a
-// warning + confirm dialog ("выходит за рабочую норму, всё равно
-// сохранить?") before persisting.
-export function isOutsideWorkHours(
-  startMin: number,
-  durationMin: number,
-  s: CalendarSettings,
-): boolean {
-  const ws = (s.workStartHour ?? s.startHour) * 60;
-  const we = (s.workEndHour ?? s.endHour) * 60;
-  const endMin = startMin + durationMin;
-  return startMin < ws || endMin > we;
+function operationalStorageKey(tenantId: string): string {
+  return `${OPERATIONAL_STORAGE_PREFIX}:${tenantId}`;
+}
+
+/** Tenant-scoped cache for the non-private master projection. It must stay
+ * separate from the owner cache, which may contain personal calendar labels. */
+export function loadOperationalCalendarSettings(
+  tenantId: string,
+): OperationalCalendarSettings {
+  const parsed = getStorage().get<Partial<OperationalCalendarSettings>>(
+    operationalStorageKey(tenantId),
+  );
+  const settings = sanitizeCalendarSettings({
+    ...DEFAULT_CALENDAR_SETTINGS,
+    ...(parsed ?? {}),
+  });
+  return toOperationalCalendarSettings(settings);
+}
+
+export function saveOperationalCalendarSettings(
+  tenantId: string,
+  settings: OperationalCalendarSettings,
+): void {
+  const sanitized = sanitizeCalendarSettings({
+    ...DEFAULT_CALENDAR_SETTINGS,
+    ...settings,
+  });
+  getStorage().set(
+    operationalStorageKey(tenantId),
+    toOperationalCalendarSettings(sanitized),
+  );
 }

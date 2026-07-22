@@ -7,9 +7,11 @@ import {
   Platform,
   Pressable,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Search } from "lucide-react-native";
 import { getInitials } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -19,6 +21,7 @@ import { AddRow } from "@/components/ui/AddRow";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
+import { readableForeground } from "@/theme/readable-color";
 import {
   useCreateMaster,
   useMasters,
@@ -37,27 +40,44 @@ export default function MastersScreen() {
   // Включая архивных: «Вернуть из архива» живёт в хабе мастера, и без
   // архивного хвоста в списке он недостижим (аудит P1-10). Активные
   // сверху, архив серым снизу.
+  const mastersQuery = useMasters({ includeInactive: true });
   const {
     data: allMasters = [],
     isLoading,
     isError,
     error,
     refetch,
-  } = useMasters({ includeInactive: true });
-  const masters = useMemo(
+  } = mastersQuery;
+  const sortedMasters = useMemo(
     () => [
       ...allMasters.filter((m) => m.is_active),
       ...allMasters.filter((m) => !m.is_active),
     ],
     [allMasters],
   );
-  const { data: teams = [] } = useTeams();
+  const teamsQuery = useTeams();
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const create = useCreateMaster();
 
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const masters = useMemo(() => {
+    const needle = normalizeSearch(search);
+    if (!needle) return sortedMasters;
+    return sortedMasters.filter((master) => {
+      const profile = asRecord(master.profile);
+      return normalizeSearch([
+        master.full_name,
+        master.phone,
+        typeof profile.email === "string" ? profile.email : "",
+        typeof profile.login_email === "string" ? profile.login_email : "",
+      ].filter(Boolean).join(" ")).includes(needle);
+    });
+  }, [search, sortedMasters]);
 
   // Тинт аватара по основной команде мастера (цвет команды), как на вебе.
   const teamColorById = useMemo(() => {
@@ -93,14 +113,21 @@ export default function MastersScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader title="Мастера" />
 
-      {isLoading ? (
+      {isLoading || teamsQuery.isLoading ? (
         <EmptyState state="loading" fill />
-      ) : isError ? (
+      ) : isError || teamsQuery.isError ? (
         <EmptyState
           fill
           state="error"
-          subtitle={error instanceof Error ? error.message : undefined}
-          action={{ label: "Повторить", onPress: () => void refetch() }}
+          subtitle={
+            (error || teamsQuery.error) instanceof Error
+              ? ((error || teamsQuery.error) as Error).message
+              : undefined
+          }
+          action={{
+            label: "Повторить",
+            onPress: () => void Promise.all([refetch(), teamsQuery.refetch()]),
+          }}
         />
       ) : (
         <FlatList
@@ -108,6 +135,29 @@ export default function MastersScreen() {
           data={masters}
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ flexGrow: 1 }}
+          ListHeaderComponent={
+            allMasters.length > 0 ? (
+              <View
+                className="mx-3 mb-2 mt-2 h-11 flex-row items-center rounded-xl px-3"
+                style={{ backgroundColor: t.fill }}
+              >
+                <Search color={t.faint} size={17} />
+                <TextInput
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Имя, телефон или email"
+                  placeholderTextColor={t.placeholder}
+                  keyboardAppearance="light"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  accessibilityLabel="Поиск мастера"
+                  className="ml-2 flex-1 text-[15px]"
+                  style={{ color: t.ink }}
+                />
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <MasterRow
               master={item}
@@ -119,7 +169,7 @@ export default function MastersScreen() {
           )}
           ItemSeparatorComponent={() => <Divider inset={64} />}
           ListFooterComponent={
-            masters.length > 0 ? (
+            allMasters.length > 0 ? (
               <>
                 <Divider inset={64} />
                 <AddRow label="Добавить мастера" onPress={openCreate} />
@@ -129,8 +179,9 @@ export default function MastersScreen() {
           ListEmptyComponent={
             <EmptyState
               fill
-              title="Нет мастеров"
-              action={{ label: "Добавить мастера", onPress: openCreate }}
+              title={search.trim() ? "Ничего не найдено" : "Нет мастеров"}
+              subtitle={search.trim() ? "Измените имя, телефон или email в поиске." : undefined}
+              action={search.trim() ? undefined : { label: "Добавить мастера", onPress: openCreate }}
             />
           }
         />
@@ -145,7 +196,7 @@ export default function MastersScreen() {
             className="flex-1"
             style={{ backgroundColor: t.scrim }}
             onPress={() => setOpen(false)}
-            accessibilityLabel="Закрыть"
+            accessible={false}
           />
           <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
             <Text style={{ marginBottom: 12, fontSize: 18, fontWeight: "700", color: t.ink }}>
@@ -178,6 +229,16 @@ export default function MastersScreen() {
   );
 }
 
+function normalizeSearch(value: string): string {
+  return value.trim().toLocaleLowerCase("ru-RU").replace(/ё/g, "е");
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function MasterRow({
   master,
   tint,
@@ -200,7 +261,13 @@ function MasterRow({
         className="mr-3 h-10 w-10 items-center justify-center rounded-full"
         style={{ backgroundColor: archived ? t.faint : tint }}
       >
-        <Text style={{ fontSize: 14, fontWeight: "700", color: t.onAccent }}>
+        <Text
+          style={{
+            fontSize: 14,
+            fontWeight: "700",
+            color: readableForeground(archived ? t.faint : tint),
+          }}
+        >
           {getInitials(master.full_name)}
         </Text>
       </View>

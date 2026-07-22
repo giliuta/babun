@@ -18,10 +18,11 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   AlertTriangle,
   Check,
+  ChevronDown,
   ChevronLeft,
-  Minus,
+  ChevronUp,
+  Clock,
   Phone,
-  Plus,
   Repeat,
   Search,
   X,
@@ -32,21 +33,33 @@ import {
   totalDuration,
 } from "@babun/shared/local/finance/appointment-calc";
 import {
+  APPOINTMENT_SOURCE_LABELS,
   createBlankAppointment,
   getPaidAmount,
   type Appointment,
+  type AppointmentSource,
   type AppointmentStatus,
   type Discount,
   type PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
-import { findOverlap } from "@babun/shared/common/utils/appointment-overlap";
-import { buildDebtPaidPatch } from "@/features/appointments/payment";
+import {
+  findBufferClash,
+  findOverlap,
+} from "@babun/shared/common/utils/appointment-overlap";
+import {
+  buildDebtPaidPatch,
+  PAY_METHOD_LABELS,
+  type PayMethod,
+} from "@/features/appointments/payment";
+import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { OptionSheet } from "@/components/ui/OptionSheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -68,9 +81,16 @@ import { useCreateReminder } from "@/features/recurring/queries";
 import {
   useCreateAppointment,
   useDeleteAppointment,
+  useResetAppointmentPayment,
+  useSetAppointmentPrepayment,
   useUpdateAppointment,
 } from "@/features/calendar/mutations";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useAppointments } from "@/features/calendar/queries";
+import {
+  cancelAppointmentReminders,
+  syncEventAppointmentReminders,
+} from "@/features/calendar/reminders";
 import {
   addMinutesHM,
   buildServices,
@@ -100,6 +120,17 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "cancelled", label: "Отменено" },
 ];
 
+const SOURCE_OPTIONS: readonly {
+  value: AppointmentSource | "";
+  label: string;
+}[] = [
+  { value: "", label: "Не указан" },
+  ...Object.entries(APPOINTMENT_SOURCE_LABELS).map(([value, label]) => ({
+    value: value as AppointmentSource,
+    label,
+  })),
+];
+
 // Правила повтора события — те же 7 пресетов, что web RepeatPickerRow
 // (custom_weekdays набирается только с веба, здесь не предлагаем).
 const REPEAT_OPTIONS: {
@@ -114,6 +145,13 @@ const REPEAT_OPTIONS: {
   { value: "monthly", label: "Каждый месяц" },
   { value: "yearly", label: "Каждый год" },
 ];
+
+const EVENT_REMINDER_OPTIONS = [
+  { value: null, label: "Нет" },
+  { value: 15, label: "За 15 мин" },
+  { value: 60, label: "За 1 час" },
+  { value: 1440, label: "За день" },
+] as const;
 
 // «Ежедневно · до 15 июля» — сводка правила повтора (бейдж + пикер).
 function repeatLabel(r: PersonalEventRepeat): string {
@@ -134,6 +172,9 @@ const hmToMin = (hm: string) => {
 const svcSignature = (
   list: { serviceId: string; quantity: number; pricePerUnit: number }[],
 ) => JSON.stringify(list.map((s) => [s.serviceId, s.quantity, s.pricePerUnit]));
+
+const moneyDraft = (amount: number) =>
+  String(Math.round(Math.max(0, amount) * 100) / 100);
 
 export function AppointmentSheet({
   visible,
@@ -166,6 +207,9 @@ export function AppointmentSheet({
   const createMut = useCreateAppointment();
   const updateMut = useUpdateAppointment();
   const deleteMut = useDeleteAppointment();
+  const prepaymentMut = useSetAppointmentPrepayment();
+  const resetPaymentMut = useResetAppointmentPayment();
+  const currentRole = useCurrentRole().data;
   const createReminder = useCreateReminder();
   const toast = useToast();
   // Grid step drives the initial slot length for a new record (web parity:
@@ -243,6 +287,8 @@ export function AppointmentSheet({
   const [total, setTotal] = useState("0");
   const [customTotal, setCustomTotal] = useState(false);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
+  const [source, setSource] = useState<AppointmentSource | null>(null);
+  const [reminderOn, setReminderOn] = useState(false);
   const [comment, setComment] = useState("");
   const [locationId, setLocationId] = useState<string | null>(null);
   // Адрес денормализован в запись (бригада видит куда ехать даже у
@@ -263,6 +309,12 @@ export function AppointmentSheet({
   const [cancelReason, setCancelReason] = useState("");
   const [kind, setKind] = useState<"work" | "event">("work");
   const [eventColor, setEventColor] = useState<string | null>(null);
+  const [eventNotes, setEventNotes] = useState("");
+  const [eventUrl, setEventUrl] = useState("");
+  const [eventReminderOffset, setEventReminderOffset] = useState<number | null>(
+    null,
+  );
+  const [eventPushAt, setEventPushAt] = useState<string | null>(null);
   // Тип события — ПРЕСЕТ (веб-семантика): выбор чипа применяет цвет и
   // название, в запись не персистится. Локальный state сессии шита.
   const [eventTypeId, setEventTypeId] = useState<string | null>(null);
@@ -277,9 +329,13 @@ export function AppointmentSheet({
   const [clientPicker, setClientPicker] = useState(false);
   const [servicePicker, setServicePicker] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
-  // «Выполнено» + долг → предлагаем сразу принять оплату (нал/карта).
+  const [sourceSheetOpen, setSourceSheetOpen] = useState(false);
+  const [prepaymentOpen, setPrepaymentOpen] = useState(false);
+  // «Выполнено» + долг → предлагаем сразу принять оплату.
   // null = «позже»: сохраняем без платежа, долг остаётся в «Должниках».
-  const [payMethod, setPayMethod] = useState<"cash" | "card" | null>(null);
+  const [payMethod, setPayMethod] = useState<PayMethod | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAmountTouched, setPaymentAmountTouched] = useState(false);
 
   // Лояльность — автоскидка уровня по числу завершённых визитов клиента
   // (порт apps/web/src/hooks/useLoyaltyAutoApply.ts): автозначение
@@ -319,7 +375,11 @@ export function AppointmentSheet({
   useEffect(() => {
     if (!visible) return;
     setRepeatOpen(false);
+    setSourceSheetOpen(false);
+    setPrepaymentOpen(false);
     setPayMethod(null);
+    setPaymentAmount("");
+    setPaymentAmountTouched(false);
     if (appointment) {
       setClientId(appointment.client_id);
       setDate(appointment.date);
@@ -335,6 +395,8 @@ export function AppointmentSheet({
       setTotal(String(appointment.total_amount ?? 0));
       setCustomTotal(!!appointment.custom_total);
       setStatus(appointment.status);
+      setSource(appointment.source ?? null);
+      setReminderOn(appointment.reminder_enabled);
       setComment(appointment.comment ?? "");
       setLocationId(appointment.location_id ?? null);
       setAddress(appointment.address ?? "");
@@ -368,6 +430,16 @@ export function AppointmentSheet({
       setCancelReason(appointment.cancel_reason ?? "");
       setKind(appointment.kind === "work" ? "work" : "event");
       setEventColor(appointment.color_override ?? null);
+      setEventNotes(appointment.event_notes ?? "");
+      setEventUrl(appointment.event_url ?? "");
+      setEventPushAt(
+        appointment.event_push_enabled ? appointment.event_push_at ?? null : null,
+      );
+      setEventReminderOffset(
+        appointment.event_push_enabled && !appointment.event_push_at
+          ? appointment.event_push_offsets?.[0] ?? null
+          : null,
+      );
       // Пресеты не персистятся — выбранность чипа живёт только в сессии.
       setEventTypeId(null);
       setAllDay(appointment.event_all_day ?? false);
@@ -383,7 +455,17 @@ export function AppointmentSheet({
       setClientId(defaults?.client_id ?? null);
       setDate(defaults?.date ?? today);
       setTimeStart(start);
-      setTimeEnd(addMinutesHM(start, calSettings?.gridStep ?? 60));
+      // Длительность новой записи — настройка календаря той команды, куда
+      // пишем (teams.default_slot_minutes). Раньше мобила читала «Шаг сетки»:
+      // визуальная плотность рельса тайно назначала бизнес-правило «сколько
+      // длится визит». Настройки шага больше нет, дефолт — честные 30 мин.
+      const slotTeamId = defaults?.team_id ?? lastTeamId;
+      setTimeEnd(
+        addMinutesHM(
+          start,
+          teams.find((x) => x.id === slotTeamId)?.default_slot_minutes ?? 30,
+        ),
+      );
       // Предвыбор услуг из ?new= («Записать сюда» / повторное ТО).
       setServiceIds(defaults?.service_ids ?? []);
       // Умный дефолт: команда последней созданной записи (записи одной
@@ -394,6 +476,8 @@ export function AppointmentSheet({
       setTotal("0");
       setCustomTotal(false);
       setStatus("scheduled");
+      setSource(null);
+      setReminderOn(false);
       setComment("");
       // «Записать сюда» с карточки клиента предвыбирает объект (LOCKED
       // «Карта-диспетчер»: букинг в 2 тапа с предвыбранным объектом).
@@ -412,6 +496,10 @@ export function AppointmentSheet({
       setCancelReason("");
       setKind(defaults?.kind && defaults.kind !== "work" ? "event" : "work");
       setEventColor(null);
+      setEventNotes("");
+      setEventUrl("");
+      setEventReminderOffset(null);
+      setEventPushAt(null);
       setEventTypeId(null);
       setAllDay(false);
       setRepeat({ kind: "none" });
@@ -520,7 +608,32 @@ export function AppointmentSheet({
   // Долг = сумма минус уже полученное (аванс + платежи). Питает секцию
   // «Оплата» при статусе «Выполнено» (getPaidAmount — как «Должники»).
   const alreadyPaid = appointment ? getPaidAmount(appointment) : 0;
-  const debt = Math.max(0, effectiveTotal - alreadyPaid);
+  // «Возвращено» — терминальное состояние старого платёжного цикла: деньги
+  // и долг равны нулю; повторное обслуживание начинается новой заявкой.
+  const debt =
+    appointment?.payment_status === "refunded"
+      ? 0
+      : Math.max(0, effectiveTotal - alreadyPaid);
+  const settlementAmount = parseMoneyInput(paymentAmount);
+  const settlementScaleValid = /^\d+(?:[.,]\d{0,2})?$/.test(
+    paymentAmount.trim(),
+  );
+  const settlementAmountValid =
+    payMethod === null ||
+    (status === "completed" &&
+      debt > 0 &&
+      settlementAmount > 0 &&
+      settlementAmount <= debt &&
+      settlementScaleValid);
+
+  // Selecting a tender means «pay the full debt» by default. If total/debt
+  // changes before save, keep that fast-path in sync until the dispatcher
+  // explicitly edits the amount for a partial payment.
+  useEffect(() => {
+    if (!payMethod || paymentAmountTouched) return;
+    setPaymentAmount(moneyDraft(debt));
+  }, [debt, payMethod, paymentAmountTouched]);
+
   const client = clients.find((c) => c.id === clientId) ?? null;
   // «Чистка · Диагностика» — для RepeatReminderSheet (web serviceSummary).
   const serviceSummary = useMemo(
@@ -538,6 +651,7 @@ export function AppointmentSheet({
     (kind === "work"
       ? !!clientId && serviceIds.length > 0
       : comment.trim().length > 0) &&
+    settlementAmountValid &&
     !createMut.isPending &&
     !updateMut.isPending;
 
@@ -568,6 +682,44 @@ export function AppointmentSheet({
       : overlap.comment || "Запись"
     : null;
 
+  // Буфер на дорогу/уборку: team.buffer_minutes ?? общий ?? 0 — тот же
+  // резолв, что у сетки ((dashboard)/index.tsx). Предупреждаем ровно как о
+  // накладке — видимо, но не блокируя. До этого буфер был только серой
+  // полосой на сетке: доктайп обещал «новые записи не ставятся в буфер», а
+  // поставить визит впритык ничто не мешало.
+  const bufferMinutes =
+    teams.find((x) => x.id === teamId)?.buffer_minutes ??
+    calSettings?.bufferMinutes ??
+    0;
+  const tight = useMemo<Appointment | null>(
+    () =>
+      overlap
+        ? null // о накладке уже сказано — два предупреждения об одном это шум
+        : (findBufferClash(
+            {
+              id: appointment?.id,
+              date,
+              time_start: timeStart,
+              time_end: timeEnd,
+              team_id: teamId,
+              kind,
+            },
+            allAppts,
+            bufferMinutes,
+          ) as Appointment | null),
+    [
+      overlap,
+      allAppts,
+      appointment?.id,
+      kind,
+      teamId,
+      date,
+      timeStart,
+      timeEnd,
+      bufferMinutes,
+    ],
+  );
+
   // Dirty draft for the close guard: create — any meaningful field beyond
   // the opening defaults (slot tap / «Записать сюда» prefills are not dirt);
   // edit — the draft differs from the stored record (web v619 field set,
@@ -586,7 +738,13 @@ export function AppointmentSheet({
         customTotal ||
         masterId !== null ||
         eventColor !== null ||
+        eventNotes.trim().length > 0 ||
+        eventUrl.trim().length > 0 ||
+        eventReminderOffset !== null ||
+        eventPushAt !== null ||
         status !== "scheduled" ||
+        source !== null ||
+        reminderOn ||
         cancelReason.trim().length > 0 ||
         addressNote.trim().length > 0 ||
         // Адрес с выбранным объектом — предзаполнение, не грязь; руками
@@ -604,12 +762,22 @@ export function AppointmentSheet({
       teamId !== appointment.team_id ||
       masterId !== (appointment.master_id ?? null) ||
       status !== appointment.status ||
+      source !== (appointment.source ?? null) ||
+      reminderOn !== appointment.reminder_enabled ||
       comment.trim() !== (appointment.comment ?? "").trim() ||
       cancelReason.trim() !== (appointment.cancel_reason ?? "").trim() ||
       locationId !== (appointment.location_id ?? null) ||
       address.trim() !== (appointment.address ?? "").trim() ||
       addressNote.trim() !== (appointment.address_note ?? "").trim() ||
       eventColor !== (appointment.color_override ?? null) ||
+      eventNotes.trim() !== (appointment.event_notes ?? "").trim() ||
+      eventUrl.trim() !== (appointment.event_url ?? "").trim() ||
+      eventPushAt !==
+        (appointment.event_push_enabled ? appointment.event_push_at ?? null : null) ||
+      eventReminderOffset !==
+        (appointment.event_push_enabled && !appointment.event_push_at
+          ? appointment.event_push_offsets?.[0] ?? null
+          : null) ||
       allDay !== (appointment.event_all_day ?? false) ||
       JSON.stringify(repeat) !==
         JSON.stringify(appointment.event_repeat ?? { kind: "none" }) ||
@@ -634,6 +802,10 @@ export function AppointmentSheet({
     total,
     masterId,
     eventColor,
+    eventNotes,
+    eventUrl,
+    eventReminderOffset,
+    eventPushAt,
     allDay,
     repeat,
     payMethod,
@@ -642,12 +814,98 @@ export function AppointmentSheet({
     timeEnd,
     teamId,
     status,
+    source,
+    reminderOn,
     cancelReason,
     locationId,
     address,
     addressNote,
     selectedServices,
   ]);
+
+  const appointmentHasSettlement =
+    !!appointment &&
+    ((appointment.paid_amount ?? 0) > 0 ||
+      (appointment.payments?.length ?? 0) > 0 ||
+      appointment.payment != null ||
+      appointment.payment_status === "partial" ||
+      (appointment.payment_status === "paid" &&
+        (appointment.prepaid_amount ?? 0) < (appointment.total_amount ?? 0)));
+  const appointmentHasReceipt =
+    !!appointment &&
+    ((appointment.prepaid_amount ?? 0) > 0 || appointmentHasSettlement);
+  const canAdjustPrepayment =
+    !!appointment &&
+    kind === "work" &&
+    (currentRole === "owner" || currentRole === "dispatcher") &&
+    !appointmentHasSettlement &&
+    appointment.status !== "completed" &&
+    appointment.status !== "cancelled" &&
+    appointment.payment_status !== "refunded";
+  const canResetPayment =
+    !!appointment &&
+    kind === "work" &&
+    (currentRole === "owner" || currentRole === "dispatcher") &&
+    appointmentHasReceipt &&
+    appointment.status !== "cancelled" &&
+    appointment.payment_status !== "refunded";
+  const chooseStatus = (next: AppointmentStatus) => {
+    if (
+      appointment?.payment_status === "refunded" &&
+      next !== appointment.status
+    ) {
+      Alert.alert(
+        "Оплата уже возвращена",
+        "Эта заявка закрыта в финансовой истории. Для новой работы создайте новую заявку.",
+      );
+      return;
+    }
+    setStatus(next);
+    if (next !== "completed") {
+      setPayMethod(null);
+      setPaymentAmount("");
+      setPaymentAmountTouched(false);
+    }
+  };
+  const openPrepaymentEditor = () => {
+    if (dirty) {
+      Alert.alert(
+        "Сначала сохраните заявку",
+        "Предоплата пишется в финансовую историю. Сохраните изменения суммы и услуг, затем откройте предоплату.",
+      );
+      return;
+    }
+    setPrepaymentOpen(true);
+  };
+  const resetPayment = () => {
+    if (!appointment || resetPaymentMut.isPending) return;
+    if (dirty) {
+      Alert.alert(
+        "Сначала сохраните заявку",
+        "В форме есть несохранённые изменения. Сохраните их перед отменой оплаты.",
+      );
+      return;
+    }
+    Alert.alert(
+      "Отменить оплату?",
+      appointment.status === "completed"
+        ? "Все полученные суммы, включая предоплату и доплаты, вернутся на исходные счета. Заявка останется выполненной, долг появится снова, а связанный инвойс автоматически переоткроется."
+        : "Все полученные суммы вернутся на исходные счета. Сама запись останется в календаре без оплаты, а связанный инвойс автоматически переоткроется.",
+      [
+        { text: "Не отменять", style: "cancel" },
+        {
+          text: "Отменить оплату",
+          style: "destructive",
+          onPress: () =>
+            resetPaymentMut.mutate(appointment.id, {
+              onSuccess: () => toast("Оплата отменена, долг восстановлен"),
+              onError: (error) =>
+                Alert.alert("Не удалось отменить оплату", error.message),
+            }),
+        },
+      ],
+    );
+  };
 
   // «Весь день»: вкл — запоминаем время и растягиваем на сутки, выкл —
   // возвращаем прежний слот (web EventForm handleAllDay parity).
@@ -709,6 +967,14 @@ export function AppointmentSheet({
   // вхождения разворачиваются из seed (expandRepeat) и живут только с ним.
   const isRepeating =
     !!appointment?.event_repeat && appointment.event_repeat.kind !== "none";
+  const hasRecordedPayment =
+    !!appointment &&
+    ((appointment.payment_status != null &&
+      appointment.payment_status !== "unpaid") ||
+      (appointment.prepaid_amount ?? 0) > 0 ||
+      (appointment.paid_amount ?? 0) > 0 ||
+      (appointment.payments?.length ?? 0) > 0 ||
+      appointment.payment != null);
 
   const buildPatch = (): Partial<Appointment> => {
     const cancel =
@@ -723,10 +989,19 @@ export function AppointmentSheet({
         time_end: timeEnd,
         event_all_day: allDay,
         event_repeat: repeat,
+        event_notes: eventNotes.trim(),
+        event_url: eventUrl.trim(),
+        event_push_enabled:
+          eventReminderOffset !== null || eventPushAt !== null,
+        event_push_offsets:
+          eventReminderOffset === null ? [] : [eventReminderOffset],
+        event_push_at: eventPushAt,
         team_id: teamId,
-        master_id: masterId,
+        master_id: null,
         status,
         comment: comment.trim(),
+        address: address.trim(),
+        address_note: "",
         color_override: eventColor,
         client_id: null,
         location_id: null,
@@ -754,6 +1029,8 @@ export function AppointmentSheet({
       total_duration: computedDuration,
       comment: comment.trim(),
       status,
+      source,
+      reminder_enabled: reminderOn && Boolean(client?.phone),
       location_id: locationId,
       // Адрес денормализован из состояния секции «Адрес» (предзаполнен
       // объектом, правится руками) — web buildSavedWorkAppointment parity.
@@ -768,11 +1045,32 @@ export function AppointmentSheet({
     // buildCompletedAppointment parity). Патч строит общий
     // buildDebtPaidPatch — тот же, что зовёт тап «Оплачено» на визите в
     // карточке клиента: пять связанных полей пишутся из одного места.
-    if (status === "completed" && payMethod && debt > 0) {
-      Object.assign(
-        patch,
-        buildDebtPaidPatch(appointment, { method: payMethod, amount: debt }),
-      );
+    if (
+      status === "completed" &&
+      payMethod &&
+      debt > 0 &&
+      settlementAmountValid
+    ) {
+      const paymentPatch = buildDebtPaidPatch(appointment, {
+        method: payMethod,
+        amount: settlementAmount,
+        remainingDebt: debt,
+      });
+      // A dispatcher can collect only part now and the remainder later,
+      // potentially by another method. The cumulative mirrors stay in the
+      // same patch; the server records only this transition's delta.
+      Object.assign(patch, paymentPatch);
+    } else if (
+      status === "completed" &&
+      appointment &&
+      effectiveTotal > 0 &&
+      alreadyPaid >= effectiveTotal &&
+      appointment.payment_status !== "refunded"
+    ) {
+      // A fully prepaid (or previously partially paid) job has no remaining
+      // tender to append. Still finalize its payment status together with the
+      // work status so the server ledger and debt UI cannot disagree.
+      patch.payment_status = "paid";
     }
     return patch;
   };
@@ -784,22 +1082,69 @@ export function AppointmentSheet({
       return;
     }
     try {
+      const patch = buildPatch();
+      let saved: Appointment;
       if (isEdit && appointment) {
-        await updateMut.mutateAsync({ id: appointment.id, patch: buildPatch() });
+        await updateMut.mutateAsync({ id: appointment.id, patch });
+        saved = { ...appointment, ...patch };
+        if (
+          kind === "work" &&
+          (date !== appointment.date ||
+            timeStart !== appointment.time_start ||
+            timeEnd !== appointment.time_end ||
+            status === "cancelled")
+        ) {
+          void cancelAppointmentReminders(appointment.id);
+        }
       } else {
-        await createMut.mutateAsync(createBlankAppointment(buildPatch()));
+        saved = createBlankAppointment(patch);
+        saved = await createMut.mutateAsync(saved);
       }
       const paidNow =
-        kind === "work" && status === "completed" && payMethod && debt > 0;
-      toast(
-        paidNow
-          ? `Оплата ${formatEUR(debt)} получена`
-          : isEdit
-            ? "Сохранено"
-            : kind === "event"
-              ? "Событие создано"
-              : "Запись создана",
-      );
+        kind === "work" &&
+        status === "completed" &&
+        payMethod &&
+        debt > 0 &&
+        settlementAmountValid;
+      let message = paidNow
+        ? `Оплата ${formatEUR(settlementAmount)} получена`
+        : isEdit
+          ? "Сохранено"
+          : kind === "event"
+            ? "Событие создано"
+            : "Запись создана";
+      let toastType: "success" | "info" = "success";
+      if (kind === "event") {
+        const reminderResult = await syncEventAppointmentReminders(
+          saved,
+          teams.find((candidate) => candidate.id === saved.team_id)?.timezone ??
+            calSettings?.timezone ??
+            "Europe/Nicosia",
+        );
+        if (reminderResult === "scheduled") {
+          message = isEdit
+            ? "Событие и напоминание сохранены"
+            : "Событие создано с напоминанием";
+        } else if (reminderResult === "deferred") {
+          message =
+            "Событие сохранено; напоминание стоит в очереди и установится, когда на iPhone освободится место";
+          toastType = "info";
+        } else if (reminderResult === "capacity") {
+          message =
+            "Событие сохранено, но очередь напоминаний переполнена";
+          toastType = "info";
+        } else if (reminderResult === "denied") {
+          message = "Событие сохранено, но уведомления запрещены в Настройках";
+          toastType = "info";
+        } else if (reminderResult === "unavailable") {
+          message = "Событие сохранено; напоминание появится после обновления приложения";
+          toastType = "info";
+        } else if (reminderResult === "past") {
+          message = "Событие сохранено; время напоминания уже прошло";
+          toastType = "info";
+        }
+      }
+      toast(message, toastType);
       onClose();
     } catch (e) {
       Alert.alert("Ошибка", (e as Error).message);
@@ -813,6 +1158,10 @@ export function AppointmentSheet({
   const missingHint =
     createMut.isPending || updateMut.isPending
       ? "Сохраняем…"
+      : payMethod && !settlementAmountValid
+        ? settlementAmount > debt
+          ? `Сумма оплаты не может быть больше ${formatEUR(debt)}`
+          : "Введите сумму оплаты не больше чем с двумя знаками после запятой"
       : kind === "work"
         ? !clientId && serviceIds.length === 0
           ? "Выберите клиента и услуги"
@@ -848,6 +1197,13 @@ export function AppointmentSheet({
 
   const remove = () => {
     if (!appointment) return;
+    if (hasRecordedPayment) {
+      Alert.alert(
+        "Запись хранится в истории",
+        "Запись с оплатой нельзя удалить. Отмените её или оформите возврат, чтобы финансовая история осталась корректной.",
+      );
+      return;
+    }
     // Повторяющаяся запись хранится одной seed-строкой — удаление
     // стирает ВСЮ серию, и подтверждение обязано сказать это прямо.
     Alert.alert(
@@ -863,6 +1219,7 @@ export function AppointmentSheet({
           onPress: async () => {
             try {
               await deleteMut.mutateAsync(appointment.id);
+              void cancelAppointmentReminders(appointment.id);
               onClose();
             } catch (e) {
               Alert.alert("Ошибка", (e as Error).message);
@@ -880,16 +1237,15 @@ export function AppointmentSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={requestClose} />
+        <Pressable className="flex-1" onPress={requestClose} accessible={false} />
         <View className="h-[88%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.canvas }}>
           {/* header */}
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: t.separator, backgroundColor: t.surface }}>
             <Pressable
               onPress={requestClose}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Закрыть"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={t.body} size={ICON.md} />
             </Pressable>
@@ -902,7 +1258,7 @@ export function AppointmentSheet({
                   ? "Запись"
                   : "Новая запись"}
             </Text>
-            <View className="w-10" />
+            <View className="w-11" />
           </View>
 
           <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
@@ -931,48 +1287,49 @@ export function AppointmentSheet({
               <>
             {/* client */}
             <SectionCard title="Клиент">
-              <Pressable
-                onPress={() => setClientPicker(true)}
-                className="flex-row items-center px-4 py-3 active:opacity-60"
-              >
-                <View className="flex-1">
-                  {client ? (
-                    <>
-                      <Text className="text-base font-semibold" style={{ color: t.ink }}>
-                        {client.full_name || "Без имени"}
-                      </Text>
-                      {client.phone ? (
-                        <Text className="text-sm" style={{ color: t.sub }}>
-                          {client.phone}
+              <View className="flex-row items-stretch">
+                <Pressable
+                  onPress={() => setClientPicker(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={client ? `Изменить клиента: ${client.full_name || "Без имени"}` : "Выбрать клиента"}
+                  className="min-h-[52px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60"
+                >
+                  <View className="flex-1">
+                    {client ? (
+                      <>
+                        <Text className="text-base font-semibold" style={{ color: t.ink }}>
+                          {client.full_name || "Без имени"}
                         </Text>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Text className="text-base" style={{ color: t.accent }}>Выбрать клиента</Text>
-                  )}
-                </View>
+                        {client.phone ? (
+                          <Text className="text-sm" style={{ color: t.sub }}>
+                            {client.phone}
+                          </Text>
+                        ) : null}
+                      </>
+                    ) : (
+                      <Text className="text-base" style={{ color: t.accent }}>Выбрать клиента</Text>
+                    )}
+                  </View>
+                  {client ? (
+                    <Text className="mr-3 text-sm font-medium" style={{ color: t.accent }}>Изменить</Text>
+                  ) : null}
+                </Pressable>
                 {client?.phone ? (
-                  // Вложенный Pressable перехватывает тап — строка (смена
-                  // клиента) не срабатывает при звонке.
                   <Pressable
                     onPress={() =>
                       void Linking.openURL(
                         `tel:${client.phone!.replace(/[^+\d]/g, "")}`,
                       )
                     }
-                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={`Позвонить: ${client.phone}`}
-                    className="mr-3 h-9 w-9 items-center justify-center rounded-full active:opacity-70"
+                    className="mr-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
                     style={{ backgroundColor: `${t.accent}14` }}
                   >
                     <Phone color={t.accent} size={ICON.sm} />
                   </Pressable>
                 ) : null}
-                {client ? (
-                  <Text className="text-sm font-medium" style={{ color: t.accent }}>Изменить</Text>
-                ) : null}
-              </Pressable>
+              </View>
             </SectionCard>
 
             {/* object / location */}
@@ -1001,21 +1358,23 @@ export function AppointmentSheet({
             <SectionCard title="Адрес">
               <TextInput
                 value={address}
+                accessibilityLabel="Адрес"
                 onChangeText={setAddress}
                 placeholder="Улица, дом, город…"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="px-4 pt-3 pb-1.5 text-base"
                 style={{ color: t.ink }}
               />
               <TextInput
                 value={addressNote}
+                accessibilityLabel="Детали адреса"
                 onChangeText={setAddressNote}
                 placeholder="Заметка: подъезд, код, этаж…"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="px-4 pb-3 text-sm"
                 style={{ color: t.sub }}
               />
@@ -1041,11 +1400,27 @@ export function AppointmentSheet({
               </View>
             ) : null}
 
+            {/* буфер на дорогу/уборку — тот же язык, тише тоном: это не
+                накладка, а «слишком впритык» */}
+            {tight ? (
+              <View
+                className="mx-3 mt-2 flex-row items-start gap-2 rounded-[14px] px-3 py-2.5"
+                style={{ backgroundColor: t.fill }}
+              >
+                <Clock color={t.sub} size={ICON.sm} />
+                <Text className="flex-1 text-[13px]" style={{ color: t.sub }}>
+                  Меньше {bufferMinutes} мин до записи {tight.time_start}–
+                  {tight.time_end} — не останется времени на дорогу
+                </Text>
+              </View>
+            ) : null}
+
             {/* date + time */}
             <SectionCard title="Когда">
               <View className="flex-row items-center justify-between px-4 py-2.5">
                 <Text className="text-base" style={{ color: t.ink }}>Дата</Text>
                 <DateTimePicker
+                  themeVariant="light"
                   value={date ? parseYMD(date) : new Date()}
                   mode="date"
                   display="compact"
@@ -1059,6 +1434,7 @@ export function AppointmentSheet({
                     <Text className="text-base" style={{ color: t.ink }}>Время</Text>
                     <View className="flex-row items-center">
                       <DateTimePicker
+                        themeVariant="light"
                         value={parseHM(timeStart)}
                         mode="time"
                         display="compact"
@@ -1067,6 +1443,7 @@ export function AppointmentSheet({
                       />
                       <Text className="px-1" style={{ color: t.faint }}>–</Text>
                       <DateTimePicker
+                        themeVariant="light"
                         value={parseHM(timeEnd)}
                         mode="time"
                         display="compact"
@@ -1141,6 +1518,8 @@ export function AppointmentSheet({
                 ) : (
                   <Pressable
                     onPress={() => setServicePicker(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Добавить услуги"
                     className="px-4 py-3 active:opacity-60"
                   >
                     <Text className="text-base" style={{ color: t.accent }}>Добавить услуги</Text>
@@ -1150,12 +1529,26 @@ export function AppointmentSheet({
                 serviceIds.map((id) => {
                   const s = catalog.get(id);
                   const ov = overrides[id] ?? {};
-                  const qty = ov.qty ?? 1;
+                  const countable = s?.is_countable !== false;
+                  const qty = countable ? (ov.qty ?? 1) : 1;
                   // Effective price mirrors buildServices: operator override
                   // wins, otherwise the bulk ladder reprices per quantity.
                   const price = ov.price ?? (s ? unitPriceFor(s, qty) : 0);
                   const setOv = (p: ServiceOverride) =>
                     setOverrides((o) => ({ ...o, [id]: { ...o[id], ...p } }));
+                  const removeService = () => {
+                    setServiceIds((prev) => prev.filter((x) => x !== id));
+                    setOverrides((o) => {
+                      const rest = { ...o };
+                      delete rest[id];
+                      return rest;
+                    });
+                    setPriceDrafts((d) => {
+                      const rest = { ...d };
+                      delete rest[id];
+                      return rest;
+                    });
+                  };
                   return (
                     <View
                       key={id}
@@ -1164,49 +1557,51 @@ export function AppointmentSheet({
                       <Text className="flex-1 pr-2 text-base tabular-nums" style={{ color: t.ink }} numberOfLines={1}>
                         {s?.name ?? "Услуга"}
                       </Text>
-                      <Pressable
-                        onPress={() => {
-                          // Минус с qty=1 убирает услугу из выбранных —
-                          // выбор легко восстановим пикером, Undo не нужен.
-                          if (qty <= 1) {
-                            setServiceIds((prev) => prev.filter((x) => x !== id));
-                            setOverrides((o) => {
-                              const rest = { ...o };
-                              delete rest[id];
-                              return rest;
-                            });
-                            setPriceDrafts((d) => {
-                              const rest = { ...d };
-                              delete rest[id];
-                              return rest;
-                            });
-                          } else {
-                            setOv({ qty: qty - 1 });
-                          }
-                        }}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          qty <= 1 ? "Убрать услугу" : "Уменьшить количество"
-                        }
-                        className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
-                        style={{ backgroundColor: t.fill }}
-                      >
-                        <Minus color={t.body} size={13} />
-                      </Pressable>
-                      <Text className="w-6 text-center text-sm tabular-nums" style={{ color: t.sub }}>
-                        {qty}
-                      </Text>
-                      <Pressable
-                        onPress={() => setOv({ qty: qty + 1 })}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Увеличить количество"
-                        className="h-7 w-7 items-center justify-center rounded-full active:opacity-70"
-                        style={{ backgroundColor: t.fill }}
-                      >
-                        <Plus color={t.body} size={13} />
-                      </Pressable>
+                      {countable ? (
+                        <>
+                          <Pressable
+                            onPress={() => {
+                              if (qty <= 1) removeService();
+                              else setOv({ qty: qty - 1 });
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={
+                              qty <= 1
+                                ? `Убрать услугу ${s?.name ?? "Услуга"}`
+                                : `Уменьшить количество: ${s?.name ?? "Услуга"}`
+                            }
+                            accessibilityValue={{ now: qty, min: 1 }}
+                            className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
+                            style={{ backgroundColor: t.fill }}
+                          >
+                            <ChevronDown color={t.body} size={13} />
+                          </Pressable>
+                          <Text className="w-6 text-center text-sm tabular-nums" style={{ color: t.sub }}>
+                            {qty}
+                          </Text>
+                          <Pressable
+                            onPress={() => setOv({ qty: qty + 1 })}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Увеличить количество: ${s?.name ?? "Услуга"}`}
+                            accessibilityValue={{ now: qty, min: 1 }}
+                            className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
+                            style={{ backgroundColor: t.fill }}
+                          >
+                            <ChevronUp color={t.body} size={13} />
+                          </Pressable>
+                        </>
+                      ) : (
+                        <Pressable
+                          onPress={removeService}
+                          accessibilityRole="button"
+                          accessibilityLabel="Убрать услугу"
+                          style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
+                            Убрать
+                          </Text>
+                        </Pressable>
+                      )}
                       <TextInput
                         // Черновик строки, пока поле в фокусе: controlled
                         // String(price) съедал «12,» на каждом нажатии.
@@ -1223,11 +1618,12 @@ export function AppointmentSheet({
                           })
                         }
                         keyboardType="decimal-pad"
-                        className="ml-2 w-14 text-right text-sm tabular-nums"
+                        accessibilityLabel={`Стоимость услуги: ${s?.name ?? "Услуга"}`}
+                        className="ml-2 min-h-11 w-14 text-right text-sm tabular-nums"
                         style={{ color: t.sub }}
                         placeholderTextColor={t.placeholder}
                         selectionColor={t.accent}
-                        keyboardAppearance={t.dark ? "dark" : "light"}
+                        keyboardAppearance="light"
                       />
                       <Text className="text-sm" style={{ color: t.faint }}>€</Text>
                     </View>
@@ -1259,7 +1655,7 @@ export function AppointmentSheet({
                 ) : null}
               </SectionCard>
             ) : null}
-            {masters.length > 0 ? (
+            {kind === "work" && masters.length > 0 ? (
               <SectionCard title="Мастер">
                 <ChipRow
                   items={masters.map((m) => ({ id: m.id, label: m.full_name }))}
@@ -1274,8 +1670,9 @@ export function AppointmentSheet({
             {/* total */}
             <SectionCard title="Сумма">
               <View className="flex-row items-center px-4 py-2.5">
-                <TextInput
-                  value={customTotal ? total : String(computedTotal)}
+                  <TextInput
+                    value={customTotal ? total : String(computedTotal)}
+                    accessibilityLabel="Итоговая сумма"
                   onChangeText={(v) => {
                     setCustomTotal(true);
                     setTotal(v);
@@ -1286,14 +1683,15 @@ export function AppointmentSheet({
                   placeholder="0"
                   placeholderTextColor={t.placeholder}
                   selectionColor={t.accent}
-                  keyboardAppearance={t.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                 />
                 <Text className="text-2xl font-bold" style={{ color: t.faint }}>€</Text>
                 {customTotal ? (
                   <Pressable
                     onPress={() => setCustomTotal(false)}
-                    hitSlop={8}
-                    className="ml-3"
+                    accessibilityRole="button"
+                    accessibilityLabel="Вернуть автоматическую сумму"
+                    className="ml-3 min-h-11 min-w-11 items-center justify-center"
                   >
                     <Text className="text-sm font-medium" style={{ color: t.accent }}>Авто</Text>
                   </Pressable>
@@ -1323,8 +1721,9 @@ export function AppointmentSheet({
                   />
                 ))}
                 {discountType ? (
-                  <TextInput
-                    value={discountValue}
+                      <TextInput
+                        value={discountValue}
+                        accessibilityLabel="Размер скидки"
                     onChangeText={(v) => {
                       setDiscountValue(v);
                       setDiscountReason(null);
@@ -1333,7 +1732,7 @@ export function AppointmentSheet({
                     placeholder={discountType === "percent" ? "10" : "20"}
                     placeholderTextColor={t.placeholder}
                     selectionColor={t.accent}
-                    keyboardAppearance={t.dark ? "dark" : "light"}
+                    keyboardAppearance="light"
                     className="ml-2 flex-1 text-base"
                     style={{ color: t.ink }}
                   />
@@ -1348,6 +1747,34 @@ export function AppointmentSheet({
                 </Text>
               ) : null}
             </SectionCard>
+
+            {(canAdjustPrepayment || canResetPayment) && appointment ? (
+              <SectionCard title="Расчёты">
+                {canAdjustPrepayment ? (
+                  <ValueRow
+                    label="Предоплата"
+                    value={
+                      appointment.prepaid_amount > 0
+                        ? `${formatEUR(appointment.prepaid_amount)} · ${
+                            appointment.payment_method
+                              ? PAY_METHOD_LABELS[appointment.payment_method]
+                              : "способ не указан"
+                          }`
+                        : "Не внесена"
+                    }
+                    muted={appointment.prepaid_amount <= 0}
+                    onPress={openPrepaymentEditor}
+                  />
+                ) : null}
+                {canResetPayment ? (
+                  <ValueRow
+                    label="Оплата"
+                    value="Отменить оплату"
+                    onPress={resetPayment}
+                  />
+                ) : null}
+              </SectionCard>
+            ) : null}
 
               </>
             ) : null}
@@ -1367,6 +1794,97 @@ export function AppointmentSheet({
                     />
                   ))}
                 </View>
+              </SectionCard>
+            ) : null}
+
+            {kind === "event" ? (
+              <SectionCard title="Подробности">
+              <TextInput
+                value={eventNotes}
+                accessibilityLabel="Заметка к событию"
+                  onChangeText={setEventNotes}
+                  placeholder="Заметка"
+                  placeholderTextColor={t.placeholder}
+                  selectionColor={t.accent}
+                  keyboardAppearance="light"
+                  multiline
+                  className="min-h-[64px] px-4 py-3 text-base"
+                  style={{ color: t.ink, textAlignVertical: "top" }}
+                />
+                <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+              <TextInput
+                value={address}
+                accessibilityLabel="Место или адрес события"
+                  onChangeText={setAddress}
+                  placeholder="Место или адрес"
+                  placeholderTextColor={t.placeholder}
+                  selectionColor={t.accent}
+                  keyboardAppearance="light"
+                  className="min-h-12 px-4 py-3 text-base"
+                  style={{ color: t.ink }}
+                />
+                <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+              <TextInput
+                value={eventUrl}
+                accessibilityLabel="Ссылка события"
+                  onChangeText={setEventUrl}
+                  placeholder="Ссылка"
+                  placeholderTextColor={t.placeholder}
+                  selectionColor={t.accent}
+                  keyboardAppearance="light"
+                  keyboardType="url"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  className="min-h-12 px-4 py-3 text-base"
+                  style={{ color: t.ink }}
+                />
+              </SectionCard>
+            ) : null}
+
+            {kind === "event" ? (
+              <SectionCard title="Напоминание">
+                <View className="flex-row flex-wrap gap-2 p-3">
+                  {EVENT_REMINDER_OPTIONS.map((option) => (
+                    <Chip
+                      key={option.label}
+                      label={option.label}
+                      radio
+                      selected={
+                        eventPushAt === null &&
+                        eventReminderOffset === option.value
+                      }
+                      onPress={() => {
+                        setEventPushAt(null);
+                        setEventReminderOffset(option.value);
+                      }}
+                    />
+                  ))}
+                </View>
+                {eventPushAt ? (
+                  <View
+                    className="flex-row items-center px-4 pb-3"
+                    style={{ gap: 12 }}
+                  >
+                    <Text className="flex-1 text-sm" style={{ color: t.sub }}>
+                      Точное время: {new Date(eventPushAt).toLocaleString("ru-RU")}
+                    </Text>
+                    <Pressable
+                      onPress={() => setEventPushAt(null)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Убрать точное время напоминания"
+                      style={{ minHeight: 44, justifyContent: "center" }}
+                    >
+                      <Text className="text-sm font-semibold" style={{ color: t.accent }}>
+                        Убрать
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {repeat.kind !== "none" && eventReminderOffset !== null ? (
+                  <Text className="px-4 pb-3 text-sm" style={{ color: t.sub }}>
+                    Напоминание будет повторяться вместе с событием
+                  </Text>
+                ) : null}
               </SectionCard>
             ) : null}
 
@@ -1392,7 +1910,7 @@ export function AppointmentSheet({
                       accessibilityRole="button"
                       accessibilityLabel={name}
                       accessibilityState={{ selected: eventColor === c }}
-                      className="h-9 w-9 rounded-full"
+                      className="h-11 w-11 rounded-full"
                       style={[
                         { backgroundColor: c },
                         eventColor === c ? { borderWidth: 2, borderColor: t.ink } : null,
@@ -1425,6 +1943,7 @@ export function AppointmentSheet({
                     {repeatUntil ? (
                       <View className="flex-row items-center gap-3">
                         <DateTimePicker
+                          themeVariant="light"
                           value={parseYMD(repeatUntil)}
                           mode="date"
                           display="compact"
@@ -1432,9 +1951,9 @@ export function AppointmentSheet({
                         />
                         <Pressable
                           onPress={() => setRepeatUntil(undefined)}
-                          hitSlop={8}
                           accessibilityRole="button"
                           accessibilityLabel="Снять дату завершения"
+                          className="min-h-11 min-w-11 items-center justify-center px-2"
                         >
                           <Text className="text-sm font-medium" style={{ color: t.accent }}>
                             Снять
@@ -1444,9 +1963,9 @@ export function AppointmentSheet({
                     ) : (
                       <Pressable
                         onPress={() => setRepeatUntil(date)}
-                        hitSlop={8}
                         accessibilityRole="button"
                         accessibilityLabel="Повторять до даты"
+                        className="min-h-11 justify-center px-2"
                       >
                         <Text className="text-base" style={{ color: t.accent }}>
                           До даты…
@@ -1484,13 +2003,13 @@ export function AppointmentSheet({
                             {
                               text: "Отменить серию",
                               style: "destructive",
-                              onPress: () => setStatus("cancelled"),
+                              onPress: () => chooseStatus("cancelled"),
                             },
                           ],
                         );
                         return;
                       }
-                      setStatus(s.value);
+                      chooseStatus(s.value);
                     }}
                   />
                 ))}
@@ -1498,17 +2017,70 @@ export function AppointmentSheet({
             </SectionCard>
             ) : null}
 
+            {kind === "work" ? (
+              <SectionCard>
+                <ValueRow
+                  label="Источник заявки"
+                  value={source ? APPOINTMENT_SOURCE_LABELS[source] : "Не указан"}
+                  muted={!source}
+                  onPress={() => setSourceSheetOpen(true)}
+                />
+                <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+                <View
+                  className="flex-row items-center justify-between px-4 py-2.5"
+                  style={{ minHeight: 52 }}
+                >
+                  <View className="flex-1 pr-3">
+                    <Text className="text-base" style={{ color: t.ink }}>
+                      SMS-напоминание клиенту
+                    </Text>
+                    <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }}>
+                      {client?.phone
+                        ? "По расписанию SMS компании"
+                        : "Сначала добавьте телефон клиента"}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={reminderOn}
+                    onValueChange={setReminderOn}
+                    disabled={!client?.phone && !reminderOn}
+                    trackColor={{ true: t.accent }}
+                    accessibilityLabel="SMS-напоминание клиенту"
+                    accessibilityState={{ disabled: !client?.phone && !reminderOn }}
+                  />
+                </View>
+              </SectionCard>
+            ) : null}
+
             {/* payment — появляется сразу после «Выполнено», чтобы цепочка
                 «завершил → получил деньги» не требовала отдельного экрана.
                 «Позже» = сохранить с долгом (клиент останется в «Должниках»). */}
-            {kind === "work" && status === "completed" ? (
+            {kind === "work" && appointment?.payment_status === "refunded" ? (
+              <SectionCard title="Оплата">
+                <View className="flex-row items-center gap-2 px-4 py-3">
+                  <AlertTriangle color={t.danger} size={ICON.sm} />
+                  <View className="flex-1">
+                    <Text className="text-base font-semibold" style={{ color: t.danger }}>
+                      Оплата возвращена
+                    </Text>
+                    <Text className="mt-0.5 text-sm" style={{ color: t.sub }}>
+                      Денег к зачёту и долга по этой заявке нет
+                    </Text>
+                  </View>
+                </View>
+              </SectionCard>
+            ) : kind === "work" && status === "completed" ? (
               debt > 0 ? (
                 <SectionCard title={`Оплата · ${formatEUR(debt)}`}>
                   <View className="flex-row flex-wrap gap-2 p-3">
                     {(
                       [
-                        { v: "cash", label: "Наличные" },
-                        { v: "card", label: "Карта" },
+                        ...(
+                          ["cash", "card", "transfer", "other"] as const
+                        ).map((value) => ({
+                          v: value,
+                          label: PAY_METHOD_LABELS[value],
+                        })),
                         { v: null, label: "Позже" },
                       ] as const
                     ).map((opt) => (
@@ -1518,15 +2090,71 @@ export function AppointmentSheet({
                         radio
                         color={opt.v ? t.success : undefined}
                         selected={payMethod === opt.v}
-                        onPress={() => setPayMethod(opt.v)}
+                        onPress={() => {
+                          const startingPayment = payMethod === null;
+                          setPayMethod(opt.v);
+                          if (opt.v === null) {
+                            setPaymentAmount("");
+                            setPaymentAmountTouched(false);
+                          } else if (startingPayment) {
+                            setPaymentAmount(moneyDraft(debt));
+                            setPaymentAmountTouched(false);
+                          }
+                        }}
                       />
                     ))}
                   </View>
-                  <Text className="px-4 pb-3 text-sm" style={{ color: payMethod ? t.success : t.sub }}>
-                    {payMethod
-                      ? `При сохранении будет отмечена оплата ${formatEUR(debt)}`
-                      : "«Позже» — долг останется в списке должников"}
-                  </Text>
+                  {payMethod ? (
+                    <View className="px-3 pb-3">
+                      <Text className="mb-1 text-sm font-medium" style={{ color: t.sub }}>
+                        Сумма сейчас
+                      </Text>
+                      <View
+                        className="flex-row items-center rounded-2xl border px-4"
+                        style={{
+                          borderColor: settlementAmountValid
+                            ? t.separator
+                            : t.danger,
+                          backgroundColor: t.canvas,
+                        }}
+                      >
+                        <TextInput
+                          value={paymentAmount}
+                          onChangeText={(value) => {
+                            setPaymentAmount(value);
+                            setPaymentAmountTouched(true);
+                          }}
+                          keyboardType="decimal-pad"
+                          placeholder="0"
+                          placeholderTextColor={t.placeholder}
+                          selectionColor={t.accent}
+                          keyboardAppearance="light"
+                          accessibilityLabel="Сумма оплаты сейчас"
+                          className="flex-1 py-3 text-xl font-semibold tabular-nums"
+                          style={{ color: t.ink }}
+                        />
+                        <Text className="text-xl font-semibold" style={{ color: t.faint }}>
+                          €
+                        </Text>
+                      </View>
+                      <Text
+                        className="mt-2 text-sm"
+                        style={{ color: settlementAmountValid ? t.success : t.danger }}
+                      >
+                        {settlementAmountValid
+                          ? settlementAmount < debt
+                            ? `Будет принято ${formatEUR(settlementAmount)} · останется ${formatEUR(debt - settlementAmount)}`
+                            : `Будет полностью оплачено ${formatEUR(debt)}`
+                          : settlementAmount > debt
+                            ? `Не больше ${formatEUR(debt)}`
+                            : "Введите корректную сумму"}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text className="px-4 pb-3 text-sm" style={{ color: t.sub }}>
+                      «Позже» — долг останется в списке должников
+                    </Text>
+                  )}
                 </SectionCard>
               ) : effectiveTotal > 0 ? (
                 <SectionCard title="Оплата">
@@ -1554,13 +2182,14 @@ export function AppointmentSheet({
                     />
                   ))}
                 </View>
-                <TextInput
-                  value={cancelReason}
+              <TextInput
+                value={cancelReason}
+                accessibilityLabel="Причина отмены"
                   onChangeText={setCancelReason}
                   placeholder="Своя причина…"
                   placeholderTextColor={t.placeholder}
                   selectionColor={t.accent}
-                  keyboardAppearance={t.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                   className="px-4 pb-3 text-base"
                   style={{ color: t.ink }}
                 />
@@ -1571,17 +2200,28 @@ export function AppointmentSheet({
             <SectionCard title={kind === "event" ? "Название" : "Комментарий"}>
               <TextInput
                 value={comment}
+                accessibilityLabel={kind === "event" ? "Название события" : "Заметка для бригады"}
                 onChangeText={setComment}
                 multiline
                 placeholder={kind === "event" ? "Обед, встреча, перерыв…" : "Заметка для бригады…"}
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="min-h-[64px] px-4 py-3 text-base"
                 style={{ color: t.ink }}
                 textAlignVertical="top"
               />
             </SectionCard>
+
+            {isEdit && kind === "work" && appointment ? (
+              <AppointmentPhotos
+                appointmentId={appointment.id}
+                locationId={appointment.location_id}
+                consentGiven={appointment.consent_given}
+                canUpload={status !== "cancelled"}
+                canDelete
+              />
+            ) : null}
 
             {/* «Повторить через…» — посев recurring-напоминания из
                 ЗАВЕРШЁННОЙ записи (web: ClientActionMenu → RepeatReminderSheet;
@@ -1602,11 +2242,26 @@ export function AppointmentSheet({
             ) : null}
 
             {isEdit ? (
-              <Pressable onPress={remove} className="items-center py-5 active:opacity-70">
-                <Text className="text-base font-medium" style={{ color: t.danger }}>
-                  Удалить запись
+              hasRecordedPayment ? (
+                <Text
+                  accessibilityRole="text"
+                  className="px-6 py-5 text-center text-sm leading-5"
+                  style={{ color: t.faint }}
+                >
+                  Запись с оплатой хранится в истории — отмените её или оформите возврат.
                 </Text>
-              </Pressable>
+              ) : (
+                <Pressable
+                  onPress={remove}
+                  accessibilityRole="button"
+                  accessibilityLabel={isRepeating ? "Удалить серию" : "Удалить запись"}
+                  className="min-h-11 items-center justify-center py-5 active:opacity-70"
+                >
+                  <Text className="text-base font-medium" style={{ color: t.danger }}>
+                    {isRepeating ? "Удалить серию" : "Удалить запись"}
+                  </Text>
+                </Pressable>
+              )
             ) : (
               <View className="h-6" />
             )}
@@ -1729,6 +2384,186 @@ export function AppointmentSheet({
           ) : undefined
         }
       />
+      <OptionSheet
+        visible={sourceSheetOpen}
+        title="Источник заявки"
+        options={SOURCE_OPTIONS}
+        value={source ?? ""}
+        onPick={(value) => setSource(value || null)}
+        onClose={() => setSourceSheetOpen(false)}
+      />
+      {appointment ? (
+        <PrepaymentEditor
+          visible={prepaymentOpen}
+          currentAmount={appointment.prepaid_amount ?? 0}
+          currentMethod={
+            (appointment.payment_method as PayMethod | undefined) ?? null
+          }
+          maximum={appointment.total_amount ?? 0}
+          busy={prepaymentMut.isPending}
+          onClose={() => setPrepaymentOpen(false)}
+          onSubmit={async (amount, method) => {
+            const previous = appointment.prepaid_amount ?? 0;
+            await prepaymentMut.mutateAsync({
+              appointmentId: appointment.id,
+              amount,
+              paymentMethod: method,
+            });
+            setPrepaymentOpen(false);
+            toast(
+              amount < previous
+                ? "Возврат предоплаты оформлен"
+                : amount > previous
+                  ? "Предоплата принята"
+                  : "Способ предоплаты изменён",
+            );
+          }}
+        />
+      ) : null}
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function PrepaymentEditor({
+  visible,
+  currentAmount,
+  currentMethod,
+  maximum,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  currentAmount: number;
+  currentMethod: PayMethod | null;
+  maximum: number;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (amount: number, method: PayMethod | null) => Promise<void>;
+}) {
+  const t = useThemeColors();
+  const [amount, setAmount] = useState(String(currentAmount));
+  const [method, setMethod] = useState<PayMethod | null>(currentMethod ?? "cash");
+
+  useEffect(() => {
+    if (!visible) return;
+    setAmount(String(currentAmount));
+    setMethod(currentMethod ?? "cash");
+  }, [visible, currentAmount, currentMethod]);
+
+  const normalized = amount.trim().replace(",", ".");
+  const amountNumber = Number(normalized);
+  const amountShapeValid = /^\d+(?:\.\d{0,2})?$/.test(normalized);
+  const amountValid =
+    amountShapeValid &&
+    Number.isFinite(amountNumber) &&
+    amountNumber >= 0 &&
+    amountNumber <= maximum;
+  const canSubmit = amountValid && (amountNumber === 0 || method !== null) && !busy;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    try {
+      await onSubmit(amountNumber, amountNumber > 0 ? method : null);
+    } catch (e) {
+      Alert.alert(
+        "Не удалось изменить предоплату",
+        (e as Error).message,
+      );
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
+          <Pressable className="flex-1" onPress={onClose} accessible={false} />
+          <View
+            className="rounded-t-3xl px-5 pb-8 pt-3"
+            style={{ backgroundColor: t.surface }}
+          >
+            <View className="mb-4 flex-row items-center">
+              <Text className="flex-1 text-lg font-bold" style={{ color: t.ink }}>
+                Предоплата
+              </Text>
+              <Pressable
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Закрыть"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+              >
+                <X color={t.body} size={ICON.md} />
+              </Pressable>
+            </View>
+
+            <Text className="mb-1 text-sm font-medium" style={{ color: t.sub }}>
+              Сумма до {formatEUR(maximum)}
+            </Text>
+            <View
+              className="mb-4 flex-row items-center rounded-2xl border px-4"
+              style={{ borderColor: t.separator, backgroundColor: t.canvas }}
+            >
+              <TextInput
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                autoFocus
+                placeholder="0"
+                placeholderTextColor={t.placeholder}
+                selectionColor={t.accent}
+                keyboardAppearance="light"
+                accessibilityLabel="Сумма предоплаты"
+                className="flex-1 py-3 text-xl font-semibold tabular-nums"
+                style={{ color: t.ink }}
+              />
+              <Text className="text-xl font-semibold" style={{ color: t.faint }}>€</Text>
+            </View>
+
+            {amountNumber > 0 ? (
+              <>
+                <Text className="mb-2 text-sm font-medium" style={{ color: t.sub }}>
+                  Способ
+                </Text>
+                <View className="mb-4 flex-row flex-wrap gap-2">
+                  {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((value) => (
+                    <Chip
+                      key={value}
+                      label={PAY_METHOD_LABELS[value]}
+                      radio
+                      selected={method === value}
+                      onPress={() => setMethod(value)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            <Text className="mb-4 text-sm leading-5" style={{ color: t.sub }}>
+              {amountNumber < currentAmount
+                ? "Уменьшение оформит возврат на исходный счёт. История платежей сохранится."
+                : "Деньги появятся на счёте команды сразу после сохранения."}
+            </Text>
+            {!amountValid && amount.trim() ? (
+              <Text className="mb-3 text-sm" style={{ color: t.danger }}>
+                Укажите сумму от 0 до {formatEUR(maximum)}, не больше двух знаков после запятой.
+              </Text>
+            ) : null}
+            <Button
+              label={
+                currentAmount > 0
+                  ? "Сохранить"
+                  : "Принять предоплату"
+              }
+              onPress={submit}
+              disabled={!canSubmit}
+              loading={busy}
+            />
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -1766,25 +2601,27 @@ function InlineServiceCreate({
       <Text className="mb-3 text-sm" style={{ color: t.sub }}>
         Каталог пуст — создайте первую услугу, она сразу добавится в запись.
       </Text>
-      <TextInput
-        value={name}
+          <TextInput
+            value={name}
+            accessibilityLabel="Название услуги"
         onChangeText={setName}
         placeholder="Название услуги"
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
-        keyboardAppearance={t.dark ? "dark" : "light"}
+        keyboardAppearance="light"
         autoFocus
         className="mb-2 rounded-[14px] border px-4 py-3 text-base"
         style={{ borderColor: t.separator, color: t.ink }}
       />
-      <TextInput
-        value={price}
+          <TextInput
+            value={price}
+            accessibilityLabel="Цена услуги"
         onChangeText={setPrice}
         placeholder="Цена, €"
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
         keyboardType="decimal-pad"
-        keyboardAppearance={t.dark ? "dark" : "light"}
+        keyboardAppearance="light"
         className="mb-4 rounded-[14px] border px-4 py-3 text-base"
         style={{ borderColor: t.separator, color: t.ink }}
       />
@@ -1807,7 +2644,6 @@ function ChipRow({
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
-  const t = useThemeColors();
   return (
     <ScrollView
       horizontal
@@ -1874,7 +2710,7 @@ function PickerModal({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: th.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} />
+        <Pressable className="flex-1" onPress={onClose} accessible={false} />
         <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: th.surface }}>
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: th.separator }}>
             <Text className="flex-1 px-2 text-base font-semibold" style={{ color: th.ink }}>
@@ -1882,10 +2718,9 @@ function PickerModal({
             </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={multi ? "Готово" : "Закрыть"}
-              className={`h-10 items-center justify-center rounded-full active:opacity-60 ${multi ? "px-3" : "w-10"}`}
+              className={`h-11 items-center justify-center rounded-full active:opacity-60 ${multi ? "px-3" : "w-11"}`}
             >
               {multi ? (
                 <Text className="text-sm font-semibold" style={{ color: th.accent }}>Готово</Text>
@@ -1898,11 +2733,12 @@ function PickerModal({
             <Search color={th.faint} size={ICON.sm} />
             <TextInput
               value={q}
+              accessibilityLabel="Поиск услуги"
               onChangeText={setQ}
               placeholder="Поиск…"
               placeholderTextColor={th.placeholder}
               selectionColor={th.accent}
-              keyboardAppearance={th.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               className="flex-1 py-1 text-base"
               style={{ color: th.ink }}
             />
@@ -1917,10 +2753,11 @@ function PickerModal({
               onCreateNew ? (
                 <Pressable
                   onPress={() => onCreateNew(q.trim())}
+                  accessibilityRole="button"
+                  accessibilityLabel={q.trim() ? `Создать ${q.trim()}` : (createLabel ?? "Создать")}
                   className="flex-row items-center gap-2 border-b px-4 py-3 active:opacity-60"
                   style={{ borderColor: th.separator }}
                 >
-                  <Plus color={th.accent} size={ICON.md} />
                   <Text className="text-base font-semibold" style={{ color: th.accent }}>
                     {createLabel ?? "Создать"}
                     {q.trim() ? ` «${q.trim()}»` : ""}
@@ -1933,6 +2770,9 @@ function PickerModal({
               return (
                 <Pressable
                   onPress={() => (multi ? onToggle?.(item.id) : onPick?.(item.id))}
+                  accessibilityRole={multi ? "checkbox" : "button"}
+                  accessibilityLabel={item.subtitle ? `${item.title}, ${item.subtitle}` : item.title}
+                  accessibilityState={multi ? { checked: sel } : { selected: sel }}
                   className="flex-row items-center px-4 py-3 active:opacity-60"
                 >
                   <View className="flex-1 pr-2">
@@ -2057,16 +2897,15 @@ function ClientPickerModal({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} />
+        <Pressable className="flex-1" onPress={onClose} accessible={false} />
         <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.surface }}>
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: t.separator }}>
             {mode === "create" ? (
               <Pressable
                 onPress={() => setMode("list")}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Назад"
-                className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
                 <ChevronLeft color={t.body} size={ICON.md} />
               </Pressable>
@@ -2076,10 +2915,9 @@ function ClientPickerModal({
             </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Закрыть"
-              className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={t.body} size={ICON.md} />
             </Pressable>
@@ -2089,13 +2927,14 @@ function ClientPickerModal({
             <>
               <View className="flex-row items-center gap-2 px-4 py-2">
                 <Search color={t.faint} size={ICON.sm} />
-                <TextInput
-                  value={q}
+            <TextInput
+              value={q}
+              accessibilityLabel="Поиск клиента"
                   onChangeText={setQ}
                   placeholder="Поиск…"
                   placeholderTextColor={t.placeholder}
                   selectionColor={t.accent}
-                  keyboardAppearance={t.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                   className="flex-1 py-1 text-base"
                   style={{ color: t.ink }}
                 />
@@ -2110,10 +2949,11 @@ function ClientPickerModal({
                 ListHeaderComponent={
                   <Pressable
                     onPress={startCreate}
+                    accessibilityRole="button"
+                    accessibilityLabel={q.trim() ? `Новый клиент ${q.trim()}` : "Новый клиент"}
                     className="flex-row items-center gap-2 border-b px-4 py-3 active:opacity-60"
                     style={{ borderColor: t.separator }}
                   >
-                    <Plus color={t.accent} size={ICON.md} />
                     <Text className="text-base font-semibold" style={{ color: t.accent }}>
                       Новый клиент{q.trim() ? ` «${q.trim()}»` : ""}
                     </Text>
@@ -2135,6 +2975,9 @@ function ClientPickerModal({
                   return (
                     <Pressable
                       onPress={() => onPick(c.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={[c.full_name || "Без имени", c.phone].filter(Boolean).join(", ")}
+                      accessibilityState={{ selected: sel }}
                       className="flex-row items-center px-4 py-3 active:opacity-60"
                     >
                       <View className="flex-1 pr-2">
@@ -2158,25 +3001,27 @@ function ClientPickerModal({
             </>
           ) : (
             <View className="px-5 pt-4">
-              <TextInput
-                value={name}
+          <TextInput
+            value={name}
+            accessibilityLabel="Имя клиента"
                 onChangeText={setName}
                 placeholder="Имя клиента"
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 autoFocus
                 className="mb-2 rounded-[14px] border px-4 py-3 text-base"
                 style={{ borderColor: t.separator, color: t.ink }}
               />
-              <TextInput
-                value={phone}
+          <TextInput
+            value={phone}
+            accessibilityLabel="Телефон клиента"
                 onChangeText={setPhone}
                 placeholder="+357 99 ..."
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
                 keyboardType="phone-pad"
-                keyboardAppearance={t.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="mb-4 rounded-[14px] border px-4 py-3 text-base"
                 style={{ borderColor: t.separator, color: t.ink }}
               />

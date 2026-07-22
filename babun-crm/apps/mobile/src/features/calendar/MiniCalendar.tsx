@@ -4,9 +4,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
+import {
+  weekdayIndex,
+  weekdayLabels,
+  type WeekStart,
+} from "@/features/calendar/week";
 import { useThemeColors } from "@/theme/colors";
-
-const DAY_HEADERS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
@@ -19,6 +22,7 @@ export function MiniCalendar({
   appointments,
   onSelectDate,
   onClose,
+  weekStart = "monday",
 }: {
   visible: boolean;
   currentDate: Date;
@@ -27,6 +31,8 @@ export function MiniCalendar({
   appointments: Appointment[];
   onSelectDate: (d: Date) => void;
   onClose: () => void;
+  /** «Первый день недели» (calendar_settings.week_start). */
+  weekStart?: WeekStart;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -54,8 +60,9 @@ export function MiniCalendar({
     return m;
   }, [appointments]);
 
-  const firstDow = (new Date(viewYear, viewMonth, 1).getDay() + 6) % 7; // Mon=0
+  const firstDow = weekdayIndex(new Date(viewYear, viewMonth, 1).getDay(), weekStart);
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const DAY_HEADERS = weekdayLabels(weekStart);
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -244,6 +251,7 @@ export function MiniCalendar({
               onSelectDate(new Date(y, (m || 1) - 1, d || 1));
             }}
             accessibilityRole="button"
+            accessibilityLabel="Перейти к сегодняшней дате"
             // 44 — минимальная высота нажимаемой области HIG; радиус 14 = input.
             style={({ pressed }) => ({
               marginTop: 8,

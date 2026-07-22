@@ -28,7 +28,9 @@ export function ScreenHeader({
     return (
       <View className="flex-row items-end justify-between px-4 pb-2 pt-4">
         <View className="flex-1">
-          <Text style={{ ...TYPE.display, color: t.ink }}>{title}</Text>
+          <Text accessibilityRole="header" style={{ ...TYPE.display, color: t.ink }}>
+            {title}
+          </Text>
           {subtitle ? (
             <Text style={{ fontSize: 14, color: t.sub }}>{subtitle}</Text>
           ) : null}
@@ -66,7 +68,11 @@ export function ScreenHeader({
         <ChevronLeft color={t.body} size={ICON.md} />
       </Pressable>
       <View className="flex-1">
-        <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
+        <Text
+          accessibilityRole="header"
+          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         {subtitle ? (

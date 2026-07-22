@@ -44,6 +44,7 @@ export function WeekView({
   onMenu,
   onCreateAt,
   onReschedule,
+  canReschedule,
   onPickDay,
   onPickLabelDay,
   onCommitPage,
@@ -74,8 +75,11 @@ export function WeekView({
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
-  onCreateAt: (dateYmd: string, timeStart: string) => void;
-  onReschedule: (a: Appointment, s: string, e: string) => void;
+  /** Undefined for crew: empty slots and blocks are read-only. */
+  onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  onReschedule?: (a: Appointment, s: string, e: string) => void;
+  /** Per-record mutation guard (shared team events are creator-only). */
+  canReschedule?: (a: Appointment) => boolean;
   /** Долгий тап по шапке даты — открыть её Днём. */
   onPickDay: (d: Date) => void;
   /** Тап по шапке даты — попап метки этой даты (undefined, когда у бригады
@@ -196,6 +200,7 @@ export function WeekView({
                     onMenu={onMenu}
                     onCreateAt={onCreateAt}
                     onReschedule={onReschedule}
+                    canReschedule={canReschedule}
                     startHour={startHour}
                     endHour={endHour}
                     stepMinutes={stepMinutes}

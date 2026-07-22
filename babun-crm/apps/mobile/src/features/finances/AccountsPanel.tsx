@@ -8,7 +8,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { AccountKind } from "@babun/shared/local/finance/account";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";

@@ -30,6 +30,7 @@ export function AgendaView({
   onMenu,
   labelFor,
   onCreateNew,
+  showAmounts = true,
   refreshing,
   onRefresh,
 }: {
@@ -47,7 +48,9 @@ export function AgendaView({
   /** Метка дня (город) — чип в заголовке дня: единая система дат со
    *  шапками Дня/Недели и точками Месяца. */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
-  onCreateNew: () => void;
+  onCreateNew?: () => void;
+  /** Master/brigadier sees job logistics, never company/customer money. */
+  showAmounts?: boolean;
   refreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -75,6 +78,7 @@ export function AgendaView({
           serviceSummary={serviceSummary}
           onEdit={onEdit}
           onMenu={onMenu}
+          showAmounts={showAmounts}
           t={t}
         />
       )}
@@ -83,7 +87,11 @@ export function AgendaView({
           fill
           title="Записей не запланировано"
           subtitle={`Ближайшие ${horizonDays} дней пусты`}
-          action={{ label: "+ Создать запись", onPress: onCreateNew }}
+          action={
+            onCreateNew
+              ? { label: "Создать запись", onPress: onCreateNew }
+              : undefined
+          }
         />
       }
     />
@@ -98,6 +106,7 @@ function DaySection({
   serviceSummary,
   onEdit,
   onMenu,
+  showAmounts,
   t,
 }: {
   section: AgendaSection;
@@ -107,6 +116,7 @@ function DaySection({
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
   onMenu?: (a: Appointment) => void;
+  showAmounts: boolean;
   t: ThemeColors;
 }) {
   // Beta #54 — maps deep-link with the day's addresses as waypoints, in
@@ -150,6 +160,15 @@ function DaySection({
                 backgroundColor: `${label.color}1f`,
               }}
             >
+              <View
+                style={{
+                  width: 6,
+                  height: 6,
+                  marginRight: 4,
+                  borderRadius: 3,
+                  backgroundColor: label.color,
+                }}
+              />
               <Text
                 numberOfLines={1}
                 style={{
@@ -157,7 +176,9 @@ function DaySection({
                   fontWeight: "700",
                   letterSpacing: 0.5,
                   textTransform: "uppercase",
-                  color: label.color,
+                  // User colors remain the marker/tint; body text keeps an
+                  // AA-readable foreground even for yellow/green labels.
+                  color: t.ink,
                 }}
               >
                 {label.name}
@@ -198,6 +219,7 @@ function DaySection({
               serviceSummary={serviceSummary(apt)}
               onPress={() => onEdit(apt)}
               onLongPress={onMenu ? () => onMenu(apt) : undefined}
+              showAmounts={showAmounts}
               t={t}
             />
           </View>
@@ -213,6 +235,7 @@ function AgendaRow({
   serviceSummary,
   onPress,
   onLongPress,
+  showAmounts,
   t,
 }: {
   apt: Appointment;
@@ -220,6 +243,7 @@ function AgendaRow({
   serviceSummary: string;
   onPress: () => void;
   onLongPress?: () => void;
+  showAmounts: boolean;
   t: ThemeColors;
 }) {
   const statusColor =
@@ -232,7 +256,7 @@ function AgendaRow({
           : t.sub;
   const cancelled = apt.status === "cancelled";
 
-  // Личное событие — свой шаблон (web design-keeper #6): title из comment,
+  // Событие — свой шаблон (web design-keeper #6): title из comment,
   // цветная полоска слева, превью заметок — иначе событие выглядело как
   // «битая запись» (Без клиента / €0).
   if (apt.kind === "event" || apt.kind === "personal") {
@@ -246,6 +270,7 @@ function AgendaRow({
         delayLongPress={350}
         className="active:opacity-60"
         accessibilityRole="button"
+        accessibilityLabel={`${title}, ${apt.time_start}–${apt.time_end}`}
         style={{
           flexDirection: "row",
           gap: 12,
@@ -310,7 +335,7 @@ function AgendaRow({
               textDecorationLine: cancelled ? "line-through" : "none",
             }}
           >
-            Личное событие
+            {apt.team_id ? "Событие команды" : "Личное событие"}
           </Text>
         </View>
       </Pressable>
@@ -327,6 +352,7 @@ function AgendaRow({
       delayLongPress={350}
       className="active:opacity-60"
       accessibilityRole="button"
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
@@ -376,7 +402,7 @@ function AgendaRow({
           {STATUS_LABELS[apt.status]}
         </Text>
       </View>
-      {total > 0 ? (
+      {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>
           <Text
             className="tabular-nums"

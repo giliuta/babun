@@ -1,6 +1,7 @@
 import { Text, View } from "react-native";
 import type { AppointmentStatus } from "@babun/shared/local/appointments";
 import { useThemeColors } from "@/theme/colors";
+import { readableColorOnTint } from "./color-contrast";
 
 export type BadgeVariant =
   | "scheduled"
@@ -17,8 +18,8 @@ export type BadgeVariant =
   | "danger"
   | "warning";
 
-// Pill styling — one tint scale driven by the theme so meaning-colors survive
-// dark (tints ride a semantic base; neutral rides a faint surface fill).
+// Pill styling — one light tint scale driven by semantic colors; neutral uses
+// a faint surface fill.
 export function Badge({
   label,
   variant = "neutral",
@@ -32,6 +33,12 @@ export function Badge({
   const t = useThemeColors();
 
   if (color) {
+    const foreground = readableColorOnTint(
+      color,
+      t.surface,
+      t.ink,
+      0x22 / 255,
+    );
     return (
       <View
         style={{
@@ -39,10 +46,12 @@ export function Badge({
           borderRadius: 999,
           paddingHorizontal: 8,
           paddingVertical: 2,
-          backgroundColor: `${color}${t.dark ? "33" : "22"}`,
+          backgroundColor: `${color}22`,
         }}
       >
-        <Text style={{ fontSize: 11, fontWeight: "600", color }}>{label}</Text>
+        <Text style={{ fontSize: 11, fontWeight: "600", color: foreground }}>
+          {label}
+        </Text>
       </View>
     );
   }
@@ -63,11 +72,7 @@ export function Badge({
     neutral: null,
   };
   const b = base[variant];
-  const bg = b
-    ? `${b}${t.dark ? "33" : "22"}`
-    : t.dark
-      ? "rgba(255,255,255,0.08)"
-      : "rgba(11,18,32,0.06)";
+  const bg = b ? `${b}22` : "rgba(11,18,32,0.06)";
   const fg = b ?? t.sub;
 
   return (

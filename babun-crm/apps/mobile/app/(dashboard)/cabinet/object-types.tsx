@@ -27,27 +27,62 @@ import {
 
 export default function ObjectTypesScreen() {
   const t = useThemeColors();
-  const { data: labels = [], isLoading } = useLocationLabels();
+  const {
+    data: labels = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useLocationLabels();
   const save = useSaveLocationLabels();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
 
-  const add = () => {
-    if (!name.trim()) return;
-    save.mutate([
-      ...labels,
-      { id: generateLocationLabelId(), name: name.trim() },
-    ]);
-    setName("");
-    setOpen(false);
+  const add = async () => {
+    const normalizedName = name.trim();
+    if (!normalizedName) return;
+    if (
+      labels.some(
+        (label) => label.name.toLowerCase() === normalizedName.toLowerCase(),
+      )
+    ) {
+      Alert.alert("Такой тип уже есть", "Введите другое название.");
+      return;
+    }
+    try {
+      await save.mutateAsync([
+        ...labels,
+        { id: generateLocationLabelId(), name: normalizedName },
+      ]);
+      setName("");
+      setOpen(false);
+    } catch (error) {
+      Alert.alert(
+        "Не удалось сохранить тип",
+        error instanceof Error ? error.message : "Повторите попытку.",
+      );
+    }
   };
-  const remove = (id: string) => save.mutate(labels.filter((l) => l.id !== id));
+  const remove = async (id: string) => {
+    try {
+      await save.mutateAsync(labels.filter((label) => label.id !== id));
+    } catch (error) {
+      Alert.alert(
+        "Не удалось удалить тип",
+        error instanceof Error ? error.message : "Повторите попытку.",
+      );
+    }
+  };
   // Web parity: confirm before deleting a reference type (was an instant,
   // unrecoverable tap).
   const confirmRemove = (id: string, itemName: string) =>
     Alert.alert("Удалить тип объекта?", itemName, [
       { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => remove(id) },
+      {
+        text: "Удалить",
+        style: "destructive",
+        onPress: () => void remove(id),
+      },
     ]);
 
   return (
@@ -55,6 +90,13 @@ export default function ObjectTypesScreen() {
       <ScreenHeader title="Типы объектов" />
       {isLoading ? (
         <EmptyState state="loading" fill />
+      ) : isError ? (
+        <EmptyState
+          state="error"
+          fill
+          subtitle={error instanceof Error ? error.message : undefined}
+          action={{ label: "Повторить", onPress: () => void refetch() }}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}
@@ -63,9 +105,12 @@ export default function ObjectTypesScreen() {
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => (
             <View className="flex-row items-center px-4 py-3">
-              <Text className="flex-1 text-base" style={{ color: t.ink }}>{item.name}</Text>
+              <Text className="flex-1 text-base" style={{ color: t.ink }}>
+                {item.name}
+              </Text>
               <Pressable
                 onPress={() => confirmRemove(item.id, item.name)}
+                disabled={save.isPending}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Удалить ${item.name}`}
@@ -99,11 +144,20 @@ export default function ObjectTypesScreen() {
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={() => setOpen(false)} />
+        <Pressable
+          className="flex-1"
+          style={{ backgroundColor: t.scrim }}
+          onPress={() => setOpen(false)}
+          accessible={false}
+        />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип</Text>
           <Field label="Название" value={name} onChangeText={setName} placeholder="Вилла" autoFocus />
-          <Button label="Добавить" onPress={add} disabled={!name.trim()} />
+          <Button
+            label={save.isPending ? "Сохраняем…" : "Добавить"}
+            onPress={() => void add()}
+            disabled={!name.trim() || save.isPending}
+          />
         </View>
         </KeyboardAvoidingView>
       </Modal>

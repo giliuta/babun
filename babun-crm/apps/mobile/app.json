@@ -14,8 +14,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.babun.crm",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -39,14 +40,16 @@
       [
         "expo-secure-store",
         {
-          "faceIDPermission": "Babun использует Face ID для безопасного хранения входа."
+          "faceIDPermission": false
         }
       ],
       "@react-native-community/datetimepicker",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Babun использует фото для снимков объектов и выполненных работ клиента."
+          "photosPermission": "Babun использует фото для снимков объектов и выполненных работ клиента.",
+          "cameraPermission": "Babun использует камеру для снимков объекта до и после выполнения работ.",
+          "microphonePermission": false
         }
       ],
       [

@@ -88,7 +88,8 @@ const ICON_KEYS = Object.keys(EVENT_ICONS) as PersonalEventTypeIcon[];
 
 export default function EventTypesScreen() {
   const t = useThemeColors();
-  const { data: types = [], isLoading } = usePersonalEventTypes();
+  const typesQuery = usePersonalEventTypes();
+  const types = typesQuery.data ?? [];
   const save = useSavePersonalEventTypes();
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
@@ -127,13 +128,15 @@ export default function EventTypesScreen() {
       },
     );
   };
-  const remove = (id: string) =>
+  const remove = (id: string) => {
+    if (save.isPending) return;
     // removeIds carries the explicit deletion — the server must never
     // derive it from a (possibly stale) full snapshot.
     save.mutate(
       { types: types.filter((t) => t.id !== id), removeIds: [id] },
       { onError: (e) => Alert.alert("Ошибка", e.message) },
     );
+  };
   // Web parity: confirm before deleting an event type (was an instant tap).
   const confirmRemove = (id: string, itemLabel: string) =>
     Alert.alert("Удалить тип события?", itemLabel, [
@@ -144,8 +147,22 @@ export default function EventTypesScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Типы событий" />
-      {isLoading ? (
+      {typesQuery.isLoading ? (
         <EmptyState state="loading" fill />
+      ) : typesQuery.isError ? (
+        <EmptyState
+          state="error"
+          fill
+          subtitle={
+            typesQuery.error instanceof Error
+              ? typesQuery.error.message
+              : undefined
+          }
+          action={{
+            label: "Повторить",
+            onPress: () => void typesQuery.refetch(),
+          }}
+        />
       ) : (
         <FlatList
           style={{ flex: 1 }}
@@ -172,9 +189,12 @@ export default function EventTypesScreen() {
               </View>
               <Pressable
                 onPress={() => confirmRemove(item.id, item.label)}
-                hitSlop={8}
+                disabled={save.isPending}
                 accessibilityRole="button"
                 accessibilityLabel={`Удалить ${item.label}`}
+                accessibilityState={{ disabled: save.isPending }}
+                className="h-11 w-11 items-center justify-center"
+                style={{ opacity: save.isPending ? 0.4 : 1 }}
               >
                 <Trash2 color={t.danger} size={ICON.sm} />
               </Pressable>
@@ -206,7 +226,12 @@ export default function EventTypesScreen() {
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: t.scrim }} onPress={() => setOpen(false)} />
+        <Pressable
+          className="flex-1"
+          style={{ backgroundColor: t.scrim }}
+          onPress={() => setOpen(false)}
+          accessible={false}
+        />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип события</Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Обед" autoFocus />
@@ -222,6 +247,7 @@ export default function EventTypesScreen() {
                 <Pressable
                   key={key}
                   onPress={() => setIcon(key)}
+                  hitSlop={4}
                   accessibilityRole="button"
                   accessibilityLabel={`Иконка ${key}`}
                   accessibilityState={{ selected }}

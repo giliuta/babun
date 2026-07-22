@@ -22,11 +22,11 @@
 //   VAPID_PRIVATE_KEY   — base64-url, server-only
 //   VAPID_SUBJECT       — "mailto:support@babun.app"
 //
-// CORS: server-to-server (pg_net + dashboard debug). Open for now;
-// tighten if abuse appears.
+// The function has gateway JWT verification disabled for pg_net, so every
+// dispatch must carry the database-held x-dispatch-secret header.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-// @ts-ignore — esm.sh shim resolves at runtime in Deno
+// @ts-expect-error — esm.sh shim resolves at runtime in Deno
 import webpush from "https://esm.sh/web-push@3.6.7?bundle";
 
 // ─── Notification copy templates ──────────────────────────────────
@@ -195,13 +195,48 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
+function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index++) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return mismatch === 0;
+}
+
+async function authorizeDispatch(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  request: Request,
+): Promise<boolean> {
+  const supplied = request.headers.get("x-dispatch-secret") ?? "";
+  if (!supplied) return false;
+  const { data, error } = await supabase
+    .from("edge_cron_secrets")
+    .select("secret")
+    .eq("name", "send_push")
+    .single();
+  return (
+    !error &&
+    typeof data?.secret === "string" &&
+    constantTimeEqual(supplied, data.secret)
+  );
+}
+
 function validate(body: unknown): SendPushRequest | string {
   if (typeof body !== "object" || body === null) return "invalid body";
   const b = body as Record<string, unknown>;
-  if (!Array.isArray(b.user_ids) || b.user_ids.some((x) => typeof x !== "string")) {
+  if (
+    !Array.isArray(b.user_ids) ||
+    b.user_ids.some((x) => typeof x !== "string")
+  ) {
     return "user_ids must be string[]";
   }
-  if (b.url !== undefined && (typeof b.url !== "string" || !b.url.startsWith("/"))) {
+  if (b.user_ids.length > 500) return "too many recipients";
+  if (
+    b.url !== undefined &&
+    (typeof b.url !== "string" || !b.url.startsWith("/"))
+  ) {
     return "url must be a relative path starting with /";
   }
 
@@ -213,7 +248,11 @@ function validate(body: unknown): SendPushRequest | string {
     return body as TriggerShape;
   }
   // Direct shape.
-  if (typeof b.title !== "string" || b.title.length < 1 || b.title.length > 80) {
+  if (
+    typeof b.title !== "string" ||
+    b.title.length < 1 ||
+    b.title.length > 80
+  ) {
     return "title must be 1..80 chars";
   }
   if (typeof b.body !== "string" || b.body.length < 1 || b.body.length > 200) {
@@ -249,8 +288,10 @@ function endpointHost(endpoint: string): string {
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { error: "method not allowed" });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST")
+    return jsonResponse(405, { error: "method not allowed" });
 
   let parsed: SendPushRequest | string;
   try {
@@ -270,8 +311,15 @@ Deno.serve(async (req: Request) => {
   let serviceKey: string | undefined;
   if (secretKeysJson) {
     try {
-      const dict = JSON.parse(secretKeysJson) as Record<string, string>;
-      serviceKey = Object.values(dict)[0];
+      const candidates = Object.values(
+        JSON.parse(secretKeysJson) as Record<string, unknown>,
+      ).filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 20,
+      );
+      serviceKey =
+        candidates.find((value) => value.startsWith("sb_secret_")) ??
+        candidates[0];
     } catch {
       // fall through
     }
@@ -279,12 +327,16 @@ Deno.serve(async (req: Request) => {
   if (!serviceKey) serviceKey = legacyServiceKey || undefined;
   if (!supabaseUrl || !serviceKey) {
     return jsonResponse(500, {
-      error: "missing SUPABASE_URL or service key (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY)",
+      error:
+        "missing SUPABASE_URL or service key (SUPABASE_SECRET_KEYS / SUPABASE_SERVICE_ROLE_KEY)",
     });
   }
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  if (!(await authorizeDispatch(supabase, req))) {
+    return jsonResponse(401, { error: "dispatch_authorization_required" });
+  }
 
   const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
   const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
@@ -314,7 +366,9 @@ Deno.serve(async (req: Request) => {
     .in("user_id", reqShape.user_ids);
 
   if (error) {
-    return jsonResponse(500, { error: `fetch subscriptions: ${error.message}` });
+    return jsonResponse(500, {
+      error: `fetch subscriptions: ${error.message}`,
+    });
   }
   const subscriptions = subs ?? [];
 

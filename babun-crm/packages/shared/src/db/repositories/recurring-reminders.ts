@@ -145,11 +145,14 @@ export async function updateReminderStatus(
   id: string,
   status: RecurringStatus
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("recurring_reminders")
     .update({ status })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Напоминание не найдено или доступ запрещён.");
 }
 
 /** Hard delete. The X button on the inbox is destructive (the
@@ -158,11 +161,14 @@ export async function deleteRecurringReminder(
   supabase: DbSupabase,
   id: string
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("recurring_reminders")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Напоминание не найдено или доступ запрещён.");
 }
 
 /** Atomic localStorage → cloud transfer used by the Settings import

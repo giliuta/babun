@@ -12,9 +12,10 @@
 //    refuse to schedule a job if the required kit isn't at the
 //    brigade).
 //
-// Storage: localStorage, same pattern as cities/services. Migrates
-// to Supabase with the rest of the domain when we move off the
-// prototype phase.
+// Storage is an offline read cache. Native callers pass tenantId so one
+// account can never inherit another account's inventory on a shared device.
+// The optional unscoped form is retained for the frozen web prototype and as
+// a one-time legacy migration source.
 
 import { generateId } from "./masters";
 import { getStorage } from "../storage/provider";
@@ -44,28 +45,100 @@ export interface Equipment {
 }
 
 const STORAGE_KEY = "babun-equipment";
+const LEGACY_OWNER_KEY = `${STORAGE_KEY}:legacy-owner-tenant`;
 
-export function loadEquipment(): Equipment[] {
-  const parsed = getStorage().get<Partial<Equipment>[]>(STORAGE_KEY);
-  if (!Array.isArray(parsed)) return [];
-  {
-    return parsed.map((e: Partial<Equipment>) => ({
-      id: e.id ?? generateId("eq"),
-      name: e.name ?? "",
-      category: e.category,
-      serial: e.serial,
-      assigned_team_id: e.assigned_team_id ?? null,
-      notes: e.notes,
-      color: e.color,
-      is_active: e.is_active ?? true,
-      created_at: e.created_at ?? new Date().toISOString(),
-      sort_order: e.sort_order,
-    })) as Equipment[];
-  }
+function scopedStorageKey(tenantId: string, visibilityScope?: string): string {
+  const base = `${STORAGE_KEY}:tenant:${tenantId}`;
+  return visibilityScope ? `${base}:visibility:${visibilityScope}` : base;
 }
 
-export function saveEquipment(list: Equipment[]): void {
-  getStorage().set(STORAGE_KEY, list);
+function serverSyncKey(tenantId: string, visibilityScope?: string): string {
+  return `${scopedStorageKey(tenantId, visibilityScope)}:server-synced`;
+}
+
+function normalizeEquipment(parsed: unknown): Equipment[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map((e: Partial<Equipment>) => ({
+    id: e.id ?? generateId("eq"),
+    name: e.name ?? "",
+    category: e.category,
+    serial: e.serial,
+    assigned_team_id: e.assigned_team_id ?? null,
+    notes: e.notes,
+    color: e.color,
+    is_active: e.is_active ?? true,
+    created_at: e.created_at ?? new Date().toISOString(),
+    sort_order: e.sort_order,
+  })) as Equipment[];
+}
+
+export function loadEquipment(
+  tenantId?: string | null,
+  visibilityScope?: string,
+): Equipment[] {
+  const storage = getStorage();
+  if (!tenantId) {
+    return normalizeEquipment(storage.get<Partial<Equipment>[]>(STORAGE_KEY));
+  }
+
+  const scopedKey = scopedStorageKey(tenantId, visibilityScope);
+  if (storage.getRaw(scopedKey) != null) {
+    return normalizeEquipment(storage.get<Partial<Equipment>[]>(scopedKey));
+  }
+
+  // Restricted projections (for example a master's assigned teams) must
+  // never claim the tenant-wide legacy/owner cache.
+  if (visibilityScope) return [];
+
+  // Pre-multitenant builds used one global key. Only the first active tenant
+  // may claim it; a later account on the same phone always starts empty.
+  const legacy = storage.get<Partial<Equipment>[]>(STORAGE_KEY);
+  if (!Array.isArray(legacy)) return [];
+  const owner = storage.getRaw(LEGACY_OWNER_KEY);
+  if (owner && owner !== tenantId) return [];
+  if (!owner) storage.setRaw(LEGACY_OWNER_KEY, tenantId);
+  storage.set(scopedKey, legacy);
+  return normalizeEquipment(legacy);
+}
+
+export function saveEquipment(
+  list: Equipment[],
+  tenantId?: string | null,
+  visibilityScope?: string,
+): void {
+  getStorage().set(
+    tenantId ? scopedStorageKey(tenantId, visibilityScope) : STORAGE_KEY,
+    list,
+  );
+}
+
+export function hasEquipmentCache(
+  tenantId: string,
+  visibilityScope?: string,
+): boolean {
+  const storage = getStorage();
+  if (storage.getRaw(scopedStorageKey(tenantId, visibilityScope)) != null) {
+    return true;
+  }
+  if (visibilityScope) return false;
+  const legacy = storage.get<Partial<Equipment>[]>(STORAGE_KEY);
+  if (!Array.isArray(legacy)) return false;
+  const owner = storage.getRaw(LEGACY_OWNER_KEY);
+  return !owner || owner === tenantId;
+}
+
+export function hasEquipmentServerSync(
+  tenantId: string,
+  visibilityScope?: string,
+): boolean {
+  return getStorage().getRaw(serverSyncKey(tenantId, visibilityScope)) === "1";
+}
+
+export function markEquipmentServerSynced(
+  tenantId: string,
+  visibilityScope?: string,
+): void {
+  getStorage().setRaw(serverSyncKey(tenantId, visibilityScope), "1");
 }
 
 export function createBlankEquipment(

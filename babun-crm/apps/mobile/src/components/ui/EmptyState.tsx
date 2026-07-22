@@ -27,8 +27,25 @@ export function EmptyState({
 
   if (state === "loading") {
     return (
-      <View className={wrap}>
+      <View
+        className={wrap}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={title ?? "Загрузка"}
+      >
         <ActivityIndicator color={t.accent} />
+        {title ? (
+          <Text
+            style={{
+              marginTop: 12,
+              textAlign: "center",
+              fontSize: 14,
+              color: t.sub,
+            }}
+          >
+            {title}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -37,6 +54,7 @@ export function EmptyState({
     <View className={wrap}>
       {icon ? <View className="mb-3 opacity-40">{icon}</View> : null}
       <Text
+        accessibilityRole="header"
         style={{
           textAlign: "center",
           fontSize: 16,
@@ -54,12 +72,16 @@ export function EmptyState({
       {action ? (
         <Pressable
           onPress={action.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
           style={({ pressed }) => ({
             marginTop: 16,
+            minHeight: 44,
             borderRadius: 999,
             backgroundColor: t.accent,
             paddingHorizontal: 20,
             paddingVertical: 10,
+            justifyContent: "center",
             opacity: pressed ? 0.85 : 1,
           })}
         >

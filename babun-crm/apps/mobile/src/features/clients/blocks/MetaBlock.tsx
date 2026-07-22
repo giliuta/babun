@@ -8,16 +8,18 @@
 // catalog (the composer supplies `tags`; absent → empty-catalog state,
 // matching web).
 
-import { Plus, X } from "lucide-react-native";
+import { X } from "lucide-react-native";
 import { Text, View } from "react-native";
-import type { Client, ClientTag } from "@babun/shared/local/clients";
 import {
   ACQUISITION_LABELS,
   type AcquisitionSource,
+  type Client,
+  type ClientTag,
 } from "@babun/shared/local/clients";
 import { Chip } from "@/components/ui/Chip";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { useThemeColors } from "@/theme/colors";
+import { readableColorOnTint } from "@/components/ui/color-contrast";
 
 interface MetaBlockProps {
   client: Client;
@@ -25,6 +27,7 @@ interface MetaBlockProps {
   /** Tenant-managed tag catalog (palette + label). The composer passes
    *  this; when omitted we render the empty-catalog hint, same as web. */
   tags?: ClientTag[];
+  draft?: boolean;
 }
 
 const SOURCE_KEYS = Object.keys(
@@ -41,7 +44,7 @@ function formatCreatedAt(iso: string): string {
   });
 }
 
-export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
+export function MetaBlock({ client, update, tags = [], draft = false }: MetaBlockProps) {
   const th = useThemeColors();
 
   const toggleTag = (id: string) =>
@@ -106,10 +109,17 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
                     onPress={() => toggleTag(tag.id)}
                     icon={
                       active ? (
-                        <X color={tag.color} size={10} strokeWidth={2.5} />
-                      ) : (
-                        <Plus color={th.faint} size={10} strokeWidth={2.5} />
-                      )
+                        <X
+                          color={readableColorOnTint(
+                            tag.color,
+                            th.surface,
+                            th.ink,
+                            0x14 / 255,
+                          )}
+                          size={10}
+                          strokeWidth={2.5}
+                        />
+                      ) : undefined
                     }
                   />
                 );
@@ -132,9 +142,11 @@ export function MetaBlock({ client, update, tags = [] }: MetaBlockProps) {
         </View>
 
         {/* В базе с … */}
-        <Text className="border-t pt-3 text-xs" style={{ borderColor: th.separator, color: th.faint }}>
-          В базе с {formatCreatedAt(client.created_at)}
-        </Text>
+        {!draft ? (
+          <Text className="border-t pt-3 text-xs" style={{ borderColor: th.separator, color: th.faint }}>
+            В базе с {formatCreatedAt(client.created_at)}
+          </Text>
+        ) : null}
       </View>
     </CollapsibleCard>
   );

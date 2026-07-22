@@ -18,11 +18,16 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import {
+  formatEURExact as formatEUR,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
+import { randomUuid } from "@babun/shared/sync";
 import {
   accountDisplayName,
   type AccountKind,
 } from "@babun/shared/local/finance/account";
+import { transferValidationError } from "@babun/shared/local/finance/integrity";
 import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -35,7 +40,6 @@ import { Chip } from "@/components/ui/Chip";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
-import { formatYMD } from "@/features/appointments/helpers";
 import {
   useAccountsWithBalances,
   useCreateTransfer,
@@ -60,12 +64,21 @@ const KINDS: { value: AccountKind; label: string }[] = [
 
 export default function AccountsScreen() {
   const th = useThemeColors();
-  const { data: accounts = [], isLoading } = useAccountsWithBalances();
+  const accountsQuery = useAccountsWithBalances();
   // Активные — для чипов «Бригада» в форме создания; ВСЕ (вкл. soft-deleted)
   // — для резолва подзаголовков: счёт живёт дольше своей команды, и его
   // имя обязано резолвиться, иначе две «Налички» неразличимы.
-  const { data: teams = [] } = useTeams();
-  const { data: allTeams = [] } = useTeams({ includeInactive: true });
+  const teamsQuery = useTeams();
+  const allTeamsQuery = useTeams({ includeInactive: true });
+  const accounts = useMemo(
+    () => accountsQuery.data ?? [],
+    [accountsQuery.data],
+  );
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const allTeams = useMemo(
+    () => allTeamsQuery.data ?? [],
+    [allTeamsQuery.data],
+  );
   const insert = useInsertAccount();
   const updateAcc = useUpdateAccount();
   const closeAcc = useSoftCloseAccount();
@@ -77,6 +90,15 @@ export default function AccountsScreen() {
   );
   const total = useMemo(
     () => accounts.reduce((s, a) => s + a.balance, 0),
+    [accounts],
+  );
+  const hasTransferPair = useMemo(
+    () =>
+      accounts.some((account, index) =>
+        accounts.slice(index + 1).some(
+          (candidate) => candidate.brigade_id === account.brigade_id,
+        ),
+      ),
     [accounts],
   );
 
@@ -126,23 +148,35 @@ export default function AccountsScreen() {
   const [fromId, setFromId] = useState<string | null>(null);
   const [toId, setToId] = useState<string | null>(null);
   const [tAmount, setTAmount] = useState("");
+  const [transferRequestId, setTransferRequestId] = useState(randomUuid);
 
-  const tNum = Number(tAmount.replace(",", ".")) || 0;
-  const canTransfer =
-    !!fromId && !!toId && fromId !== toId && tNum > 0 && !transfer.isPending;
+  const transferAmountCents = parseMoneyInputToCents(tAmount);
+  const tNum = (transferAmountCents ?? 0) / 100;
+  const fromAccount = accounts.find((a) => a.id === fromId);
+  const toAccount = accounts.find((a) => a.id === toId);
+  const transferError =
+    transferAmountCents == null
+      ? "Введите сумму больше нуля и не больше двух знаков после запятой"
+      : transferValidationError(fromAccount, toAccount, tNum);
+  const canTransfer = transferError === null && !transfer.isPending;
 
   const doTransfer = async () => {
-    if (!fromId || !toId) return;
+    if (!fromId || !toId || transferError) {
+      Alert.alert("Перевод не выполнен", transferError ?? "Проверьте счета и сумму");
+      return;
+    }
     try {
       await transfer.mutateAsync({
+        request_id: transferRequestId,
         from_account_id: fromId,
         to_account_id: toId,
         amount: tNum,
-        occurred_on: formatYMD(new Date()),
+        brigade_id: fromAccount?.brigade_id ?? null,
       });
       setFromId(null);
       setToId(null);
       setTAmount("");
+      setTransferRequestId(randomUuid());
       setTOpen(false);
     } catch (e) {
       // Sheet stays open — nothing entered is lost.
@@ -164,11 +198,28 @@ export default function AccountsScreen() {
     setOpen(false);
     reset();
   };
+  const openingCents = opening.trim()
+    ? parseMoneyInputToCents(opening, {
+        allowNegative: true,
+        allowZero: true,
+      })
+    : 0;
   const canSave =
-    !!name.trim() && !!brigadeId && !insert.isPending && !updateAcc.isPending;
+    !!name.trim() &&
+    !!brigadeId &&
+    openingCents != null &&
+    !insert.isPending &&
+    !updateAcc.isPending;
 
   const submitAccount = async () => {
     if (!brigadeId) return;
+    if (openingCents == null) {
+      Alert.alert(
+        "Проверьте баланс",
+        "Введите сумму и не больше двух знаков после запятой.",
+      );
+      return;
+    }
     try {
       if (editingAcc) {
         await updateAcc.mutateAsync({
@@ -180,7 +231,7 @@ export default function AccountsScreen() {
           name: name.trim(),
           kind,
           brigade_id: brigadeId,
-          opening_balance: Number(opening.replace(",", ".")) || 0,
+          opening_balance: openingCents / 100,
         });
       }
       reset();
@@ -190,13 +241,36 @@ export default function AccountsScreen() {
     }
   };
 
-  const confirmClose = (a: AccountWithBalance) =>
-    Alert.alert(
-      "Закрыть счёт?",
-      a.balance !== 0
-        ? `${a.name} — история сохранится, но остаток ${formatEUR(a.balance)} исчезнет из «Всего на счетах». Сначала переведите деньги на другой счёт.`
-        : `${a.name} — история сохранится`,
-      [
+  const confirmClose = (a: AccountWithBalance) => {
+    if (Math.abs(a.balance) >= 0.005) {
+      Alert.alert(
+        "Сначала обнулите счёт",
+        `${a.name}: остаток ${formatEUR(a.balance)}. Счёт с ненулевым балансом нельзя закрыть — история и общий остаток должны сходиться.`,
+        [
+          { text: "Понятно", style: "cancel" },
+          ...(a.balance > 0 &&
+          accounts.some(
+            (item) => item.id !== a.id && item.brigade_id === a.brigade_id,
+          )
+            ? [
+                {
+                  text: "Перевести остаток",
+                  onPress: () => {
+                    setFromId(a.id);
+                    setToId(null);
+                    setTAmount(String(Math.round(a.balance * 100) / 100));
+                    setTransferRequestId(randomUuid());
+                    setTOpen(true);
+                  },
+                },
+              ]
+            : []),
+        ],
+      );
+      return;
+    }
+
+    Alert.alert("Закрыть счёт?", `${a.name} — история сохранится`, [
       { text: "Отмена", style: "cancel" },
       {
         text: "Закрыть",
@@ -207,15 +281,56 @@ export default function AccountsScreen() {
           }),
       },
     ]);
+  };
+
+  const loading =
+    accountsQuery.isLoading || teamsQuery.isLoading || allTeamsQuery.isLoading;
+  const loadError =
+    (accountsQuery.data === undefined ? accountsQuery.error : null) ||
+    (teamsQuery.data === undefined ? teamsQuery.error : null) ||
+    (allTeamsQuery.data === undefined ? allTeamsQuery.error : null);
+  const refreshAll = () =>
+    void Promise.all([
+      accountsQuery.refetch(),
+      teamsQuery.refetch(),
+      allTeamsQuery.refetch(),
+    ]);
+
+  if (loading) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Счета" />
+        <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Счета" />
+        <EmptyState
+          state="error"
+          fill
+          title="Не удалось загрузить счета"
+          subtitle={loadError instanceof Error ? loadError.message : undefined}
+          action={{ label: "Повторить", onPress: refreshAll }}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
         title="Счета"
         right={
-          accounts.length >= 2 ? (
+          hasTransferPair ? (
             <Pressable
-              onPress={() => setTOpen(true)}
+              onPress={() => {
+                setTransferRequestId(randomUuid());
+                setTOpen(true);
+              }}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Перевод между счетами"
@@ -237,14 +352,11 @@ export default function AccountsScreen() {
         </Text>
       </Card>
 
-      {isLoading ? (
-        <EmptyState state="loading" fill />
-      ) : (
-        <FlatList
+      <FlatList
           style={{ flex: 1 }}
           data={accounts}
           keyExtractor={(a) => a.id}
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
+          contentContainerStyle={{ flexGrow: 1, paddingTop: 8, paddingBottom: 104 }}
           renderItem={({ item }) => {
             const Icon = KIND_ICON[item.kind];
             // Счета строго per-brigade: подзаголовок = имя команды (это
@@ -321,15 +433,14 @@ export default function AccountsScreen() {
               action={{ label: "Добавить счёт", onPress: () => openCreate() }}
             />
           }
-        />
-      )}
+      />
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={closeCreate}>
         <KeyboardAvoidingView
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={closeCreate} />
+        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={closeCreate} accessible={false} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             {editingAcc ? "Счёт" : "Новый счёт"}
@@ -372,13 +483,20 @@ export default function AccountsScreen() {
             </View>
           )}
           {!editingAcc ? (
-            <Field
-              label="Начальный баланс €"
-              value={opening}
-              onChangeText={setOpening}
-              placeholder="0"
-              keyboardType="decimal-pad"
-            />
+            <>
+              <Field
+                label="Начальный баланс €"
+                value={opening}
+                onChangeText={setOpening}
+                placeholder="0"
+                keyboardType="decimal-pad"
+              />
+              {opening.length > 0 && openingCents == null ? (
+                <Text className="mb-3 text-sm" style={{ color: th.danger }}>
+                  Введите сумму и не больше двух знаков после запятой.
+                </Text>
+              ) : null}
+            </>
           ) : null}
           <Button
             label={editingAcc ? "Сохранить" : "Создать"}
@@ -412,7 +530,7 @@ export default function AccountsScreen() {
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setTOpen(false)} />
+        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setTOpen(false)} accessible={false} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             Перевод между счетами
@@ -426,14 +544,23 @@ export default function AccountsScreen() {
                 label={accountDisplayName(a, teamById.get(a.brigade_id)?.name)}
                 color={th.danger}
                 selected={fromId === a.id}
-                onPress={() => setFromId(a.id === fromId ? null : a.id)}
+                onPress={() => {
+                  const nextFrom = a.id === fromId ? null : a.id;
+                  setFromId(nextFrom);
+                  const selectedTo = accounts.find((item) => item.id === toId);
+                  if (nextFrom && selectedTo?.brigade_id !== a.brigade_id) setToId(null);
+                }}
               />
             ))}
           </View>
           <Text className="mb-2 text-xs font-medium" style={{ color: th.sub }}>Куда</Text>
           <View className="mb-3 flex-row flex-wrap gap-2">
             {accounts
-              .filter((a) => a.id !== fromId)
+              .filter(
+                (a) =>
+                  a.id !== fromId &&
+                  (!fromAccount || a.brigade_id === fromAccount.brigade_id),
+              )
               .map((a) => (
                 <Chip
                   key={a.id}
@@ -451,6 +578,11 @@ export default function AccountsScreen() {
             placeholder="0"
             keyboardType="decimal-pad"
           />
+          {tAmount.length > 0 && transferError ? (
+            <Text className="mb-3 text-sm" style={{ color: th.danger }}>
+              {transferError}
+            </Text>
+          ) : null}
           <Button
             label="Перевести"
             onPress={doTransfer}

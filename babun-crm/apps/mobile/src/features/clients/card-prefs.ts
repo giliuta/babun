@@ -79,6 +79,6 @@ export function cardFieldsSummary(p: CardFieldPrefs): string {
   if (p.inc) parts.push("доход");
   if (p.debt) parts.push("долг");
   if (p.last) parts.push("посл. запись");
-  if (p.meta) parts.push("команда/метка/тег");
+  if (p.meta) parts.push("команда/метка/теги");
   return parts.join(" · ");
 }

@@ -21,7 +21,7 @@ export interface ParsedRow {
 export interface ParsedCsv {
   headers: string[];
   rows: ParsedRow[];
-  /** Cheap content fingerprint for the resume guard (djb2 of head slice). */
+  /** Full-content fingerprint for resume and idempotent row UUIDs. */
   fileHash: string;
 }
 
@@ -69,16 +69,21 @@ function parseCsvRecords(text: string, delim: string): string[][] {
   return rows;
 }
 
-/** djb2 hash over the first 4 KiB — enough to answer «is this the same
- *  file we left half-imported?» without WebCrypto (absent in Hermes). */
+/** Two independent 32-bit full-content hashes. WebCrypto is absent in Hermes,
+ * but hashing the whole (guarded ≤10 MB) file avoids treating equal-size CSVs
+ * with the same 4 KiB header as the same interrupted import. */
 function quickHash(text: string): string {
-  const head = text.slice(0, 4096);
-  let h = 5381;
-  for (let i = 0; i < head.length; i++) {
-    h = ((h << 5) + h + head.charCodeAt(i)) | 0;
+  let first = 5381;
+  let second = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    first = Math.imul(first, 33) ^ code;
+    second ^= code;
+    second = Math.imul(second, 0x01000193);
   }
-  // Fold length in so two files sharing a 4 KiB head still differ.
-  return (h >>> 0).toString(16) + "-" + text.length.toString(16);
+  return `${(first >>> 0).toString(16).padStart(8, "0")}${(second >>> 0)
+    .toString(16)
+    .padStart(8, "0")}-${text.length.toString(16)}`;
 }
 
 /** Parse a clients CSV into headers + positional rows. Throws when the

@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      _finance_write_context: {
+        Row: {
+          entity_id: string
+          kind: string
+          tenant_id: string
+          transaction_id: number
+        }
+        Insert: {
+          entity_id: string
+          kind: string
+          tenant_id: string
+          transaction_id: number
+        }
+        Update: {
+          entity_id?: string
+          kind?: string
+          tenant_id?: string
+          transaction_id?: number
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           brigade_id: string
@@ -595,6 +616,7 @@ export type Database = {
           birthday: string
           blacklisted: boolean
           city: string
+          city_manual: boolean
           comment: string
           created_at: string
           deleted_at: string | null
@@ -630,6 +652,7 @@ export type Database = {
           birthday?: string
           blacklisted?: boolean
           city?: string
+          city_manual?: boolean
           comment?: string
           created_at?: string
           deleted_at?: string | null
@@ -665,6 +688,7 @@ export type Database = {
           birthday?: string
           blacklisted?: boolean
           city?: string
+          city_manual?: boolean
           comment?: string
           created_at?: string
           deleted_at?: string | null
@@ -737,6 +761,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "day_cities_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      day_closures: {
+        Row: {
+          actual_cash_cents: number
+          business_date: string
+          closed_at: string
+          closed_by: string | null
+          created_at: string
+          currency: string
+          delta_cash_cents: number
+          expected_cash_cents: number
+          is_closed: boolean
+          reopened_at: string | null
+          reopened_by: string | null
+          revision: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          actual_cash_cents: number
+          business_date: string
+          closed_at?: string
+          closed_by?: string | null
+          created_at?: string
+          currency?: string
+          delta_cash_cents: number
+          expected_cash_cents: number
+          is_closed?: boolean
+          reopened_at?: string | null
+          reopened_by?: string | null
+          revision?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          actual_cash_cents?: number
+          business_date?: string
+          closed_at?: string
+          closed_by?: string | null
+          created_at?: string
+          currency?: string
+          delta_cash_cents?: number
+          expected_cash_cents?: number
+          is_closed?: boolean
+          reopened_at?: string | null
+          reopened_by?: string | null
+          revision?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_closures_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1026,11 +1109,68 @@ export type Database = {
           },
         ]
       }
+      finance_transfer_requests: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          from_account_id: string
+          id: string
+          notes: string | null
+          occurred_on: string
+          status: string
+          team_id: string
+          tenant_id: string
+          to_account_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          from_account_id: string
+          id: string
+          notes?: string | null
+          occurred_on: string
+          status?: string
+          team_id: string
+          tenant_id: string
+          to_account_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          from_account_id?: string
+          id?: string
+          notes?: string | null
+          occurred_on?: string
+          status?: string
+          team_id?: string
+          tenant_id?: string
+          to_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_transfer_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_transactions: {
         Row: {
           account_id: string | null
           amount: number
           appointment_id: string | null
+          appointment_payment_kind: string | null
           category_id: string | null
           client_id: string | null
           created_at: string
@@ -1055,6 +1195,7 @@ export type Database = {
           account_id?: string | null
           amount: number
           appointment_id?: string | null
+          appointment_payment_kind?: string | null
           category_id?: string | null
           client_id?: string | null
           created_at?: string
@@ -1079,6 +1220,7 @@ export type Database = {
           account_id?: string | null
           amount?: number
           appointment_id?: string | null
+          appointment_payment_kind?: string | null
           category_id?: string | null
           client_id?: string | null
           created_at?: string
@@ -1154,33 +1296,39 @@ export type Database = {
       invitations: {
         Row: {
           accepted_at: string | null
+          accepted_by_user_id: string | null
           created_at: string
           email: string
           expires_at: string
           id: string
           invited_by_user_id: string | null
+          master_id: string | null
           role: string
           tenant_id: string
           token: string
         }
         Insert: {
           accepted_at?: string | null
+          accepted_by_user_id?: string | null
           created_at?: string
           email: string
           expires_at?: string
           id?: string
           invited_by_user_id?: string | null
+          master_id?: string | null
           role: string
           tenant_id: string
           token: string
         }
         Update: {
           accepted_at?: string | null
+          accepted_by_user_id?: string | null
           created_at?: string
           email?: string
           expires_at?: string
           id?: string
           invited_by_user_id?: string | null
+          master_id?: string | null
           role?: string
           tenant_id?: string
           token?: string
@@ -1237,6 +1385,7 @@ export type Database = {
         Row: {
           appointment_id: string | null
           brigade_id: string | null
+          client_snapshot: Json | null
           client_id: string | null
           created_at: string
           created_by: string | null
@@ -1248,6 +1397,7 @@ export type Database = {
           number: string
           pdf_url: string | null
           seq: number
+          seller_snapshot: Json
           status: string
           subtotal_net: number
           tenant_id: string
@@ -1260,6 +1410,7 @@ export type Database = {
         Insert: {
           appointment_id?: string | null
           brigade_id?: string | null
+          client_snapshot?: Json | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1271,6 +1422,7 @@ export type Database = {
           number: string
           pdf_url?: string | null
           seq: number
+          seller_snapshot?: Json
           status?: string
           subtotal_net: number
           tenant_id: string
@@ -1283,6 +1435,7 @@ export type Database = {
         Update: {
           appointment_id?: string | null
           brigade_id?: string | null
+          client_snapshot?: Json | null
           client_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -1294,6 +1447,7 @@ export type Database = {
           number?: string
           pdf_url?: string | null
           seq?: number
+          seller_snapshot?: Json
           status?: string
           subtotal_net?: number
           tenant_id?: string
@@ -1320,6 +1474,47 @@ export type Database = {
           },
           {
             foreignKeyName: "invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_labels: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          position: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id: string
+          is_active?: boolean
+          name: string
+          position?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          position?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_labels_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2221,6 +2416,7 @@ export type Database = {
         Row: {
           invited_by_user_id: string | null
           joined_at: string
+          master_id: string | null
           metadata: Json
           role: string
           tenant_id: string
@@ -2229,6 +2425,7 @@ export type Database = {
         Insert: {
           invited_by_user_id?: string | null
           joined_at?: string
+          master_id?: string | null
           metadata?: Json
           role: string
           tenant_id: string
@@ -2237,12 +2434,20 @@ export type Database = {
         Update: {
           invited_by_user_id?: string | null
           joined_at?: string
+          master_id?: string | null
           metadata?: Json
           role?: string
           tenant_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tenant_members_master_fkey"
+            columns: ["tenant_id", "master_id"]
+            isOneToOne: false
+            referencedRelation: "masters"
+            referencedColumns: ["tenant_id", "id"]
+          },
           {
             foreignKeyName: "tenant_members_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -2526,6 +2731,7 @@ export type Database = {
         Returns: undefined
       }
       accept_invitation: { Args: { p_token: string }; Returns: string }
+      activate_tenant: { Args: { p_tenant_id: string }; Returns: Json }
       add_platform_admin: { Args: { p_email: string }; Returns: undefined }
       admin_billing_history: {
         Args: { p_limit?: number; p_offset?: number }
@@ -2548,12 +2754,56 @@ export type Database = {
         }
         Returns: Json
       }
+      apply_location_label_changes: {
+        Args: { p_labels: Json; p_remove_ids?: Json }
+        Returns: Database["public"]["Tables"]["location_labels"]["Row"][]
+      }
       bump_sms_balance: {
         Args: { p_amount_cents: number; p_tenant_id: string }
         Returns: Json
       }
+      close_business_day: {
+        Args: { p_actual_cash_cents: number; p_business_date: string }
+        Returns: Database["public"]["Tables"]["day_closures"]["Row"][]
+      }
+      create_client_with_tags: {
+        Args: {
+          p_client: Json
+          p_client_id: string | null
+          p_tag_ids?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       current_tenant_id: { Args: never; Returns: string }
+      current_tenant_profile_safe: { Args: never; Returns: Json }
+      current_user_can_access_client: {
+        Args: { p_client_id: string }
+        Returns: boolean
+      }
+      current_user_can_access_client_tag: {
+        Args: { p_tag_id: string }
+        Returns: boolean
+      }
+      current_user_can_access_appointment: {
+        Args: { p_appointment_id: string }
+        Returns: boolean
+      }
+      current_user_can_mutate_appointment_photo: {
+        Args: { p_appointment_id: string }
+        Returns: boolean
+      }
+      current_user_master_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
+      current_user_team_ids: { Args: never; Returns: string[] }
+      create_invitation: {
+        Args: { p_email: string; p_master_id?: string; p_role: string }
+        Returns: Json
+      }
+      delete_account_transfer: {
+        Args: { p_transfer_group_id: string }
+        Returns: boolean
+      }
       import_schedule: {
         Args: {
           p_calendar_settings?: Json
@@ -2564,6 +2814,31 @@ export type Database = {
         Returns: undefined
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      invitation_preview: { Args: { p_token: string }; Returns: Json }
+      list_master_clients_safe: {
+        Args: { p_client_id?: string }
+        Returns: Json[]
+      }
+      list_master_appointments_safe: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json[]
+      }
+      list_master_services_safe: { Args: never; Returns: Json[] }
+      list_dispatcher_services_safe: { Args: never; Returns: Json[] }
+      list_operational_masters_safe: { Args: never; Returns: Json[] }
+      list_operational_teams_safe: { Args: never; Returns: Json[] }
+      normalize_client_tag_ids: {
+        Args: { p_tag_ids: string[]; p_tenant_id: string }
+        Returns: string[]
+      }
+      patch_master_profile: {
+        Args: { p_master_id: string; p_patch: Json }
+        Returns: Json
+      }
+      replace_day_extras: {
+        Args: { p_date: string; p_extras: Json; p_team_id: string }
+        Returns: Database["public"]["Tables"]["day_extras"]["Row"][]
+      }
       lookup_rating_token: {
         Args: { p_token: string }
         Returns: {
@@ -2596,12 +2871,257 @@ export type Database = {
           updated_at: string
         }[]
       }
+      update_client_with_tags: {
+        Args: {
+          p_client_id: string
+          p_patch: Json
+          p_tag_ids?: string[]
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
+      read_sms_templates_safe: { Args: never; Returns: Json }
+      read_day_closure: {
+        Args: { p_business_date: string }
+        Returns: {
+          actual_cash_cents: number | null
+          business_date: string
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string | null
+          currency: string
+          delta_cash_cents: number | null
+          expected_cash_cents: number
+          is_closed: boolean
+          reopened_at: string | null
+          reopened_by: string | null
+          revision: number
+          tenant_id: string
+          updated_at: string | null
+        }[]
+      }
+      read_operational_calendar_settings_safe: {
+        Args: never
+        Returns: {
+          allow_overtime: boolean
+          buffer_minutes: number
+          end_hour: number
+          grid_step: number
+          hide_cancelled: boolean
+          scroll_open_hour: number | null
+          start_hour: number
+          timezone: string
+          week_start: string
+          work_end_hour: number | null
+          work_start_hour: number | null
+        }[]
+      }
+      reopen_business_day: {
+        Args: { p_business_date: string }
+        Returns: Database["public"]["Tables"]["day_closures"]["Row"][]
+      }
+      try_uuid: { Args: { p_value: string }; Returns: string }
+      update_master_appointment_safe: {
+        Args: { p_appointment_id: string; p_patch: Json }
+        Returns: Json
+      }
+      write_sms_templates_safe: {
+        Args: { p_templates: Json }
+        Returns: Json
+      }
+      issue_invoice: {
+        Args: {
+          p_appointment_id: string | null
+          p_brigade_id: string | null
+          p_client_id: string | null
+          p_due_on: string | null
+          p_issued_on: string
+          p_lines: Json
+          p_link_to_tx_id?: string | null
+          p_notes?: string | null
+          p_request_id: string
+          p_vat_mode: string
+          p_vat_percent: number
+        }
+        Returns: {
+          appointment_id: string | null
+          brigade_id: string | null
+          client_snapshot: Json | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_on: string | null
+          id: string
+          issued_on: string
+          notes: string | null
+          number: string
+          pdf_url: string | null
+          seq: number
+          seller_snapshot: Json
+          status: string
+          subtotal_net: number
+          tenant_id: string
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_percent: number
+          year: number
+        }
+      }
+      record_invoice_payment: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_invoice_id: string
+          p_notes?: string | null
+          p_occurred_on?: string
+          p_payment_method: string
+          p_request_id: string
+        }
+        Returns: {
+          account_id: string | null
+          amount: number
+          appointment_id: string | null
+          appointment_payment_kind: string | null
+          category_id: string | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          invoice_id: string | null
+          master_id: string | null
+          notes: string | null
+          occurred_on: string
+          payment_method: string | null
+          receipt_url: string | null
+          refund_of_id: string | null
+          source: string
+          team_id: string | null
+          tenant_id: string
+          transfer_group_id: string | null
+          type: string
+          updated_at: string
+        }
+      }
+      refund_invoice_payment: {
+        Args: {
+          p_amount: number
+          p_notes?: string | null
+          p_occurred_on?: string
+          p_payment_id: string
+          p_request_id: string
+        }
+        Returns: Database["public"]["Tables"]["finance_transactions"]["Row"]
+      }
+      record_account_transfer: {
+        Args: {
+          p_amount: number
+          p_from_account_id: string
+          p_notes?: string | null
+          p_occurred_on?: string
+          p_request_id: string
+          p_to_account_id: string
+        }
+        Returns: Database["public"]["Tables"]["finance_transactions"]["Row"][]
+      }
+      reset_appointment_payment: {
+        Args: { p_appointment_id: string }
+        Returns: Database["public"]["Tables"]["appointments"]["Row"]
+      }
+      set_appointment_prepayment: {
+        Args: {
+          p_amount: number
+          p_appointment_id: string
+          p_payment_method: string | null
+        }
+        Returns: Database["public"]["Tables"]["appointments"]["Row"]
+      }
+      update_invoice_draft: {
+        Args: {
+          p_appointment_id: string | null
+          p_brigade_id: string | null
+          p_client_id: string | null
+          p_due_on: string | null
+          p_invoice_id: string
+          p_lines: Json
+          p_notes?: string | null
+          p_vat_mode: string
+          p_vat_percent: number
+        }
+        Returns: {
+          appointment_id: string | null
+          brigade_id: string | null
+          client_snapshot: Json | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_on: string | null
+          id: string
+          issued_on: string
+          notes: string | null
+          number: string
+          pdf_url: string | null
+          seq: number
+          seller_snapshot: Json
+          status: string
+          subtotal_net: number
+          tenant_id: string
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_percent: number
+          year: number
+        }
+      }
+      undo_appointment_payment: {
+        Args: { p_appointment_id: string }
+        Returns: Database["public"]["Tables"]["appointments"]["Row"][]
+      }
+      void_invoice: {
+        Args: { p_invoice_id: string }
+        Returns: {
+          appointment_id: string | null
+          brigade_id: string | null
+          client_snapshot: Json | null
+          client_id: string | null
+          created_at: string
+          created_by: string | null
+          currency: string
+          due_on: string | null
+          id: string
+          issued_on: string
+          notes: string | null
+          number: string
+          pdf_url: string | null
+          seq: number
+          seller_snapshot: Json
+          status: string
+          subtotal_net: number
+          tenant_id: string
+          total: number
+          updated_at: string
+          vat_amount: number
+          vat_percent: number
+          year: number
+        }
+      }
       submit_rating: {
         Args: { p_comment: string; p_stars: number; p_token: string }
         Returns: {
           code: string
           ok: boolean
         }[]
+      }
+      tenant_business_date: {
+        Args: { p_tenant_id: string }
+        Returns: string
+      }
+      tenant_cash_ledger_cents: {
+        Args: { p_as_of_date: string; p_tenant_id: string }
+        Returns: number
       }
       tenant_data_export: { Args: never; Returns: Json }
       tenant_effective_plan: { Args: { t_id: string }; Returns: string }

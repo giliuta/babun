@@ -8,9 +8,13 @@ import {
 } from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
+import {
+  isWeekendColumn,
+  weekdayIndex,
+  weekdayLabels,
+  type WeekStart,
+} from "@/features/calendar/week";
 import { useThemeColors } from "@/theme/colors";
-
-const WD = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const ymd = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -27,7 +31,8 @@ function groupByDate(appointments: Appointment[]) {
   return map;
 }
 
-// Month overview — web MonthView parity: bordered 6×7 grid (Monday-first),
+// Month overview — web MonthView parity: bordered 6×7 grid (first day per
+// «Первый день недели»),
 // out-of-month cells on the grouped canvas, today = filled accent pill,
 // weekend numbers red, appointment-count chip top-right, and the per-day
 // money mini-list (planned / earned / spent / profit) from the same
@@ -43,6 +48,8 @@ export const MonthView = memo(function MonthView({
   labelFor,
   onPickDay,
   onPickLabelDay,
+  weekStart = "monday",
+  showFinance = true,
 }: {
   month: Date; // first of the displayed month
   /** Видимый набор (фильтры сетки, вкл. «Скрывать отменённые») —
@@ -66,15 +73,20 @@ export const MonthView = memo(function MonthView({
   /** Тап по дню — попап метки (undefined, когда у бригады нет меток:
    *  тогда и обычный тап открывает Неделю). */
   onPickLabelDay?: (dateYmd: string) => void;
+  /** «Первый день недели» (calendar_settings.week_start). */
+  weekStart?: WeekStart;
+  /** Company money is owner-only; other roles still get counts and labels. */
+  showFinance?: boolean;
 }) {
   const cells = useMemo(() => {
     const y = month.getFullYear();
     const m = month.getMonth();
-    const startDow = (new Date(y, m, 1).getDay() + 6) % 7; // Monday = 0
+    const startDow = weekdayIndex(new Date(y, m, 1).getDay(), weekStart);
     const out: Date[] = [];
     for (let i = 0; i < 42; i++) out.push(new Date(y, m, 1 - startDow + i));
     return out;
-  }, [month]);
+  }, [month, weekStart]);
+  const WD = weekdayLabels(weekStart);
 
   const byDay = useMemo(() => groupByDate(appointments), [appointments]);
   const financeByDay = useMemo(
@@ -90,6 +102,7 @@ export const MonthView = memo(function MonthView({
   // операциями (extras) тоже попадают в карту.
   const totalsByDay = useMemo(() => {
     const m = new Map<string, DayFinanceTotals>();
+    if (!showFinance) return new Map<string, DayFinanceTotals>();
     const dates = new Set(financeByDay.keys());
     if (teamId) {
       const prefix = `${teamId}:`;
@@ -108,7 +121,7 @@ export const MonthView = memo(function MonthView({
       );
     }
     return m;
-  }, [financeByDay, services, extrasMap, teamId]);
+  }, [financeByDay, services, extrasMap, teamId, showFinance]);
 
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());
@@ -135,7 +148,7 @@ export const MonthView = memo(function MonthView({
               fontWeight: "600",
               letterSpacing: 0.6,
               textTransform: "uppercase",
-              color: i >= 5 ? t.danger : t.sub,
+              color: isWeekendColumn(i, weekStart) ? t.danger : t.sub,
             }}
           >
             {w}

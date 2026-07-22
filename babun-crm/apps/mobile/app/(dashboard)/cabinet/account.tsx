@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -20,7 +20,11 @@ import { ICON } from "@/components/ui/tokens";
 import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
-import { signOutAndWipe, wipeLocalData } from "@/lib/auth-clear";
+import {
+  signOutAndWipe,
+  signOutScopeAndWipe,
+  wipeTenantScopedData,
+} from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -89,7 +93,6 @@ export default function AccountScreen() {
 
 // ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
 function PasswordSection({ email }: { email: string | null }) {
-  const t = useThemeColors();
   const toast = useToast();
   const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
@@ -226,9 +229,9 @@ function DevicesSection() {
               // локальная сессия тоже гаснет → SessionProvider уводит на
               // логин. Wipe — только ПОСЛЕ успешного signOut (офлайн-
               // ошибка не должна уничтожать локальные данные).
-              const { error } = await supabase.auth.signOut({ scope: "global" });
-              if (error) throw new Error(error.message);
-              wipeLocalData();
+              // SessionProvider waits for this helper's wipe barrier before
+              // it exposes the signed-out/login tree.
+              await signOutScopeAndWipe("global");
             } catch (e) {
               Alert.alert(
                 "Не удалось выйти",
@@ -253,7 +256,7 @@ function DevicesSection() {
             alignItems: "center",
             justifyContent: "center",
             borderRadius: 8,
-            backgroundColor: t.dark ? "rgba(90,134,255,0.16)" : "rgba(44,91,224,0.10)",
+            backgroundColor: "rgba(44,91,224,0.10)",
           }}
         >
           <Smartphone color={t.accent} size={ICON.sm} />
@@ -302,70 +305,143 @@ function DevicesSection() {
 
 // ─── Опасная зона: удаление аккаунта (App Store 5.1.1(v)) ────────────
 //
-// Каскад на бэке пока живёт только в Next-роуте /api/account/delete
-// (cookie-сессия + service-role) — из приложения он недоступен, edge-функции
-// нет (см. blocked отчёта порта). Поэтому по тапу СРАЗУ и честно ведём в
-// поддержку — без двухшагового подтверждения с вводом email перед
-// гарантированной ошибкой. Когда появится edge-функция account-delete
-// (Bearer-токен, семантика веб-роута), сюда вернётся полный self-service
-// флоу с подтверждением email (web DangerZoneSection).
-const SUPPORT_EMAIL = "support@babun.app";
+// Native self-service deletion goes straight to a Supabase Edge Function.
+// There is no dependency on the abandoned Next application: auth-js attaches
+// the current access token, while the function validates it again before any
+// service-role cascade.
 
 function DangerZoneSection({ email }: { email: string }) {
   const t = useThemeColors();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const targetPhrase = email.trim() || "УДАЛИТЬ";
+  const ready =
+    typed.trim().length > 0 &&
+    typed.trim().toLowerCase() === targetPhrase.toLowerCase();
 
-  const start = () => {
-    Alert.alert(
-      "Удаление аккаунта",
-      "Аккаунт и все данные (клиенты, записи, настройки) удаляются безвозвратно. " +
-        "Сейчас удаление выполняет поддержка: напишите нам — удалим в течение 24 часов.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Написать в поддержку",
-          onPress: () => {
-            const subject = encodeURIComponent("Babun: удаление аккаунта");
-            const body = encodeURIComponent(
-              `Прошу удалить мой аккаунт${email ? ` (${email})` : ""} и все связанные с ним данные.`,
-            );
-            void Linking.openURL(
-              `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`,
-            ).catch(() => {
-              // Нет почтового клиента (симулятор/чистое устройство) —
-              // показываем адрес, чтобы флоу не стал тупиком.
-              Alert.alert(
-                "Почтовый клиент недоступен",
-                `Напишите нам на ${SUPPORT_EMAIL} — удалим аккаунт в течение 24 часов.`,
-              );
-            });
-          },
-        },
-      ],
-    );
+  const deleteAccount = async () => {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke(
+        "account-delete",
+        { body: { confirmation: typed.trim() } },
+      );
+      if (invokeError) throw new Error(invokeError.message);
+      if (!data || data.ok !== true) {
+        throw new Error(
+          typeof data?.error === "string" ? data.error : "Не удалось удалить аккаунт",
+        );
+      }
+
+      // The remote user no longer exists, so local data must be wiped even if
+      // auth-js can't revoke an already-deleted server session.
+      await wipeTenantScopedData();
+      await supabase.auth.signOut({ scope: "local" });
+      setOpen(false);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Не удалось удалить аккаунт",
+      );
+      setBusy(false);
+    }
   };
 
   return (
-    <SectionCard title="Опасная зона" padded>
-      <Text className="mb-3 text-sm leading-5" style={{ color: t.sub }}>
-        Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и
-        настройки.
-      </Text>
-      <Pressable
-        onPress={start}
-        accessibilityRole="button"
-        accessibilityLabel="Удалить аккаунт"
-        className="flex-row items-center justify-center rounded-full border py-3.5 active:opacity-70"
-        style={{
-          minHeight: 48,
-          borderColor: t.danger + "4d",
-          backgroundColor: t.danger + "1a",
-        }}
-      >
-        <Trash2 color={t.danger} size={ICON.xs} />
-        <Text className="ml-2 text-base font-semibold" style={{ color: t.danger }}>
-          Удалить аккаунт
+    <>
+      <SectionCard title="Опасная зона" padded>
+        <Text className="mb-3 text-sm leading-5" style={{ color: t.sub }}>
+          Удаление аккаунта необратимо. Будут стёрты все клиенты, записи и
+          настройки.
         </Text>
-      </Pressable>
-    </SectionCard>
+        <Pressable
+          onPress={() => {
+            setTyped("");
+            setError(null);
+            setOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Удалить аккаунт"
+          className="flex-row items-center justify-center rounded-full border py-3.5 active:opacity-70"
+          style={{
+            minHeight: 48,
+            borderColor: t.danger + "4d",
+            backgroundColor: t.danger + "1a",
+          }}
+        >
+          <Trash2 color={t.danger} size={ICON.xs} />
+          <Text className="ml-2 text-base font-semibold" style={{ color: t.danger }}>
+            Удалить аккаунт
+          </Text>
+        </Pressable>
+      </SectionCard>
+
+      <Modal
+        visible={open}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !busy && setOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: t.scrim }}
+        >
+          <View
+            accessibilityRole="alert"
+            style={{
+              borderRadius: t.radius.card,
+              backgroundColor: t.surface,
+              padding: 20,
+              boxShadow: t.cardShadow,
+            }}
+          >
+            <Text style={{ fontSize: 20, fontWeight: "700", color: t.danger }}>
+              Удалить аккаунт?
+            </Text>
+            <Text style={{ marginTop: 8, marginBottom: 16, fontSize: 14, lineHeight: 20, color: t.sub }}>
+              Введите {email ? "email аккаунта" : "УДАЛИТЬ"} для подтверждения. Все данные будут потеряны.
+            </Text>
+            <Text style={{ marginBottom: 6, fontSize: 13, color: t.ink }} selectable>
+              {targetPhrase}
+            </Text>
+            <Field
+              label="Подтверждение"
+              value={typed}
+              onChangeText={setTyped}
+              placeholder={targetPhrase}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!busy}
+              error={error}
+            />
+            <View className="mt-4 flex-row gap-2">
+              <View className="flex-1">
+                <Button
+                  label="Отмена"
+                  variant="secondary"
+                  disabled={busy}
+                  onPress={() => setOpen(false)}
+                />
+              </View>
+              <View className="flex-1">
+                <Button
+                  label="Удалить"
+                  variant="secondary"
+                  tone="danger"
+                  disabled={!ready || busy}
+                  loading={busy}
+                  onPress={() => void deleteAccount()}
+                />
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }

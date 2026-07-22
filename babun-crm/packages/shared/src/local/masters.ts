@@ -795,7 +795,7 @@ export const SALARY_MODEL_LABELS: Record<SalaryModel, string> = {
   per_visit: "Фиксировано за визит",
   monthly: "Оклад в месяц",
   hourly: "Почасовая",
-  hybrid: "Оклад + % от своих работ",
+  hybrid: "Оклад и % от своих работ",
   none: "Не учитывается",
 };
 
@@ -807,7 +807,7 @@ export const SALARY_MODEL_HINTS: Record<SalaryModel, string> = {
   per_visit: "Фиксированная ставка за каждый выполненный визит.",
   monthly: "Один и тот же оклад каждый месяц, независимо от объёма работ.",
   hourly: "Ставка умножается на фактически отработанные часы.",
-  hybrid: "Оклад каждый месяц + доп. процент с собственных визитов.",
+  hybrid: "Оклад каждый месяц и дополнительный процент с собственных визитов.",
   none: "ЗП рассчитывается вне Babun — admin/owner на контракте.",
 };
 
@@ -1047,7 +1047,7 @@ export function describeRule(rule: SalaryRule): string {
     parts.push(`${Math.round(rule.hourly_rate)}€/час`);
   }
   if (parts.length === 0) return "не настроено";
-  return parts.join(" + ");
+  return parts.join(" · ");
 }
 
 /** True when at least one pay component is set. */
@@ -1280,7 +1280,7 @@ export function getTeamDisplayName(team: Team, masters: Master[]): string {
   const people = picked.map((m) => firstName(m.full_name));
   const city = team.default_city?.trim() || team.region?.split(/[,/]/)[0].trim() || "";
   if (people.length === 0) return team.name;
-  const joined = people.join(" + ");
+  const joined = people.join(" и ");
   return city ? `${joined} · ${city}` : joined;
 }
 

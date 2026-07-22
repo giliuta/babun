@@ -62,15 +62,34 @@ function clientHaystacks(client: Client): {
   };
   push(client.full_name);
   push(client.phone);
+  push(client.email);
+  push(client.sms_name);
   push(client.whatsapp_phone);
   push(client.telegram_username);
   push(client.instagram_username);
   push(client.comment);
   push(client.address);
-  for (const p of client.phones ?? []) push(p.number);
+  push(client.city);
+  for (const note of client.notes ?? []) push(note.text);
+  for (const p of client.phones ?? []) {
+    push(p.number);
+    push(p.name);
+    push(p.label);
+  }
+  for (const unit of client.equipment ?? []) {
+    push(unit.room);
+    push(unit.brand);
+    push(unit.model);
+  }
   for (const loc of client.locations ?? []) {
     push(loc.address);
     push(loc.label);
+    push(loc.note);
+    for (const unit of loc.equipment ?? []) {
+      push(unit.room);
+      push(unit.brand);
+      push(unit.model);
+    }
   }
   return { normalized, digits };
 }
@@ -117,7 +136,7 @@ export function findDuplicateCandidates(
   if (!phoneDigits && !nameNorm) return [];
   const hits: Client[] = [];
   for (const c of clients) {
-    const { normalized, digits } = clientHaystacks(c);
+    const { digits } = clientHaystacks(c);
     let hit = false;
     if (phoneDigits && phoneDigits.length >= 5) {
       for (const d of digits) {
@@ -128,12 +147,10 @@ export function findDuplicateCandidates(
       }
     }
     if (!hit && nameNorm.length >= 3) {
-      for (const n of normalized) {
-        if (n === nameNorm) {
-          hit = true;
-          break;
-        }
-      }
+      // A name match must compare against the name only. Searching every
+      // haystack here used to treat a draft named «Лимассол» as a duplicate
+      // of any client whose CITY happened to be Лимассол.
+      hit = normalizeSearchable(c.full_name) === nameNorm;
     }
     if (hit) hits.push(c);
     if (hits.length >= 5) break;

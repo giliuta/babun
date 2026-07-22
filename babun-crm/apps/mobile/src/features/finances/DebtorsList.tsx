@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import {
   getDebtAmount,
   type Appointment,
@@ -110,52 +110,55 @@ export function DebtorsList({
           </Text>
         ) : (
           rows.map((r, i) => (
-            <Pressable
+            <View
               key={r.id}
-              onPress={
-                r.clientId
-                  ? () => router.push(`/clients/${r.clientId}`)
-                  : undefined
-              }
-              disabled={!r.clientId}
-              accessibilityRole="button"
-              accessibilityLabel={`${r.name}, долг ${formatEUR(r.owed)}, открыть карточку клиента`}
-              className="flex-row items-center gap-3 px-4 py-2 active:opacity-70"
+              className="min-h-11 flex-row items-stretch"
               style={
                 i > 0
                   ? { borderTopWidth: 1, borderTopColor: t.separator }
                   : undefined
               }
             >
-              <View className="min-w-0 flex-1">
-                <Text
-                  className="text-[15px] font-medium"
-                  style={{ color: t.ink }}
-                  numberOfLines={1}
-                >
-                  {r.name}
-                </Text>
-                <Text className="text-xs" style={{ color: t.faint }}>
-                  {humanDay(r.date)}
-                </Text>
-              </View>
-              <Text
-                className="text-[15px] font-bold tabular-nums"
-                style={{ color: t.warning }}
+              <Pressable
+                onPress={r.clientId ? () => router.push(`/clients/${r.clientId}`) : undefined}
+                disabled={!r.clientId}
+                accessible={!!r.clientId}
+                accessibilityRole={r.clientId ? "button" : undefined}
+                accessibilityLabel={
+                  r.clientId
+                    ? `${r.name}, долг ${formatEUR(r.owed)}, открыть карточку клиента`
+                    : undefined
+                }
+                className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 py-2 pl-4 active:opacity-70"
               >
-                {formatEUR(r.owed)}
-              </Text>
+                <View className="min-w-0 flex-1">
+                  <Text
+                    className="text-[15px] font-medium"
+                    style={{ color: t.ink }}
+                    numberOfLines={1}
+                  >
+                    {r.name}
+                  </Text>
+                  <Text className="text-xs" style={{ color: t.faint }}>
+                    {humanDay(r.date)}
+                  </Text>
+                </View>
+                <Text
+                  className="text-[15px] font-bold tabular-nums"
+                  style={{ color: t.warning }}
+                >
+                  {formatEUR(r.owed)}
+                </Text>
+              </Pressable>
               {r.phone ? (
                 <Pressable
                   onPress={() => remind(r)}
-                  hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Напомнить ${r.name} об оплате по SMS`}
-                  className="rounded-full px-3 py-1.5 active:opacity-60"
+                  className="min-h-11 justify-center rounded-full px-3 active:opacity-60"
                   style={{
-                    backgroundColor: t.dark
-                      ? "rgba(90,134,255,0.16)"
-                      : "rgba(44,91,224,0.10)",
+                    backgroundColor: "rgba(44,91,224,0.10)",
+                    marginHorizontal: 8,
                   }}
                 >
                   <Text
@@ -166,7 +169,7 @@ export function DebtorsList({
                   </Text>
                 </Pressable>
               ) : null}
-            </Pressable>
+            </View>
           ))
         )}
       </Card>

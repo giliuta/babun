@@ -96,9 +96,9 @@ export function SocialButtons({
   disabled?: boolean;
 }) {
   const t = useAuthTheme();
-  // Apple HIG: white button on dark backgrounds, black on light.
-  const appleBg = t.dark ? "#ffffff" : "#000000";
-  const appleFg = t.dark ? "#000000" : "#ffffff";
+  // Apple HIG on the app's fixed light surface: black button, white content.
+  const appleBg = "#000000";
+  const appleFg = "#ffffff";
   return (
     <View>
       <StackButton

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert, TextInput } from "react-native";
+import { TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import {
   AuthCard,
@@ -12,12 +12,11 @@ import {
   PillButton,
   SwitchLink,
 } from "@/components/auth/AuthCard";
-import { OrDivider, SocialButtons } from "@/components/auth/SocialAuthButtons";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { supabase } from "@/lib/supabase";
 
-// «Вход в Babun» — minimal one-screen login: brand, Apple + Google, then
-// email/password right on the screen (fewest taps), plus register/forgot.
+// «Вход в Babun» — email/password right on the screen (fewest taps),
+// Registration and password recovery stay available; unfinished OAuth is hidden.
 export default function LoginScreen() {
   const router = useRouter();
   const passwordRef = useRef<TextInput>(null);
@@ -48,18 +47,8 @@ export default function LoginScreen() {
     // success → SessionProvider redirects
   }
 
-  const soon = (name: string) =>
-    Alert.alert(
-      name,
-      `Вход через ${name} подключаем в следующей сборке. Пока войдите по почте.`,
-    );
-
   return (
     <AuthCard>
-      <SocialButtons onApple={() => soon("Apple")} onGoogle={() => soon("Google")} />
-
-      <OrDivider />
-
       <InputCard>
         <AuthField
           value={email}

@@ -5,6 +5,7 @@
 export type TransactionType = "income" | "expense" | "transfer" | "refund";
 export type TransactionSource = "auto" | "manual";
 export type PaymentMethod = "cash" | "card" | "transfer" | "other";
+export type AppointmentPaymentKind = "prepayment" | "settlement";
 
 export interface FinanceTransaction {
   id: string;
@@ -15,6 +16,7 @@ export interface FinanceTransaction {
   category_id: string | null;
   account_id: string | null;
   appointment_id: string | null;
+  appointment_payment_kind: AppointmentPaymentKind | null;
   client_id: string | null;
   team_id: string | null; // brigade
   master_id: string | null;

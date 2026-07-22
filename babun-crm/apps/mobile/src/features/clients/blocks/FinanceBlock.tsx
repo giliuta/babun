@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { Text, View } from "react-native";
-import { Calendar, Star, TrendingUp, Wallet } from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Calendar, ChevronRight, Star, TrendingUp, Wallet } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import { tierForVisits } from "@babun/shared/local/loyalty";
@@ -9,6 +10,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatVisitDate } from "@/features/clients/format";
 import { useLoyalty } from "@/features/settings/local-settings";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 
 // FinanceBlock (mobile port of apps/web/.../blocks/FinanceBlock.tsx).
@@ -21,11 +23,11 @@ import { useThemeColors } from "@/theme/colors";
 // selector + the appointments array — same data path as web; the tier
 // comes from the same useLoyalty() query the settings screen writes.
 //
-// DEGRADED vs web:
-//   * The «Подробнее» → /dashboard/finances?client_id= link is dropped;
-//     the mobile finances screen doesn't take a client filter yet. TODO.
+// The final action opens the mobile finance dashboard pre-filtered to this
+// client, so the compact card and the full ledger stay connected.
 
 interface FinanceBlockProps {
+  clientId: string;
   appointments: Appointment[];
   stats?: ClientStats;
 }
@@ -39,8 +41,14 @@ interface PaidVisit {
 
 const HISTORY_LIMIT = 5;
 
-export default function FinanceBlock({ appointments, stats }: FinanceBlockProps) {
+export default function FinanceBlock({
+  clientId,
+  appointments,
+  stats,
+}: FinanceBlockProps) {
+  const router = useRouter();
   const t = useThemeColors();
+  const { data: role } = useCurrentRole();
   const ltv = Math.round(stats?.totalSpent ?? 0);
   const debt = Math.round(stats?.debt ?? 0);
   const lastVisit = stats?.lastVisitDate ?? "";
@@ -115,17 +123,15 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
         {debt > 0 ? <Row label="Долг" value={formatEUR(debt)} tone="bad" t={t} /> : null}
 
         {tier ? (
-          // Золотой пилл уровня — литеральные цвета веба (не токены DS:
-          // это семантика «лояльность», одинаковая на обеих платформах).
           <View
             className="flex-row items-center gap-2 rounded-[10px] px-2 py-2"
-            style={{ backgroundColor: "rgba(255,204,0,0.10)" }}
+            style={{ backgroundColor: `${t.warning}1a` }}
           >
-            <Star color="#B78600" size={14} strokeWidth={2.2} />
-            <Text className="flex-1 text-[13px] font-semibold" style={{ color: "#B78600" }}>
+            <Star color={t.warning} size={14} strokeWidth={2.2} />
+            <Text className="flex-1 text-[13px] font-semibold" style={{ color: t.warning }}>
               {tier.label}
             </Text>
-            <Text className="text-[13px] font-bold tabular-nums" style={{ color: "#B78600" }}>
+            <Text className="text-[13px] font-bold tabular-nums" style={{ color: t.warning }}>
               −{tier.percent}%
             </Text>
           </View>
@@ -147,16 +153,33 @@ export default function FinanceBlock({ appointments, stats }: FinanceBlockProps)
                 {v.method ? ` · ${methodLabel(v.method)}` : ""}
               </Text>
               <Text className="text-xs font-semibold" style={{ color: t.success }}>
-                +{formatEUR(v.amount)}
+                {formatEUR(v.amount)}
               </Text>
             </View>
           ))}
           {paidVisits.length > HISTORY_LIMIT ? (
             <Text className="px-1 pt-1 text-[11px]" style={{ color: t.faint }}>
-              + ещё {paidVisits.length - HISTORY_LIMIT} оплат
+              Ещё {paidVisits.length - HISTORY_LIMIT} оплат
             </Text>
           ) : null}
         </View>
+      ) : null}
+
+      {role === "owner" ? (
+        <Pressable
+          onPress={() =>
+            router.push({ pathname: "/finances", params: { clientId } })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Открыть все финансы клиента"
+          className="mt-2 flex-row items-center border-t px-1 py-2.5 active:opacity-60"
+          style={{ borderColor: t.separator }}
+        >
+          <Text className="flex-1 text-[13px] font-semibold" style={{ color: t.accent }}>
+            Все операции клиента
+          </Text>
+          <ChevronRight color={t.chevron} size={17} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
     </CollapsibleCard>
   );

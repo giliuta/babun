@@ -1,13 +1,14 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   ScrollView,
   Text,
   View,
 } from "react-native";
-import { Modal } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import type { CountryCode } from "libphonenumber-js";
 import {
   AlertTriangle,
   Check,
@@ -21,14 +22,10 @@ import { Card } from "@/components/ui/Card";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import type { Client } from "@babun/shared/local/clients";
-import { useClients, useClientTags } from "../queries";
+import { supabase } from "@/lib/supabase";
+import { useTenantId } from "@/lib/tenant";
+import { useClientTags } from "../queries";
 import { parseCsv, type ParsedCsv } from "./csv-parse";
-
-// Upload guardrails — web parity (UploadStep.tsx).
-const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
-const MAX_ROWS = 5000;
-const ALLOWED_EXT = [".csv", ".txt"];
 import {
   autoMapHeaders,
   COUNTRY_OPTIONS,
@@ -46,20 +43,21 @@ import {
   type RowReason,
 } from "./csv-validate";
 import {
-  existingPhoneSet,
   fetchExistingPhoneSet,
   useImportRows,
   type ImportProgress,
   type ImportRowsResult,
 } from "./useImportRows";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import {
   clearResumeState,
   loadResumeState,
   type ImportResumeState,
 } from "./resume";
-import type { CountryCode } from "libphonenumber-js";
+
+// Upload guardrails — web parity (UploadStep.tsx).
+const MAX_BYTES = 10 * 1024 * 1024; // 10 МБ
+const MAX_ROWS = 5000;
+const ALLOWED_EXT = [".csv", ".txt"];
 
 // F1.3 — full CSV import wizard (mobile port of web ImportWizard).
 // Upload → Mapping → Preview → Result, rendered as a full-screen modal so
@@ -90,7 +88,6 @@ export function ImportWizardSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const { data: clients = [] } = useClients();
   const { data: tags = [] } = useClientTags();
   const tenantId = useTenantId();
   const importer = useImportRows();
@@ -135,23 +132,16 @@ export function ImportWizardSheet({
     onClose();
   }, [reset, onClose]);
 
-  // Instant fallback set for the preview flag; the real dedup runs against a
-  // FRESH DB read fetched in toPreview / on resume (see runValidate).
-  const existing = useMemo(() => existingPhoneSet(clients as Client[]), [clients]);
-
   // Validate `parsed` against a FRESH tenant phone set (DB round-trip), so the
   // «дубликат в базе» decision never keys on a stale / cold cache — and,
   // critically, so already-inserted rows are seen as duplicates on a
   // resume/retry and are NOT written a second time (no unique index guards
-  // clients.phone_e164). Falls back to the warm cache only if the fetch throws.
+  // clients.phone_e164). If this canonical read fails, block the import:
+  // partial/stale dedup data can create hundreds of duplicate clients.
   const runValidate = useCallback(async (): Promise<MapAndValidateResult> => {
     if (!parsed) throw new Error("Нет разобранного файла");
-    let existingPhones = existing;
-    try {
-      if (tenantId) existingPhones = await fetchExistingPhoneSet(supabase, tenantId);
-    } catch {
-      // degrade to the warm-cache set rather than block the import
-    }
+    if (!tenantId) throw new Error("Нет активной компании");
+    const existingPhones = await fetchExistingPhoneSet(supabase, tenantId);
     const v = mapAndValidate({
       rows: parsed.rows,
       headers: parsed.headers,
@@ -161,7 +151,7 @@ export function ImportWizardSheet({
     });
     setValidation(v);
     return v;
-  }, [parsed, mapping, country, existing, tenantId]);
+  }, [parsed, mapping, country, tenantId]);
 
   // ── Step 1: pick + parse ────────────────────────────────────────────
   // Guardrails — web parity (UploadStep.tsx): ≤10 МБ, .csv/.txt, непустой
@@ -280,11 +270,12 @@ export function ImportWizardSheet({
   // import_as_dup intent was already honoured for pre-existing rows in the
   // first attempt's keep. No offset, no double-write.
   const retryFromError = useCallback(async () => {
-    if (!parsed) return;
+    if (!parsed || preparing) return;
     setStep("result");
     setProgress(null);
     setResult(null);
     setError(null);
+    setPreparing(true);
     try {
       const v = await runValidate();
       const { keep } = selectImportable(v.mapped, "skip");
@@ -293,8 +284,10 @@ export function ImportWizardSheet({
       await runRows(keep, baseline);
     } catch (e) {
       setError((e as Error).message || "Ошибка импорта.");
+    } finally {
+      setPreparing(false);
     }
-  }, [parsed, runValidate, resume, progress, runRows]);
+  }, [parsed, preparing, runValidate, resume, progress, runRows]);
 
   // «Повторить неуд.» after a partial success: re-import ONLY the rows that
   // errored (mapped back by source), never the whole keep — the rows that
@@ -323,7 +316,7 @@ export function ImportWizardSheet({
         <WizardHeader
           subtitle={STEP_SUB[step]}
           onClose={close}
-          busy={importer.isPending}
+          busy={importer.isPending || preparing}
         />
         <ScrollView
           className="flex-1"
@@ -429,10 +422,10 @@ function WizardHeader({
       <Pressable
         onPress={busy ? undefined : onClose}
         disabled={busy}
-        hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Закрыть"
-        style={{ height: 36, width: 36, alignItems: "center", justifyContent: "center", opacity: busy ? 0.4 : 1 }}
+        accessibilityState={{ disabled: busy, busy }}
+        style={{ height: 44, width: 44, alignItems: "center", justifyContent: "center", opacity: busy ? 0.4 : 1 }}
       >
         <X color={t.body} size={ICON.md} />
       </Pressable>
@@ -546,14 +539,22 @@ function MappingStep({
           <View className="mt-1 flex-row gap-2">
             <Pressable
               onPress={onResume}
-              className="rounded-full px-3 py-1.5 active:opacity-70"
+              disabled={preparing}
+              accessibilityRole="button"
+              accessibilityLabel="Продолжить прошлый импорт"
+              accessibilityState={{ disabled: preparing, busy: preparing }}
+              className="min-h-11 items-center justify-center rounded-full px-3 py-1.5 active:opacity-70"
               style={{ backgroundColor: t.warning }}
             >
               <Text className="text-[13px] font-semibold text-white">Продолжить</Text>
             </Pressable>
             <Pressable
               onPress={onDiscardResume}
-              className="rounded-full px-3 py-1.5 active:opacity-70"
+              disabled={preparing}
+              accessibilityRole="button"
+              accessibilityLabel="Начать импорт заново"
+              accessibilityState={{ disabled: preparing, busy: preparing }}
+              className="min-h-11 items-center justify-center rounded-full px-3 py-1.5 active:opacity-70"
               style={{ backgroundColor: t.fill }}
             >
               <Text className="text-[13px] font-semibold" style={{ color: t.body }}>
@@ -610,7 +611,10 @@ function MappingStep({
               <Pressable
                 key={c.value}
                 onPress={() => setCountry(c.value)}
-                className="rounded-full px-3 py-1.5 active:opacity-70"
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                accessibilityLabel={`Код страны ${c.label}`}
+                className="min-h-11 items-center justify-center rounded-full px-3 py-1.5 active:opacity-70"
                 style={{
                   backgroundColor: active ? t.accent : t.fill,
                 }}
@@ -696,7 +700,7 @@ function FieldPicker({
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Поле: ${FIELD_LABEL[value]}`}
-        className="flex-row items-center gap-1 rounded-[10px] px-3 py-2 active:opacity-70"
+        className="min-h-11 flex-row items-center gap-1 rounded-[10px] px-3 py-2 active:opacity-70"
         style={{ backgroundColor: t.fill }}
       >
         <Text
@@ -714,11 +718,17 @@ function FieldPicker({
         animationType="fade"
         onRequestClose={() => setOpen(false)}
       >
-        <Pressable
+        <View
           className="flex-1 items-center justify-center px-8"
           style={{ backgroundColor: t.scrim }}
-          onPress={() => setOpen(false)}
         >
+          <Pressable
+            className="absolute inset-0"
+            onPress={() => setOpen(false)}
+            accessible={false}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
           <View
             className="w-full overflow-hidden rounded-2xl"
             style={{ backgroundColor: t.surface }}
@@ -732,7 +742,10 @@ function FieldPicker({
                     onChange(f);
                     setOpen(false);
                   }}
-                  className="flex-row items-center gap-2 px-4 py-3 active:opacity-70"
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  accessibilityLabel={FIELD_LABEL[f]}
+                  className="min-h-11 flex-row items-center gap-2 px-4 py-3 active:opacity-70"
                   style={
                     i < FIELD_OPTIONS.length - 1
                       ? { borderBottomWidth: 1, borderBottomColor: t.separator }
@@ -750,7 +763,7 @@ function FieldPicker({
               );
             })}
           </View>
-        </Pressable>
+        </View>
       </Modal>
     </>
   );
@@ -772,7 +785,10 @@ function TagChip({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 active:opacity-70"
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: active }}
+      accessibilityLabel={`Тег ${label}`}
+      className="min-h-11 flex-row items-center gap-1.5 rounded-full px-3 py-1.5 active:opacity-70"
       style={{ backgroundColor: active ? t.accent : t.fill }}
     >
       {color ? (

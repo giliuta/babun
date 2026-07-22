@@ -4,7 +4,7 @@
 //
 //   · SMS      → opens BulkSmsSheet (template picker + blast/sequential)
 //   · Экспорт  → CSV of the selection via the OS share sheet (bulk-export)
-//   · Удалить  → hard delete after a native confirm (destructive, red)
+//   · Архив    → reversible soft archive after a native confirm
 //
 // Disabled-not-hidden when nothing is picked, so the bar never reflows. The
 // SMS/Export/Delete plumbing lives in the parent (index.tsx) — this is a
@@ -12,19 +12,19 @@
 
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MessageSquare, Share2, Trash2 } from "lucide-react-native";
+import { Archive, MessageSquare, Share2 } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
 export function BulkActionBar({
   count,
   onSms,
   onExport,
-  onDelete,
+  onArchive,
 }: {
   count: number;
   onSms: () => void;
   onExport: () => void;
-  onDelete: () => void;
+  onArchive: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -56,12 +56,12 @@ export function BulkActionBar({
         onPress={onExport}
       />
       <BarButton
-        label="Удалить"
-        icon={<Trash2 color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
+        label="Архив"
+        icon={<Archive color={disabled ? t.faint : t.danger} size={20} strokeWidth={2} />}
         color={t.danger}
         disabled={disabled}
         count={count}
-        onPress={onDelete}
+        onPress={onArchive}
       />
     </View>
   );

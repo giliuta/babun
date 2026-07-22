@@ -3,7 +3,6 @@ import { Modal, Pressable, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { AlertTriangle, X } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { findOverlap } from "@babun/shared/common/utils/appointment-overlap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
@@ -18,8 +17,15 @@ import {
   parseYMD,
 } from "@/features/appointments/helpers";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
-import { useCalendarSettings } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
+import {
+  cancelAppointmentReminders,
+  syncEventAppointmentReminders,
+} from "@/features/calendar/reminders";
+import {
+  rescheduleWarning,
+  type RescheduleWorkBand,
+} from "@/features/calendar/reschedule-warning";
 
 // «Перенести» одним экраном (web RescheduleSheet по смыслу): дата inline-
 // календарём + время начала, длительность сохраняется автоматически
@@ -30,18 +36,23 @@ import { haptics } from "@/lib/haptics";
 export function RescheduleSheet({
   appointment,
   appointments,
+  workBandFor,
+  bufferMinutes = 0,
+  timeZone = "Europe/Nicosia",
   onClose,
 }: {
   /** Запись на перенос (null = закрыт). */
   appointment: Appointment | null;
   /** Видимый набор записей — проверка пересечения. */
   appointments: Appointment[];
+  workBandFor?: (dateYmd: string) => RescheduleWorkBand | null | undefined;
+  bufferMinutes?: number;
+  timeZone?: string;
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const { data: calSettings } = useCalendarSettings();
   const updateAppt = useUpdateAppointment();
 
   const [date, setDate] = useState("");
@@ -62,22 +73,18 @@ export function RescheduleSheet({
   }, [appointment]);
   const timeEnd = timeStart ? addMinutesHM(timeStart, durationMin) : "";
 
-  const overlap = useMemo(
+  const warning = useMemo(
     () =>
       appointment && date && timeStart
-        ? findOverlap(
-            { ...appointment, date, time_start: timeStart, time_end: timeEnd },
-            // Виртуальные вхождения СОБСТВЕННОЙ серии — не конфликт:
-            // перенос seed на дату другого вхождения ложно предупреждал
-            // «пересекается сам с собой».
-            appointments.filter(
-              (a) =>
-                (a as { virtualParentId?: string }).virtualParentId !==
-                appointment.id,
-            ),
+        ? rescheduleWarning(
+            appointment,
+            { date, timeStart, timeEnd },
+            appointments,
+            workBandFor?.(date),
+            bufferMinutes,
           )
         : null,
-    [appointment, appointments, date, timeStart, timeEnd],
+    [appointment, appointments, date, timeStart, timeEnd, workBandFor, bufferMinutes],
   );
 
   // Меню не открывает виртуальные вхождения повтора, но защищаемся и на
@@ -109,6 +116,14 @@ export function RescheduleSheet({
       {
         onSuccess: () => {
           haptics.success();
+          if (appointment.kind === "event" || appointment.kind === "personal") {
+            void syncEventAppointmentReminders(
+              { ...appointment, date, time_start: timeStart, time_end: timeEnd },
+              timeZone,
+            );
+          } else {
+            void cancelAppointmentReminders(appointment.id);
+          }
           toast(`Перенесено: ${humanDay(date)}, ${timeStart}`, "success", {
             label: "Отменить",
             onPress: () =>
@@ -121,11 +136,6 @@ export function RescheduleSheet({
     onClose();
   };
 
-  // «Шаг сетки» календаря задаёт шаг колеса минут; iOS-пикер принимает
-  // максимум 30 — шаг 60 сводим к ближайшему делителю.
-  const step = calSettings?.gridStep ?? 30;
-  const minuteInterval = step === 60 ? 30 : step;
-
   return (
     <Modal
       visible={appointment != null}
@@ -137,7 +147,7 @@ export function RescheduleSheet({
         <Pressable
           className="flex-1"
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="overflow-hidden rounded-t-3xl"
@@ -162,7 +172,12 @@ export function RescheduleSheet({
                 </Text>
               ) : null}
             </View>
-            <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Закрыть">
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Закрыть"
+            >
               <X color={t.faint} size={ICON.md} />
             </Pressable>
           </View>
@@ -170,6 +185,7 @@ export function RescheduleSheet({
           {/* новая дата — inline-календарь */}
           <View className="px-3">
             <DateTimePicker
+              themeVariant="light"
               value={date ? parseYMD(date) : new Date()}
               mode="date"
               display="inline"
@@ -187,11 +203,17 @@ export function RescheduleSheet({
               Время
             </Text>
             <View className="flex-row items-center">
+              {/* 5 мин — как на экране создания /book и в AppointmentSheet.
+                  Раньше шаг колеса брался из «Шага сетки»
+                  (30 мин), и запись, созданную на 11:35, физически нельзя было
+                  перенести обратно на 11:35: две двери в одно время разной
+                  ширины. */}
               <DateTimePicker
+                themeVariant="light"
                 value={timeStart ? parseHM(timeStart) : new Date()}
                 mode="time"
                 display="compact"
-                minuteInterval={minuteInterval}
+                minuteInterval={5}
                 onChange={(_, d) => d && setTimeStart(formatHM(d))}
               />
               <Text className="pl-2 text-[13px] tabular-nums" style={{ color: t.faint }}>
@@ -204,7 +226,7 @@ export function RescheduleSheet({
           </Text>
 
           {/* пересечение — предупреждаем, не блокируем (web parity) */}
-          {overlap ? (
+          {warning ? (
             <View
               className="mx-4 mb-1 mt-1 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
               style={{
@@ -217,7 +239,7 @@ export function RescheduleSheet({
                 className="flex-1 text-[13px] font-medium"
                 style={{ color: t.warning }}
               >
-                Пересекается с {overlap.time_start}–{overlap.time_end}
+                {warning}
               </Text>
             </View>
           ) : null}

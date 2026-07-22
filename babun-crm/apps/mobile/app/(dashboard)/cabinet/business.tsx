@@ -27,6 +27,7 @@ type FormKey =
   | "contact_email"
   | "contact_whatsapp"
   | "legal_name"
+  | "business_address"
   | "vat_number"
   | "iban"
   | "bank_name"
@@ -39,6 +40,7 @@ const EMPTY: Record<FormKey, string> = {
   contact_email: "",
   contact_whatsapp: "",
   legal_name: "",
+  business_address: "",
   vat_number: "",
   iban: "",
   bank_name: "",
@@ -47,7 +49,7 @@ const EMPTY: Record<FormKey, string> = {
 
 export default function BusinessScreen() {
   const t = useThemeColors();
-  const { data: tenant, isLoading, error } = useTenant();
+  const { data: tenant, isLoading, error, refetch } = useTenant();
   const { data: role } = useCurrentRole();
   const update = useUpdateTenant();
   const [form, setForm] = useState<Record<FormKey, string>>(EMPTY);
@@ -55,7 +57,8 @@ export default function BusinessScreen() {
 
   // RLS (tenants_update_owner) allows saving to the owner only — disable
   // upfront instead of letting the save fail with an opaque error.
-  const readOnly = role != null && role !== "owner";
+  const owner = role === "owner";
+  const readOnly = !owner;
 
   useEffect(() => {
     if (!tenant) return;
@@ -66,13 +69,14 @@ export default function BusinessScreen() {
       contact_email: tenant.contact_email ?? "",
       contact_whatsapp: tenant.contact_whatsapp ?? "",
       legal_name: tenant.legal_name ?? "",
+      business_address: tenant.business_address ?? "",
       vat_number: tenant.vat_number ?? "",
       iban: tenant.iban ?? "",
       bank_name: tenant.bank_name ?? "",
       invoice_prefix: tenant.invoice_prefix ?? "",
     });
     setDirty(false);
-  }, [tenant?.id]);
+  }, [tenant]);
 
   const set = (k: FormKey) => (v: string) => {
     setForm((s) => ({ ...s, [k]: v }));
@@ -80,6 +84,7 @@ export default function BusinessScreen() {
   };
 
   const save = async () => {
+    if (!owner) return;
     try {
       const clean = (v: string) => (v.trim() ? v.trim() : null);
       await update.mutateAsync({
@@ -89,6 +94,7 @@ export default function BusinessScreen() {
         contact_email: clean(form.contact_email),
         contact_whatsapp: clean(form.contact_whatsapp),
         legal_name: clean(form.legal_name),
+        business_address: clean(form.business_address),
         vat_number: clean(form.vat_number),
         iban: clean(form.iban),
         bank_name: clean(form.bank_name),
@@ -108,7 +114,12 @@ export default function BusinessScreen() {
         {isLoading ? (
           <EmptyState state="loading" fill />
         ) : (
-          <EmptyState state="error" fill subtitle={(error as Error).message} />
+          <EmptyState
+            state="error"
+            fill
+            subtitle={(error as Error).message}
+            action={{ label: "Повторить", onPress: () => void refetch() }}
+          />
         )}
       </Screen>
     );
@@ -127,8 +138,8 @@ export default function BusinessScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <SectionCard title="Компания" padded>
-          <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="AirFix" />
-          <Field label="Город" value={form.city} onChangeText={set("city")} placeholder="Limassol" />
+          <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="AirFix" editable={owner} />
+          <Field label="Город" value={form.city} onChangeText={set("city")} placeholder="Limassol" editable={owner} />
         </SectionCard>
 
         <SectionCard title="Контакты" padded>
@@ -138,6 +149,7 @@ export default function BusinessScreen() {
             onChangeText={set("contact_phone")}
             placeholder="+357…"
             keyboardType="phone-pad"
+            editable={owner}
           />
           <Field
             label="Email"
@@ -145,6 +157,7 @@ export default function BusinessScreen() {
             onChangeText={set("contact_email")}
             placeholder="info@…"
             keyboardType="email-address"
+            editable={owner}
           />
           <Field
             label="WhatsApp"
@@ -152,21 +165,30 @@ export default function BusinessScreen() {
             onChangeText={set("contact_whatsapp")}
             placeholder="+357…"
             keyboardType="phone-pad"
+            editable={owner}
           />
         </SectionCard>
 
-        <SectionCard title="Реквизиты для счетов" padded>
-          <Field label="Юр. название" value={form.legal_name} onChangeText={set("legal_name")} />
-          <Field label="VAT / рег. номер" value={form.vat_number} onChangeText={set("vat_number")} />
-          <Field label="IBAN" value={form.iban} onChangeText={set("iban")} />
-          <Field label="Банк" value={form.bank_name} onChangeText={set("bank_name")} />
-          <Field
-            label="Префикс счёта"
-            value={form.invoice_prefix}
-            onChangeText={set("invoice_prefix")}
-            placeholder="INV-"
-          />
-        </SectionCard>
+        {owner ? (
+          <SectionCard title="Реквизиты для счетов" padded>
+            <Field label="Юр. название" value={form.legal_name} onChangeText={set("legal_name")} />
+            <Field
+              label="Юридический адрес"
+              value={form.business_address}
+              onChangeText={set("business_address")}
+              placeholder="Адрес для инвойсов"
+            />
+            <Field label="VAT / рег. номер" value={form.vat_number} onChangeText={set("vat_number")} />
+            <Field label="IBAN" value={form.iban} onChangeText={set("iban")} />
+            <Field label="Банк" value={form.bank_name} onChangeText={set("bank_name")} />
+            <Field
+              label="Префикс счёта"
+              value={form.invoice_prefix}
+              onChangeText={set("invoice_prefix")}
+              placeholder="INV-"
+            />
+          </SectionCard>
+        ) : null}
 
         <View className="mx-3 mt-5">
           {readOnly ? (

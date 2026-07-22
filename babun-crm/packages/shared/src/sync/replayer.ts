@@ -6,9 +6,9 @@
 //   1. Reads the queue/cache from the SQLite cache (`../db/cache/sql`) —
 //      identical public surface, so the drain/dispatch logic is byte-for-byte.
 //   2. Takes the quota gate as an OPTIONAL injection
-//      (`ReplayerOptions.quota`). If absent it is a no-op — mobile passes a
-//      no-op (lib/quota.ts), the web app (which keeps its own replayer copy)
-//      is untouched. `assertAvailable(op)` throwing a `QuotaExceeded`-shaped
+//      (`ReplayerOptions.quota`). The mobile host installs a live server-backed
+//      gate as a process default; other hosts may omit it. `assertAvailable(op)`
+//      throwing a `QuotaExceeded`-shaped
 //      error (has `.quota === true`) is treated as KNOWN-PERMANENT exactly
 //      like the web `QuotaExceededError` branch.
 //   3. Otherwise preserves ALL data-loss guards verbatim:
@@ -27,7 +27,7 @@
 // does not apply on native.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "../db/database.types";
+import type { Database, Json } from "../db/database.types";
 import {
   dequeueAll,
   cacheUpsert,
@@ -57,7 +57,8 @@ import {
 //     KNOWN-PERMANENT (mark perm-failed immediately, no retry windows);
 //     any other throw falls through to the normal dispatch + bump path so a
 //     transient blip doesn't permanently fail the op.
-// Mobile injects a no-op (lib/quota.ts). Web is unaffected (keeps its copy).
+// Mobile injects its server-backed gate from lib/quota-gate.ts. Web is
+// unaffected (it keeps its own replayer copy).
 export interface QuotaGate {
   /** Called before an offline INSERT replays. Throw to block; a throw with
    *  `.quota === true` (+ optional `.message`) is a permanent quota breach. */
@@ -93,20 +94,18 @@ const BACKOFFS_MS = [1000, 5000, 30000]; // attempts 1, 2, 3
 
 type Toast = (msg: string) => void;
 
-interface ReplayerOptions {
+export interface ReplayerOptions {
   supabase: DbSupabase;
   /** OPTIONAL active tenant id (offline-plan risk #1, second half). When
    *  supplied, an op whose `payload.tenant_id` is present and DIFFERENT is
    *  skipped — never drained under this session — so a queue entry left by a
    *  previous tenant (a cacheClearAll wipe that was missed on the tenant
    *  switch) can't replay onto the server under the current tenant's auth.
-   *  Absent = no tenant gating (the current sync-runtime doesn't pass it;
-   *  behaviour is then identical to before). Skipped ops stay in the queue
+   *  Absent = no tenant gating. Skipped ops stay in the queue
    *  rather than being discarded — the wipe on the next clean switch removes
    *  them. */
   tenantId?: string;
-  /** OPTIONAL quota gate — see QuotaGate. Absent = no gating (mobile passes
-   *  a no-op; behaviour with no gate matches "quota always available"). */
+  /** OPTIONAL quota gate — see QuotaGate. Absent = no gating. */
   quota?: QuotaGate;
   /** Called after the drain completes (success or error) so the UI
    *  can refresh its in-memory state from the cache + Supabase. */
@@ -123,22 +122,43 @@ interface ReplayerOptions {
 let draining = false;
 let pendingFollowup = false;
 
+// Cached wrappers deliberately know nothing about the host application: they
+// can enqueue an op and call `kickReplayer({ supabase })`, but they cannot
+// import the mobile quota/notification adapters. Keep those host adapters as
+// process defaults so EVERY kick (including a wrapper's immediate retry after
+// a network blip) uses the same safety policy as the NetInfo runtime kick.
+// The explicit call options still win, which keeps tests and other hosts
+// deterministic.
+export type ReplayerDefaults = Omit<ReplayerOptions, "supabase">;
+let replayerDefaults: ReplayerDefaults = {};
+
+export function setReplayerDefaults(
+  defaults: ReplayerDefaults | null,
+): void {
+  replayerDefaults = defaults ? { ...defaults } : {};
+}
+
+function withReplayerDefaults(opts: ReplayerOptions): ReplayerOptions {
+  return { ...replayerDefaults, ...opts, supabase: opts.supabase };
+}
+
 /** Public trigger — call from `online` listener, onResync, manual
  *  retry button, or after a write failed mid-flight. Idempotent
  *  and self-coalescing. */
 export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
+  const effectiveOpts = withReplayerDefaults(opts);
   if (draining) {
     pendingFollowup = true;
     return;
   }
   draining = true;
   try {
-    await drain(opts);
+    await drain(effectiveOpts);
     if (pendingFollowup) {
       pendingFollowup = false;
       // Run one follow-up pass synchronously so coalesced triggers
       // get a chance to flush the queue without recursion explosion.
-      await drain(opts);
+      await drain(effectiveOpts);
     }
   } finally {
     draining = false;
@@ -287,6 +307,83 @@ async function dispatch(
     // a fresh UUID, then drop the local-id row from IDB cache so
     // the orphan optimistic row doesn't double up next list().
     let payload = op.payload as Record<string, unknown>;
+    const queuedClientTagIds =
+      op.table === "clients" && Array.isArray(payload.__tag_ids)
+        ? payload.__tag_ids.filter(
+            (value): value is string => typeof value === "string" && value.length > 0,
+          )
+        : [];
+    if (op.table === "clients" && "__tag_ids" in payload) {
+      const { __tag_ids: _queueMetadata, ...databasePayload } = payload;
+      void _queueMetadata;
+      payload = databasePayload;
+    }
+
+    // A client plus its tag assignments is one aggregate. Replaying it as a
+    // direct INSERT followed by junction upserts could leave a half-created
+    // client after a crash/RLS error. When tags are present, use the same
+    // transaction-owning RPC as the online repository. A lost successful
+    // response is repaired idempotently through update_client_with_tags on
+    // the next duplicate-key attempt.
+    if (op.table === "clients" && queuedClientTagIds.length > 0) {
+      if (!isUuid(op.row_id)) {
+        throw new Error(
+          "replay client tags: client id is not a UUID; aggregate cannot be restored",
+        );
+      }
+      const tenantId = payload.tenant_id;
+      if (typeof tenantId !== "string" || tenantId.length === 0) {
+        throw new Error("replay client tags: tenant_id is missing");
+      }
+      const {
+        id: _id,
+        tenant_id: _tenantId,
+        updated_at: _updatedAt,
+        ...clientPayload
+      } = payload;
+      void _id;
+      void _tenantId;
+      void _updatedAt;
+      const { error: aggregateError } = await supabase.rpc(
+        "create_client_with_tags",
+        {
+          p_tenant_id: tenantId,
+          p_client_id: op.row_id,
+          p_client: clientPayload as Json,
+          p_tag_ids: [...new Set(queuedClientTagIds)],
+        },
+      );
+      if (aggregateError) {
+        const duplicate =
+          aggregateError.code === "23505" ||
+          /duplicate key/i.test(aggregateError.message);
+        if (!duplicate) {
+          const unavailable =
+            aggregateError.code === "PGRST202" ||
+            /could not find the function|schema cache|does not exist/i.test(
+              aggregateError.message,
+            );
+          throw new Error(
+            unavailable
+              ? "Безопасная синхронизация меток клиента ждёт обновления серверной схемы. Локальный клиент сохранён и останется в очереди."
+              : `replay client aggregate: ${aggregateError.message}`,
+          );
+        }
+        const { error: repairError } = await supabase.rpc(
+          "update_client_with_tags",
+          {
+            p_tenant_id: tenantId,
+            p_client_id: op.row_id,
+            p_patch: {},
+            p_tag_ids: [...new Set(queuedClientTagIds)],
+          },
+        );
+        if (repairError) {
+          throw new Error(`replay client aggregate repair: ${repairError.message}`);
+        }
+      }
+      return false;
+    }
     let stripped = false;
     if (!isUuid(op.row_id) && typeof payload === "object" && payload !== null) {
       const { id: _id, ...rest } = payload as { id?: string };
@@ -367,6 +464,13 @@ async function dispatch(
     if (forceErr)
       throw new Error(`replay force-update: ${forceErr.message}`);
     if (forced) {
+      if (op.table === "clients" && forced.deleted_at != null) {
+        // Soft archive is represented by UPDATE, but the clients SQLite table
+        // is the active-list cache. A last-write-wins retry must keep the row
+        // hidden instead of re-inserting the archived server response.
+        await cacheDelete("clients", op.row_id);
+        return true;
+      }
       // Cache write-through with the canonical row. Кэш хранит
       // ДОМЕННУЮ форму (cache-of-domain, slice 5) — сырую серверную
       // Row прогоняем через тот же row→domain маппер, что и обычное

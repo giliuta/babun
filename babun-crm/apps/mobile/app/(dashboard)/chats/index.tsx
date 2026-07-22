@@ -7,7 +7,6 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { Archive, Clock, MessageCircle, Pin, Search } from "lucide-react-native";
 import {
-  CHANNEL_COLORS,
   CHANNEL_LABELS,
   type Chat,
   type ChatChannel,
@@ -18,9 +17,9 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 import {
   useChats,
-  useSeedDemoChats,
   useSetChatStatus,
   useTogglePin,
 } from "@/features/chats/store";
@@ -124,7 +123,7 @@ function ChatRow({
 }) {
   const t = useThemeColors();
   const swipeRef = useRef<SwipeableMethods | null>(null);
-  const color = CHANNEL_COLORS[c.channel] ?? "#6b7280";
+  const color = MOBILE_CHANNEL_COLORS[c.channel];
   const title = c.contact_name || c.contact_handle || "Без имени";
   const initial = title.trim().slice(0, 1).toUpperCase();
   const sla = slaOf(c, now);
@@ -269,7 +268,6 @@ export default function ChatsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const { data: chats = [], isLoading } = useChats();
-  const seedDemo = useSeedDemoChats();
   const togglePin = useTogglePin();
   const setStatus = useSetChatStatus();
   const [query, setQuery] = useState("");
@@ -347,7 +345,7 @@ export default function ChatsListScreen() {
           placeholder="Имя, телефон, @handle или текст"
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
-          keyboardAppearance={t.dark ? "dark" : "light"}
+          keyboardAppearance="light"
           clearButtonMode="while-editing"
           accessibilityLabel="Поиск по чатам"
           className="flex-1 py-2.5 text-base"
@@ -366,7 +364,7 @@ export default function ChatsListScreen() {
         {([null, "unanswered", ...CHANNELS] as ChatFilter[]).map((ch) => {
           const active = filter === ch;
           const waiting = ch === "unanswered";
-          const color = waiting ? t.warning : ch ? CHANNEL_COLORS[ch] : t.accent;
+          const color = waiting ? t.warning : ch ? MOBILE_CHANNEL_COLORS[ch] : t.accent;
           // Counts in chips — web parity (chats/page.tsx:294–309): «Все»
           // always shows its count (canonical total); «Без ответа» and the
           // channels only when > 0 or active, so a first-time user doesn't
@@ -446,18 +444,7 @@ export default function ChatsListScreen() {
               subtitle={
                 filter || query.trim()
                   ? "Попробуйте другой фильтр или обнулите поиск."
-                  : "Здесь появятся диалоги из WhatsApp, Instagram и Telegram после подключения каналов — оно скоро появится."
-              }
-              // STORY-053a — demo data strictly ON REQUEST (auto-seed was
-              // removed in Wave 1): explicit button, only on a truly empty
-              // inbox (no chats at all, not just a filtered-out view).
-              action={
-                !filter && !query.trim() && chats.length === 0
-                  ? {
-                      label: "Загрузить демо-чаты",
-                      onPress: () => seedDemo.mutate(),
-                    }
-                  : undefined
+                  : "Новые обращения и переписки с клиентами будут отображаться здесь."
               }
             />
           }

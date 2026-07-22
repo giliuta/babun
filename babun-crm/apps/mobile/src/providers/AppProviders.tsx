@@ -9,16 +9,25 @@ import { SessionProvider } from "@/providers/SessionProvider";
 import { startSyncRuntime } from "@/lib/sync-runtime";
 import { startSyncBridge } from "@/lib/sync-bridge";
 import { useTenantId } from "@/lib/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
  *  un-injected on web (Expo web / Preview) — see bootstrap.ts. On native the
  *  subscription drains the queue whenever connectivity returns. */
 function SyncRuntimeMount() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   useEffect(() => {
-    if (Platform.OS === "web") return;
-    return startSyncRuntime();
-  }, []);
+    if (
+      Platform.OS === "web" ||
+      !tenantId ||
+      (role !== "owner" && role !== "dispatcher")
+    ) {
+      return;
+    }
+    return startSyncRuntime(tenantId);
+  }, [role, tenantId]);
   return null;
 }
 
@@ -29,10 +38,16 @@ function SyncRuntimeMount() {
  *  so it lives BELOW SessionProvider where useTenantId resolves. */
 function SyncBridgeMount() {
   const tenantId = useTenantId();
+  const role = useCurrentRole().data;
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    if (
+      Platform.OS === "web" ||
+      (role !== "owner" && role !== "dispatcher")
+    ) {
+      return;
+    }
     return startSyncBridge(tenantId);
-  }, [tenantId]);
+  }, [role, tenantId]);
   return null;
 }
 
@@ -44,7 +59,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
           <SessionProvider>
             <SyncRuntimeMount />
             <SyncBridgeMount />
-            <StatusBar style="auto" />
+            <StatusBar style="dark" />
             {children}
           </SessionProvider>
         </QueryClientProvider>

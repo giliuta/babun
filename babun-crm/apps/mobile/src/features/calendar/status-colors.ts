@@ -2,8 +2,8 @@ import { useCallback } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
-// Colors for a calendar appointment block, resolved from the «Halo Cobalt»
-// theme so they flip light↔dark. Mirrors the web calendar's intent: the FILL
+// Colors for a calendar appointment block, resolved from the fixed-light
+// «Halo Cobalt» palette. Mirrors the web calendar's intent: the FILL
 // is status-tinted, the left STRIPE carries identity (override → team → status).
 export type BlockColors = { stripe: string; fill: string; base: string };
 
@@ -44,8 +44,8 @@ export function useBlockColors(
         (apt.color_override as string | null | undefined) ||
         (teamColorFor ? teamColorFor(apt) : null) ||
         base;
-      // ~12% (light) / ~18% (dark) tint over the surface.
-      const fill = `${base}${t.dark ? "2e" : "1f"}`;
+      // ~12% tint over the fixed light surface.
+      const fill = `${base}1f`;
       return { stripe, fill, base };
     },
     [t, teamColorFor],

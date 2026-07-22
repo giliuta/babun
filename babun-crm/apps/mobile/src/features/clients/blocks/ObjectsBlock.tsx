@@ -16,14 +16,14 @@
 // пресеты меток объектов (кабинет «Типы объектов»), чипы в форме добавления.
 
 import { useMemo, useState } from "react";
-import { Linking, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Linking, Pressable, Text, TextInput, View } from "react-native";
 import {
   ArrowUpRight,
   ChevronRight,
   KeyRound,
   MapPin,
-  Plus,
   Trash2,
+  Wrench,
 } from "lucide-react-native";
 import type { ACType, ACUnit, Client, Location } from "@babun/shared/local/clients";
 import { AC_TYPE_LABELS } from "@babun/shared/local/clients";
@@ -46,7 +46,7 @@ interface ObjectsBlockProps {
   appointments: Appointment[];
   /** lastTeamId feeds the pre-aimed «Записать сюда» booking link. */
   stats?: ClientStats;
-  update: (patch: Partial<Client>) => void;
+  update: (patch: Partial<Client>) => Promise<boolean>;
 }
 
 const AC_TYPE_ORDER: ACType[] = ["split", "ducted", "cassette"];
@@ -87,22 +87,29 @@ export default function ObjectsBlock({
     address: string;
     note: string;
   } | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
 
-  const saveDraft = () => {
-    if (!draft || !draft.address.trim()) return;
+  const saveDraft = async () => {
+    if (!draft || !draft.address.trim() || savingDraft) return;
+    const submitted = draft;
     const newLoc: Location = {
       id: genId("loc"),
-      label: draft.label.trim() || "Объект",
-      address: draft.address.trim(),
+      label: submitted.label.trim() || "Объект",
+      address: submitted.address.trim(),
       isPrimary: all.length === 0,
-      note: draft.note.trim() || undefined,
+      note: submitted.note.trim() || undefined,
       equipment: [],
     };
-    update({ locations: [...all, newLoc] });
-    setDraft(null);
+    setSavingDraft(true);
+    try {
+      const saved = await update({ locations: [...all, newLoc] });
+      if (saved) setDraft(null);
+    } finally {
+      setSavingDraft(false);
+    }
   };
 
-  const removeLoc = (id: string) => {
+  const removeLoc = async (id: string) => {
     const next = all.filter((l) => l.id !== id);
     // Promote a new primary if we removed the previous one.
     const stillHasPrimary = next.some((l) => l.isPrimary);
@@ -110,7 +117,7 @@ export default function ObjectsBlock({
       !stillHasPrimary && next.length > 0
         ? next.map((l, i) => ({ ...l, isPrimary: i === 0 }))
         : next;
-    update({ locations: reseated });
+    return update({ locations: reseated });
   };
 
   const patchLocation = (id: string, patch: Partial<Location>) =>
@@ -124,12 +131,9 @@ export default function ObjectsBlock({
         Объекты{all.length ? ` · ${all.length}` : ""}
       </Text>
 
-      {all.length === 0 && !draft ? (
-        <Text className="px-1 py-2 text-[13px]" style={{ color: t.faint }}>
-          Объектов пока нет — добавь дом или офис, чтобы привязать
-          кондиционеры и адрес.
-        </Text>
-      ) : null}
+      {/* Пустого состояния НЕТ намеренно: «Объектов пока нет — добавь дом
+          или офис…» было туториалом на две строки, который висел вечно и
+          повторял кнопку «Добавить первый объект» под ним. */}
 
       <View className="gap-2">
         {all.map((loc) => (
@@ -171,56 +175,75 @@ export default function ObjectsBlock({
               ))}
             </View>
           ) : null}
-          <TextInput
-            value={draft.label}
+      <TextInput
+        value={draft.label}
+        accessibilityLabel="Метка объекта"
             onChangeText={(v) => setDraft({ ...draft, label: v })}
             placeholder="Метка (Дом / Офис)"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
-            className="rounded-lg px-3 py-2 text-sm"
+            keyboardAppearance="light"
+            className="min-h-11 rounded-lg px-3 py-2 text-sm"
             style={{ backgroundColor: t.surface, color: t.ink }}
           />
-          <TextInput
-            value={draft.address}
+      <TextInput
+        value={draft.address}
+        accessibilityLabel="Адрес объекта"
             onChangeText={(v) => setDraft({ ...draft, address: v })}
             placeholder="Адрес или ссылка на карту"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
-            className="rounded-lg px-3 py-2 text-sm"
+            keyboardAppearance="light"
+            className="min-h-11 rounded-lg px-3 py-2 text-sm"
             style={{ backgroundColor: t.surface, color: t.ink }}
           />
-          <TextInput
-            value={draft.note}
+      <TextInput
+        value={draft.note}
+        accessibilityLabel="Заметка об объекте"
             onChangeText={(v) => setDraft({ ...draft, note: v })}
             placeholder="Заметка (зелёная дверь, домофон 25)"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
-            className="rounded-lg px-3 py-2 text-sm"
+            keyboardAppearance="light"
+            className="min-h-11 rounded-lg px-3 py-2 text-sm"
             style={{ backgroundColor: t.surface, color: t.ink }}
           />
           <View className="flex-row gap-2">
             <Pressable
-              onPress={saveDraft}
-              disabled={!draft.address.trim()}
+              onPress={() => void saveDraft()}
+              disabled={!draft.address.trim() || savingDraft}
+              accessibilityRole="button"
+              accessibilityLabel="Сохранить объект"
+              accessibilityState={{
+                disabled: !draft.address.trim() || savingDraft,
+                busy: savingDraft,
+              }}
               className="flex-1 items-center rounded-lg py-2"
-              style={{ backgroundColor: draft.address.trim() ? t.accent : t.fill }}
+              style={{
+                minHeight: 44,
+                backgroundColor:
+                  draft.address.trim() && !savingDraft ? t.accent : t.fill,
+              }}
             >
               {/* Conditional label color (as in NotesBlock) — plain white
                   is invisible on the light disabled fill. */}
               <Text
                 className="text-sm font-semibold"
-                style={{ color: draft.address.trim() ? "#fff" : t.faint }}
+                style={{
+                  color: draft.address.trim() && !savingDraft ? "#fff" : t.faint,
+                }}
               >
-                Сохранить
+                {savingDraft ? "Сохраняю…" : "Сохранить"}
               </Text>
             </Pressable>
             <Pressable
               onPress={() => setDraft(null)}
+              disabled={savingDraft}
+              accessibilityRole="button"
+              accessibilityLabel="Отменить добавление объекта"
+              accessibilityState={{ disabled: savingDraft, busy: savingDraft }}
               className="items-center rounded-lg px-4 py-2 active:opacity-70"
-              style={{ backgroundColor: t.fill }}
+              style={{ minHeight: 44, backgroundColor: t.fill }}
             >
               <Text className="text-sm font-semibold" style={{ color: t.sub }}>
                 Отмена
@@ -231,12 +254,11 @@ export default function ObjectsBlock({
       ) : (
         <Pressable
           onPress={() => setDraft({ label: "", address: "", note: "" })}
-          hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel="Добавить объект"
-          className="mt-2 flex-row items-center gap-1.5 self-start px-1 py-1 active:opacity-60"
+          className="mt-2 min-h-11 flex-row items-center gap-1.5 self-start px-1 active:opacity-60"
         >
-          <Plus color={t.accent} size={14} />
+          <MapPin color={t.accent} size={14} />
           <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
             {all.length > 0 ? "Добавить объект" : "Добавить первый объект"}
           </Text>
@@ -257,8 +279,8 @@ function ObjectCard({
 }: {
   loc: Location;
   history?: { count: number; lastDate: string };
-  onRemove: () => void;
-  onPatch: (patch: Partial<Location>) => void;
+  onRemove: () => Promise<boolean>;
+  onPatch: (patch: Partial<Location>) => Promise<boolean>;
   onBookHere: () => void;
 }) {
   const t = useThemeColors();
@@ -266,6 +288,10 @@ function ObjectCard({
   // Unit currently being edited: existing unit id, "new" for the add
   // draft, or null (nothing open).
   const [editing, setEditing] = useState<string | null>(null);
+  const [savingUnit, setSavingUnit] = useState(false);
+  const [removingObject, setRemovingObject] = useState(false);
+  const canOpenMaps = Boolean(loc.address || loc.mapUrl);
+  const objectBusy = savingUnit || removingObject;
 
   const openMaps = () => {
     // Apple Maps on iOS; the shared builder returns a universal URL
@@ -274,19 +300,68 @@ function ObjectCard({
     if (url) Linking.openURL(url);
   };
 
-  const saveUnit = (unit: ACUnit) => {
+  const removeObject = async () => {
+    if (removingObject) return;
+    setRemovingObject(true);
+    try {
+      await onRemove();
+    } finally {
+      setRemovingObject(false);
+    }
+  };
+
+  const saveUnit = async (unit: ACUnit) => {
+    if (savingUnit) return;
     const exists = units.some((u) => u.id === unit.id);
-    onPatch({
-      equipment: exists
-        ? units.map((u) => (u.id === unit.id ? unit : u))
-        : [...units, unit],
-    });
-    setEditing(null);
+    setSavingUnit(true);
+    try {
+      const saved = await onPatch({
+        equipment: exists
+          ? units.map((u) => (u.id === unit.id ? unit : u))
+          : [...units, unit],
+      });
+      if (saved) setEditing(null);
+    } finally {
+      setSavingUnit(false);
+    }
   };
 
   const removeUnit = (id: string) => {
-    onPatch({ equipment: units.filter((u) => u.id !== id) });
-    setEditing(null);
+    Alert.alert(
+      "Удалить кондиционер?",
+      "Данные оборудования и даты обслуживания будут удалены из карточки клиента.",
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            if (savingUnit) return;
+            setSavingUnit(true);
+            try {
+              const saved = await onPatch({
+                equipment: units.filter((u) => u.id !== id),
+              });
+              if (saved) setEditing(null);
+            } finally {
+              setSavingUnit(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const requestRemoveObject = () => {
+    if (objectBusy) return;
+    Alert.alert(
+      `Удалить объект «${loc.label || "Объект"}»?`,
+      "Адрес, заметки и оборудование объекта будут удалены из карточки клиента.",
+      [
+        { text: "Отмена", style: "cancel" },
+        { text: "Удалить", style: "destructive", onPress: () => void removeObject() },
+      ],
+    );
   };
 
   return (
@@ -306,11 +381,12 @@ function ObjectCard({
           ) : null}
         </Text>
         <Pressable
-          onPress={onRemove}
-          hitSlop={8}
+          onPress={requestRemoveObject}
+          disabled={objectBusy}
           accessibilityRole="button"
           accessibilityLabel="Удалить объект"
-          className="h-8 w-8 items-center justify-center rounded-lg active:opacity-60"
+          accessibilityState={{ disabled: objectBusy, busy: objectBusy }}
+          className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
         >
           <Trash2 color={t.danger} size={14} />
         </Pressable>
@@ -318,16 +394,18 @@ function ObjectCard({
 
       {/* Address (tap → Maps) */}
       <Pressable
-        onPress={loc.address || loc.mapUrl ? openMaps : undefined}
+        onPress={canOpenMaps ? openMaps : undefined}
+        disabled={!canOpenMaps}
         accessibilityRole="button"
         accessibilityLabel="Открыть адрес в Картах"
-        className="mt-0.5 flex-row items-center gap-1 active:opacity-60"
+        accessibilityState={{ disabled: !canOpenMaps }}
+        className="mt-0.5 min-h-11 flex-row items-center gap-1 active:opacity-60"
       >
         <MapPin color={t.faint} size={11} />
         <Text className="flex-1 text-[13px]" style={{ color: t.sub }} numberOfLines={1}>
           {loc.address || "адрес не указан"}
         </Text>
-        {loc.address || loc.mapUrl ? (
+        {canOpenMaps ? (
           <ArrowUpRight color={t.accent} size={14} />
         ) : null}
       </Pressable>
@@ -354,9 +432,10 @@ function ObjectCard({
             <UnitEditor
               key={u.id}
               unit={u}
-              onSave={saveUnit}
+              onSave={(next) => void saveUnit(next)}
               onRemove={() => removeUnit(u.id)}
               onCancel={() => setEditing(null)}
+              busy={savingUnit}
             />
           ) : (
             <UnitRow key={u.id} unit={u} onPress={() => setEditing(u.id)} />
@@ -365,18 +444,20 @@ function ObjectCard({
         {editing === "new" ? (
           <UnitEditor
             unit={null}
-            onSave={saveUnit}
+            onSave={(next) => void saveUnit(next)}
             onCancel={() => setEditing(null)}
+            busy={savingUnit}
           />
         ) : (
           <Pressable
             onPress={() => setEditing("new")}
-            hitSlop={6}
+            disabled={savingUnit}
             accessibilityRole="button"
             accessibilityLabel="Добавить кондиционер"
-            className="mt-1 flex-row items-center gap-1.5 self-start py-1 active:opacity-60"
+            accessibilityState={{ disabled: savingUnit, busy: savingUnit }}
+            className="mt-1 min-h-11 flex-row items-center gap-1.5 self-start active:opacity-60"
           >
-            <Plus color={t.accent} size={13} />
+            <Wrench color={t.accent} size={13} />
             <Text className="text-[12px] font-semibold" style={{ color: t.accent }}>
               Кондиционер
             </Text>
@@ -396,10 +477,9 @@ function ObjectCard({
         </Text>
         <Pressable
           onPress={onBookHere}
-          hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={`Записать на объект ${loc.label || ""}`}
-          className="flex-row items-center gap-0.5 active:opacity-60"
+          className="min-h-11 flex-row items-center gap-0.5 active:opacity-60"
         >
           <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
             Записать сюда
@@ -459,12 +539,14 @@ function UnitEditor({
   onSave,
   onRemove,
   onCancel,
+  busy = false,
 }: {
   /** null → creating a new unit. */
   unit: ACUnit | null;
   onSave: (unit: ACUnit) => void;
   onRemove?: () => void;
   onCancel: () => void;
+  busy?: boolean;
 }) {
   const t = useThemeColors();
   const [room, setRoom] = useState(unit?.room ?? "");
@@ -505,38 +587,41 @@ function UnitEditor({
   const inputStyle = { backgroundColor: t.surface, color: t.ink } as const;
 
   return (
-    <View className="my-1 gap-2 rounded-lg p-2.5" style={{ backgroundColor: t.dark ? "rgba(255,255,255,0.05)" : "#ffffff" }}>
-      <TextInput
-        value={room}
+    <View className="my-1 gap-2 rounded-lg p-2.5" style={{ backgroundColor: "#ffffff" }}>
+        <TextInput
+          value={room}
+          accessibilityLabel="Комната"
         onChangeText={setRoom}
         placeholder="Комната (Спальня / Гостиная)"
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
-        keyboardAppearance={t.dark ? "dark" : "light"}
-        className="rounded-lg px-2.5 py-2 text-[13px]"
+        keyboardAppearance="light"
+        className="min-h-11 rounded-lg px-2.5 py-2 text-[13px]"
         style={[inputStyle, { backgroundColor: t.fill }]}
         maxLength={40}
       />
       <View className="flex-row gap-2">
-        <TextInput
-          value={brand}
+          <TextInput
+            value={brand}
+            accessibilityLabel="Бренд кондиционера"
           onChangeText={setBrand}
           placeholder="Бренд"
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
-          keyboardAppearance={t.dark ? "dark" : "light"}
-          className="flex-1 rounded-lg px-2.5 py-2 text-[13px]"
+          keyboardAppearance="light"
+          className="min-h-11 flex-1 rounded-lg px-2.5 py-2 text-[13px]"
           style={[inputStyle, { backgroundColor: t.fill }]}
           maxLength={40}
         />
-        <TextInput
-          value={model}
+          <TextInput
+            value={model}
+            accessibilityLabel="Модель кондиционера"
           onChangeText={setModel}
           placeholder="Модель"
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
-          keyboardAppearance={t.dark ? "dark" : "light"}
-          className="flex-1 rounded-lg px-2.5 py-2 text-[13px]"
+          keyboardAppearance="light"
+          className="min-h-11 flex-1 rounded-lg px-2.5 py-2 text-[13px]"
           style={[inputStyle, { backgroundColor: t.fill }]}
           maxLength={40}
         />
@@ -568,15 +653,16 @@ function UnitEditor({
           <Text className="mb-1 text-[11px]" style={{ color: t.sub }}>
             ТО, мес
           </Text>
-          <TextInput
-            value={intervalMonths}
+        <TextInput
+          value={intervalMonths}
+          accessibilityLabel="Интервал обслуживания в месяцах"
             onChangeText={setIntervalMonths}
             placeholder="12"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
+            keyboardAppearance="light"
             keyboardType="number-pad"
-            className="rounded-lg px-2.5 py-2 text-[13px]"
+            className="min-h-11 rounded-lg px-2.5 py-2 text-[13px]"
             style={[inputStyle, { backgroundColor: t.fill }]}
             maxLength={3}
           />
@@ -585,22 +671,28 @@ function UnitEditor({
       <View className="flex-row items-center gap-2">
         <Pressable
           onPress={save}
-          disabled={!canSave}
+          disabled={!canSave || busy}
           accessibilityRole="button"
           accessibilityLabel="Сохранить кондиционер"
+          accessibilityState={{ disabled: !canSave || busy, busy }}
           className="flex-1 items-center rounded-lg py-2"
-          style={{ backgroundColor: canSave ? t.accent : t.fill }}
+          style={{
+            minHeight: 44,
+            backgroundColor: canSave && !busy ? t.accent : t.fill,
+          }}
         >
-          <Text className="text-sm font-semibold" style={{ color: canSave ? "#fff" : t.faint }}>
-            Сохранить
+          <Text className="text-sm font-semibold" style={{ color: canSave && !busy ? "#fff" : t.faint }}>
+            {busy ? "Сохраняю…" : "Сохранить"}
           </Text>
         </Pressable>
         <Pressable
           onPress={onCancel}
+          disabled={busy}
           accessibilityRole="button"
           accessibilityLabel="Отмена"
+          accessibilityState={{ disabled: busy, busy }}
           className="items-center rounded-lg px-4 py-2 active:opacity-70"
-          style={{ backgroundColor: t.fill }}
+          style={{ minHeight: 44, backgroundColor: t.fill }}
         >
           <Text className="text-sm font-semibold" style={{ color: t.sub }}>
             Отмена
@@ -609,10 +701,11 @@ function UnitEditor({
         {onRemove ? (
           <Pressable
             onPress={onRemove}
-            hitSlop={8}
+            disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Удалить кондиционер"
-            className="h-9 w-9 items-center justify-center rounded-lg active:opacity-60"
+            accessibilityState={{ disabled: busy, busy }}
+            className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
           >
             <Trash2 color={t.danger} size={15} />
           </Pressable>

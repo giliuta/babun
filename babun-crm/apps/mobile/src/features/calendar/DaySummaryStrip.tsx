@@ -117,8 +117,9 @@ function Pill({
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? label : undefined}
       className="rounded-full px-2.5 py-1 active:opacity-70"
-      style={{ backgroundColor: bg }}
+      style={{ minHeight: onPress ? 44 : undefined, justifyContent: "center", backgroundColor: bg }}
     >
       <Text
         className="tabular-nums"

@@ -30,7 +30,8 @@ const PAYMENT_METHODS: readonly DayExtraPaymentMethod[] = [
 function rowToExtra(r: Row): DayExtra {
   const category = r.category as ExpenseCategoryKey | null;
   const method =
-    r.payment_method && (PAYMENT_METHODS as readonly string[]).includes(r.payment_method)
+    r.payment_method &&
+    (PAYMENT_METHODS as readonly string[]).includes(r.payment_method)
       ? (r.payment_method as DayExtraPaymentMethod)
       : null;
   return {
@@ -62,10 +63,7 @@ export async function listDayExtras(
   return map;
 }
 
-/** Replace the entire list for a single (tenant, team, date). The
- *  delete + insert runs as two PostgREST calls — see STORY-044 A1
- *  comment about nested replace semantics. For atomicity across
- *  many (team, date) pairs use the `import_schedule` RPC. */
+/** Replace the entire list for a single (tenant, team, date) atomically. */
 export async function setDayExtras(
   supabase: DbSupabase,
   tenantId: string,
@@ -73,19 +71,8 @@ export async function setDayExtras(
   date: string,
   extras: DayExtra[],
 ): Promise<void> {
-  const { error: delErr } = await supabase
-    .from("day_extras")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("team_id", teamId)
-    .eq("date", date);
-  if (delErr) throw new Error(`setDayExtras (delete): ${delErr.message}`);
-  if (extras.length === 0) return;
-  const rows = extras.map((e) => ({
+  const payload = extras.map((e) => ({
     id: e.id,
-    tenant_id: tenantId,
-    team_id: teamId,
-    date,
     name: e.name,
     amount: e.amount,
     kind: e.kind,
@@ -93,6 +80,26 @@ export async function setDayExtras(
     payment_method: e.payment_method ?? null,
     receipt_url: e.receipt_url ?? null,
   }));
-  const { error: insErr } = await supabase.from("day_extras").insert(rows);
-  if (insErr) throw new Error(`setDayExtras (insert): ${insErr.message}`);
+  const { data, error } = await supabase.rpc("replace_day_extras", {
+    p_team_id: teamId,
+    p_date: date,
+    p_extras: payload,
+  });
+  if (error) throw new Error(`setDayExtras: ${error.message}`);
+
+  const savedIds = new Set((data ?? []).map((row) => row.id));
+  if (
+    savedIds.size !== extras.length ||
+    (data ?? []).some(
+      (row) =>
+        row.tenant_id !== tenantId ||
+        row.team_id !== teamId ||
+        row.date !== date,
+    ) ||
+    extras.some((extra) => !savedIds.has(extra.id))
+  ) {
+    throw new Error(
+      "setDayExtras: server did not confirm the complete replacement",
+    );
+  }
 }

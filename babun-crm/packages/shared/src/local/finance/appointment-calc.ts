@@ -5,6 +5,105 @@
 // легковесный unit-testing в будущем (пока без Vitest).
 
 import type { AppointmentService, Discount } from "../appointments";
+import {
+  getServiceMaterialCost,
+  type ServiceCostSource,
+} from "../services";
+
+export interface AppointmentMaterialSource {
+  service_ids?: unknown;
+  services?: unknown;
+}
+
+export interface MaterialCatalogService extends ServiceCostSource {
+  id: string;
+  name?: string;
+}
+
+export interface AppointmentMaterialCostLine {
+  serviceId: string;
+  serviceName: string;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+}
+
+function materialQuantity(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.max(1, Math.floor(value))
+    : 1;
+}
+
+/** Material-cost lines use the quantity snapshot saved on an appointment.
+ * Old appointments without services[] fall back to one unit per service_id. */
+export function appointmentMaterialCostLines(
+  appointment: AppointmentMaterialSource,
+  services: readonly MaterialCatalogService[],
+): AppointmentMaterialCostLine[] {
+  const quantityByService = new Map<string, number>();
+  const snapshotIds = new Set<string>();
+  const snapshot = Array.isArray(appointment.services)
+    ? appointment.services
+    : [];
+
+  for (const rawLine of snapshot) {
+    if (
+      rawLine === null ||
+      typeof rawLine !== "object" ||
+      Array.isArray(rawLine)
+    ) {
+      continue;
+    }
+    const line = rawLine as { serviceId?: unknown; quantity?: unknown };
+    if (typeof line.serviceId !== "string" || line.serviceId.length === 0) {
+      continue;
+    }
+    snapshotIds.add(line.serviceId);
+    quantityByService.set(
+      line.serviceId,
+      (quantityByService.get(line.serviceId) ?? 0) +
+        materialQuantity(line.quantity),
+    );
+  }
+
+  const legacyIds = Array.isArray(appointment.service_ids)
+    ? appointment.service_ids
+    : [];
+  for (const rawId of legacyIds) {
+    if (typeof rawId !== "string" || rawId.length === 0 || snapshotIds.has(rawId)) {
+      continue;
+    }
+    quantityByService.set(rawId, (quantityByService.get(rawId) ?? 0) + 1);
+  }
+
+  const serviceById = new Map(services.map((service) => [service.id, service]));
+  const lines: AppointmentMaterialCostLine[] = [];
+  for (const [serviceId, quantity] of quantityByService) {
+    const service = serviceById.get(serviceId);
+    if (!service) continue;
+    const unitCost = getServiceMaterialCost(service);
+    const totalCost = unitCost * quantity;
+    if (totalCost <= 0) continue;
+    lines.push({
+      serviceId,
+      serviceName: service.name?.trim() || "Услуга",
+      quantity,
+      unitCost,
+      totalCost,
+    });
+  }
+  return lines;
+}
+
+export function appointmentMaterialCost(
+  appointment: AppointmentMaterialSource,
+  services: readonly MaterialCatalogService[],
+): number {
+  return appointmentMaterialCostLines(appointment, services).reduce(
+    (sum, line) => sum + line.totalCost,
+    0,
+  );
+}
 
 /** Apply a discount to a number; clamped to [0, base]. */
 export function applyDiscount(base: number, discount?: Discount | null): number {

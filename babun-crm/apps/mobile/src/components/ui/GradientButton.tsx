@@ -12,11 +12,16 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useThemeColors } from "@/theme/colors";
+import { ctaGradient } from "@/components/ui/color-contrast";
 
 // The «Halo Cobalt» primary action — full-width cobalt-gradient pill with a
 // floating accent shadow, a slow halo sheen sweep, and a press dip. The ONLY
-// gradient surface in the app besides the logo/FAB. All motion gated on Reduce
+// Gradient surface in the app besides the logo. All motion is gated on Reduce
 // Motion. apps/mobile/docs/DESIGN-SYSTEM.md.
+//
+// `tint` dresses this ONE gradient in the appointment's identity colour on the
+// booking screen (still the app's only gradient). Endpoints, label and shadow
+// are AA-derived from the hex; undefined = today's cobalt, byte-identical.
 const FILL = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as const;
 
 export function GradientButton({
@@ -25,18 +30,27 @@ export function GradientButton({
   disabled,
   loading,
   sheen = true,
+  tint,
 }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
   sheen?: boolean;
+  tint?: string;
 }) {
   const t = useThemeColors();
   const reduced = useReducedMotion();
   const filled = loading || !disabled;
   const pressable = !disabled && !loading;
-  const animate = sheen && !reduced;
+  const g = tint ? ctaGradient(tint) : null;
+  const fromColor = g?.from ?? t.accentFrom;
+  const toColor = g?.to ?? t.accentTo;
+  const labelColor = g?.label ?? t.onAccent;
+  // Pale tints carry an ink label; the white sheen/edge would read dirty over
+  // a near-white fill, so gate the glass overlays off for them.
+  const glassEdge = g ? g.sheen : true;
+  const animate = sheen && glassEdge && !reduced;
   const [w, setW] = useState(0);
   const scale = useSharedValue(1);
   const sweep = useSharedValue(-160);
@@ -86,8 +100,8 @@ export function GradientButton({
             overflow: "hidden",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: filled ? t.accentTo : t.disabledFill,
-            boxShadow: filled ? t.brandShadow : undefined,
+            backgroundColor: filled ? toColor : t.disabledFill,
+            boxShadow: filled ? (g?.shadow ?? t.brandShadow) : undefined,
           },
           scaleStyle,
         ]}
@@ -98,14 +112,14 @@ export function GradientButton({
               {/* Диагональ 135° вместо вертикали — объёмнее на длинной
                   пилюле; вершина чуть светлее за счёт хайлайта ниже. */}
               <LinearGradient id="gbtn" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0" stopColor={t.accentFrom} />
-                <Stop offset="1" stopColor={t.accentTo} />
+                <Stop offset="0" stopColor={fromColor} />
+                <Stop offset="1" stopColor={toColor} />
               </LinearGradient>
             </Defs>
             <Rect width="100%" height="100%" fill="url(#gbtn)" />
           </Svg>
         ) : null}
-        {filled ? (
+        {filled && glassEdge ? (
           // Внутренний верхний хайлайт — «стеклянная» кромка премиальной
           // кнопки: волосяная светлая линия по верхнему краю пилюли.
           <View
@@ -131,15 +145,18 @@ export function GradientButton({
           />
         ) : null}
         {loading ? (
-          <ActivityIndicator color={t.onAccent} />
+          <ActivityIndicator color={labelColor} />
         ) : (
           <Text
             maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
             style={{
               fontSize: 17,
               fontWeight: "600",
               letterSpacing: 0.2,
-              color: filled ? t.onAccent : t.sub,
+              color: filled ? labelColor : t.sub,
             }}
           >
             {label}

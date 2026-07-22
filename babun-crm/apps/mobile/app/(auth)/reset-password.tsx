@@ -13,6 +13,8 @@ import {
 } from "@/components/auth/AuthCard";
 import { mapAuthError } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
+import { signOutScopeAndWipe } from "@/lib/auth-clear";
+import { parseRecoveryLink } from "@/lib/recovery-link";
 import { supabase } from "@/lib/supabase";
 
 // Set-new-password screen — the exit of the reset flow. The recovery deep link
@@ -29,34 +31,41 @@ export default function ResetPasswordScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [sessionEnded, setSessionEnded] = useState(true);
 
   useEffect(() => {
     let active = true;
     async function hydrate() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        if (active) setReady(true);
-        return;
-      }
-      const link = url ?? (await Linking.getInitialURL());
-      if (!link) return;
-      const qp = Linking.parse(link).queryParams ?? {};
-      const frag = link.includes("#")
-        ? Object.fromEntries(new URLSearchParams(link.split("#")[1]))
-        : {};
-      const access_token = (qp.access_token as string) ?? frag.access_token;
-      const refresh_token = (qp.refresh_token as string) ?? frag.refresh_token;
-      const token_hash = (qp.token_hash as string) ?? frag.token_hash;
-      if (access_token && refresh_token) {
-        const { error: e } = await supabase.auth.setSession({ access_token, refresh_token });
-        if (active) (e ? setExpired(true) : setReady(true));
-      } else if (token_hash) {
-        const { error: e } = await supabase.auth.verifyOtp({ type: "recovery", token_hash });
-        if (active) (e ? setExpired(true) : setReady(true));
-      } else if (active) {
-        setExpired(true);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (session) {
+          if (active) setReady(true);
+          return;
+        }
+        const link = url ?? (await Linking.getInitialURL());
+        const credential = parseRecoveryLink(link);
+        if (!credential) {
+          if (active) setExpired(true);
+          return;
+        }
+        const { error: recoveryError } =
+          credential.kind === "session"
+            ? await supabase.auth.setSession({
+                access_token: credential.accessToken,
+                refresh_token: credential.refreshToken,
+              })
+            : await supabase.auth.verifyOtp({
+                type: "recovery",
+                token_hash: credential.tokenHash,
+              });
+        if (active) {
+          if (recoveryError) setExpired(true);
+          else setReady(true);
+        }
+      } catch {
+        if (active) setExpired(true);
       }
     }
     void hydrate();
@@ -78,16 +87,35 @@ export default function ResetPasswordScreen() {
     // End the recovery session: the done-screen promises «Теперь можно
     // войти», and with a live session the root guard would bounce «Войти»
     // straight into the app instead of showing /login.
-    await supabase.auth.signOut();
+    let ended = true;
+    try {
+      await signOutScopeAndWipe("local");
+    } catch {
+      // The password write already succeeded. Keep that success honest while
+      // routing an active recovery session back into the app, not to a login
+      // screen that would immediately redirect away.
+      ended = false;
+    }
+    setSessionEnded(ended);
     setLoading(false);
     setDone(true);
   }
 
   if (done) {
     return (
-      <AuthCard title="Пароль обновлён" subtitle="Теперь можно войти">
-        <NoticeCard>Новый пароль сохранён. Войдите с ним в Babun.</NoticeCard>
-        <PillButton label="Войти" onPress={() => router.replace("/login")} />
+      <AuthCard
+        title="Пароль обновлён"
+        subtitle={sessionEnded ? "Теперь можно войти" : "Сеанс остаётся активным"}
+      >
+        <NoticeCard>
+          {sessionEnded
+            ? "Новый пароль сохранён. Войдите с ним в Babun."
+            : "Новый пароль сохранён. Вы можете продолжить работу в текущем защищённом сеансе."}
+        </NoticeCard>
+        <PillButton
+          label={sessionEnded ? "Войти" : "Продолжить"}
+          onPress={() => router.replace(sessionEnded ? "/login" : "/")}
+        />
       </AuthCard>
     );
   }
@@ -100,6 +128,14 @@ export default function ResetPasswordScreen() {
         </NoticeCard>
         <PillButton label="Запросить заново" onPress={() => router.replace("/forgot-password")} />
         <GhostLink label="Вернуться ко входу" muted onPress={() => router.replace("/login")} />
+      </AuthCard>
+    );
+  }
+
+  if (!ready) {
+    return (
+      <AuthCard title="Новый пароль" subtitle="Проверяем ссылку">
+        <NoticeCard>Проверяем защищённую ссылку восстановления…</NoticeCard>
       </AuthCard>
     );
   }

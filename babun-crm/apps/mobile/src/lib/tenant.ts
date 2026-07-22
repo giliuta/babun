@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
+import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 
@@ -85,6 +86,18 @@ function withTimeout<T>(work: PromiseLike<T>): Promise<T> {
 // device is offline — for the gate that's a transient state, not "loading".
 function isPaused(q: { isPending: boolean; fetchStatus: string }): boolean {
   return q.isPending && q.fetchStatus === "paused";
+}
+
+function isMissingSafeTenantRpc(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    error.code === "PGRST202" ||
+    /could not find the function.*current_tenant_profile_safe/i.test(
+      error.message ?? "",
+    )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -190,24 +203,59 @@ export function useOnboardingGate(): OnboardingGate {
     staleTime: 30_000,
     retry: 1,
     queryFn: async (): Promise<OnboardingTenant | null> => {
-      const { data, error } = await withTimeout(
-        supabase
-          .from("tenants")
-          .select("id, name, vertical, onboarded_at")
-          .eq("id", tenantId as string)
-          .maybeSingle(),
+      const rpcResult = await withTimeout(
+        supabase.rpc("current_tenant_profile_safe"),
       );
-      if (error) throw new Error(error.message);
-      if (data?.onboarded_at) stampOnboarded(tenantId as string);
+      let data: Json | null = rpcResult.data;
+      if (rpcResult.error) {
+        if (!isMissingSafeTenantRpc(rpcResult.error)) {
+          throw new Error(rpcResult.error.message);
+        }
+        // Rolling deployments may run the new native build against the old
+        // database for a short window. Read only the four onboarding fields;
+        // even the old member-wide RLS policy cannot expose invoice/bank data.
+        const fallback = await withTimeout(
+          supabase
+            .from("tenants")
+            .select("id, name, vertical, onboarded_at")
+            .eq("id", tenantId as string)
+            .maybeSingle(),
+        );
+        if (fallback.error) throw new Error(fallback.error.message);
+        data = fallback.data as unknown as Json | null;
+      }
+      let tenant: OnboardingTenant | null = null;
+      if (data != null) {
+        if (typeof data !== "object" || Array.isArray(data)) {
+          throw new Error("Сервер вернул некорректный профиль компании");
+        }
+        const row = data as Record<string, Json | undefined>;
+        if (
+          typeof row.id !== "string" ||
+          row.id !== tenantId ||
+          typeof row.name !== "string" ||
+          !(row.vertical === null || typeof row.vertical === "string") ||
+          !(row.onboarded_at === null || typeof row.onboarded_at === "string")
+        ) {
+          throw new Error("Сервер вернул некорректный профиль компании");
+        }
+        tenant = {
+          id: row.id,
+          name: row.name,
+          vertical: row.vertical,
+          onboarded_at: row.onboarded_at,
+        };
+      }
+      if (tenant?.onboarded_at) stampOnboarded(tenantId as string);
       // CONFIRMED dead CACHED tenant id (row gone / переехал в другой
       // тенант): drop the MMKV cache — the resulting re-render resolves
       // to knownTenantId=null, which re-enables the tenant_members lookup
       // instead of stranding the user on «no-tenant». JWT ids are not
       // ours to clear (web parity: login?error=tenant_missing).
-      if (!data && tenantIdFromCache && userId) {
+      if (!tenant && tenantIdFromCache && userId) {
         removeCache(tenantIdCacheKey(userId));
       }
-      return data ?? null;
+      return tenant;
     },
   });
 

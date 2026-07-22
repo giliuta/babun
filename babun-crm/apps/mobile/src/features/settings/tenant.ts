@@ -3,16 +3,120 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import type { Database } from "@babun/shared/db/database.types";
+import type { Database, Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { isUserRole, type UserRole } from "./role-policy";
 
 export type Tenant = Database["public"]["Tables"]["tenants"]["Row"];
 type TenantUpdate = Database["public"]["Tables"]["tenants"]["Update"];
 
-// Mirrors the tenant_members CHECK constraint (20260430_008_team_roles.sql):
-// role in ('owner','dispatcher','master').
-export type UserRole = "owner" | "dispatcher" | "master";
+const TENANT_SAFE_DEFAULTS: Tenant = {
+  id: "",
+  name: "",
+  address: null,
+  bank_name: null,
+  booking_slug: null,
+  business_address: null,
+  city: null,
+  contact_email: null,
+  contact_instagram: null,
+  contact_phone: null,
+  contact_telegram: null,
+  contact_whatsapp: null,
+  country: "",
+  created_at: "",
+  currency: "",
+  current_period_end: null,
+  iban: null,
+  invoice_prefix: "",
+  legal_name: null,
+  logo_url: null,
+  onboarded_at: null,
+  personal_calendar_enabled: false,
+  plan: "",
+  plan_override: null,
+  stripe_customer_id: null,
+  stripe_subscription_id: null,
+  subscription_status: null,
+  trial_ends_at: null,
+  vat_number: null,
+  vertical: null,
+};
+
+function parseTenantProfile(value: Json | null): Tenant {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Профиль компании недоступен");
+  }
+  const row = value as Record<string, Json | undefined>;
+  if (typeof row.id !== "string" || typeof row.name !== "string") {
+    throw new Error("Сервер вернул некорректный профиль компании");
+  }
+  return {
+    ...TENANT_SAFE_DEFAULTS,
+    ...(row as unknown as Partial<Tenant>),
+    id: row.id,
+    name: row.name,
+  };
+}
+
+function isMissingSafeTenantRpc(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    error.code === "PGRST202" ||
+    /could not find the function.*current_tenant_profile_safe/i.test(
+      error.message ?? "",
+    )
+  );
+}
+
+async function readTenantProfileFallback(
+  tenantId: string,
+  role: UserRole,
+): Promise<Tenant> {
+  // Older deployed databases do not have the safe projection RPC yet. An
+  // owner may read the full RLS-scoped row (invoice creation needs legal
+  // requisites). Operational users get an explicit column allow-list so an
+  // old permissive tenant policy cannot leak billing or bank fields.
+  if (role === "owner") {
+    const { data, error } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("id", tenantId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return parseTenantProfile(data as unknown as Json | null);
+  }
+
+  const { data, error } = await supabase
+    .from("tenants")
+    .select(
+      "id, name, vertical, city, country, address, logo_url, contact_phone, contact_email, contact_whatsapp, contact_telegram, contact_instagram, onboarded_at, personal_calendar_enabled, created_at",
+    )
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return parseTenantProfile(data as unknown as Json | null);
+}
+
+export type { UserRole } from "./role-policy";
+
+const ROLE_LOOKUP_TIMEOUT_MS = 6_000;
+
+function withRoleLookupTimeout<T>(work: PromiseLike<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    Promise.resolve(work),
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("Не удалось проверить роль: сеть не отвечает")),
+        ROLE_LOOKUP_TIMEOUT_MS,
+      );
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 // Role of the signed-in user within the active tenant (tenant_members via
 // the current_user_role() RPC from 20260430_008). RLS gates tenants UPDATE
@@ -22,11 +126,25 @@ export function useCurrentRole() {
   return useQuery({
     queryKey: ["current-role", tenantId],
     enabled: !!tenantId,
-    staleTime: Infinity,
+    // Security gates need a terminal result even on a cold offline start.
+    // Default networkMode would park this query in pending/paused forever;
+    // always + a bounded request turns that into the explicit retry screen.
+    networkMode: "always",
+    retry: 1,
+    // Membership can be revoked or changed while this device is open. Poll the
+    // tiny RPC so an old owner/dispatcher surface is unmounted promptly instead
+    // of keeping sensitive cached screens visible until the next app focus.
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
     queryFn: async (): Promise<UserRole | null> => {
-      const { data, error } = await supabase.rpc("current_user_role");
+      const { data, error } = await withRoleLookupTimeout(
+        supabase.rpc("current_user_role"),
+      );
       if (error) throw new Error(error.message);
-      return (data as UserRole | null) ?? null;
+      if (data == null) return null;
+      if (!isUserRole(data)) throw new Error("Сервер вернул неизвестную роль");
+      return data;
     },
   });
 }
@@ -41,17 +159,25 @@ function friendlyTenantError(message: string): string {
 
 export function useTenant() {
   const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
   return useQuery({
-    queryKey: ["tenant", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["tenant", tenantId, role ?? "role-pending"],
+    enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*")
-        .eq("id", tenantId as string)
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      const { data, error } = await supabase.rpc(
+        "current_tenant_profile_safe",
+      );
+      if (error) {
+        if (isMissingSafeTenantRpc(error)) {
+          return readTenantProfileFallback(
+            tenantId as string,
+            role as UserRole,
+          );
+        }
+        throw new Error(error.message);
+      }
+      return parseTenantProfile(data);
     },
   });
 }

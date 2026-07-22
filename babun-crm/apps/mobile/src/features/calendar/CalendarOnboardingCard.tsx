@@ -1,61 +1,88 @@
 import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ChevronRight, X } from "lucide-react-native";
+import { Check, ChevronRight, X } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { ICON } from "@/components/ui/tokens";
+import { useCurrentRole } from "@/features/settings/tenant";
 
-// First-run onboarding card — web CalendarOnboardingCard (STORY-060 §F1.1)
-// parity, mobile-simplified: floats over the empty grid while the tenant has
-// zero clients, zero services and zero appointments. Steps 1–2 deep-link into
-// the create flows; step 3 teaches the tap-a-slot gesture (no action).
-// Dismissal is session-only state held by the parent (web persists to
-// localStorage; the card self-clears anyway once real data appears).
+// Онбординг первого запуска — web CalendarOnboardingCard (STORY-060 §F1.1).
+// Плавает над пустой сеткой, пока у тенанта нет записей.
+//
+// Три правки против прежней версии, каждая — по факту поведения:
+//  1. Гейт по записям, а не по «0 клиентов И 0 услуг И 0 записей»: заведя
+//     одного клиента, человек терял карточку вместе с невыполненным шагом
+//     «заведите услугу». Пройденные шаги теперь помечаются галочкой — список
+//     остаётся, пока не станет настоящим.
+//  2. top:80 вместо центра: карточка садилась ровно на середину сетки и
+//     глотала тапы по тем самым слотам, по которым сама же просила тапнуть.
+//  3. Шаг 3 — кнопка, а не текст «Тапните по свободному слоту»: приложение
+//     не учит жестам, оно даёт нажать.
 export function CalendarOnboardingCard({
+  hasClients,
+  hasServices,
+  onCreate,
   onDismiss,
 }: {
+  hasClients: boolean;
+  hasServices: boolean;
+  /** Создать первую запись — активна, когда есть клиент и услуга. */
+  onCreate: () => void;
   onDismiss: () => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const { data: role } = useCurrentRole();
 
-  const steps: { n: number; label: string; onPress?: () => void }[] = [
+  const steps: {
+    n: number;
+    label: string;
+    done?: boolean;
+    disabled?: boolean;
+    onPress?: () => void;
+  }[] = [
     {
       n: 1,
       label: "Добавьте клиента",
+      done: hasClients,
       onPress: () => router.push("/clients/new"),
     },
     {
       n: 2,
-      label: "Заведите услугу",
-      onPress: () => router.push("/cabinet/services"),
+      label:
+        role === "dispatcher" && !hasServices
+          ? "Попросите владельца добавить услугу"
+          : "Заведите услугу",
+      done: hasServices,
+      onPress:
+        role === "owner" ? () => router.push("/cabinet/services") : undefined,
     },
-    { n: 3, label: "Тапните по свободному слоту — создастся запись" },
+    {
+      n: 3,
+      label: "Запланируйте запись",
+      disabled: !hasClients || !hasServices,
+      onPress: onCreate,
+    },
   ];
 
   return (
-    // box-none: only the card itself catches touches — the grid, header and
-    // tab bar around it stay fully interactive (web pointer-events parity).
+    // box-none: карточка ловит тапы только собой — сетка, шапка и таб-бар
+    // вокруг остаются живыми.
     <View
       pointerEvents="box-none"
       style={{
         position: "absolute",
-        top: 0,
+        top: 80,
         left: 0,
         right: 0,
-        bottom: 0,
         alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
+        paddingHorizontal: 16,
       }}
     >
       <View
         accessibilityLiveRegion="polite"
-        // marginBottom: оптический центр чуть выше геометрического — карточка
-        // не липнет взглядом к таб-бару.
         style={{
           width: "100%",
           maxWidth: 420,
-          marginBottom: 16,
           backgroundColor: t.surface,
           borderRadius: t.radius.card,
           borderWidth: 1,
@@ -100,7 +127,7 @@ export function CalendarOnboardingCard({
 
         <View style={{ gap: 8 }}>
           {steps.map((s) => (
-            <StepRow key={s.n} n={s.n} label={s.label} onPress={s.onPress} />
+            <StepRow key={s.n} {...s} />
           ))}
         </View>
       </View>
@@ -111,10 +138,14 @@ export function CalendarOnboardingCard({
 function StepRow({
   n,
   label,
+  done,
+  disabled,
   onPress,
 }: {
   n: number;
   label: string;
+  done?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
 }) {
   const t = useThemeColors();
@@ -127,6 +158,7 @@ function StepRow({
     paddingVertical: 8,
     borderRadius: t.radius.input,
     backgroundColor: t.fill,
+    opacity: disabled ? 0.5 : 1,
   } as const;
   const body = (
     <>
@@ -135,35 +167,58 @@ function StepRow({
           height: 28,
           width: 28,
           borderRadius: 14,
-          backgroundColor: `${t.accent}1f`,
+          backgroundColor: done ? `${t.success}1f` : `${t.accent}1f`,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Text
-          className="tabular-nums"
-          style={{ fontSize: 14, fontWeight: "700", color: t.accent }}
-        >
-          {n}
-        </Text>
+        {done ? (
+          <Check color={t.success} size={16} strokeWidth={2.6} />
+        ) : (
+          <Text
+            className="tabular-nums"
+            style={{ fontSize: 14, fontWeight: "700", color: t.accent }}
+          >
+            {n}
+          </Text>
+        )}
       </View>
-      <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}>
+      <Text
+        style={{
+          flex: 1,
+          fontSize: 15,
+          fontWeight: "600",
+          color: done ? t.faint : t.ink,
+          textDecorationLine: done ? "line-through" : "none",
+        }}
+      >
         {label}
       </Text>
-      {onPress ? <ChevronRight color={t.chevron} size={ICON.sm} /> : null}
+      {onPress && !done ? <ChevronRight color={t.chevron} size={ICON.sm} /> : null}
     </>
   );
-  return onPress ? (
+  return onPress && !done ? (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
       className="active:opacity-60"
       style={rowStyle}
     >
       {body}
     </Pressable>
   ) : (
-    <View style={rowStyle}>{body}</View>
+    // «Сделано» несут только зелёная галочка и зачёркивание — для VoiceOver
+    // это невидимо, и пройденный шаг звучал бы неотличимо от невыполненного.
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={done ? `${label} — сделано` : label}
+      style={rowStyle}
+    >
+      {body}
+    </View>
   );
 }

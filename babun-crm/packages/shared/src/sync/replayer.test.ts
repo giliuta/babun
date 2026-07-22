@@ -27,10 +27,16 @@ import {
   cacheGetOne,
   type CachedClient,
 } from "../db/cache/sql";
-import { kickReplayer, type QuotaGate } from "./replayer";
+import {
+  kickReplayer,
+  setReplayerDefaults,
+  type QuotaGate,
+} from "./replayer";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const UUID_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const UUID_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const UUID_C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 
 // ─── Fake Supabase PostgREST builder ──────────────────────────────────
 // Records every terminal operation. Each `.from(table)` returns a builder
@@ -48,10 +54,20 @@ interface Recorded {
   usedSingle: boolean;
 }
 
+interface RecordedRpc {
+  name: string;
+  args: Record<string, unknown>;
+}
+
 function makeFakeSupabase(
   script: (rec: Recorded) => Result,
-): { client: unknown; calls: Recorded[] } {
+  rpcScript: (rec: RecordedRpc) => Result = () => ({
+    data: null,
+    error: { code: "PGRST202", message: "RPC unavailable in test fake" },
+  }),
+): { client: unknown; calls: Recorded[]; rpcCalls: RecordedRpc[] } {
   const calls: Recorded[] = [];
+  const rpcCalls: RecordedRpc[] = [];
 
   function builder(table: string) {
     let current: Recorded | null = null;
@@ -75,6 +91,7 @@ function makeFakeSupabase(
     const resolve = (): Result => script(current as Recorded);
 
     chain.insert = (payload: unknown) => start("insert", payload);
+    chain.upsert = (payload: unknown) => start("insert", payload);
     chain.update = (payload: unknown) => start("update", payload);
     chain.delete = () => start("delete");
     chain.eq = (col: string, val: unknown) => {
@@ -101,7 +118,18 @@ function makeFakeSupabase(
     return chain;
   }
 
-  return { client: { from: builder }, calls };
+  return {
+    client: {
+      from: builder,
+      rpc(name: string, args: Record<string, unknown>) {
+        const call = { name, args };
+        rpcCalls.push(call);
+        return Promise.resolve(rpcScript(call));
+      },
+    },
+    calls,
+    rpcCalls,
+  };
 }
 
 beforeEach(() => {
@@ -109,6 +137,7 @@ beforeEach(() => {
   __resetCacheForTests();
 });
 afterEach(() => {
+  setReplayerDefaults(null);
   __resetCacheForTests();
 });
 
@@ -162,6 +191,79 @@ describe("replayer — insert", () => {
     await kickReplayer({ supabase: asSupabase(client) });
     expect(calls[0]?.table).toBe("client_tags");
     expect(await queueDepth()).toBe(0);
+  });
+
+  test("offline client insert restores tags through one atomic RPC", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: {
+        id: UUID_A,
+        tenant_id: TENANT,
+        full_name: "A",
+        __tag_ids: [UUID_B, UUID_C, UUID_B],
+      },
+      expected_updated_at: null,
+    });
+    const { client, calls, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      () => ({ data: { id: UUID_A }, error: null }),
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(calls).toHaveLength(0);
+    expect(rpcCalls).toEqual([
+      {
+        name: "create_client_with_tags",
+        args: {
+          p_tenant_id: TENANT,
+          p_client_id: UUID_A,
+          p_client: { full_name: "A" },
+          p_tag_ids: [UUID_B, UUID_C],
+        },
+      },
+    ]);
+  });
+
+  test("a lost aggregate response repairs tags atomically after duplicate", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: {
+        id: UUID_A,
+        tenant_id: TENANT,
+        full_name: "A",
+        __tag_ids: [UUID_B],
+      },
+      expected_updated_at: null,
+    });
+    const { client, rpcCalls } = makeFakeSupabase(
+      () => ({ data: null, error: null }),
+      (call) =>
+        call.name === "create_client_with_tags"
+          ? {
+              data: null,
+              error: { code: "23505", message: "duplicate key clients_pkey" },
+            }
+          : { data: { id: UUID_A }, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(await queueDepth()).toBe(0);
+    expect(rpcCalls.map((call) => call.name)).toEqual([
+      "create_client_with_tags",
+      "update_client_with_tags",
+    ]);
+    expect(rpcCalls[1]?.args).toMatchObject({
+      p_client_id: UUID_A,
+      p_patch: {},
+      p_tag_ids: [UUID_B],
+    });
   });
 });
 
@@ -277,9 +379,85 @@ describe("replayer — LWW update", () => {
     const cached = await cacheGetOne<CachedClient>("clients", UUID_A);
     expect(cached?.updated_at).toBe("2026-02-02T00:00:00.000Z");
   });
+
+  test("archive conflict drains UPDATE and keeps archived client out of active cache", async () => {
+    const archivedAt = "2026-03-03T00:00:00.000Z";
+    await cacheUpsert("clients", {
+      id: UUID_A,
+      tenant_id: TENANT,
+      full_name: "Archived",
+      deleted_at: null,
+      updated_at: "2026-01-01T00:00:00.000Z",
+    } as unknown as CachedClient);
+
+    await enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { deleted_at: archivedAt },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+
+    let call = 0;
+    const { client, calls } = makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        call += 1;
+        if (call === 1) return { data: [], error: null };
+        return {
+          data: {
+            id: UUID_A,
+            tenant_id: TENANT,
+            full_name: "Archived",
+            deleted_at: archivedAt,
+            updated_at: "2026-03-03T00:00:01.000Z",
+          },
+          error: null,
+        };
+      }
+      return { data: null, error: null };
+    });
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls).toHaveLength(2);
+    expect(calls.every((record) => record.op === "update")).toBe(true);
+    expect(calls[1]?.usedMaybeSingle).toBe(true);
+    expect(await queueDepth()).toBe(0);
+    expect(await cacheGetOne<CachedClient>("clients", UUID_A)).toBeNull();
+  });
 });
 
 describe("replayer — injected quota gate", () => {
+  test("host defaults protect wrapper kicks that provide only supabase", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+    let notified = "";
+    setReplayerDefaults({
+      quota: {
+        assertAvailable() {
+          throw { quota: true, message: "Mobile quota reached" };
+        },
+      },
+      onPermanentFailure: (op) => {
+        notified = op.last_error ?? "";
+      },
+    });
+
+    // Cached wrappers use this minimal form after enqueueing. Defaults must
+    // still run; otherwise their immediate kick bypasses the mobile policy.
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls).toHaveLength(0);
+    expect(notified).toContain("Mobile quota reached");
+    expect((await dequeueAll())[0]?.attempts).toBeGreaterThanOrEqual(3);
+  });
+
   test("quota-shaped throw perm-fails the insert without dispatching", async () => {
     await enqueueOp({
       table: "clients",

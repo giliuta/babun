@@ -11,7 +11,13 @@ export type AppointmentStatus =
   | "completed" // выполнена
   | "cancelled"; // отменена
 
-export type PaymentMethod = "cash" | "card" | "transfer" | "split" | "invoice";
+export type PaymentMethod =
+  | "cash"
+  | "card"
+  | "transfer"
+  | "other"
+  | "split"
+  | "invoice";
 
 export interface Payment {
   id: string;
@@ -116,6 +122,9 @@ export interface AppointmentExpense {
 
 export interface Appointment {
   id: string;
+  /** Auth user who created the row. Server-owned; used to keep shared team
+   * event controls aligned with creator-only UPDATE/DELETE policies. */
+  created_by?: string | null;
   date: string; // YYYY-MM-DD
   time_start: string; // HH:MM
   time_end: string; // HH:MM
@@ -230,6 +239,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Наличные",
   card: "Карта",
   transfer: "Перевод",
+  other: "Другое",
   // Brief 1 #15: «Сплит» reads as the HVAC equipment type (used
   // elsewhere as ACType.split = «Сплит»). For the payment-method
   // surface use the plain RU word.
@@ -333,6 +343,11 @@ export function saveAppointments(list: Appointment[]): void {
 // ─── Computed helpers ──────────────────────────────────────────────────
 
 export function getPaidAmount(apt: Appointment): number {
+  // A full refund is a terminal economic state for the appointment read
+  // model. Historical receipt mirrors deliberately stay on the row for the
+  // audit trail, but they must not be resurrected as current revenue.
+  if (apt.payment_status === "refunded") return 0;
+
   // Получено СВЕРХ аванса считается по двум источникам и берётся максимум:
   // леджер payments[] (мобильные пути: buildDebtPaidPatch, close-day) и
   // веб-зеркала — payment-объект (нал+карта) либо колонка paid_amount
@@ -353,11 +368,27 @@ export function getPaidAmount(apt: Appointment): number {
 }
 
 export function getDebtAmount(apt: Appointment): number {
+  // Refunding a completed visit does not silently reopen customer debt. The
+  // visit remains in history with the explicit «Возврат» status; collecting
+  // it again requires a new payment lifecycle, not a derived balance.
+  if (apt.payment_status === "refunded") return 0;
   return Math.max(0, apt.total_amount - getPaidAmount(apt));
 }
 
 export function isFullyPaid(apt: Appointment): boolean {
   return getPaidAmount(apt) >= apt.total_amount && apt.total_amount > 0;
+}
+
+/**
+ * Revenue recognized by operational KPI screens. Those screens historically
+ * value every completed job at its agreed total (even when collection is
+ * still pending), which is intentionally different from getPaidAmount(). A
+ * fully refunded job remains completed work in visit counters but contributes
+ * zero to revenue and leaderboards.
+ */
+export function getRecognizedRevenue(apt: Appointment): number {
+  if (apt.status !== "completed" || apt.payment_status === "refunded") return 0;
+  return Math.max(0, apt.total_amount ?? 0);
 }
 
 // ─── Validation: required fields config (settings) ─────────────────────
@@ -646,6 +677,7 @@ export function createBlankAppointment(overrides: Partial<Appointment> = {}): Ap
       typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
         ? crypto.randomUUID()
         : generateId("apt"),
+    created_by: null,
     date: "",
     time_start: "10:00",
     time_end: "11:00",
@@ -697,6 +729,9 @@ export function duplicateAppointment(apt: Appointment): Appointment {
   return {
     ...apt,
     id: generateId("apt"),
+    // The server stamps the authenticated copier as the new creator. Never
+    // carry the source event's author into the optimistic copy.
+    created_by: null,
     prepaid_amount: 0,
     payments: [],
     payment: null,

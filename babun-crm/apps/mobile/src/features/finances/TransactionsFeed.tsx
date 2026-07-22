@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, SectionList, Text, View } from "react-native";
-import { formatEUR, formatEURSigned } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import {
   signedAmount,
   type FinanceTransaction,
@@ -40,7 +40,6 @@ export function TransactionsFeed({
   title,
   onReset,
   onTxTap,
-  onClientTap,
 }: {
   transactions: FinanceTransaction[];
   accounts: Account[];
@@ -54,7 +53,6 @@ export function TransactionsFeed({
   /** Shown as an «Все» reset link when the feed is filtered. */
   onReset?: () => void;
   onTxTap: (tx: FinanceTransaction) => void;
-  onClientTap: (clientId: string) => void;
 }) {
   const t = useThemeColors();
 
@@ -92,7 +90,9 @@ export function TransactionsFeed({
   }, [transactions]);
 
   const renderRow = (tx: FinanceTransaction) => {
-    const isIn = tx.type === "income" || tx.type === "refund";
+    const isIncome = tx.type === "income";
+    const isRefund = tx.type === "refund";
+    const isIn = isIncome || isRefund;
     const isEx = tx.type === "expense";
     const isTr = tx.type === "transfer";
 
@@ -135,17 +135,15 @@ export function TransactionsFeed({
         .join(" · ");
     }
 
-    const barColor = isIn ? t.success : isEx ? t.danger : t.faint;
-    const amountColor = isIn ? t.success : isEx ? t.danger : t.sub;
-    const sign = isIn || (isTr && tx.amount > 0) ? "+" : "−";
+    const barColor = isIncome ? t.success : isRefund || isEx ? t.danger : t.faint;
+    const amountColor = isIncome ? t.success : isRefund || isEx ? t.danger : t.sub;
+    const sign = isIncome || (isTr && tx.amount > 0) ? "" : "−";
 
     return (
       <Pressable
-        onPress={() =>
-          isIn && tx.client_id ? onClientTap(tx.client_id) : onTxTap(tx)
-        }
+        onPress={() => onTxTap(tx)}
         accessibilityRole="button"
-        accessibilityLabel={`${desc}, ${sign}${formatEUR(Math.abs(tx.amount))}`}
+        accessibilityLabel={`${desc}, ${isIncome ? "поступление" : isRefund ? "возврат" : isEx ? "списание" : "перевод"} ${formatEUR(Math.abs(tx.amount))}`}
         className="flex-row items-center gap-3 px-4 active:opacity-60"
         style={{ backgroundColor: t.surface, minHeight: 56 }}
       >
@@ -194,10 +192,9 @@ export function TransactionsFeed({
           {onReset ? (
             <Pressable
               onPress={onReset}
-              hitSlop={10}
               accessibilityRole="button"
               accessibilityLabel="Показать все операции"
-              className="ml-auto active:opacity-60"
+              className="ml-auto min-h-11 justify-center px-2 active:opacity-60"
             >
               <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
                 Все
@@ -222,7 +219,7 @@ export function TransactionsFeed({
             className="text-xs font-semibold tabular-nums"
             style={{ color: section.net < 0 ? t.danger : t.success }}
           >
-            {formatEURSigned(section.net)}
+            {section.net < 0 ? "−" : ""}{formatEUR(Math.abs(section.net))}
           </Text>
         </View>
       )}

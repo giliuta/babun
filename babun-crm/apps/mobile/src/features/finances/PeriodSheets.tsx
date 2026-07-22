@@ -22,11 +22,13 @@ import {
 export function PeriodPresetModal({
   visible,
   current,
+  businessNow,
   onClose,
   onApply,
 }: {
   visible: boolean;
   current: Period;
+  businessNow: Date;
   onClose: () => void;
   onApply: (p: Period) => void;
 }) {
@@ -34,7 +36,12 @@ export function PeriodPresetModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Закрыть" />
+        <Pressable
+          className="flex-1"
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть выбор периода"
+        />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
             Период
@@ -54,7 +61,7 @@ export function PeriodPresetModal({
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={PERIOD_LABELS[kind]}
                     onPress={() => {
-                      onApply(makePeriod(kind));
+                      onApply(makePeriod(kind, businessNow));
                       onClose();
                     }}
                     className="flex-row items-center px-3.5 active:opacity-70"
@@ -74,7 +81,7 @@ export function PeriodPresetModal({
                       className="ml-auto text-[13px] tabular-nums"
                       style={{ color: t.faint }}
                     >
-                      {presetHint(kind)}
+                      {presetHint(kind, businessNow)}
                     </Text>
                     {active ? (
                       <View className="ml-2">
@@ -163,7 +170,12 @@ export function PeriodWheelsModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Закрыть" />
+        <Pressable
+          className="flex-1"
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Закрыть выбор дат"
+        />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-1 text-lg font-bold" style={{ color: t.ink }}>
             Свой период
@@ -187,6 +199,7 @@ export function PeriodWheelsModal({
           {/* one wheel edits the active endpoint */}
           <View className="items-center">
             <DateTimePicker
+              themeVariant="light"
               value={parseYMD(side === "from" ? from : to)}
               mode="date"
               display="spinner"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Text } from "react-native";
+import { Alert, Text } from "react-native";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import {
@@ -51,7 +51,13 @@ export default function ForgotPasswordScreen() {
     setCooldown(30);
   }
 
-  const openMail = () => Linking.openURL("message://").catch(() => undefined);
+  const openMail = () =>
+    Linking.openURL("message://").catch(() => {
+      Alert.alert(
+        "Почта недоступна",
+        "Откройте приложение почты вручную и найдите письмо от Babun.",
+      );
+    });
 
   if (sent) {
     return (
@@ -63,9 +69,16 @@ export default function ForgotPasswordScreen() {
         </NoticeCard>
         <PillButton label="Открыть Почту" onPress={openMail} />
         <GhostLink
-          label={cooldown > 0 ? `Отправить снова (${cooldown})` : "Отправить ещё раз"}
-          muted={cooldown > 0}
-          onPress={() => (cooldown > 0 ? undefined : submit())}
+          label={
+            loading
+              ? "Отправляем…"
+              : cooldown > 0
+                ? `Отправить снова (${cooldown})`
+                : "Отправить ещё раз"
+          }
+          muted={cooldown > 0 || loading}
+          disabled={cooldown > 0 || loading}
+          onPress={() => void submit()}
         />
         <GhostLink label="Вернуться ко входу" muted onPress={() => router.replace("/login")} />
       </AuthCard>

@@ -1,82 +1,50 @@
-# Babun2 Roadmap
+# Babun Roadmap
 
-> Short, honest, prioritized. Update when plans change.
+> Краткий фактический приоритет на 2026-07-20. Исторические планы не считаются
+> текущим состоянием продукта.
 
-## Status today (2026-04-11)
+## Сейчас
 
-- **Phase 1 done:** Calendar, clients, services, appointments, schedule, analytics, reports, SMS templates, masters, teams — all in localStorage, working prototype.
-- **Pending:** Real backend, auth, tests, mobile app, online booking, messaging integrations.
+Web и mobile работают на Supabase с Auth, tenant isolation/RLS, Realtime и
+offline cache/sync. Основные поверхности: календарь, записи, клиенты, команды,
+услуги, финансы, настройки и кабинет. Активная ветка мобильной стабилизации —
+`feat/mobile-app-port`.
 
-## Near-term (1-2 weeks)
+### STORY-063 — аудит и стабилизация (active)
 
-### STORY-011 — Calendar v2 (HIGH, can run in parallel)
-Operational polish: overlap column split, conflict highlight, resize duration, Now button, mobile-first month view, tap-day-header, 15/30-min gridlines. Full spec: `docs/stories/STORY-011.md`.
+- Безопасная гидратация `/book`, проверка команды, защита от дублей клиентов.
+- Создание записи тапом по свободному времени без FAB, менее шумный financial footer и HIG/VoiceOver; тема строго светлая.
+- Node 24 + Bun 1.3.14, единый lockfile и синхронизированный CI.
+- Адресные dependency upgrades и документированные Expo исключения.
+- Native self-service account deletion через защищённый web API.
+- Полный typecheck/tests/build и simulator smoke в обеих темах.
 
-### STORY-001 — Supabase migration (HIGH)
-Move from localStorage to Postgres + Auth + RLS. Single-tenant for AirFix, but schema is multi-tenant-ready.
-- Wire `@supabase/ssr` client
-- Create migrations for 9 tables (see `docs/stories/STORY-001.md`)
-- Add `tenant_id` to every table + RLS policies
-- Write seed script that imports existing localStorage dump
-- Keep localStorage as offline fallback
+## Следующие задачи
 
-### STORY-002 — Auth + onboarding
-Login page already exists as stub. Wire it up.
-- Supabase Auth (email + magic link for now)
-- Create default tenant on first signup
-- Invite flow for brothers/teams (email link)
-- Role-based UI: admin/dispatcher/lead/helper
+1. Провести owner smoke-test на физическом iPhone и пройти release checklist.
+2. Выпустить изменения через PR; после deploy проверить production user flows,
+   включая авторизацию и открытие модального окна удаления аккаунта. Само
+   удаление тестировать только на специально созданном tenant/user.
+3. Сократить web ESLint debt (сейчас исторический backlog), начиная с React
+   Compiler purity/refs и stale-closure групп.
+4. Продолжить декомпозицию legacy-компонентов >400 строк без визуального
+   редизайна и изменения domain behavior.
+5. Перепроверять оставшиеся транзитивные advisories после Expo/ESLint/Babel
+   upstream patches; не форсировать несовместимые major overrides.
 
-### STORY-003 — Import 903 AirFix clients
-- Parse Bumpix export (format TBD — ask user)
-- Validation script (phone normalization, deduplication)
-- Review UI before mass-import
-- Preserve history if Bumpix exposes it
+## После стабилизации
 
-## Mid-term (weeks 3-6)
+- Public online booking и управление доступностью.
+- Надёжная messaging/inbox интеграция (WhatsApp сначала, остальные каналы
+  после подтверждённого MVP).
+- Route optimization и operational day view для команд.
+- SaaS billing только после стабильного production pilot.
 
-### STORY-004 — Online booking public page
-Use `.reference/calcom/packages/lib/availability.ts` as reference.
-- Public URL `/book/{team-slug}`
-- Pick service → pick slot → contacts → confirm
-- SMS/email confirmation (via STORY-005 templates)
-- New booking appears in calendar with `is_online_booking: true`
+## Правила выпуска
 
-### STORY-005 — WhatsApp Business API (inbox MVP)
-- Meta webhook → `/api/webhooks/whatsapp`
-- Unified inbox page `/dashboard/inbox`
-- Client matching by phone
-- Send templated replies
-- Realtime updates via Supabase Realtime
-
-### STORY-006 — Route optimization
-- Google Maps Directions API
-- Day-route view for team leads
-- "Оптимизировать маршрут" button
-- GPS tracking (team_locations table)
-
-## Later (months 2-3)
-
-### STORY-007 — Mobile app (Expo)
-Use `babun-crm/apps/mobile` stub. Tabs: Calendar, Clients, Inbox, More. Same Supabase, realtime sync.
-
-### STORY-008 — Instagram + Telegram + Messenger
-Add more channels to the inbox from STORY-005.
-
-### STORY-009 — Stripe subscription + billing
-For SaaS v1. Only after at least one other pilot customer.
-
-### STORY-010 — AI marketing
-Claude API for:
-- Ad copy generation
-- Schedule optimization suggestions
-- Client segmentation insights
-- Auto-responses in inbox
-
-## Ground rules
-
-- **Don't start STORY-N+1 until STORY-N is `done`** (merged + deployed + visible on prod).
-- **Supabase migration first**, everything else depends on it.
-- **Keep the UI working during migration** — switch data sources, don't rebuild pages.
-- **Test data separate from prod** — never drop production tables.
-- **Track technical debt** in `docs/adr/` as decision records.
+- Schema/migrations → shared types/domain → API → clients/UI.
+- Production schema проверяется до любой новой записи.
+- Каждая волна проходит mobile/web/shared gates и runtime smoke.
+- Не удалять production data и не проверять account deletion на реальном
+  пользовательском аккаунте.
+- Push, PR и deploy выполняются только по явному разрешению владельца.

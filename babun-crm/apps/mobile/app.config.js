@@ -3,15 +3,27 @@
 // и обе иконки жили на телефоне рядом.
 //   APP_VARIANT=development → «Babun Dev», com.babun.crm.dev, scheme babundev
 //   без переменной         → боевой Babun как в app.json (релиз/TestFlight)
-const base = require("./app.json").expo;
 const IS_DEV = process.env.APP_VARIANT === "development";
 
-module.exports = {
-  ...base,
-  name: IS_DEV ? "Babun Dev" : base.name,
-  scheme: IS_DEV ? "babundev" : base.scheme,
+module.exports = ({ config }) => ({
+  ...config,
+  name: IS_DEV ? "Babun Dev" : config.name,
+  scheme: IS_DEV ? "babundev" : config.scheme,
+  // Local appointment/client reminders need the native notifications module.
+  // Keep the APNs entitlement aligned with the signing profile as well, so a
+  // later mobile push transport cannot accidentally ship a development
+  // entitlement in TestFlight.
+  plugins: [
+    ...(config.plugins ?? []),
+    [
+      "expo-notifications",
+      { mode: IS_DEV ? "development" : "production" },
+    ],
+  ],
   ios: {
-    ...base.ios,
-    bundleIdentifier: IS_DEV ? "com.babun.crm.dev" : base.ios.bundleIdentifier,
+    ...config.ios,
+    bundleIdentifier: IS_DEV
+      ? "com.babun.crm.dev"
+      : config.ios?.bundleIdentifier,
   },
-};
+});

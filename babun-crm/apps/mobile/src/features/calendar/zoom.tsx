@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import {
   Gesture,
   GestureDetector,
@@ -358,7 +358,9 @@ export function ZoomableTimeGrid({
       </GestureDetector>
       </GestureDetector>
 
-      {/* Плавающая стрелка «к сейчас» — цвет линии текущего времени. */}
+      {/* Explicit «Сейчас» is clearer than an unlabeled floating arrow: the
+          arrow only communicates whether the current-time line is above or
+          below the viewport. */}
       {nowArrow ? (
         <Animated.View
           entering={FadeIn.duration(150)}
@@ -367,13 +369,15 @@ export function ZoomableTimeGrid({
         >
           <Pressable
             onPress={onNowPress}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="К текущему времени"
             style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
+              minWidth: 92,
+              height: 44,
+              borderRadius: 22,
+              paddingHorizontal: 13,
+              flexDirection: "row",
+              gap: 6,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: t.surface,
@@ -387,10 +391,13 @@ export function ZoomableTimeGrid({
               opacity: pressed ? 0.7 : 1,
             })}
           >
+            <Text style={{ color: t.ink, fontSize: 14, fontWeight: "600" }}>
+              Сейчас
+            </Text>
             {nowArrow === "up" ? (
-              <ChevronUp color={t.danger} size={22} strokeWidth={2.5} />
+              <ChevronUp color={t.danger} size={18} strokeWidth={2.5} />
             ) : (
-              <ChevronDown color={t.danger} size={22} strokeWidth={2.5} />
+              <ChevronDown color={t.danger} size={18} strokeWidth={2.5} />
             )}
           </Pressable>
         </Animated.View>

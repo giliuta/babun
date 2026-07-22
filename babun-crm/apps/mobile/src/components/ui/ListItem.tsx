@@ -28,10 +28,12 @@ export function ListItem({
     onPress?: () => void;
     className?: string;
     children?: ReactNode;
+    accessibilityRole?: "button";
   }>;
   return (
     <Comp
       onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
       className={`min-h-[52px] flex-row items-center px-4 py-2.5 ${
         onPress ? "active:opacity-60" : ""
       }`}

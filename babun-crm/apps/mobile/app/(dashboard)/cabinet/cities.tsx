@@ -69,6 +69,9 @@ export default function CitiesScreen() {
         await del.mutateAsync(id);
       }}
       itemToValues={(c) => ({ name: c.name, country: c.country ?? "" })}
+      itemAccessibilityLabel={(c) =>
+        `${c.name}${c.country ? `, ${c.country}` : ""}. Изменить город`
+      }
       renderItem={(c) => (
         <View className="flex-row items-center px-4 py-2.5">
           <View className="min-w-0 flex-1 pr-3">

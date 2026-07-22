@@ -23,7 +23,11 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import {
+  formatEURExact as formatEUR,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
+import { isPaymentAccountCompatible } from "@babun/shared/local/finance/integrity";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -46,11 +50,14 @@ export function OperationSheet({
   visible,
   onClose,
   defaultTeamId,
+  businessToday,
   transaction,
 }: {
   visible: boolean;
   onClose: () => void;
   defaultTeamId?: string | null;
+  /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
+  businessToday: string;
   transaction?: FinanceTransaction | null;
 }) {
   const th = useThemeColors();
@@ -76,7 +83,7 @@ export function OperationSheet({
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentMethod>("cash");
-  const [date, setDate] = useState(formatYMD(new Date()));
+  const [date, setDate] = useState(businessToday);
   const [notes, setNotes] = useState("");
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
@@ -101,10 +108,13 @@ export function OperationSheet({
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       setPayment("cash");
-      setDate(formatYMD(new Date()));
+      setDate(businessToday);
       setNotes("");
     }
-  }, [visible, defaultTeamId, transaction?.id]);
+    // Hydrate once per opened transaction id. Depending on the full query
+    // object would wipe operator edits on a background cache refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, defaultTeamId, transaction?.id, businessToday]);
 
   const cats = useMemo(
     () =>
@@ -113,28 +123,76 @@ export function OperationSheet({
       ),
     [categories, type],
   );
-  // Accounts for the chosen brigade (or all when none selected).
+  // A tender maps to exactly one account kind. Showing incompatible accounts
+  // made it possible to save «Наличные» onto a card balance and discover the
+  // mismatch only after a server error.
   const teamAccounts = useMemo(
-    () => (teamId ? accounts.filter((a) => a.brigade_id === teamId) : accounts),
-    [accounts, teamId],
+    () =>
+      teamId
+        ? accounts.filter(
+            (a) =>
+              a.brigade_id === teamId &&
+              isPaymentAccountCompatible(payment, a.kind),
+          )
+        : [],
+    [accounts, teamId, payment],
   );
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === accountId) ?? null,
+    [accounts, accountId],
+  );
+  const accountMismatch =
+    !!accountId &&
+    (!selectedAccount ||
+      selectedAccount.brigade_id !== teamId ||
+      !isPaymentAccountCompatible(payment, selectedAccount.kind));
 
   // Дефолт счёта = счёт команды операции. Эффект (а не разовый сет при
   // открытии), потому что счета приезжают асинхронно и команда меняется
   // чипами; ручной выбор/сброс счёта (accountTouched) дефолт отключает.
   useEffect(() => {
-    if (!visible || isEdit || accountTouched) return;
+    if (!visible || accountTouched) return;
     if (!teamId || accountId !== null) return;
-    const def = accounts.find((a) => a.brigade_id === teamId);
+    const def = accounts.find(
+      (a) =>
+        a.brigade_id === teamId &&
+        isPaymentAccountCompatible(payment, a.kind),
+    );
     if (def) setAccountId(def.id);
-  }, [visible, isEdit, accountTouched, teamId, accountId, accounts]);
+  }, [visible, accountTouched, teamId, accountId, accounts, payment]);
 
-  const amountNum = Number(amount.replace(",", ".")) || 0;
+  const amountCents = parseMoneyInputToCents(amount);
+  const amountNum = (amountCents ?? 0) / 100;
   const busy = insert.isPending || update.isPending;
-  const canSave = amountNum > 0 && !busy;
+  const dateInFuture = date > businessToday;
+  const canSave =
+    amountCents != null &&
+    !!teamId &&
+    !!accountId &&
+    !accountMismatch &&
+    !dateInFuture &&
+    !busy;
   const isExpense = type === "expense";
 
   const save = async () => {
+    if (amountCents == null) {
+      Alert.alert(
+        "Проверьте сумму",
+        "Введите сумму больше нуля и не больше двух знаков после запятой.",
+      );
+      return;
+    }
+    if (!teamId || !accountId) {
+      Alert.alert("Не выбран счёт", "Выберите команду и счёт для этого способа оплаты.");
+      return;
+    }
+    if (accountMismatch) {
+      Alert.alert(
+        "Счёт не подходит",
+        "Сохранённый счёт относится к другой команде или способу оплаты. Выберите доступный счёт заново.",
+      );
+      return;
+    }
     try {
       const draft = {
         amount: amountNum,
@@ -144,6 +202,7 @@ export function OperationSheet({
         payment_method: payment,
         notes: notes.trim() || null,
         occurred_on: date,
+        business_today: businessToday,
       };
       if (isEdit && transaction) {
         await update.mutateAsync({ id: transaction.id, patch: draft });
@@ -159,7 +218,7 @@ export function OperationSheet({
 
   // «+ Шаблон» — инлайн-создание шаблона из заполненной формы (labeled,
   // не голый глиф): следующая такая же операция становится 3 тапа
-  // (FAB → чип → Добавить). CRUD-экран остаётся в Кабинете.
+  // Быстрое создание открывается из подписанного действия. CRUD-экран остаётся в Кабинете.
   const createTemplate = async (name: string) => {
     try {
       await insertTemplate.mutateAsync({
@@ -177,8 +236,16 @@ export function OperationSheet({
     }
   };
   const saveAsTemplate = () => {
-    if (amountNum <= 0) {
-      toast("Заполните сумму — шаблон создастся из формы");
+    if (amountCents == null) {
+      toast("Введите сумму с точностью не больше двух знаков");
+      return;
+    }
+    if (!teamId || !accountId) {
+      toast("Выберите команду и счёт для шаблона");
+      return;
+    }
+    if (accountMismatch) {
+      toast("Выберите счёт, подходящий способу оплаты");
       return;
     }
     const fallback =
@@ -233,7 +300,7 @@ export function OperationSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: th.scrim }}>
-        <Pressable className="flex-1" onPress={onClose} />
+        <Pressable className="flex-1" onPress={onClose} accessible={false} />
         <View className="h-[86%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: th.canvas }}>
           <View className="flex-row items-center px-2 py-2" style={{ backgroundColor: th.surface, borderBottomWidth: 1, borderBottomColor: th.separator }}>
             <Pressable
@@ -249,7 +316,13 @@ export function OperationSheet({
               {isEdit ? "Операция" : "Новая операция"}
             </Text>
             {isEdit ? (
-              <Pressable onPress={remove} hitSlop={8} className="w-10 items-center">
+              <Pressable
+                onPress={remove}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Удалить операцию"
+                className="min-h-10 w-10 items-center justify-center"
+              >
                 <Text className="text-sm font-medium" style={{ color: th.danger }}>Удалить</Text>
               </Pressable>
             ) : (
@@ -272,24 +345,37 @@ export function OperationSheet({
                     label={`${t.name} · ${formatEUR(Number(t.amount))}`}
                     variant="outline"
                     onPress={() => {
+                      const nextPayment =
+                        (t.payment_method as PaymentMethod | null) ?? payment;
+                      const nextTeamId = t.brigade_id ?? teamId;
+                      const templateAccount = t.account_id
+                        ? accounts.find((a) => a.id === t.account_id)
+                        : null;
+                      const templateAccountFits =
+                        !!templateAccount &&
+                        !!nextTeamId &&
+                        templateAccount.brigade_id === nextTeamId &&
+                        isPaymentAccountCompatible(nextPayment, templateAccount.kind);
                       setType(t.kind);
                       setAmount(String(t.amount));
                       setCategoryId(t.category_id ?? null);
-                      if (t.brigade_id) {
-                        setTeamId(t.brigade_id);
-                        // без своего счёта в шаблоне — дефолт от команды
-                        if (!t.account_id) {
-                          setAccountId(null);
-                          setAccountTouched(false);
+                      setPayment(nextPayment);
+                      if (t.brigade_id) setTeamId(t.brigade_id);
+                      if (templateAccountFits) {
+                        setAccountId(templateAccount.id);
+                        setAccountTouched(true);
+                      } else {
+                        setAccountId(null);
+                        setAccountTouched(false);
+                        if (t.account_id) {
+                          toast("В шаблоне устарел счёт — выберите доступный");
                         }
                       }
-                      if (t.account_id) setAccountId(t.account_id);
-                      if (t.payment_method) setPayment(t.payment_method as PaymentMethod);
                     }}
                   />
                 ))}
                 <Chip
-                  label="+ Шаблон"
+                  label="Сохранить шаблон"
                   variant="outline"
                   color={th.accent}
                   onPress={saveAsTemplate}
@@ -318,13 +404,14 @@ export function OperationSheet({
               <View className="flex-row items-center px-4 py-2.5">
                 <TextInput
                   value={amount}
+                  accessibilityLabel="Сумма операции"
                   onChangeText={setAmount}
                   keyboardType="decimal-pad"
                   autoFocus
                   placeholder="0"
                   placeholderTextColor={th.placeholder}
                   selectionColor={th.accent}
-                  keyboardAppearance={th.dark ? "dark" : "light"}
+                  keyboardAppearance="light"
                   className="flex-1 text-3xl font-bold"
                   style={{ color: isExpense ? th.danger : th.success }}
                 />
@@ -425,7 +512,17 @@ export function OperationSheet({
                     label={p.label}
                     selected={payment === p.value}
                     radio
-                    onPress={() => setPayment(p.value)}
+                    onPress={() => {
+                      if (payment === p.value) return;
+                      setPayment(p.value);
+                      if (
+                        !selectedAccount ||
+                        !isPaymentAccountCompatible(p.value, selectedAccount.kind)
+                      ) {
+                        setAccountId(null);
+                        setAccountTouched(false);
+                      }
+                    }}
                   />
                 ))}
               </View>
@@ -434,8 +531,10 @@ export function OperationSheet({
                 <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
                 <DateTimePicker
                   value={parseYMD(date)}
+                  maximumDate={parseYMD(businessToday)}
                   mode="date"
                   display="compact"
+                  themeVariant="light"
                   onChange={(_, d) => d && setDate(formatYMD(d))}
                 />
               </View>
@@ -445,11 +544,12 @@ export function OperationSheet({
             <SectionCard title="Заметка">
               <TextInput
                 value={notes}
+                accessibilityLabel="Заметка к операции"
                 onChangeText={setNotes}
                 placeholder="Напр. бензин, материалы…"
                 placeholderTextColor={th.placeholder}
                 selectionColor={th.accent}
-                keyboardAppearance={th.dark ? "dark" : "light"}
+                keyboardAppearance="light"
                 className="px-4 py-3 text-base"
                 style={{ color: th.ink }}
               />
@@ -459,6 +559,27 @@ export function OperationSheet({
           </ScrollView>
 
           <View className="px-4 pb-7 pt-3" style={{ backgroundColor: th.surface, borderTopWidth: 1, borderTopColor: th.separator }}>
+            {amount.length > 0 && amountCents == null ? (
+              <Text className="mb-2 text-center text-sm" style={{ color: th.danger }}>
+                Введите сумму больше нуля и не больше двух знаков после запятой
+              </Text>
+            ) : dateInFuture ? (
+              <Text className="mb-2 text-center text-sm" style={{ color: th.danger }}>
+                Финансовую операцию нельзя записать будущей датой
+              </Text>
+            ) : accountMismatch ? (
+              <Text className="mb-2 text-center text-sm" style={{ color: th.danger }}>
+                Сохранённый счёт не подходит. Выберите доступный счёт заново
+              </Text>
+            ) : teamId && teamAccounts.length === 0 ? (
+              <Text className="mb-2 text-center text-sm" style={{ color: th.danger }}>
+                Для этого способа оплаты у команды нет активного счёта
+              </Text>
+            ) : amountCents != null && (!teamId || !accountId) ? (
+              <Text className="mb-2 text-center text-sm" style={{ color: th.danger }}>
+                Выберите команду и счёт для способа оплаты
+              </Text>
+            ) : null}
             <Button
               label={
                 isEdit

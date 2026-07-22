@@ -3,9 +3,9 @@
 //
 // Reference block — collapsed by default (CollapsibleCard); the closed row
 // shows the file count. Expanded: 3-column grid of thumbnails (images via
-// 5-min signed URLs) / doc tiles, «Добавить фото» (галерея) + камера —
-// оба через expo-image-picker, long-press-free delete via an ✕ badge with
-// Alert confirm, tap opens the original through Linking.
+// 5-min signed URLs) / doc tiles, gallery + PDF/TXT document picker + camera,
+// long-press-free delete via an ✕ badge with Alert confirm, tap opens the
+// original through Linking.
 //
 // Data path lives in card-attachments.ts (Supabase Storage bucket
 // client-attachments + public.client_attachments), the block itself only
@@ -13,16 +13,19 @@
 
 import { useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   Image,
   Linking,
+  Platform,
   Pressable,
   Text,
   View,
 } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Paperclip, Plus, X } from "lucide-react-native";
+import { Camera, FileText, Paperclip, X } from "lucide-react-native";
 import {
   formatBytes,
   getSignedUrl,
@@ -59,35 +62,103 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
       })),
     );
 
-  const pick = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
-      quality: 0.8,
-    });
-    if (res.canceled || res.assets.length === 0) return;
-    uploadAssets(res.assets);
+  const showSelectionError = (error: unknown) =>
+    Alert.alert(
+      "Не удалось выбрать файл",
+      error instanceof Error ? error.message : "Попробуйте ещё раз.",
+    );
+
+  const pickPhoto = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsMultipleSelection: true,
+        selectionLimit: 5,
+        quality: 0.8,
+        // Client documents use the same portable image allow-list as job
+        // photos. Ask iOS to transcode HEIC instead of returning a file the
+        // uploader must reject after the user has already picked it.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+      });
+      if (res.canceled || res.assets.length === 0) return;
+      uploadAssets(res.assets);
+    } catch (error) {
+      showSelectionError(error);
+    }
+  };
+
+  const pickDocument = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "text/plain",
+          "image/jpeg",
+          "image/png",
+          "image/webp",
+        ],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || res.assets.length === 0) return;
+      upload.mutate(
+        res.assets.slice(0, 5).map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.name,
+          mimeType: asset.mimeType ?? undefined,
+          fileSize: asset.size,
+        })),
+      );
+    } catch (error) {
+      showSelectionError(error);
+    }
+  };
+
+  const chooseAttachment = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: "Добавить вложение",
+          options: ["Фото из галереи", "Файл или документ", "Отмена"],
+          cancelButtonIndex: 2,
+        },
+        (index) => {
+          if (index === 0) void pickPhoto();
+          if (index === 1) void pickDocument();
+        },
+      );
+      return;
+    }
+    Alert.alert("Добавить вложение", undefined, [
+      { text: "Фото из галереи", onPress: () => void pickPhoto() },
+      { text: "Файл или документ", onPress: () => void pickDocument() },
+      { text: "Отмена", style: "cancel" },
+    ]);
   };
 
   // Снять «до/после» прямо на объекте — ключевой полевой сценарий.
   // NSCameraUsageDescription уже в dev-билде (плагин expo-image-picker),
   // пересборка не нужна.
   const shoot = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert(
-        "Нет доступа к камере",
-        "Разрешите камеру: Настройки → Babun → Камера.",
-      );
-      return;
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          "Нет доступа к камере",
+          "Разрешите камеру: Настройки → Babun → Камера.",
+        );
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
+      if (res.canceled || res.assets.length === 0) return;
+      uploadAssets(res.assets);
+    } catch (error) {
+      showSelectionError(error);
     }
-    const res = await ImagePicker.launchCameraAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-    if (res.canceled || res.assets.length === 0) return;
-    uploadAssets(res.assets);
   };
 
   const confirmDelete = (a: ClientAttachment) => {
@@ -121,19 +192,25 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row items-center gap-2">
           <Pressable
-            onPress={pick}
+            onPress={chooseAttachment}
             disabled={upload.isPending}
             accessibilityRole="button"
-            accessibilityLabel="Добавить фото"
-            className="flex-row items-center gap-1.5 rounded-[10px] px-3 py-2 active:opacity-80"
-            style={{ backgroundColor: upload.isPending ? t.disabledFill : t.accent }}
+            accessibilityLabel="Добавить фото или файл"
+            className="min-h-11 flex-row items-center gap-1.5 rounded-[10px] px-3 py-2 active:opacity-80"
+            style={{
+              backgroundColor: upload.isPending ? t.disabledFill : t.accent,
+            }}
           >
-            <Plus color={upload.isPending ? t.faint : "#fff"} size={14} strokeWidth={2.5} />
+            <Paperclip
+              color={upload.isPending ? t.faint : "#fff"}
+              size={14}
+              strokeWidth={2.5}
+            />
             <Text
               className="text-[13px] font-semibold"
               style={{ color: upload.isPending ? t.faint : "#fff" }}
             >
-              {upload.isPending ? "Загрузка…" : "Добавить фото"}
+              {upload.isPending ? "Загрузка…" : "Фото или файл"}
             </Text>
           </Pressable>
           <Pressable
@@ -141,10 +218,14 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
             disabled={upload.isPending}
             accessibilityRole="button"
             accessibilityLabel="Снять фото"
-            className="h-[33px] w-[33px] items-center justify-center rounded-[10px] active:opacity-70"
+            className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-70"
             style={{ backgroundColor: t.fill }}
           >
-            <Camera color={upload.isPending ? t.faint : t.ink} size={16} strokeWidth={2.2} />
+            <Camera
+              color={upload.isPending ? t.faint : t.ink}
+              size={16}
+              strokeWidth={2.2}
+            />
           </Pressable>
           <Text className="flex-1 text-[11px]" style={{ color: t.faint }}>
             До 10 МБ. Фото «до/после», договоры.
@@ -162,12 +243,14 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
             </Text>
             <Pressable
               onPress={() => refetch()}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Повторить загрузку файлов"
-              className="active:opacity-60"
+              className="min-h-11 justify-center px-2 active:opacity-60"
             >
-              <Text className="text-[12px] font-semibold" style={{ color: t.accent }}>
+              <Text
+                className="text-[12px] font-semibold"
+                style={{ color: t.accent }}
+              >
                 Повторить
               </Text>
             </Pressable>
@@ -203,7 +286,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
                     <View className="items-center">
                       <FileText color={t.sub} size={22} strokeWidth={2} />
                       <Text
-                        className="mt-1 text-[10px] uppercase tracking-wider"
+                        className="mt-1 text-[11px] uppercase tracking-wider"
                         style={{ color: t.sub }}
                       >
                         {(a.filename.split(".").pop() ?? "файл").slice(0, 4)}
@@ -213,7 +296,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
                   {opening === a.id ? (
                     <View
                       className="absolute inset-0 items-center justify-center"
-                      style={{ backgroundColor: "rgba(0,0,0,0.25)" }}
+                      style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
                     >
                       <ActivityIndicator color="#fff" />
                     </View>
@@ -223,25 +306,31 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
                 <View
                   pointerEvents="none"
                   className="absolute inset-x-0 bottom-0 flex-row items-center justify-between gap-1 px-1.5 py-0.5"
-                  style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+                  style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
                 >
-                  <Text className="flex-1 text-[9px] text-white" numberOfLines={1}>
+                  <Text
+                    className="flex-1 text-[11px] text-white"
+                    numberOfLines={1}
+                  >
                     {a.filename}
                   </Text>
-                  <Text className="text-[9px] text-white opacity-80">
+                  <Text className="text-[11px] text-white opacity-80">
                     {formatBytes(a.size_bytes)}
                   </Text>
                 </View>
 
                 <Pressable
                   onPress={() => confirmDelete(a)}
-                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={`Удалить ${a.filename}`}
-                  className="absolute right-1 top-1 h-6 w-6 items-center justify-center rounded-full active:opacity-70"
-                  style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
+                  className="absolute right-0 top-0 h-11 w-11 items-center justify-center active:opacity-70"
                 >
-                  <X color="#fff" size={11} strokeWidth={2.4} />
+                  <View
+                    className="h-6 w-6 items-center justify-center rounded-full"
+                    style={{ backgroundColor: "rgba(0,0,0,0.65)" }}
+                  >
+                    <X color="#fff" size={11} strokeWidth={2.4} />
+                  </View>
                 </Pressable>
               </View>
             ))}

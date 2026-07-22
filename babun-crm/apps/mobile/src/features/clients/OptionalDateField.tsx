@@ -40,6 +40,7 @@ export function OptionalDateField({
       {value ? (
         <View className="flex-row items-center">
           <DateTimePicker
+            themeVariant="light"
             value={parseYMD(value)}
             mode="date"
             display="compact"
@@ -48,10 +49,9 @@ export function OptionalDateField({
           />
           <Pressable
             onPress={() => onChange("")}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={`Очистить дату${a11y}`}
-            className="ml-1 h-7 w-7 items-center justify-center rounded-full active:opacity-60"
+            className="ml-1 h-11 w-11 items-center justify-center rounded-full active:opacity-60"
           >
             <X color={t.faint} size={13} />
           </Pressable>
@@ -61,7 +61,7 @@ export function OptionalDateField({
           onPress={() => onChange(formatYMD(new Date()))}
           accessibilityRole="button"
           accessibilityLabel={`Указать дату${a11y}`}
-          className="self-start rounded-lg px-2.5 py-2 active:opacity-60"
+          className="min-h-11 self-start justify-center rounded-lg px-3 py-2 active:opacity-60"
           style={{ backgroundColor: t.fill }}
         >
           <Text className="text-[13px] font-medium" style={{ color: t.accent }}>

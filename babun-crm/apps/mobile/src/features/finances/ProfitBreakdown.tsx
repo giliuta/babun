@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -24,11 +24,15 @@ export function ProfitBreakdown({
   categories,
   services,
   appointments,
+  materialCost,
+  materialAppointmentCount,
 }: {
   transactions: FinanceTransaction[];
   categories: FinanceCategory[];
   services: Service[];
   appointments: Appointment[];
+  materialCost: number;
+  materialAppointmentCount: number;
 }) {
   const th = useThemeColors();
 
@@ -36,10 +40,19 @@ export function ProfitBreakdown({
     () => breakdownIncome(transactions, categories, services, appointments),
     [transactions, categories, services, appointments],
   );
-  const expenseRows = useMemo(
-    () => breakdownExpense(transactions, categories),
-    [transactions, categories],
-  );
+  const expenseRows = useMemo(() => {
+    const rows = breakdownExpense(transactions, categories);
+    if (materialCost > 0) {
+      rows.push({
+        id: "appointment-material-cost",
+        name: "Материалы",
+        amount: materialCost,
+        count: materialAppointmentCount,
+      });
+      rows.sort((a, b) => b.amount - a.amount);
+    }
+    return rows;
+  }, [transactions, categories, materialCost, materialAppointmentCount]);
   const income = incomeRows.reduce((s, r) => s + r.amount, 0);
   const expense = expenseRows.reduce((s, r) => s + r.amount, 0);
 
@@ -53,7 +66,7 @@ export function ProfitBreakdown({
   const renderRow = (r: BreakdownRow, total: number, kind: "income" | "expense") => {
     const color =
       kind === "expense" || r.amount < 0 ? th.danger : th.success;
-    const sign = kind === "expense" || r.amount < 0 ? "−" : "+";
+    const sign = kind === "expense" || r.amount < 0 ? "−" : "";
     // negative rows (refunds) get no proportion bar
     const pct = total > 0 ? Math.min(100, Math.max(0, (r.amount / total) * 100)) : 0;
     return (
@@ -115,7 +128,7 @@ export function ProfitBreakdown({
             className="ml-auto text-[13px] font-bold tabular-nums"
             style={{ color: income >= 0 ? th.success : th.danger }}
           >
-            {income >= 0 ? "+" : "−"}
+            {income >= 0 ? "" : "−"}
             {formatEUR(Math.abs(income))}
           </Text>
         </View>

@@ -3,20 +3,24 @@ import { Pressable, Text, View } from "react-native";
 import { Card } from "./Card";
 import { useThemeColors } from "@/theme/colors";
 
-// Grouped-iOS card. Reuses the themed Card surface (radius 20, frosted edge,
-// tone-lift in dark). No inner padding by default (lists sit flush); pass
+// Grouped-iOS card. Reuses the light Card surface (radius 20, frosted edge).
+// No inner padding by default (lists sit flush); pass
 // `padded` for form/content cards.
 export function SectionCard({
   title,
   action,
   padded,
   className = "",
+  eyebrowColor,
   children,
 }: {
   title?: string;
   action?: { label: string; onPress: () => void };
   padded?: boolean;
   className?: string;
+  /** Identity-tint override for the eyebrow (defaults to neutral faint). The
+   *  caller passes an already-AA-guarded colour; falls back to faint. */
+  eyebrowColor?: string;
   children: ReactNode;
 }) {
   const t = useThemeColors();
@@ -26,6 +30,7 @@ export function SectionCard({
         {title ? (
           <View className="flex-row items-center justify-between px-4 pb-1 pt-3">
             <Text
+              accessibilityRole="header"
               // Caption tier (DS §2: 11/700/+0.6 uppercase) — same recipe as
               // SectionHeader in Card.tsx so section eyebrows match app-wide.
               style={{
@@ -33,13 +38,23 @@ export function SectionCard({
                 fontWeight: "700",
                 letterSpacing: 0.6,
                 textTransform: "uppercase",
-                color: t.faint,
+                color: eyebrowColor ?? t.faint,
               }}
             >
               {title}
             </Text>
             {action ? (
-              <Pressable onPress={action.onPress} hitSlop={8}>
+              <Pressable
+                onPress={action.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  justifyContent: "center",
+                  paddingLeft: 12,
+                  opacity: pressed ? 0.65 : 1,
+                })}
+              >
                 <Text style={{ fontSize: 14, fontWeight: "500", color: t.accent }}>
                   {action.label}
                 </Text>

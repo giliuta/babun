@@ -25,7 +25,7 @@ import {
   type CachedTag,
 } from "../db/cache/sql";
 import { cacheSignature, subscribeRevalidated } from "./revalidate-events";
-import { listClientTags } from "./tagsCached";
+import { createClientTag, listClientTags } from "./tagsCached";
 
 const TENANT_A = "11111111-1111-1111-1111-111111111111";
 const TENANT_B = "22222222-2222-2222-2222-222222222222";
@@ -39,20 +39,36 @@ class OnlineNetwork implements NetworkAdapter {
   }
 }
 
-/** Minimal Supabase stub modelling only `from("client_tags").select("*")
- *  .eq("tenant_id", …)`, resolving to the rows the test stages. Thenable so
- *  `await supabase.from(...).select(...).eq(...)` works. */
+class OfflineNetwork implements NetworkAdapter {
+  isOnline(): boolean {
+    return false;
+  }
+  subscribe(_cb: (online: boolean) => void): () => void {
+    return () => {};
+  }
+}
+
+/** Minimal Supabase stub modelling the repository's deterministic paged tag
+ *  read (`eq → order → order → range`). */
 function tagStub(rowsByTenant: Record<string, CachedTag[]>) {
   return {
-    from: (_table: string) => ({
-      select: (_cols: string) => ({
-        eq: (_col: string, value: string) => ({
-          then: (
-            onFulfilled: (r: { data: CachedTag[]; error: null }) => unknown,
-          ) => Promise.resolve(onFulfilled({ data: rowsByTenant[value] ?? [], error: null })),
-        }),
-      }),
-    }),
+    from: (_table: string) => {
+      let tenantId = "";
+      const chain = {
+        select: (_cols: string) => chain,
+        eq: (_col: string, value: string) => {
+          tenantId = value;
+          return chain;
+        },
+        order: () => chain,
+        range: (from: number, to: number) =>
+          Promise.resolve({
+            data: (rowsByTenant[tenantId] ?? []).slice(from, to + 1),
+            error: null,
+          }),
+      };
+      return chain;
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
@@ -152,6 +168,26 @@ describe("cacheSignature", () => {
 });
 
 describe("revalidate bridge (tags wrapper)", () => {
+  test("does not prune an optimistic tag while its offline insert is pending", async () => {
+    setNetwork(new OfflineNetwork());
+    const created = await createClientTag(
+      {} as never,
+      { name: "Оффлайн", color: "#3366ff" },
+      TENANT_A,
+    );
+    setNetwork(new OnlineNetwork());
+
+    // The server snapshot is still empty. The pending-op guard must preserve
+    // the optimistic row until replay resolves instead of treating the stale
+    // empty snapshot as authoritative.
+    const listed = await listClientTags(tagStub({ [TENANT_A]: [] }), TENANT_A);
+    expect(listed.map((row) => row.id)).toEqual([created.id]);
+    await flush();
+
+    const cached = await cacheRead<CachedTag>("tags", TENANT_A);
+    expect(cached.map((row) => row.id)).toEqual([created.id]);
+  });
+
   test("warm-cache online read prunes a server-deleted tag and emits ONCE", async () => {
     // Warm the cache with two tags.
     await cacheBulkUpsert("tags", [tag("t1"), tag("t2")]);

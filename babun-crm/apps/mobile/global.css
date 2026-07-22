@@ -17,16 +17,16 @@
    amber = caution. */
 @theme {
   --color-brand: #2c5be0; /* accent — brand / action */
-  --color-accent-from: #3e84ff; /* the only gradient (logo · CTA · FAB) */
+  --color-accent-from: #2f6fd6; /* the only gradient (logo · CTA) */
   --color-accent-to: #1f4fcc;
-  --color-brand-accent: #34aadc; /* finance accent (kept) */
-  --color-success: #1fb47a; /* money in / profit */
-  --color-danger: #f0473c; /* money out / debt / destructive */
-  --color-warning: #f5a623; /* caution */
+  --color-brand-accent: #2c5be0; /* single app accent */
+  --color-success: #087a52; /* money in / profit */
+  --color-danger: #c9372c; /* money out / debt / destructive */
+  --color-warning: #9a6400; /* caution */
   --color-ink: #0b1220; /* text primary */
   --color-sub: #5b6678; /* text secondary */
-  --color-faint: #97a0ae; /* text tertiary */
+  --color-faint: #66707e; /* text tertiary — AA on light surfaces */
   --color-separator: #e7ebf0; /* hairline — a color, never a 1px border */
-  --color-fill: #eef1f5; /* idle chip / segmented track / inset input (light; dark reads t.fill) */
+  --color-fill: #eef1f5; /* idle chip / segmented track / inset input */
   --color-canvas: #f4f6f9; /* app ground — lifts white surfaces for free */
 }

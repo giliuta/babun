@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import type { Appointment } from "@babun/shared/local/appointments";
+import {
+  getRecognizedRevenue,
+  type Appointment,
+} from "@babun/shared/local/appointments";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -16,9 +19,10 @@ import { useClients } from "@/features/clients/queries";
 
 // Статистика мастера (порт web masters/[id]/stats/page.tsx). Период-переключатель
 // Неделя / Месяц / Квартал / Год / Свой; всё считается на лету из общего кэша
-// appointments по (master_id + окно периода). Метрики: выручка Σtotal_amount по
-// completed, средний чек, всего / закрыто / отменено, % закрытия. Плюс сравнение
-// с командой (медиана + ранг по коллегам) и топ-5 клиентов — как на вебе.
+// appointments по (master_id + окно периода). Метрики: выручка по completed
+// без полностью возвращённых оплат, средний чек, всего / закрыто / отменено,
+// % закрытия. Плюс сравнение с командой (медиана + ранг по коллегам) и топ-5
+// клиентов — как на вебе.
 
 type Period = "week" | "month" | "quarter" | "year" | "custom";
 
@@ -125,7 +129,7 @@ export default function MasterStatsScreen() {
     for (const a of myApts) {
       if (a.status === "completed") {
         completed += 1;
-        revenue += a.total_amount ?? 0;
+        revenue += getRecognizedRevenue(a);
       } else if (a.status === "cancelled") {
         cancelled += 1;
       }
@@ -145,7 +149,7 @@ export default function MasterStatsScreen() {
       if (a.status !== "completed" || !a.master_id) continue;
       revenueByMaster.set(
         a.master_id,
-        (revenueByMaster.get(a.master_id) ?? 0) + (a.total_amount ?? 0),
+        (revenueByMaster.get(a.master_id) ?? 0) + getRecognizedRevenue(a),
       );
     }
     const peers = Array.from(revenueByMaster.values());
@@ -168,7 +172,7 @@ export default function MasterStatsScreen() {
       if (a.status !== "completed" || !a.client_id) continue;
       byClient.set(
         a.client_id,
-        (byClient.get(a.client_id) ?? 0) + (a.total_amount ?? 0),
+        (byClient.get(a.client_id) ?? 0) + getRecognizedRevenue(a),
       );
     }
     return Array.from(byClient.entries())

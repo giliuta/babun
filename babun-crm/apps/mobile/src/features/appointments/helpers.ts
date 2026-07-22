@@ -3,8 +3,15 @@ import type {
   AppointmentService,
   Payment,
 } from "@babun/shared/local/appointments";
-import { pricePerUnit, type PriceTier } from "@babun/shared/local/services";
+import {
+  durationForQuantity,
+  pricePerUnit,
+} from "@babun/shared/local/services";
 import type { Service } from "@/features/services/queries";
+import {
+  parseDurationTiers,
+  parsePriceTiers,
+} from "@/features/services/economics";
 
 export const pad2 = (n: number) => String(n).padStart(2, "0");
 
@@ -44,6 +51,29 @@ export function addMinutesHM(hm: string, minutes: number): string {
   return `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
 }
 
+/** Duration inside one calendar day. Appointment rows don't span midnight;
+ * invalid/reversed values therefore resolve to 0 instead of wrapping. */
+export function minutesBetweenHM(start: string, end: string): number {
+  const toMinutes = (value: string) => {
+    if (!/^\d{2}:\d{2}$/.test(value)) return null;
+    const [hours, minutes] = value.split(":").map(Number);
+    if (
+      !Number.isInteger(hours) ||
+      !Number.isInteger(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
+    ) {
+      return null;
+    }
+    return hours * 60 + minutes;
+  };
+  const from = toMinutes(start);
+  const to = toMinutes(end);
+  return from == null || to == null || to <= from ? 0 : to - from;
+}
+
 // Денежный ввод с клавиатуры: запятая — десятичный разделитель
 // (EU-раскладка decimal-pad шлёт «12,5»), мусор и отрицательные → 0.
 export function parseMoneyInput(s: string): number {
@@ -79,31 +109,17 @@ export interface ServiceOverride {
   price?: number;
 }
 
-// The DB row stores price_tiers as loose Json — validate the shape
-// before feeding it to the shared pricing ladder.
-function parsePriceTiers(raw: unknown): PriceTier[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const tiers: PriceTier[] = [];
-  for (const t of raw) {
-    if (t == null || typeof t !== "object") continue;
-    const { min_qty, price_per_unit } = t as Record<string, unknown>;
-    if (typeof min_qty === "number" && typeof price_per_unit === "number") {
-      tiers.push({ min_qty, price_per_unit });
-    }
-  }
-  return tiers.length ? tiers : undefined;
-}
-
 // Unit price of a catalog row at the given quantity — bulk ladder via
 // the shared pricePerUnit, one source of truth with the web
 // (apps/web/src/lib/appointment-services.ts).
 export function unitPriceFor(svc: Service, qty: number): number {
+  const tiers = parsePriceTiers(svc.price_tiers);
   return pricePerUnit(
     {
       price: Number(svc.price),
       bulk_threshold: svc.bulk_threshold ?? 0,
       bulk_price: svc.bulk_price ?? 0,
-      price_tiers: parsePriceTiers(svc.price_tiers),
+      price_tiers: tiers.length > 0 ? tiers : undefined,
     },
     qty,
   );
@@ -122,15 +138,30 @@ export function buildServices(
     const catalogPrice = c ? Number(c.price) : 0;
     const baseDuration = c ? c.duration_minutes : 60;
     const ov = overrides?.[id];
-    const qty = ov?.qty != null && ov.qty > 0 ? ov.qty : 1;
+    const countable = c?.is_countable !== false;
+    const requestedQuantity =
+      ov?.qty != null && Number.isFinite(ov.qty) && ov.qty > 0
+        ? Math.floor(ov.qty)
+        : 1;
+    const qty = countable ? Math.max(1, requestedQuantity) : 1;
     const price = ov?.price != null ? ov.price : c ? unitPriceFor(c, qty) : 0;
+    const durationTiers = c ? parseDurationTiers(c.duration_tiers) : [];
+    const duration = c
+      ? durationForQuantity(
+          {
+            duration_minutes: baseDuration,
+            duration_tiers: durationTiers.length > 0 ? durationTiers : undefined,
+          },
+          qty,
+        )
+      : baseDuration * qty;
     return {
       serviceId: id,
       quantity: qty,
       pricePerUnit: price,
       originalPrice: catalogPrice,
       totalPrice: price * qty,
-      duration: baseDuration * qty,
+      duration,
     };
   });
 }

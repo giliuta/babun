@@ -1,7 +1,7 @@
 // Metro config for the Babun mobile app inside a bun-workspaces monorepo.
 //
-//   1. getDefaultConfig — Expo base; we set watchFolders / nodeModulesPaths
-//      explicitly so the symlinked @babun/shared TS source resolves.
+//   1. getDefaultConfig — Expo SDK 54 provides monorepo watch/resolution
+//      defaults; don't replace them with a partial list.
 //   2. withNativeWind — compiles Tailwind classes -> RN styles via global.css.
 //   3. react dedup — force ONE copy of react. The mobile app pins react 19.1.0
 //      (required by RN 0.81.5's bundled renderer) while the web workspace
@@ -13,15 +13,7 @@ const { withNativeWind } = require("nativewind/metro");
 const path = require("path");
 
 const projectRoot = __dirname;
-const monorepoRoot = path.resolve(projectRoot, "../..");
-
 let config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [monorepoRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, "node_modules"),
-  path.resolve(monorepoRoot, "node_modules"),
-];
 
 config = withNativeWind(config, { input: "./global.css" });
 

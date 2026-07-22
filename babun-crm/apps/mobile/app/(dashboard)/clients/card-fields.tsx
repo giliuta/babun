@@ -30,9 +30,9 @@ const ROWS: FieldRow[] = [
   { field: null, label: "Имя клиента", sub: "всегда видно", dot: (t) => t.faint },
   { field: "exp", label: "Ожидаемая прибыль", sub: "серая", dot: (t) => t.sub },
   { field: "inc", label: "Доход", sub: "зелёный", dot: (t) => t.success },
-  { field: "debt", label: "Долг", sub: "жёлтый", dot: () => "#b78600" },
+  { field: "debt", label: "Долг", sub: "жёлтый", dot: (t) => t.warning },
   { field: "last", label: "Последняя запись", dot: (t) => t.faint },
-  { field: "meta", label: "Команда, метка, тег", dot: (t) => t.faint },
+  { field: "meta", label: "Команда, метка, теги", dot: (t) => t.faint },
 ];
 
 export default function CardFieldsScreen() {
@@ -102,7 +102,7 @@ export default function CardFieldsScreen() {
 
         <View
           className="mx-3 mt-4 flex-row items-start gap-2 rounded-xl px-3.5 py-3"
-          style={{ backgroundColor: t.dark ? `${t.accent}29` : `${t.accent}14` }}
+          style={{ backgroundColor: `${t.accent}14` }}
         >
           <Info color={t.accent} size={16} strokeWidth={2.2} />
           <Text

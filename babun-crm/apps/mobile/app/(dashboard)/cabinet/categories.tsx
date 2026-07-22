@@ -139,32 +139,38 @@ export default function CategoriesScreen() {
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => (
-            <Pressable
-              onPress={item.tenant_id ? () => openEdit(item) : undefined}
-              accessibilityRole={item.tenant_id ? "button" : undefined}
-              accessibilityLabel={
-                item.tenant_id ? `Категория ${item.name}, редактировать` : undefined
-              }
-              className={`flex-row items-center px-4 py-3 ${item.tenant_id ? "active:opacity-60" : ""}`}
-            >
-              <View
-                className="mr-3 h-7 w-7 rounded-full"
-                style={{ backgroundColor: item.color ?? th.faint }}
-              />
-              <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
+            <View className="flex-row items-stretch">
+              <Pressable
+                onPress={item.tenant_id ? () => openEdit(item) : undefined}
+                disabled={!item.tenant_id}
+                accessible={!!item.tenant_id}
+                accessibilityRole={item.tenant_id ? "button" : undefined}
+                accessibilityLabel={
+                  item.tenant_id ? `Категория ${item.name}, редактировать` : undefined
+                }
+                className={`min-h-[52px] flex-1 flex-row items-center py-3 pl-4 ${item.tenant_id ? "active:opacity-60" : ""}`}
+              >
+                <View
+                  className="mr-3 h-7 w-7 rounded-full"
+                  style={{ backgroundColor: item.color ?? th.faint }}
+                />
+                <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
+              </Pressable>
               {item.tenant_id ? (
                 <Pressable
                   onPress={() => confirmDelete(item)}
-                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel={`Удалить ${item.name}`}
+                  className="min-h-[52px] min-w-11 items-center justify-center pr-2 active:opacity-60"
                 >
                   <Trash2 color={th.danger} size={ICON.sm} />
                 </Pressable>
               ) : (
-                <Text className="text-xs" style={{ color: th.faint }}>станд.</Text>
+                <View className="min-h-[52px] justify-center pr-4">
+                  <Text className="text-xs" style={{ color: th.faint }}>станд.</Text>
+                </View>
               )}
-            </Pressable>
+            </View>
           )}
           ItemSeparatorComponent={() => <Divider inset={56} />}
           ListFooterComponent={
@@ -191,7 +197,7 @@ export default function CategoriesScreen() {
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} />
+        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             {editing

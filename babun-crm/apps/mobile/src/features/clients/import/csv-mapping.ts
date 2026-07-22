@@ -40,7 +40,7 @@ export const FIELD_OPTIONS: ImportableField[] = [
 ];
 
 /** Header substring → field. All comparisons are lowercased + trimmed. */
-const AUTO_MAP_RULES: Array<{ field: ImportableField; patterns: string[] }> = [
+const AUTO_MAP_RULES: { field: ImportableField; patterns: string[] }[] = [
   {
     field: "full_name",
     patterns: ["full name", "client name", "имя", "фио", "name", "клиент", "название"],
@@ -85,7 +85,7 @@ export function autoMapHeaders(headers: string[]): ImportableField[] {
 /** Country options for phone normalisation. libphonenumber-js keys on the
  *  ISO country code (CY, RU…), so we store ISO + show the dial hint. The
  *  order puts the tenant default (Cyprus) first. */
-export const COUNTRY_OPTIONS: Array<{ value: CountryCode; label: string }> = [
+export const COUNTRY_OPTIONS: { value: CountryCode; label: string }[] = [
   { value: "CY", label: "Кипр (+357)" },
   { value: "RU", label: "Россия (+7)" },
   { value: "KZ", label: "Казахстан (+7)" },

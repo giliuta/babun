@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   Switch,
@@ -47,18 +48,19 @@ type VisibilityMode = "own" | "picked" | "all";
 // saved flags must not read as "everything off"). Presets from the shared
 // master-presets module apply the exact same shapes as web.
 //
-// RISK-3 (write races): useUpdateMasterProfile does read-before-write over the
-// whole profile blob and preset/toggle writes are batched into one patch
-// ({ permissions }), so bursts don't clobber unrelated keys. Two toggles fired
-// within the same invalidate window can still lose one update (parity with web,
-// which has the same single-source upsert) — acceptable at one-tap frequency.
+// Permission writes replace one top-level `permissions` object. A local mutex
+// keeps a second toggle from being built on a stale snapshot while the first
+// save + authoritative refetch is still pending.
 
 export default function MasterAccessScreen() {
   const t = useThemeColors();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: master, isLoading } = useMaster(id);
-  const { data: teams = [] } = useTeams();
+  const masterQuery = useMaster(id);
+  const teamsQuery = useTeams();
+  const { data: master } = masterQuery;
+  const teams = teamsQuery.data ?? [];
   const save = useUpdateMasterProfile();
+  const writeLocked = useRef(false);
 
   const role = master ? getMasterRole(master) : "helper";
   const permissions: MasterPermissions = useMemo(
@@ -90,11 +92,30 @@ export default function MasterAccessScreen() {
   );
   const [query, setQuery] = useState("");
 
-  if (isLoading) {
+  if (masterQuery.isLoading || teamsQuery.isLoading) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Доступы" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+  const readError = masterQuery.error || teamsQuery.error;
+  if (readError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Доступы" />
+        <EmptyState
+          state="error"
+          title="Не удалось загрузить доступы"
+          subtitle={readError instanceof Error ? readError.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([masterQuery.refetch(), teamsQuery.refetch()]),
+          }}
+          fill
+        />
       </Screen>
     );
   }
@@ -110,8 +131,26 @@ export default function MasterAccessScreen() {
 
   // Single patch — top-level `permissions` replaces (read-before-write merges
   // the rest of the profile). visible_team_ids rides inside permissions.
+  const persistPermissions = (next: MasterPermissions) => {
+    if (writeLocked.current) return;
+    writeLocked.current = true;
+    save.mutate(
+      { id: m.id, patch: { permissions: next } },
+      {
+        onError: (error) =>
+          Alert.alert(
+            "Не удалось сохранить доступы",
+            error.message || "Проверьте соединение и повторите попытку.",
+          ),
+        onSettled: () => {
+          writeLocked.current = false;
+        },
+      },
+    );
+  };
+
   const commit = (diff: Partial<MasterPermissions>) => {
-    save.mutate({ id: m.id, patch: { permissions: { ...permissions, ...diff } } });
+    persistPermissions({ ...permissions, ...diff });
   };
 
   const applyPreset = (preset: Exclude<PresetId, "custom">) => {
@@ -119,7 +158,7 @@ export default function MasterAccessScreen() {
     if (!built) return;
     const next = built.build();
     if (permissionsEqual(permissions, next)) return;
-    save.mutate({ id: m.id, patch: { permissions: next } });
+    persistPermissions(next);
   };
 
   const togglePermission = (key: keyof MasterPermissions) => {
@@ -146,7 +185,7 @@ export default function MasterAccessScreen() {
   };
 
   const resetToDefaults = () => {
-    save.mutate({ id: m.id, patch: { permissions: defaultPermissionsForRole(role) } });
+    persistPermissions(defaultPermissionsForRole(role));
   };
 
   const toggleGroup = (key: PermissionGroupKey) =>
@@ -179,8 +218,10 @@ export default function MasterAccessScreen() {
                 <Pressable
                   key={p.id}
                   onPress={() => applyPreset(p.id)}
+                  disabled={save.isPending}
+                  hitSlop={4}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: picked }}
+                  accessibilityState={{ selected: picked, disabled: save.isPending }}
                   accessibilityLabel={p.label}
                   style={{
                     height: 36,
@@ -241,8 +282,9 @@ export default function MasterAccessScreen() {
                 {i > 0 ? <Divider inset={16} /> : null}
                 <Pressable
                   onPress={() => setVisibility(opt.v)}
+                  disabled={save.isPending}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: picked }}
+                  accessibilityState={{ selected: picked, disabled: save.isPending }}
                   accessibilityLabel={opt.label}
                   className="min-h-[48px] flex-row items-center justify-between px-4 active:opacity-70"
                 >
@@ -290,6 +332,7 @@ export default function MasterAccessScreen() {
                       <Switch
                         value={picked}
                         onValueChange={() => toggleVisibleTeam(tm.id)}
+                        disabled={save.isPending}
                         trackColor={{ true: t.accent }}
                         accessibilityLabel={tm.name}
                       />
@@ -314,7 +357,7 @@ export default function MasterAccessScreen() {
               placeholder="Найти право…"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               accessibilityLabel="Поиск по правам доступа"
               style={{
                 flex: 1,
@@ -382,6 +425,7 @@ export default function MasterAccessScreen() {
                             onValueChange={() =>
                               togglePermission(p as keyof MasterPermissions)
                             }
+                            disabled={save.isPending}
                             trackColor={{ true: t.accent }}
                             accessibilityLabel={PERMISSION_LABELS[p]}
                           />
@@ -422,8 +466,10 @@ export default function MasterAccessScreen() {
         <SectionCard className="mt-5">
           <Pressable
             onPress={resetToDefaults}
+            disabled={save.isPending}
             accessibilityRole="button"
             accessibilityLabel="Сбросить на стандартные для роли"
+            accessibilityState={{ disabled: save.isPending }}
             className="min-h-[48px] flex-row items-center justify-center gap-2 px-4 active:opacity-70"
           >
             <RotateCcw color={t.accent} size={ICON.sm} />

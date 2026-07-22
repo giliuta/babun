@@ -9,9 +9,9 @@
 import type { Appointment } from "../appointments";
 import { getPaidAmount } from "../appointments";
 import type { Service } from "../services";
-import { getServiceMaterialCost } from "../services";
 import type { DayExtra } from "../day-extras";
 import { sumExtras } from "../day-extras";
+import { appointmentMaterialCost } from "./appointment-calc";
 
 // ─── Payment-method breakdown (for the detail popup) ────────────────
 export interface DayPaymentBreakdown {
@@ -54,19 +54,15 @@ export function computeDayFinance(
   services: Service[],
   extras: DayExtra[],
 ): DayFinanceTotals {
-  const serviceById = new Map(services.map((s) => [s.id, s] as const));
-
   const earnedFromAppts = appointments
     .filter(isClosable)
     .reduce((sum, a) => sum + getPaidAmount(a), 0);
 
-  const materialCost = appointments.filter(isClosable).reduce((sum, a) => {
-    const cost = a.service_ids.reduce((c, sid) => {
-      const s = serviceById.get(sid);
-      return c + (s ? getServiceMaterialCost(s) : 0);
+  const materialCost = appointments
+    .filter(isClosable)
+    .reduce((sum, appointment) => {
+      return sum + appointmentMaterialCost(appointment, services);
     }, 0);
-    return sum + cost;
-  }, 0);
 
   // Mirror DayFinanceModal: manual expenses summed across ALL records.
   const manualExpenses = appointments.reduce(
@@ -75,7 +71,10 @@ export function computeDayFinance(
   );
 
   const planned = appointments
-    .filter((a) => a.status !== "cancelled")
+    .filter(
+      (a) =>
+        a.status !== "cancelled" && a.payment_status !== "refunded",
+    )
     .reduce((sum, a) => sum + a.total_amount, 0);
 
   const extrasSum = sumExtras(extras);
@@ -92,14 +91,24 @@ export function computeDayFinance(
   };
   for (const a of appointments) {
     if (!isClosable(a)) continue;
+    // Keep the original receipts on the appointment for history, but a fully
+    // refunded visit contributes no current tender to the day's breakdown.
+    if (a.payment_status === "refunded") continue;
     for (const p of a.payments) {
       if (p.method === "cash") byMethod.cash += p.amount;
       else if (p.method === "card") byMethod.card += p.amount;
       else if (p.method === "transfer") byMethod.transfer += p.amount;
       else byMethod.other += p.amount;
     }
-    // Авансы без явного метода падают в «прочее».
-    if (a.prepaid_amount > 0) byMethod.other += a.prepaid_amount;
+    if (a.prepaid_amount > 0) {
+      // Способ аванса сохраняется на самой записи. Legacy-аванс без метода
+      // остаётся в «прочее»: приписывать его кассе или карте нельзя.
+      if (a.payment_method === "cash") byMethod.cash += a.prepaid_amount;
+      else if (a.payment_method === "card") byMethod.card += a.prepaid_amount;
+      else if (a.payment_method === "transfer") {
+        byMethod.transfer += a.prepaid_amount;
+      } else byMethod.other += a.prepaid_amount;
+    }
   }
 
   return {

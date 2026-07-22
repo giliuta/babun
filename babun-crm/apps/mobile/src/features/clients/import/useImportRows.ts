@@ -9,9 +9,13 @@
 // A cold import with no network fails and the wizard surfaces the error.
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient as createClientRepo } from "@babun/shared/db/repositories/clients";
-import { createBlankClient, type Client } from "@babun/shared/local/clients";
+import {
+  createClient as createClientRepo,
+  getClient as getClientRepo,
+} from "@babun/shared/db/repositories/clients";
+import type { Client } from "@babun/shared/local/clients";
 import { supabase } from "@/lib/supabase";
+import { assertQuotaAvailable } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
 import { tryToE164 } from "../phone";
 import type { CountryCode } from "libphonenumber-js";
@@ -22,6 +26,7 @@ import {
   saveResumeState,
   type ImportResumeState,
 } from "./resume";
+import { importClientId, rowToClient } from "./import-client";
 
 // Parallel round-trips per chunk. Same 10 the existing importer uses — the
 // repo has no array-insert, so «batch» on mobile = a bounded Promise.all.
@@ -62,18 +67,39 @@ export interface ImportRowsArgs {
   onProgress?: (p: ImportProgress) => void;
 }
 
-function rowToClient(row: MappedRow, defaultCountry: CountryCode, tagId?: string | null): Client {
-  const e164 = tryToE164(row.rawPhone, defaultCountry);
-  return createBlankClient({
-    full_name: row.full_name || (e164 ?? ""),
-    phone: row.rawPhone || (e164 ?? ""),
-    phone_e164: e164,
-    email: row.email,
-    city: row.city,
-    address: row.address,
-    comment: row.comment,
-    tag_ids: tagId ? [tagId] : [],
-  });
+function isDuplicateImportId(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /duplicate key[\s\S]*clients_pkey|clients_pkey[\s\S]*duplicate key/i.test(
+    message,
+  );
+}
+
+async function ensureImportTag(
+  clientId: string,
+  tagId: string | null | undefined,
+  tenantId: string,
+): Promise<void> {
+  if (!tagId) return;
+  const { error } = await supabase.from("client_tag_assignments").upsert(
+    { client_id: clientId, tag_id: tagId, tenant_id: tenantId },
+    { onConflict: "client_id,tag_id", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`Не удалось применить тег: ${error.message}`);
+}
+
+async function createImportClient(
+  client: Client,
+  tagId: string | null | undefined,
+  tenantId: string,
+): Promise<void> {
+  try {
+    await createClientRepo(supabase, client, tenantId);
+  } catch (error) {
+    if (!isDuplicateImportId(error)) throw error;
+    const existing = await getClientRepo(supabase, client.id, tenantId);
+    if (!existing) throw error;
+    await ensureImportTag(client.id, tagId, tenantId);
+  }
 }
 
 export function useImportRows() {
@@ -92,6 +118,12 @@ export function useImportRows() {
         alreadyImported = 0,
         onProgress,
       } = args;
+
+      // Refuse the whole selected batch before the first INSERT when it does
+      // not fit the tenant's remaining allowance. Without this preflight a
+      // 200-row CSV near the cap produced a misleading partial import: early
+      // chunks succeeded and every later row failed independently.
+      await assertQuotaAvailable(supabase, tenantId, "clients", rows.length);
 
       // Slice into fixed chunks so we can persist a resume offset between
       // them. totalBatches is stable across a resume (same rows array).
@@ -113,9 +145,14 @@ export function useImportRows() {
         // Per-row insert so one bad row (RLS / unique-index hit) doesn't sink
         // the whole chunk — settle each and collect the failures.
         const settled = await Promise.allSettled(
-          batch.map((r) =>
-            createClientRepo(supabase, rowToClient(r, defaultCountry, tagId), tenantId),
-          ),
+          batch.map((r) => {
+            const id = importClientId(tenantId, fileHash, r.source);
+            return createImportClient(
+              rowToClient(r, defaultCountry, tagId, id),
+              tagId,
+              tenantId,
+            );
+          }),
         );
         settled.forEach((res, idx) => {
           if (res.status === "fulfilled") inserted++;
@@ -165,10 +202,8 @@ export function useImportRows() {
 
 /** Existing tenant phones as an E.164 set, read from the warm clients cache
  *  (same source the list renders from). Kept as the instant fallback for the
- *  preview flag, but the wizard prefers {@link fetchExistingPhoneSet} — a
- *  fresh DB read — before it validates, so the dedup that decides «дубликат в
- *  базе» never runs against a stale / cold cache (see the web's
- *  fetchExistingPhones). */
+ *  preview display. The import decision itself requires the canonical paged
+ *  server read below; a stale cache is not safe enough to prevent duplicates. */
 export function existingPhoneSet(clients: Client[]): Set<string> {
   const set = new Set<string>();
   for (const c of clients) {
@@ -184,29 +219,30 @@ export function existingPhoneSet(clients: Client[]): Set<string> {
  *  cache would let already-present or just-inserted rows slip past the
  *  «дубликат в базе» flag and double up). Keys on phone_e164 (the mobile
  *  dedup key), falling back to normalising the raw phone for legacy rows that
- *  never got an E.164 stamped. Paged to cover large tenants; on any error we
- *  return whatever we gathered so the import degrades rather than blocks. */
+ *  never got an E.164 stamped. Paged deterministically to cover every tenant
+ *  row. Any error aborts preview: a partial dedup set can create hundreds of
+ *  duplicate clients. */
 export async function fetchExistingPhoneSet(
   client: SupabaseClient,
   tenantId: string,
 ): Promise<Set<string>> {
   const set = new Set<string>();
-  const CHUNK = 1000;
-  let from = 0;
-  for (let safety = 0; safety < 60; safety++) {
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
     const { data, error } = await client
       .from("clients")
-      .select("phone, phone_e164")
+      .select("id, phone, phone_e164")
       .eq("tenant_id", tenantId)
       .is("deleted_at", null)
-      .range(from, from + CHUNK - 1);
-    if (error || !data || data.length === 0) break;
+      .order("id", { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`Не удалось проверить дубли: ${error.message}`);
+    if (!data || data.length === 0) break;
     for (const row of data as { phone: string | null; phone_e164: string | null }[]) {
       const key = row.phone_e164 ?? tryToE164(row.phone ?? "");
       if (key) set.add(key);
     }
-    if (data.length < CHUNK) break;
-    from += CHUNK;
+    if (data.length < PAGE_SIZE) break;
   }
   return set;
 }

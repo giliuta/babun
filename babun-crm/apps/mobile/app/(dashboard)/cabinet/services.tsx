@@ -45,11 +45,19 @@ import {
   useUpdateServiceCategory,
   type Service,
   type ServiceCategory,
+  type ServiceInput,
 } from "@/features/services/queries";
+import { ServiceEconomicsEditor } from "@/features/services/ServiceEconomicsEditor";
+import {
+  economicsDraftFromService,
+  validateServiceEconomics,
+  type ServiceEconomicsDraft,
+  type ServiceEconomicsErrors,
+} from "@/features/services/economics";
 
 // Услуги — порт /dashboard/services: группировка по цветным категориям,
-// цвет услуги на календаре, привязка к командам (пусто = все). Bulk/tier-
-// цены отложены (не портируем). Палитра — единая PRESET_COLORS (бригада /
+// цвет услуги на календаре, привязка к командам (пусто = все), себестоимость
+// и ступени цены/длительности. Палитра — единая PRESET_COLORS (бригада /
 // метка / категория / услуга делят один набор, web parity).
 
 const DEFAULT_SERVICE_COLOR = PRESET_COLORS[1].value; // синий
@@ -69,9 +77,18 @@ export default function ServicesScreen() {
 export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const t = useThemeColors();
   const toast = useToast();
-  const { data: allServices = [], isLoading, isError, refetch } = useServices();
-  const { data: categories = [] } = useServiceCategories();
-  const { data: teams = [] } = useTeams();
+  const servicesQuery = useServices();
+  const categoriesQuery = useServiceCategories();
+  const teamsQuery = useTeams();
+  const allServices = useMemo(
+    () => servicesQuery.data ?? [],
+    [servicesQuery.data],
+  );
+  const categories = useMemo(
+    () => categoriesQuery.data ?? [],
+    [categoriesQuery.data],
+  );
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const create = useCreateService();
   const update = useUpdateService();
   const del = useDeleteService();
@@ -120,19 +137,12 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
   const handleSave = async (
-    draft: {
-      name: string;
-      price: number;
-      duration_minutes: number;
-      category_id: string | null;
-      color: string;
-      brigade_ids: string[];
-    },
+    draft: ServiceInput,
     serviceId?: string,
   ) => {
     try {
       if (serviceId) {
-        await update.mutateAsync({ id: serviceId, patch: draft });
+        await update.mutateAsync({ id: serviceId, patch: { ...draft } });
       } else {
         await create.mutateAsync(draft);
       }
@@ -201,14 +211,30 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         }
       />
 
-      {isLoading ? (
+      {servicesQuery.isLoading || categoriesQuery.isLoading || teamsQuery.isLoading ? (
         <EmptyState state="loading" fill />
-      ) : isError ? (
+      ) : servicesQuery.isError || categoriesQuery.isError || teamsQuery.isError ? (
         <EmptyState
           fill
           state="error"
           title="Не удалось загрузить услуги"
-          action={{ label: "Повторить", onPress: () => void refetch() }}
+          subtitle={
+            [servicesQuery.error, categoriesQuery.error, teamsQuery.error].find(Boolean)
+              instanceof Error
+              ? ([servicesQuery.error, categoriesQuery.error, teamsQuery.error].find(
+                  Boolean,
+                ) as Error).message
+              : undefined
+          }
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([
+                servicesQuery.refetch(),
+                categoriesQuery.refetch(),
+                teamsQuery.refetch(),
+              ]),
+          }}
         />
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
@@ -367,17 +393,7 @@ function ServiceSheet({
   lockedTeamId?: string;
   busy: boolean;
   onClose: () => void;
-  onSave: (
-    draft: {
-      name: string;
-      price: number;
-      duration_minutes: number;
-      category_id: string | null;
-      color: string;
-      brigade_ids: string[];
-    },
-    serviceId?: string,
-  ) => void;
+  onSave: (draft: ServiceInput, serviceId?: string) => void;
   onDelete: (svc: Service) => void;
 }) {
   const t = useThemeColors();
@@ -389,6 +405,15 @@ function ServiceSheet({
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [color, setColor] = useState(DEFAULT_SERVICE_COLOR);
   const [brigadeIds, setBrigadeIds] = useState<string[]>([]);
+  const [economics, setEconomics] = useState<ServiceEconomicsDraft>(() =>
+    economicsDraftFromService(),
+  );
+  const [economicsErrors, setEconomicsErrors] =
+    useState<ServiceEconomicsErrors>();
+  const [baseErrors, setBaseErrors] = useState<{
+    price?: string;
+    duration?: string;
+  }>({});
   const [seeded, setSeeded] = useState<ServiceEditing | null>(null);
 
   if (editing !== seeded) {
@@ -399,6 +424,9 @@ function ServiceSheet({
     setDuration(service ? String(service.duration_minutes) : "60");
     setCategoryId(service?.category_id ?? null);
     setColor(service?.color || DEFAULT_SERVICE_COLOR);
+    setEconomics(economicsDraftFromService(service));
+    setEconomicsErrors(undefined);
+    setBaseErrors({});
     // На создании из хаба команды — заранее привязываем бригаду
     // (lockedTeamId), чтобы услуга сразу попала в её список.
     setBrigadeIds(
@@ -416,6 +444,45 @@ function ServiceSheet({
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
 
+  const updateEconomics = (next: ServiceEconomicsDraft) => {
+    setEconomics(next);
+    if (economicsErrors) {
+      setEconomicsErrors(validateServiceEconomics(next).errors);
+    }
+  };
+
+  const submit = () => {
+    const parsedPrice = Number(price.trim().replace(",", "."));
+    const parsedDuration = Number(duration.trim());
+    const nextBaseErrors: { price?: string; duration?: string } = {};
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      nextBaseErrors.price = "Введите цену 0 или больше";
+    }
+    if (
+      !Number.isSafeInteger(parsedDuration) ||
+      parsedDuration < 0
+    ) {
+      nextBaseErrors.duration = "Введите целые минуты от 0";
+    }
+    const validated = validateServiceEconomics(economics);
+    setBaseErrors(nextBaseErrors);
+    setEconomicsErrors(validated.errors);
+    if (Object.keys(nextBaseErrors).length > 0 || !validated.value) return;
+
+    onSave(
+      {
+        name: name.trim(),
+        price: parsedPrice,
+        duration_minutes: parsedDuration,
+        category_id: categoryId,
+        color,
+        brigade_ids: brigadeIds,
+        ...validated.value,
+      },
+      service?.id,
+    );
+  };
+
   return (
     <Modal
       visible={editing !== null}
@@ -428,7 +495,7 @@ function ServiceSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-          <Pressable className="flex-1" onPress={onClose} accessibilityLabel="Закрыть" />
+          <Pressable className="flex-1" onPress={onClose} accessible={false} />
           <View
             className="max-h-[88%] rounded-t-3xl"
             style={{ backgroundColor: t.surface }}
@@ -456,6 +523,7 @@ function ServiceSheet({
                     onChangeText={setPrice}
                     placeholder="0"
                     keyboardType="decimal-pad"
+                    error={baseErrors.price}
                   />
                 </View>
                 <View className="flex-1">
@@ -465,9 +533,18 @@ function ServiceSheet({
                     onChangeText={setDuration}
                     placeholder="60"
                     keyboardType="number-pad"
+                    error={baseErrors.duration}
                   />
                 </View>
               </View>
+
+              <ServiceEconomicsEditor
+                value={economics}
+                errors={economicsErrors}
+                basePrice={price}
+                baseDuration={duration}
+                onChange={updateEconomics}
+              />
 
               {categories.length > 0 ? (
                 <>
@@ -538,19 +615,7 @@ function ServiceSheet({
 
               <Button
                 label={service ? "Сохранить" : "Создать"}
-                onPress={() =>
-                  onSave(
-                    {
-                      name: name.trim(),
-                      price: Number(price.replace(",", ".")) || 0,
-                      duration_minutes: Number(duration) || 60,
-                      category_id: categoryId,
-                      color,
-                      brigade_ids: brigadeIds,
-                    },
-                    service?.id,
-                  )
-                }
+                onPress={submit}
                 disabled={!canSubmit}
                 loading={busy}
               />
@@ -657,7 +722,7 @@ function CategoriesSheet({
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={close}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>

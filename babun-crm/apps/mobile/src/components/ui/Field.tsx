@@ -7,6 +7,7 @@ export function Field({
   label,
   error,
   style,
+  accessibilityLabel,
   ...inputProps
 }: { label: string; error?: string | null } & TextInputProps) {
   const t = useThemeColors();
@@ -16,14 +17,16 @@ export function Field({
         {label}
       </Text>
       <TextInput
+        accessibilityLabel={accessibilityLabel ?? label}
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
-        keyboardAppearance={t.dark ? "dark" : "light"}
+        keyboardAppearance="light"
         style={[
           {
             borderRadius: t.radius.input,
             borderWidth: 1,
             borderColor: t.separator,
+            minHeight: 48,
             paddingHorizontal: 16,
             paddingVertical: 12,
             fontSize: 16,
@@ -34,7 +37,13 @@ export function Field({
         {...inputProps}
       />
       {error ? (
-        <Text style={{ marginTop: 4, fontSize: 14, color: t.danger }}>{error}</Text>
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          style={{ marginTop: 4, fontSize: 14, color: t.danger }}
+        >
+          {error}
+        </Text>
       ) : null}
     </View>
   );

@@ -17,6 +17,90 @@ import { HEADER_H, RAIL_W } from "@/features/calendar/DayView";
 //
 // «Кости»-блоки по колонкам: День — одна широкая колонка, Неделя — 7 узких
 // (иначе скелет обещает не ту сетку, что загрузится).
+// Месяц: бледная сетка 6×7 с шапкой дней недели — то же, что нарисует
+// MonthView. Без пульса: 42 мигающие клетки это не ожидание, а рябь.
+function MonthSkeleton({ bone, line }: { bone: string; line: string }) {
+  const t = useThemeColors();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.surface }}>
+      <View
+        style={{
+          flexDirection: "row",
+          backgroundColor: t.canvas,
+          borderBottomWidth: 1,
+          borderBottomColor: line,
+        }}
+      >
+        {Array.from({ length: 7 }).map((_, i) => (
+          <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 8 }}>
+            <View
+              style={{ width: 18, height: 8, borderRadius: 4, backgroundColor: bone }}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={{ flex: 1 }}>
+        {Array.from({ length: 6 }).map((_, r) => (
+          <View key={r} style={{ flex: 1, flexDirection: "row" }}>
+            {Array.from({ length: 7 }).map((_, c) => (
+              <View
+                key={c}
+                style={{
+                  flex: 1,
+                  borderTopWidth: r === 0 ? 0 : 1,
+                  borderTopColor: line,
+                  borderLeftWidth: c === 0 ? 0 : 1,
+                  borderLeftColor: line,
+                  padding: 6,
+                }}
+              >
+                <View
+                  style={{
+                    width: 16,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: bone,
+                  }}
+                />
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// Агенда: три кости-строки списка — она список, а не сетка.
+function AgendaSkeleton({
+  bone,
+  shimmer,
+}: {
+  bone: string;
+  shimmer: { opacity: number };
+}) {
+  const t = useThemeColors();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.canvas, paddingTop: 12 }}>
+      {[0, 1, 2].map((i) => (
+        <Animated.View
+          key={i}
+          style={[
+            {
+              marginHorizontal: 12,
+              marginBottom: 10,
+              height: 64,
+              borderRadius: 14,
+              backgroundColor: bone,
+            },
+            shimmer,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
 const BONES: Record<"day" | "week", { col: number; top: `${number}%`; height: `${number}%` }[]> = {
   day: [
     { col: 0, top: "12%", height: "10%" },
@@ -32,7 +116,9 @@ const BONES: Record<"day" | "week", { col: number; top: `${number}%`; height: `$
   ],
 };
 
-export function CalendarSkeleton({ mode = "week" }: { mode?: "day" | "week" }) {
+export type SkeletonMode = "day" | "week" | "month" | "agenda";
+
+export function CalendarSkeleton({ mode = "week" }: { mode?: SkeletonMode }) {
   const t = useThemeColors();
   const reduced = useReducedMotion();
   const pulse = useSharedValue(0);
@@ -46,6 +132,12 @@ export function CalendarSkeleton({ mode = "week" }: { mode?: "day" | "week" }) {
 
   const bone = `${t.ink}0f`;
   const line = `${t.ink}33`;
+
+  // Месяц и Агенда — не сетка часов: подставлять им недельный рельс из семи
+  // колонок значит обещать геометрию, которая не придёт.
+  if (mode === "month") return <MonthSkeleton bone={bone} line={line} />;
+  if (mode === "agenda") return <AgendaSkeleton bone={bone} shimmer={shimmer} />;
+
   const cols = mode === "week" ? 7 : 1;
 
   return (

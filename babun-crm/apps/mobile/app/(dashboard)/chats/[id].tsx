@@ -15,7 +15,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Archive,
-  CalendarPlus,
+  Calendar,
   Check,
   CheckCheck,
   Copy,
@@ -24,12 +24,10 @@ import {
   Link2,
   MessageSquareText,
   Pin,
-  Plus,
   Search,
   Send,
   Star,
   Trash2,
-  UserPlus,
   UserRound,
   X,
 } from "lucide-react-native";
@@ -132,6 +130,7 @@ const MessageRow = memo(function MessageRow({
   return (
     <Pressable
       onLongPress={() => onLongPress(m)}
+      accessibilityRole="button"
       accessibilityLabel={`${out ? "Вы" : "Клиент"}: ${bodyOf(m)}, ${msgTime(m.timestamp)}`}
       accessibilityHint="Долгое нажатие — меню сообщения"
       // Screen-reader path to the long-press menu and to copy.
@@ -143,7 +142,7 @@ const MessageRow = memo(function MessageRow({
         if (e.nativeEvent.actionName === "copy") onCopy(m);
         else onLongPress(m);
       }}
-      className={`my-0.5 max-w-[82%] ${out ? "self-end" : "self-start"}`}
+      className={`my-0.5 min-h-11 max-w-[82%] justify-center ${out ? "self-end" : "self-start"}`}
     >
       <View
         className="rounded-2xl px-3.5 py-2"
@@ -159,15 +158,13 @@ const MessageRow = memo(function MessageRow({
             style={{
               borderColor: out ? "rgba(255,255,255,0.6)" : t.accent,
               backgroundColor: out
-                ? "rgba(255,255,255,0.15)"
-                : t.dark
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(11,18,32,0.05)",
+                ? "rgba(11,18,32,0.18)"
+                : "rgba(11,18,32,0.05)",
             }}
           >
             <Text
               className="text-[11px]"
-              style={{ color: out ? "rgba(255,255,255,0.8)" : t.sub }}
+              style={{ color: out ? t.onAccent : t.sub }}
               numberOfLines={1}
             >
               {bodyOf(quoted)}
@@ -216,7 +213,7 @@ function DateSeparator({ label }: { label: string }) {
       <View
         className="rounded-full px-3 py-1"
         style={{
-          backgroundColor: t.dark ? "rgba(255,255,255,0.08)" : "rgba(11,18,32,0.06)",
+          backgroundColor: "rgba(11,18,32,0.06)",
         }}
       >
         <Text className="text-xs font-medium" style={{ color: t.sub }}>
@@ -492,7 +489,7 @@ export default function ChatThreadScreen() {
       : [
           {
             label: "Создать клиента",
-            icon: UserPlus,
+            icon: UserRound,
             onPress: createFromChat,
           },
           {
@@ -503,7 +500,7 @@ export default function ChatThreadScreen() {
         ]),
     {
       label: "Записать на приём",
-      icon: CalendarPlus,
+      icon: Calendar,
       onPress: () => bookClient(chat.client_id),
     },
     {
@@ -591,9 +588,9 @@ export default function ChatThreadScreen() {
             </Text>
             <Pressable
               onPress={() => setReplyTo(null)}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Отменить ответ"
+              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
             >
               <X color={t.sub} size={16} />
             </Pressable>
@@ -609,7 +606,7 @@ export default function ChatThreadScreen() {
             onPress={() => setQrOpen(true)}
             accessibilityRole="button"
             accessibilityLabel="Шаблоны"
-            className="h-10 w-10 items-center justify-center rounded-full active:opacity-60"
+            className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
           >
             <MessageSquareText color={t.accent} size={ICON.sm} />
           </Pressable>
@@ -620,7 +617,7 @@ export default function ChatThreadScreen() {
             placeholder="Сообщение…"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
+            keyboardAppearance="light"
             multiline
             accessibilityLabel="Текст сообщения"
             className="max-h-24 flex-1 rounded-2xl px-4 py-2.5 text-base"
@@ -634,7 +631,8 @@ export default function ChatThreadScreen() {
             disabled={!draft.trim()}
             accessibilityRole="button"
             accessibilityLabel="Отправить"
-            className={`h-10 w-10 items-center justify-center rounded-full ${draft.trim() ? "active:opacity-80" : ""}`}
+            accessibilityState={{ disabled: !draft.trim() }}
+            className={`h-11 w-11 items-center justify-center rounded-full ${draft.trim() ? "active:opacity-80" : ""}`}
             style={{ backgroundColor: draft.trim() ? t.accent : t.disabledFill }}
           >
             <Send color="#fff" size={18} />
@@ -653,7 +651,7 @@ export default function ChatThreadScreen() {
           className="flex-1 justify-end"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setHeaderMenuOpen(false)}
-          accessibilityLabel="Закрыть меню"
+          accessible={false}
         >
           <View
             className="m-3 overflow-hidden rounded-2xl"
@@ -690,6 +688,7 @@ export default function ChatThreadScreen() {
           className="flex-1 justify-end"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setMenuMsg(null)}
+          accessible={false}
         >
           <View
             className="m-3 overflow-hidden rounded-2xl"
@@ -758,6 +757,7 @@ export default function ChatThreadScreen() {
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setQrOpen(false)}
+          accessible={false}
         />
         <View
           className="absolute bottom-0 left-0 right-0 max-h-[70%] rounded-t-3xl p-4 pb-8"
@@ -881,6 +881,7 @@ export default function ChatThreadScreen() {
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={() => setLinkOpen(false)}
+          accessible={false}
         />
         <View
           className="h-[70%] rounded-t-3xl"
@@ -896,9 +897,9 @@ export default function ChatThreadScreen() {
                   linkClient.mutate({ chatId: chat.id, clientId: null });
                   setLinkOpen(false);
                 }}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Отвязать клиента"
+                className="min-h-11 justify-center px-2 active:opacity-60"
               >
                 <Text
                   className="text-sm font-medium"
@@ -922,7 +923,8 @@ export default function ChatThreadScreen() {
               placeholder="Поиск клиента"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
+              accessibilityLabel="Поиск клиента"
               className="flex-1 py-2 text-base"
               style={{ color: t.ink }}
             />
@@ -944,7 +946,7 @@ export default function ChatThreadScreen() {
               className="h-7 w-7 items-center justify-center rounded-full"
               style={{ backgroundColor: `${t.accent}1A` }}
             >
-              <Plus color={t.accent} size={16} strokeWidth={2.4} />
+              <UserRound color={t.accent} size={16} strokeWidth={2.4} />
             </View>
             <Text className="text-base font-medium" style={{ color: t.accent }}>
               Новый клиент из этого чата

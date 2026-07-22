@@ -93,10 +93,9 @@ export function CityPickerModal({
             {onSettings ? (
               <Pressable
                 onPress={onSettings}
-                hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel="Настройки меток"
-                className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
+                className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
               >
                 <Settings color={t.sub} size={20} strokeWidth={2} />
               </Pressable>

@@ -10,7 +10,10 @@ import {
   View,
 } from "react-native";
 import { X } from "lucide-react-native";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import {
+  formatEURExact as formatEUR,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { Account } from "@babun/shared/local/finance/account";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
@@ -67,6 +70,8 @@ export function TransactionPopup({
   alreadyRefunded = 0,
   onClose,
   onEdit,
+  onInvoice,
+  onClientOpen,
   onDelete,
   onRefund,
 }: {
@@ -79,6 +84,8 @@ export function TransactionPopup({
   alreadyRefunded?: number;
   onClose: () => void;
   onEdit: (tx: FinanceTransaction) => void;
+  onInvoice: (tx: FinanceTransaction) => void;
+  onClientOpen: (clientId: string) => void;
   onDelete: (tx: FinanceTransaction) => Promise<void>;
   onRefund: (tx: FinanceTransaction, amount: number) => Promise<void>;
 }) {
@@ -110,16 +117,28 @@ export function TransactionPopup({
         : t.ink;
   const sign =
     tx.type === "income" || (tx.type === "transfer" && tx.amount > 0)
-      ? "+"
+      ? ""
       : "−";
 
+  // Auto rows are the immutable financial mirror of an appointment. They may
+  // only be refunded through that appointment; a generic refund here would
+  // leave its paid/prepaid fields disagreeing with the ledger.
+  const isAppointmentLedger = tx.source === "auto";
   const refundRemaining = Math.max(0, tx.amount - alreadyRefunded);
-  const canRefund = tx.type === "income" && refundRemaining > 0;
-  const canEdit = tx.type === "income" || tx.type === "expense";
+  const canRefund =
+    tx.type === "income" && !isAppointmentLedger && refundRemaining > 0;
+  const canEdit =
+    !isAppointmentLedger &&
+    !tx.invoice_id &&
+    (tx.type === "income" || tx.type === "expense");
+  const canDelete =
+    !isAppointmentLedger && !tx.invoice_id && tx.type !== "transfer";
+  const canInvoice = tx.type === "income";
 
-  const refundNum = parseFloat(refundAmount.replace(",", "."));
+  const refundCents = parseMoneyInputToCents(refundAmount);
+  const refundNum = (refundCents ?? 0) / 100;
   const refundValid =
-    Number.isFinite(refundNum) && refundNum > 0 && refundNum <= refundRemaining;
+    refundCents != null && refundNum <= refundRemaining;
 
   const handleDelete = () => {
     Alert.alert("Удалить операцию?", "Действие нельзя отменить.", [
@@ -205,7 +224,7 @@ export function TransactionPopup({
         <Pressable
           className="absolute inset-0"
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="w-full overflow-hidden rounded-3xl"
@@ -276,6 +295,9 @@ export function TransactionPopup({
               {tx.source === "auto" ? (
                 <MetaRow label="Источник" value="Автоматически (из записи)" />
               ) : null}
+              {isAppointmentLedger ? (
+                <MetaRow label="Изменение" value="Через связанную заявку" />
+              ) : null}
               {canRefund && alreadyRefunded > 0 ? (
                 <MetaRow
                   label="Уже возвращено"
@@ -287,22 +309,38 @@ export function TransactionPopup({
             {/* actions */}
             {!showRefundForm ? (
               <View style={{ gap: 8 }}>
+                {canInvoice
+                  ? actionBtn(
+                      tx.invoice_id ? "Открыть инвойс" : "Выставить инвойс",
+                      () => onInvoice(tx),
+                      "plain",
+                    )
+                  : null}
+                {tx.client_id
+                  ? actionBtn(
+                      "Открыть клиента",
+                      () => onClientOpen(tx.client_id as string),
+                      "plain",
+                    )
+                  : null}
                 {canEdit
                   ? actionBtn("Редактировать", () => onEdit(tx), "primary")
                   : null}
-                <View className="flex-row" style={{ gap: 8 }}>
-                  {actionBtn("Удалить", handleDelete, "danger")}
-                  {canRefund
-                    ? actionBtn(
-                        "Создать возврат",
-                        () => {
-                          setShowRefundForm(true);
-                          setRefundAmount(String(refundRemaining));
-                        },
-                        "plain",
-                      )
-                    : null}
-                </View>
+                {canDelete || canRefund ? (
+                  <View className="flex-row" style={{ gap: 8 }}>
+                    {canDelete ? actionBtn("Удалить", handleDelete, "danger") : null}
+                    {canRefund
+                      ? actionBtn(
+                          "Создать возврат",
+                          () => {
+                            setShowRefundForm(true);
+                            setRefundAmount(String(refundRemaining));
+                          },
+                          "plain",
+                        )
+                      : null}
+                  </View>
+                ) : null}
               </View>
             ) : (
               <View style={{ gap: 8 }}>
@@ -324,7 +362,7 @@ export function TransactionPopup({
                     placeholder="0"
                     placeholderTextColor={t.placeholder}
                     selectionColor={t.accent}
-                    keyboardAppearance={t.dark ? "dark" : "light"}
+                    keyboardAppearance="light"
                     accessibilityLabel="Сумма возврата"
                     className="ml-1 flex-1 text-[15px] tabular-nums"
                     style={{ color: t.ink }}

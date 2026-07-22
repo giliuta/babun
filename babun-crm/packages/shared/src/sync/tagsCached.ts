@@ -31,10 +31,11 @@ import {
   cacheDelete,
   cacheReplaceTenant,
   cacheGetOne,
+  dequeueAll,
   type CachedTag,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
-import { kickReplayer } from "./replayer";
+import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
 import {
   enqueueOpAndEmit,
   enqueueOpWithCacheUpsertAndEmit,
@@ -44,6 +45,21 @@ import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
 
 type DbSupabase = SupabaseClient<Database>;
+
+function isTransientNetworkError(err: unknown): boolean {
+  const withStatus = err as { status?: unknown; statusCode?: unknown };
+  const status =
+    typeof withStatus?.status === "number"
+      ? withStatus.status
+      : typeof withStatus?.statusCode === "number"
+        ? withStatus.statusCode
+        : 0;
+  if (status >= 500) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /failed to fetch|load failed|network request failed|network error|fetch failed|timed? ?out|socket|econn|abort|bad gateway|service unavailable|gateway time|\b50[234]\b/i.test(
+    message,
+  );
+}
 
 // ─── Read ─────────────────────────────────────────────────────────
 
@@ -60,9 +76,10 @@ export async function listClientTags(
   // catch and return empty. UI shows no tag chips until reconnect.
   try {
     const fresh = await repoListClientTags(supabase, tenantId);
-    await refreshCacheFromSupabase(supabase, tenantId).catch(() => {});
+    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
     return fresh;
-  } catch {
+  } catch (err) {
+    if (isOnline()) throw err;
     return [];
   }
 }
@@ -87,13 +104,25 @@ async function revalidateTags(
 async function refreshCacheFromSupabase(
   supabase: DbSupabase,
   tenantId: string,
+  domain?: ClientTag[],
 ): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("client_tags")
-    .select("*")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`refreshTags: ${error.message}`);
-  const rows = (data ?? []) as CachedTag[];
+  // Preserve optimistic offline tags until replay finishes. Otherwise the
+  // first reconnect snapshot naturally lacks the not-yet-inserted tag and
+  // `cacheReplaceTenant` makes it disappear before the queued write runs.
+  const pending = await dequeueAll();
+  if (
+    pending.some((op) => op.table === "tags" && op.attempts < MAX_ATTEMPTS)
+  ) {
+    void kickReplayer({ supabase });
+    return false;
+  }
+  const tags = domain ?? (await repoListClientTags(supabase, tenantId));
+  const rows: CachedTag[] = tags.map((tag) => ({
+    id: tag.id,
+    tenant_id: tenantId,
+    name: tag.name,
+    color: tag.color,
+  }));
   const before = cacheSignature(await safeCacheReadTags(tenantId));
   await cacheReplaceTenant("tags", tenantId, rows);
   const after = cacheSignature(rows);
@@ -130,12 +159,14 @@ export async function createClientTag(
     // Optimistic UI first (standalone online — no queued op to pair with).
     await cacheUpsert("tags", optimisticRow);
     try {
-      const created = await repoCreateClientTag(supabase, input, tenantId);
-      // Server-generated id wins. Replace the optimistic row with
-      // the canonical one (delete the temp + insert the real).
-      if (created.id !== id) {
-        await cacheDelete("tags", id);
-      }
+      // Keep the same UUID online and in the offline queue. If the HTTP
+      // response is lost after commit, replay sees 23505 and treats it as an
+      // idempotent success instead of creating a duplicate tag.
+      const created = await repoCreateClientTag(
+        supabase,
+        { ...input, id },
+        tenantId,
+      );
       await cacheUpsert("tags", {
         id: created.id,
         tenant_id: tenantId,
@@ -144,8 +175,11 @@ export async function createClientTag(
       });
       return created;
     } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        await cacheDelete("tags", id).catch(() => {});
+        throw err;
+      }
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
-      void err;
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
       void kickReplayer({ supabase });
       return { id, name: input.name, color: input.color };
@@ -188,7 +222,10 @@ export async function updateClientTag(
       });
       return updated;
     } catch (err) {
-      void err;
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("tags", existing).catch(() => {});
+        throw err;
+      }
       await enqueueTagUpdate(updateOp, merged);
       void kickReplayer({ supabase });
       return {
@@ -227,6 +264,7 @@ export async function deleteClientTag(
   id: string,
   tenantId: string,
 ): Promise<void> {
+  const existing = await readCachedTag(id, tenantId);
   const deleteOp = {
     table: "tags" as const,
     op: "delete" as const,
@@ -240,7 +278,11 @@ export async function deleteClientTag(
     try {
       await repoDeleteClientTag(supabase, id, tenantId);
       return;
-    } catch {
+    } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("tags", existing).catch(() => {});
+        throw err;
+      }
       // Fall through — ATOMIC optimistic delete + enqueue (risk #6).
       await enqueueOpWithCacheDeleteAndEmit(deleteOp, "tags", id);
       void kickReplayer({ supabase });

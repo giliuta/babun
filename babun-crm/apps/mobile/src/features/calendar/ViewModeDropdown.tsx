@@ -97,6 +97,7 @@ export function ViewModeDropdown({
                     setOpen(false);
                   }}
                   accessibilityRole="menuitem"
+                  accessibilityLabel={m.label}
                   accessibilityState={{ selected: cur }}
                   style={({ pressed }) => ({
                     minHeight: 44,

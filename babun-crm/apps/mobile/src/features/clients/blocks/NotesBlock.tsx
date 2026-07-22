@@ -26,7 +26,7 @@ import { useThemeColors } from "@/theme/colors";
 
 interface NotesBlockProps {
   client: Client;
-  update: (patch: Partial<Client>) => void;
+  update: (patch: Partial<Client>) => Promise<boolean>;
 }
 
 function genId(prefix: string): string {
@@ -36,18 +36,27 @@ function genId(prefix: string): string {
 export default function NotesBlock({ client, update }: NotesBlockProps) {
   const t = useThemeColors();
   const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
   const notes = client.notes ?? [];
 
-  const submit = () => {
+  const submit = async () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || saving) return;
     const note: ClientNote = {
       id: genId("note"),
       text,
       created_at: new Date().toISOString(),
     };
-    update({ notes: [note, ...notes] });
-    setDraft("");
+    setSaving(true);
+    try {
+      const saved = await update({ notes: [note, ...notes] });
+      if (saved) {
+        // Do not erase text typed while the request was in flight.
+        setDraft((current) => (current.trim() === text ? "" : current));
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = (id: string) =>
@@ -61,27 +70,33 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
     <CollapsibleCard title="Заметки" summary={summary} tone="muted">
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row gap-2">
-          <TextInput
-            value={draft}
+      <TextInput
+        value={draft}
+        accessibilityLabel="Новая заметка"
             onChangeText={setDraft}
-            onSubmitEditing={submit}
+            onSubmitEditing={() => void submit()}
             placeholder="Записать звонок / встречу / наблюдение"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
-            className="h-9 flex-1 rounded-[10px] px-3 text-[13px]"
+            keyboardAppearance="light"
+            className="h-11 flex-1 rounded-[10px] px-3 text-[13px]"
             style={{
               backgroundColor: t.fill,
               color: t.ink,
             }}
           />
           <Pressable
-            onPress={submit}
-            disabled={!draft.trim()}
-            className="items-center justify-center rounded-[10px] px-4"
+            onPress={() => void submit()}
+            disabled={!draft.trim() || saving}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить заметку"
+            accessibilityState={{ disabled: !draft.trim() || saving, busy: saving }}
+            className="min-h-11 items-center justify-center rounded-[10px] px-4"
             style={{ backgroundColor: draft.trim() ? t.accent : t.fill }}
           >
-            <Text className="text-sm font-semibold" style={{ color: draft.trim() ? "#fff" : t.faint }}>Добавить</Text>
+            <Text className="text-sm font-semibold" style={{ color: draft.trim() && !saving ? "#fff" : t.faint }}>
+              {saving ? "Сохраняю…" : "Добавить"}
+            </Text>
           </Pressable>
         </View>
 
@@ -97,9 +112,9 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
                 key={n.id}
                 className="flex-row items-start gap-2 rounded-lg p-2"
                 style={{
-                  backgroundColor: t.dark ? "rgba(234,179,8,0.12)" : "rgba(234,179,8,0.10)",
+                  backgroundColor: "rgba(234,179,8,0.10)",
                   borderWidth: 1,
-                  borderColor: t.dark ? "rgba(234,179,8,0.20)" : "rgba(234,179,8,0.25)",
+                  borderColor: "rgba(234,179,8,0.25)",
                 }}
               >
                 <Text className="flex-1 text-[13px]" style={{ color: t.warning }}>
@@ -110,10 +125,9 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
                 </Text>
                 <Pressable
                   onPress={() => remove(n.id)}
-                  hitSlop={8}
                   accessibilityRole="button"
                   accessibilityLabel="Удалить заметку"
-                  className="h-6 w-6 items-center justify-center active:opacity-60"
+                  className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
                 >
                   <X color={t.warning} size={13} />
                 </Pressable>

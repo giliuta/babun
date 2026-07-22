@@ -14,7 +14,6 @@ import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Calendar,
-  CalendarPlus,
   ChevronRight,
   Wrench,
 } from "lucide-react-native";
@@ -32,23 +31,42 @@ interface ClientNextJobProps {
   serviceDue: ServiceDueSummary;
 }
 
+/**
+ * Ведёт ли hero САМ на создание записи. Во всех режимах кроме «есть
+ * предстоящая запись» — да (ТО просрочено / скоро ТО / generic «Записать»
+ * зовут goToBooking). При предстоящей записи hero показывает ЕЁ и
+ * открывает календарь на дате, создать новую оттуда нельзя.
+ *
+ * Ряд действий (card-actions) читает этот же предикат и показывает
+ * «Записать» ровно тогда, когда hero его не даёт: так кнопка не двоится
+ * и не пропадает. Единственный источник правды — здесь.
+ */
+export function heroOffersBooking(stats: ClientStats | undefined): boolean {
+  return !stats?.nextApt;
+}
+
 type Tone = "accent" | "info" | "alert" | "warn";
 
-// WHERE the next job is — the dispatcher's first question after «when».
-// Resolve the appointment the hero names (selector rule: earliest
-// upcoming scheduled/in_progress) and return its object as
-// «Метка · адрес»; null → caller falls back to the generic hint.
-function nextAptPlace(
-  client: Client,
+// Resolve the appointment the hero names — the selector's rule: the earliest
+// upcoming scheduled/in_progress at nextApt's date+time. Resolved ONCE so
+// its object AND its team come from the SAME row: a cancelled duplicate at
+// the same slot must never lend its team (or place) to the shown visit.
+function findHeroApt(
   appointments: Appointment[],
   nextApt: { date: string; time: string },
-): string | null {
-  const apt = appointments.find(
+): Appointment | undefined {
+  return appointments.find(
     (a) =>
       a.date === nextApt.date &&
       a.time_start === nextApt.time &&
       (a.status === "scheduled" || a.status === "in_progress"),
   );
+}
+
+// WHERE the next job is — the dispatcher's first question after «when».
+// «Метка · адрес» of the resolved appointment's object; null → caller falls
+// back to the generic hint.
+function aptPlace(client: Client, apt: Appointment | undefined): string | null {
   const loc = apt?.location_id
     ? client.locations?.find((l) => l.id === apt.location_id)
     : undefined;
@@ -93,8 +111,19 @@ export default function ClientNextJob({
   // booking sheet can open pre-aimed (consumer side may ignore unknown
   // params → degrades gracefully to a plain calendar open).
   // The calendar lives at the dashboard index route («Календарь» tab).
-  const goToDate = (date: string) =>
-    router.push({ pathname: "/(dashboard)", params: { date } });
+  const goToDate = (
+    appointmentId: string,
+    date: string,
+    teamId: string | null,
+  ) =>
+    router.push({
+      pathname: "/(dashboard)",
+      params: {
+        appointmentId,
+        date,
+        ...(teamId ? { teamId } : {}),
+      },
+    });
   const goToBooking = (locationId: string | null, teamId: string | null) =>
     router.push({
       pathname: "/(dashboard)",
@@ -106,15 +135,23 @@ export default function ClientNextJob({
       },
     });
 
-  if (stats?.nextApt) {
+  const nextApt = stats?.nextApt;
+  if (nextApt) {
+    // Одна выборка записи — и место, и бригада берутся из неё (селектор
+    // nextApt несёт только date+time). Календарь переключается на бригаду
+    // записи, иначе визит чужой бригады открывал бы пустой день.
+    const heroApt = findHeroApt(appointments, nextApt);
     tone = "info";
     Icon = Calendar;
-    title = `Запись · ${aptLabel(stats.nextApt)}`;
-    subtitle =
-      nextAptPlace(client, appointments, stats.nextApt) ??
-      "Открыть в календаре";
-    const date = stats.nextApt.date;
-    onPress = () => goToDate(date);
+    title = `Запись · ${aptLabel(nextApt)}`;
+    subtitle = aptPlace(client, heroApt) ?? "Открыть в календаре";
+    onPress = heroApt
+      ? () => goToDate(heroApt.id, nextApt.date, heroApt.team_id)
+      : () =>
+          router.push({
+            pathname: "/(dashboard)",
+            params: { date: nextApt.date },
+          });
   } else if (serviceDue.overdue.length > 0) {
     const u = serviceDue.overdue[0];
     tone = "alert";
@@ -124,14 +161,19 @@ export default function ClientNextJob({
     onPress = () => goToBooking(u.locationId, stats?.lastTeamId ?? null);
   } else if (serviceDue.soon.length > 0) {
     const u = serviceDue.soon[0];
+    const d = u.due.daysUntil;
     tone = "warn";
     Icon = Wrench;
     title = `Скоро ТО · ${u.room}`;
-    subtitle = `через ${u.due.daysUntil} дн · записать на ТО`;
+    // «через 0 дн» для юнита с дедлайном сегодня — это «сегодня» (селектор
+    // кладёт в soon 0…14 дн). Тот же словарь относительных дней, что и в
+    // aptLabel: сегодня / завтра / через N дн.
+    const when = d <= 0 ? "сегодня" : d === 1 ? "завтра" : `через ${d} дн`;
+    subtitle = `${when} · записать на ТО`;
     onPress = () => goToBooking(u.locationId, stats?.lastTeamId ?? null);
   } else {
     tone = "accent";
-    Icon = CalendarPlus;
+    Icon = Calendar;
     title = "Записать";
     subtitle =
       stats && stats.visits > 0 ? "Новая запись" : "Первый визит этого клиента";
@@ -167,8 +209,7 @@ export default function ClientNextJob({
       chevColor: "rgba(255,255,255,0.90)",
     },
     // Semantic tones are tints of the DS tokens (as in Badge /
-    // ClientHeader) — no tailwind-amber / light-cobalt literals, so the
-    // dark scheme keeps its own accent (#5a86ff) and warning hues.
+    // ClientHeader) — no parallel Tailwind amber or cobalt literals.
     warn: {
       wrapBg: `${th.warning}1a`,
       iconBg: `${th.warning}2e`,
@@ -178,8 +219,8 @@ export default function ClientNextJob({
       chevColor: th.warning,
     },
     info: {
-      wrapBg: th.dark ? `${th.accent}26` : `${th.accent}14`,
-      iconBg: th.dark ? `${th.accent}33` : `${th.accent}1f`,
+      wrapBg: `${th.accent}14`,
+      iconBg: `${th.accent}1f`,
       iconColor: th.accent,
       titleColor: th.accent,
       subColor: th.sub,
@@ -193,6 +234,8 @@ export default function ClientNextJob({
     <View className="mx-3 mt-2">
       <Pressable
         onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}. ${subtitle}`}
         className="min-h-[62px] flex-row items-center gap-3 rounded-2xl px-3.5 py-2.5 active:opacity-90"
         style={{ backgroundColor: ts.wrapBg }}
       >

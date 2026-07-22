@@ -30,28 +30,38 @@ import {
   MessageSquareText,
   Package,
   Receipt,
+  RefreshCw,
   RotateCw,
   Scissors,
   Shield,
   Star,
   Tag,
   Tags,
+  UserCog,
   Users,
   Wallet,
   Wrench,
 } from "lucide-react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
+import {
+  getCurrentCyprusTime,
+  getCurrentTimeInZone,
+} from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
-import { useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { ROLE_LABELS, type UserRole } from "@/features/settings/role-policy";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
+import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useQueueDepth } from "@babun/shared/sync";
 
 type IconType = ComponentType<{
   color?: string;
@@ -62,19 +72,19 @@ type IconType = ComponentType<{
 // Палитра icon-тайлов — веб-токены --tile-* (apps/web globals.css),
 // один к одному, как в iOS Settings: цвет различает пункты, не несёт
 // смысловой нагрузки.
-// Личный календарь (метки/типы событий не-командного календаря) выключен —
-// зеркало web feature-flags.ts PERSONAL_CALENDAR_ENABLED.
-const PERSONAL_CALENDAR_ENABLED = false;
+// Личные события включены в единую страницу /book; их типы и метки должны
+// оставаться настраиваемыми из кабинета, а не жить скрытым deep link.
+const PERSONAL_CALENDAR_ENABLED = true;
 
 const TILE = {
-  blue: "#3E88F7",
-  green: "#4CAF50",
-  yellow: "#F4C430",
-  orange: "#F59E0B",
-  purple: "#9B59B6",
-  mint: "#10B981",
-  cyan: "#3EB8E5",
-  indigo: "#5E72E4",
+  blue: "#2F6FD6",
+  green: "#2E7D32",
+  yellow: "#9A6400",
+  orange: "#B45309",
+  purple: "#8E44AD",
+  mint: "#087A52",
+  cyan: "#007A99",
+  indigo: "#4B55C7",
 } as const;
 
 // Строка меню — анатомия веб-ряда: тайл 30, заголовок 15 medium,
@@ -147,32 +157,11 @@ function MenuRow({
   );
 }
 
-function GroupLabel({ children }: { children: string }) {
-  const t = useThemeColors();
-  return (
-    <Text
-      // Caption tier (DS §2: 11/700/+0.6 uppercase) — matches SectionHeader.
-      style={{
-        paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 4,
-        fontSize: 11,
-        fontWeight: "700",
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: t.faint,
-      }}
-    >
-      {children}
-    </Text>
-  );
-}
-
 // Герой-карта аккаунта (веб AccountHero): градиент accent→indigo→purple
 // 135°, кольцо-аватар с инициалами компании, имя + email. Тап ведёт в
 // «Личную информацию» — карту с именем компании естественно тыкают,
 // чтобы это имя поменять.
-function AccountHero() {
+function AccountHero({ role }: { role: UserRole | null | undefined }) {
   const t = useThemeColors();
   const router = useRouter();
   const { session } = useSession();
@@ -204,7 +193,7 @@ function AccountHero() {
           <LinearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={t.accent} />
             <Stop offset="0.6" stopColor="#5E5CE6" />
-            <Stop offset="1" stopColor="#AF52DE" />
+            <Stop offset="1" stopColor="#9B3DCB" />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero)" />
@@ -228,11 +217,13 @@ function AccountHero() {
           <Text style={{ fontSize: 17, fontWeight: "600", color: "#fff" }} numberOfLines={1}>
             {name}
           </Text>
-          {email ? (
+          {email || role ? (
             <Text
-              style={{ marginTop: 2, fontSize: 12, color: "rgba(255,255,255,0.85)" }}
+              style={{ marginTop: 2, fontSize: 12, color: "#fff" }}
               numberOfLines={1}
             >
+              {role ? ROLE_LABELS[role] : ""}
+              {role && email ? " · " : ""}
               {email}
             </Text>
           ) : null}
@@ -244,18 +235,28 @@ function AccountHero() {
 
 export default function CabinetHome() {
   const t = useThemeColors();
+  const { data: role } = useCurrentRole();
+  const owner = role === "owner";
+  const dispatcher = role === "dispatcher";
+  const master = role === "master";
+  const syncDepth = useQueueDepth();
+  const { data: calendarSettings } = useCalendarSettings();
+  const todayKey = formatYMD(
+    calendarSettings?.timezone
+      ? getCurrentTimeInZone(calendarSettings.timezone)
+      : getCurrentCyprusTime(),
+  );
   // Бейдж «Незакрытые дни» — тот же фильтр, что и в unclosed.tsx, но хабу
   // нужен только count; useAppointments — локальный кэш, тяжёлого нет.
   const { data: appts = [] } = useAppointments();
   const unclosedCount = useMemo(() => {
-    const todayKey = formatYMD(new Date());
     return appts.filter(
       (a) =>
         (a.kind === undefined || a.kind === "work") &&
         a.status === "scheduled" &&
         a.date < todayKey,
     ).length;
-  }, [appts]);
+  }, [appts, todayKey]);
 
   return (
     <Screen>
@@ -264,65 +265,79 @@ export default function CabinetHome() {
       </View>
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <AccountHero />
+        <AccountHero role={role} />
 
-        <GroupLabel>Смена</GroupLabel>
-        <SectionCard>
-          {/* Веб: АНАЛИТИКА → Сводка (KPI + топы за период). */}
-          <MenuRow
-            icon={BarChart3}
-            tone={TILE.indigo}
-            title="Сводка"
-            desc="KPI и топы за период"
-            href={"/cabinet/insights" as Href}
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={CalendarCheck2}
-            tone={TILE.green}
-            title="Закрыть день"
-            desc="Сверка записей и оплат за день"
-            href="/cabinet/close-day"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={CalendarX2}
-            tone={TILE.orange}
-            title="Незакрытые дни"
-            desc="Прошедшие записи без итога"
-            href={"/cabinet/unclosed" as Href}
-            badge={unclosedCount}
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Package}
-            tone={TILE.yellow}
-            title="Склад"
-            desc="Материалы и остатки"
-            href="/cabinet/inventory"
-          />
-        </SectionCard>
+        {owner || dispatcher || master ? (
+          <>
+            <SectionEyebrow>Смена</SectionEyebrow>
+            <SectionCard>
+              {owner ? (
+                <>
+                  {/* Веб: АНАЛИТИКА → Сводка (KPI + топы за период). */}
+                  <MenuRow
+                    icon={BarChart3}
+                    tone={TILE.indigo}
+                    title="Сводка"
+                    desc="KPI и топы за период"
+                    href={"/cabinet/insights" as Href}
+                  />
+                  <Divider inset={58} />
+                  <MenuRow
+                    icon={CalendarCheck2}
+                    tone={TILE.green}
+                    title="Закрыть день"
+                    desc="Сверка записей и оплат за день"
+                    href="/cabinet/close-day"
+                  />
+                  <Divider inset={58} />
+                </>
+              ) : null}
+              {owner || dispatcher ? (
+                <MenuRow
+                  icon={CalendarX2}
+                  tone={TILE.orange}
+                  title="Незакрытые дни"
+                  desc="Прошедшие записи без итога"
+                  href={"/cabinet/unclosed" as Href}
+                  badge={unclosedCount}
+                />
+              ) : null}
+              {owner || dispatcher ? <Divider inset={58} /> : null}
+              <MenuRow
+                icon={Package}
+                tone={TILE.yellow}
+                title="Склад"
+                desc={owner ? "Материалы и остатки" : "Материалы · только просмотр"}
+                href="/cabinet/inventory"
+              />
+            </SectionCard>
+          </>
+        ) : null}
 
         {/* Веб-группа «Личный кабинет» — те же строки, что в веб-меню;
             «Счёт компании» на мобиле живёт внутри «Личной информации»
             (business.tsx, секция «Реквизиты для счетов»). */}
-        <GroupLabel>Личный кабинет</GroupLabel>
+        <SectionEyebrow>Личный кабинет</SectionEyebrow>
         <SectionCard>
           <MenuRow
             icon={IdCard}
             tone={TILE.blue}
             title="Личная информация"
-            desc="Бизнес, контакты, реквизиты"
+            desc={owner ? "Бизнес, контакты, реквизиты" : "Профиль компании · только чтение"}
             href="/cabinet/business"
           />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Receipt}
-            tone={TILE.yellow}
-            title="Шаблоны транзакций"
-            desc="Аренда, ЗП, чаевые — в один тап"
-            href="/cabinet/templates"
-          />
+          {owner ? (
+            <>
+              <Divider inset={58} />
+              <MenuRow
+                icon={Receipt}
+                tone={TILE.yellow}
+                title="Шаблоны транзакций"
+                desc="Аренда, ЗП, чаевые — в один тап"
+                href="/cabinet/templates"
+              />
+            </>
+          ) : null}
           <Divider inset={58} />
           <MenuRow
             icon={Shield}
@@ -333,44 +348,73 @@ export default function CabinetHome() {
           />
         </SectionCard>
 
-        <GroupLabel>Записи</GroupLabel>
+        <SectionEyebrow>Записи</SectionEyebrow>
         <SectionCard>
           <MenuRow
             icon={CalendarClock}
             tone={TILE.orange}
-            title="Календарь"
-            desc="Часы и шаг сетки по умолчанию для всех команд"
-            href="/cabinet/calendar"
+            title={owner ? "Настройки календаря" : "Рабочий календарь"}
+            desc={owner ? "Часы, шаг сетки, буфер, часовой пояс" : "График и назначенные заявки"}
+            href={owner ? "/calendar" : "/"}
           />
-          <Divider inset={58} />
-          <MenuRow
-            icon={MessageSquareText}
-            tone={TILE.green}
-            title="Шаблоны SMS"
-            desc="Тексты напоминаний и подтверждений"
-            href={"/cabinet/sms-templates" as Href}
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Star}
-            tone={TILE.yellow}
-            title="Программа лояльности"
-            desc="Скидки постоянным клиентам"
-            href="/cabinet/loyalty"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={RotateCw}
-            tone={TILE.mint}
-            title="Повторяющиеся ТО"
-            desc="Серии регулярных записей"
-            href="/cabinet/recurring"
-          />
-          {/* Личный календарь спрятан (web feature-flags PERSONAL_CALENDAR_
-              ENABLED=false): эти экраны правят personal_labels/event-types,
-              которые НЕ влияют на командный календарь — метки команд живут в
-              Кабинет → Команды → Метки. Экраны не удалены (deep-link-safe). */}
-          {PERSONAL_CALENDAR_ENABLED ? (
+          {dispatcher ? (
+            <>
+              <Divider inset={58} />
+              <MenuRow
+                icon={BookUser}
+                tone={TILE.indigo}
+                title="Клиенты"
+                desc="Поиск, карточки и новые обращения"
+                href={"/clients" as Href}
+              />
+              <Divider inset={58} />
+              <MenuRow
+                icon={MessageSquareText}
+                tone={TILE.green}
+                title="Шаблоны SMS"
+                desc="Рабочие тексты для клиентов"
+                href={"/cabinet/sms-templates" as Href}
+              />
+              <Divider inset={58} />
+              <MenuRow
+                icon={RotateCw}
+                tone={TILE.mint}
+                title="Повторяющиеся ТО"
+                desc="Серии регулярных записей"
+                href="/cabinet/recurring"
+              />
+            </>
+          ) : null}
+          {owner ? (
+            <>
+              <Divider inset={58} />
+              <MenuRow
+                icon={MessageSquareText}
+                tone={TILE.green}
+                title="Шаблоны SMS"
+                desc="Тексты напоминаний и подтверждений"
+                href={"/cabinet/sms-templates" as Href}
+              />
+              <Divider inset={58} />
+              <MenuRow
+                icon={Star}
+                tone={TILE.yellow}
+                title="Программа лояльности"
+                desc="Скидки постоянным клиентам"
+                href="/cabinet/loyalty"
+              />
+              <Divider inset={58} />
+              <MenuRow
+                icon={RotateCw}
+                tone={TILE.mint}
+                title="Повторяющиеся ТО"
+                desc="Серии регулярных записей"
+                href="/cabinet/recurring"
+              />
+            </>
+          ) : null}
+          {/* Типы применяются на /book; метки используются в календаре. */}
+          {owner && PERSONAL_CALENDAR_ENABLED ? (
             <>
               <Divider inset={58} />
               <MenuRow
@@ -392,8 +436,10 @@ export default function CabinetHome() {
           ) : null}
         </SectionCard>
 
-        <GroupLabel>Справочники</GroupLabel>
-        <SectionCard>
+        {owner ? (
+          <>
+            <SectionEyebrow>Справочники</SectionEyebrow>
+            <SectionCard>
           {/* Настройки списка клиентов — тот же экран, что за шестерёнкой
               на вкладке Клиенты (правило: меню настроек живёт в Кабинете). */}
           <MenuRow
@@ -443,10 +489,18 @@ export default function CabinetHome() {
             desc="Кассы и счета бригад"
             href="/cabinet/accounts"
           />
-        </SectionCard>
+            </SectionCard>
 
-        <GroupLabel>Компания</GroupLabel>
-        <SectionCard>
+            <SectionEyebrow>Компания</SectionEyebrow>
+            <SectionCard>
+              <MenuRow
+                icon={UserCog}
+                tone={TILE.green}
+                title="Доступ в CRM"
+                desc="Владелец, диспетчер, бригадир / мастер"
+                href={"/cabinet/team-access" as Href}
+              />
+              <Divider inset={58} />
           <MenuRow
             icon={Users}
             tone={TILE.orange}
@@ -462,7 +516,29 @@ export default function CabinetHome() {
             desc="Сотрудники и их бригады"
             href="/cabinet/masters"
           />
-        </SectionCard>
+            </SectionCard>
+          </>
+        ) : null}
+
+        {owner || dispatcher ? (
+          <>
+            <SectionEyebrow>Приложение</SectionEyebrow>
+            <SectionCard>
+              <MenuRow
+                icon={RefreshCw}
+                tone={TILE.blue}
+                title="Синхронизация"
+                desc={
+                  syncDepth > 0
+                    ? "Ожидающие и отклонённые изменения"
+                    : "Все изменения переданы на сервер"
+                }
+                href={"/cabinet/sync" as Href}
+                badge={syncDepth}
+              />
+            </SectionCard>
+          </>
+        ) : null}
 
         {/* Выход — красная карта-строка, как в вебе. Wipes tenant-scoped
             MMKV + query cache once signOut succeeds, so the next account

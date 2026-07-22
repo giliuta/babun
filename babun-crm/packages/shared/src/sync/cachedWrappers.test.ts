@@ -21,21 +21,35 @@ import {
   NavigatorOnlineNetwork,
 } from "../storage/sql/provider";
 import type { NetworkAdapter } from "../storage/sql/types";
-import { __resetCacheForTests, cacheRead, dequeueAll } from "../db/cache/sql";
+import {
+  __resetCacheForTests,
+  cacheRead,
+  cacheReplaceTenant,
+  dequeueAll,
+} from "../db/cache/sql";
 import {
   createClient,
   updateClient,
   listClients,
+  archiveClient,
+  restoreClient,
 } from "./clientsCached";
 import {
   createAppointment,
+  deleteAppointment,
   updateAppointment,
   listAppointments,
 } from "./appointmentsCached";
+import {
+  createClientTag,
+  deleteClientTag,
+  updateClientTag,
+} from "./tagsCached";
 import { createBlankClient } from "../local/clients";
 import { createBlankAppointment } from "../local/appointments";
 import type { Client } from "../local/clients";
 import type { Appointment } from "../local/appointments";
+import { ColdOfflineCacheMissError } from "./cache-errors";
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const CLIENT_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -50,6 +64,84 @@ class OfflineNetwork implements NetworkAdapter {
   subscribe(_cb: (online: boolean) => void): () => void {
     return () => {};
   }
+}
+
+class OnlineNetwork implements NetworkAdapter {
+  isOnline(): boolean {
+    return true;
+  }
+  subscribe(_cb: (online: boolean) => void): () => void {
+    return () => {};
+  }
+}
+
+function semanticRejectSupabase() {
+  const result = {
+    data: null,
+    error: {
+      code: "42501",
+      message: "row-level security policy rejected this write",
+    },
+  };
+  return {
+    rpc() {
+      return Promise.resolve(result);
+    },
+    from() {
+      const chain: Record<string, unknown> = {};
+      chain.update = () => chain;
+      chain.delete = () => chain;
+      chain.insert = () => chain;
+      chain.eq = () => chain;
+      chain.select = () => chain;
+      chain.single = () => Promise.resolve(result);
+      chain.maybeSingle = () => Promise.resolve(result);
+      chain.then = (
+        onFulfilled: (value: typeof result) => unknown,
+        onRejected?: (reason: unknown) => unknown,
+      ) => Promise.resolve(result).then(onFulfilled, onRejected);
+      return chain;
+    },
+  };
+}
+
+function emptyClientSnapshotSupabase() {
+  let readPages = 0;
+  return {
+    client: {
+      from() {
+        let write = false;
+        const readResult = { data: [], error: null };
+        const writeResult = {
+          data: null,
+          error: { status: 503, message: "service unavailable" },
+        };
+        const chain: Record<string, unknown> = {};
+        chain.select = () => chain;
+        chain.eq = () => chain;
+        chain.is = () => chain;
+        chain.order = () => chain;
+        chain.insert = () => {
+          write = true;
+          return chain;
+        };
+        chain.range = () => {
+          readPages += 1;
+          return Promise.resolve(readResult);
+        };
+        chain.then = (
+          onFulfilled: (value: typeof readResult | typeof writeResult) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) =>
+          Promise.resolve(write ? writeResult : readResult).then(
+            onFulfilled,
+            onRejected,
+          );
+        return chain;
+      },
+    },
+    readPages: () => readPages,
+  };
 }
 
 // The offline path never calls Supabase; a bare stub satisfies the type.
@@ -69,6 +161,35 @@ afterEach(() => {
 });
 
 describe("clients cache-of-domain", () => {
+  test("reconnect revalidation preserves a client whose offline insert is pending", async () => {
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "Оффлайн" }),
+      TENANT,
+    );
+    setNetwork(new OnlineNetwork());
+    const server = emptyClientSnapshotSupabase();
+
+    const listed = await listClients(server.client as never, TENANT);
+    expect(listed.map((row) => row.id)).toEqual([CLIENT_ID]);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect(server.readPages()).toBe(0);
+    const cached = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cached.map((row) => row.id)).toEqual([CLIENT_ID]);
+  });
+
+  test("cold offline cache miss is unknown, not an empty client list", async () => {
+    await expect(listClients(stubSupabase, TENANT)).rejects.toBeInstanceOf(
+      ColdOfflineCacheMissError,
+    );
+  });
+
+  test("an authoritative empty client snapshot remains usable offline", async () => {
+    await cacheReplaceTenant("clients", TENANT, []);
+    expect(await listClients(stubSupabase, TENANT)).toEqual([]);
+  });
+
   test("offline create caches the FULL domain (tag_ids + nested) but queues a RAW payload", async () => {
     const input: Client = createBlankClient({
       id: CLIENT_ID,
@@ -125,6 +246,7 @@ describe("clients cache-of-domain", () => {
     expect(op!.op).toBe("insert");
     expect(op!.row_id).toBe(CLIENT_ID);
     expect(op!.payload.tag_ids).toBeUndefined();
+    expect(op!.payload.__tag_ids).toEqual(["tag-vip", "tag-regular"]);
     expect(op!.payload.tenant_id).toBe(TENANT);
     expect(op!.payload.full_name).toBe("Иван");
     // Nested jsonb columns ARE part of the server row (phones/locations/…
@@ -185,9 +307,84 @@ describe("clients cache-of-domain", () => {
     expect(updateOp.payload.tag_ids).toBeUndefined();
     expect(updateOp.payload.comment).toBe("left a note");
   });
+
+  test("offline archive queues UPDATE deleted_at, hides the row, and restore rehydrates it", async () => {
+    const client = createBlankClient({
+      id: CLIENT_ID,
+      full_name: "История сохранена",
+    });
+    await createClient(stubSupabase, client, TENANT);
+
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT);
+    expect(await cacheRead("clients", TENANT)).toEqual([]);
+    // This test started from a local-only create, not a server snapshot. Once
+    // its sole row is archived, [] is still unknown until first sync.
+    await expect(listClients(stubSupabase, TENANT)).rejects.toBeInstanceOf(
+      ColdOfflineCacheMissError,
+    );
+
+    const archivedOp = (await dequeueAll()).find(
+      (op) => op.op === "update" && typeof op.payload.deleted_at === "string",
+    );
+    expect(archivedOp).toBeDefined();
+    expect(archivedOp!.row_id).toBe(CLIENT_ID);
+    expect(
+      (await dequeueAll()).some(
+        (op) => op.row_id === CLIENT_ID && op.op === "delete",
+      ),
+    ).toBe(false);
+
+    await restoreClient(
+      stubSupabase,
+      { ...client, deleted_at: "2026-07-20T00:00:00.000Z" },
+      TENANT,
+    );
+    const [restored] = await listClients(stubSupabase, TENANT);
+    expect(restored!.id).toBe(CLIENT_ID);
+    expect(restored!.deleted_at).toBeNull();
+    expect(
+      (await dequeueAll()).some(
+        (op) => op.op === "update" && op.payload.deleted_at === null,
+      ),
+    ).toBe(true);
+  });
+
+  test("online semantic update rejection rolls back cache and is never queued", async () => {
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "До изменения" }),
+      TENANT,
+    );
+    const queuedBefore = (await dequeueAll()).length;
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      updateClient(
+        semanticRejectSupabase() as never,
+        CLIENT_ID,
+        { full_name: "Ложный optimistic" },
+        TENANT,
+      ),
+    ).rejects.toThrow("row-level security");
+
+    const [cached] = await cacheRead<Record<string, unknown>>("clients", TENANT);
+    expect(cached?.full_name).toBe("До изменения");
+    expect((await dequeueAll()).length).toBe(queuedBefore);
+  });
 });
 
 describe("appointments cache-of-domain", () => {
+  test("cold offline cache miss is unknown, not a free calendar", async () => {
+    await expect(
+      listAppointments(stubSupabase, TENANT),
+    ).rejects.toBeInstanceOf(ColdOfflineCacheMissError);
+  });
+
+  test("an authoritative empty calendar snapshot remains usable offline", async () => {
+    await cacheReplaceTenant("appointments", TENANT, []);
+    expect(await listAppointments(stubSupabase, TENANT)).toEqual([]);
+  });
+
   test("offline create caches the full domain (nested fields) and queues a raw payload", async () => {
     const input: Appointment = createBlankAppointment({
       id: APPT_ID,
@@ -260,5 +457,125 @@ describe("appointments cache-of-domain", () => {
     const updateOp = (await dequeueAll()).find((o) => o.op === "update")!;
     expect(updateOp.payload.status).toBe("completed");
     expect(updateOp.payload.comment).toBe("готово");
+  });
+
+  test("online semantic update rejection restores the canonical appointment", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+        comment: "Исходная заметка",
+      }),
+      TENANT,
+    );
+    const queuedBefore = (await dequeueAll()).length;
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      updateAppointment(
+        semanticRejectSupabase() as never,
+        APPT_ID,
+        { comment: "Ложная заметка" },
+        TENANT,
+      ),
+    ).rejects.toThrow("row-level security");
+
+    const [cached] = await cacheRead<Record<string, unknown>>(
+      "appointments",
+      TENANT,
+    );
+    expect(cached?.comment).toBe("Исходная заметка");
+    expect((await dequeueAll()).length).toBe(queuedBefore);
+  });
+
+  test("online semantic delete rejection restores the appointment", async () => {
+    await createAppointment(
+      stubSupabase,
+      createBlankAppointment({
+        id: APPT_ID,
+        date: "2026-07-10",
+        time_start: "09:00",
+        time_end: "10:00",
+      }),
+      TENANT,
+    );
+    const queuedBefore = (await dequeueAll()).length;
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      deleteAppointment(semanticRejectSupabase() as never, APPT_ID, TENANT),
+    ).rejects.toThrow("row-level security");
+
+    const cached = await cacheRead<Record<string, unknown>>(
+      "appointments",
+      TENANT,
+    );
+    expect(cached.some((row) => row.id === APPT_ID)).toBe(true);
+    expect((await dequeueAll()).length).toBe(queuedBefore);
+  });
+});
+
+describe("client tags offline and semantic failures", () => {
+  test("offline create keeps one stable UUID in cache and replay payload", async () => {
+    const created = await createClientTag(
+      stubSupabase,
+      { name: "VIP", color: "#3366ff" },
+      TENANT,
+    );
+    const [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    const [op] = await dequeueAll();
+
+    expect(cached?.id).toBe(created.id);
+    expect(op?.row_id).toBe(created.id);
+    expect(op?.payload.id).toBe(created.id);
+  });
+
+  test("online semantic create rejection removes the optimistic tag", async () => {
+    setNetwork(new OnlineNetwork());
+    await expect(
+      createClientTag(
+        semanticRejectSupabase() as never,
+        { name: "Запрещено", color: "#3366ff" },
+        TENANT,
+      ),
+    ).rejects.toThrow("row-level security");
+
+    expect(await cacheRead("tags", TENANT)).toEqual([]);
+    expect(await dequeueAll()).toEqual([]);
+  });
+
+  test("online semantic update and delete restore the cached tag", async () => {
+    const created = await createClientTag(
+      stubSupabase,
+      { name: "Исходная", color: "#3366ff" },
+      TENANT,
+    );
+    const queuedBefore = (await dequeueAll()).length;
+    setNetwork(new OnlineNetwork());
+
+    await expect(
+      updateClientTag(
+        semanticRejectSupabase() as never,
+        created.id,
+        { name: "Ложная" },
+        TENANT,
+      ),
+    ).rejects.toThrow("row-level security");
+    let [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    expect(cached?.name).toBe("Исходная");
+
+    await expect(
+      deleteClientTag(
+        semanticRejectSupabase() as never,
+        created.id,
+        TENANT,
+      ),
+    ).rejects.toThrow("row-level security");
+    [cached] = await cacheRead<Record<string, unknown>>("tags", TENANT);
+    expect(cached?.id).toBe(created.id);
+    expect((await dequeueAll()).length).toBe(queuedBefore);
   });
 });

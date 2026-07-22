@@ -78,7 +78,9 @@ export async function insertFinanceCategory(
     })
     .select("*")
     .single();
-  if (error) throw new Error(`insertFinanceCategory: ${error.message}`);
+  if (error || !data) {
+    throw new Error(error?.message ?? "Не удалось создать финансовую категорию");
+  }
   return rowToCategory(data as Row);
 }
 
@@ -99,11 +101,15 @@ export async function updateFinanceCategory(
   if (patch.name !== undefined) update.name = patch.name.trim();
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("finance_categories")
     .update(update)
-    .eq("id", id);
-  if (error) throw new Error(`updateFinanceCategory: ${error.message}`);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Категория не найдена или недоступна");
+  }
 }
 
 /** Deletes a tenant-owned category. Transactions/templates referencing it
@@ -112,9 +118,13 @@ export async function deleteFinanceCategory(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("finance_categories")
     .delete()
-    .eq("id", id);
-  if (error) throw new Error(`deleteFinanceCategory: ${error.message}`);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Категория не найдена или недоступна");
+  }
 }

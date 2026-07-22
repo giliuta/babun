@@ -43,8 +43,8 @@ export const QUICK_REPLIES: QuickReply[] = [
     title: "Цена чистки",
     variants: [
       { lang: "ru", text: "Стоимость чистки кондиционера: €50 за единицу. При заказе от 3 единиц — €45/шт." },
-      { lang: "en", text: "AC cleaning cost: €50 per unit. For 3+ units — €45 each." },
-      { lang: "el", text: "Κόστος καθαρισμού κλιματιστικού: €50 ανά μονάδα. Για 3+ μονάδες — €45 η κάθε μία." },
+      { lang: "en", text: "AC cleaning cost: €50 per unit. From 3 units — €45 each." },
+      { lang: "el", text: "Κόστος καθαρισμού κλιματιστικού: €50 ανά μονάδα. Από 3 μονάδες — €45 η κάθε μία." },
     ],
     sort_order: 2,
   },

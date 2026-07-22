@@ -11,7 +11,6 @@
 
 import {
   useMutation,
-  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import {
@@ -21,8 +20,8 @@ import {
   type MasterPermissions,
   type MasterRole,
 } from "@babun/shared/local/masters";
+import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import type { Master } from "./queries";
 
 // The rich fields that ride inside `profile`. Everything the shared Master
@@ -98,17 +97,11 @@ export function getMasterContacts(m: Master): MasterContacts {
 // ─── Profile patch writer ────────────────────────────────────────────
 // RISK-3 (races) + no-clobber: the generic useUpdateMaster overwrites whole
 // columns, which for `profile` would drop keys the caller didn't include.
-// Here we re-read the freshest profile immediately before merging the patch,
-// so untouched keys survive and a slow round-trip doesn't merge onto a stale
-// cached copy. NOTE: this narrows but does NOT fully close the race — mutations
-// aren't serialized, so two blur-commits fired almost simultaneously can both
-// read the same base before either write lands, and the second still wins.
-// The window is one field per blur; if the coming per-permission toggle bursts
-// (slice 3) make it observable, serialize on a shared mutationKey/queue.
-// Pass a shallow patch — top-level keys replace.
+// patch_master_profile performs `profile || patch` in one PostgreSQL UPDATE,
+// so parallel blur/switch saves cannot overwrite one another's keys.
+// Pass a shallow patch — top-level keys replace atomically.
 
 export function useUpdateMasterProfile() {
-  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -118,28 +111,10 @@ export function useUpdateMasterProfile() {
       id: string;
       patch: MasterProfile;
     }) => {
-      // Read-before-write: pull the current profile so we merge onto the
-      // latest server state rather than a possibly-stale cached copy.
-      const { data: current, error: readErr } = await supabase
-        .from("masters")
-        .select("profile")
-        .eq("tenant_id", tenantId as string)
-        .eq("id", id)
-        .maybeSingle();
-      if (readErr) throw new Error(readErr.message);
-
-      const base =
-        current?.profile &&
-        typeof current.profile === "object" &&
-        !Array.isArray(current.profile)
-          ? (current.profile as MasterProfile)
-          : {};
-      const next: MasterProfile = { ...base, ...patch };
-
-      const { error } = await (supabase.from("masters") as any)
-        .update({ profile: next })
-        .eq("tenant_id", tenantId as string)
-        .eq("id", id);
+      const { error } = await supabase.rpc("patch_master_profile", {
+        p_master_id: id,
+        p_patch: patch as unknown as Json,
+      });
       if (error) throw new Error(error.message);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["masters"] }),

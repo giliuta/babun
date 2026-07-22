@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useRef,
   useState,
   type ReactNode,
@@ -13,6 +14,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
 
@@ -40,13 +42,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
   const t = useThemeColors();
+  const reducedMotion = useReducedMotion();
 
   const hide = useCallback(() => {
+    if (reducedMotion) {
+      opacity.setValue(0);
+      translateY.setValue(-12);
+      setToast(null);
+      return;
+    }
     Animated.parallel([
       Animated.timing(opacity, { toValue: 0, duration: 220, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: -12, duration: 220, useNativeDriver: true }),
     ]).start(() => setToast(null));
-  }, [opacity, translateY]);
+  }, [opacity, reducedMotion, translateY]);
 
   const show = useCallback(
     (message: string, type: ToastType = "success", action?: ToastAction) => {
@@ -56,19 +65,34 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       AccessibilityInfo.announceForAccessibility(
         action ? `${message}. Доступно действие: ${action.label}` : message,
       );
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
-      ]).start();
+      if (reducedMotion) {
+        opacity.setValue(1);
+        translateY.setValue(0);
+      } else {
+        Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true }),
+        ]).start();
+      }
       if (timer.current) clearTimeout(timer.current);
       // С кнопкой держим дольше — человеку нужно успеть передумать.
       timer.current = setTimeout(hide, action ? 5000 : 2200);
     },
-    [opacity, translateY, hide],
+    [hide, opacity, reducedMotion, translateY],
   );
 
-  // info = inverse surface from the palette (ink ground, canvas text) — the
-  // classic iOS dark toast in light mode, a light toast in dark mode.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  // info = inverse surface from the fixed light palette: classic iOS ink toast.
   const info = toast?.type === "info";
   const toastBg = toast?.type === "error" ? t.danger : info ? t.ink : t.success;
   const toastText = info ? t.canvas : "#ffffff";
@@ -111,8 +135,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={toast.action.label}
-                className="rounded-full px-3 py-1 active:opacity-70"
-                style={{ backgroundColor: "rgba(255,255,255,0.22)" }}
+                className="rounded-full px-3 active:opacity-70"
+                style={{
+                  minHeight: 44,
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.22)",
+                }}
               >
                 <Text
                   className="text-sm font-bold"

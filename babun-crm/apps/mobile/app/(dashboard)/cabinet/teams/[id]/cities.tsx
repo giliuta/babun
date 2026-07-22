@@ -405,7 +405,7 @@ function LabelSheet({
           className="flex-1"
           style={{ backgroundColor: t.scrim }}
           onPress={onClose}
-          accessibilityLabel="Закрыть"
+          accessible={false}
         />
         <View
           className="rounded-t-3xl p-5 pb-8"

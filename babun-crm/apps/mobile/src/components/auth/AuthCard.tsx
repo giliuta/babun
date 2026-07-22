@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useState, type ReactNode } from "react";
 import {
+  AccessibilityInfo,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -29,8 +30,8 @@ import Animated, {
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useAuthTheme } from "@/components/auth/theme";
 
-// «Halo Cobalt» auth surfaces — one styling dialect, formal «вы», §5 focus ring,
-// light + dark token inversion via useAuthTheme(). apps/mobile/docs/DESIGN-SYSTEM.md.
+// «Halo Cobalt» auth surfaces — one fixed-light styling dialect, formal «вы»,
+// §5 focus ring via useAuthTheme(). apps/mobile/docs/DESIGN-SYSTEM.md.
 const FILL = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as const;
 
 // The single decorative light source — a soft cobalt bloom from the top.
@@ -144,6 +145,7 @@ export function AuthCard({
                 </Text>
                 {title ? (
                   <Text
+                    accessibilityRole="header"
                     maxFontSizeMultiplier={1.2}
                     style={{ marginTop: 20, fontSize: 26, lineHeight: 32, fontWeight: "700", letterSpacing: -0.4, color: t.ink, textAlign: "center" }}
                   >
@@ -178,7 +180,7 @@ export function InputCard({ children }: { children: ReactNode }) {
         backgroundColor: t.surface,
         overflow: "hidden",
         boxShadow: t.cardShadow,
-        borderWidth: t.dark ? 1 : 0,
+        borderWidth: 0,
         borderColor: t.separator,
       }}
     >
@@ -208,7 +210,8 @@ export const AuthField = forwardRef<
         ref={ref}
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
-        keyboardAppearance={t.dark ? "dark" : "light"}
+        keyboardAppearance="light"
+        accessibilityLabel={props.accessibilityLabel ?? props.placeholder}
         onFocus={(e) => {
           focus.value = withTiming(1, { duration: 180 });
           onFocus?.(e);
@@ -266,9 +269,13 @@ export const PasswordInput = forwardRef<TextInput, TextInputProps>(
 // Shared assertive error line.
 export function FormError({ message }: { message?: string | null }) {
   const t = useAuthTheme();
+  useEffect(() => {
+    if (message) AccessibilityInfo.announceForAccessibility(message);
+  }, [message]);
   if (!message) return null;
   return (
     <Text
+      accessibilityRole="alert"
       accessibilityLiveRegion="assertive"
       style={{ marginTop: 12, paddingHorizontal: 8, textAlign: "center", fontSize: 13, color: t.danger }}
     >
@@ -310,17 +317,21 @@ export function GhostLink({
   label,
   onPress,
   muted,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
   muted?: boolean;
+  disabled?: boolean;
 }) {
   const t = useAuthTheme();
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
       hitSlop={6}
       style={{ height: 44, alignItems: "center", justifyContent: "center", marginTop: 8 }}
     >
@@ -356,4 +367,3 @@ export function SwitchLink({
     </Pressable>
   );
 }
-

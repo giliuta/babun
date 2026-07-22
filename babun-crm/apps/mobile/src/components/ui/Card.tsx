@@ -4,8 +4,8 @@ import { useThemeColors } from "@/theme/colors";
 
 // «Halo Cobalt» surfaces — apps/mobile/docs/DESIGN-SYSTEM.md.
 
-// Grouped card: soft neutral elevation in light (dark lifts by tone, no grey
-// shadow) + a 1px frosted top-edge highlight that reads as glass thickness.
+// Grouped card: soft neutral elevation on the fixed light canvas plus a 1px
+// frosted top-edge highlight that reads as glass thickness.
 export function Card({
   style,
   children,
@@ -45,6 +45,7 @@ export function SectionHeader({ children }: { children: string }) {
   const t = useThemeColors();
   return (
     <Text
+      accessibilityRole="header"
       style={{
         fontSize: 11,
         fontWeight: "700",

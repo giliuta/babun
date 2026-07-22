@@ -4,8 +4,9 @@
 // changes only (same as clientsCached.ts):
 //   1. SQLite cache (`../db/cache/sql`); `readCachedAppointment` uses
 //      `cacheGetOne` instead of the web `(await getCache()).get(...)`.
-//   2. Web-only quota gate dropped from the create-path (quota lives in the
-//      replayer's injected gate on the offline replay).
+//   2. Web-only quota module stays out of this host-neutral wrapper. Mobile
+//      preflights interactive creates in its hook and injects the policy into
+//      the replayer for offline writes.
 //   3. `crypto.randomUUID()` → `randomUuid()` (RN-safe).
 //
 // Original behaviour preserved verbatim, including the v452 UUID guard: a
@@ -47,6 +48,7 @@ import {
   cacheDelete,
   cacheReplaceTenant,
   cacheGetOne,
+  hasAuthoritativeTenantSnapshot,
   dequeueAll,
   type CachedAppointment,
   type CachedAppointmentData,
@@ -62,6 +64,7 @@ import {
 } from "./queue-events";
 import { emitRevalidated, cacheSignature } from "./revalidate-events";
 import { randomUuid } from "./uuid";
+import { ColdOfflineCacheMissError } from "./cache-errors";
 
 type DbSupabase = SupabaseClient<Database>;
 
@@ -112,19 +115,25 @@ export async function listAppointments(
     void revalidateAppointments(supabase, tenantId);
     return cached.map(rowToAppointment);
   }
-  // Cold-OFFLINE guard (offline-plan rule 4): empty cache + no network →
-  // `repoListAppointments` throws. Catch and return [] so the calendar shows
-  // an empty grid, not an error screen (matches tagsCached / clientsCached).
+  // An empty row set is ambiguous: it can be a real server snapshot or a
+  // device that has never synced appointments. The authoritative marker
+  // written by cacheReplaceTenant disambiguates those states below.
   try {
     const fresh = await repoListAppointments(supabase, tenantId);
     await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
     return fresh;
   } catch (err) {
-    // [] — только для честного офлайна. Онлайн-ошибка сервера обязана
-    // дойти до error-ветки UI: пустая сетка «свободного» дня при живой
-    // сети читается как отсутствие записей — риск дабл-букинга.
+    // Online/server errors always reach the UI. Offline may return [] only
+    // when this device previously stored an authoritative empty snapshot;
+    // otherwise the calendar must render a blocked unknown state, never a
+    // false «free day» that invites double-booking.
     if (isOnline()) throw err;
-    return [];
+    const hasSnapshot = await hasAuthoritativeTenantSnapshot(
+      "appointments",
+      tenantId,
+    ).catch(() => false);
+    if (hasSnapshot) return [];
+    throw new ColdOfflineCacheMissError("appointments");
   }
 }
 
@@ -318,7 +327,13 @@ export async function updateAppointment(
       await refetchAndCacheOne(supabase, id, tenantId);
       return updated;
     } catch (err) {
-      void err;
+      // RLS/constraint/business-rule failures will never succeed on replay.
+      // Put the canonical cached row back and surface the error instead of
+      // leaving a false optimistic edit plus a permanently poisoned queue.
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        throw err;
+      }
       await enqueueUpdate(updateOp, merged);
       void kickReplayer({ supabase });
       return { ...toDomain(existing), ...patch, id } as Appointment;
@@ -364,6 +379,8 @@ export async function deleteAppointment(
     return;
   }
 
+  const existing = await readCachedAppointment(id, tenantId);
+
   const deleteOp = {
     table: "appointments" as const,
     op: "delete" as const,
@@ -377,7 +394,11 @@ export async function deleteAppointment(
     try {
       await repoDeleteAppointment(supabase, id, tenantId);
       return;
-    } catch {
+    } catch (err) {
+      if (!isTransientNetworkError(err)) {
+        if (existing) await cacheUpsert("appointments", existing).catch(() => {});
+        throw err;
+      }
       // Fall through — ATOMIC optimistic delete + enqueue (risk #6).
       await enqueueOpWithCacheDeleteAndEmit(deleteOp, "appointments", id);
       void kickReplayer({ supabase });

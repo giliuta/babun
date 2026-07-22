@@ -81,6 +81,11 @@ export function DayFinanceFooter({
     [days, byDate, sharedServices, extrasMap, teamId, todayYmd],
   );
 
+  // A completely empty week used to reserve two noisy rows of seven €0
+  // values. Preserve the per-day operational view when money exists, but let
+  // an empty calendar use the grid space for actual work.
+  if (rows.every((row) => row.income === 0 && row.spent === 0)) return null;
+
   return (
     <View
       style={{

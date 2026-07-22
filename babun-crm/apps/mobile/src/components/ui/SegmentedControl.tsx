@@ -55,12 +55,16 @@ export function SegmentedControl<V extends string>({
               justifyContent: "center",
               borderRadius: 10,
               paddingVertical: 8,
-              minHeight: 36,
+              minHeight: 44,
               backgroundColor: active ? t.surface : "transparent",
               opacity: disabled && !active ? 0.4 : 1,
             }}
           >
             <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.75}
               style={{
                 fontSize: 14,
                 fontWeight: "600",

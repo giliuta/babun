@@ -13,7 +13,7 @@
 // All input monetary values get normalised on entry:
 //   - Appointment.payments[*].amount / apt.prepaid_amount → already euros
 //   - Appointment.expenses[*].amount → already euros
-//   - Service.material cost via getServiceMaterialCost → already euros
+//   - Service material unit cost × Appointment.services quantity → euros
 //   - DayExtra.amount → already euros
 //   - FinancePayment.amountCents → divided by 100
 //   - Expense.amountCents → divided by 100
@@ -22,7 +22,8 @@
 // called on them verbatim.
 
 import { getPaidAmount, type Appointment } from "../appointments";
-import { getServiceMaterialCost, type Service } from "../services";
+import type { Service } from "../services";
+import { appointmentMaterialCostLines } from "./appointment-calc";
 import type { Team } from "../masters";
 import type { DayExtra } from "../day-extras";
 import type {
@@ -87,7 +88,9 @@ export interface ComputeFinancialsResult {
   cash: number;
   /** Card tendered. Euros. */
   card: number;
-  /** Transfer / invoice / split / other payment methods. Euros. */
+  /** Bank transfer tendered. Euros. */
+  transfer: number;
+  /** Invoice / split / other or unknown payment methods. Euros. */
   otherPayment: number;
 }
 
@@ -155,6 +158,7 @@ export function computeFinancials(
   const expenseLines: FinanceLine[] = [];
   let cash = 0;
   let card = 0;
+  let transfer = 0;
   let otherPayment = 0;
 
   for (const apt of appointments) {
@@ -175,34 +179,43 @@ export function computeFinancials(
       });
     }
 
-    for (const p of apt.payments ?? []) {
-      if (p.amount <= 0) continue;
-      if (p.method === "cash") cash += p.amount;
-      else if (p.method === "card") card += p.amount;
-      else otherPayment += p.amount;
-    }
-    if ((apt.prepaid_amount ?? 0) > 0) {
-      // Prepaid is assumed cash unless a dedicated method lives on the
-      // record later. Conservative default so cashbox stays realistic.
-      cash += apt.prepaid_amount;
+    // Receipt rows remain attached after a full refund as audit history.
+    // They are no longer current tender and therefore must not survive in
+    // the cash/card breakdown after getPaidAmount() has already netted the
+    // appointment's revenue to zero.
+    if (apt.payment_status !== "refunded") {
+      for (const p of apt.payments ?? []) {
+        if (p.amount <= 0) continue;
+        if (p.method === "cash") cash += p.amount;
+        else if (p.method === "card") card += p.amount;
+        else if (p.method === "transfer") transfer += p.amount;
+        else otherPayment += p.amount;
+      }
+      if ((apt.prepaid_amount ?? 0) > 0) {
+        // `payment_method` is persisted together with a booking prepayment.
+        // Never invent cash for legacy rows: that inflates the physical
+        // cashbox. Missing/transfer/other methods belong to the non-cash
+        // bucket until the operator supplies an explicit tender.
+        if (apt.payment_method === "cash") cash += apt.prepaid_amount;
+        else if (apt.payment_method === "card") card += apt.prepaid_amount;
+        else if (apt.payment_method === "transfer") {
+          transfer += apt.prepaid_amount;
+        }
+        else otherPayment += apt.prepaid_amount;
+      }
     }
 
-    for (const sid of apt.service_ids) {
-      const svc = servicesById.get(sid);
-      if (!svc) continue;
-      const materialCost = getServiceMaterialCost(svc);
-      if (materialCost > 0) {
-        expenseLines.push({
-          id: `mat-${apt.id}-${sid}`,
-          dateKey: apt.date,
-          description: `Материалы: ${svc.name}`,
-          amount: materialCost,
-          teamId: apt.team_id,
-          category: "Материалы",
-          source: "apt-material",
-          refId: apt.id,
-        });
-      }
+    for (const material of appointmentMaterialCostLines(apt, services)) {
+      expenseLines.push({
+        id: `mat-${apt.id}-${material.serviceId}`,
+        dateKey: apt.date,
+        description: `Материалы: ${material.serviceName}`,
+        amount: material.totalCost,
+        teamId: apt.team_id,
+        category: "Материалы",
+        source: "apt-material",
+        refId: apt.id,
+      });
     }
 
     for (const ex of apt.expenses ?? []) {
@@ -265,6 +278,7 @@ export function computeFinancials(
     });
     if (p.method === "cash") cash += eur;
     else if (p.method === "card") card += eur;
+    else if (p.method === "transfer") transfer += eur;
     else otherPayment += eur;
   }
 
@@ -304,6 +318,7 @@ export function computeFinancials(
     margin,
     cash,
     card,
+    transfer,
     otherPayment,
   };
 }

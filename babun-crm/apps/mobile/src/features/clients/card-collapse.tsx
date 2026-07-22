@@ -46,7 +46,7 @@ interface CollapsibleCardProps {
   title: string;
   /** Loud right-side summary, e.g. «долг €135» / «8 · был 10 мая». */
   summary?: string;
-  /** danger → red summary (долг). muted → grey regular (заметки/«—»). */
+  /** danger → red summary (долг). muted → grey regular. */
   tone?: "default" | "danger" | "muted";
   defaultOpen?: boolean;
   /** Block kind — set it to persist the open-state per kind (MMKV,
@@ -71,7 +71,7 @@ export function CollapsibleCard({
     setOpen(next);
   };
 
-  const value = summary || "—";
+  const value = summary || "Пусто";
   const valueColor =
     tone === "danger" ? t.danger : tone === "muted" || !summary ? t.sub : t.ink;
   const valueWeight = tone === "muted" || !summary ? "font-normal" : "font-semibold";

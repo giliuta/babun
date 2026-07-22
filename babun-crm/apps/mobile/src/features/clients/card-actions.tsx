@@ -1,8 +1,17 @@
-// card-actions — the 5 always-visible quick actions of the client card
+// card-actions — the always-visible quick actions of the client card
 // (mobile port of apps/web/src/components/clients/ClientQuickActions.tsx,
 // visual language from the LOCKED client-app.html mockup «qa» row):
 //
-//   Звонок · Записать · WhatsApp · Чат · Напомнить
+//   Звонок · [Записать ·] WhatsApp · Напомнить
+//
+// «БЕЗ ДУБЛЕЙ» (решение владельца 2026-07-14): каждое действие живёт ровно
+// в одном месте. Звонок ушёл из шапки карточки сюда (SMS — не отдельная
+// кнопка ряда, а «SMS о долге» внутри «Напомнить»); «Записать» —
+// это синий hero (ClientNextJob), поэтому здесь оно появляется ТОЛЬКО
+// когда hero занят предстоящей записью и сам на создание не ведёт
+// (heroOffersBooking — единственный источник правды). Раньше «Записать»
+// было в hero И в ряду, звонок — в шапке И в ряду: девять контролов на
+// пять намерений.
 //
 // Color budget: neutral circles; green ONLY on the comms that dial out
 // (Звонок, WhatsApp). Disabled-not-hidden (no phone → dimmed) so the row
@@ -11,33 +20,29 @@
 // native date input — RN has no such input, presets keep it 2 taps).
 //
 // Цепочки (стандарт «минимум тапов»):
-// · «Чат» — если у клиента уже есть привязанный диалог (chat.client_id),
-//   открываем ЕГО (самый свежий по last_message_at), а не корень вкладки;
-//   без привязки деградирует в список чатов (web deep-link parity).
 // · «Напомнить» у должника — первым пунктом «SMS о долге €X» (sms: с
-//   готовым текстом) и «Напомнить в чате», затем обычные пресеты
-//   напоминания себе. Долг считается как в списке: stats.debt, иначе
+//   готовым текстом), затем обычные пресеты напоминания себе. Долг
+//   считается как в списке: stats.debt, иначе
 //   отрицательный balance.
 
 import { Alert, Linking, Platform, Pressable, Text, View } from "react-native";
-import {
-  Bell,
-  CalendarPlus,
-  MessageCircle,
-  MessageSquare,
-  Phone,
-} from "lucide-react-native";
-import { useRouter } from "expo-router";
+import { Bell, Calendar, MessageCircle, Phone } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { telUrl, whatsappUrl } from "@babun/shared/common/utils/messenger-links";
+import {
+  telUrl,
+  whatsappUrl,
+} from "@babun/shared/common/utils/messenger-links";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { useChats } from "@/features/chats/store";
-import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
+import {
+  renderDebtSms,
+  useSmsTemplates,
+} from "@/features/settings/sms-templates";
 import { useBookingNav } from "@/features/clients/card-booking";
+import { heroOffersBooking } from "@/features/clients/ClientNextJob";
 import { formatShortDateRu, ymdInDays } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 interface CardActionsProps {
   client: Client;
@@ -45,11 +50,13 @@ interface CardActionsProps {
   update: (patch: Partial<Client>) => void;
 }
 
-export default function CardActions({ client, stats, update }: CardActionsProps) {
+export default function CardActions({
+  client,
+  stats,
+  update,
+}: CardActionsProps) {
   const t = useThemeColors();
-  const router = useRouter();
   const book = useBookingNav();
-  const { data: chats = [] } = useChats();
   const { data: smsTemplates = [] } = useSmsTemplates();
 
   const tel = telUrl(client.phone);
@@ -58,13 +65,6 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
   const primaryLocationId =
     client.locations?.find((l) => l.isPrimary)?.id ??
     client.locations?.[0]?.id ??
-    null;
-
-  // Привязанный диалог — самый свежий из chats с этим client_id.
-  const linkedChat =
-    chats
-      .filter((c) => c.client_id === client.id)
-      .sort((a, b) => b.last_message_at.localeCompare(a.last_message_at))[0] ??
     null;
 
   // Долг — то же правило, что в строке списка (stats.debt, иначе
@@ -83,18 +83,14 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
       teamId: stats?.lastTeamId ?? null,
     });
 
-  const openLinkedChat = () => router.push(`/(dashboard)/chats/${linkedChat!.id}`);
-
-  // «Чат»: есть привязанный диалог → сразу в него (1 тап, web
-  // ?client_id parity); нет — список чатов (degrades gracefully).
-  const onChat = () =>
-    linkedChat ? openLinkedChat() : router.push("/(dashboard)/chats");
-
   // Готовое SMS о долге: sms: с body (iOS — «&body», Android — «?body»).
   const debtSmsUrl = (() => {
     if (debt <= 0 || !phoneDigits) return null;
     const first = (client.full_name || "").trim().split(/\s+/)[0] ?? "";
-    const body = renderDebtSms(smsTemplates, { amount: formatEUR(debt), name: first });
+    const body = renderDebtSms(smsTemplates, {
+      amount: formatEUR(debt),
+      name: first,
+    });
     const sep = Platform.OS === "ios" ? "&" : "?";
     return `sms:${phoneDigits}${sep}body=${encodeURIComponent(body)}`;
   })();
@@ -110,7 +106,7 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
       "Напомнить о клиенте",
       messageParts.length > 0 ? messageParts.join(" · ") : undefined,
       [
-        // Должнику — напомнить ЕМУ: готовое SMS и/или привязанный чат.
+        // Должнику — напомнить ЕМУ готовым SMS.
         ...(debtSmsUrl
           ? [
               {
@@ -119,13 +115,19 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
               },
             ]
           : []),
-        ...(debt > 0 && linkedChat
-          ? [{ text: "Напомнить в чате", onPress: openLinkedChat }]
-          : []),
         // Себе — пресеты reminder_at (2 тапа, web date-input parity).
-        { text: "Завтра", onPress: () => update({ reminder_at: ymdInDays(1) }) },
-        { text: "Через неделю", onPress: () => update({ reminder_at: ymdInDays(7) }) },
-        { text: "Через месяц", onPress: () => update({ reminder_at: ymdInDays(30) }) },
+        {
+          text: "Завтра",
+          onPress: () => update({ reminder_at: ymdInDays(1) }),
+        },
+        {
+          text: "Через неделю",
+          onPress: () => update({ reminder_at: ymdInDays(7) }),
+        },
+        {
+          text: "Через месяц",
+          onPress: () => update({ reminder_at: ymdInDays(30) }),
+        },
         ...(client.reminder_at
           ? [
               {
@@ -140,33 +142,38 @@ export default function CardActions({ client, stats, update }: CardActionsProps)
     );
   };
 
+  // Hero сам зовёт на создание записи во всех режимах кроме «есть
+  // предстоящая запись» — там он показывает ЕЁ и ведёт на дату. Только в
+  // этом случае «Записать» нужно здесь, иначе клиенту с записью новую
+  // было бы не создать с карточки.
+  const showBook = !heroOffersBooking(stats);
+
   return (
     <View className="mx-3 mb-1 mt-3 flex-row items-start justify-between px-1">
       <Action
         label="Звонок"
-        icon={<Phone color={tel ? t.success : t.faint} size={21} strokeWidth={2} />}
+        icon={
+          <Phone color={tel ? t.success : t.faint} size={21} strokeWidth={2} />
+        }
         onPress={tel ? () => Linking.openURL(tel) : undefined}
       />
-      <Action
-        label="Записать"
-        icon={<CalendarPlus color={t.ink} size={21} strokeWidth={2} />}
-        onPress={onBook}
-      />
+      {showBook ? (
+        <Action
+          label="Записать"
+          icon={<Calendar color={t.ink} size={21} strokeWidth={2} />}
+          onPress={onBook}
+        />
+      ) : null}
       <Action
         label="WhatsApp"
         icon={
           <MessageCircle
-            color={wa ? CHANNEL_COLORS.whatsapp : t.faint}
+            color={wa ? MOBILE_CHANNEL_COLORS.whatsapp : t.faint}
             size={21}
             strokeWidth={2}
           />
         }
         onPress={wa ? () => Linking.openURL(wa) : undefined}
-      />
-      <Action
-        label="Чат"
-        icon={<MessageSquare color={t.ink} size={21} strokeWidth={2} />}
-        onPress={onChat}
       />
       <Action
         label="Напомнить"

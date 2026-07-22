@@ -156,7 +156,8 @@ function Block({
   /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
    *  с движением — перенос, как раньше. */
   onMenu?: (a: Appointment) => void;
-  onReschedule: (a: Appointment, s: string, e: string) => void;
+  /** Undefined for crew: the block stays tappable but has no drag affordance. */
+  onReschedule?: (a: Appointment, s: string, e: string) => void;
 }) {
   const t = useThemeColors();
   const { apt, startMin, endMin, colIndex, colCount } = placed;
@@ -182,6 +183,10 @@ function Block({
   const noAddress = !overdue && missingAddress(apt);
 
   const commit = (translationY: number) => {
+    if (!onReschedule) {
+      ty.value = withSpring(0);
+      return;
+    }
     const duration = Math.max(15, endMin - startMin);
     // Base the move on the UNCLAMPED startMin (like moveBy below), not on
     // the clamped visual top: a block clipped by the visible window
@@ -212,6 +217,7 @@ function Block({
   };
 
   const moveBy = (deltaMin: number) => {
+    if (!onReschedule) return;
     const duration = Math.max(15, endMin - startMin);
     let newStart = startMin + deltaMin;
     const lo = Math.min(startMin, winStart);
@@ -255,7 +261,18 @@ function Block({
       pressed.value = withTiming(1, { duration: 150 });
     })
     .onEnd(() => runOnJS(onEdit)(apt));
-  const gesture = Gesture.Exclusive(pan, tap);
+  // A crew member still gets the useful long-press actions (next status,
+  // call, route), but never enters the drag gesture that the server rejects.
+  const longPress = Gesture.LongPress()
+    .minDuration(300)
+    .onStart(() => {
+      if (onMenu) runOnJS(onMenu)(apt);
+    });
+  const gesture = onReschedule
+    ? Gesture.Exclusive(pan, tap)
+    : onMenu
+      ? Gesture.Exclusive(longPress, tap)
+      : tap;
 
   // The wrapper owns position + stacking (zIndex must live among siblings);
   // the card owns the drag transform + shadow, so the wrapper's percent
@@ -282,16 +299,20 @@ function Block({
         accessible
         accessibilityRole="button"
         accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}`}
-        accessibilityActions={[
-          { name: "activate", label: "Открыть" },
-          { name: "increment", label: `Позже на ${stepMinutes} минут` },
-          { name: "decrement", label: `Раньше на ${stepMinutes} минут` },
-        ]}
+        accessibilityActions={
+          onReschedule
+            ? [
+                { name: "activate", label: "Открыть" },
+                { name: "increment", label: `Позже на ${stepMinutes} минут` },
+                { name: "decrement", label: `Раньше на ${stepMinutes} минут` },
+              ]
+            : [{ name: "activate", label: "Открыть" }]
+        }
         onAccessibilityAction={(e) => {
           const action = e.nativeEvent.actionName;
           if (action === "activate") onEdit(apt);
-          else if (action === "increment") moveBy(stepMinutes);
-          else if (action === "decrement") moveBy(-stepMinutes);
+          else if (onReschedule && action === "increment") moveBy(stepMinutes);
+          else if (onReschedule && action === "decrement") moveBy(-stepMinutes);
         }}
         style={[
           {
@@ -542,6 +563,7 @@ export function DayColumn({
   onMenu,
   onCreateAt,
   onReschedule,
+  canReschedule,
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   stepMinutes = DEFAULT_STEP,
@@ -566,8 +588,11 @@ export function DayColumn({
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
-  onCreateAt: (dateYmd: string, timeStart: string) => void;
-  onReschedule: (a: Appointment, newStart: string, newEnd: string) => void;
+  /** Undefined for read-only calendars: empty slots are plain grid cells. */
+  onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  /** Per-record mutation guard (shared team events are creator-only). */
+  canReschedule?: (a: Appointment) => boolean;
   startHour?: number;
   endHour?: number;
   /** Snap granularity for drag + empty-slot taps (settings.gridStep) —
@@ -657,6 +682,7 @@ export function DayColumn({
   const workEnd = band ? clampWin(band.endMin) : winEndMin;
 
   const onSlotPress = (hour: number, locationY: number) => {
+    if (!onCreateAt) return;
     // Sub-hour snap by touch position (web handleColumnClick parity):
     // floor to multiples of gridStep, so a tap at 11:27 with a 30-min step
     // creates 11:00, at 11:40 → 11:30. Screen-reader activation has no
@@ -742,7 +768,7 @@ export function DayColumn({
           toMin={winStartMin + nowMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.dark ? "rgba(255,255,255,0.09)" : "rgba(11,18,32,0.05)"}
+          color="rgba(11,18,32,0.05)"
         />
       ) : null}
       {/* Прошедшие дни (неделя) — то же затемнение всей колонки: «что уже
@@ -753,40 +779,49 @@ export function DayColumn({
           toMin={winEndMin}
           winStartMin={winStartMin}
           winEndMin={winEndMin}
-          color={t.dark ? "rgba(255,255,255,0.09)" : "rgba(11,18,32,0.05)"}
+          color="rgba(11,18,32,0.05)"
         />
       ) : null}
 
       {/* hour cells: gridline + create-slot in one flex node. Часовые ряды
           чистые (Bumpix); получасовая волосяная линия появляется только на
           достаточном зуме (HALF_MARK_MIN_H) — иначе частокол. */}
-      {hours.map((h) => (
-        <Pressable
-          key={h}
-          onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
-          accessibilityRole="button"
-          accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
-          style={{
-            flex: 1,
-            borderTopWidth: 1,
-            borderTopColor: gridLine,
-          }}
-        >
-          {hourH >= HALF_MARK_MIN_H ? (
-            <View
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                top: "50%",
-                left: 0,
-                right: 0,
-                height: 1,
-                backgroundColor: `${t.ink}14`,
-              }}
-            />
-          ) : null}
-        </Pressable>
-      ))}
+      {hours.map((h) => {
+        const halfHourLine = hourH >= HALF_MARK_MIN_H ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 0,
+              right: 0,
+              height: 1,
+              backgroundColor: `${t.ink}14`,
+            }}
+          />
+        ) : null;
+        const style = {
+          flex: 1,
+          borderTopWidth: 1,
+          borderTopColor: gridLine,
+        } as const;
+
+        return onCreateAt ? (
+          <Pressable
+            key={h}
+            onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
+            accessibilityRole="button"
+            accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
+            style={style}
+          >
+            {halfHourLine}
+          </Pressable>
+        ) : (
+          <View key={h} pointerEvents="none" style={style}>
+            {halfHourLine}
+          </View>
+        );
+      })}
       {/* closing line of the last hour */}
       <View
         pointerEvents="none"
@@ -902,7 +937,9 @@ export function DayColumn({
                   (isToday && nowMinutes != null && p.endMin < nowMinutes))
               }
               onEdit={onEdit}
-              onReschedule={onReschedule}
+              onReschedule={
+                canReschedule?.(p.apt) === false ? undefined : onReschedule
+              }
             />
           ))
         : null}
@@ -988,6 +1025,7 @@ export function DayView({
   onMenu,
   onCreateAt,
   onReschedule,
+  canReschedule,
   onCommitPage,
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
@@ -1018,8 +1056,10 @@ export function DayView({
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
-  onCreateAt: (dateYmd: string, timeStart: string) => void;
-  onReschedule: (a: Appointment, newStart: string, newEnd: string) => void;
+  onCreateAt?: (dateYmd: string, timeStart: string) => void;
+  onReschedule?: (a: Appointment, newStart: string, newEnd: string) => void;
+  /** Per-record mutation guard (shared team events are creator-only). */
+  canReschedule?: (a: Appointment) => boolean;
   /** Палец долистал страницу: родитель сдвигает день на ±1. */
   onCommitPage: (dir: 1 | -1) => void;
   startHour?: number;
@@ -1119,6 +1159,7 @@ export function DayView({
                 onMenu={onMenu}
                 onCreateAt={onCreateAt}
                 onReschedule={onReschedule}
+                canReschedule={canReschedule}
                 startHour={startHour}
                 endHour={endHour}
                 stepMinutes={stepMinutes}

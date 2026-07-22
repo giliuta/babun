@@ -1,12 +1,10 @@
-// «Halo Cobalt» — single app-wide runtime palette. LIGHT-ONLY: the app is
-// locked to the light scheme (see bootstrap.ts «Appearance.setColorScheme» +
-// app.json «userInterfaceStyle: light»), so there is no dark palette.
+// «Halo Cobalt» — single app-wide light palette. Babun intentionally ignores
+// the system appearance; components read these semantic tokens everywhere.
 // This is the SINGLE source of truth for COLOR. Components call
 // useThemeColors() and read t.* into inline styles, so the «no component
 // rebuild» promise in DESIGN-SYSTEM.md holds app-wide; the auth screens read
 // this via the useAuthTheme alias in components/auth/theme.ts.
 export type ThemeColors = {
-  dark: boolean;
   statusBar: "dark" | "light";
   // surfaces
   canvas: string;
@@ -36,7 +34,7 @@ export type ThemeColors = {
   highlight: string;
   pressed: string; // row/button pressed fill
   scrim: string; // modal backdrop
-  cardShadow?: string; // undefined in dark — surfaces lift by tone
+  cardShadow?: string;
   brandShadow: string;
   disabledFill: string;
   haloOpacity: number;
@@ -51,13 +49,14 @@ export type ThemeColors = {
 const RADIUS = { card: 20, input: 14, pill: 999, logo: 18 } as const;
 
 export const light: ThemeColors = {
-  dark: false,
   statusBar: "dark",
   canvas: "#f4f6f9",
   surface: "#ffffff",
   surfaceElevated: "rgba(255,255,255,0.72)",
   accent: "#2c5be0",
-  accentFrom: "#3e84ff",
+  // White primary-button text remains AA-readable across the entire
+  // gradient, including its lightest endpoint (4.81:1).
+  accentFrom: "#2f6fd6",
   accentTo: "#1f4fcc",
   onAccent: "#ffffff",
   brandAccent: "#2c5be0",
@@ -66,20 +65,25 @@ export const light: ThemeColors = {
   sub: "#5b6678",
   // WCAG AA: 4.6:1 on canvas / 5.0:1 on surface (was #97a0ae ≈ 2.4:1 —
   // unreadable captions). Still lighter than `sub`, so the tier order holds.
-  faint: "#66707e",
-  placeholder: "#8b94a3",
-  success: "#1fb47a",
-  danger: "#f0473c",
-  warning: "#f5a623",
+  faint: "#626c79",
+  // Every text-capable token clears WCAG AA on white. These colors also
+  // drive icons/fills, so one semantic source stays consistent everywhere.
+  placeholder: "#636e7c",
+  success: "#087a52",
+  danger: "#c9372c",
+  // Also clears AA on its own 10% semantic tint (used by warning cards).
+  warning: "#955f00",
   fill: "#eef1f5",
   separator: "#e7ebf0",
-  // «Из чёрного, не серого»: прозрачный ink вместо плоского #c4c4c4 — шевроны
-  // читаемы, но остаются самым тихим слоем иерархии.
-  chevron: "rgba(11,18,32,0.24)",
+  // Navigation chevrons are meaningful controls, not decoration. At 50%
+  // ink they clear the 3:1 non-text contrast threshold on canvas while
+  // remaining quieter than labels.
+  chevron: "rgba(11,18,32,0.50)",
   highlight: "rgba(255,255,255,0.9)",
   pressed: "rgba(11,18,32,0.04)",
   scrim: "rgba(11,18,32,0.30)",
-  cardShadow: "0px 1px 2px rgba(11,18,32,0.04), 0px 8px 24px rgba(11,18,32,0.06)",
+  cardShadow:
+    "0px 1px 2px rgba(11,18,32,0.04), 0px 8px 24px rgba(11,18,32,0.06)",
   brandShadow: "0px 8px 28px rgba(44,91,224,0.28)",
   // Light enough that a `sub`-colored disabled label reads at ≥4.5:1.
   disabledFill: "#e2e7ee",

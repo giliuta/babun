@@ -25,26 +25,23 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
-import {
-  Instagram,
-  Phone as PhoneIcon,
-  Plus,
-  Send,
-  X,
-} from "lucide-react-native";
+import { Instagram, Phone as PhoneIcon, Send, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
-import { CHANNEL_COLORS } from "@babun/shared/local/chats";
 import {
   instagramUrl,
   telegramUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
+import { tryToE164 } from "@/features/clients/phone";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 interface ContactsBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => void;
+  /** Creation already owns the primary phone in the identity card. */
+  hidePrimaryPhone?: boolean;
 }
 
 function genId(prefix: string): string {
@@ -73,6 +70,8 @@ function DraftInput({
   useEffect(() => setDraft(value), [value]);
   return (
     <TextInput
+      keyboardAppearance="light"
+      accessibilityLabel={rest.accessibilityLabel ?? rest.placeholder}
       value={draft}
       onChangeText={setDraft}
       onBlur={() => {
@@ -83,7 +82,11 @@ function DraftInput({
   );
 }
 
-export default function ContactsBlock({ client, update }: ContactsBlockProps) {
+export default function ContactsBlock({
+  client,
+  update,
+  hidePrimaryPhone = false,
+}: ContactsBlockProps) {
   const t = useThemeColors();
   const extras = client.phones ?? [];
 
@@ -112,41 +115,47 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
   const inputFill = t.fill;
 
   // Collapsed-row summary: primary phone «+357 99… · ещё 1» (mockup).
-  const summary = client.phone
-    ? `${client.phone}${extras.length ? ` · ещё ${extras.length}` : ""}`
-    : extras.length
-      ? `ещё ${extras.length}`
-      : "";
+  const summary =
+    !hidePrimaryPhone && client.phone
+      ? `${client.phone}${extras.length ? ` · ещё ${extras.length}` : ""}`
+      : extras.length
+        ? `ещё ${extras.length}`
+        : "";
 
   return (
     <CollapsibleCard title="Контакты" summary={summary}>
       <View className="gap-3 px-1 pt-1">
         {/* Primary phone */}
-        <View className="flex-row items-center gap-2">
-          <Text className="w-28 shrink-0 text-xs" style={{ color: t.sub }}>
-            Основной телефон
-          </Text>
-          <DraftInput
-            value={client.phone}
-            onCommit={(v) => update({ phone: v })}
-            placeholder="+357 99 ..."
-            placeholderTextColor={t.placeholder}
-            selectionColor={t.accent}
-            keyboardAppearance={t.dark ? "dark" : "light"}
-            keyboardType="phone-pad"
-            className="h-8 flex-1 rounded-md px-2 text-[13px]"
-            style={{ backgroundColor: inputFill, color: t.ink }}
-          />
-          {dialUrl(client.phone) ? (
-            <Pressable
-              onPress={() => Linking.openURL(dialUrl(client.phone) as string)}
-              className="h-8 w-8 items-center justify-center rounded-md active:opacity-70"
-              style={{ backgroundColor: `${t.success}1a` }}
-            >
-              <PhoneIcon color={t.success} size={14} />
-            </Pressable>
-          ) : null}
-        </View>
+        {!hidePrimaryPhone ? (
+          <View className="flex-row items-center gap-2">
+            <Text className="w-28 shrink-0 text-xs" style={{ color: t.sub }}>
+              Основной телефон
+            </Text>
+            <DraftInput
+              value={client.phone}
+              onCommit={(v) => update({ phone: v, phone_e164: tryToE164(v) })}
+              placeholder="+357 99 ..."
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              keyboardType="phone-pad"
+              accessibilityLabel="Основной телефон"
+              className="h-11 flex-1 rounded-lg px-3 text-[13px]"
+              style={{ backgroundColor: inputFill, color: t.ink }}
+            />
+            {dialUrl(client.phone) ? (
+              <Pressable
+                onPress={() => Linking.openURL(dialUrl(client.phone) as string)}
+                accessibilityRole="button"
+                accessibilityLabel="Позвонить на основной телефон"
+                className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
+                style={{ backgroundColor: `${t.success}1a` }}
+              >
+                <PhoneIcon color={t.success} size={14} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Extra phones (wife / work / WhatsApp on a different number) */}
         {extras.map((p) => (
@@ -157,8 +166,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
               placeholder="Жена"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
-              className="h-8 w-20 rounded-md px-2 text-[12px]"
+              keyboardAppearance="light"
+              accessibilityLabel="Имя контакта"
+              className="h-11 w-20 rounded-lg px-2 text-[12px]"
               style={{ backgroundColor: inputFill, color: t.ink }}
             />
             <DraftInput
@@ -167,18 +177,18 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
               placeholder="+357 ..."
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
-              keyboardAppearance={t.dark ? "dark" : "light"}
+              keyboardAppearance="light"
               keyboardType="phone-pad"
-              className="h-8 flex-1 rounded-md px-2 text-[13px]"
+              accessibilityLabel="Дополнительный телефон"
+              className="h-11 flex-1 rounded-lg px-2 text-[13px]"
               style={{ backgroundColor: inputFill, color: t.ink }}
             />
             {dialUrl(p.number) ? (
               <Pressable
                 onPress={() => Linking.openURL(dialUrl(p.number) as string)}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Позвонить"
-                className="h-7 w-7 items-center justify-center rounded-md active:opacity-70"
+                className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
                 style={{ backgroundColor: `${t.success}1a` }}
               >
                 <PhoneIcon color={t.success} size={13} />
@@ -186,10 +196,9 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             ) : null}
             <Pressable
               onPress={() => removeExtra(p.id)}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Удалить номер"
-              className="h-7 w-7 items-center justify-center rounded-md active:opacity-60"
+              className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
             >
               <X color={t.faint} size={13} />
             </Pressable>
@@ -198,24 +207,31 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
 
         <Pressable
           onPress={addExtra}
-          className="flex-row items-center gap-1 self-start active:opacity-70"
+          accessibilityRole="button"
+          accessibilityLabel="Добавить дополнительный номер"
+          className="min-h-11 flex-row items-center gap-1 self-start px-1 active:opacity-70"
         >
-          <Plus color={t.accent} size={13} />
-          <Text className="text-[12px] font-semibold" style={{ color: t.accent }}>
+          <Text
+            className="text-[12px] font-semibold"
+            style={{ color: t.accent }}
+          >
             Добавить номер
           </Text>
         </Pressable>
 
         {/* Messengers */}
-        <View className="gap-2 pt-3" style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
+        <View
+          className="gap-2 pt-3"
+          style={{ borderTopWidth: 1, borderTopColor: t.separator }}
+        >
           <Messenger
             label="Telegram"
             placeholder="@username"
             value={client.telegram_username}
             onChange={(v) => update({ telegram_username: v })}
             url={telegramUrl(tg, client.phone)}
-            icon={<Send color={CHANNEL_COLORS.telegram} size={13} />}
-            tintColor={CHANNEL_COLORS.telegram}
+            icon={<Send color={MOBILE_CHANNEL_COLORS.telegram} size={13} />}
+            tintColor={MOBILE_CHANNEL_COLORS.telegram}
             t={t}
             inputFill={inputFill}
           />
@@ -225,8 +241,10 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             value={client.instagram_username}
             onChange={(v) => update({ instagram_username: v })}
             url={instagramUrl(ig)}
-            icon={<Instagram color={CHANNEL_COLORS.instagram} size={13} />}
-            tintColor={CHANNEL_COLORS.instagram}
+            icon={
+              <Instagram color={MOBILE_CHANNEL_COLORS.instagram} size={13} />
+            }
+            tintColor={MOBILE_CHANNEL_COLORS.instagram}
             t={t}
             inputFill={inputFill}
           />
@@ -236,10 +254,14 @@ export default function ContactsBlock({ client, update }: ContactsBlockProps) {
             value={client.whatsapp_phone}
             onChange={(v) => update({ whatsapp_phone: v })}
             url={
-              waDigits ? whatsappUrl(client.whatsapp_phone) : whatsappUrl(client.phone)
+              waDigits
+                ? whatsappUrl(client.whatsapp_phone)
+                : whatsappUrl(client.phone)
             }
-            icon={<PhoneIcon color={CHANNEL_COLORS.whatsapp} size={13} />}
-            tintColor={CHANNEL_COLORS.whatsapp}
+            icon={
+              <PhoneIcon color={MOBILE_CHANNEL_COLORS.whatsapp} size={13} />
+            }
+            tintColor={MOBILE_CHANNEL_COLORS.whatsapp}
             t={t}
             inputFill={inputFill}
           />
@@ -285,19 +307,26 @@ function Messenger({
         placeholder={placeholder}
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
-        keyboardAppearance={t.dark ? "dark" : "light"}
+        keyboardAppearance="light"
         autoCapitalize="none"
-        className="h-8 flex-1 rounded-md px-2 text-[13px]"
+        accessibilityLabel={label}
+        className="h-11 flex-1 rounded-lg px-3 text-[13px]"
         style={{ backgroundColor: inputFill, color: t.ink }}
       />
       {url ? (
         <Pressable
           onPress={() => Linking.openURL(url)}
+          accessibilityRole="link"
           accessibilityLabel={`Открыть ${label}`}
-          className="h-7 justify-center rounded-md px-2.5 active:opacity-70"
+          className="h-11 justify-center rounded-lg px-3 active:opacity-70"
           style={{ borderWidth: 1, borderColor: t.separator }}
         >
-          <Text className="text-[12px] font-semibold" style={{ color: t.accent }}>Открыть</Text>
+          <Text
+            className="text-[12px] font-semibold"
+            style={{ color: t.accent }}
+          >
+            Открыть
+          </Text>
         </Pressable>
       ) : null}
     </View>

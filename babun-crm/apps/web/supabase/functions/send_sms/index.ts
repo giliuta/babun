@@ -14,11 +14,12 @@
 //     Tenant blocked when both are exhausted.
 //
 // Idempotency: sms_messages has a partial UNIQUE on
-// (appointment_id, trigger_type) so a retried cron firing can't
-// double-send. The pre-check is just a counter optimisation.
+// (appointment_id, trigger_type). The function atomically claims that row
+// before Twilio, so overlapping cron runs cannot both perform the side effect;
+// the earlier lookup is only a round-trip optimisation.
 //
-// Time window: ±5 min around T-24h / T-2h. Tenant TZ assumed
-// Europe/Nicosia (single-TZ v1).
+// Time window: ±5 min around T-24h / T-2h in the brigade timezone,
+// falling back to the tenant calendar timezone.
 //
 // Master switch: app_settings.sms_enabled = 'on' required. Off →
 // the function returns immediately without scanning.
@@ -31,6 +32,12 @@
 // CORS: server-to-server only (pg_cron via pg_net). Open for now.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import {
+  dateKeyInTimeZone,
+  isValidTimeZone,
+  resolveTenantTimeZone,
+  tenantLocalToUtc,
+} from "./time.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,8 +83,10 @@ interface AppointmentRow {
   id: string;
   tenant_id: string;
   client_id: string | null;
+  team_id: string | null;
   date: string;
   time_start: string;
+  reminder_enabled: boolean;
 }
 
 interface ClientRow {
@@ -91,6 +100,11 @@ interface TenantRow {
   name: string;
 }
 
+interface TeamTimeZoneRow {
+  id: string;
+  timezone: string | null;
+}
+
 interface SendSmsResponse {
   matched: number;
   sent: number;
@@ -98,6 +112,64 @@ interface SendSmsResponse {
   skipped: number;
   failed: number;
   errors: Array<{ tenant_id: string; appointment_id?: string; reason: string }>;
+}
+
+type SmsCharge = "free" | "paid";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringField(value: unknown, field: string): string | null {
+  if (!isRecord(value)) return null;
+  const candidate = value[field];
+  return typeof candidate === "string" ? candidate : null;
+}
+
+function parseTenantSmsConfig(value: unknown): TenantSmsConfig | null {
+  if (!isRecord(value)) return null;
+
+  const tenantId = value.tenant_id;
+  const senderName = value.sender_name;
+  const senderStatus = value.sender_status;
+  const mode = value.mode;
+  if (
+    typeof tenantId !== "string" ||
+    typeof value.enabled !== "boolean" ||
+    typeof value.remind_24h_before !== "boolean" ||
+    typeof value.remind_2h_before !== "boolean" ||
+    typeof value.template_24h !== "string" ||
+    typeof value.template_2h !== "string" ||
+    (senderName !== null && typeof senderName !== "string") ||
+    (senderStatus !== null &&
+      senderStatus !== "pending" &&
+      senderStatus !== "approved" &&
+      senderStatus !== "rejected") ||
+    typeof value.balance_cents !== "number" ||
+    !Number.isFinite(value.balance_cents) ||
+    typeof value.free_sms_remaining !== "number" ||
+    !Number.isFinite(value.free_sms_remaining) ||
+    typeof value.total_sent_count !== "number" ||
+    !Number.isFinite(value.total_sent_count) ||
+    (mode !== "platform" && mode !== "byok")
+  ) {
+    return null;
+  }
+
+  return {
+    tenant_id: tenantId,
+    enabled: value.enabled,
+    remind_24h_before: value.remind_24h_before,
+    remind_2h_before: value.remind_2h_before,
+    template_24h: value.template_24h,
+    template_2h: value.template_2h,
+    sender_name: senderName,
+    sender_status: senderStatus,
+    balance_cents: value.balance_cents,
+    free_sms_remaining: value.free_sms_remaining,
+    total_sent_count: value.total_sent_count,
+    mode,
+  };
 }
 
 // ─── Supabase + Twilio bootstrap ─────────────────────────────────
@@ -109,8 +181,15 @@ function buildServiceClient(): ReturnType<typeof createClient> | null {
   let serviceKey: string | undefined;
   if (secretKeysJson) {
     try {
-      const dict = JSON.parse(secretKeysJson) as Record<string, string>;
-      serviceKey = Object.values(dict)[0];
+      const candidates = Object.values(
+        JSON.parse(secretKeysJson) as Record<string, unknown>,
+      ).filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 20,
+      );
+      serviceKey =
+        candidates.find((value) => value.startsWith("sb_secret_")) ??
+        candidates[0];
     } catch {
       /* fall through */
     }
@@ -120,6 +199,95 @@ function buildServiceClient(): ReturnType<typeof createClient> | null {
   return createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+}
+
+function bearerToken(request: Request): string | null {
+  return (
+    request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null
+  );
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index++) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return mismatch === 0;
+}
+
+async function authorizeOwnerTestSend(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  request: Request,
+  tenantId: string,
+): Promise<boolean> {
+  const token = bearerToken(request);
+  if (!token) return false;
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser(token);
+  const userId = authData?.user?.id;
+  if (authError || !userId) return false;
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("tenant_members")
+    .select("tenant_id")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId)
+    .eq("role", "owner")
+    .maybeSingle();
+  return !membershipError && membership?.tenant_id === tenantId;
+}
+
+async function authorizeCronSweep(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  request: Request,
+): Promise<boolean> {
+  const supplied = request.headers.get("x-cron-secret") ?? "";
+  if (!supplied) return false;
+  const { data, error } = await supabase
+    .from("edge_cron_secrets")
+    .select("secret")
+    .eq("name", "send_sms")
+    .single();
+  return (
+    !error &&
+    typeof data?.secret === "string" &&
+    constantTimeEqual(supplied, data.secret)
+  );
+}
+
+async function reserveSmsCredit(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  tenantId: string,
+): Promise<{ charge: SmsCharge | null; error: string | null }> {
+  const { data, error } = await supabase.rpc("reserve_sms_credit", {
+    p_tenant_id: tenantId,
+  });
+  if (error)
+    return {
+      charge: null,
+      error: error.message ?? "credit reservation failed",
+    };
+  return {
+    charge: data === "free" || data === "paid" ? data : null,
+    error: null,
+  };
+}
+
+async function releaseSmsCredit(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  tenantId: string,
+  charge: SmsCharge,
+): Promise<string | null> {
+  const { error } = await supabase.rpc("release_sms_credit", {
+    p_tenant_id: tenantId,
+    p_charge: charge,
+  });
+  return error?.message ?? null;
 }
 
 interface TwilioCreds {
@@ -135,7 +303,8 @@ function readTwilioCreds(): TwilioCreds | null {
   const authToken = Deno.env.get("TWILIO_AUTH_TOKEN");
   if (!accountSid || !authToken) return null;
   const statusCallbackUrl =
-    Deno.env.get("TWILIO_STATUS_CALLBACK_URL") ?? "https://babun.app/api/twilio/status";
+    Deno.env.get("TWILIO_STATUS_CALLBACK_URL") ??
+    "https://babun.app/api/twilio/status";
   return { accountSid, authToken, statusCallbackUrl };
 }
 
@@ -169,14 +338,15 @@ async function twilioSend(
   form.set("To", to);
   form.set("From", from);
   form.set("Body", body);
-  if (creds.statusCallbackUrl) form.set("StatusCallback", creds.statusCallbackUrl);
+  if (creds.statusCallbackUrl)
+    form.set("StatusCallback", creds.statusCallbackUrl);
 
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${auth}`,
+        Authorization: `Basic ${auth}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: form.toString(),
@@ -206,7 +376,9 @@ async function twilioSend(
           ? String(payload.code)
           : `http_${res.status}`,
       errorMessage:
-        typeof payload.message === "string" ? payload.message : `Twilio HTTP ${res.status}`,
+        typeof payload.message === "string"
+          ? payload.message
+          : `Twilio HTTP ${res.status}`,
     };
   }
 
@@ -219,35 +391,7 @@ async function twilioSend(
 
 // ─── Time helpers ─────────────────────────────────────────────────
 
-const TENANT_TZ = "Europe/Nicosia";
 const WINDOW_MINUTES = 5;
-
-function tenantLocalToUtc(date: string, time: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  const t = /^(\d{2}):(\d{2})$/.exec(time);
-  if (!m || !t) return null;
-  const naive = new Date(
-    Date.UTC(
-      Number(m[1]),
-      Number(m[2]) - 1,
-      Number(m[3]),
-      Number(t[1]),
-      Number(t[2]),
-      0,
-      0,
-    ),
-  );
-  const tzFmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: TENANT_TZ,
-    timeZoneName: "shortOffset",
-  });
-  const offsetPart = tzFmt
-    .formatToParts(naive)
-    .find((p) => p.type === "timeZoneName")?.value ?? "GMT+0";
-  const off = /GMT([+-]\d+)/.exec(offsetPart)?.[1] ?? "+0";
-  const offsetHours = Number(off);
-  return new Date(naive.getTime() - offsetHours * 3600_000);
-}
 
 function isWithinWindow(target: Date, center: Date, mins: number): boolean {
   return Math.abs(target.getTime() - center.getTime()) <= mins * 60_000;
@@ -259,8 +403,18 @@ function formatDateRu(date: string): string {
   const month = Number(m[2]) - 1;
   const day = Number(m[3]);
   const months = [
-    "января", "февраля", "марта", "апреля", "мая", "июня",
-    "июля", "августа", "сентября", "октября", "ноября", "декабря",
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
   ];
   return `${day} ${months[month] ?? ""}`.trim();
 }
@@ -283,37 +437,10 @@ function renderTemplate(
     .replaceAll("{business_name}", ctx.business_name);
 }
 
-function isoDate(d: Date): string {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: TENANT_TZ,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  return fmt.format(d);
-}
-
-// Resolve which sender name to use + whether this send eats a free
-// slot or balance. Returns null when the tenant is fully blocked.
-function planSend(
-  cfg: TenantSmsConfig,
-): {
-  senderName: string;
-  charge: "free" | "paid";
-  costCents: number;
-} | { blocked: "no_credit" } {
-  const senderName =
-    cfg.sender_status === "approved" && cfg.sender_name
-      ? cfg.sender_name
-      : PLATFORM_DEFAULT_SENDER;
-
-  if (cfg.free_sms_remaining > 0) {
-    return { senderName, charge: "free", costCents: 0 };
-  }
-  if (cfg.balance_cents >= PER_SMS_COST_CENTS) {
-    return { senderName, charge: "paid", costCents: PER_SMS_COST_CENTS };
-  }
-  return { blocked: "no_credit" };
+function senderForConfig(cfg: TenantSmsConfig): string {
+  return cfg.sender_status === "approved" && cfg.sender_name
+    ? cfg.sender_name
+    : PLATFORM_DEFAULT_SENDER;
 }
 
 // ─── Main handler ────────────────────────────────────────────────
@@ -356,10 +483,17 @@ async function handleTestSend(
       hint: cfgErr?.message ?? "no config row for this tenant",
     });
   }
+  if (!cfg.enabled) {
+    return jsonResponse(403, { error: "sms_disabled_for_tenant" });
+  }
 
-  // Balance check — free slot first, otherwise charge balance_cents.
-  const useFree = (cfg.free_sms_remaining ?? 0) > 0;
-  if (!useFree && (cfg.balance_cents ?? 0) < PER_SMS_COST_CENTS) {
+  const reservation = await reserveSmsCredit(supabase, tenantId);
+  if (reservation.error) {
+    return jsonResponse(503, {
+      error: "sms_credit_reservation_failed",
+    });
+  }
+  if (!reservation.charge) {
     return jsonResponse(402, {
       error: "balance_exhausted",
       hint: "Buy more SMS credit before sending a test.",
@@ -373,27 +507,19 @@ async function handleTestSend(
 
   const send = await twilioSend(twilio, sender, toPhone, message);
   if (!send.ok) {
+    const releaseError = await releaseSmsCredit(
+      supabase,
+      tenantId,
+      reservation.charge,
+    );
     return jsonResponse(502, {
       error: "twilio_send_failed",
       status: send.status,
       errorCode: send.errorCode,
       errorMessage: send.errorMessage,
+      creditReleasePending: releaseError !== null,
     });
   }
-
-  // Charge.
-  const update: Record<string, unknown> = {
-    total_sent_count: (cfg.total_sent_count ?? 0) + 1,
-  };
-  if (useFree) {
-    update.free_sms_remaining = (cfg.free_sms_remaining ?? 0) - 1;
-  } else {
-    update.balance_cents = (cfg.balance_cents ?? 0) - PER_SMS_COST_CENTS;
-  }
-  await supabase
-    .from("tenant_sms_config")
-    .update(update)
-    .eq("tenant_id", tenantId);
 
   // Log to both tables — the legacy sms_messages and the new
   // sms_logs — so /admin + history UI both reflect the test send.
@@ -401,20 +527,23 @@ async function handleTestSend(
   await supabase.from("sms_messages").insert({
     tenant_id: tenantId,
     appointment_id: null,
+    client_id: null,
     trigger_type: "test",
     twilio_sid: send.sid,
     to_phone: toPhone,
-    body_preview: message.slice(0, 80),
-    status: send.status,
-    sent_at: nowIso,
+    message_body: message,
+    status: send.status === "sent" ? "sent" : "queued",
+    mode: "platform",
   });
   await supabase.from("sms_logs").insert({
     tenant_id: tenantId,
-    trigger_type: "test",
-    twilio_sid: send.sid,
     to_phone: toPhone,
-    body_preview: message.slice(0, 80),
-    status: send.status,
+    body: message,
+    sender_name_used: sender,
+    cost_cents: reservation.charge === "free" ? 0 : PER_SMS_COST_CENTS,
+    was_free: reservation.charge === "free",
+    twilio_message_sid: send.sid,
+    twilio_status: send.status,
     created_at: nowIso,
   });
 
@@ -422,7 +551,8 @@ async function handleTestSend(
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS")
+    return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") {
     return jsonResponse(405, { error: "method not allowed" });
   }
@@ -438,7 +568,12 @@ Deno.serve(async (req: Request) => {
   // balance (or a free-trial slot) and dispatch via Twilio. Logged
   // with `trigger_type: 'test'` so the history UI labels it
   // distinctly.
-  let body: { mode?: string; tenant_id?: string; to_phone?: string; body?: string } | null = null;
+  let body: {
+    mode?: string;
+    tenant_id?: string;
+    to_phone?: string;
+    body?: string;
+  } | null = null;
   try {
     const text = await req.clone().text();
     body = text ? JSON.parse(text) : null;
@@ -446,7 +581,15 @@ Deno.serve(async (req: Request) => {
     body = null;
   }
   if (body?.mode === "test") {
+    const tenantId = body.tenant_id?.trim() ?? "";
+    if (!tenantId || !(await authorizeOwnerTestSend(supabase, req, tenantId))) {
+      return jsonResponse(403, { error: "owner_authorization_required" });
+    }
     return handleTestSend(supabase, body);
+  }
+
+  if (!(await authorizeCronSweep(supabase, req))) {
+    return jsonResponse(401, { error: "cron_authorization_required" });
   }
 
   // ── Master switch ────────────────────────────────────────────
@@ -500,10 +643,15 @@ Deno.serve(async (req: Request) => {
     errors: [],
   };
 
-  for (const cfgRaw of (configs ?? []) as TenantSmsConfig[]) {
-    // Mutable in-loop copy so deductions stay consistent across the
-    // tenant's batch before we persist at the end.
-    const cfg = { ...cfgRaw };
+  for (const rawConfig of configs ?? []) {
+    const cfg = parseTenantSmsConfig(rawConfig);
+    if (!cfg) {
+      out.errors.push({
+        tenant_id: stringField(rawConfig, "tenant_id") ?? "unknown",
+        reason: "invalid tenant SMS config",
+      });
+      continue;
+    }
     try {
       const { data: tenant, error: tenantErr } = await supabase
         .from("tenants")
@@ -518,14 +666,80 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      const todayStr = isoDate(now);
-      const tomorrowStr = isoDate(new Date(now.getTime() + 25 * 60 * 60_000));
+      const { data: calendarSettings, error: calendarSettingsErr } =
+        await supabase
+          .from("calendar_settings")
+          .select("timezone")
+          .eq("tenant_id", cfg.tenant_id)
+          .maybeSingle();
+      if (calendarSettingsErr) {
+        out.errors.push({
+          tenant_id: cfg.tenant_id,
+          reason: `calendar timezone: ${calendarSettingsErr.message}`,
+        });
+        continue;
+      }
+      const tenantTimeZone = resolveTenantTimeZone(calendarSettings?.timezone);
+      if (!tenantTimeZone) {
+        out.errors.push({
+          tenant_id: cfg.tenant_id,
+          reason: "invalid calendar timezone",
+        });
+        continue;
+      }
+
+      const { data: teamRows, error: teamsErr } = await supabase
+        .from("teams")
+        .select("id,timezone")
+        .eq("tenant_id", cfg.tenant_id);
+      if (teamsErr) {
+        out.errors.push({
+          tenant_id: cfg.tenant_id,
+          reason: `team timezones: ${teamsErr.message}`,
+        });
+        continue;
+      }
+      const timeZoneByTeam = new Map<string, string>();
+      const invalidTimeZoneTeamIds = new Set<string>();
+      for (const team of (teamRows ?? []) as TeamTimeZoneRow[]) {
+        const timeZone = team.timezone?.trim();
+        if (!timeZone) continue;
+        if (!isValidTimeZone(timeZone)) {
+          out.errors.push({
+            tenant_id: cfg.tenant_id,
+            reason: `invalid team timezone (${team.id})`,
+          });
+          invalidTimeZoneTeamIds.add(team.id);
+          continue;
+        }
+        timeZoneByTeam.set(team.id, timeZone);
+      }
+
+      const candidateDates = new Set<string>();
+      for (const timeZone of new Set([
+        tenantTimeZone,
+        ...timeZoneByTeam.values(),
+      ])) {
+        candidateDates.add(dateKeyInTimeZone(now, timeZone));
+        candidateDates.add(
+          dateKeyInTimeZone(
+            new Date(now.getTime() + 25 * 60 * 60_000),
+            timeZone,
+          ),
+        );
+      }
       const { data: appts, error: apptErr } = await supabase
         .from("appointments")
-        .select("id,tenant_id,client_id,date,time_start")
+        .select(
+          "id,tenant_id,client_id,team_id,date,time_start,reminder_enabled",
+        )
         .eq("tenant_id", cfg.tenant_id)
         .eq("status", "scheduled")
-        .in("date", [todayStr, tomorrowStr]);
+        // Appointment opt-in is authoritative. `= true` deliberately
+        // excludes legacy/null rows as well as explicit false; tenant SMS
+        // settings only decide *when* an opted-in appointment is notified.
+        .eq("reminder_enabled", true)
+        .in("date", [...candidateDates]);
       if (apptErr) {
         out.errors.push({
           tenant_id: cfg.tenant_id,
@@ -535,11 +749,24 @@ Deno.serve(async (req: Request) => {
       }
 
       for (const apt of (appts ?? []) as AppointmentRow[]) {
-        const startUtc = tenantLocalToUtc(apt.date, apt.time_start);
+        // A corrupt team zone must never silently inherit another zone: skip
+        // only the affected team's appointments and keep other teams live.
+        if (apt.team_id && invalidTimeZoneTeamIds.has(apt.team_id)) continue;
+        const appointmentTimeZone =
+          (apt.team_id ? timeZoneByTeam.get(apt.team_id) : null) ??
+          tenantTimeZone;
+        const startUtc = tenantLocalToUtc(
+          apt.date,
+          apt.time_start,
+          appointmentTimeZone,
+        );
         if (!startUtc) continue;
 
         let trigger: TriggerType | null = null;
-        if (cfg.remind_24h_before && isWithinWindow(startUtc, t24, WINDOW_MINUTES)) {
+        if (
+          cfg.remind_24h_before &&
+          isWithinWindow(startUtc, t24, WINDOW_MINUTES)
+        ) {
           trigger = "reminder_24h";
         } else if (
           cfg.remind_2h_before &&
@@ -594,28 +821,72 @@ Deno.serve(async (req: Request) => {
           business_name: (tenant as TenantRow).name ?? "",
         });
 
-        // Pricing decision BEFORE Twilio call. Block tenants without
-        // credit instead of failing mid-fanout.
-        const plan = planSend(cfg);
-        if ("blocked" in plan) {
-          await supabase.from("sms_messages").insert({
+        // The UNIQUE insert is the authoritative idempotency gate. It happens
+        // before Twilio because a lookup alone is racy across overlapping cron
+        // invocations. A claimed row favours at-most-once delivery if the
+        // process crashes mid-send, which is safer than duplicate reminders.
+        const { data: claim, error: claimError } = await supabase
+          .from("sms_messages")
+          .insert({
             tenant_id: cfg.tenant_id,
             appointment_id: apt.id,
             client_id: client?.id ?? null,
             to_phone: toPhone,
             message_body: body,
-            status: "failed",
-            error_code: "no_credit",
-            error_message:
-              "Бесплатные SMS закончились, баланс < стоимости отправки",
+            status: "queued",
             trigger_type: trigger,
             mode: "platform",
+          })
+          .select("id")
+          .single();
+        const claimId = stringField(claim, "id");
+        if (claimError || !claimId) {
+          if (claimError?.code === "23505") out.skipped++;
+          else {
+            out.errors.push({
+              tenant_id: cfg.tenant_id,
+              appointment_id: apt.id,
+              reason: "failed to claim SMS reminder",
+            });
+          }
+          continue;
+        }
+
+        // Reserve credit under a PostgreSQL row lock. Overlapping cron runs and
+        // owner test sends can no longer spend the same free slot/balance.
+        const reservation = await reserveSmsCredit(supabase, cfg.tenant_id);
+        if (reservation.error) {
+          await supabase
+            .from("sms_messages")
+            .update({
+              status: "failed",
+              error_code: "credit_reservation_failed",
+              error_message: "SMS credit reservation failed",
+            })
+            .eq("id", claimId);
+          out.failed++;
+          out.errors.push({
+            tenant_id: cfg.tenant_id,
+            appointment_id: apt.id,
+            reason: "SMS credit reservation failed",
           });
+          continue;
+        }
+        if (!reservation.charge) {
+          await supabase
+            .from("sms_messages")
+            .update({
+              status: "failed",
+              error_code: "no_credit",
+              error_message:
+                "Бесплатные SMS закончились, баланс < стоимости отправки",
+            })
+            .eq("id", claimId);
           await supabase.from("sms_logs").insert({
             tenant_id: cfg.tenant_id,
             to_phone: toPhone,
             body,
-            sender_name_used: PLATFORM_DEFAULT_SENDER,
+            sender_name_used: senderForConfig(cfg),
             cost_cents: 0,
             was_free: false,
             error_code: "no_credit",
@@ -626,88 +897,68 @@ Deno.serve(async (req: Request) => {
           continue;
         }
 
-        // Send to Twilio.
-        const result = await twilioSend(twilio, plan.senderName, toPhone, body);
+        const senderName = senderForConfig(cfg);
+        const result = await twilioSend(twilio, senderName, toPhone, body);
 
         if (!result.ok) {
-          await supabase.from("sms_messages").insert({
-            tenant_id: cfg.tenant_id,
-            appointment_id: apt.id,
-            client_id: client?.id ?? null,
-            to_phone: toPhone,
-            message_body: body,
-            status: "failed",
-            error_code: result.errorCode,
-            error_message: result.errorMessage,
-            trigger_type: trigger,
-            mode: "platform",
-          });
+          const releaseError = await releaseSmsCredit(
+            supabase,
+            cfg.tenant_id,
+            reservation.charge,
+          );
+          await supabase
+            .from("sms_messages")
+            .update({
+              status: "failed",
+              error_code: result.errorCode,
+              error_message: result.errorMessage,
+            })
+            .eq("id", claimId);
           await supabase.from("sms_logs").insert({
             tenant_id: cfg.tenant_id,
             to_phone: toPhone,
             body,
-            sender_name_used: plan.senderName,
+            sender_name_used: senderName,
             cost_cents: 0,
-            was_free: plan.charge === "free",
+            was_free: reservation.charge === "free",
             twilio_status: result.status ?? "failed",
             error_code: result.errorCode,
             error_message: result.errorMessage,
             appointment_id: apt.id,
           });
+          if (releaseError) {
+            out.errors.push({
+              tenant_id: cfg.tenant_id,
+              appointment_id: apt.id,
+              reason: "SMS credit release requires reconciliation",
+            });
+          }
           out.failed++;
           continue;
         }
 
-        // Success — write sms_messages (legacy) + sms_logs (new) +
-        // deduct from local cfg copy. Persist counters at end of
-        // tenant loop to save round-trips.
-        await supabase.from("sms_messages").insert({
-          tenant_id: cfg.tenant_id,
-          appointment_id: apt.id,
-          client_id: client?.id ?? null,
-          to_phone: toPhone,
-          message_body: body,
-          status: "sent",
-          twilio_sid: result.sid,
-          trigger_type: trigger,
-          mode: "platform",
-          sent_at: new Date().toISOString(),
-        });
+        // Success — finalize the claimed legacy row + write the managed log.
+        await supabase
+          .from("sms_messages")
+          .update({
+            status: "sent",
+            twilio_sid: result.sid,
+            error_code: null,
+            error_message: null,
+          })
+          .eq("id", claimId);
         await supabase.from("sms_logs").insert({
           tenant_id: cfg.tenant_id,
           to_phone: toPhone,
           body,
-          sender_name_used: plan.senderName,
-          cost_cents: plan.costCents,
-          was_free: plan.charge === "free",
+          sender_name_used: senderName,
+          cost_cents: reservation.charge === "free" ? 0 : PER_SMS_COST_CENTS,
+          was_free: reservation.charge === "free",
           twilio_message_sid: result.sid,
           twilio_status: result.status,
           appointment_id: apt.id,
         });
-
-        if (plan.charge === "free") {
-          cfg.free_sms_remaining = Math.max(0, cfg.free_sms_remaining - 1);
-        } else {
-          cfg.balance_cents = Math.max(0, cfg.balance_cents - plan.costCents);
-        }
-        cfg.total_sent_count = (cfg.total_sent_count ?? 0) + 1;
         out.sent++;
-      }
-
-      // Persist tenant counters once per cron pass per tenant.
-      if (
-        cfg.free_sms_remaining !== cfgRaw.free_sms_remaining ||
-        cfg.balance_cents !== cfgRaw.balance_cents ||
-        cfg.total_sent_count !== cfgRaw.total_sent_count
-      ) {
-        await supabase
-          .from("tenant_sms_config")
-          .update({
-            free_sms_remaining: cfg.free_sms_remaining,
-            balance_cents: cfg.balance_cents,
-            total_sent_count: cfg.total_sent_count,
-          })
-          .eq("tenant_id", cfg.tenant_id);
       }
     } catch (err) {
       out.errors.push({

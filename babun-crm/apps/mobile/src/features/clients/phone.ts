@@ -112,6 +112,19 @@ export function formatPhoneAsYouType(
   return formatted;
 }
 
+/** Страна номера ДЛЯ ФЛАГА: по набранному «+коду», а для локального
+ *  формата (без «+») — страна по умолчанию, которой его и разбирают.
+ *  Пустой номер → undefined (флагу нечего показывать). Один хелпер на
+ *  оба режима карточки клиента: черновик и сохранённая строка. */
+export function phoneCountry(
+  raw: string,
+  defaultCountry: CountryCode = DEFAULT_COUNTRY,
+): CountryCode | undefined {
+  const s = (raw ?? "").trim();
+  if (!s) return undefined;
+  return countryFromDialPrefix(s) ?? (s.startsWith("+") ? undefined : defaultCountry);
+}
+
 /** Страна по НАБРАННОМУ коду: «+35799…» → CY, «+7 999…» → RU. Живёт на
  *  каждый ввод (частичный номер ещё не парсится libphonenumber), поэтому
  *  матчим самый длинный dial-код из поддержанных стран. Не начинается с

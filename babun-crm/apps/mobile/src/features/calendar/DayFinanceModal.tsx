@@ -32,7 +32,7 @@ import { useThemeColors, type ThemeColors } from "@/theme/colors";
 // месяце — общий computeDayFinance (extras уже внутри earned/spent),
 // расхождение невозможно. Центрированная карточка в языке
 // CityPickerModal + веб-паритетный редактор ручных операций: сегменты
-// Доход/Расход/Ожидается, «+ Доход / + Расход» открывают инлайн-форму,
+// Доход/Расход/Ожидается, действия добавления открывают инлайн-форму,
 // ✕ у строки удаляет; «Ожидается» — записи дня с долгом, тап открывает
 // запись (отметить оплату) через onEditAppointment.
 type Segment = "income" | "expense" | "pending";
@@ -176,10 +176,9 @@ export function DayFinanceModal({
             </Text>
             <Pressable
               onPress={onClose}
-              hitSlop={10}
               accessibilityRole="button"
-              accessibilityLabel="Закрыть"
-              className="absolute right-3 top-3 h-8 w-8 items-center justify-center rounded-full"
+              accessibilityLabel="Закрыть финансы дня"
+              className="absolute right-2 top-2 h-11 w-11 items-center justify-center rounded-full"
               style={{ backgroundColor: t.pressed }}
             >
               <X color={t.sub} size={ICON.sm} />
@@ -243,8 +242,9 @@ export function DayFinanceModal({
                       setAddKind(null);
                     }}
                     accessibilityRole="button"
+                    accessibilityLabel={`Показать: ${s.label}`}
                     accessibilityState={{ selected: active }}
-                    className="flex-1 items-center rounded-[9px] py-1.5"
+                    className="min-h-11 flex-1 items-center justify-center rounded-[9px]"
                     style={active ? { backgroundColor: t.surface } : undefined}
                   >
                     <Text
@@ -295,10 +295,12 @@ export function DayFinanceModal({
                         }}
                         accessibilityRole="button"
                         accessibilityLabel={`${clientName(a)}, долг ${formatEUR(getDebtAmount(a))} — открыть запись`}
+                        accessibilityState={{ disabled: !onEditAppointment }}
                         className="flex-row items-center px-4 py-3"
-                        style={({ pressed }) =>
-                          pressed ? { backgroundColor: t.pressed } : undefined
-                        }
+                        style={({ pressed }) => [
+                          { minHeight: 44 },
+                          pressed ? { backgroundColor: t.pressed } : undefined,
+                        ]}
                       >
                         <Text
                           className="tabular-nums"
@@ -339,7 +341,7 @@ export function DayFinanceModal({
   );
 }
 
-// Список ручных операций одного вида + «+ Доход/Расход» → инлайн-форма.
+// Список ручных операций одного вида с переходом в инлайн-форму.
 function ExtrasSection({
   kind,
   items,
@@ -390,7 +392,7 @@ function ExtrasSection({
                   maxFontSizeMultiplier={1.3}
                   style={{ fontSize: 15, fontWeight: "600", color: tone }}
                 >
-                  {isIncome ? "+" : "−"}
+                  {isIncome ? "" : "−"}
                   {formatEUR(e.amount)}
                 </Text>
                 {canEdit ? (
@@ -398,10 +400,9 @@ function ExtrasSection({
                     onPress={() =>
                       onCommit(allExtras.filter((x) => x.id !== e.id))
                     }
-                    hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={`Удалить «${e.name}»`}
-                    className="ml-2 h-6 w-6 items-center justify-center rounded-full"
+                    className="ml-2 h-11 w-11 items-center justify-center rounded-full"
                     style={{ backgroundColor: t.pressed }}
                   >
                     <X color={t.faint} size={ICON.xs} />
@@ -428,13 +429,14 @@ function ExtrasSection({
           <Pressable
             onPress={onStartAdd}
             accessibilityRole="button"
-            className="mx-3 mt-2 items-center rounded-[14px] py-2.5"
+            accessibilityLabel={isIncome ? "Добавить доход" : "Добавить расход"}
+            className="mx-3 mt-2 min-h-11 items-center justify-center rounded-[14px]"
             style={({ pressed }) => ({
               backgroundColor: pressed ? t.pressed : t.surface,
             })}
           >
             <Text style={{ fontSize: 15, fontWeight: "600", color: tone }}>
-              {isIncome ? "+ Доход" : "+ Расход"}
+              {isIncome ? "Добавить доход" : "Добавить расход"}
             </Text>
           </Pressable>
         )
@@ -475,7 +477,7 @@ function AddExtraForm({
   };
 
   const inputStyle = {
-    height: 40,
+    height: 44,
     borderRadius: t.radius.input,
     paddingHorizontal: 12,
     fontSize: 15,
@@ -489,7 +491,9 @@ function AddExtraForm({
       style={{ backgroundColor: t.surface }}
     >
       <View className="flex-row" style={{ gap: 8 }}>
-        <TextInput
+                  <TextInput
+                    keyboardAppearance="light"
+                    accessibilityLabel={isIncome ? "Название дохода" : "Название расхода"}
           value={name}
           onChangeText={setName}
           placeholder={isIncome ? "Например, чаевые" : "Например, заправка"}
@@ -498,7 +502,9 @@ function AddExtraForm({
           className="flex-1"
           style={inputStyle}
         />
-        <TextInput
+                  <TextInput
+                    keyboardAppearance="light"
+                    accessibilityLabel="Сумма"
           value={amount}
           onChangeText={setAmount}
           placeholder="0,00"
@@ -512,7 +518,8 @@ function AddExtraForm({
         <Pressable
           onPress={onCancel}
           accessibilityRole="button"
-          className="flex-1 items-center justify-center rounded-[12px] py-2"
+          accessibilityLabel="Отменить добавление операции"
+          className="min-h-11 flex-1 items-center justify-center rounded-[12px]"
         >
           <Text style={{ fontSize: 14, fontWeight: "500", color: t.sub }}>
             Отмена
@@ -522,8 +529,9 @@ function AddExtraForm({
           onPress={save}
           disabled={!canSave}
           accessibilityRole="button"
+          accessibilityLabel="Сохранить операцию"
           accessibilityState={{ disabled: !canSave }}
-          className="flex-1 items-center justify-center rounded-[12px] py-2"
+          className="min-h-11 flex-1 items-center justify-center rounded-[12px]"
           style={{
             backgroundColor: canSave
               ? isIncome
