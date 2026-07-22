@@ -16,16 +16,44 @@ export async function listDayCities(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<DayCityMap> {
-  const { data, error } = await supabase
-    .from("day_cities")
-    .select("team_id, date, city")
-    .eq("tenant_id", tenantId);
-  if (error) throw new Error(`listDayCities: ${error.message}`);
   const map: DayCityMap = {};
-  for (const r of (data ?? []) as Pick<Row, "team_id" | "date" | "city">[]) {
-    map[dayCityKey(r.team_id, r.date)] = r.city;
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("day_cities")
+      .select("team_id, date, city")
+      .eq("tenant_id", tenantId)
+      .order("date", { ascending: true })
+      .order("team_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(`listDayCities: ${error.message}`);
+    const page = (data ?? []) as Pick<Row, "team_id" | "date" | "city">[];
+    for (const row of page) {
+      map[dayCityKey(row.team_id, row.date)] = row.city;
+    }
+    if (page.length < pageSize) break;
   }
   return map;
+}
+
+/** Один явный override team+date — точечное чтение без полной карты
+ *  (автоприсвоение метки клиенту при записи). null = строки нет; может
+ *  вернуть сентинел CITY_CLEARED — нормализация на вызывающем. */
+export async function fetchDayCity(
+  supabase: DbSupabase,
+  tenantId: string,
+  teamId: string,
+  date: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("day_cities")
+    .select("city")
+    .eq("tenant_id", tenantId)
+    .eq("team_id", teamId)
+    .eq("date", date)
+    .maybeSingle();
+  if (error) throw new Error(`fetchDayCity: ${error.message}`);
+  return data?.city ?? null;
 }
 
 /** Upsert one assignment. Empty/whitespace city deletes the row,

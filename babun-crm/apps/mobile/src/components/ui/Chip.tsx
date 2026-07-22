@@ -80,8 +80,10 @@ export function Chip({
     }
   } else if (variant === "tint") {
     if (selected) {
-      bg = `${hue}14`;
-      fg = readableColorOnTint(hue, t.surface, t.ink, 0x14 / 255);
+      // 12% (не 8): тинт должен читаться выбором с вытянутой руки, а не
+      // фокус-рамкой; DS §5 допускает 8–16%.
+      bg = `${hue}1F`;
+      fg = readableColorOnTint(hue, t.surface, t.ink, 0x1f / 255);
       border = hue;
     } else {
       bg = t.fill;
@@ -156,8 +158,6 @@ export function Chip({
       {icon}
       <Text
         maxFontSizeMultiplier={1.3}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
         numberOfLines={numberOfLines}
         style={[
           { fontSize: 13, fontWeight: "600", color: fg, flexShrink: 1 },

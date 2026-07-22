@@ -58,6 +58,7 @@ import {
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
+import { useClientsSort } from "@/features/clients/sort-pref";
 import {
   DEFAULT_CARD_FIELDS,
   useCardFields,
@@ -77,7 +78,7 @@ import { BulkActionBar } from "@/features/clients/BulkActionBar";
 import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
-import { useTeams } from "@/features/reference/queries";
+import { useCities, useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -445,17 +446,19 @@ export default function ClientsListScreen() {
   const router = useRouter();
   const toast = useToast();
   const { data: role } = useCurrentRole();
-  // Экран настроек возвращается сюда с nonce-параметрами: «Фильтры /
-  // Сортировка» → openFilters, «Импорт из CSV» → openImport.
+  // Экран настроек возвращается сюда с nonce-параметром:
+  // «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
-    openFilters?: string;
     openImport?: string;
   }>();
   const { data, isLoading, isRefetching, refetch, error } = useClients();
   const { data: tags = [] } = useClientTags();
   const { data: appointments = [] } = useAppointments();
   const { data: teams = [] } = useTeams();
+  const { data: cities = [] } = useCities();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
+  // Сортировка — персистентная настройка («Настройки клиентов»), не фильтр.
+  const { data: sort = "recent" } = useClientsSort();
   const archiveClients = useArchiveClients();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
@@ -468,9 +471,6 @@ export default function ClientsListScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [smsOpen, setSmsOpen] = useState(false);
 
-  useEffect(() => {
-    if (params.openFilters) setSheetOpen(true);
-  }, [params.openFilters]);
   useEffect(() => {
     if (params.openImport) setImportOpen(true);
   }, [params.openImport]);
@@ -496,11 +496,12 @@ export default function ClientsListScreen() {
     clients,
     appointments,
     teams,
+    cities,
     tags,
     statsMap,
+    sort,
     filter,
     query,
-    sheetOpen,
   );
 
   const removeToken = (token: ActiveToken) => {
@@ -731,12 +732,7 @@ export default function ClientsListScreen() {
           }}
         >
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/clients/settings",
-                params: { sort: filter.sort },
-              })
-            }
+            onPress={() => router.push("/clients/settings")}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel="Настройки клиентов"
@@ -807,7 +803,7 @@ export default function ClientsListScreen() {
             setSheetOpen(true);
           }}
           onRemoveToken={removeToken}
-          onReset={() => setFilter(resetFilters(filter))}
+          onReset={() => setFilter(resetFilters())}
         />
       ) : null}
 
@@ -883,7 +879,7 @@ export default function ClientsListScreen() {
                   label: "Сбросить",
                   onPress: () => {
                     setQuery("");
-                    setFilter(resetFilters(filter));
+                    setFilter(resetFilters());
                   },
                 }}
               />

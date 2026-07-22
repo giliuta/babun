@@ -1,22 +1,31 @@
 // PersonalBlock (mobile port of apps/web/.../blocks/PersonalBlock.tsx)
-// STORY-034 — Личное: Город · ДР · Email · Язык. Reference data for
+// STORY-034 — Личное: Метка · ДР · Email · Язык. Reference data for
 // SMS templates and birthday reminders; nothing here drives behavior
 // except birthday → stats.birthdayInDays (badge «ДР на неделе»), which
 // is why the date goes through OptionalDateField, not free text.
+// «Метка» («Тихий лист 2», 2026-07-22) — бывший свободный «Город»: теперь
+// строго из библиотеки Кабинета через LabelPickerSheet; ручной выбор
+// ставит city_manual (автоприсвоение из метки дня её не трогает).
 // Collapsed by default (CollapsibleCard) — the closed row shows
 // «{город} · ДР {дата}». Presentational only — receives client +
 // update(), persists via the composer's Supabase mutation.
 
 import { useEffect, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { ChevronRight } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
+import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { Chip } from "@/components/ui/Chip";
+import { LabelTag } from "@/components/ui/LabelTag";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
 import { formatShortDateRu } from "@/features/clients/format";
+import { LabelPickerSheet } from "@/features/clients/LabelPickerSheet";
 import {
   normalizeYMD,
   OptionalDateField,
 } from "@/features/clients/OptionalDateField";
+import { useCities } from "@/features/reference/queries";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 interface PersonalBlockProps {
@@ -48,6 +57,7 @@ function EditableField({
   return (
     <TextInput
       value={draft}
+      accessibilityLabel={placeholder}
       onChangeText={setDraft}
       onBlur={() => {
         if (draft.trim() !== value) onSave(draft.trim());
@@ -57,8 +67,8 @@ function EditableField({
       keyboardType={keyboardType}
       autoCapitalize={keyboardType === "email-address" ? "none" : "sentences"}
       selectionColor={t.accent}
-      keyboardAppearance={t.dark ? "dark" : "light"}
-      className="h-9 flex-1 rounded-lg px-2 text-[13px]"
+      keyboardAppearance="light"
+      className="h-11 flex-1 rounded-lg px-2 text-[13px]"
       style={{
         backgroundColor: t.fill,
         color: t.ink,
@@ -79,7 +89,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function PersonalBlock({ client, update }: PersonalBlockProps) {
   const t = useThemeColors();
-
+  const { data: cities = [] } = useCities();
+  const [pickerOpen, setPickerOpen] = useState(false);
   // Collapsed-row summary: «Пафос · ДР 14 мар» — only what's filled.
   const summary = [
     client.city || null,
@@ -88,15 +99,41 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
     .filter(Boolean)
     .join(" · ");
 
+  const label = client.city.trim();
+  const labelColor =
+    cities.find((c) => c.name === label)?.color ?? getAvatarColor(label);
+
   return (
     <CollapsibleCard title="Личное" summary={summary}>
       <View className="gap-2.5 px-1 pt-1">
-        <Row label="Город">
-          <EditableField
-            value={client.city}
-            onSave={(v) => update({ city: v })}
-            placeholder="Пафос"
-          />
+        {/* Метка — из библиотеки Кабинета (тот же корешок, что на днях
+            календаря). Свободного ввода нет: тап открывает пикер. */}
+        <Row label="Метка">
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              setPickerOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={
+              label ? `Метка: ${label}, изменить` : "Выбрать метку"
+            }
+            className="h-11 flex-1 flex-row items-center justify-between rounded-lg px-2 active:opacity-70"
+            style={{ backgroundColor: t.fill }}
+          >
+            {label ? (
+              <LabelTag color={labelColor} text={label} lg />
+            ) : (
+              <Text
+                maxFontSizeMultiplier={1.3}
+                className="text-[13px]"
+                style={{ color: t.placeholder }}
+              >
+                Выбрать метку
+              </Text>
+            )}
+            <ChevronRight color={t.faint} size={16} strokeWidth={2.2} />
+          </Pressable>
         </Row>
         <Row label="День рождения">
           {/* Native compact date picker (OptionalDateField, как даты ТО в
@@ -131,6 +168,14 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
           </View>
         </Row>
       </View>
+
+      <LabelPickerSheet
+        visible={pickerOpen}
+        current={client.city}
+        onSelect={(name) => update({ city: name, city_manual: true })}
+        onClear={() => update({ city: "", city_manual: false })}
+        onClose={() => setPickerOpen(false)}
+      />
     </CollapsibleCard>
   );
 }

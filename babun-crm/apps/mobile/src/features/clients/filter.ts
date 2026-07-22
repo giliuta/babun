@@ -12,36 +12,18 @@ import {
 
 // ── Sort ───────────────────────────────────────────────────────────
 
-export type SortKey = "recent" | "name" | "revenue" | "equipment";
+export type SortKey = "recent" | "name" | "revenue";
 
-/** Короткие подписи строк сортировки. «A/C» → «По технике» (внятно и в
- *  одно слово с фильтром «Тип техники» / метрикой acCount). */
-export const SORT_LABELS: Record<SortKey, string> = {
-  recent: "Недавние",
-  name: "Имя",
-  revenue: "Доход",
-  equipment: "По технике",
-};
-
-/** Подсказка-направление справа в строке сортировки — снимает любую
- *  двусмысленность («что и куда сортируем»). */
-export const SORT_HINTS: Record<SortKey, string> = {
-  recent: "у кого недавно был визит",
-  name: "по алфавиту, А–Я",
-  revenue: "кто больше платит",
-  equipment: "у кого больше техники",
-};
-
-/** Длинные подписи для строки «Сортировка списка» в настройках (web
- *  SORT_LABELS_RU из page.tsx v811). */
+/** Подписи сортировки — строка в «Настройки клиентов» (сортировка живёт
+ *  ТОЛЬКО там, из листа «Фильтры» удалена — решение владельца 2026-07-22;
+ *  персист в sort-pref.ts). */
 export const SORT_LABELS_LONG: Record<SortKey, string> = {
   recent: "Недавно посещали",
   name: "По имени (А–Я)",
   revenue: "По доходу",
-  equipment: "По технике",
 };
 
-export const SORT_ORDER: SortKey[] = ["recent", "name", "revenue", "equipment"];
+export const SORT_ORDER: SortKey[] = ["recent", "name", "revenue"];
 
 // ── Segments (Статус) ──────────────────────────────────────────────
 
@@ -147,7 +129,15 @@ export function buildSegmentCounts(
 // ── Period ─────────────────────────────────────────────────────────
 
 export type PeriodPreset =
-  "today" | "7d" | "30d" | "90d" | "month" | "prevMonth" | "year" | "custom";
+  | "today"
+  | "yesterday"
+  | "week"
+  | "lastweek"
+  | "month"
+  | "lastmonth"
+  | "year"
+  | "lastyear"
+  | "custom";
 
 /** Активный период. null везде = «Всё время» (нет фильтра).
  *  from/to — включительные YYYY-MM-DD. */
@@ -170,40 +160,68 @@ function pad(n: number): string {
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function daysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return ymd(d);
-}
 
-/** Пресеты от РЕАЛЬНОЙ текущей даты (web PeriodSection.buildPresets). */
+/** Пресеты от РЕАЛЬНОЙ текущей даты — набор Финансов ОДИН В ОДИН
+ *  (решение владельца 2026-07-22, зеркало finances/period.ts): пары
+ *  «текущий/прошлый», в 2-кол сетке каждый ряд = пара. */
 export function buildPeriodPresets(): PeriodPresetDef[] {
   const now = new Date();
-  const today = ymd(now);
-  const y = now.getFullYear();
-  const m = now.getMonth();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const shift = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  // Monday-based ISO week, как календарная сетка.
+  const dow = (today.getDay() + 6) % 7;
+  const monday = shift(today, -dow);
+  const prevMonday = shift(today, -dow - 7);
+  const yesterday = shift(today, -1);
   return [
-    { key: "today", label: "Сегодня", from: today, to: today },
-    { key: "7d", label: "7 дней", from: daysAgo(6), to: today },
-    { key: "30d", label: "30 дней", from: daysAgo(29), to: today },
-    { key: "90d", label: "90 дней", from: daysAgo(89), to: today },
+    { key: "today", label: "Сегодня", from: ymd(today), to: ymd(today) },
+    {
+      key: "yesterday",
+      label: "Вчера",
+      from: ymd(yesterday),
+      to: ymd(yesterday),
+    },
+    {
+      key: "week",
+      label: "Текущая неделя",
+      from: ymd(monday),
+      to: ymd(shift(monday, 6)),
+    },
+    {
+      key: "lastweek",
+      label: "Прошлая неделя",
+      from: ymd(prevMonday),
+      to: ymd(shift(prevMonday, 6)),
+    },
     {
       key: "month",
-      label: "Этот месяц",
+      label: "Текущий месяц",
       from: ymd(new Date(y, m, 1)),
       to: ymd(new Date(y, m + 1, 0)),
     },
     {
-      key: "prevMonth",
+      key: "lastmonth",
       label: "Прошлый месяц",
       from: ymd(new Date(y, m - 1, 1)),
       to: ymd(new Date(y, m, 0)),
     },
     {
       key: "year",
-      label: "Этот год",
+      label: "Текущий год",
       from: ymd(new Date(y, 0, 1)),
       to: ymd(new Date(y, 11, 31)),
+    },
+    {
+      key: "lastyear",
+      label: "Прошлый год",
+      from: ymd(new Date(y - 1, 0, 1)),
+      to: ymd(new Date(y - 1, 11, 31)),
     },
   ];
 }
@@ -225,12 +243,13 @@ const M_GEN = [
 
 const PRESET_LABELS: Record<string, string> = {
   today: "Сегодня",
-  "7d": "7 дней",
-  "30d": "30 дней",
-  "90d": "90 дней",
-  month: "Этот месяц",
-  prevMonth: "Прошлый месяц",
-  year: "Этот год",
+  yesterday: "Вчера",
+  week: "Текущая неделя",
+  lastweek: "Прошлая неделя",
+  month: "Текущий месяц",
+  lastmonth: "Прошлый месяц",
+  year: "Текущий год",
+  lastyear: "Прошлый год",
 };
 
 function fmtShort(key: string): string {
@@ -271,8 +290,8 @@ export interface ActiveToken {
 // ── Filter state ───────────────────────────────────────────────────
 
 export interface ClientsFilter {
-  sort: SortKey;
-  /** Выбранные статусы — AND-семантика (как теги). Пусто = все. */
+  /** Выбранные статусы — OR-семантика («список на обзвон»: любой из
+   *  выбранных), как у всех фасетов листа. Пусто = все. */
   segments: SegmentKey[];
   selectedTeams: string[];
   selectedCities: string[];
@@ -281,7 +300,6 @@ export interface ClientsFilter {
 }
 
 export const EMPTY_FILTER: ClientsFilter = {
-  sort: "recent",
   segments: [],
   selectedTeams: [],
   selectedCities: [],
@@ -289,7 +307,7 @@ export const EMPTY_FILTER: ClientsFilter = {
   period: null,
 };
 
-/** Сколько активных ЗНАЧЕНИЙ фильтра (сортировка — не фильтр). */
+/** Сколько активных ЗНАЧЕНИЙ фильтра. */
 export function filterActiveCount(f: ClientsFilter): number {
   return (
     f.selectedTeams.length +
@@ -300,18 +318,7 @@ export function filterActiveCount(f: ClientsFilter): number {
   );
 }
 
-/** Сброс всех фильтров, сортировка сохраняется (web resetFilters). */
-export function resetFilters(f: ClientsFilter): ClientsFilter {
-  return { ...EMPTY_FILTER, sort: f.sort };
-}
-
-/** Кол-во кондиционеров: по локациям + legacy client.equipment
- *  (web acCount). */
-export function acCount(c: Client): number {
-  return (
-    (c.locations ?? []).reduce(
-      (sum, loc) => sum + (loc.equipment ?? []).length,
-      0,
-    ) + c.equipment.length
-  );
+/** Сброс всех фильтров (сортировка — отдельная настройка, sort-pref.ts). */
+export function resetFilters(): ClientsFilter {
+  return { ...EMPTY_FILTER };
 }

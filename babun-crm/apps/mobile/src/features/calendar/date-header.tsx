@@ -12,6 +12,7 @@
 // «Выбранного дня» в Неделе нет: тап по дате открывает попап метки,
 // долгий тап проваливается в День (см. WeekHeaderRow).
 import { Text, View } from "react-native";
+import { LabelTag } from "@/components/ui/LabelTag";
 import { useThemeColors } from "@/theme/colors";
 
 const WEEKDAYS_RU = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
@@ -156,39 +157,5 @@ export function DateCell({
   );
 }
 
-// Корешок метки города: компактный тег на тонированной подложке цвета
-// метки — sm: до 4 букв под числом недели, lg: полное имя в шапке Дня.
-function LabelTag({
-  color,
-  text,
-  lg = false,
-}: {
-  color: string;
-  text: string;
-  lg?: boolean;
-}) {
-  return (
-    <View
-      style={{
-        borderRadius: lg ? 5 : 4,
-        paddingHorizontal: lg ? 8 : 5,
-        paddingVertical: lg ? 1.5 : 1,
-        backgroundColor: `${color}26`,
-      }}
-    >
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.2}
-        style={{
-          fontSize: lg ? 10 : 9,
-          fontWeight: "700",
-          letterSpacing: 0.5,
-          textTransform: "uppercase",
-          color,
-        }}
-      >
-        {text}
-      </Text>
-    </View>
-  );
-}
+// Корешок метки города — вынесен в DS (@/components/ui/LabelTag): тот же
+// компонент рисует метку на карточке клиента. Правки вида — только там.
