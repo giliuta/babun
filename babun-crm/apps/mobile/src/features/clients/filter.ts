@@ -136,28 +136,14 @@ export function buildSegmentCounts(
 
 // ── Period ─────────────────────────────────────────────────────────
 
-export type PeriodPreset =
-  | "today"
-  | "yesterday"
-  | "week"
-  | "lastweek"
-  | "month"
-  | "lastmonth"
-  | "year"
-  | "lastyear"
-  | "custom";
+/** Период всегда задаётся явным диапазоном (лента месяцев / колёса). */
+export type PeriodPreset = "custom";
 
 /** Активный период. null везде = «Всё время» (нет фильтра).
- *  from/to — включительные YYYY-MM-DD. */
+ *  from/to — включительные YYYY-MM-DD. Пресетов больше нет: период
+ *  задаёт лента месяцев или колёса С–До — всегда явный диапазон. */
 export interface PeriodValue {
   preset: PeriodPreset;
-  from: string;
-  to: string;
-}
-
-export interface PeriodPresetDef {
-  key: Exclude<PeriodPreset, "custom">;
-  label: string;
   from: string;
   to: string;
 }
@@ -167,71 +153,6 @@ function pad(n: number): string {
 }
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** Пресеты от РЕАЛЬНОЙ текущей даты — набор Финансов ОДИН В ОДИН
- *  (решение владельца 2026-07-22, зеркало finances/period.ts): пары
- *  «текущий/прошлый», в 2-кол сетке каждый ряд = пара. */
-export function buildPeriodPresets(): PeriodPresetDef[] {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const y = today.getFullYear();
-  const m = today.getMonth();
-  const shift = (d: Date, n: number) => {
-    const x = new Date(d);
-    x.setDate(x.getDate() + n);
-    return x;
-  };
-  // Monday-based ISO week, как календарная сетка.
-  const dow = (today.getDay() + 6) % 7;
-  const monday = shift(today, -dow);
-  const prevMonday = shift(today, -dow - 7);
-  const yesterday = shift(today, -1);
-  return [
-    { key: "today", label: "Сегодня", from: ymd(today), to: ymd(today) },
-    {
-      key: "yesterday",
-      label: "Вчера",
-      from: ymd(yesterday),
-      to: ymd(yesterday),
-    },
-    {
-      key: "week",
-      label: "Текущая неделя",
-      from: ymd(monday),
-      to: ymd(shift(monday, 6)),
-    },
-    {
-      key: "lastweek",
-      label: "Прошлая неделя",
-      from: ymd(prevMonday),
-      to: ymd(shift(prevMonday, 6)),
-    },
-    {
-      key: "month",
-      label: "Текущий месяц",
-      from: ymd(new Date(y, m, 1)),
-      to: ymd(new Date(y, m + 1, 0)),
-    },
-    {
-      key: "lastmonth",
-      label: "Прошлый месяц",
-      from: ymd(new Date(y, m - 1, 1)),
-      to: ymd(new Date(y, m, 0)),
-    },
-    {
-      key: "year",
-      label: "Текущий год",
-      from: ymd(new Date(y, 0, 1)),
-      to: ymd(new Date(y, 11, 31)),
-    },
-    {
-      key: "lastyear",
-      label: "Прошлый год",
-      from: ymd(new Date(y - 1, 0, 1)),
-      to: ymd(new Date(y - 1, 11, 31)),
-    },
-  ];
 }
 
 const M_GEN = [
@@ -249,16 +170,37 @@ const M_GEN = [
   "дек",
 ];
 
-const PRESET_LABELS: Record<string, string> = {
-  today: "Сегодня",
-  yesterday: "Вчера",
-  week: "Текущая неделя",
-  lastweek: "Прошлая неделя",
-  month: "Текущий месяц",
-  lastmonth: "Прошлый месяц",
-  year: "Текущий год",
-  lastyear: "Прошлый год",
-};
+/** Именительный падеж — подписи целых месяцев («Июнь», «Март — Май»). */
+const M_NOM = [
+  "Январь",
+  "Февраль",
+  "Март",
+  "Апрель",
+  "Май",
+  "Июнь",
+  "Июль",
+  "Август",
+  "Сентябрь",
+  "Октябрь",
+  "Ноябрь",
+  "Декабрь",
+];
+
+/** Короткие подписи колонок ленты («май», не «мая»). */
+export const M_BAND = [
+  "янв",
+  "фев",
+  "мар",
+  "апр",
+  "май",
+  "июн",
+  "июл",
+  "авг",
+  "сен",
+  "окт",
+  "ноя",
+  "дек",
+];
 
 function fmtShort(key: string): string {
   const [, mo, d] = key.split("-").map(Number);
@@ -266,12 +208,66 @@ function fmtShort(key: string): string {
   return `${d} ${M_GEN[mo - 1]}`;
 }
 
-/** Короткая подпись периода для токена бара (web periodLabel). */
+/** Подпись периода — умная: целые месяцы называются по имени
+ *  («Июнь», «Март — Май», «Ноябрь ’25»), произвольные даты — числами
+ *  («1 июн–15 июн»). Используется токеном бара и значением в листе. */
 export function periodLabel(period: PeriodValue): string {
-  if (period.preset === "custom") {
-    return `${fmtShort(period.from)}–${fmtShort(period.to)}`;
+  const [fy, fm, fd] = period.from.split("-").map(Number);
+  const [ty, tm, td] = period.to.split("-").map(Number);
+  if (!fy || !ty) return "Период";
+  const curYear = new Date().getFullYear();
+  const lastDay = new Date(ty, tm, 0).getDate();
+  const monthAligned = fd === 1 && td === lastDay;
+  if (monthAligned) {
+    const fLbl = `${M_NOM[fm - 1]}${fy !== curYear ? ` ’${String(fy).slice(2)}` : ""}`;
+    if (fy === ty && fm === tm) return fLbl;
+    const tLbl = `${M_NOM[tm - 1]}${ty !== curYear ? ` ’${String(ty).slice(2)}` : ""}`;
+    return `${fLbl} — ${tLbl}`;
   }
-  return PRESET_LABELS[period.preset] ?? "Период";
+  return `${fmtShort(period.from)}–${fmtShort(period.to)}`;
+}
+
+// ── Лента месяцев («гравюра времени») ──────────────────────────────
+
+export interface PeriodMonth {
+  /** YYYY-MM. */
+  key: string;
+  /** Подпись колонки («май»). */
+  label: string;
+  /** «’26» на колонке января (граница года в окне) — иначе null. */
+  yearMark: string | null;
+  /** Первый/последний день месяца (включительно, YYYY-MM-DD). */
+  from: string;
+  to: string;
+  /** Число записей в месяце — высота штриха гравюры. */
+  count: number;
+}
+
+/** Окно последних 12 месяцев (старые → новые) с плотностью записей.
+ *  dates — даты записей (YYYY-MM-DD), отменённые отсеять снаружи. */
+export function buildPeriodMonths(dates: string[]): PeriodMonth[] {
+  const counts = new Map<string, number>();
+  for (const d of dates) {
+    const k = d.slice(0, 7);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const now = new Date();
+  const out: PeriodMonth[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const y = d.getFullYear();
+    const m = d.getMonth();
+    const key = `${y}-${pad(m + 1)}`;
+    out.push({
+      key,
+      label: M_BAND[m],
+      yearMark: m === 0 ? `’${String(y).slice(2)}` : null,
+      from: ymd(new Date(y, m, 1)),
+      to: ymd(new Date(y, m + 1, 0)),
+      count: counts.get(key) ?? 0,
+    });
+  }
+  return out;
 }
 
 // ── Facets / tokens ────────────────────────────────────────────────

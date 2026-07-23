@@ -51,6 +51,7 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
+  buildPeriodMonths,
   buildSegmentCounts,
   EMPTY_FILTER,
   resetFilters,
@@ -487,6 +488,15 @@ export default function ClientsListScreen() {
   const segmentCounts = useMemo(
     () => buildSegmentCounts(clients, statsMap),
     [clients, statsMap],
+  );
+
+  // Окно «ленты времени» — 12 месяцев с плотностью записей (гравюра).
+  const periodMonths = useMemo(
+    () =>
+      buildPeriodMonths(
+        appointments.filter((a) => a.status !== "cancelled").map((a) => a.date),
+      ),
+    [appointments],
   );
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
@@ -942,6 +952,7 @@ export default function ClientsListScreen() {
         filter={filter}
         result={result}
         segmentCounts={segmentCounts}
+        months={periodMonths}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
       />
