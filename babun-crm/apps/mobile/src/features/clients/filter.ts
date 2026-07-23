@@ -41,6 +41,14 @@ export type Segment =
 /** Конкретный статус (без служебного «all») — единица мультивыбора. */
 export type SegmentKey = Exclude<Segment, "all">;
 
+/** Рабочие статусы-«дела» диспетчера — в чип-ленте и лотке стоят на
+ *  постоянных местах всегда (мышечная память). */
+export const CORE_SEGMENTS = new Set<SegmentKey>([
+  "debt",
+  "noUpcoming",
+  "reminderDue",
+]);
+
 /** Порядок (деньги/действие вперёд) + RU-подписи. «Без записи» и
  *  «Напомнить» — «дела»: кого дозаписать и по кому сработало напоминание. */
 export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [

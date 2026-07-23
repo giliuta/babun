@@ -756,7 +756,13 @@ export default function ClientsListScreen() {
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Имя, телефон, адрес"
+              // Приём Jobber: активные фильтры меняют плейсхолдер — статус
+              // «список отфильтрован» виден даже без открытия панели.
+              placeholder={
+                result.activeCount > 0
+                  ? "Поиск среди отфильтрованных"
+                  : "Имя, телефон, адрес"
+              }
               accessibilityLabel="Поиск клиентов"
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
@@ -831,7 +837,11 @@ export default function ClientsListScreen() {
           keyboardShouldPersistTaps="handled"
           // Низ списка не должен прятаться под нижней панелью массовых
           // действий в режиме выбора; вне выбора — небольшой отступ.
-          contentContainerStyle={{ paddingBottom: selecting ? 108 : 24 }}
+          // При открытом полулисте фильтров хвост списка должен уметь
+          // проскроллиться выше панели (список позади живой).
+          contentContainerStyle={{
+            paddingBottom: selecting ? 108 : sheetOpen ? 420 : 24,
+          }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
             const teamName = stats?.lastTeamId
