@@ -340,6 +340,14 @@ export function ClientsFilterSheet({
     }
   }, [filter.period]);
 
+  // Возврат на половину — контент к началу: свёрнутый лист всегда
+  // показывает голову стека, а не случайный обрез прокрутки.
+  useEffect(() => {
+    if (detent === "medium") {
+      scrollRef.current?.scrollTo({ y: 0, animated: !reduced });
+    }
+  }, [detent, reduced]);
+
   useEffect(
     () => () => {
       if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -372,6 +380,25 @@ export function ClientsFilterSheet({
     );
     return () => clearTimeout(id);
   }, [visible, shownCount, countPart]);
+
+  // «Возле названия видно, что выбрано» (владелец): компактная сводка
+  // активного набора под заголовком — читается и на полной странице,
+  // когда список позади скрыт.
+  const activeSummary = nothingActive
+    ? null
+    : [
+        ...filter.segments.map(
+          (k) => SEGMENT_OPTIONS.find((o) => o.key === k)?.label ?? k,
+        ),
+        ...(filter.period ? [periodLabel(filter.period)] : []),
+        ...filter.selectedCities,
+        ...filter.activeTags
+          .map((id) => tagOptions.find((o) => o.value === id)?.label ?? "")
+          .filter(Boolean),
+        ...filter.selectedTeams
+          .map((id) => teamOptions.find((o) => o.value === id)?.label ?? "")
+          .filter(Boolean),
+      ].join(" · ");
 
   // Ядро-«дела» стоит на постоянных местах ВСЕГДА (при нуле — пригашено);
   // редкие статусы появляются только при наличии клиентов.
@@ -540,6 +567,20 @@ export function ClientsFilterSheet({
           >
             Фильтры
           </Text>
+          {activeSummary ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{
+                marginTop: 1,
+                fontSize: 12,
+                fontWeight: "500",
+                color: "rgba(11,18,32,0.48)",
+              }}
+            >
+              {activeSummary}
+            </Text>
+          ) : null}
         </View>
         <View style={{ width: SLOT, alignItems: "flex-end" }}>
           <Pressable
@@ -565,10 +606,13 @@ export function ClientsFilterSheet({
         </View>
       </View>
 
-      {/* Стек все-видно-сразу; скролл на любом детенте. Паддинги ТОЛЬКО
-          через contentContainerStyle (NativeWind роняет className). */}
+      {/* Стек все-видно-сразу. Scroll-to-expand: на medium свайп тела
+          поднимает ЛИСТ (DetentSheet), контент скроллится только на
+          large — обрезков под шапкой не бывает. Паддинги ТОЛЬКО через
+          contentContainerStyle (NativeWind роняет className). */}
       <ScrollView
         ref={scrollRef}
+        scrollEnabled={detent === "large"}
         style={{ flex: 1 }}
         contentContainerStyle={{
           paddingTop: 10,

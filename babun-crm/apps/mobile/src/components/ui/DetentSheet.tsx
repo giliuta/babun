@@ -153,6 +153,19 @@ export const DetentSheet = forwardRef<
     })
     .onEnd((e) => snap(e.velocityY));
 
+  // На medium панель тянется за ЛЮБОЕ место тела (scroll-to-expand:
+  // свайп вверх поднимает лист, контент внутри в это время не скроллится;
+  // тапы проходят — pan активируется только с движения). Осевая
+  // доминанта: горизонталь отдаём вложенным контролам (лента месяцев).
+  const bodyDrag = Gesture.Pan()
+    .enabled(detent === "medium")
+    .activeOffsetY([-8, 8])
+    .failOffsetX([-12, 12])
+    .onChange((e) => {
+      ty.value = Math.min(H, Math.max(0, ty.value + e.changeY));
+    })
+    .onEnd((e) => snap(e.velocityY));
+
 
   const scrimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(
@@ -215,21 +228,23 @@ export const DetentSheet = forwardRef<
         ]}
       >
         <GestureDetector gesture={headerDrag}>
+          {/* «Нормальная свайп-палка» (владелец): заметный язычок 44×5. */}
           <View className="items-center pb-1 pt-2.5">
             <View
               style={{
-                width: 36,
+                width: 44,
                 height: 5,
                 borderRadius: 3,
-                backgroundColor: "rgba(11,18,32,0.14)",
+                backgroundColor: "rgba(11,18,32,0.22)",
               }}
             />
           </View>
         </GestureDetector>
-        {/* Тело скроллится на ЛЮБОМ детенте (скрыть секции за сгибом без
-            скролла — ловушка обнаруживаемости); высоту меняет только
-            перетаскивание за язычок/шапку. */}
-        <View style={{ flex: 1, overflow: "hidden" }}>{children}</View>
+        {/* Scroll-to-expand: на medium тело тянет ЛИСТ (контент статичен и
+            сам встаёт к началу), на large контент скроллится нативно. */}
+        <GestureDetector gesture={bodyDrag}>
+          <View style={{ flex: 1, overflow: "hidden" }}>{children}</View>
+        </GestureDetector>
       </Animated.View>
       ) : null}
 
