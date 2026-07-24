@@ -827,9 +827,7 @@ export function ClientsFilterSheet({
                 onPress={() => setOpenFacet("tag")}
               />
             ) : null}
-            {/* Фильтр по единственной команде бессмыслен — строка
-                появляется со второй командой. */}
-            {teamOptions.length >= 2 ? (
+            {teamOptions.length > 0 ? (
               <FilterRow
                 name="Команда"
                 value={teamValue}
