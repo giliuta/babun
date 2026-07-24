@@ -51,7 +51,6 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
-  buildPeriodMonths,
   buildSegmentCounts,
   EMPTY_FILTER,
   resetFilters,
@@ -490,8 +489,15 @@ export default function ClientsListScreen() {
     [clients, statsMap],
   );
 
-  // Окно «ленты времени» — 24 листаемых месяца.
-  const periodMonths = useMemo(buildPeriodMonths, []);
+  // Дата первой (не отменённой) записи — сплит периода в фильтрах
+  // показывает у «Всего времени» честный охват данных.
+  const dataFrom = useMemo(() => {
+    let min: string | null = null;
+    for (const a of appointments)
+      if (a.status !== "cancelled" && a.date && (!min || a.date < min))
+        min = a.date;
+    return min;
+  }, [appointments]);
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют
@@ -841,10 +847,8 @@ export default function ClientsListScreen() {
           keyboardShouldPersistTaps="handled"
           // Низ списка не должен прятаться под нижней панелью массовых
           // действий в режиме выбора; вне выбора — небольшой отступ.
-          // При открытом полулисте фильтров хвост списка должен уметь
-          // проскроллиться выше панели (список позади живой).
           contentContainerStyle={{
-            paddingBottom: selecting ? 108 : sheetOpen ? 420 : 24,
+            paddingBottom: selecting ? 108 : 24,
           }}
           renderItem={({ item }) => {
             const stats = statsMap.get(item.id);
@@ -946,7 +950,7 @@ export default function ClientsListScreen() {
         filter={filter}
         result={result}
         segmentCounts={segmentCounts}
-        months={periodMonths}
+        dataFrom={dataFrom}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
       />

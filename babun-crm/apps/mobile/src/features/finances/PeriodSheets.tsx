@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Check } from "lucide-react-native";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -18,84 +19,102 @@ import {
 // LOCKED v5 header split (finances-design.html): the period NAME opens this
 // preset list — paired «текущий/прошлый» blocks (День/Неделя/Месяц/Год),
 // each row shows its concrete range, tap applies instantly (web parity:
-// PeriodPicker.pickPreset).
+// PeriodPicker.pickPreset). Общий диалект периода приложения: этим же
+// листом пользуются «Клиенты» (там сверху добавляется «Всё время»).
 export function PeriodPresetModal({
   visible,
   current,
   businessNow,
+  allTime,
   onClose,
   onApply,
 }: {
   visible: boolean;
-  current: Period;
+  /** null = период не выбран («Всё время» у Клиентов). */
+  current: Period | null;
   businessNow: Date;
+  /** Строка «Всё время» над блоками — сброс периода (Клиенты). */
+  allTime?: { active: boolean; hint?: string; onSelect: () => void };
   onClose: () => void;
   onApply: (p: Period) => void;
 }) {
   const t = useThemeColors();
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable
-          className="flex-1"
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Закрыть выбор периода"
-        />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
-            Период
-          </Text>
-          {PERIOD_BLOCKS.map(([cur, prev]) => (
-            <View
-              key={cur}
-              className="mb-2 overflow-hidden rounded-xl"
-              style={{ backgroundColor: t.canvas }}
-            >
-              {[cur, prev].map((kind, i) => {
-                const active = current.preset === kind;
-                return (
-                  <Pressable
-                    key={kind}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={PERIOD_LABELS[kind]}
-                    onPress={() => {
-                      onApply(makePeriod(kind, businessNow));
-                      onClose();
-                    }}
-                    className="flex-row items-center px-3.5 active:opacity-70"
-                    style={{
-                      minHeight: 48,
-                      borderTopWidth: i > 0 ? 1 : 0,
-                      borderTopColor: t.separator,
-                    }}
-                  >
-                    <Text
-                      className={`text-[15px] ${active ? "font-semibold" : ""}`}
-                      style={{ color: active ? t.accent : t.ink }}
-                    >
-                      {PERIOD_LABELS[kind]}
-                    </Text>
-                    <Text
-                      className="ml-auto text-[13px] tabular-nums"
-                      style={{ color: t.faint }}
-                    >
-                      {presetHint(kind, businessNow)}
-                    </Text>
-                    {active ? (
-                      <View className="ml-2">
-                        <Check color={t.accent} size={ICON.sm} strokeWidth={3} />
-                      </View>
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
+
+  const row = (
+    label: string,
+    hint: string | undefined,
+    active: boolean,
+    separated: boolean,
+    onPress: () => void,
+  ) => (
+    <Pressable
+      key={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      onPress={() => {
+        onPress();
+        onClose();
+      }}
+      className="flex-row items-center px-3.5 active:opacity-70"
+      style={{
+        minHeight: 48,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+      }}
+    >
+      <Text
+        className={`text-[15px] ${active ? "font-semibold" : ""}`}
+        style={{ color: active ? t.accent : t.ink }}
+      >
+        {label}
+      </Text>
+      {hint ? (
+        <Text className="ml-auto text-[13px] tabular-nums" style={{ color: t.faint }}>
+          {hint}
+        </Text>
+      ) : null}
+      {active ? (
+        <View className={hint ? "ml-2" : "ml-auto"}>
+          <Check color={t.accent} size={ICON.sm} strokeWidth={3} />
         </View>
+      ) : null}
+    </Pressable>
+  );
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View className="px-5 pb-8 pt-1">
+        <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
+          Период
+        </Text>
+        {allTime ? (
+          <View
+            className="mb-2 overflow-hidden rounded-xl"
+            style={{ backgroundColor: t.canvas }}
+          >
+            {row("Всё время", allTime.hint, allTime.active, false, allTime.onSelect)}
+          </View>
+        ) : null}
+        {PERIOD_BLOCKS.map(([cur, prev]) => (
+          <View
+            key={cur}
+            className="mb-2 overflow-hidden rounded-xl"
+            style={{ backgroundColor: t.canvas }}
+          >
+            {[cur, prev].map((kind, i) =>
+              row(
+                PERIOD_LABELS[kind],
+                presetHint(kind, businessNow),
+                current?.preset === kind,
+                i > 0,
+                () => onApply(makePeriod(kind, businessNow)),
+              ),
+            )}
+          </View>
+        ))}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
@@ -118,8 +137,8 @@ export function PeriodWheelsModal({
   const [to, setTo] = useState(current.to);
   const [side, setSide] = useState<"from" | "to">("from");
 
-  // The modal stays mounted — resync the wheels with the active period on
-  // every open, otherwise they keep showing the range from first mount.
+  // Resync the wheels with the active period on every open, otherwise
+  // they keep showing the range from first mount.
   useEffect(() => {
     if (!visible) return;
     setFrom(current.from);
@@ -168,55 +187,47 @@ export function PeriodWheelsModal({
   const shown: Period = { preset: "custom", from, to };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable
-          className="flex-1"
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Закрыть выбор дат"
-        />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
-          <Text className="mb-1 text-lg font-bold" style={{ color: t.ink }}>
-            Свой период
-          </Text>
-          <Text
-            className="mb-3 text-center text-base font-semibold tabular-nums"
-            style={{ color: t.sub }}
-          >
-            {periodDates(shown)}
-          </Text>
+    <BottomSheet visible={visible} onClose={onClose}>
+      <View className="px-5 pb-8 pt-1">
+        <Text className="mb-1 text-lg font-bold" style={{ color: t.ink }}>
+          Свой период
+        </Text>
+        <Text
+          className="mb-3 text-center text-base font-semibold tabular-nums"
+          style={{ color: t.sub }}
+        >
+          {periodDates(shown)}
+        </Text>
 
-          {/* С | До endpoint segment */}
-          <View
-            className="mb-3 flex-row rounded-xl p-1"
-            style={{ backgroundColor: t.fill, gap: 4 }}
-          >
-            {segment("from", "С", periodDates({ preset: "custom", from, to: from }))}
-            {segment("to", "До", periodDates({ preset: "custom", from: to, to }))}
-          </View>
+        {/* С | До endpoint segment */}
+        <View
+          className="mb-3 flex-row rounded-xl p-1"
+          style={{ backgroundColor: t.fill, gap: 4 }}
+        >
+          {segment("from", "С", periodDates({ preset: "custom", from, to: from }))}
+          {segment("to", "До", periodDates({ preset: "custom", from: to, to }))}
+        </View>
 
-          {/* one wheel edits the active endpoint */}
-          <View className="items-center">
-            <DateTimePicker
-              themeVariant="light"
-              value={parseYMD(side === "from" ? from : to)}
-              mode="date"
-              display="spinner"
-              locale="ru-RU"
-              onChange={(_, d) => {
-                if (!d) return;
-                if (side === "from") setFrom(formatYMD(d));
-                else setTo(formatYMD(d));
-              }}
-            />
-          </View>
+        {/* one wheel edits the active endpoint */}
+        <View className="items-center">
+          <DateTimePicker
+            themeVariant="light"
+            value={parseYMD(side === "from" ? from : to)}
+            mode="date"
+            display="spinner"
+            locale="ru-RU"
+            onChange={(_, d) => {
+              if (!d) return;
+              if (side === "from") setFrom(formatYMD(d));
+              else setTo(formatYMD(d));
+            }}
+          />
+        </View>
 
-          <View className="mt-2">
-            <Button label="Применить" onPress={apply} />
-          </View>
+        <View className="mt-2">
+          <Button label="Применить" onPress={apply} />
         </View>
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

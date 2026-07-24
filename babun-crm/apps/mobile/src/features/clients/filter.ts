@@ -5,6 +5,7 @@ import {
   isLoyalClient,
   isNewClient,
 } from "@babun/shared/local/selectors/client-stats";
+import { PERIOD_LABELS, type Period } from "@/features/finances/period";
 
 // Волна 2 — web-parity типы/константы фильтров клиентов. Порт
 // apps/web/.../clients/filters/{types.ts,useClientFilters.ts} (v812).
@@ -136,24 +137,11 @@ export function buildSegmentCounts(
 
 // ── Period ─────────────────────────────────────────────────────────
 
-/** Период всегда задаётся явным диапазоном (лента месяцев / колёса). */
-export type PeriodPreset = "custom";
-
-/** Активный период. null везде = «Всё время» (нет фильтра).
- *  from/to — включительные YYYY-MM-DD. Пресетов больше нет: период
- *  задаёт лента месяцев или колёса С–До — всегда явный диапазон. */
-export interface PeriodValue {
-  preset: PeriodPreset;
-  from: string;
-  to: string;
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+/** Период — общий диалект приложения (решение владельца 2026-07-24:
+ *  «точно так же, как в Финансах»): пресеты парами текущий/прошлый из
+ *  finances/period + «Свой период» с колёс С–До. null везде = «Всё
+ *  время» (нет фильтра) — состояние, которого у Финансов не бывает. */
+export type PeriodValue = Period;
 
 const M_GEN = [
   "янв",
@@ -186,32 +174,18 @@ const M_NOM = [
   "Декабрь",
 ];
 
-/** Подписи колонок ленты («Май», не «мая» и не капс — воздух и покой). */
-export const M_BAND = [
-  "Янв",
-  "Фев",
-  "Мар",
-  "Апр",
-  "Май",
-  "Июн",
-  "Июл",
-  "Авг",
-  "Сен",
-  "Окт",
-  "Ноя",
-  "Дек",
-];
-
 function fmtShort(key: string): string {
   const [, mo, d] = key.split("-").map(Number);
   if (!mo || !d) return key;
   return `${d} ${M_GEN[mo - 1]}`;
 }
 
-/** Подпись периода — умная: целые месяцы называются по имени
- *  («Июнь», «Март — Май», «Ноябрь ’25»), произвольные даты — числами
- *  («1 июн–15 июн»). Используется токеном бара и значением в листе. */
+/** Подпись периода: пресет называется по имени («Текущий месяц»), свой
+ *  диапазон — умно: целые месяцы по имени («Июнь», «Март — Май»,
+ *  «Ноябрь ’25»), произвольные даты — числами («1 июн–15 июн»).
+ *  Используется токеном бара и сводкой в шапке листа. */
 export function periodLabel(period: PeriodValue): string {
+  if (period.preset !== "custom") return PERIOD_LABELS[period.preset];
   const [fy, fm, fd] = period.from.split("-").map(Number);
   const [ty, tm, td] = period.to.split("-").map(Number);
   if (!fy || !ty) return "Период";
@@ -225,44 +199,6 @@ export function periodLabel(period: PeriodValue): string {
     return `${fLbl} — ${tLbl}`;
   }
   return `${fmtShort(period.from)}–${fmtShort(period.to)}`;
-}
-
-// ── Лента месяцев ──────────────────────────────────────────────────
-
-export interface PeriodMonth {
-  /** YYYY-MM. */
-  key: string;
-  /** Подпись колонки («Май»). */
-  label: string;
-  /** Год месяца — лента рисует границы и подписи годов сама. */
-  year: number;
-  /** Январь — граница года (разделитель на треке). */
-  isJanuary: boolean;
-  /** Первый/последний день месяца (включительно, YYYY-MM-DD). */
-  from: string;
-  to: string;
-}
-
-/** Окно последних 24 месяцев (старые → новые) — лента листается пальцем
- *  в прошлое. Чистые названия месяцев, без гравюры (решение владельца
- *  2026-07-24: «без мишуры»). */
-export function buildPeriodMonths(): PeriodMonth[] {
-  const now = new Date();
-  const out: PeriodMonth[] = [];
-  for (let i = 23; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    out.push({
-      key: `${y}-${pad(m + 1)}`,
-      label: M_BAND[m],
-      year: y,
-      isJanuary: m === 0,
-      from: ymd(new Date(y, m, 1)),
-      to: ymd(new Date(y, m + 1, 0)),
-    });
-  }
-  return out;
 }
 
 // ── Facets / tokens ────────────────────────────────────────────────

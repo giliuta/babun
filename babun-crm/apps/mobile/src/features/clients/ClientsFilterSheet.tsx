@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Pressable,
@@ -8,9 +8,7 @@ import {
   View,
 } from "react-native";
 import Animated, {
-  FadeInDown,
   FadeInUp,
-  FadeOut,
   FadeOutDown,
   interpolateColor,
   useDerivedValue,
@@ -18,19 +16,18 @@ import Animated, {
   useReducedMotion,
   withTiming,
 } from "react-native-reanimated";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChevronDown } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
-import {
-  DetentSheet,
-  type Detent,
-  type DetentSheetHandle,
-} from "@/components/ui/DetentSheet";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors } from "@/theme/colors";
-import { parseYMD, formatYMD } from "@/features/appointments/helpers";
-import { formatShortDateRu } from "./format";
-import { PeriodBand } from "./PeriodBand";
+import { formatYMD } from "@/features/appointments/helpers";
+import { periodDates } from "@/features/finances/period";
+import {
+  PeriodPresetModal,
+  PeriodWheelsModal,
+} from "@/features/finances/PeriodSheets";
 import {
   CORE_SEGMENTS,
   filterActiveCount,
@@ -39,26 +36,24 @@ import {
   SEGMENT_OPTIONS,
   type ClientsFilter,
   type FacetOption,
-  type PeriodMonth,
   type SegmentCounts,
 } from "./filter";
 import type { ClientFilterResult } from "./useClientFilters";
 
-// Лист «Фильтры» — канон «ОТТИСК + ЛЕНТА» (решение руководителя по
-// брейншторму 3 идеаторов + арбитра, 2026-07-23). Немодальный
-// DetentSheet (половина экрана без скрима, список позади живой) +
-// стек все-видно-сразу. Грамматика «Оттиск»: ВЫБРАННОЕ ПЕЧАТАЕТСЯ
-// ЧЁРНЫМ — ink-заливка #0B1220 с белой подписью (letterpress,
-// буквальное «чёрное не серое»); никаких галок, тинтов и цветных
-// бордеров — заливка и есть состояние. Idle-материал ячеек выведен из
-// ink (rgba 4%), не из серого пигмента. Цвет сущности — вертикальный
-// тик-эмаль у левого края (45% в покое, 100% на оттиске). Кобальт
-// живёт ровно в двух местах: CTA и «Сбросить/Вернуть». Заголовки —
-// капс 11/700 с гравировальной линейкой до края. ПЕРИОД — сигнатурная
-// «лента времени» (PeriodBand): 12 месяцев с гравюрой плотности
-// записей, тап = месяц, штрих = диапазон; точные даты — колёса С–До по
-// тапу на значение. Движение: ничто не меняет позицию, только
-// проявляется (крашфейд 140мс, ролл счётчика CTA). Всё LIVE.
+// Лист «Фильтры» — полноценная страница (решение владельца 2026-07-24:
+// лист выезжает снизу ДО КОНЦА вверх; эксперимент с детентами закрыт).
+// Канонический BottomSheet, контент фиксированной высоты «в экран».
+// Грамматика «Оттиск»: ВЫБРАННОЕ ПЕЧАТАЕТСЯ ЧЁРНЫМ — ink-заливка
+// #0B1220 с белой подписью (letterpress, буквальное «чёрное не серое»);
+// никаких галок, тинтов и цветных бордеров — заливка и есть состояние.
+// Idle-материал ячеек выведен из ink (rgba 4%), не из серого пигмента.
+// Цвет сущности — вертикальный тик-эмаль у левого края (45% в покое,
+// 100% на оттиске). Кобальт живёт ровно в двух местах: CTA и
+// «Сбросить/Вернуть». Заголовки — капс 11/700 с гравировальной
+// линейкой до края. ПЕРИОД — диалект Финансов один в один: сплит-строка
+// «имя … даты» (имя открывает попап пресетов, даты — колёса С–До);
+// вместо заголовка секции строка сама читается «Всё время». Всё LIVE:
+// счётчик в CTA и сводка выбранного под заголовком.
 
 const INK = "#0B1220";
 const SLOT = 92; // боковые слоты шапки: заголовок оптически по центру.
@@ -67,15 +62,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // ── Строительные блоки ─────────────────────────────────────────────
 
-/** Заголовок секции: капс 11/700 + гравировальная линейка до края;
- *  справа — опциональное живое значение (Период). */
-function SectionHead({
-  title,
-  right,
-}: {
-  title: string;
-  right?: ReactNode;
-}) {
+/** Заголовок секции: капс 11/700 + гравировальная линейка до края. */
+function SectionHead({ title }: { title: string }) {
   return (
     <View className="flex-row items-center" style={{ gap: 10, minHeight: 20 }}>
       <Text
@@ -94,7 +82,6 @@ function SectionHead({
       <View
         style={{ flex: 1, height: 1, backgroundColor: "rgba(11,18,32,0.10)" }}
       />
-      {right}
     </View>
   );
 }
@@ -106,23 +93,18 @@ function SectionHead({
 function Cell({
   label,
   active,
-  full,
   dimmed,
   tick,
-  radio,
   checkbox,
   reduced,
   onPress,
 }: {
   label: string;
   active: boolean;
-  /** Полноширинная ячейка. */
-  full?: boolean;
   /** Ядро-статус с нулём клиентов: на месте, но пригашен и неактивен. */
   dimmed?: boolean;
   /** Цвет сущности (метка/тег/команда) — вертикальный тик-эмаль. */
   tick?: string;
-  radio?: boolean;
   checkbox?: boolean;
   reduced: boolean;
   onPress: () => void;
@@ -157,7 +139,7 @@ function Cell({
         onPress();
       }}
       disabled={dimmed}
-      accessibilityRole={radio ? "radio" : checkbox ? "checkbox" : "button"}
+      accessibilityRole={checkbox ? "checkbox" : "button"}
       accessibilityState={
         checkbox
           ? { checked: active, disabled: !!dimmed }
@@ -167,7 +149,7 @@ function Cell({
       className="items-center justify-center px-3 active:opacity-80"
       style={[
         {
-          flexBasis: full || oneCol ? "100%" : "47%",
+          flexBasis: oneCol ? "100%" : "47%",
           flexGrow: 1,
           minHeight: 44,
           borderRadius: 14,
@@ -293,7 +275,7 @@ export function ClientsFilterSheet({
   filter,
   result,
   segmentCounts,
-  months,
+  dataFrom,
   onChange,
   onClose,
 }: {
@@ -301,23 +283,18 @@ export function ClientsFilterSheet({
   filter: ClientsFilter;
   result: ClientFilterResult;
   segmentCounts: SegmentCounts;
-  /** Окно ленты времени: 12 месяцев с плотностью записей. */
-  months: PeriodMonth[];
+  /** Дата первой записи (YYYY-MM-DD) — даты «Всего времени» в сплите. */
+  dataFrom: string | null;
   onChange: (f: ClientsFilter) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const { height: winH } = useWindowDimensions();
 
-  const sheetRef = useRef<DetentSheetHandle>(null);
-  const scrollRef = useRef<ScrollView>(null);
-  const [detent, setDetent] = useState<Detent>("medium");
-
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
-  // Какой край диапазона крутит единственное колесо (диалект Финансов).
-  const [side, setSide] = useState<"from" | "to">("from");
-  const wheelsY = useRef(0);
 
   // «Сбросить» с прощением: 4 секунды можно «Вернуть» снятый набор.
   const [undo, setUndo] = useState<ClientsFilter | null>(null);
@@ -325,28 +302,12 @@ export function ClientsFilterSheet({
 
   useEffect(() => {
     if (!visible) {
+      setPresetsOpen(false);
       setWheelsOpen(false);
-      setSide("from");
-      setDetent("medium");
       setUndo(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     }
   }, [visible]);
-
-  useEffect(() => {
-    if (filter.period === null) {
-      setWheelsOpen(false);
-      setSide("from");
-    }
-  }, [filter.period]);
-
-  // Возврат на половину — контент к началу: свёрнутый лист всегда
-  // показывает голову стека, а не случайный обрез прокрутки.
-  useEffect(() => {
-    if (detent === "medium") {
-      scrollRef.current?.scrollTo({ y: 0, animated: !reduced });
-    }
-  }, [detent, reduced]);
 
   useEffect(
     () => () => {
@@ -359,14 +320,12 @@ export function ClientsFilterSheet({
   const shownCount = filtered.length;
   const nothingActive = filterActiveCount(filter) === 0;
 
-  // Честный глагол: на половине список уже виден — кнопка лишь закрывает.
+  // Полная страница: высота окна минус верхний зазор и грабер листа.
+  const pageH = winH - insets.top - 29;
+
   const countPart = `${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
   const ctaLabel =
-    shownCount === 0
-      ? "Ничего не найдено"
-      : detent === "medium"
-        ? `Готово · ${countPart}`
-        : `Показать ${countPart}`;
+    shownCount === 0 ? "Ничего не найдено" : `Показать ${countPart}`;
 
   // Live-apply нем для VoiceOver — дебаунс-анонс счётчика.
   useEffect(() => {
@@ -382,8 +341,7 @@ export function ClientsFilterSheet({
   }, [visible, shownCount, countPart]);
 
   // «Возле названия видно, что выбрано» (владелец): компактная сводка
-  // активного набора под заголовком — читается и на полной странице,
-  // когда список позади скрыт.
+  // активного набора под заголовком — список позади скрыт страницей.
   const activeSummary = nothingActive
     ? null
     : [
@@ -409,38 +367,28 @@ export function ClientsFilterSheet({
       filter.segments.includes(s.key),
   );
 
-  // Сид колёс: «с начала месяца — по сегодня».
+  // Сплит периода (диалект Финансов): слева имя, справа всегда даты —
+  // у «Всего времени» это честный охват данных «с первой записи по
+  // сегодня». Тот же диапазон сидит и в колёсах, и в подсказке попапа.
   const now = new Date();
+  const todayYmd = formatYMD(now);
+  const spanFrom = dataFrom && dataFrom < todayYmd ? dataFrom : todayYmd;
+  const allSpanDates = dataFrom
+    ? periodDates({ preset: "custom", from: spanFrom, to: todayYmd })
+    : null;
+  const periodName = filter.period ? periodLabel(filter.period) : "Всё время";
+  const datesLabel = filter.period
+    ? periodDates(filter.period)
+    : (allSpanDates ?? "—");
   const draftFrom =
     filter.period?.from ??
-    formatYMD(new Date(now.getFullYear(), now.getMonth(), 1));
-  const draftTo = filter.period?.to ?? formatYMD(now);
+    (dataFrom && dataFrom < todayYmd
+      ? dataFrom
+      : formatYMD(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const draftTo = filter.period?.to ?? todayYmd;
 
   const toggleIn = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
-
-  const setCustomRange = (from: string, to: string) => {
-    const [f, tt] = from <= to ? [from, to] : [to, from];
-    onChange({ ...filter, period: { preset: "custom", from: f, to: tt } });
-  };
-
-  const openWheels = () => {
-    haptics.tap();
-    const next = !wheelsOpen;
-    setWheelsOpen(next);
-    if (next) {
-      sheetRef.current?.expand();
-      setDetent("large");
-      setTimeout(
-        () =>
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, wheelsY.current - 72),
-            animated: !reduced,
-          }),
-        120,
-      );
-    }
-  };
 
   const onReset = () => {
     haptics.tap();
@@ -457,336 +405,290 @@ export function ClientsFilterSheet({
     undoTimer.current = setTimeout(() => setUndo(null), 4000);
   };
 
-  // Сегмент «С | До» (диалект Финансов): выбирает край, одно колесо крутит.
-  const rangeSegment = (key: "from" | "to", label: string, value: string) => {
-    const active = side === key;
-    return (
-      <Pressable
-        key={key}
-        accessibilityRole="button"
-        accessibilityState={{ selected: active }}
-        accessibilityLabel={`${label}: ${formatShortDateRu(value)}`}
-        onPress={() => {
-          haptics.tap();
-          setSide(key);
-        }}
-        className="flex-1 items-center justify-center"
-        style={{
-          minHeight: 46,
-          paddingVertical: 6,
-          borderRadius: 10,
-          backgroundColor: active ? t.surface : "transparent",
-        }}
-      >
-        <Text
-          className="text-[11px] font-semibold uppercase tracking-wider"
-          style={{ color: active ? INK : "rgba(11,18,32,0.45)" }}
-        >
-          {label}
-        </Text>
-        <Text
-          className="text-[15px] font-semibold"
-          style={{ color: INK, fontVariant: ["tabular-nums"] }}
-        >
-          {formatShortDateRu(value)}
-        </Text>
-      </Pressable>
-    );
-  };
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={1}>
+      <View style={{ height: pageH }}>
+        {/* Шапка 92│центр│92 — «Фильтры» оптически по центру всегда. */}
+        <View className="flex-row items-center px-5 pb-1">
+          <View style={{ width: SLOT }} />
+          <View className="flex-1 items-center">
+            <Text
+              accessibilityRole="header"
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              className="text-[17px] font-semibold"
+              style={{ color: INK }}
+            >
+              Фильтры
+            </Text>
+            {activeSummary ? (
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{
+                  marginTop: 1,
+                  fontSize: 12,
+                  fontWeight: "500",
+                  color: "rgba(11,18,32,0.48)",
+                }}
+              >
+                {activeSummary}
+              </Text>
+            ) : null}
+          </View>
+          <View style={{ width: SLOT, alignItems: "flex-end" }}>
+            <Pressable
+              onPress={onReset}
+              disabled={nothingActive && !undo}
+              accessibilityRole="button"
+              accessibilityLabel={undo ? "Вернуть фильтры" : "Сбросить фильтры"}
+              accessibilityState={{ disabled: nothingActive && !undo }}
+              hitSlop={8}
+              className="min-h-11 justify-center active:opacity-60"
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                className="text-[15px] font-semibold"
+                style={{
+                  color: nothingActive && !undo ? t.faint : t.accent,
+                }}
+              >
+                {undo ? "Вернуть" : "Сбросить"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
-  const footer = (
-    <View
-      style={{
-        backgroundColor: t.surface,
-        borderTopWidth: 1,
-        borderTopColor: t.separator,
-        paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: Math.max(insets.bottom, 16) + 6,
-      }}
-    >
-      {shownCount === 0 ? (
-        <Text
-          maxFontSizeMultiplier={1.3}
-          className="mb-2 text-center text-[13px]"
-          style={{ color: t.faint }}
-        >
-          Смягчите условия — период или статус
-        </Text>
-      ) : null}
-      <Pressable
-        onPress={() => {
-          haptics.tap();
-          onClose();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={ctaLabel}
-        className="min-h-[52px] items-center justify-center overflow-hidden active:opacity-85"
-        style={{
-          borderRadius: 14,
-          backgroundColor: shownCount === 0 ? "rgba(11,18,32,0.04)" : t.accent,
-        }}
-      >
-        {/* Ролл счётчика — единственный «живой» элемент листа: пульс
-            перестройки списка позади. */}
-        <Animated.Text
-          key={ctaLabel}
-          entering={reduced ? undefined : FadeInUp.duration(160)}
-          exiting={reduced ? undefined : FadeOutDown.duration(120)}
-          maxFontSizeMultiplier={1.3}
-          className="text-[17px] font-semibold"
-          style={{
-            color: shownCount === 0 ? "rgba(11,18,32,0.45)" : t.onAccent,
-            fontVariant: ["tabular-nums"],
+        {/* Стек все-видно-сразу — страница целиком, контент скроллится
+            свободно. Паддинги ТОЛЬКО через contentContainerStyle
+            (NativeWind роняет className на ScrollView). */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            paddingTop: 10,
+            paddingHorizontal: 20,
+            paddingBottom: 28,
+            gap: 28,
           }}
         >
-          {ctaLabel}
-        </Animated.Text>
-      </Pressable>
-    </View>
-  );
+          {/* ── Статус: ежедневное ядро — первым ── */}
+          <View className="gap-3">
+            <SectionHead title="Статус" />
+            <View className="flex-row flex-wrap gap-2">
+              {availableSegments.map((s) => {
+                // Мультивыбор (ИЛИ — объединение, «список на обзвон»).
+                const on = filter.segments.includes(s.key);
+                const dead =
+                  CORE_SEGMENTS.has(s.key) &&
+                  segmentCounts[s.key] === 0 &&
+                  !on;
+                return (
+                  <Cell
+                    key={s.key}
+                    label={s.label}
+                    active={on}
+                    checkbox
+                    dimmed={dead}
+                    reduced={reduced}
+                    onPress={() =>
+                      onChange({
+                        ...filter,
+                        segments: on
+                          ? filter.segments.filter((x) => x !== s.key)
+                          : [...filter.segments, s.key],
+                      })
+                    }
+                  />
+                );
+              })}
+              {availableSegments.length % 2 === 1 ? (
+                <View style={{ flexBasis: "47%", flexGrow: 1 }} />
+              ) : null}
+            </View>
+          </View>
 
-  return (
-    <DetentSheet
-      ref={sheetRef}
-      visible={visible}
-      onClose={onClose}
-      onDetentChange={setDetent}
-      footer={footer}
-    >
-      {/* Шапка 92│центр│92 — «Фильтры» оптически по центру всегда. */}
-      <View className="flex-row items-center px-5 pb-1">
-        <View style={{ width: SLOT }} />
-        <View className="flex-1 items-center">
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            className="text-[17px] font-semibold"
-            style={{ color: INK }}
+          {/* ── Период: сплит Финансов без заголовка секции — строка сама
+              читается «Всё время … даты». Имя → пресеты, даты → колёса. */}
+          <View
+            className="flex-row items-stretch"
+            style={{
+              minHeight: 48,
+              borderRadius: 14,
+              backgroundColor: "rgba(11,18,32,0.04)",
+            }}
           >
-            Фильтры
-          </Text>
-          {activeSummary ? (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{
-                marginTop: 1,
-                fontSize: 12,
-                fontWeight: "500",
-                color: "rgba(11,18,32,0.48)",
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                setPresetsOpen(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`Период: ${periodName}. Выбрать пресет`}
+              className="flex-1 flex-row items-center pl-4 pr-2 active:opacity-60"
+              style={{ gap: 4 }}
             >
-              {activeSummary}
+              <Text
+                maxFontSizeMultiplier={1.3}
+                numberOfLines={1}
+                className="shrink text-[15px] font-semibold"
+                style={{ color: INK }}
+              >
+                {periodName}
+              </Text>
+              <ChevronDown
+                color="rgba(11,18,32,0.45)"
+                size={14}
+                strokeWidth={2.6}
+              />
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                setWheelsOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Даты: ${datesLabel}. Выбрать диапазон`}
+              className="flex-row items-center pl-2 pr-4 active:opacity-60"
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                className="text-[15px] font-bold"
+                style={{
+                  color: filter.period ? INK : "rgba(11,18,32,0.48)",
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {datesLabel}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* ── Метка · Теги · Команда: вся библиотека, OR-внутри ── */}
+          {cityOptions.length > 0 ? (
+            <View className="gap-3">
+              <SectionHead title="Метка" />
+              <FacetGrid
+                options={cityOptions}
+                selected={filter.selectedCities}
+                reduced={reduced}
+                onToggle={(v) =>
+                  onChange({
+                    ...filter,
+                    selectedCities: toggleIn(filter.selectedCities, v),
+                  })
+                }
+              />
+            </View>
+          ) : null}
+
+          {tagOptions.length > 0 ? (
+            <View className="gap-3">
+              <SectionHead title="Теги" />
+              <FacetGrid
+                options={tagOptions}
+                selected={filter.activeTags}
+                reduced={reduced}
+                onToggle={(v) =>
+                  onChange({
+                    ...filter,
+                    activeTags: toggleIn(filter.activeTags, v),
+                  })
+                }
+              />
+            </View>
+          ) : null}
+
+          {teamOptions.length > 0 ? (
+            <View className="gap-3">
+              <SectionHead title="Команда" />
+              <FacetGrid
+                options={teamOptions}
+                selected={filter.selectedTeams}
+                reduced={reduced}
+                onToggle={(v) =>
+                  onChange({
+                    ...filter,
+                    selectedTeams: toggleIn(filter.selectedTeams, v),
+                  })
+                }
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+
+        {/* Футер: CTA со счётчиком — единственный «живой» элемент листа. */}
+        <View
+          style={{
+            backgroundColor: t.surface,
+            borderTopWidth: 1,
+            borderTopColor: t.separator,
+            paddingHorizontal: 20,
+            paddingTop: 10,
+            paddingBottom: Math.max(insets.bottom, 16) + 6,
+          }}
+        >
+          {shownCount === 0 ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="mb-2 text-center text-[13px]"
+              style={{ color: t.faint }}
+            >
+              Смягчите условия — период или статус
             </Text>
           ) : null}
-        </View>
-        <View style={{ width: SLOT, alignItems: "flex-end" }}>
           <Pressable
-            onPress={onReset}
-            disabled={nothingActive && !undo}
+            onPress={() => {
+              haptics.tap();
+              onClose();
+            }}
             accessibilityRole="button"
-            accessibilityLabel={undo ? "Вернуть фильтры" : "Сбросить фильтры"}
-            accessibilityState={{ disabled: nothingActive && !undo }}
-            hitSlop={8}
-            className="min-h-11 justify-center active:opacity-60"
+            accessibilityLabel={ctaLabel}
+            className="min-h-[52px] items-center justify-center overflow-hidden active:opacity-85"
+            style={{
+              borderRadius: 14,
+              backgroundColor:
+                shownCount === 0 ? "rgba(11,18,32,0.04)" : t.accent,
+            }}
           >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              className="text-[15px] font-semibold"
+            <Animated.Text
+              key={ctaLabel}
+              entering={reduced ? undefined : FadeInUp.duration(160)}
+              exiting={reduced ? undefined : FadeOutDown.duration(120)}
+              maxFontSizeMultiplier={1.3}
+              className="text-[17px] font-semibold"
               style={{
-                color: nothingActive && !undo ? t.faint : t.accent,
+                color: shownCount === 0 ? "rgba(11,18,32,0.45)" : t.onAccent,
+                fontVariant: ["tabular-nums"],
               }}
             >
-              {undo ? "Вернуть" : "Сбросить"}
-            </Text>
+              {ctaLabel}
+            </Animated.Text>
           </Pressable>
         </View>
       </View>
 
-      {/* Стек все-видно-сразу. Scroll-to-expand: на medium свайп тела
-          поднимает ЛИСТ (DetentSheet), контент скроллится только на
-          large — обрезков под шапкой не бывает. Паддинги ТОЛЬКО через
-          contentContainerStyle (NativeWind роняет className). */}
-      <ScrollView
-        ref={scrollRef}
-        scrollEnabled={detent === "large"}
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingTop: 10,
-          paddingHorizontal: 20,
-          paddingBottom: 140,
-          gap: 28,
+      {/* Попапы периода — общие с Финансами (модал поверх модала:
+          вложены в дерево листа, iOS показывает их цепочкой). */}
+      <PeriodPresetModal
+        visible={presetsOpen}
+        current={filter.period}
+        businessNow={now}
+        allTime={{
+          active: !filter.period,
+          hint: allSpanDates ?? undefined,
+          onSelect: () => onChange({ ...filter, period: null }),
         }}
-      >
-        {/* ── Статус: ежедневное ядро — первым ── */}
-        <View className="gap-3">
-          <SectionHead title="Статус" />
-          <View className="flex-row flex-wrap gap-2">
-            {availableSegments.map((s) => {
-              // Мультивыбор (ИЛИ — объединение, «список на обзвон»).
-              const on = filter.segments.includes(s.key);
-              const dead =
-                CORE_SEGMENTS.has(s.key) &&
-                segmentCounts[s.key] === 0 &&
-                !on;
-              return (
-                <Cell
-                  key={s.key}
-                  label={s.label}
-                  active={on}
-                  checkbox
-                  dimmed={dead}
-                  reduced={reduced}
-                  onPress={() =>
-                    onChange({
-                      ...filter,
-                      segments: on
-                        ? filter.segments.filter((x) => x !== s.key)
-                        : [...filter.segments, s.key],
-                    })
-                  }
-                />
-              );
-            })}
-            {availableSegments.length % 2 === 1 ? (
-              <View style={{ flexBasis: "47%", flexGrow: 1 }} />
-            ) : null}
-          </View>
-        </View>
-
-        {/* ── Период: лента времени (сигнатура) ── */}
-        <View className="gap-3">
-          <SectionHead
-            title="Период"
-            right={
-              <Pressable
-                onPress={openWheels}
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: wheelsOpen }}
-                accessibilityLabel={`Период: ${
-                  filter.period ? periodLabel(filter.period) : "Всё время"
-                }. Точные даты`}
-                className="active:opacity-60"
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    color: filter.period ? INK : "rgba(11,18,32,0.48)",
-                    fontVariant: ["tabular-nums"],
-                  }}
-                >
-                  {filter.period ? periodLabel(filter.period) : "Всё время"}
-                </Text>
-              </Pressable>
-            }
-          />
-          <PeriodBand
-            months={months}
-            period={filter.period}
-            onChange={(p) => onChange({ ...filter, period: p })}
-          />
-          {wheelsOpen ? (
-            <Animated.View
-              entering={reduced ? undefined : FadeInDown.duration(180)}
-              exiting={reduced ? undefined : FadeOut.duration(120)}
-              onLayout={(e) => {
-                wheelsY.current = e.nativeEvent.layout.y;
-              }}
-              className="p-3"
-              style={{
-                borderRadius: t.radius.card,
-                backgroundColor: t.canvas,
-              }}
-            >
-              {/* С | До — точные дни и диапазоны старше окна ленты. */}
-              <View
-                className="mb-2 flex-row p-1"
-                style={{
-                  borderRadius: 14,
-                  backgroundColor: "rgba(11,18,32,0.04)",
-                  gap: 4,
-                }}
-              >
-                {rangeSegment("from", "С", draftFrom)}
-                {rangeSegment("to", "До", draftTo)}
-              </View>
-              <View className="items-center">
-                <DateTimePicker
-                  themeVariant="light"
-                  value={parseYMD(side === "from" ? draftFrom : draftTo)}
-                  mode="date"
-                  display="spinner"
-                  locale="ru-RU"
-                  onChange={(_, d) => {
-                    if (!d) return;
-                    if (side === "from") setCustomRange(formatYMD(d), draftTo);
-                    else setCustomRange(draftFrom, formatYMD(d));
-                  }}
-                />
-              </View>
-            </Animated.View>
-          ) : null}
-        </View>
-
-        {/* ── Метка · Теги · Команда: вся библиотека, OR-внутри ── */}
-        {cityOptions.length > 0 ? (
-          <View className="gap-3">
-            <SectionHead title="Метка" />
-            <FacetGrid
-              options={cityOptions}
-              selected={filter.selectedCities}
-              reduced={reduced}
-              onToggle={(v) =>
-                onChange({
-                  ...filter,
-                  selectedCities: toggleIn(filter.selectedCities, v),
-                })
-              }
-            />
-          </View>
-        ) : null}
-
-        {tagOptions.length > 0 ? (
-          <View className="gap-3">
-            <SectionHead title="Теги" />
-            <FacetGrid
-              options={tagOptions}
-              selected={filter.activeTags}
-              reduced={reduced}
-              onToggle={(v) =>
-                onChange({
-                  ...filter,
-                  activeTags: toggleIn(filter.activeTags, v),
-                })
-              }
-            />
-          </View>
-        ) : null}
-
-        {teamOptions.length > 0 ? (
-          <View className="gap-3">
-            <SectionHead title="Команда" />
-            <FacetGrid
-              options={teamOptions}
-              selected={filter.selectedTeams}
-              reduced={reduced}
-              onToggle={(v) =>
-                onChange({
-                  ...filter,
-                  selectedTeams: toggleIn(filter.selectedTeams, v),
-                })
-              }
-            />
-          </View>
-        ) : null}
-      </ScrollView>
-    </DetentSheet>
+        onClose={() => setPresetsOpen(false)}
+        onApply={(p) => onChange({ ...filter, period: p })}
+      />
+      <PeriodWheelsModal
+        visible={wheelsOpen}
+        current={{ preset: filter.period?.preset ?? "custom", from: draftFrom, to: draftTo }}
+        onClose={() => setWheelsOpen(false)}
+        onApply={(p) => onChange({ ...filter, period: p })}
+      />
+    </BottomSheet>
   );
 }

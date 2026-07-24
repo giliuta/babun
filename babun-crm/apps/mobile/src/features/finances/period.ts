@@ -1,7 +1,7 @@
-// Period presets for the finances screen — web parity with
-// apps/web/src/lib/finance/period.ts (paired current/previous presets)
-// plus the label helpers the LOCKED v5 header needs (name + dates split).
-// All ranges are inclusive YYYY-MM-DD on occurred_on.
+// The app-wide period dialect (born in finances, reused by clients
+// filters) — web parity with apps/web/src/lib/finance/period.ts (paired
+// current/previous presets) plus the label helpers the LOCKED v5 header
+// needs (name + dates split). All ranges are inclusive YYYY-MM-DD.
 
 export type PeriodKind =
   | "today"
