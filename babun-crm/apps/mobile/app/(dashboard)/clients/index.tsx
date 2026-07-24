@@ -490,14 +490,8 @@ export default function ClientsListScreen() {
     [clients, statsMap],
   );
 
-  // Окно «ленты времени» — 12 месяцев с плотностью записей (гравюра).
-  const periodMonths = useMemo(
-    () =>
-      buildPeriodMonths(
-        appointments.filter((a) => a.status !== "cancelled").map((a) => a.date),
-      ),
-    [appointments],
-  );
+  // Окно «ленты времени» — 24 листаемых месяца.
+  const periodMonths = useMemo(buildPeriodMonths, []);
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
   // (deps без поиска) — фикс Волны 1 сохранён: клавиши не гоняют

@@ -4,8 +4,7 @@ import {
   Gesture,
   GestureDetector,
   // Горизонтальный трек обязан быть RNGH-ScrollView: только он корректно
-  // договаривается с long-press-паном штриха (флик = скролл, удержание =
-  // штрих, активация пана отменяет скролл).
+  // договаривается с жестами колонок (флик = скролл без конфликтов).
   ScrollView,
 } from "react-native-gesture-handler";
 import Animated, {
@@ -16,21 +15,20 @@ import Animated, {
 import { haptics } from "@/lib/haptics";
 import type { PeriodMonth, PeriodValue } from "./filter";
 
-// «Лента времени» v2 — сигнатурный контрол периода («Оттиск + Лента»,
-// доработка по владельцу 2026-07-24: «чтоб я мог сам листать» +
-// просторные подписи). Горизонтально ЛИСТАЕМЫЙ трек 24 месяцев:
-// колонки фиксированной ширины 52pt с гравюрой плотности записей,
-// лента открывается у текущего месяца, флик — в прошлое (нативная
-// инерция, ощущение тумблера). ТАП по колонке = весь месяц;
-// УДЕРЖАНИЕ + протяжка = диапазон месяцев (хаптик на активации и на
-// каждой границе, на время штриха скролл замирает); повторный тап по
-// единственному выбранному месяцу = «Всё время». Выбор = ink-оттиск
-// #0B1220 с белой гравюрой (две плоскости с клипом — грамматика листа).
-// Точные дни — колёса С–До по тапу на значение в заголовке секции.
+// «Лента времени» v3 — по владельцу 2026-07-24: БЕЗ «мишуры» (гравюра
+// удалена — только чистые названия месяцев), годы чётко разделены
+// (вертикальный волосок перед январём + подпись года над его группой),
+// и ДИАПАЗОН ДВУМЯ ТАПАМИ: тап «Фев» = месяц, тап «Май» следом =
+// «Февраль — Май» (одиночный выбор расширяется вторым тапом; тап при
+// активном диапазоне начинает новый одиночный; повторный тап по
+// одиночному = «Всё время»). Никаких удержаний — флик просто листает
+// (24 месяца, открытие у текущего). Бонус для быстрой руки: удержание
+// 220мс + протяжка по-прежнему рисует диапазон одним жестом. Выбор =
+// ink-оттиск #0B1220 с белыми подписями (две плоскости с клипом).
 
 const INK = "#0B1220";
-const TRACK_H = 56;
-const COL_W = 52;
+const TRACK_H = 48;
+const COL_W = 56;
 const PAD = 6;
 
 /** Индексы выбранных месяцев [i0, i1], если период точно совпадает с
@@ -60,6 +58,9 @@ export function PeriodBand({
   const [stroking, setStroking] = useState(false);
 
   const selection = selectionFromPeriod(months, period);
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
   const contentW = PAD * 2 + months.length * COL_W;
 
   // Анимированное окно оттиска: границы в колонках (-1 = пусто).
@@ -83,7 +84,6 @@ export function PeriodBand({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const maxCount = Math.max(1, ...months.map((m) => m.count));
   const nowKey = months[months.length - 1]?.key;
 
   const colAt = (x: number) =>
@@ -98,13 +98,28 @@ export function PeriodBand({
     onChange({ preset: "custom", from: months[i0].from, to: months[i1].to });
   };
 
+  // Тап-грамматика диапазона («упрощённо», владелец): одиночный месяц
+  // расширяется вторым тапом до диапазона; тап при активном диапазоне
+  // начинает новый одиночный; повторный тап одиночного — «Всё время».
   const tapAt = (x: number) => {
     haptics.tap();
     const i = colAt(x);
-    // Повторный тап по единственному выбранному месяцу — «Всё время».
-    if (selection && selection[0] === i && selection[1] === i) {
-      onChange(null);
-      return;
+    const sel = selectionRef.current;
+    if (sel) {
+      const [a, b] = sel;
+      if (a === i && b === i) {
+        onChange(null);
+        return;
+      }
+      if (a === b) {
+        const [i0, i1] = a <= i ? [a, i] : [i, a];
+        onChange({
+          preset: "custom",
+          from: months[i0].from,
+          to: months[i1].to,
+        });
+        return;
+      }
     }
     onChange({ preset: "custom", from: months[i].from, to: months[i].to });
   };
@@ -116,7 +131,8 @@ export function PeriodBand({
   const strokeEnd = () => setStroking(false);
   const hapticTick = () => haptics.tap();
 
-  // Удержание 220мс включает штрих (флик без удержания = нативный скролл).
+  // Бонус быстрой руки: удержание 220мс включает штрих одним жестом
+  // (флик без удержания = нативный скролл).
   const pan = Gesture.Pan()
     .activateAfterLongPress(220)
     .onStart((e) => {
@@ -146,8 +162,6 @@ export function PeriodBand({
     .onEnd(() => {
       "worklet";
       if (selA.value >= 0) runOnJS(commit)(selA.value, selB.value, true);
-      panning.value = false;
-      runOnJS(strokeEnd)();
     })
     .onFinalize(() => {
       "worklet";
@@ -183,54 +197,60 @@ export function PeriodBand({
   });
 
   const columns = (onInk: boolean) =>
-    months.map((m) => {
+    months.map((m, idx) => {
       const isNow = m.key === nowKey;
-      const barH = 4 + (m.count / maxCount) * 22;
+      // Год подписывается над январём (и над первой колонкой окна).
+      const showYear = m.isJanuary || idx === 0;
       return (
         <View
           key={m.key}
           style={{
             width: COL_W,
             alignItems: "center",
-            justifyContent: "flex-end",
-            paddingBottom: 7,
+            justifyContent: "center",
           }}
         >
-          {m.yearMark ? (
+          {/* Волосок-граница года по левому краю января. */}
+          {m.isJanuary && idx > 0 ? (
+            <View
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 6,
+                bottom: 6,
+                width: 1,
+                backgroundColor: onInk
+                  ? "rgba(255,255,255,0.35)"
+                  : "rgba(11,18,32,0.14)",
+              }}
+            />
+          ) : null}
+          {showYear ? (
             <Text
               style={{
                 position: "absolute",
-                top: 6,
+                top: 5,
                 fontSize: 9,
                 fontWeight: "600",
                 fontVariant: ["tabular-nums"],
+                letterSpacing: 0.3,
                 color: onInk ? "rgba(255,255,255,0.72)" : "rgba(11,18,32,0.4)",
               }}
             >
-              {m.yearMark}
+              {m.year}
             </Text>
           ) : null}
-          <View
-            style={{
-              width: 16,
-              height: barH,
-              borderRadius: 2,
-              marginBottom: 5,
-              backgroundColor: onInk
-                ? "rgba(255,255,255,0.62)"
-                : "rgba(11,18,32,0.18)",
-            }}
-          />
           <Text
             style={{
-              fontSize: 11,
+              marginTop: showYear ? 8 : 0,
+              fontSize: 13,
               fontWeight: isNow ? "700" : "500",
               letterSpacing: 0.2,
               color: onInk
                 ? "#FFFFFF"
                 : isNow
                   ? "rgba(11,18,32,0.85)"
-                  : "rgba(11,18,32,0.48)",
+                  : "rgba(11,18,32,0.52)",
             }}
           >
             {m.label}
@@ -260,7 +280,7 @@ export function PeriodBand({
             accessible
             accessibilityRole="adjustable"
             accessibilityLabel="Период по месяцам"
-            accessibilityHint="Тап — месяц, удержание с протяжкой — диапазон"
+            accessibilityHint="Тап — месяц, второй тап — диапазон до него"
             onAccessibilityAction={(e) => {
               const cur = selection ? selection[0] : months.length - 1;
               const next =
@@ -279,18 +299,7 @@ export function PeriodBand({
             ]}
             style={{ width: contentW, height: TRACK_H }}
           >
-            {/* Базовая линия гравюры — волосок над подписями. */}
-            <View
-              style={{
-                position: "absolute",
-                left: PAD,
-                width: contentW - PAD * 2,
-                bottom: 24,
-                height: 1,
-                backgroundColor: "rgba(11,18,32,0.08)",
-              }}
-            />
-            {/* Нижняя плоскость: гравюра в покое. */}
+            {/* Нижняя плоскость: месяцы в покое. */}
             <View
               style={{
                 position: "absolute",

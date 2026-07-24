@@ -227,45 +227,39 @@ export function periodLabel(period: PeriodValue): string {
   return `${fmtShort(period.from)}–${fmtShort(period.to)}`;
 }
 
-// ── Лента месяцев («гравюра времени») ──────────────────────────────
+// ── Лента месяцев ──────────────────────────────────────────────────
 
 export interface PeriodMonth {
   /** YYYY-MM. */
   key: string;
-  /** Подпись колонки («май»). */
+  /** Подпись колонки («Май»). */
   label: string;
-  /** «’26» на колонке января (граница года в окне) — иначе null. */
-  yearMark: string | null;
+  /** Год месяца — лента рисует границы и подписи годов сама. */
+  year: number;
+  /** Январь — граница года (разделитель на треке). */
+  isJanuary: boolean;
   /** Первый/последний день месяца (включительно, YYYY-MM-DD). */
   from: string;
   to: string;
-  /** Число записей в месяце — высота штриха гравюры. */
-  count: number;
 }
 
-/** Окно последних 24 месяцев (старые → новые) с плотностью записей —
- *  лента листается пальцем в прошлое. dates — даты записей
- *  (YYYY-MM-DD), отменённые отсеять снаружи. */
-export function buildPeriodMonths(dates: string[]): PeriodMonth[] {
-  const counts = new Map<string, number>();
-  for (const d of dates) {
-    const k = d.slice(0, 7);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
+/** Окно последних 24 месяцев (старые → новые) — лента листается пальцем
+ *  в прошлое. Чистые названия месяцев, без гравюры (решение владельца
+ *  2026-07-24: «без мишуры»). */
+export function buildPeriodMonths(): PeriodMonth[] {
   const now = new Date();
   const out: PeriodMonth[] = [];
   for (let i = 23; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const y = d.getFullYear();
     const m = d.getMonth();
-    const key = `${y}-${pad(m + 1)}`;
     out.push({
-      key,
+      key: `${y}-${pad(m + 1)}`,
       label: M_BAND[m],
-      yearMark: m === 0 ? `’${String(y).slice(2)}` : null,
+      year: y,
+      isJanuary: m === 0,
       from: ymd(new Date(y, m, 1)),
       to: ymd(new Date(y, m + 1, 0)),
-      count: counts.get(key) ?? 0,
     });
   }
   return out;
