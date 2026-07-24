@@ -100,6 +100,25 @@ function normName(s: string): string {
   return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Does the client name appear as a WHOLE word/phrase inside the (already
+ *  normalised) comment? Plain `.includes()` over-matches short names
+ *  («Ан» ловит «диван», «Иван» ловит «Иванов») — require the match to be
+ *  bounded by non-letters (or string edges). Both args must be normName'd.
+ *  Keeps the intended «comment contains the name + extra text» case. */
+export function nameInComment(commentNorm: string, cnameNorm: string): boolean {
+  if (!cnameNorm) return false;
+  let from = 0;
+  for (;;) {
+    const i = commentNorm.indexOf(cnameNorm, from);
+    if (i < 0) return false;
+    const before = i === 0 ? "" : commentNorm[i - 1];
+    const after = commentNorm[i + cnameNorm.length] ?? "";
+    // Пустой край строки — тоже граница; \p{L} ловит и кириллицу.
+    if (!/\p{L}/u.test(before) && !/\p{L}/u.test(after)) return true;
+    from = i + 1;
+  }
+}
+
 export function buildStats(
   client: Pick<Client, "id" | "full_name" | "created_at" | "birthday">,
   apts: Appointment[],
@@ -124,7 +143,7 @@ export function buildStats(
     // that pre-date client_id linkage.
     const matchById = a.client_id === cid;
     const matchByName =
-      a.client_id == null && cname.length > 0 && normName(a.comment).includes(cname);
+      a.client_id == null && nameInComment(normName(a.comment), cname);
     if (!matchById && !matchByName) continue;
 
     if (a.status === "completed") {
@@ -259,9 +278,9 @@ export function buildStatsMap(
     if (orphanByName.size > 0) {
       const cname = normName(c.full_name);
       const orphans: Appointment[] = [];
-      // Cheap substring scan — only for orphans, in practice <50 of them.
+      // Bounded-name scan — only for orphans, in practice <50 of them.
       for (const [name, arr] of orphanByName) {
-        if (cname && name.includes(cname)) orphans.push(...arr);
+        if (nameInComment(name, cname)) orphans.push(...arr);
       }
       combined = orphans.length === 0 ? own : own.concat(orphans);
     } else {

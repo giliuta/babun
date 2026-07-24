@@ -44,12 +44,15 @@ export function reminderBadge(
   reminderAt: string | null | undefined,
 ): { label: string; due: boolean } | null {
   if (!reminderAt) return null;
+  // После синка reminder_at приходит как timestamptz («…T00:00:00+00») —
+  // режем до YYYY-MM-DD, иначе «сегодня» не совпадёт и бейдж не краснеет.
+  const ymd = reminderAt.slice(0, 10);
   const d = new Date();
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (reminderAt === today) return { label: "сегодня", due: true };
+  if (ymd === today) return { label: "сегодня", due: true };
   return {
-    label: formatShortDateRu(reminderAt) || reminderAt,
-    due: reminderAt < today,
+    label: formatShortDateRu(ymd) || ymd,
+    due: ymd < today,
   };
 }
 

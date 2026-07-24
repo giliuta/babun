@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronDown } from "lucide-react-native";
+import { Check, ChevronDown } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import type {
   AcquisitionSource,
@@ -39,10 +39,13 @@ import {
   resetFilters,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
+  SORT_LABELS_LONG,
+  SORT_ORDER,
   SOURCE_OPTIONS,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
+  type SortKey,
 } from "./filter";
 import type { ClientFilterResult } from "./useClientFilters";
 
@@ -440,6 +443,80 @@ function MultiPickSheet({
   );
 }
 
+/** Попап одиночного выбора — закон «галка = один»: тап применяет и
+ *  ЗАКРЫВАЕТ (эталон — пресеты периода). Для «Сортировки»: это
+ *  персистентная настройка списка, «Сбросить» её не трогает. */
+function SinglePickSheet({
+  visible,
+  title,
+  options,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  options: { value: string; label: string }[];
+  selected: string;
+  onSelect: (value: string) => void;
+  onClose: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
+      <Text
+        accessibilityRole="header"
+        className="px-5 pt-1 text-lg font-bold"
+        style={{ color: t.ink, marginBottom: 12 }}
+      >
+        {title}
+      </Text>
+      <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
+        <View
+          className="overflow-hidden rounded-xl"
+          style={{ backgroundColor: t.canvas }}
+        >
+          {options.map((o, i) => {
+            const on = selected === o.value;
+            return (
+              <Pressable
+                key={o.value}
+                onPress={() => {
+                  haptics.tap();
+                  if (!on) onSelect(o.value);
+                  onClose();
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={o.label}
+                className="flex-row items-center px-3.5 active:opacity-70"
+                style={{
+                  minHeight: 48,
+                  borderTopWidth: i > 0 ? 1 : 0,
+                  borderTopColor: t.separator,
+                }}
+              >
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  className={`text-[15px] ${on ? "font-semibold" : "font-medium"}`}
+                  style={{ color: on ? t.accent : INK }}
+                >
+                  {o.label}
+                </Text>
+                {on ? (
+                  <View style={{ marginLeft: "auto" }}>
+                    <Check color={t.accent} size={18} strokeWidth={2.6} />
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </BottomSheet>
+  );
+}
+
 // ── Панель ─────────────────────────────────────────────────────────
 
 type FacetSheet = "segment" | "city" | "tag" | "team" | "source" | "property";
@@ -449,6 +526,8 @@ export function ClientsFilterSheet({
   filter,
   result,
   dataFrom,
+  sort,
+  onSortChange,
   onChange,
   onClose,
 }: {
@@ -457,6 +536,10 @@ export function ClientsFilterSheet({
   result: ClientFilterResult;
   /** Дата первой записи (YYYY-MM-DD) — даты «Всего времени» в сплите. */
   dataFrom: string | null;
+  /** Сортировка списка — персистентная настройка (sort-pref), НЕ фильтр;
+   *  «Сбросить» её не трогает. Живёт первой строкой листа. */
+  sort: SortKey;
+  onSortChange: (s: SortKey) => void;
   onChange: (f: ClientsFilter) => void;
   onClose: () => void;
 }) {
@@ -467,6 +550,7 @@ export function ClientsFilterSheet({
 
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
   const [openFacet, setOpenFacet] = useState<FacetSheet | null>(null);
 
   // «Сбросить» с прощением: 4 секунды можно «Вернуть» снятый набор.
@@ -477,6 +561,7 @@ export function ClientsFilterSheet({
     if (!visible) {
       setPresetsOpen(false);
       setWheelsOpen(false);
+      setSortOpen(false);
       setOpenFacet(null);
       setUndo(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -678,6 +763,12 @@ export function ClientsFilterSheet({
     },
   };
 
+  // Сортировка — всегда одно значение (не «Все»), персистентна.
+  const sortOptions = SORT_ORDER.map((k) => ({
+    value: k as string,
+    label: SORT_LABELS_LONG[k],
+  }));
+
   // Сводки строк — первый выбранный по каноническому порядку + «+K».
   const segmentValue = summarize(segmentAsOptions, filter.segments);
   const cityValue = summarize(cityOptions, filter.selectedCities);
@@ -754,8 +845,15 @@ export function ClientsFilterSheet({
             gap: 28,
           }}
         >
-          {/* ── Абзац «когда и кого» ── */}
+          {/* ── Сортировка (как показывать) + когда и кого ── */}
           <View style={{ gap: 12 }}>
+            {/* Сортировка — первой; персистентна, «Сбросить» её не трогает. */}
+            <FilterRow
+              name="Сортировка"
+              value={{ label: SORT_LABELS_LONG[sort], extra: 0 }}
+              onPress={() => setSortOpen(true)}
+            />
+
             {/* Период: сплит Финансов — имя → пресеты, даты → колёса. */}
             <View
               className="flex-row items-stretch"
@@ -898,6 +996,15 @@ export function ClientsFilterSheet({
           />
         );
       })}
+
+      <SinglePickSheet
+        visible={sortOpen}
+        title="Сортировка"
+        options={sortOptions}
+        selected={sort}
+        onSelect={(v) => onSortChange(v as SortKey)}
+        onClose={() => setSortOpen(false)}
+      />
 
       <PeriodPresetModal
         visible={presetsOpen}

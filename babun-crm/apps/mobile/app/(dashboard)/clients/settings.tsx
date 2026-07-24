@@ -1,30 +1,21 @@
-import { useState, type ComponentType } from "react";
+import { type ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
-  ArrowUpDown,
   Archive,
-  Check,
   ChevronRight,
   Download,
   Eye,
   Tags,
   Upload,
 } from "lucide-react-native";
-import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
-import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { SORT_LABELS_LONG, SORT_ORDER } from "@/features/clients/filter";
-import {
-  useClientsSort,
-  useSetClientsSort,
-} from "@/features/clients/sort-pref";
 import {
   cardFieldsSummary,
   DEFAULT_CARD_FIELDS,
@@ -104,7 +95,6 @@ function Row({
 }
 
 export default function ClientsSettingsScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
@@ -112,11 +102,6 @@ export default function ClientsSettingsScreen() {
   const tagsQuery = useClientTags();
   const clients = clientsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
-  // Сортировка — персистентная настройка списка (sort-pref); выбирается
-  // прямо здесь мини-листом, список пересортируется мгновенно.
-  const { data: sortKey = "recent" } = useClientsSort();
-  const setSort = useSetClientsSort();
-  const [sortOpen, setSortOpen] = useState(false);
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
   const backToList = (param: "openImport") =>
@@ -176,14 +161,6 @@ export default function ClientsSettingsScreen() {
           />
           <Divider inset={56} />
           <Row
-            tile="#4B55C7"
-            icon={ArrowUpDown}
-            title="Сортировка списка"
-            sub={SORT_LABELS_LONG[sortKey]}
-            onPress={() => setSortOpen(true)}
-          />
-          <Divider inset={56} />
-          <Row
             tile="#8E44AD"
             icon={Tags}
             title="Теги клиентов"
@@ -233,56 +210,6 @@ export default function ClientsSettingsScreen() {
           />
         </SectionCard>
       </ScrollView>
-
-      {/* Мини-лист выбора сортировки — тап применяет сразу и закрывает
-          (live-настройка: открытый список пересортируется мгновенно). */}
-      <BottomSheet visible={sortOpen} onClose={() => setSortOpen(false)}>
-        <View className="items-center pb-2 pt-2">
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            className="text-[17px] font-semibold"
-            style={{ color: t.ink }}
-          >
-            Сортировка списка
-          </Text>
-        </View>
-        <View style={{ paddingHorizontal: 20, paddingBottom: 28, gap: 8 }}>
-          {SORT_ORDER.map((k) => {
-            const on = sortKey === k;
-            return (
-              <Pressable
-                key={k}
-                onPress={() => {
-                  haptics.tap();
-                  if (!on) setSort.mutate(k);
-                  setSortOpen(false);
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={SORT_LABELS_LONG[k]}
-                className="h-11 flex-row items-center gap-2.5 border px-3 active:opacity-70"
-                style={{
-                  borderRadius: t.radius.input,
-                  borderColor: on ? t.accent : "transparent",
-                  backgroundColor: on ? `${t.accent}1F` : t.fill,
-                }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="flex-1 text-sm font-medium"
-                  style={{ color: on ? t.accent : t.ink }}
-                >
-                  {SORT_LABELS_LONG[k]}
-                </Text>
-                {on ? (
-                  <Check color={t.accent} size={16} strokeWidth={2.6} />
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      </BottomSheet>
     </Screen>
   );
 }

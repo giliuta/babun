@@ -90,7 +90,10 @@ export function matchesSegment(
       return (s?.visits ?? 0) > 0 && (s?.nextApt ?? null) === null;
     case "reminderDue":
       // Напоминание, поставленное руками, уже сработало (сегодня/прошло).
-      return !!c.reminder_at && c.reminder_at <= todayYMD();
+      // reminder_at приходит из БД как timestamptz («2026-07-24T…») после
+      // синка — режем до YYYY-MM-DD, иначе строковое сравнение с датой
+      // выкидывает СЕГОДНЯШНИЕ напоминания (T > пусто).
+      return !!c.reminder_at && c.reminder_at.slice(0, 10) <= todayYMD();
     case "silent":
       return s ? isLongSilence(s) : false;
     case "birthday": {

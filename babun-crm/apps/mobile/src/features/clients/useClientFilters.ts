@@ -3,6 +3,7 @@ import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient } from "@babun/shared/local/selectors/client-search";
+import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   clientPropertyTypes,
@@ -104,7 +105,9 @@ export function buildClientAppointmentIndex(
       const cname = normName(c.full_name);
       const orphans: Appointment[] = [];
       for (const [name, arr] of orphanByName) {
-        if (cname && name.includes(cname)) orphans.push(...arr);
+        // Границы слова — как в buildStatsMap (короткое имя не ловит
+        // подстроку: «Ан» не матчит «диван»).
+        if (nameInComment(name, cname)) orphans.push(...arr);
       }
       combined = orphans.length === 0 ? own : own.concat(orphans);
     } else {
@@ -148,6 +151,9 @@ export function useClientFilters(
   sort: SortKey,
   filter: ClientsFilter,
   search: string,
+  /** Считать контекстные счётчики попапов только когда лист открыт —
+   *  иначе полный проход по клиентам гоняется на каждую клавишу поиска. */
+  withFacetCounts: boolean,
 ): ClientFilterResult {
   const {
     segments,
@@ -358,6 +364,9 @@ export function useClientFilters(
     const team: Record<string, number> = {};
     const source: Record<string, number> = {};
     const property: Record<string, number> = {};
+    // Лист закрыт — числа не видны, полный проход не нужен (иначе он бы
+    // гонялся на каждую клавишу поиска у тенанта на тысячи карточек).
+    if (!withFacetCounts) return { segment, city, tag, team, source, property };
     // client.city может отличаться регистром от канона опции.
     const cityValueByNorm = new Map(
       cityOptions.map((o) => [o.value.trim().toLowerCase(), o.value]),
@@ -400,6 +409,7 @@ export function useClientFilters(
     }
     return { segment, city, tag, team, source, property };
   }, [
+    withFacetCounts,
     clients,
     cityOptions,
     statsMap,

@@ -57,7 +57,10 @@ import {
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
-import { useClientsSort } from "@/features/clients/sort-pref";
+import {
+  useClientsSort,
+  useSetClientsSort,
+} from "@/features/clients/sort-pref";
 import {
   DEFAULT_CARD_FIELDS,
   useCardFields,
@@ -458,6 +461,7 @@ export default function ClientsListScreen() {
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   // Сортировка — персистентная настройка («Настройки клиентов»), не фильтр.
   const { data: sort = "recent" } = useClientsSort();
+  const setSort = useSetClientsSort();
   const archiveClients = useArchiveClients();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
@@ -506,7 +510,30 @@ export default function ClientsListScreen() {
     sort,
     filter,
     query,
+    sheetOpen, // счётчики попапов считаем только при открытом листе
   );
+
+  // Прунинг «призрачных» фильтров: если тег/команду/метку удалили, пока
+  // фильтр по ним активен, список схлопнулся бы в ноль без токена для
+  // снятия. Держим выбранное подмножеством живых опций.
+  const { teamOptions, cityOptions, tagOptions } = result;
+  useEffect(() => {
+    setFilter((f) => {
+      const teamSet = new Set(teamOptions.map((o) => o.value));
+      const tagSet = new Set(tagOptions.map((o) => o.value));
+      const citySet = new Set(cityOptions.map((o) => o.value));
+      const selectedTeams = f.selectedTeams.filter((x) => teamSet.has(x));
+      const activeTags = f.activeTags.filter((x) => tagSet.has(x));
+      const selectedCities = f.selectedCities.filter((x) => citySet.has(x));
+      if (
+        selectedTeams.length === f.selectedTeams.length &&
+        activeTags.length === f.activeTags.length &&
+        selectedCities.length === f.selectedCities.length
+      )
+        return f;
+      return { ...f, selectedTeams, activeTags, selectedCities };
+    });
+  }, [teamOptions, cityOptions, tagOptions]);
 
   const removeToken = (token: ActiveToken) => {
     if (token.key === "team")
@@ -954,6 +981,8 @@ export default function ClientsListScreen() {
         filter={filter}
         result={result}
         dataFrom={dataFrom}
+        sort={sort}
+        onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}
       />
