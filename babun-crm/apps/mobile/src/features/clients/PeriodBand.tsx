@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  Gesture,
+  GestureDetector,
+  // Горизонтальный трек обязан быть RNGH-ScrollView: только он корректно
+  // договаривается с long-press-паном штриха (флик = скролл, удержание =
+  // штрих, активация пана отменяет скролл).
+  ScrollView,
+} from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -9,24 +16,25 @@ import Animated, {
 import { haptics } from "@/lib/haptics";
 import type { PeriodMonth, PeriodValue } from "./filter";
 
-// «Лента времени» — сигнатурный контрол периода («Оттиск + Лента»,
-// решение руководителя 2026-07-23). 12 месяцев одной строкой 48pt:
-// каждая колонка несёт гравюру плотности записей (штрих ink 20%),
-// ТАП по колонке = весь месяц, ГОРИЗОНТАЛЬНЫЙ штрих = диапазон месяцев
-// (снап поколоночно, хаптик на границе), тап по уже выбранному
-// одиночному месяцу = сброс во «Всё время». Выбор = ink-оттиск #0B1220
-// (грамматика листа: выбранное печатается чёрным), внутри оттиска
-// гравюра и подписи белые — реализовано двумя плоскостями: нижняя
-// ink-версия + верхняя белая, клипнутая анимированным окном выбора.
-// Точные дни и диапазоны старше окна живут в колёсах С–До (тап по
-// значению в заголовке секции) — лента про месяцы, честно.
+// «Лента времени» v2 — сигнатурный контрол периода («Оттиск + Лента»,
+// доработка по владельцу 2026-07-24: «чтоб я мог сам листать» +
+// просторные подписи). Горизонтально ЛИСТАЕМЫЙ трек 24 месяцев:
+// колонки фиксированной ширины 52pt с гравюрой плотности записей,
+// лента открывается у текущего месяца, флик — в прошлое (нативная
+// инерция, ощущение тумблера). ТАП по колонке = весь месяц;
+// УДЕРЖАНИЕ + протяжка = диапазон месяцев (хаптик на активации и на
+// каждой границе, на время штриха скролл замирает); повторный тап по
+// единственному выбранному месяцу = «Всё время». Выбор = ink-оттиск
+// #0B1220 с белой гравюрой (две плоскости с клипом — грамматика листа).
+// Точные дни — колёса С–До по тапу на значение в заголовке секции.
 
 const INK = "#0B1220";
-const TRACK_H = 48;
-const PAD = 6; // внутренний отступ трека до первой/последней колонки
+const TRACK_H = 56;
+const COL_W = 52;
+const PAD = 6;
 
-/** Индексы выбранных месяцев [i0, i1] если период точно совпадает с
- *  границами месяцев окна, иначе null (кастом с колёс — band скрыт). */
+/** Индексы выбранных месяцев [i0, i1], если период точно совпадает с
+ *  границами месяцев окна, иначе null (кастом с колёс — оттиск скрыт). */
 function selectionFromPeriod(
   months: PeriodMonth[],
   period: PeriodValue | null,
@@ -47,15 +55,16 @@ export function PeriodBand({
   period: PeriodValue | null;
   onChange: (p: PeriodValue | null) => void;
 }) {
-  const [width, setWidth] = useState(0);
-  const colW = width > 0 ? (width - PAD * 2) / months.length : 0;
+  const scrollRef = useRef<ScrollView>(null);
+  // Штрих замораживает нативный скролл — палец рисует диапазон.
+  const [stroking, setStroking] = useState(false);
 
   const selection = selectionFromPeriod(months, period);
+  const contentW = PAD * 2 + months.length * COL_W;
 
-  // Анимированное окно выбора: границы в колонках (‑1 = пусто).
+  // Анимированное окно оттиска: границы в колонках (-1 = пусто).
   const selA = useSharedValue(-1);
   const selB = useSharedValue(-1);
-  // Во время штриха палец главнее внешнего состояния.
   const panning = useSharedValue(false);
 
   useEffect(() => {
@@ -64,9 +73,22 @@ export function PeriodBand({
     selB.value = selection ? selection[1] : -1;
   }, [selection, selA, selB, panning]);
 
-  const maxCount = Math.max(1, ...months.map((m) => m.count));
+  // Открываемся у текущего месяца (правый край окна).
+  useEffect(() => {
+    const id = setTimeout(
+      () => scrollRef.current?.scrollToEnd({ animated: false }),
+      0,
+    );
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Коммит диапазона [a..b] — троттлится во время штриха, финально в onEnd.
+  const maxCount = Math.max(1, ...months.map((m) => m.count));
+  const nowKey = months[months.length - 1]?.key;
+
+  const colAt = (x: number) =>
+    Math.min(months.length - 1, Math.max(0, Math.floor((x - PAD) / COL_W)));
+
   const lastCommit = useRef(0);
   const commit = (a: number, b: number, final: boolean) => {
     const now = Date.now();
@@ -77,12 +99,8 @@ export function PeriodBand({
   };
 
   const tapAt = (x: number) => {
-    if (colW <= 0) return;
-    const i = Math.min(
-      months.length - 1,
-      Math.max(0, Math.floor((x - PAD) / colW)),
-    );
     haptics.tap();
+    const i = colAt(x);
     // Повторный тап по единственному выбранному месяцу — «Всё время».
     if (selection && selection[0] === i && selection[1] === i) {
       onChange(null);
@@ -91,30 +109,33 @@ export function PeriodBand({
     onChange({ preset: "custom", from: months[i].from, to: months[i].to });
   };
 
+  const strokeBegin = () => {
+    setStroking(true);
+    haptics.tap();
+  };
+  const strokeEnd = () => setStroking(false);
   const hapticTick = () => haptics.tap();
 
+  // Удержание 220мс включает штрих (флик без удержания = нативный скролл).
   const pan = Gesture.Pan()
-    // Осевая доминанта: горизонталь — наша, вертикаль отдаём скроллу листа.
-    .activeOffsetX([-8, 8])
-    .failOffsetY([-10, 10])
+    .activateAfterLongPress(220)
     .onStart((e) => {
       "worklet";
-      if (colW <= 0) return;
       panning.value = true;
       const i = Math.min(
         months.length - 1,
-        Math.max(0, Math.floor((e.x - PAD) / colW)),
+        Math.max(0, Math.floor((e.x - PAD) / COL_W)),
       );
       selA.value = i;
       selB.value = i;
-      runOnJS(hapticTick)();
+      runOnJS(strokeBegin)();
     })
     .onChange((e) => {
       "worklet";
-      if (colW <= 0 || selA.value < 0) return;
+      if (selA.value < 0) return;
       const i = Math.min(
         months.length - 1,
-        Math.max(0, Math.floor((e.x - PAD) / colW)),
+        Math.max(0, Math.floor((e.x - PAD) / COL_W)),
       );
       if (i !== selB.value) {
         selB.value = i;
@@ -126,6 +147,12 @@ export function PeriodBand({
       "worklet";
       if (selA.value >= 0) runOnJS(commit)(selA.value, selB.value, true);
       panning.value = false;
+      runOnJS(strokeEnd)();
+    })
+    .onFinalize(() => {
+      "worklet";
+      panning.value = false;
+      runOnJS(strokeEnd)();
     });
 
   const tap = Gesture.Tap().onEnd((e) => {
@@ -135,48 +162,49 @@ export function PeriodBand({
 
   const gesture = Gesture.Race(pan, tap);
 
-  // Окно оттиска (нижний слой ink) и клип белой плоскости.
   const bandStyle = useAnimatedStyle(() => {
     const a = selA.value;
     const b = selB.value;
-    if (a < 0 || colW <= 0) return { opacity: 0, left: 0, width: 0 };
+    if (a < 0) return { opacity: 0, left: 0, width: 0 };
     const [i0, i1] = a <= b ? [a, b] : [b, a];
     return {
       opacity: 1,
-      left: PAD + i0 * colW,
-      width: (i1 - i0 + 1) * colW,
+      left: PAD + i0 * COL_W,
+      width: (i1 - i0 + 1) * COL_W,
     };
   });
   // Белая плоскость едет внутри клипа в противофазе — колонки совпадают.
   const innerShift = useAnimatedStyle(() => {
     const a = selA.value;
     const b = selB.value;
-    if (a < 0 || colW <= 0) return { transform: [{ translateX: 0 }] };
+    if (a < 0) return { transform: [{ translateX: 0 }] };
     const i0 = Math.min(a, b);
-    return { transform: [{ translateX: -(PAD + i0 * colW) }] };
+    return { transform: [{ translateX: -(PAD + i0 * COL_W) }] };
   });
 
   const columns = (onInk: boolean) =>
     months.map((m) => {
-      const barH = 3 + (m.count / maxCount) * 17;
+      const isNow = m.key === nowKey;
+      const barH = 4 + (m.count / maxCount) * 22;
       return (
         <View
           key={m.key}
           style={{
-            width: colW,
+            width: COL_W,
             alignItems: "center",
             justifyContent: "flex-end",
-            paddingBottom: 4,
+            paddingBottom: 7,
           }}
         >
           {m.yearMark ? (
             <Text
               style={{
                 position: "absolute",
-                top: 3,
-                fontSize: 8,
+                top: 6,
+                fontSize: 9,
                 fontWeight: "600",
-                color: onInk ? "rgba(255,255,255,0.7)" : "rgba(11,18,32,0.45)",
+                fontVariant: ["tabular-nums"],
+                color: onInk ? "rgba(255,255,255,0.72)" : "rgba(11,18,32,0.4)",
               }}
             >
               {m.yearMark}
@@ -184,22 +212,25 @@ export function PeriodBand({
           ) : null}
           <View
             style={{
-              width: Math.max(3, colW * 0.34),
+              width: 16,
               height: barH,
-              borderRadius: 1.5,
-              marginBottom: 3,
+              borderRadius: 2,
+              marginBottom: 5,
               backgroundColor: onInk
-                ? "rgba(255,255,255,0.6)"
-                : "rgba(11,18,32,0.2)",
+                ? "rgba(255,255,255,0.62)"
+                : "rgba(11,18,32,0.18)",
             }}
           />
           <Text
             style={{
-              fontSize: 9,
-              fontWeight: "600",
-              textTransform: "uppercase",
+              fontSize: 11,
+              fontWeight: isNow ? "700" : "500",
               letterSpacing: 0.2,
-              color: onInk ? "#FFFFFF" : "rgba(11,18,32,0.45)",
+              color: onInk
+                ? "#FFFFFF"
+                : isNow
+                  ? "rgba(11,18,32,0.85)"
+                  : "rgba(11,18,32,0.48)",
             }}
           >
             {m.label}
@@ -209,46 +240,56 @@ export function PeriodBand({
     });
 
   return (
-    <GestureDetector gesture={gesture}>
-      <View
-        accessible
-        accessibilityRole="adjustable"
-        accessibilityLabel="Период по месяцам"
-        accessibilityHint="Тап — месяц, горизонтальный жест — диапазон"
-        onAccessibilityAction={(e) => {
-          const cur = selection ? selection[0] : months.length - 1;
-          const next =
-            e.nativeEvent.actionName === "increment"
-              ? Math.min(months.length - 1, cur + 1)
-              : Math.max(0, cur - 1);
-          onChange({
-            preset: "custom",
-            from: months[next].from,
-            to: months[next].to,
-          });
-        }}
-        accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
-        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-        style={{
-          height: TRACK_H,
-          borderRadius: 14,
-          backgroundColor: "rgba(11,18,32,0.04)",
-          overflow: "hidden",
-        }}
+    <View
+      style={{
+        height: TRACK_H,
+        borderRadius: 14,
+        backgroundColor: "rgba(11,18,32,0.04)",
+        overflow: "hidden",
+      }}
+    >
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        scrollEnabled={!stroking}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ width: contentW }}
       >
-        {/* Базовая линия гравюры — волосок над подписями. */}
-        <View
-          style={{
-            position: "absolute",
-            left: PAD,
-            right: PAD,
-            bottom: 17,
-            height: 1,
-            backgroundColor: "rgba(11,18,32,0.08)",
-          }}
-        />
-        {width > 0 ? (
-          <>
+        <GestureDetector gesture={gesture}>
+          <View
+            accessible
+            accessibilityRole="adjustable"
+            accessibilityLabel="Период по месяцам"
+            accessibilityHint="Тап — месяц, удержание с протяжкой — диапазон"
+            onAccessibilityAction={(e) => {
+              const cur = selection ? selection[0] : months.length - 1;
+              const next =
+                e.nativeEvent.actionName === "increment"
+                  ? Math.min(months.length - 1, cur + 1)
+                  : Math.max(0, cur - 1);
+              onChange({
+                preset: "custom",
+                from: months[next].from,
+                to: months[next].to,
+              });
+            }}
+            accessibilityActions={[
+              { name: "increment" },
+              { name: "decrement" },
+            ]}
+            style={{ width: contentW, height: TRACK_H }}
+          >
+            {/* Базовая линия гравюры — волосок над подписями. */}
+            <View
+              style={{
+                position: "absolute",
+                left: PAD,
+                width: contentW - PAD * 2,
+                bottom: 24,
+                height: 1,
+                backgroundColor: "rgba(11,18,32,0.08)",
+              }}
+            />
             {/* Нижняя плоскость: гравюра в покое. */}
             <View
               style={{
@@ -268,7 +309,7 @@ export function PeriodBand({
                   position: "absolute",
                   top: 0,
                   bottom: 0,
-                  borderRadius: 10,
+                  borderRadius: 12,
                   backgroundColor: INK,
                   overflow: "hidden",
                 },
@@ -290,9 +331,9 @@ export function PeriodBand({
                 {columns(true)}
               </Animated.View>
             </Animated.View>
-          </>
-        ) : null}
-      </View>
-    </GestureDetector>
+          </View>
+        </GestureDetector>
+      </ScrollView>
+    </View>
   );
 }

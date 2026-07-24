@@ -186,20 +186,20 @@ const M_NOM = [
   "Декабрь",
 ];
 
-/** Короткие подписи колонок ленты («май», не «мая»). */
+/** Подписи колонок ленты («Май», не «мая» и не капс — воздух и покой). */
 export const M_BAND = [
-  "янв",
-  "фев",
-  "мар",
-  "апр",
-  "май",
-  "июн",
-  "июл",
-  "авг",
-  "сен",
-  "окт",
-  "ноя",
-  "дек",
+  "Янв",
+  "Фев",
+  "Мар",
+  "Апр",
+  "Май",
+  "Июн",
+  "Июл",
+  "Авг",
+  "Сен",
+  "Окт",
+  "Ноя",
+  "Дек",
 ];
 
 function fmtShort(key: string): string {
@@ -243,8 +243,9 @@ export interface PeriodMonth {
   count: number;
 }
 
-/** Окно последних 12 месяцев (старые → новые) с плотностью записей.
- *  dates — даты записей (YYYY-MM-DD), отменённые отсеять снаружи. */
+/** Окно последних 24 месяцев (старые → новые) с плотностью записей —
+ *  лента листается пальцем в прошлое. dates — даты записей
+ *  (YYYY-MM-DD), отменённые отсеять снаружи. */
 export function buildPeriodMonths(dates: string[]): PeriodMonth[] {
   const counts = new Map<string, number>();
   for (const d of dates) {
@@ -253,7 +254,7 @@ export function buildPeriodMonths(dates: string[]): PeriodMonth[] {
   }
   const now = new Date();
   const out: PeriodMonth[] = [];
-  for (let i = 11; i >= 0; i--) {
+  for (let i = 23; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const y = d.getFullYear();
     const m = d.getMonth();
