@@ -506,10 +506,10 @@ export function ClientsFilterSheet({
   const activeSummary = nothingActive
     ? null
     : [
+        ...(filter.period ? [periodLabel(filter.period)] : []),
         ...filter.segments.map(
           (k) => SEGMENT_OPTIONS.find((o) => o.key === k)?.label ?? k,
         ),
-        ...(filter.period ? [periodLabel(filter.period)] : []),
         ...filter.selectedCities,
         ...filter.activeTags
           .map((id) => tagOptions.find((o) => o.value === id)?.label ?? "")
@@ -701,14 +701,8 @@ export function ClientsFilterSheet({
             gap: 28,
           }}
         >
-          {/* ── Абзац «кого и когда» ── */}
+          {/* ── Абзац «когда и кого» ── */}
           <View style={{ gap: 12 }}>
-            <FilterRow
-              name="Статус"
-              value={segmentValue}
-              onPress={() => setOpenFacet("segment")}
-            />
-
             {/* Период: сплит Финансов — имя → пресеты, даты → колёса. */}
             <View
               className="flex-row items-stretch"
@@ -764,6 +758,12 @@ export function ClientsFilterSheet({
                 </Text>
               </Pressable>
             </View>
+
+            <FilterRow
+              name="Статус"
+              value={segmentValue}
+              onPress={() => setOpenFacet("segment")}
+            />
           </View>
 
           {/* ── Абзац «чьих» ── */}
