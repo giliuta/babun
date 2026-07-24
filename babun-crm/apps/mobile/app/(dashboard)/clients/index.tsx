@@ -535,11 +535,6 @@ export default function ClientsListScreen() {
         ...f,
         sources: f.sources.filter((x) => x !== token.val),
       }));
-    else if (token.key === "language")
-      setFilter((f) => ({
-        ...f,
-        languages: f.languages.filter((x) => x !== token.val),
-      }));
     else if (token.key === "property")
       setFilter((f) => ({
         ...f,

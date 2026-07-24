@@ -1,9 +1,5 @@
 import { useMemo } from "react";
-import {
-  CLIENT_LANGUAGES,
-  type Client,
-  type ClientTag,
-} from "@babun/shared/local/clients";
+import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { matchesClient } from "@babun/shared/local/selectors/client-search";
@@ -40,7 +36,6 @@ export interface FacetCounts {
   tag: Record<string, number>;
   team: Record<string, number>;
   source: Record<string, number>;
-  language: Record<string, number>;
   property: Record<string, number>;
 }
 
@@ -55,10 +50,9 @@ export interface ClientFilterResult {
   cityOptions: FacetOption[];
   tagOptions: FacetOption[];
   facetCounts: FacetCounts;
-  /** Строки Источник/Язык/Тип объекта появляются, когда данные есть
-   *  хоть у одного клиента — пустой справочник не даёт мёртвую строку. */
+  /** Строки Источник/Тип объекта появляются, когда данные есть хоть у
+   *  одного клиента — пустой справочник не даёт мёртвую строку. */
   hasSourceData: boolean;
-  hasLanguageData: boolean;
   hasPropertyData: boolean;
 }
 
@@ -162,7 +156,6 @@ export function useClientFilters(
     activeTags,
     period,
     sources,
-    languages,
     propertyTypes,
   } = filter;
 
@@ -285,12 +278,6 @@ export function useClientFilters(
       sel.length === 0 || sel.includes(clientSource(c));
   }, [sources]);
 
-  const passesLanguage = useMemo(() => {
-    const sel = languages;
-    return (c: Client): boolean =>
-      sel.length === 0 || sel.includes(c.language ?? "");
-  }, [languages]);
-
   const passesProperty = useMemo(() => {
     const sel = propertyTypes as string[];
     return (c: Client): boolean => {
@@ -303,10 +290,6 @@ export function useClientFilters(
   // Строки-фильтры «портрета» появляются, только когда данные есть.
   const hasSourceData = useMemo(
     () => clients.some((c) => clientSource(c) !== "unknown"),
-    [clients],
-  );
-  const hasLanguageData = useMemo(
-    () => clients.some((c) => !!c.language),
     [clients],
   );
   const hasPropertyData = useMemo(
@@ -348,7 +331,6 @@ export function useClientFilters(
         passesCity(c) &&
         passesPeriod(c) &&
         passesSource(c) &&
-        passesLanguage(c) &&
         passesProperty(c),
     );
   }, [
@@ -360,7 +342,6 @@ export function useClientFilters(
     passesCity,
     passesPeriod,
     passesSource,
-    passesLanguage,
     passesProperty,
   ]);
 
@@ -376,7 +357,6 @@ export function useClientFilters(
     const tag: Record<string, number> = {};
     const team: Record<string, number> = {};
     const source: Record<string, number> = {};
-    const language: Record<string, number> = {};
     const property: Record<string, number> = {};
     // client.city может отличаться регистром от канона опции.
     const cityValueByNorm = new Map(
@@ -389,41 +369,36 @@ export function useClientFilters(
       const ct = passesCity(c);
       const tg = passesTag(c);
       const so = passesSource(c);
-      const ln = passesLanguage(c);
       const pr = passesProperty(c);
-      if (tm && ct && tg && so && ln && pr) {
+      if (tm && ct && tg && so && pr) {
         const s = statsMap.get(c.id);
         for (const o of SEGMENT_OPTIONS) {
           if (matchesSegment(c, o.key, s)) segment[o.key] += 1;
         }
       }
-      if (seg && tm && tg && so && ln && pr) {
+      if (seg && tm && tg && so && pr) {
         const norm = (c.city ?? "").trim().toLowerCase();
         const val = norm ? cityValueByNorm.get(norm) : undefined;
         if (val) city[val] = (city[val] ?? 0) + 1;
       }
-      if (seg && tm && ct && so && ln && pr) {
+      if (seg && tm && ct && so && pr) {
         for (const id of c.tag_ids) tag[id] = (tag[id] ?? 0) + 1;
       }
-      if (seg && ct && tg && so && ln && pr) {
+      if (seg && ct && tg && so && pr) {
         const set = index.clientTeams.get(c.id);
         if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
       }
-      if (seg && tm && ct && tg && ln && pr) {
+      if (seg && tm && ct && tg && pr) {
         const key = clientSource(c);
         source[key] = (source[key] ?? 0) + 1;
       }
-      if (seg && tm && ct && tg && so && pr) {
-        const lang = c.language ?? "";
-        if (lang) language[lang] = (language[lang] ?? 0) + 1;
-      }
-      if (seg && tm && ct && tg && so && ln) {
+      if (seg && tm && ct && tg && so) {
         for (const p of clientPropertyTypes(c)) {
           property[p] = (property[p] ?? 0) + 1;
         }
       }
     }
-    return { segment, city, tag, team, source, language, property };
+    return { segment, city, tag, team, source, property };
   }, [
     clients,
     cityOptions,
@@ -436,7 +411,6 @@ export function useClientFilters(
     passesCity,
     passesTag,
     passesSource,
-    passesLanguage,
     passesProperty,
   ]);
 
@@ -483,16 +457,6 @@ export function useClientFilters(
       if (o)
         tokens.push({ key: "source", val: src, label: o.label, color: "" });
     }
-    for (const lang of languages) {
-      const o = CLIENT_LANGUAGES.find((x) => x.value === lang);
-      if (o)
-        tokens.push({
-          key: "language",
-          val: lang,
-          label: `${o.flag} ${o.label}`,
-          color: "",
-        });
-    }
     for (const p of propertyTypes) {
       const o = PROPERTY_OPTIONS.find((x) => x.value === p);
       if (o)
@@ -506,7 +470,6 @@ export function useClientFilters(
     activeTags,
     period,
     sources,
-    languages,
     propertyTypes,
     teamOptions,
     cityOptions,
@@ -520,7 +483,6 @@ export function useClientFilters(
     (period ? 1 : 0) +
     segments.length +
     sources.length +
-    languages.length +
     propertyTypes.length;
 
   return {
@@ -532,7 +494,6 @@ export function useClientFilters(
     tagOptions,
     facetCounts,
     hasSourceData,
-    hasLanguageData,
     hasPropertyData,
   };
 }

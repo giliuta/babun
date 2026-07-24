@@ -63,16 +63,16 @@ export const PROPERTY_LABELS: Record<PropertyType, string> = {
 };
 
 /** Языки клиента (SMS-шаблоны, фильтр «Язык») — единый список для
- *  карточки и фильтров. value хранится в `client.language`. */
+ *  карточки и фильтров. value хранится в `client.language`.
+ *  Только текст — эмодзи/флагов в приложении нет (канон владельца). */
 export const CLIENT_LANGUAGES: {
   value: string;
   label: string;
   short: string;
-  flag: string;
 }[] = [
-  { value: "ru", label: "Русский", short: "RU", flag: "🇷🇺" },
-  { value: "en", label: "English", short: "EN", flag: "🇬🇧" },
-  { value: "el", label: "Ελληνικά", short: "EL", flag: "🇬🇷" },
+  { value: "ru", label: "Русский", short: "RU" },
+  { value: "en", label: "English", short: "EN" },
+  { value: "el", label: "Ελληνικά", short: "EL" },
 ];
 
 export type ACType = "split" | "ducted" | "cassette";

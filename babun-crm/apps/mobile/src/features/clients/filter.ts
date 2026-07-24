@@ -243,10 +243,10 @@ export interface FacetOption {
 
 /** Удаляемый токен в summary-баре. */
 export interface ActiveToken {
-  key: FacetKey | "period" | "segment" | "source" | "language" | "property";
+  key: FacetKey | "period" | "segment" | "source" | "property";
   val: string;
   label: string;
-  /** Пустая строка → без точки (период/сегмент/источник/язык/тип). */
+  /** Пустая строка → без точки (период/сегмент/источник/тип). */
   color: string;
 }
 
@@ -261,7 +261,6 @@ export interface ClientsFilter {
   activeTags: string[];
   period: PeriodValue | null;
   sources: AcquisitionSource[];
-  languages: string[];
   propertyTypes: PropertyType[];
 }
 
@@ -272,7 +271,6 @@ export const EMPTY_FILTER: ClientsFilter = {
   activeTags: [],
   period: null,
   sources: [],
-  languages: [],
   propertyTypes: [],
 };
 
@@ -285,7 +283,6 @@ export function filterActiveCount(f: ClientsFilter): number {
     (f.period ? 1 : 0) +
     f.segments.length +
     f.sources.length +
-    f.languages.length +
     f.propertyTypes.length
   );
 }

@@ -153,7 +153,7 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
               return (
                 <Chip
                   key={l.value}
-                  label={`${l.flag} ${l.short}`}
+                  label={l.short}
                   selected={active}
                   onPress={() => update({ language: active ? "" : l.value })}
                 />

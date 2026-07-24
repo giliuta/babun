@@ -19,10 +19,9 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
-import {
-  CLIENT_LANGUAGES,
-  type AcquisitionSource,
-  type PropertyType,
+import type {
+  AcquisitionSource,
+  PropertyType,
 } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -433,21 +432,7 @@ function MultiPickSheet({
 
 // ── Панель ─────────────────────────────────────────────────────────
 
-type FacetSheet =
-  | "segment"
-  | "city"
-  | "tag"
-  | "team"
-  | "source"
-  | "language"
-  | "property";
-
-/** Опции языка — общий справочник карточки (флаг + полное имя). */
-const LANGUAGE_OPTIONS: FacetOption[] = CLIENT_LANGUAGES.map((l) => ({
-  value: l.value,
-  label: `${l.flag} ${l.label}`,
-  color: "",
-}));
+type FacetSheet = "segment" | "city" | "tag" | "team" | "source" | "property";
 
 export function ClientsFilterSheet({
   visible,
@@ -502,7 +487,6 @@ export function ClientsFilterSheet({
     tagOptions,
     facetCounts,
     hasSourceData,
-    hasLanguageData,
     hasPropertyData,
   } = result;
   const shownCount = filtered.length;
@@ -548,9 +532,6 @@ export function ClientsFilterSheet({
           .filter(Boolean),
         ...filter.sources
           .map((s) => SOURCE_OPTIONS.find((o) => o.value === s)?.label ?? "")
-          .filter(Boolean),
-        ...filter.languages
-          .map((l) => LANGUAGE_OPTIONS.find((o) => o.value === l)?.label ?? "")
           .filter(Boolean),
         ...filter.propertyTypes
           .map((p) => PROPERTY_OPTIONS.find((o) => o.value === p)?.label ?? "")
@@ -674,14 +655,6 @@ export function ClientsFilterSheet({
           sources: toggleIn(filter.sources, v) as AcquisitionSource[],
         }),
     },
-    language: {
-      title: "Язык",
-      blocks: [LANGUAGE_OPTIONS],
-      selected: filter.languages,
-      counts: facetCounts.language,
-      toggle: (v) =>
-        onChange({ ...filter, languages: toggleIn(filter.languages, v) }),
-    },
     property: {
       title: "Тип объекта",
       blocks: [PROPERTY_OPTIONS],
@@ -701,7 +674,6 @@ export function ClientsFilterSheet({
   const tagValue = summarize(tagOptions, filter.activeTags);
   const teamValue = summarize(teamOptions, filter.selectedTeams);
   const sourceValue = summarize(SOURCE_OPTIONS, filter.sources);
-  const languageValue = summarize(LANGUAGE_OPTIONS, filter.languages);
   const propertyValue = summarize(PROPERTY_OPTIONS, filter.propertyTypes);
 
   return (
@@ -868,20 +840,13 @@ export function ClientsFilterSheet({
           </View>
 
           {/* ── Абзац «портрет»: строки появляются, когда данные есть ── */}
-          {hasSourceData || hasLanguageData || hasPropertyData ? (
+          {hasSourceData || hasPropertyData ? (
             <View style={{ gap: 12 }}>
               {hasSourceData || filter.sources.length > 0 ? (
                 <FilterRow
                   name="Источник"
                   value={sourceValue}
                   onPress={() => setOpenFacet("source")}
-                />
-              ) : null}
-              {hasLanguageData || filter.languages.length > 0 ? (
-                <FilterRow
-                  name="Язык"
-                  value={languageValue}
-                  onPress={() => setOpenFacet("language")}
                 />
               ) : null}
               {hasPropertyData || filter.propertyTypes.length > 0 ? (
