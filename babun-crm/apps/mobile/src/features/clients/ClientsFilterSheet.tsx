@@ -281,18 +281,23 @@ function PickRow({
   );
 }
 
-/** Футер-CTA — один и тот же на странице и в попапах: живой счётчик и
- *  выход на список. */
+/** Футер-CTA — общий каркас страницы и попапов: живой счётчик в
+ *  кнопке; muted — «пустой» серый вид (0 клиентов на странице). */
 function FooterCta({
   t,
-  shownCount,
-  ctaLabel,
+  label,
+  hint,
+  muted,
+  a11yHint,
   reduced,
   onPress,
 }: {
   t: ThemeColors;
-  shownCount: number;
-  ctaLabel: string;
+  label: string;
+  /** Строка над кнопкой («Смягчите условия…»). */
+  hint?: string | null;
+  muted?: boolean;
+  a11yHint: string;
   reduced: boolean;
   onPress: () => void;
 }) {
@@ -308,13 +313,13 @@ function FooterCta({
         paddingBottom: Math.max(insets.bottom, 16) + 6,
       }}
     >
-      {shownCount === 0 ? (
+      {hint ? (
         <Text
           maxFontSizeMultiplier={1.3}
           className="mb-2 text-center text-[13px]"
           style={{ color: t.faint }}
         >
-          Смягчите условия — период или статус
+          {hint}
         </Text>
       ) : null}
       <Pressable
@@ -323,36 +328,38 @@ function FooterCta({
           onPress();
         }}
         accessibilityRole="button"
-        accessibilityLabel={ctaLabel}
-        accessibilityHint="Закрывает фильтры и показывает список"
+        accessibilityLabel={label}
+        accessibilityHint={a11yHint}
         className="min-h-[52px] items-center justify-center overflow-hidden active:opacity-85"
         style={{
           borderRadius: 14,
-          backgroundColor: shownCount === 0 ? "rgba(11,18,32,0.04)" : t.accent,
+          backgroundColor: muted ? "rgba(11,18,32,0.04)" : t.accent,
         }}
       >
         <Animated.Text
-          key={ctaLabel}
+          key={label}
           entering={reduced ? undefined : FadeInUp.duration(160)}
           exiting={reduced ? undefined : FadeOutDown.duration(120)}
           maxFontSizeMultiplier={1.3}
           className="text-[17px] font-semibold"
           style={{
-            color: shownCount === 0 ? "rgba(11,18,32,0.45)" : t.onAccent,
+            color: muted ? "rgba(11,18,32,0.45)" : t.onAccent,
             fontVariant: ["tabular-nums"],
           }}
         >
-          {ctaLabel}
+          {label}
         </Animated.Text>
       </Pressable>
     </View>
   );
 }
 
-/** Попап мультивыбора — общая грамматика четырёх блоков: контейнеры
- *  попапа периода (блоки canvas без подписей, ряды 48), отметка =
- *  оттиск. Live-apply, тап НЕ закрывает; закрывает CTA (попап И лист)
- *  или скрим/свайп (возврат на страницу). */
+/** Попап мультивыбора — общая грамматика блоков: контейнеры попапа
+ *  периода (блоки canvas без подписей, ряды 48), отметка = оттиск.
+ *  Live-apply, тап НЕ закрывает — накликивается набор. «Готово · N»
+ *  (и скрим/свайп) возвращают на СТРАНИЦУ фильтров, где выбранное
+ *  видно в строке; на список ведёт только CTA страницы (решение
+ *  владельца 2026-07-24: тап не должен «перекидывать в клиенты»). */
 function MultiPickSheet({
   visible,
   title,
@@ -360,11 +367,9 @@ function MultiPickSheet({
   selected,
   counts,
   shownCount,
-  ctaLabel,
   reduced,
   onToggle,
   onClose,
-  onShow,
 }: {
   visible: boolean;
   title: string;
@@ -372,16 +377,18 @@ function MultiPickSheet({
   selected: string[];
   counts: Record<string, number>;
   shownCount: number;
-  ctaLabel: string;
   reduced: boolean;
   onToggle: (value: string) => void;
   onClose: () => void;
-  onShow: () => void;
 }) {
   const t = useThemeColors();
   const { fontScale } = useWindowDimensions();
   // При крупном шрифте подпись важнее числа — счётчик уступает место.
   const hideCount = fontScale >= 1.6;
+  const doneLabel =
+    shownCount === 0
+      ? "Готово"
+      : `Готово · ${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
       <Text
@@ -421,10 +428,13 @@ function MultiPickSheet({
       </ScrollView>
       <FooterCta
         t={t}
-        shownCount={shownCount}
-        ctaLabel={ctaLabel}
+        label={doneLabel}
+        hint={
+          shownCount === 0 ? "Ничего не найдено — смягчите условия" : null
+        }
+        a11yHint="Возвращает к фильтрам"
         reduced={reduced}
-        onPress={onShow}
+        onPress={onClose}
       />
     </BottomSheet>
   );
@@ -860,8 +870,10 @@ export function ClientsFilterSheet({
 
         <FooterCta
           t={t}
-          shownCount={shownCount}
-          ctaLabel={ctaLabel}
+          label={ctaLabel}
+          hint={shownCount === 0 ? "Смягчите условия — период или статус" : null}
+          muted={shownCount === 0}
+          a11yHint="Закрывает фильтры и показывает список"
           reduced={reduced}
           onPress={onClose}
         />
@@ -880,14 +892,9 @@ export function ClientsFilterSheet({
             selected={cfg.selected}
             counts={cfg.counts}
             shownCount={shownCount}
-            ctaLabel={ctaLabel}
             reduced={reduced}
             onToggle={cfg.toggle}
             onClose={() => setOpenFacet(null)}
-            onShow={() => {
-              setOpenFacet(null);
-              onClose();
-            }}
           />
         );
       })}
