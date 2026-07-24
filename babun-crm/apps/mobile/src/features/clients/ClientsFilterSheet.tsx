@@ -19,6 +19,11 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronDown } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
+import {
+  CLIENT_LANGUAGES,
+  type AcquisitionSource,
+  type PropertyType,
+} from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
@@ -31,9 +36,11 @@ import {
 import {
   filterActiveCount,
   periodLabel,
+  PROPERTY_OPTIONS,
   resetFilters,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
+  SOURCE_OPTIONS,
   type ClientsFilter,
   type FacetOption,
   type SegmentKey,
@@ -426,7 +433,21 @@ function MultiPickSheet({
 
 // ── Панель ─────────────────────────────────────────────────────────
 
-type FacetSheet = "segment" | "city" | "tag" | "team";
+type FacetSheet =
+  | "segment"
+  | "city"
+  | "tag"
+  | "team"
+  | "source"
+  | "language"
+  | "property";
+
+/** Опции языка — общий справочник карточки (флаг + полное имя). */
+const LANGUAGE_OPTIONS: FacetOption[] = CLIENT_LANGUAGES.map((l) => ({
+  value: l.value,
+  label: `${l.flag} ${l.label}`,
+  color: "",
+}));
 
 export function ClientsFilterSheet({
   visible,
@@ -474,8 +495,16 @@ export function ClientsFilterSheet({
     [],
   );
 
-  const { filtered, teamOptions, cityOptions, tagOptions, facetCounts } =
-    result;
+  const {
+    filtered,
+    teamOptions,
+    cityOptions,
+    tagOptions,
+    facetCounts,
+    hasSourceData,
+    hasLanguageData,
+    hasPropertyData,
+  } = result;
   const shownCount = filtered.length;
   const nothingActive = filterActiveCount(filter) === 0;
 
@@ -516,6 +545,15 @@ export function ClientsFilterSheet({
           .filter(Boolean),
         ...filter.selectedTeams
           .map((id) => teamOptions.find((o) => o.value === id)?.label ?? "")
+          .filter(Boolean),
+        ...filter.sources
+          .map((s) => SOURCE_OPTIONS.find((o) => o.value === s)?.label ?? "")
+          .filter(Boolean),
+        ...filter.languages
+          .map((l) => LANGUAGE_OPTIONS.find((o) => o.value === l)?.label ?? "")
+          .filter(Boolean),
+        ...filter.propertyTypes
+          .map((p) => PROPERTY_OPTIONS.find((o) => o.value === p)?.label ?? "")
           .filter(Boolean),
       ].join(" · ");
 
@@ -625,6 +663,36 @@ export function ClientsFilterSheet({
           selectedTeams: toggleIn(filter.selectedTeams, v),
         }),
     },
+    source: {
+      title: "Источник",
+      blocks: [SOURCE_OPTIONS],
+      selected: filter.sources,
+      counts: facetCounts.source,
+      toggle: (v) =>
+        onChange({
+          ...filter,
+          sources: toggleIn(filter.sources, v) as AcquisitionSource[],
+        }),
+    },
+    language: {
+      title: "Язык",
+      blocks: [LANGUAGE_OPTIONS],
+      selected: filter.languages,
+      counts: facetCounts.language,
+      toggle: (v) =>
+        onChange({ ...filter, languages: toggleIn(filter.languages, v) }),
+    },
+    property: {
+      title: "Тип объекта",
+      blocks: [PROPERTY_OPTIONS],
+      selected: filter.propertyTypes,
+      counts: facetCounts.property,
+      toggle: (v) =>
+        onChange({
+          ...filter,
+          propertyTypes: toggleIn(filter.propertyTypes, v) as PropertyType[],
+        }),
+    },
   };
 
   // Сводки строк — первый выбранный по каноническому порядку + «+K».
@@ -632,6 +700,9 @@ export function ClientsFilterSheet({
   const cityValue = summarize(cityOptions, filter.selectedCities);
   const tagValue = summarize(tagOptions, filter.activeTags);
   const teamValue = summarize(teamOptions, filter.selectedTeams);
+  const sourceValue = summarize(SOURCE_OPTIONS, filter.sources);
+  const languageValue = summarize(LANGUAGE_OPTIONS, filter.languages);
+  const propertyValue = summarize(PROPERTY_OPTIONS, filter.propertyTypes);
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={1}>
@@ -795,6 +866,33 @@ export function ClientsFilterSheet({
               />
             ) : null}
           </View>
+
+          {/* ── Абзац «портрет»: строки появляются, когда данные есть ── */}
+          {hasSourceData || hasLanguageData || hasPropertyData ? (
+            <View style={{ gap: 12 }}>
+              {hasSourceData || filter.sources.length > 0 ? (
+                <FilterRow
+                  name="Источник"
+                  value={sourceValue}
+                  onPress={() => setOpenFacet("source")}
+                />
+              ) : null}
+              {hasLanguageData || filter.languages.length > 0 ? (
+                <FilterRow
+                  name="Язык"
+                  value={languageValue}
+                  onPress={() => setOpenFacet("language")}
+                />
+              ) : null}
+              {hasPropertyData || filter.propertyTypes.length > 0 ? (
+                <FilterRow
+                  name="Тип объекта"
+                  value={propertyValue}
+                  onPress={() => setOpenFacet("property")}
+                />
+              ) : null}
+            </View>
+          ) : null}
         </ScrollView>
 
         <FooterCta

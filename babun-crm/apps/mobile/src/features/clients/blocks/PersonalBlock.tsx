@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
-import type { Client } from "@babun/shared/local/clients";
+import { CLIENT_LANGUAGES, type Client } from "@babun/shared/local/clients";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { Chip } from "@/components/ui/Chip";
 import { LabelTag } from "@/components/ui/LabelTag";
@@ -32,12 +32,6 @@ interface PersonalBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => void;
 }
-
-const LANG_OPTIONS: { value: string; label: string; flag: string }[] = [
-  { value: "ru", label: "RU", flag: "🇷🇺" },
-  { value: "en", label: "EN", flag: "🇬🇧" },
-  { value: "el", label: "EL", flag: "🇬🇷" },
-];
 
 // Tap-to-edit text field, saves on blur (matches the [id].tsx pattern).
 function EditableField({
@@ -154,12 +148,12 @@ export function PersonalBlock({ client, update }: PersonalBlockProps) {
         </Row>
         <Row label="Язык">
           <View className="flex-1 flex-row flex-wrap gap-1">
-            {LANG_OPTIONS.map((l) => {
+            {CLIENT_LANGUAGES.map((l) => {
               const active = (client.language ?? "") === l.value;
               return (
                 <Chip
                   key={l.value}
-                  label={`${l.flag} ${l.label}`}
+                  label={`${l.flag} ${l.short}`}
                   selected={active}
                   onPress={() => update({ language: active ? "" : l.value })}
                 />

@@ -530,6 +530,21 @@ export default function ClientsListScreen() {
         ...f,
         segments: f.segments.filter((x) => x !== token.val),
       }));
+    else if (token.key === "source")
+      setFilter((f) => ({
+        ...f,
+        sources: f.sources.filter((x) => x !== token.val),
+      }));
+    else if (token.key === "language")
+      setFilter((f) => ({
+        ...f,
+        languages: f.languages.filter((x) => x !== token.val),
+      }));
+    else if (token.key === "property")
+      setFilter((f) => ({
+        ...f,
+        propertyTypes: f.propertyTypes.filter((x) => x !== token.val),
+      }));
   };
 
   const filtering = result.activeCount > 0 || query.trim().length > 0;

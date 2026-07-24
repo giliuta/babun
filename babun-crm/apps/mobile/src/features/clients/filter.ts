@@ -1,4 +1,10 @@
-import type { Client } from "@babun/shared/local/clients";
+import {
+  ACQUISITION_LABELS,
+  PROPERTY_LABELS,
+  type AcquisitionSource,
+  type Client,
+  type PropertyType,
+} from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
   isLongSilence,
@@ -103,6 +109,58 @@ export function matchesSegment(
 // Счётчики сегментов живут контекстно в useClientFilters.facetCounts
 // (веб-парити): считаются с учётом ВСЕХ остальных фасетов + периода.
 
+// ── Источник · Язык · Тип объекта (владелец 2026-07-24) ────────────
+
+/** Канонический порядок источников — порядок попапа и сводки строки. */
+export const SOURCE_ORDER: AcquisitionSource[] = [
+  "referral",
+  "instagram",
+  "whatsapp",
+  "google_maps",
+  "website",
+  "repeat",
+  "walk_in",
+  "other",
+  "unknown",
+];
+
+export const SOURCE_OPTIONS = SOURCE_ORDER.map((key) => ({
+  value: key as string,
+  label: ACQUISITION_LABELS[key],
+  color: "",
+}));
+
+/** Канонический порядок типов объектов. */
+export const PROPERTY_ORDER: PropertyType[] = [
+  "apartment",
+  "house",
+  "office",
+  "restaurant",
+  "shop",
+  "other",
+];
+
+export const PROPERTY_OPTIONS = PROPERTY_ORDER.map((key) => ({
+  value: key as string,
+  label: PROPERTY_LABELS[key],
+  color: "",
+}));
+
+/** Источник клиента: пустые legacy-строки читаются как «Неизвестно». */
+export function clientSource(c: Client): AcquisitionSource {
+  return (c.acquisition_source || "unknown") as AcquisitionSource;
+}
+
+/** Типы объектов клиента: legacy-поле карточки + все объекты. */
+export function clientPropertyTypes(c: Client): Set<string> {
+  const out = new Set<string>();
+  if (c.property_type) out.add(c.property_type);
+  for (const loc of c.locations ?? []) {
+    if (loc.property_type) out.add(loc.property_type);
+  }
+  return out;
+}
+
 // ── Period ─────────────────────────────────────────────────────────
 
 /** Период — общий диалект приложения (решение владельца 2026-07-24:
@@ -185,10 +243,10 @@ export interface FacetOption {
 
 /** Удаляемый токен в summary-баре. */
 export interface ActiveToken {
-  key: FacetKey | "period" | "segment";
+  key: FacetKey | "period" | "segment" | "source" | "language" | "property";
   val: string;
   label: string;
-  /** Пустая строка → без точки (период/сегмент). */
+  /** Пустая строка → без точки (период/сегмент/источник/язык/тип). */
   color: string;
 }
 
@@ -202,6 +260,9 @@ export interface ClientsFilter {
   selectedCities: string[];
   activeTags: string[];
   period: PeriodValue | null;
+  sources: AcquisitionSource[];
+  languages: string[];
+  propertyTypes: PropertyType[];
 }
 
 export const EMPTY_FILTER: ClientsFilter = {
@@ -210,6 +271,9 @@ export const EMPTY_FILTER: ClientsFilter = {
   selectedCities: [],
   activeTags: [],
   period: null,
+  sources: [],
+  languages: [],
+  propertyTypes: [],
 };
 
 /** Сколько активных ЗНАЧЕНИЙ фильтра. */
@@ -219,7 +283,10 @@ export function filterActiveCount(f: ClientsFilter): number {
     f.selectedCities.length +
     f.activeTags.length +
     (f.period ? 1 : 0) +
-    f.segments.length
+    f.segments.length +
+    f.sources.length +
+    f.languages.length +
+    f.propertyTypes.length
   );
 }
 
