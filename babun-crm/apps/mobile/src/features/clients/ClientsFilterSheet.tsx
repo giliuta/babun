@@ -21,7 +21,7 @@ import { ChevronDown } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { haptics } from "@/lib/haptics";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { useThemeColors } from "@/theme/colors";
+import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { formatYMD } from "@/features/appointments/helpers";
 import { periodDates } from "@/features/finances/period";
 import {
@@ -29,31 +29,30 @@ import {
   PeriodWheelsModal,
 } from "@/features/finances/PeriodSheets";
 import {
-  CORE_SEGMENTS,
   filterActiveCount,
   periodLabel,
   resetFilters,
+  SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
   type ClientsFilter,
   type FacetOption,
-  type SegmentCounts,
+  type SegmentKey,
 } from "./filter";
 import type { ClientFilterResult } from "./useClientFilters";
 
-// Лист «Фильтры» — полноценная страница (решение владельца 2026-07-24:
-// лист выезжает снизу ДО КОНЦА вверх; эксперимент с детентами закрыт).
-// Канонический BottomSheet, контент фиксированной высоты «в экран».
-// Грамматика «Оттиск»: ВЫБРАННОЕ ПЕЧАТАЕТСЯ ЧЁРНЫМ — ink-заливка
-// #0B1220 с белой подписью (letterpress, буквальное «чёрное не серое»);
-// никаких галок, тинтов и цветных бордеров — заливка и есть состояние.
-// Idle-материал ячеек выведен из ink (rgba 4%), не из серого пигмента.
-// Цвет сущности — вертикальный тик-эмаль у левого края (45% в покое,
-// 100% на оттиске). Кобальт живёт ровно в двух местах: CTA и
-// «Сбросить/Вернуть». Заголовки — капс 11/700 с гравировальной
-// линейкой до края. ПЕРИОД — диалект Финансов один в один: сплит-строка
-// «имя … даты» (имя открывает попап пресетов, даты — колёса С–До);
-// вместо заголовка секции строка сама читается «Всё время». Всё LIVE:
-// счётчик в CTA и сводка выбранного под заголовком.
+// Лист «Фильтры» — полноценная страница (BottomSheet фиксированной
+// высоты): ПЯТЬ СТРОК ОДНОГО ДИАЛЕКТА (решение владельца + арбитраж
+// дизайн-панели 2026-07-24) — Статус · Период · Метка · Теги · Команда.
+// Каждая строка = «имя 15/600 + шеврон … значение 15/700 tabular»
+// (грамматика строки периода); весь выбор уезжает в попапы
+// канонического BottomSheet. Системное правило: ГАЛКА = одиночный
+// выбор, тап применяет и закрывает (попап пресетов периода — эталон);
+// ОТТИСК = мультивыбор, попап остаётся открытым (ряд печатается
+// сплошным ink #0B1220 с белой подписью — галок нет). В слоте хинта
+// рядов — контекстный счётчик «что даст этот тап» (facetCounts);
+// ряд с нулём пригашен. Живой CTA «Показать N» дублируется в футере
+// попапа и закрывает всё разом. Кобальт — только CTA и
+// «Сбросить/Вернуть». Всё LIVE: счётчик CTA + сводка под заголовком.
 
 const INK = "#0B1220";
 const SLOT = 92; // боковые слоты шапки: заголовок оптически по центру.
@@ -62,55 +61,121 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // ── Строительные блоки ─────────────────────────────────────────────
 
-/** Заголовок секции: капс 11/700 + гравировальная линейка до края. */
-function SectionHead({ title }: { title: string }) {
+/** Сводка строки: первый выбранный ПО КАНОНИЧЕСКОМУ ПОРЯДКУ + «+K». */
+function summarize(
+  options: { value: string; label: string; color?: string }[],
+  selected: string[],
+): { label: string; extra: number; color?: string } | null {
+  if (selected.length === 0) return null;
+  const chosen = options.filter((o) => selected.includes(o.value));
+  if (chosen.length === 0) return null;
+  return {
+    label: chosen[0].label,
+    extra: chosen.length - 1,
+    color: chosen[0].color,
+  };
+}
+
+/** Строка блока: одна тап-зона «имя + шеврон … значение». Значение —
+ *  «Все» faint в покое, оттиск в чёрный при выборе; у сущностей перед
+ *  значением тик цвета первой выбранной. */
+function FilterRow({
+  name,
+  value,
+  tick,
+  onPress,
+}: {
+  name: string;
+  value: { label: string; extra: number } | null;
+  /** Цвет тика сущности (метка/тег/команда) — только при выборе. */
+  tick?: string;
+  onPress: () => void;
+}) {
+  const valueText = value
+    ? value.label + (value.extra > 0 ? ` +${value.extra}` : "")
+    : "Все";
   return (
-    <View className="flex-row items-center" style={{ gap: 10, minHeight: 20 }}>
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}: ${valueText}`}
+      accessibilityHint="Открывает выбор"
+      className="flex-row items-center active:opacity-60"
+      style={{
+        minHeight: 48,
+        borderRadius: 14,
+        backgroundColor: "rgba(11,18,32,0.04)",
+        paddingHorizontal: 16,
+      }}
+    >
       <Text
-        accessibilityRole="header"
         maxFontSizeMultiplier={1.3}
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          letterSpacing: 1.4,
-          textTransform: "uppercase",
-          color: "rgba(11,18,32,0.48)",
-        }}
+        className="text-[15px] font-semibold"
+        style={{ color: INK, marginRight: 4 }}
       >
-        {title}
+        {name}
       </Text>
+      <ChevronDown color="rgba(11,18,32,0.45)" size={14} strokeWidth={2.6} />
       <View
-        style={{ flex: 1, height: 1, backgroundColor: "rgba(11,18,32,0.10)" }}
-      />
-    </View>
+        className="flex-row items-center"
+        style={{ marginLeft: "auto", flexShrink: 1 }}
+      >
+        {value && tick ? (
+          <View
+            style={{
+              width: 2,
+              height: 16,
+              borderRadius: 1,
+              marginRight: 6,
+              backgroundColor: tick,
+            }}
+          />
+        ) : null}
+        <Text
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+          className="text-[15px] font-bold"
+          style={{
+            flexShrink: 1,
+            color: value ? INK : "rgba(11,18,32,0.48)",
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {valueText}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
-/** ЕДИНАЯ ячейка листа — «оттиск»: idle rgba(ink,4%), выбранная —
- *  сплошной ink с белой подписью (крашфейд 140мс), без галок. Цвет
- *  сущности — тик 2×16 у левого края. Слот под галку не нужен —
- *  подпись не двигается по построению. Dynamic Type ≥1.2 → 1 колонка. */
-function Cell({
+/** Оттиск-ряд попапа: мультивыбор БЕЗ галки — выбранный ряд печатается
+ *  сплошным ink с белой подписью (крашфейд 140мс). В слоте хинта —
+ *  контекстный счётчик; ряд с нулём пригашен и неактивен. */
+function PickRow({
   label,
   active,
-  dimmed,
+  separated,
   tick,
-  checkbox,
+  count,
+  hideCount,
   reduced,
-  onPress,
+  onToggle,
 }: {
   label: string;
   active: boolean;
-  /** Ядро-статус с нулём клиентов: на месте, но пригашен и неактивен. */
-  dimmed?: boolean;
-  /** Цвет сущности (метка/тег/команда) — вертикальный тик-эмаль. */
+  /** Волосок к соседу сверху (внутри блока). */
+  separated: boolean;
   tick?: string;
-  checkbox?: boolean;
+  count: number;
+  hideCount: boolean;
   reduced: boolean;
-  onPress: () => void;
+  onToggle: () => void;
 }) {
-  const { fontScale } = useWindowDimensions();
-  const oneCol = fontScale >= 1.2;
+  const t = useThemeColors();
+  const dimmed = count === 0 && !active;
   const progress = useDerivedValue(
     () => withTiming(active ? 1 : 0, { duration: reduced ? 0 : 140 }),
     [active, reduced],
@@ -119,7 +184,7 @@ function Cell({
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [dimmed ? "rgba(11,18,32,0.02)" : "rgba(11,18,32,0.04)", INK],
+      ["rgba(11,18,32,0)", INK],
     ),
   }));
   const labelStyle = useAnimatedStyle(() => ({
@@ -129,30 +194,36 @@ function Cell({
       [dimmed ? "rgba(11,18,32,0.32)" : INK, "#FFFFFF"],
     ),
   }));
+  const hintStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(
+      progress.value,
+      [0, 1],
+      [t.faint, "rgba(255,255,255,0.64)"],
+    ),
+  }));
   const tickStyle = useAnimatedStyle(() => ({
-    opacity: 0.45 + progress.value * 0.55,
+    opacity: dimmed ? 0.25 : 0.45 + progress.value * 0.55,
   }));
   return (
     <AnimatedPressable
       onPress={() => {
         haptics.tap();
-        onPress();
+        onToggle();
       }}
       disabled={dimmed}
-      accessibilityRole={checkbox ? "checkbox" : "button"}
-      accessibilityState={
-        checkbox
-          ? { checked: active, disabled: !!dimmed }
-          : { selected: active, disabled: !!dimmed }
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: active, disabled: dimmed }}
+      accessibilityLabel={
+        dimmed
+          ? `${label}, нет клиентов`
+          : `${label}, ${count} ${countWordRu(count, "клиент", "клиента", "клиентов")}`
       }
-      accessibilityLabel={label}
-      className="items-center justify-center px-3 active:opacity-80"
+      className="flex-row items-center px-3.5 active:opacity-70"
       style={[
         {
-          flexBasis: oneCol ? "100%" : "47%",
-          flexGrow: 1,
-          minHeight: 44,
-          borderRadius: 14,
+          minHeight: 48,
+          borderTopWidth: separated ? 1 : 0,
+          borderTopColor: t.separator,
         },
         bgStyle,
       ]}
@@ -161,11 +232,10 @@ function Cell({
         <Animated.View
           style={[
             {
-              position: "absolute",
-              left: 12,
               width: 2,
               height: 16,
               borderRadius: 1,
+              marginRight: 10,
               backgroundColor: tick,
             },
             tickStyle,
@@ -177,104 +247,191 @@ function Cell({
         numberOfLines={1}
         style={[
           {
+            flexShrink: 1,
             fontSize: 15,
             fontWeight: active ? "600" : "500",
-            fontVariant: ["tabular-nums"],
           },
           labelStyle,
         ]}
       >
         {label}
       </Animated.Text>
+      {hideCount ? null : (
+        <Animated.Text
+          maxFontSizeMultiplier={1.3}
+          style={[
+            {
+              marginLeft: "auto",
+              fontSize: 13,
+              fontVariant: ["tabular-nums"],
+            },
+            hintStyle,
+          ]}
+        >
+          {count}
+        </Animated.Text>
+      )}
     </AnimatedPressable>
   );
 }
 
-/** Сетка фасета: 2 колонки, нечётный хвост держит фантом, больше 6 —
- *  «Ещё N» полуячейкой в потоке (выбранные из хвоста не прячутся). */
-const FACET_VISIBLE_LIMIT = 6;
-
-function FacetGrid({
-  options,
-  selected,
+/** Футер-CTA — один и тот же на странице и в попапах: живой счётчик и
+ *  выход на список. */
+function FooterCta({
+  t,
+  shownCount,
+  ctaLabel,
   reduced,
-  onToggle,
+  onPress,
 }: {
-  options: FacetOption[];
-  selected: string[];
+  t: ThemeColors;
+  shownCount: number;
+  ctaLabel: string;
   reduced: boolean;
-  onToggle: (value: string) => void;
+  onPress: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const overflow = options.length > FACET_VISIBLE_LIMIT;
-  const shown =
-    overflow && !expanded
-      ? [
-          ...options.slice(0, FACET_VISIBLE_LIMIT),
-          ...options
-            .slice(FACET_VISIBLE_LIMIT)
-            .filter((o) => selected.includes(o.value)),
-        ]
-      : options;
-  const hiddenCount = options.length - shown.length;
-  const cellCount = shown.length + (overflow ? 1 : 0);
+  const insets = useSafeAreaInsets();
   return (
-    <View className="flex-row flex-wrap gap-2">
-      {shown.map((o) => (
-        <Cell
-          key={o.value}
-          label={o.label}
-          active={selected.includes(o.value)}
-          tick={o.color || undefined}
-          checkbox
-          reduced={reduced}
-          onPress={() => onToggle(o.value)}
-        />
-      ))}
-      {overflow ? (
-        <Pressable
-          onPress={() => {
-            haptics.tap();
-            setExpanded(!expanded);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={expanded ? "Свернуть" : `Ещё ${hiddenCount}`}
-          className="items-center justify-center active:opacity-70"
+    <View
+      style={{
+        backgroundColor: t.surface,
+        borderTopWidth: 1,
+        borderTopColor: t.separator,
+        paddingHorizontal: 20,
+        paddingTop: 10,
+        paddingBottom: Math.max(insets.bottom, 16) + 6,
+      }}
+    >
+      {shownCount === 0 ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          className="mb-2 text-center text-[13px]"
+          style={{ color: t.faint }}
+        >
+          Смягчите условия — период или статус
+        </Text>
+      ) : null}
+      <Pressable
+        onPress={() => {
+          haptics.tap();
+          onPress();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={ctaLabel}
+        accessibilityHint="Закрывает фильтры и показывает список"
+        className="min-h-[52px] items-center justify-center overflow-hidden active:opacity-85"
+        style={{
+          borderRadius: 14,
+          backgroundColor: shownCount === 0 ? "rgba(11,18,32,0.04)" : t.accent,
+        }}
+      >
+        <Animated.Text
+          key={ctaLabel}
+          entering={reduced ? undefined : FadeInUp.duration(160)}
+          exiting={reduced ? undefined : FadeOutDown.duration(120)}
+          maxFontSizeMultiplier={1.3}
+          className="text-[17px] font-semibold"
           style={{
-            flexBasis: "47%",
-            flexGrow: 1,
-            minHeight: 44,
-            borderRadius: 14,
-            backgroundColor: "rgba(11,18,32,0.04)",
+            color: shownCount === 0 ? "rgba(11,18,32,0.45)" : t.onAccent,
+            fontVariant: ["tabular-nums"],
           }}
         >
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: "rgba(11,18,32,0.45)",
-            }}
-          >
-            {expanded ? "Свернуть" : `Ещё ${hiddenCount}`}
-          </Text>
-        </Pressable>
-      ) : null}
-      {/* Нечётный хвост НЕ тянется на всю ширину — фантом держит колонку. */}
-      {cellCount % 2 === 1 ? (
-        <View style={{ flexBasis: "47%", flexGrow: 1 }} />
-      ) : null}
+          {ctaLabel}
+        </Animated.Text>
+      </Pressable>
     </View>
+  );
+}
+
+/** Попап мультивыбора — общая грамматика четырёх блоков: контейнеры
+ *  попапа периода (блоки canvas без подписей, ряды 48), отметка =
+ *  оттиск. Live-apply, тап НЕ закрывает; закрывает CTA (попап И лист)
+ *  или скрим/свайп (возврат на страницу). */
+function MultiPickSheet({
+  visible,
+  title,
+  blocks,
+  selected,
+  counts,
+  shownCount,
+  ctaLabel,
+  reduced,
+  onToggle,
+  onClose,
+  onShow,
+}: {
+  visible: boolean;
+  title: string;
+  blocks: FacetOption[][];
+  selected: string[];
+  counts: Record<string, number>;
+  shownCount: number;
+  ctaLabel: string;
+  reduced: boolean;
+  onToggle: (value: string) => void;
+  onClose: () => void;
+  onShow: () => void;
+}) {
+  const t = useThemeColors();
+  const { fontScale } = useWindowDimensions();
+  // При крупном шрифте подпись важнее числа — счётчик уступает место.
+  const hideCount = fontScale >= 1.6;
+  return (
+    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
+      <Text
+        accessibilityRole="header"
+        className="px-5 pt-1 text-lg font-bold"
+        style={{ color: t.ink, marginBottom: 12 }}
+      >
+        {title}
+      </Text>
+      <ScrollView
+        style={{ flexShrink: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 8 }}
+      >
+        {blocks.map((block, bi) =>
+          block.length === 0 ? null : (
+            <View
+              key={bi}
+              className="mb-2 overflow-hidden rounded-xl"
+              style={{ backgroundColor: t.canvas }}
+            >
+              {block.map((o, i) => (
+                <PickRow
+                  key={o.value}
+                  label={o.label}
+                  active={selected.includes(o.value)}
+                  separated={i > 0}
+                  tick={o.color || undefined}
+                  count={counts[o.value] ?? 0}
+                  hideCount={hideCount}
+                  reduced={reduced}
+                  onToggle={() => onToggle(o.value)}
+                />
+              ))}
+            </View>
+          ),
+        )}
+      </ScrollView>
+      <FooterCta
+        t={t}
+        shownCount={shownCount}
+        ctaLabel={ctaLabel}
+        reduced={reduced}
+        onPress={onShow}
+      />
+    </BottomSheet>
   );
 }
 
 // ── Панель ─────────────────────────────────────────────────────────
 
+type FacetSheet = "segment" | "city" | "tag" | "team";
+
 export function ClientsFilterSheet({
   visible,
   filter,
   result,
-  segmentCounts,
   dataFrom,
   onChange,
   onClose,
@@ -282,7 +439,6 @@ export function ClientsFilterSheet({
   visible: boolean;
   filter: ClientsFilter;
   result: ClientFilterResult;
-  segmentCounts: SegmentCounts;
   /** Дата первой записи (YYYY-MM-DD) — даты «Всего времени» в сплите. */
   dataFrom: string | null;
   onChange: (f: ClientsFilter) => void;
@@ -295,6 +451,7 @@ export function ClientsFilterSheet({
 
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
+  const [openFacet, setOpenFacet] = useState<FacetSheet | null>(null);
 
   // «Сбросить» с прощением: 4 секунды можно «Вернуть» снятый набор.
   const [undo, setUndo] = useState<ClientsFilter | null>(null);
@@ -304,6 +461,7 @@ export function ClientsFilterSheet({
     if (!visible) {
       setPresetsOpen(false);
       setWheelsOpen(false);
+      setOpenFacet(null);
       setUndo(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
     }
@@ -316,7 +474,8 @@ export function ClientsFilterSheet({
     [],
   );
 
-  const { filtered, teamOptions, cityOptions, tagOptions } = result;
+  const { filtered, teamOptions, cityOptions, tagOptions, facetCounts } =
+    result;
   const shownCount = filtered.length;
   const nothingActive = filterActiveCount(filter) === 0;
 
@@ -327,7 +486,8 @@ export function ClientsFilterSheet({
   const ctaLabel =
     shownCount === 0 ? "Ничего не найдено" : `Показать ${countPart}`;
 
-  // Live-apply нем для VoiceOver — дебаунс-анонс счётчика.
+  // Live-apply нем для VoiceOver — дебаунс-анонс счётчика (один анонсер
+  // на состояние — работает и при открытом попапе).
   useEffect(() => {
     if (!visible) return;
     const id = setTimeout(
@@ -340,8 +500,9 @@ export function ClientsFilterSheet({
     return () => clearTimeout(id);
   }, [visible, shownCount, countPart]);
 
-  // «Возле названия видно, что выбрано» (владелец): компактная сводка
-  // активного набора под заголовком — список позади скрыт страницей.
+  // «Возле названия видно, что выбрано»: компактная сводка активного
+  // набора под заголовком — единственный композитный взгляд, когда
+  // строки накрыты попапом. Порядок групп = порядок строк.
   const activeSummary = nothingActive
     ? null
     : [
@@ -357,15 +518,6 @@ export function ClientsFilterSheet({
           .map((id) => teamOptions.find((o) => o.value === id)?.label ?? "")
           .filter(Boolean),
       ].join(" · ");
-
-  // Ядро-«дела» стоит на постоянных местах ВСЕГДА (при нуле — пригашено);
-  // редкие статусы появляются только при наличии клиентов.
-  const availableSegments = SEGMENT_OPTIONS.filter(
-    (s) =>
-      CORE_SEGMENTS.has(s.key) ||
-      segmentCounts[s.key] > 0 ||
-      filter.segments.includes(s.key),
-  );
 
   // Сплит периода (диалект Финансов): слева имя, справа всегда даты —
   // у «Всего времени» это честный охват данных «с первой записи по
@@ -404,6 +556,82 @@ export function ClientsFilterSheet({
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = setTimeout(() => setUndo(null), 4000);
   };
+
+  // ── Конфигурация четырёх попапов одной грамматики ────────────────
+  const segmentAsOptions = SEGMENT_OPTIONS.map((s) => ({
+    value: s.key as string,
+    label: s.label,
+    color: "",
+  }));
+  const segmentBlocks: FacetOption[][] = SEGMENT_BLOCKS.map((block) =>
+    block.map((key) => ({
+      value: key as string,
+      label: SEGMENT_OPTIONS.find((o) => o.key === key)?.label ?? key,
+      color: "",
+    })),
+  );
+  const facetConfig: Record<
+    FacetSheet,
+    {
+      title: string;
+      blocks: FacetOption[][];
+      selected: string[];
+      counts: Record<string, number>;
+      toggle: (v: string) => void;
+    }
+  > = {
+    segment: {
+      title: "Статус",
+      blocks: segmentBlocks,
+      selected: filter.segments,
+      counts: facetCounts.segment,
+      toggle: (v) =>
+        onChange({
+          ...filter,
+          segments: toggleIn(filter.segments, v) as SegmentKey[],
+        }),
+    },
+    city: {
+      title: "Метка",
+      // Библиотека и legacy-хвост — отдельными блоками без подписей.
+      blocks: [
+        cityOptions.filter((o) => !o.legacy),
+        cityOptions.filter((o) => o.legacy),
+      ],
+      selected: filter.selectedCities,
+      counts: facetCounts.city,
+      toggle: (v) =>
+        onChange({
+          ...filter,
+          selectedCities: toggleIn(filter.selectedCities, v),
+        }),
+    },
+    tag: {
+      title: "Теги",
+      blocks: [tagOptions],
+      selected: filter.activeTags,
+      counts: facetCounts.tag,
+      toggle: (v) =>
+        onChange({ ...filter, activeTags: toggleIn(filter.activeTags, v) }),
+    },
+    team: {
+      title: "Команда",
+      blocks: [teamOptions],
+      selected: filter.selectedTeams,
+      counts: facetCounts.team,
+      toggle: (v) =>
+        onChange({
+          ...filter,
+          selectedTeams: toggleIn(filter.selectedTeams, v),
+        }),
+    },
+  };
+
+  // Сводки строк — первый выбранный по каноническому порядку + «+K».
+  const segmentValue = summarize(segmentAsOptions, filter.segments);
+  const cityValue = summarize(cityOptions, filter.selectedCities);
+  const tagValue = summarize(tagOptions, filter.activeTags);
+  const teamValue = summarize(teamOptions, filter.selectedTeams);
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={1}>
@@ -460,9 +688,10 @@ export function ClientsFilterSheet({
           </View>
         </View>
 
-        {/* Стек все-видно-сразу — страница целиком, контент скроллится
-            свободно. Паддинги ТОЛЬКО через contentContainerStyle
-            (NativeWind роняет className на ScrollView). */}
+        {/* Страница-бланк: два абзаца строк (12 внутри, 28 между),
+            прижаты к шапке, ниже — намеренная пустота до футера.
+            Паддинги ТОЛЬКО через contentContainerStyle (NativeWind
+            роняет className на ScrollView). */}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
@@ -472,205 +701,136 @@ export function ClientsFilterSheet({
             gap: 28,
           }}
         >
-          {/* ── Статус: ежедневное ядро — первым ── */}
-          <View className="gap-3">
-            <SectionHead title="Статус" />
-            <View className="flex-row flex-wrap gap-2">
-              {availableSegments.map((s) => {
-                // Мультивыбор (ИЛИ — объединение, «список на обзвон»).
-                const on = filter.segments.includes(s.key);
-                const dead =
-                  CORE_SEGMENTS.has(s.key) &&
-                  segmentCounts[s.key] === 0 &&
-                  !on;
-                return (
-                  <Cell
-                    key={s.key}
-                    label={s.label}
-                    active={on}
-                    checkbox
-                    dimmed={dead}
-                    reduced={reduced}
-                    onPress={() =>
-                      onChange({
-                        ...filter,
-                        segments: on
-                          ? filter.segments.filter((x) => x !== s.key)
-                          : [...filter.segments, s.key],
-                      })
-                    }
-                  />
-                );
-              })}
-              {availableSegments.length % 2 === 1 ? (
-                <View style={{ flexBasis: "47%", flexGrow: 1 }} />
-              ) : null}
-            </View>
-          </View>
+          {/* ── Абзац «кого и когда» ── */}
+          <View style={{ gap: 12 }}>
+            <FilterRow
+              name="Статус"
+              value={segmentValue}
+              onPress={() => setOpenFacet("segment")}
+            />
 
-          {/* ── Период: сплит Финансов без заголовка секции — строка сама
-              читается «Всё время … даты». Имя → пресеты, даты → колёса. */}
-          <View
-            className="flex-row items-stretch"
-            style={{
-              minHeight: 48,
-              borderRadius: 14,
-              backgroundColor: "rgba(11,18,32,0.04)",
-            }}
-          >
-            <Pressable
-              onPress={() => {
-                haptics.tap();
-                setPresetsOpen(true);
+            {/* Период: сплит Финансов — имя → пресеты, даты → колёса. */}
+            <View
+              className="flex-row items-stretch"
+              style={{
+                minHeight: 48,
+                borderRadius: 14,
+                backgroundColor: "rgba(11,18,32,0.04)",
               }}
-              accessibilityRole="button"
-              accessibilityLabel={`Период: ${periodName}. Выбрать пресет`}
-              className="flex-1 flex-row items-center pl-4 pr-2 active:opacity-60"
-              style={{ gap: 4 }}
             >
-              <Text
-                maxFontSizeMultiplier={1.3}
-                numberOfLines={1}
-                className="shrink text-[15px] font-semibold"
-                style={{ color: INK }}
-              >
-                {periodName}
-              </Text>
-              <ChevronDown
-                color="rgba(11,18,32,0.45)"
-                size={14}
-                strokeWidth={2.6}
-              />
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                haptics.tap();
-                setWheelsOpen(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Даты: ${datesLabel}. Выбрать диапазон`}
-              className="flex-row items-center pl-2 pr-4 active:opacity-60"
-            >
-              <Text
-                maxFontSizeMultiplier={1.2}
-                numberOfLines={1}
-                className="text-[15px] font-bold"
-                style={{
-                  color: filter.period ? INK : "rgba(11,18,32,0.48)",
-                  fontVariant: ["tabular-nums"],
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  setPresetsOpen(true);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Период: ${periodName}. Выбрать пресет`}
+                className="flex-1 flex-row items-center pl-4 pr-2 active:opacity-60"
+                style={{ gap: 4 }}
               >
-                {datesLabel}
-              </Text>
-            </Pressable>
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  className="shrink text-[15px] font-semibold"
+                  style={{ color: INK }}
+                >
+                  {periodName}
+                </Text>
+                <ChevronDown
+                  color="rgba(11,18,32,0.45)"
+                  size={14}
+                  strokeWidth={2.6}
+                />
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  setWheelsOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Даты: ${datesLabel}. Выбрать диапазон`}
+                className="flex-row items-center pl-2 pr-4 active:opacity-60"
+              >
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  numberOfLines={1}
+                  className="text-[15px] font-bold"
+                  style={{
+                    color: filter.period ? INK : "rgba(11,18,32,0.48)",
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {datesLabel}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
-          {/* ── Метка · Теги · Команда: вся библиотека, OR-внутри ── */}
-          {cityOptions.length > 0 ? (
-            <View className="gap-3">
-              <SectionHead title="Метка" />
-              <FacetGrid
-                options={cityOptions}
-                selected={filter.selectedCities}
-                reduced={reduced}
-                onToggle={(v) =>
-                  onChange({
-                    ...filter,
-                    selectedCities: toggleIn(filter.selectedCities, v),
-                  })
-                }
+          {/* ── Абзац «чьих» ── */}
+          <View style={{ gap: 12 }}>
+            {cityOptions.length > 0 ? (
+              <FilterRow
+                name="Метка"
+                value={cityValue}
+                tick={cityValue?.color}
+                onPress={() => setOpenFacet("city")}
               />
-            </View>
-          ) : null}
-
-          {tagOptions.length > 0 ? (
-            <View className="gap-3">
-              <SectionHead title="Теги" />
-              <FacetGrid
-                options={tagOptions}
-                selected={filter.activeTags}
-                reduced={reduced}
-                onToggle={(v) =>
-                  onChange({
-                    ...filter,
-                    activeTags: toggleIn(filter.activeTags, v),
-                  })
-                }
+            ) : null}
+            {tagOptions.length > 0 ? (
+              <FilterRow
+                name="Теги"
+                value={tagValue}
+                tick={tagValue?.color}
+                onPress={() => setOpenFacet("tag")}
               />
-            </View>
-          ) : null}
-
-          {teamOptions.length > 0 ? (
-            <View className="gap-3">
-              <SectionHead title="Команда" />
-              <FacetGrid
-                options={teamOptions}
-                selected={filter.selectedTeams}
-                reduced={reduced}
-                onToggle={(v) =>
-                  onChange({
-                    ...filter,
-                    selectedTeams: toggleIn(filter.selectedTeams, v),
-                  })
-                }
+            ) : null}
+            {/* Фильтр по единственной команде бессмыслен — строка
+                появляется со второй командой. */}
+            {teamOptions.length >= 2 ? (
+              <FilterRow
+                name="Команда"
+                value={teamValue}
+                tick={teamValue?.color}
+                onPress={() => setOpenFacet("team")}
               />
-            </View>
-          ) : null}
+            ) : null}
+          </View>
         </ScrollView>
 
-        {/* Футер: CTA со счётчиком — единственный «живой» элемент листа. */}
-        <View
-          style={{
-            backgroundColor: t.surface,
-            borderTopWidth: 1,
-            borderTopColor: t.separator,
-            paddingHorizontal: 20,
-            paddingTop: 10,
-            paddingBottom: Math.max(insets.bottom, 16) + 6,
-          }}
-        >
-          {shownCount === 0 ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="mb-2 text-center text-[13px]"
-              style={{ color: t.faint }}
-            >
-              Смягчите условия — период или статус
-            </Text>
-          ) : null}
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              onClose();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={ctaLabel}
-            className="min-h-[52px] items-center justify-center overflow-hidden active:opacity-85"
-            style={{
-              borderRadius: 14,
-              backgroundColor:
-                shownCount === 0 ? "rgba(11,18,32,0.04)" : t.accent,
-            }}
-          >
-            <Animated.Text
-              key={ctaLabel}
-              entering={reduced ? undefined : FadeInUp.duration(160)}
-              exiting={reduced ? undefined : FadeOutDown.duration(120)}
-              maxFontSizeMultiplier={1.3}
-              className="text-[17px] font-semibold"
-              style={{
-                color: shownCount === 0 ? "rgba(11,18,32,0.45)" : t.onAccent,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {ctaLabel}
-            </Animated.Text>
-          </Pressable>
-        </View>
+        <FooterCta
+          t={t}
+          shownCount={shownCount}
+          ctaLabel={ctaLabel}
+          reduced={reduced}
+          onPress={onClose}
+        />
       </View>
 
-      {/* Попапы периода — общие с Финансами (модал поверх модала:
-          вложены в дерево листа, iOS показывает их цепочкой). */}
+      {/* Попапы — модал поверх модала: вложены в дерево листа, iOS
+          показывает их цепочкой. */}
+      {(Object.keys(facetConfig) as FacetSheet[]).map((key) => {
+        const cfg = facetConfig[key];
+        return (
+          <MultiPickSheet
+            key={key}
+            visible={openFacet === key}
+            title={cfg.title}
+            blocks={cfg.blocks}
+            selected={cfg.selected}
+            counts={cfg.counts}
+            shownCount={shownCount}
+            ctaLabel={ctaLabel}
+            reduced={reduced}
+            onToggle={cfg.toggle}
+            onClose={() => setOpenFacet(null)}
+            onShow={() => {
+              setOpenFacet(null);
+              onClose();
+            }}
+          />
+        );
+      })}
+
       <PeriodPresetModal
         visible={presetsOpen}
         current={filter.period}
@@ -685,7 +845,11 @@ export function ClientsFilterSheet({
       />
       <PeriodWheelsModal
         visible={wheelsOpen}
-        current={{ preset: filter.period?.preset ?? "custom", from: draftFrom, to: draftTo }}
+        current={{
+          preset: filter.period?.preset ?? "custom",
+          from: draftFrom,
+          to: draftTo,
+        }}
         onClose={() => setWheelsOpen(false)}
         onApply={(p) => onChange({ ...filter, period: p })}
       />

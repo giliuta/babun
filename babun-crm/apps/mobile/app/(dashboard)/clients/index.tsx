@@ -51,7 +51,6 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
-  buildSegmentCounts,
   EMPTY_FILTER,
   resetFilters,
   type ActiveToken,
@@ -482,11 +481,6 @@ export default function ClientsListScreen() {
   const statsMap = useMemo(
     () => buildStatsMap(clients, appointments),
     [clients, appointments],
-  );
-
-  const segmentCounts = useMemo(
-    () => buildSegmentCounts(clients, statsMap),
-    [clients, statsMap],
   );
 
   // Дата первой (не отменённой) записи — сплит периода в фильтрах
@@ -949,7 +943,6 @@ export default function ClientsListScreen() {
         visible={sheetOpen}
         filter={filter}
         result={result}
-        segmentCounts={segmentCounts}
         dataFrom={dataFrom}
         onChange={setFilter}
         onClose={() => setSheetOpen(false)}

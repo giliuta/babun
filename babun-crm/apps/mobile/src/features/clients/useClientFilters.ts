@@ -11,6 +11,7 @@ import {
   type ActiveToken,
   type ClientsFilter,
   type FacetOption,
+  type SegmentKey,
   type SortKey,
 } from "./filter";
 
@@ -22,6 +23,16 @@ import {
 // идентичен вебу, но клавиатурный ввод в поиске НЕ перегоняет
 // O(n log n) localeCompare-компаратор (фикс Волны 1 — не откатывать).
 
+/** Контекстные счётчики рядов попапов (веб-парити facetCounts):
+ *  «сколько клиентов даст этот тап» — все ДРУГИЕ фасеты + период +
+ *  поиск применены, собственный фасет исключён. */
+export interface FacetCounts {
+  segment: Record<SegmentKey, number>;
+  city: Record<string, number>;
+  tag: Record<string, number>;
+  team: Record<string, number>;
+}
+
 export interface ClientFilterResult {
   /** Итоговый отсортированный+отфильтрованный список. */
   filtered: Client[];
@@ -32,6 +43,7 @@ export interface ClientFilterResult {
   teamOptions: FacetOption[];
   cityOptions: FacetOption[];
   tagOptions: FacetOption[];
+  facetCounts: FacetCounts;
 }
 
 /** Свободная нормализация имени — зеркалит seed-fallback buildStatsMap. */
@@ -173,7 +185,12 @@ export function useClientFilters(
     }
     const legacy = [...used.values()].sort((a, b) => a.localeCompare(b, "ru"));
     for (const city of legacy) {
-      options.push({ value: city, label: city, color: getAvatarColor(city) });
+      options.push({
+        value: city,
+        label: city,
+        color: getAvatarColor(city),
+        legacy: true,
+      });
     }
     return options;
   }, [clients, cities]);
@@ -282,6 +299,60 @@ export function useClientFilters(
     passesPeriod,
   ]);
 
+  // ── Контекстные счётчики попапов ─────────────────────────────────
+  // «Что даст этот тап»: для каждого измерения применены все ОСТАЛЬНЫЕ
+  // предикаты (свой исключён — иначе счётчики схлопывались бы к уже
+  // выбранному). Один проход по клиентам; пока попап открыт, чужие
+  // фасеты меняться не могут — числа стабильны.
+  const facetCounts = useMemo<FacetCounts>(() => {
+    const segment = {} as Record<SegmentKey, number>;
+    for (const o of SEGMENT_OPTIONS) segment[o.key] = 0;
+    const city: Record<string, number> = {};
+    const tag: Record<string, number> = {};
+    const team: Record<string, number> = {};
+    // client.city может отличаться регистром от канона опции.
+    const cityValueByNorm = new Map(
+      cityOptions.map((o) => [o.value.trim().toLowerCase(), o.value]),
+    );
+    for (const c of clients) {
+      if (!passesSearch(c) || !passesPeriod(c)) continue;
+      const seg = passesSegment(c);
+      const tm = passesTeam(c);
+      const ct = passesCity(c);
+      const tg = passesTag(c);
+      if (tm && ct && tg) {
+        const s = statsMap.get(c.id);
+        for (const o of SEGMENT_OPTIONS) {
+          if (matchesSegment(c, o.key, s)) segment[o.key] += 1;
+        }
+      }
+      if (seg && tm && tg) {
+        const norm = (c.city ?? "").trim().toLowerCase();
+        const val = norm ? cityValueByNorm.get(norm) : undefined;
+        if (val) city[val] = (city[val] ?? 0) + 1;
+      }
+      if (seg && tm && ct) {
+        for (const id of c.tag_ids) tag[id] = (tag[id] ?? 0) + 1;
+      }
+      if (seg && ct && tg) {
+        const set = index.clientTeams.get(c.id);
+        if (set) for (const id of set) team[id] = (team[id] ?? 0) + 1;
+      }
+    }
+    return { segment, city, tag, team };
+  }, [
+    clients,
+    cityOptions,
+    statsMap,
+    index,
+    passesSearch,
+    passesPeriod,
+    passesSegment,
+    passesTeam,
+    passesCity,
+    passesTag,
+  ]);
+
   // ── Токены summary-бара ──────────────────────────────────────────
   const activeTokens = useMemo<ActiveToken[]>(() => {
     const tokens: ActiveToken[] = [];
@@ -346,5 +417,6 @@ export function useClientFilters(
     teamOptions,
     cityOptions,
     tagOptions,
+    facetCounts,
   };
 }

@@ -42,13 +42,13 @@ export type Segment =
 /** Конкретный статус (без служебного «all») — единица мультивыбора. */
 export type SegmentKey = Exclude<Segment, "all">;
 
-/** Рабочие статусы-«дела» диспетчера — в чип-ленте и лотке стоят на
- *  постоянных местах всегда (мышечная память). */
-export const CORE_SEGMENTS = new Set<SegmentKey>([
-  "debt",
-  "noUpcoming",
-  "reminderDue",
-]);
+/** Блоки попапа «Статус» (грамматика попапа периода — деление без
+ *  подписей): «дела» диспетчера на постоянных местах · «портрет» клиента.
+ *  Все ряды видны всегда; при нуле — пригашены. */
+export const SEGMENT_BLOCKS: SegmentKey[][] = [
+  ["debt", "noUpcoming", "reminderDue"],
+  ["silent", "birthday", "new", "loyal", "blacklist"],
+];
 
 /** Порядок (деньги/действие вперёд) + RU-подписи. «Без записи» и
  *  «Напомнить» — «дела»: кого дозаписать и по кому сработало напоминание. */
@@ -100,40 +100,8 @@ export function matchesSegment(
   }
 }
 
-export interface SegmentCounts {
-  debt: number;
-  noUpcoming: number;
-  reminderDue: number;
-  silent: number;
-  birthday: number;
-  new: number;
-  loyal: number;
-  blacklist: number;
-}
-
-/** Счётчики авто-сегментов — теперь только гейт видимости чипов. */
-export function buildSegmentCounts(
-  clients: Client[],
-  statsMap: Map<string, ClientStats>,
-): SegmentCounts {
-  const counts: SegmentCounts = {
-    debt: 0,
-    noUpcoming: 0,
-    reminderDue: 0,
-    silent: 0,
-    birthday: 0,
-    new: 0,
-    loyal: 0,
-    blacklist: 0,
-  };
-  for (const c of clients) {
-    const s = statsMap.get(c.id);
-    for (const opt of SEGMENT_OPTIONS) {
-      if (matchesSegment(c, opt.key, s)) counts[opt.key] += 1;
-    }
-  }
-  return counts;
-}
+// Счётчики сегментов живут контекстно в useClientFilters.facetCounts
+// (веб-парити): считаются с учётом ВСЕХ остальных фасетов + периода.
 
 // ── Period ─────────────────────────────────────────────────────────
 
@@ -205,12 +173,14 @@ export function periodLabel(period: PeriodValue): string {
 
 export type FacetKey = "team" | "city" | "tag";
 
-/** Значение внутри фасет-секции (Команда / Метка / Тег). */
+/** Значение внутри фасет-попапа (Команда / Метка / Тег). */
 export interface FacetOption {
   value: string;
   label: string;
-  /** Цвет ведущей точки (hex/rgba). */
+  /** Цвет тика сущности (hex/rgba). */
   color: string;
+  /** Метка вне библиотеки (свободный legacy-город) — отдельный блок. */
+  legacy?: boolean;
 }
 
 /** Удаляемый токен в summary-баре. */
