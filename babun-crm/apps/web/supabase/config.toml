@@ -23,3 +23,20 @@ verify_jwt = true
 # Internal retry worker called by pg_net with x-cleanup-secret.
 [functions.account-delete-cleanup]
 verify_jwt = false
+
+# ─── Ports of the Next API routes (retiring apps/web) ────────────────
+# All three are called by systems that have no Supabase JWT to send, so
+# verify_jwt must stay false. Each authenticates by its own means.
+
+# Stripe signs with STRIPE_WEBHOOK_SECRET (constructEventAsync).
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Twilio signs an HMAC-SHA1 over the called URL (x-twilio-signature).
+[functions.twilio-status]
+verify_jwt = false
+
+# Public .ics feed for Apple/Google Calendar subscriptions. Deliberately
+# unauthenticated — the per-user URL is itself the secret.
+[functions.calendar-ics]
+verify_jwt = false
