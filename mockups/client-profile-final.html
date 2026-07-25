@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Babun — Клиент «Профиль»: финальный макет</title>
+<style>
+  :root{
+    --canvas:#f4f6f9; --surface:#ffffff;
+    --accent:#2c5be0; --accentFrom:#2f6fd6; --accentTo:#1f4fcc; --onAccent:#fff;
+    --ink:#0b1220; --body:#39414e; --sub:#5b6678; --faint:#626c79; --placeholder:#636e7c;
+    --success:#087a52; --danger:#c9372c; --warning:#955f00;
+    --fill:#eef1f5; --separator:#e7ebf0; --chevron:rgba(11,18,32,.50);
+    --cardShadow:0 1px 2px rgba(11,18,32,.04),0 8px 24px rgba(11,18,32,.06);
+    --brandShadow:0 8px 28px rgba(44,91,224,.28);
+    --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --rCard:20px; --rInput:14px; --rSheet:24px;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased}
+  html,body{margin:0}
+  body{font-family:var(--font);background:radial-gradient(1300px 950px at 50% -10%,#fbfcfe,#e9edf3 55%,#dfe4ec);
+    min-height:100vh;color:var(--ink);font-variant-numeric:tabular-nums;padding:34px 20px 80px}
+  .wrap{max-width:1700px;margin:0 auto}
+  .lede{text-align:center;margin:0 auto 4px;max-width:920px}
+  .lede h1{font-size:27px;font-weight:800;letter-spacing:-.6px;margin:0 0 10px}
+  .lede p{font-size:14.5px;line-height:1.62;color:var(--sub);margin:0 0 8px}
+  .lede .k{color:var(--accent);font-weight:650}
+  .sec{margin-top:54px}
+  .sec-h{max-width:1040px;margin:0 auto 4px;text-align:center}
+  .sec-h h2{font-size:19px;font-weight:750;letter-spacing:-.3px;margin:0 0 7px}
+  .sec-h h2 .num{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;
+    border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:800;margin-right:9px;vertical-align:2px}
+  .sec-h p{font-size:13.5px;line-height:1.6;color:var(--sub);margin:0}
+  .grid{display:flex;flex-wrap:wrap;gap:36px 26px;justify-content:center;align-items:flex-start;margin-top:28px}
+  .col{width:392px;display:flex;flex-direction:column;gap:11px}
+  .cap{font-size:13px;line-height:1.5;color:var(--sub);padding:0 4px}
+  .cap b{color:var(--ink);font-weight:700}
+  .cap code{background:rgba(11,18,32,.05);padding:1px 5px;border-radius:5px;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--accent);
+    background:rgba(44,91,224,.10);border-radius:6px;padding:3px 8px;margin-bottom:6px;text-transform:uppercase}
+  .tag.q{color:var(--warning);background:rgba(149,95,0,.13)}
+  .tag.st{color:var(--faint);background:rgba(98,108,121,.12)}
+
+  .dev{width:392px;border:11px solid #0B0C0E;border-radius:54px;background:#0B0C0E;
+    box-shadow:0 50px 90px -32px rgba(15,23,42,.55)}
+  .scr{width:370px;height:800px;overflow:hidden;border-radius:43px;background:var(--canvas);
+    position:relative;display:flex;flex-direction:column}
+  .island{position:absolute;left:50%;top:9px;transform:translateX(-50%);width:104px;height:28px;border-radius:17px;background:#000;z-index:9}
+  .sb{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 28px;background:var(--surface);z-index:5}
+  .sb .t{font-size:14.5px;font-weight:700}.sb .r{font-size:11px;letter-spacing:1px}
+  .nav{height:48px;flex:none;display:grid;grid-template-columns:104px 1fr 104px;align-items:center;
+    padding:0 8px;background:var(--surface);border-bottom:1px solid var(--separator);z-index:4}
+  .nav .l{display:flex;align-items:center;gap:2px;color:var(--accent);font-size:15px}
+  .nav .t{text-align:center;font-size:15px;font-weight:650}
+  .nav .r{text-align:right;color:var(--accent);font-size:15px;font-weight:650;padding-right:6px}
+  .nav .r.off{color:var(--placeholder);font-weight:500}
+  .scroll{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:12px 0 0}
+  .scroll>*{flex:none}
+
+  .ctx{margin:0 16px;border-radius:var(--rCard);background:rgba(44,91,224,.08);padding:11px 14px;display:flex;gap:11px;align-items:center}
+  .ctx .ic{width:32px;height:32px;border-radius:11px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+  .ctx b{display:block;font-size:13px;font-weight:650;color:var(--accent)}
+  .ctx span{display:block;font-size:12px;color:var(--sub);margin-top:1px}
+
+  .ident{padding:4px 16px 2px}
+  .eyebrow{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--faint)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+  .dot.draft{background:var(--warning)}
+  .ident h1{font-size:26px;line-height:32px;font-weight:700;letter-spacing:-.4px;margin:8px 0 0}
+  .ident h1.ph{color:var(--placeholder);font-weight:600}
+  .ident .meta{font-size:15px;line-height:20px;color:var(--sub);margin-top:6px}
+  .ident .debt{font-size:15px;font-weight:600;color:var(--danger);margin-top:6px}
+
+  .strip{margin:0 16px;background:var(--surface);border-radius:var(--rCard);box-shadow:var(--cardShadow);
+    display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden}
+  .strip .a{min-height:68px;padding:10px 4px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:5px;color:var(--accent);font-size:12px;font-weight:650;line-height:1}
+  .strip .a+.a{border-left:1px solid var(--separator)}
+  .strip .a .g{font-size:17px}
+  .strip .a.off{color:var(--placeholder);opacity:.5}
+
+  .card{margin:0 16px;background:var(--surface);border-radius:var(--rCard);box-shadow:var(--cardShadow);overflow:hidden}
+  .eye{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:rgba(11,18,32,.48);
+    padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between}
+  .eye .lnk{color:var(--accent);font-size:12px;font-weight:650;letter-spacing:0;text-transform:none}
+  .row{min-height:52px;display:grid;grid-template-columns:112px minmax(0,1fr) auto;align-items:center;gap:10px;padding:0 16px}
+  .row+.row{border-top:1px solid var(--separator)}
+  .row .l{font-size:13px;font-weight:500;color:var(--sub)}
+  .row .v{font-size:15px;color:var(--ink);text-align:right}
+  .row .v.ph{color:var(--placeholder)}
+  .row .v.strong{font-weight:600}
+  .row .cv{color:var(--chevron);font-size:15px}
+  .row .req::after{content:' *';color:var(--danger)}
+  .row.focus{background:rgba(44,91,224,.05);box-shadow:inset 0 -1.5px var(--accent)}
+  .cursor{display:inline-block;width:2px;height:17px;background:var(--accent);vertical-align:-3px;margin-left:1px;animation:bl 1.1s steps(1) infinite}
+  @keyframes bl{0%,49%{opacity:1}50%,100%{opacity:0}}
+  .money{font-size:15px;font-weight:600;text-align:right}
+  .money.g{color:var(--success)}.money.r{color:var(--danger)}
+  .row.multi{grid-template-columns:1fr;align-items:start;padding-top:12px;padding-bottom:12px}
+  .row.multi .l{margin-bottom:6px}
+  .row.multi .v{text-align:left;font-size:14px;line-height:1.45}
+
+  .job{padding:14px 16px;display:flex;gap:12px;align-items:flex-start}
+  .job+.row{border-top:1px solid var(--separator)}
+  .job .bar{width:3px;align-self:stretch;border-radius:2px;background:var(--accent);flex:none}
+  .job .bar.warn{background:var(--warning)}
+  .job .c{flex:1;min-width:0}
+  .job .top{display:flex;align-items:baseline;gap:8px}
+  .job .top b{font-size:17px;font-weight:600;letter-spacing:-.2px}
+  .job .top span{font-size:13px;font-weight:500;color:var(--sub)}
+  .job .ttl{display:block;font-size:13px;color:var(--body);margin-top:4px}
+  .job .mt{display:block;font-size:12px;color:var(--sub);margin-top:2px}
+  .job .go{align-self:center;color:var(--accent);font-size:13px;font-weight:650;white-space:nowrap}
+
+  .ev{min-height:56px;display:flex;align-items:center;gap:11px;padding:0 16px}
+  .ev+.ev{border-top:1px solid var(--separator)}
+  .ev .m{width:30px;height:30px;border-radius:10px;background:rgba(44,91,224,.10);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:14px;flex:none}
+  .ev .m.g{background:rgba(8,122,82,.10);color:var(--success)}
+  .ev .c{flex:1;min-width:0}
+  .ev .c b{display:block;font-size:15px;font-weight:600}
+  .ev .c span{display:block;font-size:13px;color:var(--sub);margin-top:1px}
+  .ev .d{font-size:12px;color:var(--faint);white-space:nowrap}
+  .more{min-height:48px;display:flex;align-items:center;justify-content:center;color:var(--accent);
+    font-size:14px;font-weight:650;border-top:1px solid var(--separator)}
+
+  .danger-row{min-height:52px;display:flex;align-items:center;padding:0 16px;color:var(--danger);font-size:15px}
+  .foot{flex:none;padding:10px 16px 16px;background:rgba(255,255,255,.94);border-top:1px solid var(--separator)}
+  .cta{min-height:52px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--accentFrom),var(--accentTo));color:#fff;font-size:17px;font-weight:600;box-shadow:var(--brandShadow)}
+  .cta.off{background:#c8d0dc;box-shadow:none}
+
+  .shw{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:flex-end}
+  .scrim{position:absolute;inset:0;background:rgba(11,18,32,.36)}
+  .sheet{position:relative;background:var(--canvas);border-radius:var(--rSheet) var(--rSheet) 0 0;max-height:86%;
+    display:flex;flex-direction:column;overflow:hidden}
+  .sheet>*{flex:none}
+  .grab{width:36px;height:5px;border-radius:999px;background:#d2d8e2;margin:8px auto 4px}
+  .shh{display:grid;grid-template-columns:80px 1fr 80px;align-items:center;padding:4px 14px 12px}
+  .shh .c{font-size:15px;color:var(--sub)}
+  .shh .t{text-align:center;font-size:17px;font-weight:600}
+  .shb{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;padding-bottom:6px}
+  .shb>*{flex:none}
+  .pin{margin:0 16px;border-radius:var(--rCard);background:rgba(44,91,224,.07);padding:12px 14px;display:flex;align-items:center;gap:11px}
+  .pin .av{width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+  .pin b{display:block;font-size:15px;font-weight:600}
+  .pin span{display:block;font-size:13px;color:var(--sub);margin-top:1px}
+  .pin .lk{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--accent);background:rgba(44,91,224,.12);padding:4px 9px;border-radius:999px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 14px}
+  .chip{height:32px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:var(--fill);color:var(--sub);font-size:13px;font-weight:500}
+  .chip.on{background:var(--accent);color:#fff;font-weight:600}
+  .chip.gh{background:transparent;border:1px solid var(--separator);color:var(--accent);font-weight:600}
+  .tot{min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-top:1px solid var(--separator)}
+  .tot .l{font-size:15px;font-weight:600}.tot .v{font-size:17px;font-weight:700}
+
+  .skel{background:linear-gradient(90deg,#e9edf2 25%,#f2f5f8 50%,#e9edf2 75%);background-size:200% 100%;
+    animation:sh 1.3s infinite;border-radius:8px}
+  @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .err{margin:0 16px;border-radius:var(--rCard);background:rgba(201,55,44,.07);padding:14px 16px;text-align:center}
+  .err b{display:block;font-size:15px;font-weight:600;color:var(--danger)}
+  .err span{display:block;font-size:13px;color:var(--sub);margin-top:4px;line-height:1.4}
+  .err .btn{margin-top:12px;min-height:40px;border-radius:999px;background:var(--fill);color:var(--accent);
+    font-size:14px;font-weight:650;display:flex;align-items:center;justify-content:center}
+  .dedup{margin:8px 16px 0;border-radius:14px;background:rgba(149,95,0,.09);padding:11px 13px}
+  .dedup b{display:block;font-size:13px;font-weight:650;color:var(--warning)}
+  .dedup span{display:block;font-size:12.5px;color:var(--sub);margin-top:2px;line-height:1.4}
+  .dedup .a{margin-top:8px;font-size:13px;font-weight:700;color:var(--accent)}
+
+  .note{max-width:1040px;margin:24px auto 0;background:rgba(255,255,255,.75);border:1px solid rgba(11,18,32,.07);
+    border-radius:16px;padding:17px 21px;font-size:13.5px;line-height:1.65;color:var(--body)}
+  .note b{color:var(--ink)}
+  .note .hd{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:9px}
+  .note ul{margin:8px 0 0;padding-left:19px}.note li{margin-bottom:6px}
+  .note code{background:var(--fill);padding:1px 6px;border-radius:5px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="lede">
+  <h1>Клиент — «Профиль». Финальный макет</h1>
+  <p>Решение принято: плоский профиль, всё на виду, без сворачивающихся блоков.
+     Один экран на создание · просмотр · правку · запись.
+     Токены — <span class="k">apps/mobile/src/theme/colors.ts</span>, типографика и радиусы — Halo Cobalt.</p>
+</div>
+
+<!-- 1. ОСНОВНЫЕ СОСТОЯНИЯ -->
+<div class="sec">
+  <div class="sec-h">
+    <h2><span class="num">1</span>Три режима одного экрана</h2>
+    <p>Одна вёрстка. Отличаются шапка, футер и то, что скрыто до создания.</p>
+  </div>
+  <div class="grid">
+
+    <div class="col">
+      <div class="cap"><span class="tag">создание</span><br/>
+        <b>Черновик.</b> Телефон первым, с автофокусом и живой проверкой — по нему ловим дубль.
+        Расчёты и История скрыты: до создания там пусто, «€0 · записей нет» вокруг двух полей — шум.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Новый клиент</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot draft"></span>Черновик</div>
+            <h1 class="ph">Новый клиент</h1>
+          </div>
+          <div>
+            <div class="eye">Контакт</div>
+            <div class="card">
+              <div class="row focus"><span class="l req">Телефон</span><span class="v strong">+357 99 452 118<span class="cursor"></span></span><span></span></div>
+              <div class="row"><span class="l">Имя</span><span class="v ph">Можно позже</span><span></span></div>
+              <div class="row"><span class="l">Из контактов</span><span class="v" style="color:var(--accent);font-weight:600">Выбрать</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="row"><span class="l">Адрес объекта</span><span class="v ph">Район или адрес</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Команда</span><span class="v ph">Не назначена</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Заметка</div>
+            <div class="card"><div class="row multi"><span class="l">Комментарий</span><span class="v ph">Доступ, язык, предпочтения…</span></div></div>
+          </div>
+        </div>
+        <div class="foot"><div class="cta">Создать клиента</div></div>
+      </div></div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag">просмотр</span><br/>
+        <b>Карточка.</b> Долг — красной строкой под именем, он важнее всего остального.
+        История — 3 последних события и «Вся ›»: так страница остаётся 2–3 экрана, а не восемь.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">⋯</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot"></span>Клиент · с 14 мая</div>
+            <h1>Анастасия П.</h1>
+            <div class="meta">+357 99 452 118 · Лимассол · Y&amp;D</div>
+            <div class="debt">Долг €120</div>
+          </div>
+          <div class="strip">
+            <span class="a"><span class="g">📞</span>Позвонить</span>
+            <span class="a"><span class="g">💬</span>Написать</span>
+            <span class="a"><span class="g">📅</span>Записать</span>
+          </div>
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="job"><span class="bar"></span>
+                <span class="c"><span class="top"><b>24 июля</b><span>09:30</span></span>
+                <span class="ttl">Чистка · 2 кондиционера</span><span class="mt">Y&amp;D · Agios Athanasios</span></span>
+                <span class="go">›</span></div>
+              <div class="row"><span class="l">Объект</span><span class="v">Agios Athanasios</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Оборудование</span><span class="v">Daikin · 2 шт</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Расчёты</div>
+            <div class="card">
+              <div class="row"><span class="l">Визитов</span><span class="money">8</span><span></span></div>
+              <div class="row"><span class="l">Получено</span><span class="money g">€2 340</span><span></span></div>
+              <div class="row"><span class="l">К оплате</span><span class="money r">€120</span><span></span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">История</div>
+            <div class="card">
+              <div class="ev"><span class="m">📅</span><span class="c"><b>Визит завершён</b><span>Чистка · 2 шт</span></span><span class="d">14 мая</span></div>
+              <div class="ev"><span class="m g">€</span><span class="c"><b>Оплата €180</b><span>Наличные</span></span><span class="d">14 мая</span></div>
+              <div class="ev"><span class="m">📅</span><span class="c"><b>Визит завершён</b><span>Заправка</span></span><span class="d">3 мар</span></div>
+              <div class="more">Вся история ›</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag">из записи</span><br/>
+        <b>Контекст записи.</b> Открыт из создания заявки: плашка сверху, «назад» ведёт в запись,
+        кнопка — «Создать и добавить». Адрес и команда подтянутся из самой записи.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Запись</span><span class="t">Новый клиент</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="ctx"><span class="ic">📅</span><span><b>Добавление клиента в запись</b><span>22 июля · 12:00 · Y&amp;D</span></span></div>
+          <div class="ident">
+            <div class="eyebrow"><span class="dot draft"></span>Черновик</div>
+            <h1>Мария Соколова</h1>
+          </div>
+          <div>
+            <div class="eye">Контакт</div>
+            <div class="card">
+              <div class="row"><span class="l req">Телефон</span><span class="v strong">+357 96 771 204</span><span></span></div>
+              <div class="row"><span class="l">Имя</span><span class="v">Мария Соколова</span><span></span></div>
+            </div>
+          </div>
+          <div class="dedup">
+            <b>Такой номер уже есть</b>
+            <span>Мария С. · 3 визита · последний 2 апреля</span>
+            <div class="a">Открыть существующего ›</div>
+          </div>
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="row"><span class="l">Команда</span><span class="v">Y&amp;D</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Адрес</span><span class="v ph">Из записи</span><span class="cv">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><div class="cta">Создать и добавить</div></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. ЗАПИСЬ + ДЛИННЫЙ ЭКРАН -->
+<div class="sec">
+  <div class="sec-h">
+    <h2><span class="num">2</span>Запись шторкой · и как экран не становится простынёй</h2>
+  </div>
+  <div class="grid">
+
+    <div class="col">
+      <div class="cap"><span class="tag">запись</span><br/>
+        <b>Шторка поверх карточки.</b> Тот же <code>BottomSheet</code>, что у фильтров и периода.
+        Клиент зафиксирован, объект и команда подставлены. Свайп вниз — ты там же, где был.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">⋯</span></div>
+        <div class="scroll" style="filter:blur(.7px);opacity:.5">
+          <div class="ident"><div class="eyebrow"><span class="dot"></span>Клиент</div><h1>Анастасия П.</h1></div>
+          <div class="strip"><span class="a">📞</span><span class="a">💬</span><span class="a">📅</span></div>
+        </div>
+        <div class="shw"><div class="scrim"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="shh"><span class="c">Отмена</span><span class="t">Новая запись</span><span></span></div>
+            <div class="shb">
+              <div class="pin"><span class="av">АП</span><span><b>Анастасия П.</b><span>Agios Athanasios</span></span><span class="lk">клиент</span></div>
+              <div class="card">
+                <div class="row"><span class="l">Когда</span><span class="v strong">Завтра, 11:00</span><span class="cv">›</span></div>
+                <div class="row"><span class="l">Объект</span><span class="v">Agios Athanasios</span><span class="cv">›</span></div>
+                <div class="row"><span class="l">Команда</span><span class="v">Y&amp;D</span><span class="cv">›</span></div>
+              </div>
+              <div>
+                <div class="eye">Услуги</div>
+                <div class="card">
+                  <div class="chips" style="padding-top:12px"><span class="chip on">Чистка · €60</span><span class="chip">Заправка</span><span class="chip gh">＋ ещё</span></div>
+                  <div class="tot"><span class="l">Итого</span><span class="v">€60</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="foot"><div class="cta">Создать запись</div></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag q">длинный экран</span><br/>
+        <b>Клиент с 5 объектами и 40 визитами.</b> Твоё опасение. Решение без сворачивания:
+        объектов показываем основной + «Ещё 4 ›», истории — 3 события + «Вся ›».
+        Экран остаётся ~2,5 прокрутки при любом объёме данных.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">⋯</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot"></span>Клиент · с 2 фев 2024</div>
+            <h1>Кипр Пропертис ЛТД</h1>
+            <div class="meta">+357 25 100 200 · Лимассол · Y&amp;D</div>
+          </div>
+          <div class="strip">
+            <span class="a"><span class="g">📞</span>Позвонить</span>
+            <span class="a"><span class="g">💬</span>Написать</span>
+            <span class="a"><span class="g">📅</span>Записать</span>
+          </div>
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="job"><span class="bar"></span>
+                <span class="c"><span class="top"><b>26 июля</b><span>08:00</span></span>
+                <span class="ttl">ТО · 12 кондиционеров</span><span class="mt">Y&amp;D · Офис Makarios</span></span>
+                <span class="go">›</span></div>
+              <div class="row"><span class="l">Объект</span><span class="v">Офис Makarios</span><span class="cv">›</span></div>
+              <div class="row"><span class="l" style="color:var(--accent);font-weight:600">Ещё 4 объекта</span><span class="v"></span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Расчёты</div>
+            <div class="card">
+              <div class="row"><span class="l">Визитов</span><span class="money">40</span><span></span></div>
+              <div class="row"><span class="l">Получено</span><span class="money g">€18 400</span><span></span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">История</div>
+            <div class="card">
+              <div class="ev"><span class="m">📅</span><span class="c"><b>Визит завершён</b><span>ТО · 12 шт</span></span><span class="d">1 июл</span></div>
+              <div class="ev"><span class="m g">€</span><span class="c"><b>Оплата €960</b><span>Перевод</span></span><span class="d">1 июл</span></div>
+              <div class="ev"><span class="m">📅</span><span class="c"><b>Визит завершён</b><span>Ремонт</span></span><span class="d">12 июн</span></div>
+              <div class="more">Вся история · 40 ›</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag st">состояния</span><br/>
+        <b>Загрузка · ошибка · пусто.</b> Скелет повторяет форму карточки, чтобы не было прыжка.
+        Ошибка не выкидывает с экрана — показывает сохранённую копию и даёт «Повторить».</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div><div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="skel" style="width:90px;height:11px"></div>
+            <div class="skel" style="width:200px;height:26px;margin-top:10px"></div>
+            <div class="skel" style="width:240px;height:15px;margin-top:9px"></div>
+          </div>
+          <div class="strip">
+            <span class="a"><div class="skel" style="width:40px;height:34px"></div></span>
+            <span class="a"><div class="skel" style="width:40px;height:34px"></div></span>
+            <span class="a"><div class="skel" style="width:40px;height:34px"></div></span>
+          </div>
+          <div class="card" style="padding:16px"><div class="skel" style="height:14px;width:60%"></div>
+            <div class="skel" style="height:14px;width:85%;margin-top:12px"></div>
+            <div class="skel" style="height:14px;width:45%;margin-top:12px"></div></div>
+
+          <div style="height:6px"></div>
+          <div class="err">
+            <b>Не удалось обновить</b>
+            <span>Показана сохранённая копия. Карточка доступна, правки уйдут при связи.</span>
+            <div class="btn">Повторить</div>
+          </div>
+
+          <div>
+            <div class="eye">История</div>
+            <div class="card">
+              <div style="padding:22px 16px;text-align:center">
+                <div style="font-size:15px;font-weight:600;color:var(--ink)">Пока пусто</div>
+                <div style="font-size:13px;color:var(--sub);margin-top:4px;line-height:1.4">
+                  Здесь появятся визиты, оплаты и заметки команды.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <div class="hd">Что я решил сам (и почему), если не возразишь</div>
+  <ul>
+    <li><b>Секции — карточками radius 20, а не сплошным списком.</b> В вебовом макете строки шли без карточек;
+        в приложении весь язык — белые карточки на холодном фоне, плоский список выпал бы из всех остальных экранов.
+        Порядок секций из твоего макета сохранён.</li>
+    <li><b>Нумерации 01–05 нет</b> — на телефоне съедает 34pt слева в каждой секции и ничего не сообщает.</li>
+    <li><b>Правка на месте, без режима «Изменить».</b> Поля всегда живые, сохранение по уходу с поля —
+        так работает вся остальная карточка сейчас. «⋯» в шапке остаётся для удаления/архива/ЧС.</li>
+    <li><b>Долг — красной строкой под именем.</b> Единственное красное на экране, кроме кнопки удаления.</li>
+    <li><b>Три действия, не пять</b> — Позвонить · Написать · Записать, как в твоём макете.</li>
+  </ul>
+</div>
+
+</div>
+</body>
+</html>
