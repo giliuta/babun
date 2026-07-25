@@ -459,7 +459,8 @@ export default function ClientsListScreen() {
   const { data: teams = [] } = useTeams();
   const { data: cities = [] } = useCities();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
-  // Сортировка — персистентная настройка («Настройки клиентов»), не фильтр.
+  // Сортировка — персистентная настройка списка (первая строка листа
+  // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = "recent" } = useClientsSort();
   const setSort = useSetClientsSort();
   const archiveClients = useArchiveClients();
@@ -487,14 +488,17 @@ export default function ClientsListScreen() {
     [clients, appointments],
   );
 
-  // Дата первой (не отменённой) записи — сплит периода в фильтрах
-  // показывает у «Всего времени» честный охват данных.
-  const dataFrom = useMemo(() => {
+  // Первая и последняя (не отменённые) записи — сплит периода в фильтрах
+  // показывает у «Всего времени» честный охват данных в обе стороны.
+  const dataSpan = useMemo(() => {
     let min: string | null = null;
-    for (const a of appointments)
-      if (a.status !== "cancelled" && a.date && (!min || a.date < min))
-        min = a.date;
-    return min;
+    let max: string | null = null;
+    for (const a of appointments) {
+      if (a.status === "cancelled" || !a.date) continue;
+      if (!min || a.date < min) min = a.date;
+      if (!max || a.date > max) max = a.date;
+    }
+    return { from: min, to: max };
   }, [appointments]);
 
   // Web useClientFilters port. Внутри сортировка живёт в отдельном мемо
@@ -659,9 +663,11 @@ export default function ClientsListScreen() {
   const toggleAll = () =>
     setSelectedIds(allSelected ? new Set() : new Set(visible.map((c) => c.id)));
 
+  // Массовые действия — строго по ВИДИМОМУ списку: если фильтр изменился
+  // после выбора, «Архивировать 12» не должно задеть невидимых.
   const selectedClients = useMemo(
-    () => clients.filter((c) => selectedIds.has(c.id)),
-    [clients, selectedIds],
+    () => result.filtered.filter((c) => selectedIds.has(c.id)),
+    [result.filtered, selectedIds],
   );
 
   const onExport = async () => {
@@ -980,7 +986,9 @@ export default function ClientsListScreen() {
         visible={sheetOpen}
         filter={filter}
         result={result}
-        dataFrom={dataFrom}
+        dataFrom={dataSpan.from}
+        dataTo={dataSpan.to}
+        search={query}
         sort={sort}
         onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}

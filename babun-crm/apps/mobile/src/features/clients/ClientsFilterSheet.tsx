@@ -39,8 +39,8 @@ import {
   resetFilters,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
+  SORT_BLOCKS,
   SORT_LABELS_LONG,
-  SORT_ORDER,
   SOURCE_OPTIONS,
   type ClientsFilter,
   type FacetOption,
@@ -146,15 +146,30 @@ function FilterRow({
         <Text
           maxFontSizeMultiplier={1.2}
           numberOfLines={1}
-          className="text-[15px] font-bold"
+          className={`text-[15px] ${value ? "font-bold" : "font-medium"}`}
           style={{
             flexShrink: 1,
             color: value ? INK : "rgba(11,18,32,0.48)",
             fontVariant: ["tabular-nums"],
           }}
         >
-          {valueText}
+          {value ? value.label : "Все"}
         </Text>
+        {/* «+K» — отдельный несжимаемый Text: обрезаться должно длинное
+            имя, а не счётчик остальных. */}
+        {value && value.extra > 0 ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            className="text-[15px] font-bold"
+            style={{
+              flexShrink: 0,
+              color: INK,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {` +${value.extra}`}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -366,6 +381,7 @@ function FooterCta({
 function MultiPickSheet({
   visible,
   title,
+  subtitle,
   blocks,
   selected,
   counts,
@@ -376,6 +392,8 @@ function MultiPickSheet({
 }: {
   visible: boolean;
   title: string;
+  /** Подпись-семантика под заголовком («Любой из выбранных»). */
+  subtitle?: string;
   blocks: FacetOption[][];
   selected: string[];
   counts: Record<string, number>;
@@ -396,10 +414,19 @@ function MultiPickSheet({
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
       <Text
         accessibilityRole="header"
-        className="px-5 pt-1 text-lg font-bold"
-        style={{ color: t.ink, marginBottom: 12 }}
+        maxFontSizeMultiplier={1.2}
+        className="px-5 pt-1 text-[17px] font-semibold"
+        style={{ color: INK }}
       >
         {title}
+      </Text>
+      {/* Семантика набора словами: мультивыбор — объединение, не сужение. */}
+      <Text
+        maxFontSizeMultiplier={1.2}
+        className="px-5 pb-3 pt-0.5 text-[13px]"
+        style={{ color: t.faint }}
+      >
+        {subtitle ?? "Любой из выбранных"}
       </Text>
       <ScrollView
         style={{ flexShrink: 1 }}
@@ -449,14 +476,15 @@ function MultiPickSheet({
 function SinglePickSheet({
   visible,
   title,
-  options,
+  blocks,
   selected,
   onSelect,
   onClose,
 }: {
   visible: boolean;
   title: string;
-  options: { value: string; label: string }[];
+  /** Смысловые группы рядов — блоки разделены воздухом, как у периода. */
+  blocks: { value: string; label: string }[][];
   selected: string;
   onSelect: (value: string) => void;
   onClose: () => void;
@@ -466,52 +494,65 @@ function SinglePickSheet({
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
       <Text
         accessibilityRole="header"
-        className="px-5 pt-1 text-lg font-bold"
-        style={{ color: t.ink, marginBottom: 12 }}
+        maxFontSizeMultiplier={1.2}
+        className="px-5 pt-1 text-[17px] font-semibold"
+        style={{ color: INK, marginBottom: 12 }}
       >
         {title}
       </Text>
       <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
-        <View
-          className="overflow-hidden rounded-xl"
-          style={{ backgroundColor: t.canvas }}
-        >
-          {options.map((o, i) => {
-            const on = selected === o.value;
-            return (
-              <Pressable
-                key={o.value}
-                onPress={() => {
-                  haptics.tap();
-                  if (!on) onSelect(o.value);
-                  onClose();
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={o.label}
-                className="flex-row items-center px-3.5 active:opacity-70"
-                style={{
-                  minHeight: 48,
-                  borderTopWidth: i > 0 ? 1 : 0,
-                  borderTopColor: t.separator,
-                }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className={`text-[15px] ${on ? "font-semibold" : "font-medium"}`}
-                  style={{ color: on ? t.accent : INK }}
-                >
-                  {o.label}
-                </Text>
-                {on ? (
-                  <View style={{ marginLeft: "auto" }}>
-                    <Check color={t.accent} size={18} strokeWidth={2.6} />
-                  </View>
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
+        {blocks.map((block, bi) =>
+          block.length === 0 ? null : (
+            <View
+              key={bi}
+              className="mb-2 overflow-hidden rounded-xl"
+              style={{ backgroundColor: t.canvas }}
+            >
+              {block.map((o, i) => {
+                const on = selected === o.value;
+                return (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => {
+                      haptics.tap();
+                      if (!on) onSelect(o.value);
+                      onClose();
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={o.label}
+                    // Раскладка ТОЛЬКО через style: NativeWind v5 роняет
+                    // style-функцию Pressable, если рядом есть className
+                    // (тот же баг, что с паддингами на ScrollView).
+                    style={({ pressed }) => ({
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 14,
+                      minHeight: 48,
+                      borderTopWidth: i > 0 ? 1 : 0,
+                      borderTopColor: t.separator,
+                      backgroundColor: pressed ? t.pressed : "transparent",
+                    })}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      className={`shrink text-[15px] ${on ? "font-semibold" : "font-medium"}`}
+                      style={{ color: on ? t.accent : INK }}
+                    >
+                      {o.label}
+                    </Text>
+                    {on ? (
+                      <View style={{ marginLeft: "auto", paddingLeft: 8 }}>
+                        <Check color={t.accent} size={18} strokeWidth={2.6} />
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ),
+        )}
       </View>
     </BottomSheet>
   );
@@ -526,6 +567,8 @@ export function ClientsFilterSheet({
   filter,
   result,
   dataFrom,
+  dataTo,
+  search,
   sort,
   onSortChange,
   onChange,
@@ -534,8 +577,11 @@ export function ClientsFilterSheet({
   visible: boolean;
   filter: ClientsFilter;
   result: ClientFilterResult;
-  /** Дата первой записи (YYYY-MM-DD) — даты «Всего времени» в сплите. */
+  /** Первая/последняя записи (YYYY-MM-DD) — честный охват «Всего времени». */
   dataFrom: string | null;
+  dataTo: string | null;
+  /** Строка поиска — участвует во всех числах листа, поэтому видна в сводке. */
+  search: string;
   /** Сортировка списка — персистентная настройка (sort-pref), НЕ фильтр;
    *  «Сбросить» её не трогает. Живёт первой строкой листа. */
   sort: SortKey;
@@ -591,8 +637,10 @@ export function ClientsFilterSheet({
   const pageH = winH - insets.top - 29;
 
   const countPart = `${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
-  const ctaLabel =
-    shownCount === 0 ? "Ничего не найдено" : `Показать ${countPart}`;
+  // Кнопка — всегда ДЕЙСТВИЕ (при нуле «Закрыть»), статус живёт в хинте
+  // над ней: пригашенная кнопка-статус читалась как сломанная и не
+  // проходила по контрасту.
+  const ctaLabel = shownCount === 0 ? "Закрыть" : `Показать ${countPart}`;
 
   // Live-apply нем для VoiceOver — дебаунс-анонс счётчика (один анонсер
   // на состояние — работает и при открытом попапе).
@@ -611,9 +659,13 @@ export function ClientsFilterSheet({
   // «Возле названия видно, что выбрано»: компактная сводка активного
   // набора под заголовком — единственный композитный взгляд, когда
   // строки накрыты попапом. Порядок групп = порядок строк.
-  const activeSummary = nothingActive
+  const searchNote = search.trim() ? `Поиск: «${search.trim()}»` : null;
+  const activeSummary = nothingActive && !searchNote
     ? null
     : [
+        // Поиск участвует во ВСЕХ числах листа — если он не виден,
+        // «Показать 0» выглядит необъяснимым.
+        ...(searchNote ? [searchNote] : []),
         ...(filter.period ? [periodLabel(filter.period)] : []),
         ...filter.segments.map(
           (k) => SEGMENT_OPTIONS.find((o) => o.key === k)?.label ?? k,
@@ -638,10 +690,14 @@ export function ClientsFilterSheet({
   // сегодня». Тот же диапазон сидит и в колёсах, и в подсказке попапа.
   const now = new Date();
   const todayYmd = formatYMD(now);
+  // Охват данных честен в обе стороны: у тенанта с записями только в
+  // будущем «Всё время» — это «сегодня — последняя запись», а не «сегодня».
   const spanFrom = dataFrom && dataFrom < todayYmd ? dataFrom : todayYmd;
-  const allSpanDates = dataFrom
-    ? periodDates({ preset: "custom", from: spanFrom, to: todayYmd })
-    : null;
+  const spanTo = dataTo && dataTo > todayYmd ? dataTo : todayYmd;
+  const allSpanDates =
+    dataFrom || dataTo
+      ? periodDates({ preset: "custom", from: spanFrom, to: spanTo })
+      : null;
   const periodName = filter.period ? periodLabel(filter.period) : "Всё время";
   const datesLabel = filter.period
     ? periodDates(filter.period)
@@ -656,19 +712,34 @@ export function ClientsFilterSheet({
   const toggleIn = (list: string[], v: string) =>
     list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 
+  // Любая правка фильтра гасит окно «Вернуть»: иначе кнопка залипала и
+  // молча выбрасывала только что собранный набор (владелец жал «Вернуть»
+  // и терял выбор).
+  const applyFilter = (next: ClientsFilter) => {
+    if (undo) {
+      setUndo(null);
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    }
+    onChange(next);
+  };
+
   const onReset = () => {
     haptics.tap();
     if (undo) {
       onChange(undo);
       setUndo(null);
       if (undoTimer.current) clearTimeout(undoTimer.current);
+      AccessibilityInfo.announceForAccessibility("Фильтры возвращены");
       return;
     }
     if (nothingActive) return;
     setUndo(filter);
     onChange(resetFilters());
     if (undoTimer.current) clearTimeout(undoTimer.current);
-    undoTimer.current = setTimeout(() => setUndo(null), 4000);
+    undoTimer.current = setTimeout(() => setUndo(null), 8000);
+    AccessibilityInfo.announceForAccessibility(
+      "Фильтры сброшены. Доступно «Вернуть»",
+    );
   };
 
   // ── Конфигурация четырёх попапов одной грамматики ────────────────
@@ -700,7 +771,7 @@ export function ClientsFilterSheet({
       selected: filter.segments,
       counts: facetCounts.segment,
       toggle: (v) =>
-        onChange({
+        applyFilter({
           ...filter,
           segments: toggleIn(filter.segments, v) as SegmentKey[],
         }),
@@ -715,7 +786,7 @@ export function ClientsFilterSheet({
       selected: filter.selectedCities,
       counts: facetCounts.city,
       toggle: (v) =>
-        onChange({
+        applyFilter({
           ...filter,
           selectedCities: toggleIn(filter.selectedCities, v),
         }),
@@ -726,7 +797,7 @@ export function ClientsFilterSheet({
       selected: filter.activeTags,
       counts: facetCounts.tag,
       toggle: (v) =>
-        onChange({ ...filter, activeTags: toggleIn(filter.activeTags, v) }),
+        applyFilter({ ...filter, activeTags: toggleIn(filter.activeTags, v) }),
     },
     team: {
       title: "Команда",
@@ -734,7 +805,7 @@ export function ClientsFilterSheet({
       selected: filter.selectedTeams,
       counts: facetCounts.team,
       toggle: (v) =>
-        onChange({
+        applyFilter({
           ...filter,
           selectedTeams: toggleIn(filter.selectedTeams, v),
         }),
@@ -745,7 +816,7 @@ export function ClientsFilterSheet({
       selected: filter.sources,
       counts: facetCounts.source,
       toggle: (v) =>
-        onChange({
+        applyFilter({
           ...filter,
           sources: toggleIn(filter.sources, v) as AcquisitionSource[],
         }),
@@ -756,18 +827,18 @@ export function ClientsFilterSheet({
       selected: filter.propertyTypes,
       counts: facetCounts.property,
       toggle: (v) =>
-        onChange({
+        applyFilter({
           ...filter,
           propertyTypes: toggleIn(filter.propertyTypes, v) as PropertyType[],
         }),
     },
   };
 
-  // Сортировка — всегда одно значение (не «Все»), персистентна.
-  const sortOptions = SORT_ORDER.map((k) => ({
-    value: k as string,
-    label: SORT_LABELS_LONG[k],
-  }));
+  // Сортировка — всегда одно значение (не «Все»), персистентна; блоки
+  // время · деньги · алфавит.
+  const sortBlocks = SORT_BLOCKS.map((block) =>
+    block.map((k) => ({ value: k as string, label: SORT_LABELS_LONG[k] })),
+  );
 
   // Сводки строк — первый выбранный по каноническому порядку + «+K».
   const segmentValue = summarize(segmentAsOptions, filter.segments);
@@ -796,11 +867,12 @@ export function ClientsFilterSheet({
             {activeSummary ? (
               <Text
                 maxFontSizeMultiplier={1.2}
-                numberOfLines={1}
+                numberOfLines={2}
                 style={{
                   marginTop: 1,
                   fontSize: 12,
                   fontWeight: "500",
+                  textAlign: "center",
                   color: "rgba(11,18,32,0.48)",
                 }}
               >
@@ -845,15 +917,16 @@ export function ClientsFilterSheet({
             gap: 28,
           }}
         >
-          {/* ── Сортировка (как показывать) + когда и кого ── */}
-          <View style={{ gap: 12 }}>
-            {/* Сортировка — первой; персистентна, «Сбросить» её не трогает. */}
-            <FilterRow
-              name="Сортировка"
-              value={{ label: SORT_LABELS_LONG[sort], extra: 0 }}
-              onPress={() => setSortOpen(true)}
-            />
+          {/* ── Как показывать: сортировка отдельным абзацем — это НЕ
+              фильтр (персистентна, «Сбросить» её не трогает). ── */}
+          <FilterRow
+            name="Сортировка"
+            value={{ label: SORT_LABELS_LONG[sort], extra: 0 }}
+            onPress={() => setSortOpen(true)}
+          />
 
+          {/* ── Абзац «когда и кого» ── */}
+          <View style={{ gap: 12 }}>
             {/* Период: сплит Финансов — имя → пресеты, даты → колёса. */}
             <View
               className="flex-row items-stretch"
@@ -945,8 +1018,12 @@ export function ClientsFilterSheet({
             ) : null}
           </View>
 
-          {/* ── Абзац «портрет»: строки появляются, когда данные есть ── */}
-          {hasSourceData || hasPropertyData ? (
+          {/* ── Абзац «портрет»: строки появляются, когда данные есть, но
+              УЖЕ ВЫБРАННОЕ держит строку видимой (иначе фильтр не снять). ── */}
+          {hasSourceData ||
+          hasPropertyData ||
+          filter.sources.length > 0 ||
+          filter.propertyTypes.length > 0 ? (
             <View style={{ gap: 12 }}>
               {hasSourceData || filter.sources.length > 0 ? (
                 <FilterRow
@@ -969,8 +1046,11 @@ export function ClientsFilterSheet({
         <FooterCta
           t={t}
           label={ctaLabel}
-          hint={shownCount === 0 ? "Смягчите условия — период или статус" : null}
-          muted={shownCount === 0}
+          hint={
+            shownCount === 0
+              ? "Ничего не найдено — смягчите период или статус"
+              : null
+          }
           a11yHint="Закрывает фильтры и показывает список"
           reduced={reduced}
           onPress={onClose}
@@ -1000,9 +1080,14 @@ export function ClientsFilterSheet({
       <SinglePickSheet
         visible={sortOpen}
         title="Сортировка"
-        options={sortOptions}
+        blocks={sortBlocks}
         selected={sort}
-        onSelect={(v) => onSortChange(v as SortKey)}
+        onSelect={(v) => {
+          onSortChange(v as SortKey);
+          AccessibilityInfo.announceForAccessibility(
+            `Отсортировано: ${SORT_LABELS_LONG[v as SortKey]}`,
+          );
+        }}
         onClose={() => setSortOpen(false)}
       />
 
@@ -1013,10 +1098,10 @@ export function ClientsFilterSheet({
         allTime={{
           active: !filter.period,
           hint: allSpanDates ?? undefined,
-          onSelect: () => onChange({ ...filter, period: null }),
+          onSelect: () => applyFilter({ ...filter, period: null }),
         }}
         onClose={() => setPresetsOpen(false)}
-        onApply={(p) => onChange({ ...filter, period: p })}
+        onApply={(p) => applyFilter({ ...filter, period: p })}
       />
       <PeriodWheelsModal
         visible={wheelsOpen}
@@ -1026,7 +1111,7 @@ export function ClientsFilterSheet({
           to: draftTo,
         }}
         onClose={() => setWheelsOpen(false)}
-        onApply={(p) => onChange({ ...filter, period: p })}
+        onApply={(p) => applyFilter({ ...filter, period: p })}
       />
     </BottomSheet>
   );

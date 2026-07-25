@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import { SORT_ORDER, type SortKey } from "./filter";
 
-// «Тихий лист 2» (владелец, 2026-07-22): сортировка — НЕ фильтр, а
-// настройка списка. Живёт в «Настройки клиентов» и переживает перезапуск
-// (device-local MMKV, конвенция card-prefs); из листа «Фильтры» удалена.
+// Сортировка — НЕ фильтр, а настройка списка: переживает перезапуск
+// (device-local MMKV, конвенция card-prefs) и не сбрасывается кнопкой
+// «Сбросить». Выбирается ПЕРВОЙ строкой листа «Фильтры» (владелец
+// 2026-07-25; из «Настроек клиентов» ряд удалён).
 
 const KEY = "babun-clients-sort";
 

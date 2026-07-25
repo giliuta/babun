@@ -19,18 +19,111 @@ import { PERIOD_LABELS, type Period } from "@/features/finances/period";
 
 // ── Sort ───────────────────────────────────────────────────────────
 
-export type SortKey = "recent" | "name" | "revenue";
+export type SortKey = "recent" | "stale" | "debt" | "revenue" | "name";
 
-/** Подписи сортировки — строка в «Настройки клиентов» (сортировка живёт
- *  ТОЛЬКО там, из листа «Фильтры» удалена — решение владельца 2026-07-22;
- *  персист в sort-pref.ts). */
+/** ЗАКОН СОРТИРОВКИ (владелец + арбитраж 2026-07-25): сортируем только по
+ *  тому числу, которое НАПЕЧАТАНО в карточке списка, а подпись описывает
+ *  ПЕРВУЮ карточку («Недавний визит» — сверху свежий). Направление вшито
+ *  в ключ: отдельной сущности «по возр./по убыв.» нет, двусторонней
+ *  сделана одна ось «визит» — обе её стороны рабочие («Давний визит» +
+ *  «Без записи» = список на дозвон). Сортировка — первая строка листа
+ *  «Фильтры», персистентна (sort-pref.ts), «Сбросить» её не трогает. */
 export const SORT_LABELS_LONG: Record<SortKey, string> = {
-  recent: "Недавно посещали",
-  name: "По имени (А–Я)",
-  revenue: "По доходу",
+  recent: "Недавний визит",
+  stale: "Давний визит",
+  debt: "Самый большой долг",
+  revenue: "Самый большой доход",
+  name: "Имя (А–Я)",
 };
 
-export const SORT_ORDER: SortKey[] = ["recent", "name", "revenue"];
+export const SORT_ORDER: SortKey[] = [
+  "recent",
+  "stale",
+  "debt",
+  "revenue",
+  "name",
+];
+
+/** Смысловые группы рядов попапа (волосок между блоками): время · деньги
+ *  · алфавит. */
+export const SORT_BLOCKS: SortKey[][] = [
+  ["recent", "stale"],
+  ["debt", "revenue"],
+  ["name"],
+];
+
+/** Долг клиента РОВНО как он напечатан в карточке списка (долг по визитам,
+ *  иначе отрицательный баланс). Один источник для карточки, сортировки и
+ *  статуса «Должники». */
+export function clientDebt(c: Client, s: ClientStats | undefined): number {
+  const byVisits = s?.debt ?? 0;
+  if (byVisits > 0) return byVisits;
+  return c.balance < 0 ? Math.abs(c.balance) : 0;
+}
+
+/** Сортировка списка клиентов. Ключи предвычисляются ОДНИМ проходом,
+ *  дальше сравниваются числа/строки — statsMap не дёргается на каждое
+ *  сравнение (2000 карточек ≈ 22 тыс. сравнений).
+ *
+ *  ПРАВИЛО ХВОСТА: у кого нет значения по активной оси (ни одного визита /
+ *  нет долга / нет дохода) — вниз при ЛЮБОМ направлении. Фолбэка
+ *  «lastVisitDate || created_at» нет: он ставил клиента «нет записей» выше
+ *  обслуженного сегодня (ISO-время created_at длиннее и «больше» голой
+ *  даты) и печатал «Недавний визит» над карточкой без визитов.
+ *
+ *  Тай-брейкеры: закреплённые → есть значение → значение → свежесть
+ *  визита → добавлен → имя → закреплён когда → id (детерминизм: список
+ *  пересобирается после каждого синка, «дрожь» порядка была бы видна). */
+export function sortClients(
+  clients: Client[],
+  statsMap: Map<string, ClientStats>,
+  sort: SortKey,
+): Client[] {
+  const collator = new Intl.Collator("ru");
+  const rows = clients.map((c) => {
+    const s = statsMap.get(c.id);
+    const last = s?.lastVisitDate ?? "";
+    let has = 1; // есть ли значение по активной оси
+    let num = 0; // числовая ось (деньги)
+    let str = ""; // строковая ось (даты)
+    if (sort === "recent" || sort === "stale") {
+      has = last ? 1 : 0;
+      str = last;
+    } else if (sort === "debt") {
+      num = clientDebt(c, s);
+      has = num > 0 ? 1 : 0;
+    } else if (sort === "revenue") {
+      num = s?.totalSpent ?? 0;
+      has = num > 0 ? 1 : 0;
+    }
+    return { c, pinned: c.pinned_at ? 1 : 0, pinnedAt: c.pinned_at ?? "", has, num, str, last };
+  });
+  rows.sort((a, b) => {
+    if (a.pinned !== b.pinned) return b.pinned - a.pinned;
+    if (a.has !== b.has) return b.has - a.has;
+    if (a.has) {
+      if (sort === "recent") {
+        if (a.str !== b.str) return b.str.localeCompare(a.str);
+      } else if (sort === "stale") {
+        if (a.str !== b.str) return a.str.localeCompare(b.str);
+      } else if (sort === "debt" || sort === "revenue") {
+        if (a.num !== b.num) return b.num - a.num;
+      } else {
+        const n = collator.compare(a.c.full_name, b.c.full_name);
+        if (n !== 0) return n;
+      }
+    }
+    if (sort !== "recent" && sort !== "stale" && a.last !== b.last)
+      return b.last.localeCompare(a.last);
+    if (a.c.created_at !== b.c.created_at)
+      return b.c.created_at.localeCompare(a.c.created_at);
+    const byName = collator.compare(a.c.full_name, b.c.full_name);
+    if (byName !== 0) return byName;
+    if (a.pinnedAt !== b.pinnedAt) return b.pinnedAt.localeCompare(a.pinnedAt);
+    return a.c.id.localeCompare(b.c.id);
+  });
+  return rows.map((r) => r.c);
+}
 
 // ── Segments (Статус) ──────────────────────────────────────────────
 
@@ -84,7 +177,9 @@ export function matchesSegment(
 ): boolean {
   switch (key) {
     case "debt":
-      return (s?.debt ?? 0) > 0 || c.balance < 0;
+      // Тот же долг, что печатается в карточке и сортирует «Самый
+      // большой долг» — одна формула на все три места.
+      return clientDebt(c, s) > 0;
     case "noUpcoming":
       // Был визит, но следующего нет — кого дозаписать (реактивация).
       return (s?.visits ?? 0) > 0 && (s?.nextApt ?? null) === null;

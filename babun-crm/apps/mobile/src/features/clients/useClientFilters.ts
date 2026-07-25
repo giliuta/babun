@@ -9,6 +9,7 @@ import {
   clientPropertyTypes,
   clientSource,
   matchesSegment,
+  sortClients,
   periodLabel,
   PROPERTY_OPTIONS,
   SEGMENT_OPTIONS,
@@ -304,28 +305,18 @@ export function useClientFilters(
   );
 
   // ── Сортировка ОТДЕЛЬНО от предикатов ────────────────────────────
-  // Компаратор web'а (pinned-first + 3 ключа), но в мемо без
-  // поисковых deps — фильтрация ниже сохраняет порядок.
-  const sorted = useMemo(() => {
-    return [...clients].sort((a, b) => {
-      const aPinned = a.pinned_at ? 1 : 0;
-      const bPinned = b.pinned_at ? 1 : 0;
-      if (aPinned !== bPinned) return bPinned - aPinned;
-      if (aPinned && bPinned) {
-        return (b.pinned_at ?? "").localeCompare(a.pinned_at ?? "");
-      }
-      if (sort === "name") return a.full_name.localeCompare(b.full_name, "ru");
-      if (sort === "revenue") {
-        return (
-          (statsMap.get(b.id)?.totalSpent ?? 0) -
-          (statsMap.get(a.id)?.totalSpent ?? 0)
-        );
-      }
-      const aDate = statsMap.get(a.id)?.lastVisitDate || a.created_at;
-      const bDate = statsMap.get(b.id)?.lastVisitDate || b.created_at;
-      return bDate.localeCompare(aDate);
-    });
-  }, [clients, sort, statsMap]);
+  // Мемо без поисковых deps — фильтрация ниже сохраняет порядок (фикс
+  // Волны 1, не откатывать). Ключи сортировки предвычисляются ОДНИМ
+  // проходом, дальше сравниваются числа/строки — statsMap не дёргается
+  // на каждое сравнение. Правило хвоста: у кого НЕТ значения по активной
+  // оси (ни одного визита / нет долга / нет дохода) — вниз при любом
+  // направлении; фолбэка «lastVisitDate || created_at» больше нет (он
+  // ставил клиента «нет записей» выше обслуженного сегодня, потому что
+  // ISO-время created_at длиннее и «больше» голой даты).
+  const sorted = useMemo(
+    () => sortClients(clients, statsMap, sort),
+    [clients, sort, statsMap],
+  );
 
   const filtered = useMemo(() => {
     return sorted.filter(

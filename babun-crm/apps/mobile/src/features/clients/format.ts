@@ -7,12 +7,16 @@ export const MONTHS_RU_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
-/** "2024-05-10" → "10 мая"; invalid/empty → "". */
+/** "2024-05-10" → "10 мая"; прошлый год дописывается («10 мая ’24»),
+ *  иначе позапрошлогодний визит читается как свежий — ровно на той оси,
+ *  ради которой существует сортировка. invalid/empty → "". */
 export function formatShortDateRu(key: string): string {
   if (!key) return "";
   const [y, m, d] = key.split("-").map(Number);
   if (!y || !m || !d) return "";
-  return `${d} ${MONTHS_RU_SHORT[m - 1] ?? ""}`.trim();
+  const base = `${d} ${MONTHS_RU_SHORT[m - 1] ?? ""}`.trim();
+  const curYear = new Date().getFullYear();
+  return y === curYear ? base : `${base} ’${String(y).slice(2)}`;
 }
 
 /** "2024-05-10" → "10 мая 2024 г." (ru-RU, with year); invalid → input. */

@@ -177,12 +177,16 @@ export function buildStats(
     }
   }
 
-  const lastVisitDays =
-    lastVisitDate
-      ? daysBetween(parseKey(lastVisitDate)!, new Date())
-      : null;
-  const nextAptDays =
-    nextApt ? daysBetween(new Date(), parseKey(nextApt.date)!) : null;
+  // Дни считаются между КАЛЕНДАРНЫМИ днями (полночь↔полночь), а не от
+  // «сейчас»: иначе визит вчера утром к вечеру округлялся до «2 дня
+  // назад», и «Давно не были» давал разный список утром и вечером.
+  const todayD = parseKey(todayKey())!;
+  const lastVisitDays = lastVisitDate
+    ? daysBetween(parseKey(lastVisitDate)!, todayD)
+    : null;
+  const nextAptDays = nextApt
+    ? daysBetween(todayD, parseKey(nextApt.date)!)
+    : null;
 
   return computeNonAptFields(client, {
     visits,
