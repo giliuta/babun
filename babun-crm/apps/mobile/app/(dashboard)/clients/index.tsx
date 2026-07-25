@@ -989,6 +989,7 @@ export default function ClientsListScreen() {
         dataFrom={dataSpan.from}
         dataTo={dataSpan.to}
         search={query}
+        onClearSearch={setQuery}
         sort={sort}
         onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}
