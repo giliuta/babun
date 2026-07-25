@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Babun mobile — Клиент: одна страница на все случаи</title>
+<style>
+  :root{
+    /* Halo Cobalt — runtime source of truth: apps/mobile/src/theme/colors.ts */
+    --canvas:#f4f6f9; --surface:#ffffff;
+    --accent:#2c5be0; --accentFrom:#2f6fd6; --accentTo:#1f4fcc; --onAccent:#ffffff;
+    --ink:#0b1220; --body:#39414e; --sub:#5b6678; --faint:#626c79; --placeholder:#636e7c;
+    --success:#087a52; --danger:#c9372c; --warning:#955f00;
+    --fill:#eef1f5; --separator:#e7ebf0; --chevron:rgba(11,18,32,.50);
+    --cardShadow:0 1px 2px rgba(11,18,32,.04),0 8px 24px rgba(11,18,32,.06);
+    --brandShadow:0 8px 28px rgba(44,91,224,.28);
+    --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    /* radii — t.radius */
+    --rCard:20px; --rInput:14px; --rSheet:24px;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  html,body{margin:0;}
+  body{font-family:var(--font);background:radial-gradient(1300px 950px at 50% -10%,#fbfcfe 0%,#e9edf3 55%,#dfe4ec 100%);
+    min-height:100vh;color:var(--ink);font-variant-numeric:tabular-nums;padding:34px 20px 80px;}
+  .wrap{max-width:1640px;margin:0 auto;}
+
+  .lede{text-align:center;margin:0 auto 4px;max-width:900px;}
+  .lede h1{font-size:27px;font-weight:800;letter-spacing:-.6px;margin:0 0 10px;}
+  .lede p{font-size:14.5px;line-height:1.62;color:var(--sub);margin:0 0 8px;}
+  .lede .k{color:var(--accent);font-weight:650;}
+  .lede .w{color:var(--warning);font-weight:700;}
+
+  .sec{margin-top:54px;}
+  .sec-h{max-width:1020px;margin:0 auto 4px;text-align:center;}
+  .sec-h h2{font-size:19px;font-weight:750;letter-spacing:-.3px;margin:0 0 7px;}
+  .sec-h h2 .num{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;
+    border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:800;margin-right:9px;vertical-align:2px;}
+  .sec-h p{font-size:13.5px;line-height:1.6;color:var(--sub);margin:0;}
+  .grid{display:flex;flex-wrap:wrap;gap:36px 26px;justify-content:center;align-items:flex-start;margin-top:28px;}
+  .col{width:392px;display:flex;flex-direction:column;gap:11px;}
+  .cap{font-size:13px;line-height:1.5;color:var(--sub);padding:0 4px;}
+  .cap b{color:var(--ink);font-weight:700;}
+  .cap code{background:rgba(11,18,32,.05);padding:1px 5px;border-radius:5px;font-size:12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;color:var(--accent);
+    background:rgba(44,91,224,.10);border-radius:6px;padding:3px 8px;margin-bottom:6px;text-transform:uppercase;}
+  .tag.now{color:var(--faint);background:rgba(98,108,121,.12);}
+  .tag.rec{color:#fff;background:var(--accent);}
+  .tag.q{color:var(--warning);background:rgba(149,95,0,.13);}
+
+  /* device — iPhone Pro Max 393pt logical */
+  .dev{width:392px;border:11px solid #0B0C0E;border-radius:54px;background:#0B0C0E;
+    box-shadow:0 50px 90px -32px rgba(15,23,42,.55),0 10px 30px -10px rgba(15,23,42,.22);}
+  .scr{width:370px;height:800px;overflow:hidden;border-radius:43px;background:var(--canvas);
+    position:relative;display:flex;flex-direction:column;}
+  .island{position:absolute;left:50%;top:9px;transform:translateX(-50%);width:104px;height:28px;border-radius:17px;background:#000;z-index:9;}
+  .sb{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;
+    padding:0 24px 0 28px;background:var(--surface);position:relative;z-index:5;}
+  .sb .t{font-size:14.5px;font-weight:700;} .sb .r{font-size:11px;letter-spacing:1px;}
+
+  /* nav */
+  .nav{height:48px;flex:none;display:grid;grid-template-columns:104px 1fr 104px;align-items:center;
+    padding:0 8px;background:var(--surface);border-bottom:1px solid var(--separator);z-index:4;}
+  .nav .l{display:flex;align-items:center;gap:2px;color:var(--accent);font-size:15px;}
+  .nav .t{text-align:center;font-size:15px;font-weight:650;}
+  .nav .r{text-align:right;color:var(--accent);font-size:15px;font-weight:650;padding-right:6px;}
+  .nav .r.off{color:var(--placeholder);font-weight:500;}
+
+  .scroll{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:12px 0 0;}
+  .scroll > *{flex:none;}
+  .shb > *{flex:none;}
+
+  /* context banner (из календаря) */
+  .ctx{margin:0 16px;border-radius:var(--rCard);background:rgba(44,91,224,.08);
+    padding:11px 14px;display:flex;gap:11px;align-items:center;}
+  .ctx .ic{width:32px;height:32px;border-radius:11px;background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;}
+  .ctx b{display:block;font-size:13px;font-weight:650;color:var(--accent);}
+  .ctx span{display:block;font-size:12px;color:var(--sub);margin-top:1px;}
+
+  /* identity — Display/Title, no avatar */
+  .ident{padding:4px 16px 2px;}
+  .eyebrow{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.6px;
+    text-transform:uppercase;color:var(--faint);}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--success);}
+  .dot.draft{background:var(--warning);}
+  .ident h1{font-size:26px;line-height:32px;font-weight:700;letter-spacing:-.4px;margin:8px 0 0;}
+  .ident h1.ph{color:var(--placeholder);font-weight:600;}
+  .ident .meta{font-size:15px;line-height:20px;color:var(--sub);margin-top:6px;}
+
+  /* action strip — 3 действия, ровно по одному месту на намерение */
+  .strip{margin:0 16px;background:var(--surface);border-radius:var(--rCard);box-shadow:var(--cardShadow);
+    display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden;}
+  .strip .a{min-height:68px;padding:10px 4px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:5px;color:var(--accent);font-size:12px;font-weight:650;line-height:1;}
+  .strip .a+.a{border-left:1px solid var(--separator);}
+  .strip .a .g{font-size:17px;}
+  .strip .a.off{color:var(--placeholder);opacity:.55;}
+
+  /* card + rows */
+  .card{margin:0 16px;background:var(--surface);border-radius:var(--rCard);box-shadow:var(--cardShadow);overflow:hidden;}
+  .eye{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:rgba(11,18,32,.48);
+    padding:0 16px 8px;display:flex;align-items:center;justify-content:space-between;}
+  .eye .lnk{color:var(--accent);font-size:12px;font-weight:650;letter-spacing:0;text-transform:none;}
+  .row{min-height:52px;display:grid;grid-template-columns:118px minmax(0,1fr) auto;align-items:center;
+    gap:10px;padding:0 16px;}
+  .row+.row{border-top:1px solid var(--separator);}
+  .row .l{font-size:13px;font-weight:500;color:var(--sub);}
+  .row .v{font-size:15px;font-weight:400;color:var(--ink);text-align:right;}
+  .row .v.ph{color:var(--placeholder);}
+  .row .v.strong{font-weight:600;}
+  .row .cv{color:var(--chevron);font-size:15px;}
+  .row .req::after{content:' *';color:var(--danger);}
+  .row.edit .v{color:var(--ink);}
+  .row.focus{background:rgba(44,91,224,.05);box-shadow:inset 0 -1.5px var(--accent);}
+  .cursor{display:inline-block;width:2px;height:17px;background:var(--accent);vertical-align:-3px;margin-left:1px;
+    animation:bl 1.1s steps(1) infinite;}
+  @keyframes bl{0%,49%{opacity:1}50%,100%{opacity:0}}
+  .row .money{font-size:15px;font-weight:600;text-align:right;}
+  .money.g{color:var(--success);} .money.r{color:var(--danger);}
+  .row.multi{grid-template-columns:1fr;align-items:start;padding-top:12px;padding-bottom:12px;}
+  .row.multi .l{margin-bottom:6px;}
+  .row.multi .v{text-align:left;font-size:14px;line-height:1.45;}
+
+  /* hero-запись внутри «работа» */
+  .job{padding:14px 16px;display:flex;gap:12px;align-items:flex-start;border-top:1px solid var(--separator);}
+  .job:first-child{border-top:0;}
+  .job .bar{width:3px;align-self:stretch;border-radius:2px;background:var(--accent);flex:none;}
+  .job .bar.warn{background:var(--warning);}
+  .job .c{flex:1;min-width:0;}
+  .job .top{display:flex;align-items:baseline;gap:8px;}
+  .job .top b{font-size:17px;font-weight:600;letter-spacing:-.2px;}
+  .job .top span{font-size:13px;font-weight:500;color:var(--sub);}
+  .job .ttl{font-size:13px;color:var(--body);margin-top:4px;}
+  .job .mt{font-size:12px;color:var(--sub);margin-top:2px;}
+  .job .go{align-self:center;color:var(--accent);font-size:13px;font-weight:650;white-space:nowrap;}
+
+  /* пустая история */
+  .empty{padding:16px;font-size:13px;line-height:1.45;color:var(--sub);}
+  .ev{min-height:56px;display:flex;align-items:center;gap:11px;padding:0 16px;}
+  .ev+.ev{border-top:1px solid var(--separator);}
+  .ev .m{width:30px;height:30px;border-radius:10px;background:rgba(44,91,224,.10);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;font-size:14px;flex:none;}
+  .ev .m.g{background:rgba(8,122,82,.10);color:var(--success);}
+  .ev .c{flex:1;min-width:0;}
+  .ev .c b{display:block;font-size:15px;font-weight:600;}
+  .ev .c span{display:block;font-size:13px;color:var(--sub);margin-top:1px;}
+  .ev .d{font-size:12px;color:var(--faint);white-space:nowrap;}
+
+  /* footer CTA — единственный градиент */
+  .foot{flex:none;padding:10px 16px 16px;background:rgba(255,255,255,.92);border-top:1px solid var(--separator);}
+  .cta{min-height:52px;border-radius:999px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--accentFrom),var(--accentTo));color:#fff;font-size:17px;font-weight:600;
+    box-shadow:var(--brandShadow);}
+  .cta.off{background:#c8d0dc;box-shadow:none;}
+  .cta.sec{background:var(--fill);color:var(--body);box-shadow:none;font-weight:600;}
+
+  /* bottom sheet */
+  .shw{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;justify-content:flex-end;}
+  .scrim{position:absolute;inset:0;background:rgba(11,18,32,.36);}
+  .sheet{position:relative;background:var(--canvas);border-radius:var(--rSheet) var(--rSheet) 0 0;max-height:86%;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -12px 40px rgba(11,18,32,.22);}
+  .grab{width:36px;height:5px;border-radius:999px;background:#d2d8e2;margin:8px auto 4px;flex:none;}
+  .shh{display:grid;grid-template-columns:80px 1fr 80px;align-items:center;padding:4px 14px 12px;flex:none;}
+  .shh .c{font-size:15px;color:var(--sub);}
+  .shh .t{text-align:center;font-size:17px;font-weight:600;}
+  .shb{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding-bottom:6px;}
+
+  /* закреплённый клиент в шторке */
+  .pin{margin:0 16px;border-radius:var(--rCard);background:rgba(44,91,224,.07);padding:12px 14px;
+    display:flex;align-items:center;gap:11px;}
+  .pin .av{width:38px;height:38px;border-radius:999px;background:var(--accent);color:#fff;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;}
+  .pin b{display:block;font-size:15px;font-weight:600;}
+  .pin span{display:block;font-size:13px;color:var(--sub);margin-top:1px;}
+  .pin .lk{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;
+    color:var(--accent);background:rgba(44,91,224,.12);padding:4px 9px;border-radius:999px;}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 14px;}
+  .chip{height:32px;display:flex;align-items:center;padding:0 13px;border-radius:999px;background:var(--fill);
+    color:var(--sub);font-size:13px;font-weight:500;}
+  .chip.on{background:var(--accent);color:#fff;font-weight:600;}
+  .chip.gh{background:transparent;border:1px solid var(--separator);color:var(--accent);font-weight:600;}
+
+  .tot{min-height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;
+    border-top:1px solid var(--separator);}
+  .tot .l{font-size:15px;font-weight:600;} .tot .v{font-size:17px;font-weight:700;}
+
+  .toast{position:absolute;left:50%;top:64px;transform:translateX(-50%);z-index:12;
+    background:rgba(11,18,32,.93);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:999px;
+    white-space:nowrap;}
+
+  .note{max-width:1020px;margin:24px auto 0;background:rgba(255,255,255,.74);border:1px solid rgba(11,18,32,.07);
+    border-radius:16px;padding:17px 21px;font-size:13.5px;line-height:1.65;color:var(--body);}
+  .note b{color:var(--ink);}
+  .note .hd{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);margin-bottom:9px;}
+  .note ul{margin:8px 0 0;padding-left:19px;} .note li{margin-bottom:6px;}
+  .note code{background:var(--fill);padding:1px 6px;border-radius:5px;font-size:12.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .pill{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+    padding:3px 9px;border-radius:999px;margin-right:7px;}
+  .pill.a{color:var(--success);background:rgba(8,122,82,.12);}
+  .pill.b{color:var(--warning);background:rgba(149,95,0,.13);}
+  .pill.c{color:var(--danger);background:rgba(201,55,44,.11);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="lede">
+  <h1>Клиент — одна страница на все случаи</h1>
+  <p>Мобильное приложение (Expo/RN, Metro). Токены — реальные, из
+     <span class="k">apps/mobile/src/theme/colors.ts</span>; типографика и радиусы — по
+     <span class="k">DESIGN-SYSTEM.md «Halo Cobalt» (LOCKED v1)</span>.</p>
+  <p>Это перенос твоего макета <span class="k">mockup-site/client-create.html</span> (22 июля — «единый профиль»:
+     создание · просмотр · контекст записи) в материал мобильного приложения — <span class="w">плюс то, чего в нём не было:
+     создание записи прямо со страницы</span>.</p>
+</div>
+
+<!-- ═══════ 1. ТРИ РЕЖИМА ОДНОГО ЭКРАНА ═══════ -->
+<div class="sec">
+  <div class="sec-h">
+    <h2><span class="num">1</span>Один экран — три режима</h2>
+    <p>Тот же <code>/clients/[id]</code>. Отличаются только шапка, футер и то, что скрыто до создания.
+       Структура секций — из твоего макета: контакты → работа → расчёты → история → заметка.</p>
+  </div>
+
+  <div class="grid">
+
+    <!-- 1A: создание -->
+    <div class="col">
+      <div class="cap"><span class="tag">режим 1</span><br/>
+        <b>Создание.</b> Заголовок — «Новый клиент», точка янтарная = черновик.
+        Обязателен только <b>Имя</b>; телефон с автофокусом и живой проверкой. Расчёты и история скрыты — до создания
+        там пусто, и «€0 · записей нет» вокруг двух полей было бы шумом.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Новый клиент</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot draft"></span>Черновик</div>
+            <h1 class="ph">Новый клиент</h1>
+            <div class="meta">+357 99 123 456</div>
+          </div>
+
+          <div>
+            <div class="eye">Контакт</div>
+            <div class="card">
+              <div class="row edit"><span class="l req">Имя</span><span class="v ph">Имя и фамилия</span><span></span></div>
+              <div class="row edit focus"><span class="l">Телефон</span><span class="v">+357 99 123 456<span class="cursor"></span></span><span></span></div>
+              <div class="row"><span class="l">Из контактов</span><span class="v" style="color:var(--accent);font-weight:600;">Выбрать</span><span class="cv">›</span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="row"><span class="l">Адрес объекта</span><span class="v ph">Район или адрес</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Команда</span><span class="v ph">Не назначена</span><span class="cv">›</span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="eye">Заметка</div>
+            <div class="card">
+              <div class="row multi"><span class="l">Комментарий</span>
+                <span class="v ph">Доступ, язык, предпочтения…</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><div class="cta">Создать клиента</div></div>
+      </div></div>
+    </div>
+
+    <!-- 1B: просмотр -->
+    <div class="col">
+      <div class="cap"><span class="tag">режим 2</span><br/>
+        <b>Просмотр и редактирование.</b> Та же вёрстка, поля заполнены, справа «Изменить».
+        Появляются три действия, расчёты и история. Футера нет — пока не жмёшь «Изменить».</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">Изменить</span></div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot"></span>Клиент · с 14 мая</div>
+            <h1>Анастасия П.</h1>
+            <div class="meta">+357 99 452 118 · Лимассол · Y&amp;D</div>
+          </div>
+
+          <div class="strip">
+            <span class="a"><span class="g">📞</span>Позвонить</span>
+            <span class="a"><span class="g">💬</span>Написать</span>
+            <span class="a"><span class="g">📅</span>Записать</span>
+          </div>
+
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="job">
+                <span class="bar"></span>
+                <span class="c">
+                  <span class="top"><b>24 июля</b><span>09:30</span></span>
+                  <span class="ttl">Чистка · 2 кондиционера</span>
+                  <span class="mt">Y&amp;D · Agios Athanasios</span>
+                </span>
+                <span class="go">Открыть ›</span>
+              </div>
+              <div class="row"><span class="l">Адрес объекта</span><span class="v">Agios Athanasios</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Оборудование</span><span class="v">Daikin · 2 шт</span><span class="cv">›</span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="eye">Расчёты</div>
+            <div class="card">
+              <div class="row"><span class="l">Визитов</span><span class="money">8</span><span></span></div>
+              <div class="row"><span class="l">Получено</span><span class="money g">€2 340</span><span></span></div>
+              <div class="row"><span class="l">К оплате</span><span class="money r">€120</span><span></span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="eye">История <span class="lnk">Вся</span></div>
+            <div class="card">
+              <div class="ev"><span class="m">📅</span><span class="c"><b>Визит завершён</b><span>Чистка · 2 кондиционера</span></span><span class="d">14 мая</span></div>
+              <div class="ev"><span class="m g">€</span><span class="c"><b>Оплата получена</b><span>€180 · наличные</span></span><span class="d">14 мая</span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 1C: из календаря -->
+    <div class="col">
+      <div class="cap"><span class="tag">режим 3</span><br/>
+        <b>Из календаря — контекст записи.</b> Тот же экран открыт из создания записи: сверху плашка,
+        «назад» ведёт в запись, а кнопка внизу — «Создать и добавить». Один экран, третья работа.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Запись</span><span class="t">Новый клиент</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="ctx">
+            <span class="ic">📅</span>
+            <span><b>Добавление клиента в запись</b><span>22 июля · 12:00 · Y&amp;D</span></span>
+          </div>
+
+          <div class="ident">
+            <div class="eyebrow"><span class="dot draft"></span>Черновик</div>
+            <h1>Мария Соколова</h1>
+            <div class="meta">+357 96 771 204</div>
+          </div>
+
+          <div>
+            <div class="eye">Контакт</div>
+            <div class="card">
+              <div class="row edit"><span class="l req">Имя</span><span class="v strong">Мария Соколова</span><span></span></div>
+              <div class="row edit"><span class="l">Телефон</span><span class="v">+357 96 771 204</span><span></span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="job">
+                <span class="bar warn"></span>
+                <span class="c">
+                  <span class="top"><b>22 июля</b><span>12:00</span></span>
+                  <span class="ttl">Запись, в которую добавляем</span>
+                  <span class="mt">Y&amp;D · адрес возьмём из записи</span>
+                </span>
+              </div>
+              <div class="row"><span class="l">Команда</span><span class="v">Y&amp;D</span><span class="cv">›</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><div class="cta">Создать и добавить</div></div>
+      </div></div>
+    </div>
+
+  </div>
+
+  <div class="note">
+    <div class="hd">Что здесь моё решение, а не твой макет</div>
+    <ul>
+      <li><b>Секции — карточками, а не плоским списком.</b> В твоём вебовом макете строки шли сплошняком без карточек.
+          В приложении весь язык — белые карточки radius 20 на холодном фоне (<code>SectionCard</code>), и плоский список
+          выпал бы из всех остальных экранов. IA и порядок секций я сохранил один в один.</li>
+      <li><b>Нумерации 01–05 нет.</b> На телефоне она съедает 34pt слева в каждой секции и ничего не сообщает.</li>
+      <li><b>Три действия, а не пять.</b> Позвонить · Написать · Записать — ровно как в твоём макете
+          (и это совпадает с правилом «без дублей» от 14 июля).</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ═══════ 2. СОЗДАНИЕ ЗАПИСИ СО СТРАНИЦЫ ═══════ -->
+<div class="sec">
+  <div class="sec-h">
+    <h2><span class="num">2</span>«Записать» — то, чего нет ни в макете, ни в коде</h2>
+    <p>Сегодня кнопка уводит на <b>календарь</b>, он переключает бригаду и только потом открывает экран <code>/book</code>.
+       Возврат — через календарь. Вот два способа это закрыть.</p>
+  </div>
+
+  <div class="grid">
+
+    <div class="col">
+      <div class="cap"><span class="tag rec">рекомендую</span><br/>
+        <b>Шторка поверх карточки.</b> Канонический <code>BottomSheet</code> (тот же, что у фильтров и периода).
+        Клиент, объект и бригада уже подставлены. Свайп вниз — ты ровно там, где был, скролл не потерян.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">Изменить</span></div>
+        <div class="scroll" style="filter:blur(.7px);opacity:.5;">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot"></span>Клиент · с 14 мая</div>
+            <h1>Анастасия П.</h1>
+            <div class="meta">+357 99 452 118 · Лимассол · Y&amp;D</div>
+          </div>
+          <div class="strip"><span class="a">📞</span><span class="a">💬</span><span class="a">📅</span></div>
+        </div>
+        <div class="shw">
+          <div class="scrim"></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="shh"><span class="c">Отмена</span><span class="t">Новая запись</span><span></span></div>
+            <div class="shb">
+              <div class="pin">
+                <span class="av">АП</span>
+                <span><b>Анастасия П.</b><span>Agios Athanasios</span></span>
+                <span class="lk">клиент</span>
+              </div>
+              <div class="card">
+                <div class="row"><span class="l">Когда</span><span class="v strong">Завтра, 11:00</span><span class="cv">›</span></div>
+                <div class="row"><span class="l">Объект</span><span class="v">Agios Athanasios</span><span class="cv">›</span></div>
+                <div class="row"><span class="l">Команда</span><span class="v">Y&amp;D</span><span class="cv">›</span></div>
+              </div>
+              <div>
+                <div class="eye">Услуги</div>
+                <div class="card">
+                  <div style="padding:12px 16px 0;"></div>
+                  <div class="chips" style="padding-top:0;">
+                    <span class="chip on">Чистка · €60</span>
+                    <span class="chip">Заправка</span>
+                    <span class="chip gh">＋ ещё</span>
+                  </div>
+                  <div class="tot"><span class="l">Итого</span><span class="v">€60</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="foot"><div class="cta">Создать запись</div></div>
+          </div>
+        </div>
+      </div></div>
+      <div class="cap" style="color:var(--faint);font-size:12.5px;">
+        ＋ не уходишь со страницы · ＋ тот же <code>BottomSheet</code>, что везде · − ещё один слой над экраном
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag">альтернатива</span><br/>
+        <b>Сразу на <code>/book</code>, без крюка через календарь.</b> Экран тот же, что и сегодня,
+        но открывается прямо с карточки, и «назад» возвращает в карточку, а не в календарь. ~20 строк правки.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Анастасия</span><span class="t">Новая запись</span><span class="r off">&nbsp;</span></div>
+        <div class="scroll">
+          <div class="pin">
+            <span class="av">АП</span>
+            <span><b>Анастасия П.</b><span>+357 99 452 118</span></span>
+            <span class="lk">клиент</span>
+          </div>
+          <div>
+            <div class="eye">Когда</div>
+            <div class="card">
+              <div class="row"><span class="l">Дата</span><span class="v strong">Завтра, 23 июля</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Время</span><span class="v">11:00 – 12:00</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Где и кто</div>
+            <div class="card">
+              <div class="row"><span class="l">Объект</span><span class="v">Agios Athanasios</span><span class="cv">›</span></div>
+              <div class="row"><span class="l">Команда</span><span class="v">Y&amp;D</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Услуги</div>
+            <div class="card">
+              <div class="chips" style="padding-top:12px;">
+                <span class="chip on">Чистка · €60</span><span class="chip gh">＋ ещё</span>
+              </div>
+              <div class="tot"><span class="l">Итого</span><span class="v">€60</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><div class="cta">Создать запись</div></div>
+      </div></div>
+      <div class="cap" style="color:var(--faint);font-size:12.5px;">
+        ＋ один экран записи на всё приложение · ＋ дешевле всего · − формально всё же уход со страницы
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="cap"><span class="tag">после создания</span><br/>
+        <b>Цепочка «завёл → сразу записал».</b> Клиент создан — сверху тост с одним действием, сам уезжает.
+        Без модалок «что дальше?». Работает и в режиме 1, и в режиме 3.</div>
+      <div class="dev"><div class="scr">
+        <div class="island"></div>
+        <div class="sb"><span class="t">9:41</span><span class="r">▮▮▮ ᯤ ▰</span></div>
+        <div class="nav"><span class="l">‹ Клиенты</span><span class="t">Клиент</span><span class="r">Изменить</span></div>
+        <div class="toast">Мария в базе · Записать?</div>
+        <div class="scroll">
+          <div class="ident">
+            <div class="eyebrow"><span class="dot"></span>Клиент · сегодня</div>
+            <h1>Мария Соколова</h1>
+            <div class="meta">+357 96 771 204</div>
+          </div>
+          <div class="strip">
+            <span class="a"><span class="g">📞</span>Позвонить</span>
+            <span class="a"><span class="g">💬</span>Написать</span>
+            <span class="a"><span class="g">📅</span>Записать</span>
+          </div>
+          <div>
+            <div class="eye">Работа с клиентом</div>
+            <div class="card">
+              <div class="job">
+                <span class="bar warn"></span>
+                <span class="c">
+                  <span class="top"><b>Записей нет</b></span>
+                  <span class="ttl">Следующий визит не запланирован</span>
+                </span>
+                <span class="go">Записать ›</span>
+              </div>
+              <div class="row"><span class="l">Адрес объекта</span><span class="v ph">Не указан</span><span class="cv">›</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="eye">Расчёты</div>
+            <div class="card">
+              <div class="row"><span class="l">Визитов</span><span class="money">0</span><span></span></div>
+              <div class="row"><span class="l">Получено</span><span class="money">€0</span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════ 3. РАЗВИЛКА ═══════ -->
+<div class="sec">
+  <div class="sec-h">
+    <h2><span class="num">3</span>Развилка, которую решаешь только ты</h2>
+  </div>
+  <div class="note" style="max-width:1020px;">
+    <p><span class="pill c">важно</span> В приложении <b>уже есть</b> карточка клиента — LOCKED «Карта-диспетчер»
+       (NEXT-JOB hero → ряд действий → ОБСЛУЖИВАНИЕ → объекты → свёрнутая справка: Визиты · Финансы · Вложения ·
+       Контакты · Личное · Мета). Создание там тоже уже на этой же странице (<code>id="new"</code> → черновик).</p>
+    <p style="margin-top:10px;">Твой макет от 22 июля — <b>другая</b> структура: плоские секции
+       Контакты → Работа → Расчёты → История → Заметка, всё развёрнуто, ничего не свёрнуто.
+       Это не полировка существующего, это <b>замена</b> карточки.</p>
+    <p style="margin-top:10px;">Оба варианта рабочие. Но выбрать надо один — и я не буду молча переписывать LOCKED-дизайн.</p>
+    <ul style="margin-top:10px;">
+      <li><b>Вариант «Профиль»</b> (то, что нарисовано выше) — всё на виду, ничего не разворачивать, ближе к твоему макету.
+          Минус: у клиента с 8 объектами и 40 визитами экран станет очень длинным.</li>
+      <li><b>Вариант «Диспетчер»</b> — оставляем как есть, а я достраиваю только «Записать» шторкой и цепочку после создания.
+          Минус: остаётся сворачивание, которое тебе, судя по макету, не нравится.</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
