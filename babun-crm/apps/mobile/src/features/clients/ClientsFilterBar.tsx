@@ -1,14 +1,22 @@
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, Filter, X } from "lucide-react-native";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import type { ActiveToken } from "./filter";
 
-// Волна 2 — порт web ClientsFilterBar (v809/v812). Idle: воронка +
-// «Фильтры» + «Всего N клиентов» + шеврон. Active: акцентная воронка +
-// бейдж-счётчик + перенос удаляемых токенов с цветными точками, ниже —
-// тонкая строка «Найдено: N» / «Сбросить». Тап по бару (кроме ✕ токена)
-// открывает панель.
+// Бар над списком — вход в лист «Фильтры» и снятие выбранного.
+// Говорит на диалекте листа (полировка 2026-07-26): токен = материал
+// rowFill с радиусом 12 и вертикальным тиком сущности (не пилюля с
+// круглой точкой — круглых пилюль в продукте нет), бейдж — сплошной ink,
+// кобальт живёт ровно в одном месте — «Сбросить». Счётчик найденного —
+// ОДИН, по одной формуле, в обоих состояниях; вторая строка «Найдено: N»
+// удалена как дубль. Тап по телу токена открывает попап именно этого
+// измерения, ✕ — снимает его.
+
+/** Больше пяти токенов бар не печатает: остальное сворачивается в «+K»,
+ *  иначе бар отжимает список на пол-экрана. */
+const TOKEN_LIMIT = 5;
 
 export function ClientsFilterBar({
   totalCount,
@@ -16,170 +24,234 @@ export function ClientsFilterBar({
   activeCount,
   tokens,
   onOpen,
+  onOpenToken,
   onRemoveToken,
   onReset,
 }: {
   /** Всего клиентов у тенанта — показывается в idle. */
   totalCount: number;
-  /** После фильтров — строка «Найдено» в active. */
+  /** После фильтров — «Найдено N из M». */
   foundCount: number;
   /** Число активных значений фильтра (бейдж). */
   activeCount: number;
   tokens: ActiveToken[];
   onOpen: () => void;
+  /** Тап по телу токена — открыть лист сразу на его измерении. */
+  onOpenToken: (token: ActiveToken) => void;
   onRemoveToken: (token: ActiveToken) => void;
   onReset: () => void;
 }) {
   const t = useThemeColors();
   const active = activeCount > 0;
+  const shown = tokens.slice(0, TOKEN_LIMIT);
+  const hidden = tokens.length - shown.length;
+
+  // Одна формула на оба состояния — счётчик не должен звучать по-разному
+  // в зависимости от того, включён ли фильтр.
+  const countLine =
+    foundCount < totalCount
+      ? `Найдено ${foundCount} из ${totalCount}`
+      : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`;
 
   return (
-    <View className="mx-4 mb-2">
-      <View
-        className="min-h-11 border px-3 py-1.5"
-        style={[
-          { borderRadius: t.radius.card },
-          active
-            ? {
-                backgroundColor: `${t.accent}14`,
-                borderColor: "transparent",
-              }
-            : // Idle — без карточной обводки/заливки: строка «Фильтры ·
-              // Всего N» ложится прямо на канвас, а не второй белой коробкой
-              // под шапкой. Активное состояние остаётся сгруппированным.
-              { backgroundColor: "transparent", borderColor: "transparent" },
-        ]}
+    <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+      <Pressable
+        onPress={() => {
+          haptics.tap();
+          onOpen();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={
+          active ? `Фильтры, активно ${activeCount}. ${countLine}` : "Фильтры"
+        }
+        accessibilityHint="Открывает фильтры"
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 8,
+          minHeight: 44,
+          opacity: pressed ? 0.8 : 1,
+        })}
       >
+        <Filter
+          color={active ? t.ink : t.sub}
+          size={16}
+          strokeWidth={2.2}
+        />
         {active ? (
-          <View className="gap-1.5">
-            <Pressable
-              onPress={onOpen}
-              accessibilityRole="button"
-              accessibilityLabel={`Изменить фильтры, активно ${activeCount}`}
-              className="min-h-11 flex-row items-center gap-2 active:opacity-80"
-            >
-              <Filter color={t.accent} size={16} strokeWidth={2.2} />
-              <View
-                className="h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5"
-                style={{ backgroundColor: t.accent }}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  className="text-[11px] font-bold"
-                  style={{ color: t.onAccent, fontVariant: ["tabular-nums"] }}
-                >
-                  {activeCount}
-                </Text>
-              </View>
-              <Text
-                maxFontSizeMultiplier={1.3}
-                className="flex-1 text-sm font-semibold"
-                style={{ color: t.ink }}
-              >
-                Фильтры
-              </Text>
-              <ChevronDown color={t.faint} size={16} strokeWidth={2.2} />
-            </Pressable>
-            <View className="flex-row flex-wrap items-center gap-1.5">
-              {tokens.map((tok) => (
-                <View
-                  key={`${tok.key}:${tok.val}`}
-                  className="min-h-[34px] flex-row items-center gap-1 rounded-full border pl-3"
-                  style={{
-                    backgroundColor: t.surface,
-                    borderColor: t.separator,
-                  }}
-                >
-                  {tok.color ? (
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: tok.color,
-                      }}
-                    />
-                  ) : null}
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    className="max-w-[120px] text-xs font-semibold"
-                    style={{ color: t.ink }}
-                    numberOfLines={1}
-                  >
-                    {tok.label}
-                  </Text>
-                  <Pressable
-                    onPress={() => onRemoveToken(tok)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Убрать ${tok.label}`}
-                    hitSlop={8}
-                    className="h-8 w-8 items-center justify-center rounded-full active:opacity-60"
-                  >
-                    <X color={t.faint} size={13} strokeWidth={2.6} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : (
-          <Pressable
-            onPress={onOpen}
-            accessibilityRole="button"
-            accessibilityLabel="Фильтры"
-            className="min-h-11 flex-row items-center gap-2 active:opacity-80"
+          <View
+            style={{
+              minWidth: 18,
+              height: 18,
+              paddingHorizontal: 6,
+              borderRadius: 9,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: t.ink,
+            }}
           >
-            <Filter color={t.sub} size={16} strokeWidth={2.2} />
             <Text
               maxFontSizeMultiplier={1.3}
-              className="text-sm font-semibold"
-              style={{ color: t.ink }}
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                color: "#FFFFFF",
+                fontVariant: ["tabular-nums"],
+              }}
             >
-              Фильтры
+              {activeCount}
             </Text>
-            <View className="flex-1" />
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
-              className="text-[13px]"
-              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-            >
-              {foundCount < totalCount
-                ? `Найдено ${foundCount} из ${totalCount}`
-                : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`}
-            </Text>
-            <ChevronDown color={t.faint} size={16} strokeWidth={2.2} />
-          </Pressable>
-        )}
-      </View>
+          </View>
+        ) : null}
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+        >
+          Фильтры
+        </Text>
+        <View style={{ flex: 1 }} />
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={{ fontSize: 13, color: t.sub, fontVariant: ["tabular-nums"] }}
+        >
+          {countLine}
+        </Text>
+        <ChevronDown color={t.chevron} size={16} strokeWidth={2.2} />
+      </Pressable>
 
       {active ? (
-        <View className="mt-1.5 flex-row items-center justify-between px-1">
-          <Text
-            maxFontSizeMultiplier={1.3}
-            className="text-xs"
-            style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-          >
-            Найдено:{" "}
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="font-semibold"
-              style={{ color: t.ink }}
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+            marginTop: 2,
+          }}
+        >
+          {shown.map((tok) => (
+            <View
+              key={`${tok.key}:${tok.val}`}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                minHeight: 32,
+                borderRadius: 12,
+                backgroundColor: t.rowFill,
+              }}
             >
-              {foundCount}
-            </Text>
-          </Text>
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  onOpenToken(tok);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={tok.label}
+                accessibilityHint="Открывает это измерение"
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingLeft: 10,
+                  paddingRight: 2,
+                  paddingVertical: 6,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                {tok.color ? (
+                  <View
+                    style={{
+                      width: 2,
+                      height: 14,
+                      borderRadius: 1,
+                      marginRight: 7,
+                      backgroundColor: tok.color,
+                    }}
+                  />
+                ) : null}
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  numberOfLines={1}
+                  style={{
+                    maxWidth: 140,
+                    fontSize: 13,
+                    fontWeight: "600",
+                    color: t.ink,
+                  }}
+                >
+                  {tok.label}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  onRemoveToken(tok);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Убрать ${tok.label}`}
+                // Асимметрично: зона ✕ не должна залезать на соседний токен.
+                hitSlop={{ top: 10, bottom: 10, left: 2, right: 10 }}
+                style={({ pressed }) => ({
+                  width: 30,
+                  alignSelf: "stretch",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: pressed ? 0.5 : 1,
+                })}
+              >
+                <X color={t.faint} size={13} strokeWidth={2.6} />
+              </Pressable>
+            </View>
+          ))}
+          {hidden > 0 ? (
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                onOpen();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Ещё ${hidden} условий`}
+              style={({ pressed }) => ({
+                minHeight: 32,
+                justifyContent: "center",
+                paddingHorizontal: 10,
+                borderRadius: 12,
+                backgroundColor: t.rowFill,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.3}
+                style={{
+                  fontSize: 13,
+                  fontWeight: "600",
+                  color: t.faint,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {`+${hidden}`}
+              </Text>
+            </Pressable>
+          ) : null}
+          <View style={{ flex: 1 }} />
           <Pressable
-            onPress={onReset}
+            onPress={() => {
+              haptics.tap();
+              onReset();
+            }}
             accessibilityRole="button"
             accessibilityLabel="Сбросить фильтры"
-            className="min-h-11 justify-center px-1 active:opacity-60"
+            hitSlop={10}
+            style={({ pressed }) => ({
+              minHeight: 32,
+              justifyContent: "center",
+              paddingHorizontal: 4,
+              opacity: pressed ? 0.6 : 1,
+            })}
           >
             <Text
               maxFontSizeMultiplier={1.3}
-              className="text-xs font-semibold"
-              style={{ color: t.accent }}
+              style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
             >
               Сбросить
             </Text>

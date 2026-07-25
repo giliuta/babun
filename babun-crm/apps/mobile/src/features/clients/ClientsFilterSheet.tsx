@@ -736,6 +736,7 @@ export function ClientsFilterSheet({
   dataTo,
   search,
   onClearSearch,
+  initialFacet,
   sort,
   onSortChange,
   onChange,
@@ -751,6 +752,8 @@ export function ClientsFilterSheet({
    *  и снимается вместе с фильтрами («Сбросить» чистит и её). */
   search: string;
   onClearSearch: (next: string) => void;
+  /** С каким измерением открыть лист (тап по телу токена в баре). */
+  initialFacet?: FacetSheet | null;
   /** Сортировка списка — персистентная настройка (sort-pref), НЕ фильтр;
    *  «Сбросить» её не трогает. Живёт первой строкой листа. */
   sort: SortKey;
@@ -775,6 +778,14 @@ export function ClientsFilterSheet({
     filter: ClientsFilter;
     search: string;
   } | null>(null);
+
+  // Попап под токеном открываем ЧЕРЕЗ КАДР после входной пружины листа —
+  // иначе две пружины стартуют одновременно и обе смазываются.
+  useEffect(() => {
+    if (!visible || !initialFacet) return;
+    const id = setTimeout(() => setOpenFacet(initialFacet), 260);
+    return () => clearTimeout(id);
+  }, [visible, initialFacet]);
 
   useEffect(() => {
     if (!visible) {

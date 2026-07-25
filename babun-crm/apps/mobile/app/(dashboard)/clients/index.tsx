@@ -51,6 +51,7 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
+  clientDebt,
   EMPTY_FILTER,
   resetFilters,
   type ActiveToken,
@@ -120,12 +121,8 @@ function ClientRow({
   const swipeRef = useRef<SwipeableMethods | null>(null);
   const exp = Math.round(stats?.expectedRevenue ?? 0);
   const income = Math.round(stats?.totalSpent ?? 0);
-  const debt =
-    (stats?.debt ?? 0) > 0
-      ? stats!.debt
-      : client.balance < 0
-        ? Math.abs(client.balance)
-        : 0;
+  // Одна формула долга на карточку, сортировку и статус «Должники».
+  const debt = clientDebt(client, stats);
   const phoneDigits = client.phone?.replace(/\D/g, "") ?? "";
   const avatarColor = getAvatarHue(client.full_name);
 
@@ -185,6 +182,19 @@ function ClientRow({
             style={{ color: t.ink }}
           >
             {formatShortDateRu(stats.lastVisitDate)}
+          </Text>
+        </View>
+      ) : stats?.nextApt ? (
+        // Визитов ещё не было, но человек ЗАПИСАН — «нет записей» было
+        // прямой ложью в самый нужный момент.
+        <View className="flex-row items-center gap-1">
+          <Clock color={t.accent} size={12} strokeWidth={2} />
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-[11px]"
+            style={{ color: t.accent }}
+          >
+            {`записан ${formatShortDateRu(stats.nextApt.date)}`}
           </Text>
         </View>
       ) : (
@@ -468,6 +478,10 @@ export default function ClientsListScreen() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // С какого измерения открыть лист (тап по телу токена в баре).
+  const [initialFacet, setInitialFacet] = useState<
+    "segment" | "city" | "tag" | "team" | "source" | "property" | null
+  >(null);
   const [importOpen, setImportOpen] = useState(false);
 
   // ── Bulk-mode (multi-select) ──────────────────────────────────────
@@ -573,6 +587,15 @@ export default function ClientsListScreen() {
       }));
   };
 
+  // Один сброс на все три кнопки (лист, бар, пустой экран): чистит и
+  // фильтры, и поиск — иначе «Сбросить» на баре оставлял запрос и список
+  // оставался пустым без видимой причины.
+  const resetAll = () => {
+    haptics.tap();
+    setFilter(resetFilters());
+    setQuery("");
+  };
+
   const filtering = result.activeCount > 0 || query.trim().length > 0;
 
   // ── Long-press меню клиента (web v313 parity) — нижний лист
@@ -643,7 +666,14 @@ export default function ClientsListScreen() {
 
   // ── Bulk-mode helpers ─────────────────────────────────────────────
   const visible = result.filtered; // «Выбрать всё» = всё, что сейчас в списке
-  const allSelected = visible.length > 0 && selectedIds.size === visible.length;
+  // Считаем ВИДИМЫХ выбранных: массовое действие работает по ним же,
+  // а selectedIds может помнить исчезнувших из выдачи.
+  const pickedCount = visible.reduce(
+    (n, c) => (selectedIds.has(c.id) ? n + 1 : n),
+    0,
+  );
+  const allSelected =
+    visible.length > 0 && visible.every((c) => selectedIds.has(c.id));
 
   const enterSelection = (seedId?: string) => {
     setSelecting(true);
@@ -742,8 +772,8 @@ export default function ClientsListScreen() {
             </Text>
           </Pressable>
           <Text className="text-base font-semibold" style={{ color: t.ink }}>
-            {selectedIds.size > 0
-              ? `Выбрано ${selectedIds.size}`
+            {pickedCount > 0
+              ? `Выбрано ${pickedCount}`
               : "Выберите клиентов"}
           </Text>
           <Pressable
@@ -844,19 +874,27 @@ export default function ClientsListScreen() {
         </View>
       )}
 
-      {/* Фильтры прячем в режиме выбора — фокус на наборе. */}
-      {!selecting ? (
+      {/* Фильтры прячем в режиме выбора — фокус на наборе. Пока грузим
+          или упали — бара нет: он печатал «Всего 0 клиентов» поверх
+          спиннера и поверх экрана ошибки. */}
+      {!selecting && !isLoading && !error ? (
         <ClientsFilterBar
           totalCount={clients.length}
           foundCount={result.filtered.length}
           activeCount={result.activeCount}
           tokens={result.activeTokens}
           onOpen={() => {
-            haptics.tap();
+            setInitialFacet(null);
+            setSheetOpen(true);
+          }}
+          onOpenToken={(tok) => {
+            // «Период» — не фасет-попап (у него свои пресеты/колёса):
+            // открываем лист как обычно, остальное — сразу на измерении.
+            setInitialFacet(tok.key === "period" ? null : tok.key);
             setSheetOpen(true);
           }}
           onRemoveToken={removeToken}
-          onReset={() => setFilter(resetFilters())}
+          onReset={resetAll}
         />
       ) : null}
 
@@ -958,7 +996,7 @@ export default function ClientsListScreen() {
           «Добавить операцию» в Финансах, вместо отдельной иконки в шапке). */}
       {selecting ? (
         <BulkActionBar
-          count={selectedIds.size}
+          count={pickedCount}
           onSms={() => setSmsOpen(true)}
           onExport={onExport}
           onArchive={onArchive}
@@ -990,6 +1028,7 @@ export default function ClientsListScreen() {
         dataTo={dataSpan.to}
         search={query}
         onClearSearch={setQuery}
+        initialFacet={initialFacet}
         sort={sort}
         onSortChange={(s) => setSort.mutate(s)}
         onChange={setFilter}
