@@ -39,7 +39,6 @@ import type {
 } from "@babun/shared/local/appointments";
 import {
   APPOINTMENT_SOURCE_LABELS,
-  createBlankAppointment,
 } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { buildMapUrl } from "@babun/shared/common/utils/map-links";
@@ -85,9 +84,7 @@ import {
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
-import { useCreateAppointment } from "@/features/calendar/mutations";
-import { useUpdateReminderStatus } from "@/features/recurring/queries";
-import { syncEventAppointmentReminders } from "@/features/calendar/reminders";
+import { useBookingSave } from "@/features/appointments/useBookingSave";
 import { useCurrentRole } from "@/features/settings/tenant";
 import {
   useCalendarSettings,
@@ -273,7 +270,10 @@ export default function BookScreen() {
     () => eventTypesQuery.data ?? [],
     [eventTypesQuery.data],
   );
-  const updateReminderStatus = useUpdateReminderStatus();
+  // Создание заявки и весь его хвост (закрытие напоминания, синхронизация
+  // push события, тосты, хаптика) живут в общем хуке — на нём же строится
+  // шторка «Записать» с карточки клиента, чтобы путь создания остался один.
+  const booking = useBookingSave();
   const rawReminderId = first(params.reminderId);
   const reminderId =
     rawReminderId &&
@@ -285,7 +285,6 @@ export default function BookScreen() {
   const teamsLoading = teamsQuery.isLoading;
   const clientsLoading = clientsQuery.isLoading;
   const role = useCurrentRole().data ?? null;
-  const createMut = useCreateAppointment();
 
   const catalog = useMemo(
     () => new Map(services.map((s) => [s.id, s])),
@@ -1051,7 +1050,7 @@ export default function BookScreen() {
         clientId != null &&
         hasValidTeam &&
         workSelectionValid);
-  const bookingBusy = createMut.isPending || updateReminderStatus.isPending;
+  const bookingBusy = booking.isPending;
   const missingHint = bookingBusy
     ? "Сохраняем…"
     : failedReference
@@ -1112,58 +1111,14 @@ export default function BookScreen() {
       return;
     }
     try {
-      const created = await createMut.mutateAsync(
-        createBlankAppointment(buildPatch()),
-      );
-      let reminderUpdateFailed = false;
-      if (kind === "work" && reminderId) {
-        try {
-          await updateReminderStatus.mutateAsync({
-            id: reminderId,
-            status: "booked",
-          });
-        } catch {
-          // The appointment already exists. Do not throw into the create
-          // error path (which would leave the screen open and invite a
-          // duplicate retry); report the remaining manual cleanup honestly.
-          reminderUpdateFailed = true;
-        }
-      }
-      if (kind === "event" && eventReminderOffset != null) {
-        const reminderResult = await syncEventAppointmentReminders(
-          created,
+      await booking.save({
+        patch: buildPatch(),
+        kind,
+        reminderId,
+        eventReminderOffset,
+        timezone:
           team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
-        );
-        if (reminderResult === "denied") {
-          toast("Событие создано, но уведомления запрещены в Настройках", "info");
-        } else if (reminderResult === "deferred") {
-          toast(
-            "Событие создано; напоминание стоит в очереди и установится, когда на iPhone освободится место",
-            "info",
-          );
-        } else if (reminderResult === "capacity") {
-          toast(
-            "Событие создано, но очередь напоминаний переполнена",
-            "info",
-          );
-        } else if (reminderResult === "unavailable") {
-          toast("Событие создано; напоминание появится после обновления приложения", "info");
-        } else if (reminderResult === "past") {
-          toast("Событие создано; выбранное время напоминания уже прошло", "info");
-        } else {
-          toast("Событие создано с напоминанием");
-        }
-      } else {
-        toast(
-          kind === "event"
-            ? "Событие создано"
-            : reminderUpdateFailed
-              ? "Запись создана, но напоминание осталось в списке — отметьте его вручную"
-              : "Запись создана",
-          reminderUpdateFailed ? "info" : "success",
-        );
-      }
-      haptics.success();
+      });
       leaveBook();
     } catch (e) {
       haptics.error();
