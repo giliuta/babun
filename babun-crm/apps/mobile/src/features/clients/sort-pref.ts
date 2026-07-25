@@ -32,6 +32,9 @@ export function useClientsSort() {
 export function useSetClientsSort() {
   const qc = useQueryClient();
   return useMutation({
+    // Запись чисто локальная (MMKV) — без этого TanStack ставит мутацию в
+    // офлайн-паузу, и в самолёте сортировка просто не переключается.
+    networkMode: "always",
     mutationFn: async (sort: SortKey) => {
       try {
         getStorage().set(KEY, sort);

@@ -33,6 +33,10 @@ export type ThemeColors = {
   chevron: string;
   highlight: string;
   pressed: string; // row/button pressed fill
+  /** Материал строки-фасета и оттиск-ряда в покое (ink 4%). */
+  rowFill: string;
+  /** Он же под пальцем — углубление, а не прозрачность (ink 8%). */
+  rowFillPressed: string;
   scrim: string; // modal backdrop
   cardShadow?: string;
   brandShadow: string;
@@ -81,6 +85,11 @@ export const light: ThemeColors = {
   chevron: "rgba(11,18,32,0.50)",
   highlight: "rgba(255,255,255,0.9)",
   pressed: "rgba(11,18,32,0.04)",
+  // Строки-фасеты и оттиск-ряды: нажатие УГЛУБЛЯЕТ материал (4%→8%), а не
+  // делает его прозрачным — `pressed` совпадает с idle-заливкой и на них
+  // не читается вовсе.
+  rowFill: "rgba(11,18,32,0.04)",
+  rowFillPressed: "rgba(11,18,32,0.08)",
   scrim: "rgba(11,18,32,0.30)",
   cardShadow:
     "0px 1px 2px rgba(11,18,32,0.04), 0px 8px 24px rgba(11,18,32,0.06)",

@@ -60,8 +60,10 @@ export const SORT_BLOCKS: SortKey[][] = [
  *  статуса «Должники». */
 export function clientDebt(c: Client, s: ClientStats | undefined): number {
   const byVisits = s?.debt ?? 0;
-  if (byVisits > 0) return byVisits;
-  return c.balance < 0 ? Math.abs(c.balance) : 0;
+  // Округляем ЗДЕСЬ: копейки от округления сумм давали «долг €0» в
+  // карточке и ложное попадание в статус «Должники».
+  if (byVisits > 0) return Math.round(byVisits);
+  return c.balance < 0 ? Math.round(Math.abs(c.balance)) : 0;
 }
 
 /** Сортировка списка клиентов. Ключи предвычисляются ОДНИМ проходом,
@@ -98,17 +100,23 @@ export function sortClients(
     } else if (sort === "revenue") {
       num = s?.totalSpent ?? 0;
       has = num > 0 ? 1 : 0;
+    } else {
+      // Имя — тоже ось: безымянный клиент не имеет значения и уходит в
+      // хвост, а не встаёт первым в «Имя (А–Я)».
+      has = c.full_name.trim() ? 1 : 0;
     }
     return { c, pinned: c.pinned_at ? 1 : 0, pinnedAt: c.pinned_at ?? "", has, num, str, last };
   });
+  // ISO-даты и uuid сравниваем строками напрямую — коллатор нужен только
+  // именам (он на порядок дороже и на датах бессмыслен).
   rows.sort((a, b) => {
     if (a.pinned !== b.pinned) return b.pinned - a.pinned;
     if (a.has !== b.has) return b.has - a.has;
     if (a.has) {
       if (sort === "recent") {
-        if (a.str !== b.str) return b.str.localeCompare(a.str);
+        if (a.str !== b.str) return a.str < b.str ? 1 : -1;
       } else if (sort === "stale") {
-        if (a.str !== b.str) return a.str.localeCompare(b.str);
+        if (a.str !== b.str) return a.str < b.str ? -1 : 1;
       } else if (sort === "debt" || sort === "revenue") {
         if (a.num !== b.num) return b.num - a.num;
       } else {
@@ -117,13 +125,13 @@ export function sortClients(
       }
     }
     if (sort !== "recent" && sort !== "stale" && a.last !== b.last)
-      return b.last.localeCompare(a.last);
+      return a.last < b.last ? 1 : -1;
     if (a.c.created_at !== b.c.created_at)
-      return b.c.created_at.localeCompare(a.c.created_at);
+      return a.c.created_at < b.c.created_at ? 1 : -1;
     const byName = collator.compare(a.c.full_name, b.c.full_name);
     if (byName !== 0) return byName;
-    if (a.pinnedAt !== b.pinnedAt) return b.pinnedAt.localeCompare(a.pinnedAt);
-    return a.c.id.localeCompare(b.c.id);
+    if (a.pinnedAt !== b.pinnedAt) return a.pinnedAt < b.pinnedAt ? 1 : -1;
+    return a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0;
   });
   return rows.map((r) => r.c);
 }
@@ -172,18 +180,28 @@ export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
   { key: "blacklist", label: "Чёрный список" },
 ];
 
-function todayYMD(): string {
+export function todayYMD(): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/** Пороги статусов — в одном месте: их называют подписи и подзаголовки,
+ *  и владелец однажды захочет их настраивать. */
+export const SILENCE_DAYS = 60; // «Давно не были»
+export const NEW_DAYS = 30; // «Недавно добавлены»
+export const LOYAL_VISITS = 5; // «Постоянные»
+export const BIRTHDAY_DAYS = 14; // «Скоро день рождения»
+
 /** Проходит ли клиент один конкретный статус — единый предикат для
- *  фильтра (AND по выбранным) и счётчиков-гейтов видимости. */
+ *  фильтра (AND по выбранным) и счётчиков-гейтов видимости.
+ *  `today` передаётся снаружи: это горячий цикл (N клиентов × 8 статусов),
+ *  и «сегодня» не должно плыть по ходу одного прохода. */
 export function matchesSegment(
   c: Client,
   key: SegmentKey,
   s: ClientStats | undefined,
+  today: string = todayYMD(),
 ): boolean {
   switch (key) {
     case "debt":
@@ -198,21 +216,34 @@ export function matchesSegment(
       // reminder_at приходит из БД как timestamptz («2026-07-24T…») после
       // синка — режем до YYYY-MM-DD, иначе строковое сравнение с датой
       // выкидывает СЕГОДНЯШНИЕ напоминания (T > пусто).
-      return !!c.reminder_at && c.reminder_at.slice(0, 10) <= todayYMD();
+      return !!c.reminder_at && c.reminder_at.slice(0, 10) <= today;
     case "silent":
-      return s ? isLongSilence(s) : false;
+      return s ? isLongSilence(s, SILENCE_DAYS) : false;
     case "birthday": {
       const dd = s?.birthdayInDays ?? null;
-      return dd !== null && dd <= 14;
+      return dd !== null && dd <= BIRTHDAY_DAYS;
     }
     case "new":
-      return s ? isNewClient(s) : false;
+      return s ? isNewClient(s, NEW_DAYS) : false;
     case "loyal":
-      return s ? isLoyalClient(s) : false;
+      return s ? isLoyalClient(s, LOYAL_VISITS) : false;
     case "blacklist":
       return c.blacklisted;
   }
 }
+
+/** Подзаголовок попапа фасета — ОДНА строка, описывающая ровно предикат
+ *  (закон подписи). Там, где семантика неочевидна, говорим прямо: по
+ *  визитам, а не по карточке. */
+export const FACET_SUBTITLES: Record<string, string> = {
+  segment: "Любой из выбранных",
+  city: "Любая из выбранных меток",
+  tag: "Любой из выбранных тегов",
+  team: "Кто когда-либо обслуживал — по визитам",
+  source: "Любой из выбранных источников",
+  property: "По карточке и объектам клиента",
+  sort: "Что окажется сверху списка",
+};
 
 // Счётчики сегментов живут контекстно в useClientFilters.facetCounts
 // (веб-парити): считаются с учётом ВСЕХ остальных фасетов + периода.

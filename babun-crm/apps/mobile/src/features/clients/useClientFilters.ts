@@ -11,6 +11,7 @@ import {
   matchesSegment,
   sortClients,
   periodLabel,
+  todayYMD,
   PROPERTY_OPTIONS,
   SEGMENT_OPTIONS,
   SOURCE_OPTIONS,
@@ -39,7 +40,22 @@ export interface FacetCounts {
   team: Record<string, number>;
   source: Record<string, number>;
   property: Record<string, number>;
+  /** «Виновник нуля»: сколько клиентов осталось бы, сними мы РОВНО одно
+   *  условие. Ключи: search · period · segment · city · tag · team ·
+   *  source · property. Считается тем же проходом, что и счётчики. */
+  withoutOne: Record<string, number>;
 }
+
+const EMPTY_WITHOUT_ONE: Record<string, number> = {
+  search: 0,
+  period: 0,
+  segment: 0,
+  city: 0,
+  tag: 0,
+  team: 0,
+  source: 0,
+  property: 0,
+};
 
 export interface ClientFilterResult {
   /** Итоговый отсортированный+отфильтрованный список. */
@@ -221,7 +237,12 @@ export function useClientFilters(
 
   const tagOptions = useMemo<FacetOption[]>(() => {
     // Весь справочник тегов, не только назначенные.
-    return tags.map((t) => ({ value: t.id, label: t.name, color: t.color }));
+    // Тег без цвета терял тик сущности — падаем на avatar-цвет, как метки.
+    return tags.map((t) => ({
+      value: t.id,
+      label: t.name,
+      color: t.color || getAvatarColor(t.name),
+    }));
   }, [tags]);
 
   // ── Предикаты (замыкания на текущем состоянии) ───────────────────
@@ -357,23 +378,60 @@ export function useClientFilters(
     const property: Record<string, number> = {};
     // Лист закрыт — числа не видны, полный проход не нужен (иначе он бы
     // гонялся на каждую клавишу поиска у тенанта на тысячи карточек).
-    if (!withFacetCounts) return { segment, city, tag, team, source, property };
+    if (!withFacetCounts)
+      return {
+        segment,
+        city,
+        tag,
+        team,
+        source,
+        property,
+        withoutOne: EMPTY_WITHOUT_ONE,
+      };
     // client.city может отличаться регистром от канона опции.
     const cityValueByNorm = new Map(
       cityOptions.map((o) => [o.value.trim().toLowerCase(), o.value]),
     );
+    // «Кто виноват в нуле»: сколько осталось бы, сними мы ровно одно
+    // условие (leave-one-out). Считается тем же проходом — отдельный
+    // проход по клиентам ради подсказки был бы расточительством.
+    const withoutOne: Record<string, number> = {
+      search: 0,
+      period: 0,
+      segment: 0,
+      city: 0,
+      tag: 0,
+      team: 0,
+      source: 0,
+      property: 0,
+    };
+    const today = todayYMD();
     for (const c of clients) {
-      if (!passesSearch(c) || !passesPeriod(c)) continue;
+      const sr = passesSearch(c);
+      const pe = passesPeriod(c);
       const seg = passesSegment(c);
       const tm = passesTeam(c);
       const ct = passesCity(c);
       const tg = passesTag(c);
       const so = passesSource(c);
       const pr = passesProperty(c);
+
+      // Сколько прошло бы без каждого отдельного условия.
+      if (pe && seg && tm && ct && tg && so && pr) withoutOne.search += 1;
+      if (sr && seg && tm && ct && tg && so && pr) withoutOne.period += 1;
+      if (sr && pe && tm && ct && tg && so && pr) withoutOne.segment += 1;
+      if (sr && pe && seg && tm && tg && so && pr) withoutOne.city += 1;
+      if (sr && pe && seg && tm && ct && so && pr) withoutOne.tag += 1;
+      if (sr && pe && seg && ct && tg && so && pr) withoutOne.team += 1;
+      if (sr && pe && seg && tm && ct && tg && pr) withoutOne.source += 1;
+      if (sr && pe && seg && tm && ct && tg && so) withoutOne.property += 1;
+
+      // Счётчики рядов: собственный фасет исключён, остальные применены.
+      if (!sr || !pe) continue;
       if (tm && ct && tg && so && pr) {
         const s = statsMap.get(c.id);
         for (const o of SEGMENT_OPTIONS) {
-          if (matchesSegment(c, o.key, s)) segment[o.key] += 1;
+          if (matchesSegment(c, o.key, s, today)) segment[o.key] += 1;
         }
       }
       if (seg && tm && tg && so && pr) {
@@ -398,7 +456,7 @@ export function useClientFilters(
         }
       }
     }
-    return { segment, city, tag, team, source, property };
+    return { segment, city, tag, team, source, property, withoutOne };
   }, [
     withFacetCounts,
     clients,
@@ -477,14 +535,10 @@ export function useClientFilters(
     tagOptions,
   ]);
 
-  const activeCount =
-    selectedTeams.length +
-    selectedCities.length +
-    activeTags.length +
-    (period ? 1 : 0) +
-    segments.length +
-    sources.length +
-    propertyTypes.length;
+  // Бейдж считает ровно то, что можно снять токеном: значение по мёртвому
+  // id (удалённый тег/команда) токена не даёт и в счёт не идёт — иначе
+  // бейдж показывал бы фильтр, которого пользователь не видит.
+  const activeCount = activeTokens.length;
 
   return {
     filtered,

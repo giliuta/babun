@@ -61,6 +61,8 @@ export function useCardFields() {
 export function useToggleCardField() {
   const qc = useQueryClient();
   return useMutation({
+    // Локальная запись (MMKV) — не должна ждать сети.
+    networkMode: "always",
     mutationFn: async (field: CardField) => {
       const next = { ...getCardFields() };
       next[field] = !next[field];
