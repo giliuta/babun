@@ -17,8 +17,11 @@ import { setSql, setNetwork } from "@babun/shared/storage/sql";
 import { initSentry } from "@/lib/sentry";
 
 // Babun is intentionally light-only. Keep the native appearance pinned even
-// when the device changes its system theme.
-Appearance.setColorScheme("light");
+// when the device changes its system theme. react-native-web's Appearance is
+// read-only (it ships no setColorScheme), so call it optionally — on web the
+// light theme is already pinned by our own tokens + app.json's
+// userInterfaceStyle, and an unguarded call kills the whole boot.
+Appearance.setColorScheme?.("light");
 
 // Storage backend is platform-split. The `@/` alias goes through tsconfig
 // paths, which Expo's Metro resolver does NOT widen with platform extensions
