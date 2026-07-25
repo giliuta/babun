@@ -67,7 +67,7 @@ export function MetaBlock({ client, update, tags = [], draft = false }: MetaBloc
     .join(" · ");
 
   return (
-    <CollapsibleCard title="Метаданные" summary={summary}>
+    <CollapsibleCard title="О клиенте" summary={summary}>
       <View className="gap-3 px-1 pt-1">
         {/* Источник обращения — web uses a <select>; RN has no native
             select, so render the options as a wrapping chip group. */}

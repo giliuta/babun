@@ -95,6 +95,9 @@ export default function FinanceBlock({
       title="Финансы"
       summary={summary}
       tone={debt > 0 ? "danger" : "default"}
+      // Денег по клиенту не было — секцию не рисуем.
+      hideWhenEmpty
+      empty={!summary}
     >
       <View className="gap-2 px-1 py-1">
         <Row

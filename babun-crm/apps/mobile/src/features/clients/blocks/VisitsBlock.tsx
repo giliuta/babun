@@ -6,7 +6,6 @@ import {
   type Appointment,
 } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { DEFAULT_BLOCK_ORDER } from "@babun/shared/local/business-blocks";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
@@ -50,10 +49,9 @@ interface VisitsBlockProps {
 const INITIAL = 10;
 const LIMIT = 50;
 
-// Web parity: visits expand on first visit (DEFAULT_BLOCK_ORDER.visits
-// defaultOpen=true); once the user toggles, MMKV persistence wins.
-const VISITS_DEFAULT_OPEN =
-  DEFAULT_BLOCK_ORDER.find((b) => b.kind === "visits")?.defaultOpen ?? true;
+// Секции «Профиля» всегда раскрыты, поэтому прежний VISITS_DEFAULT_OPEN
+// (web-parity defaultOpen из DEFAULT_BLOCK_ORDER) больше ни на что не
+// влияет и удалён вместе со сворачиванием.
 
 export default function VisitsBlock({
   appointments,
@@ -129,7 +127,9 @@ export default function VisitsBlock({
       title="Визиты"
       summary={summary}
       kind="visits"
-      defaultOpen={VISITS_DEFAULT_OPEN}
+      // Нет визитов — секции нет: пустая рамка «Визиты» ничего не сообщает.
+      hideWhenEmpty
+      empty={own.length === 0}
     >
       {own.length === 0 ? (
         <Text className="px-1 py-2 text-sm" style={{ color: t.faint }}>

@@ -46,11 +46,13 @@ export function ClientProfileBlocks({
       />
 
       {draft ? (
-        <>
-          <ContactsBlock client={client} update={update} hidePrimaryPhone />
-          <PersonalBlock client={client} update={update} />
-          <MetaBlock client={client} update={update} tags={tags} draft />
-        </>
+        // В черновике — только то, что реально заполняют до сохранения:
+        // объект и заметка (имя с телефоном живут в шапке). Контакты,
+        // «Личное» и «О клиенте» отсюда убраны: у нового клиента они
+        // пустые по определению, и владелец увидел ровно это — столбик
+        // пустых секций на экране создания. Заполнить их можно сразу
+        // после сохранения, на той же странице.
+        null
       ) : (
         <>
           <VisitsBlock appointments={appointments} services={services} stats={stats} />

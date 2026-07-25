@@ -37,7 +37,7 @@ import {
   reminderBadge,
   visitsWord,
 } from "@/features/clients/format";
-import { countryFlag, phoneCountry, tryToE164 } from "@/features/clients/phone";
+import { tryToE164 } from "@/features/clients/phone";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
@@ -183,7 +183,6 @@ function EditableLine({
 
 export default function ClientHeader({ client, stats, update, draft }: ClientHeaderProps) {
   const t = useThemeColors();
-  const country = phoneCountry(client.phone);
 
   const debt = stats && stats.debt > 0 ? `Долг ${formatEUR(stats.debt)}` : null;
   // «Напомнить» (card-actions) пишет reminder_at — строка делает дату
@@ -252,12 +251,10 @@ export default function ClientHeader({ client, stats, update, draft }: ClientHea
 
       {/* Флаг + телефон. Черновик — живой ввод с автофокусом и ✓;
           карточка — тот же вид, редактируется по тапу. */}
+      {/* Флага-эмодзи перед номером больше нет: в UI эмодзи не держим
+          (правило владельца). Страна и так читается из кода номера
+          «+357 …», отдельный глиф ничего не добавлял. */}
       <View className="mt-1 flex-row items-center gap-2">
-        {country ? (
-          <Text className="text-base" accessibilityLabel={`Страна: ${country}`}>
-            {countryFlag(country)}
-          </Text>
-        ) : null}
         <View className="flex-1">
           {draft ? (
             <TextInput

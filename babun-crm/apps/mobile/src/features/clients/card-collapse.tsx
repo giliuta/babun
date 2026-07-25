@@ -1,57 +1,45 @@
-// card-collapse — the collapsed «reference» shell of the client card
-// (LOCKED client-app.html mockup, .ref rows: label quiet · value loud ·
-// chevron). Every reference block (Визиты / Финансы / Заметки / Вложения /
-// Контакты / Личное / Метаданные) wraps its content in this card:
-// collapsed by default, one tap expands the full block inline. Children
-// mount only while open, so a card with 50 visit rows costs nothing until
-// the user asks for it.
+// ProfileSection — плоская секция карточки клиента («Профиль»).
+//
+// БЫЛО: сворачивающаяся карточка «Диспетчера» — строка «Контакты … Пусто ›»,
+// тап разворачивает. У свежесозданного клиента экран превращался в столбик
+// из шести «Пусто ›», и владелец справедливо назвал это неготовым.
+//
+// СТАЛО (решение владельца 2026-07-25): содержимое всегда на виду, тапать
+// нечего. Заголовок — тихий caps-eyebrow НАД карточкой (Halo Cobalt:
+// 11/700, tracking 1.4), справа в той же строке — короткая сводка, если
+// блоку есть что сказать. Никаких шевронов и слова «Пусто» в интерфейсе.
+//
+// Пустые секции не рисуются вообще (`hideWhenEmpty`): пустая рамка ничего
+// не сообщает, а место занимает. Блоки, которые СЛУЖАТ вводом (объекты,
+// контакты в черновике), этот флаг не ставят — им надо показать кнопку
+// добавления даже без данных.
+//
+// Имя экспорта осталось прежним, чтобы не переписывать импорты в девяти
+// блоках; MMKV-ключи open-state больше не нужны и не читаются.
 
-import { useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
-import { ChevronDown, ChevronRight } from "lucide-react-native";
+import type { ReactNode } from "react";
+import { Text, View } from "react-native";
 import type { BlockKind } from "@babun/shared/local/business-blocks";
-import { getStorage } from "@babun/shared/storage";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
-// Open-state persistence — MMKV mirror of the web localStorage contract
-// (shared business-blocks.ts getBlockOpen/setBlockOpen use window.localStorage
-// directly, which doesn't exist on native): global per-kind key, not
-// per-client, to avoid 6300+ keys at 900-client scale.
-const OPEN_KEY = (kind: BlockKind) => `babun-block-open:${kind}`;
-
-function readBlockOpen(kind: BlockKind | undefined, fallback: boolean): boolean {
-  if (!kind) return fallback;
-  try {
-    const raw = getStorage().getRaw(OPEN_KEY(kind));
-    if (raw === "1") return true;
-    if (raw === "0") return false;
-  } catch {
-    // MMKV may throw while the Keychain is locked — fallback wins.
-  }
-  return fallback;
-}
-
-function writeBlockOpen(kind: BlockKind | undefined, open: boolean): void {
-  if (!kind) return;
-  try {
-    getStorage().setRaw(OPEN_KEY(kind), open ? "1" : "0");
-  } catch {
-    // cache only
-  }
-}
-
-interface CollapsibleCardProps {
-  /** Quiet row label, e.g. «Финансы». */
+interface ProfileSectionProps {
+  /** Заголовок секции — рисуется caps-надписью над карточкой. */
   title: string;
-  /** Loud right-side summary, e.g. «долг €135» / «8 · был 10 мая». */
+  /** Короткая сводка справа в строке заголовка («8 · был 10 мая»). */
   summary?: string;
-  /** danger → red summary (долг). muted → grey regular. */
+  /** danger → красная сводка, muted → приглушённая. */
   tone?: "default" | "danger" | "muted";
-  defaultOpen?: boolean;
-  /** Block kind — set it to persist the open-state per kind (MMKV,
-   *  `babun-block-open:{kind}`, web-parity). Omitted → session-only. */
+  /** Нет данных → не рисовать секцию совсем. Не ставить блокам,
+   *  которые сами являются формой ввода. */
+  hideWhenEmpty?: boolean;
+  /** Признак пустоты от блока. Если не передан — берём `!summary`. */
+  empty?: boolean;
+  /** Больше не используется (open-state ушёл вместе со сворачиванием).
+   *  Оставлен в сигнатуре, чтобы не трогать девять вызовов разом. */
   kind?: BlockKind;
+  /** Больше не используется — секции всегда раскрыты. */
+  defaultOpen?: boolean;
   children: ReactNode;
 }
 
@@ -59,54 +47,39 @@ export function CollapsibleCard({
   title,
   summary,
   tone = "default",
-  defaultOpen = false,
-  kind,
+  hideWhenEmpty = false,
+  empty,
   children,
-}: CollapsibleCardProps) {
+}: ProfileSectionProps) {
   const t = useThemeColors();
-  const [open, setOpen] = useState(() => readBlockOpen(kind, defaultOpen));
-  const toggle = () => {
-    const next = !open;
-    writeBlockOpen(kind, next);
-    setOpen(next);
-  };
+  const isEmpty = empty ?? !summary;
+  if (hideWhenEmpty && isEmpty) return null;
 
-  const value = summary || "Пусто";
-  const valueColor =
-    tone === "danger" ? t.danger : tone === "muted" || !summary ? t.sub : t.ink;
-  const valueWeight = tone === "muted" || !summary ? "font-normal" : "font-semibold";
-  const Chevron = open ? ChevronDown : ChevronRight;
+  const summaryColor =
+    tone === "danger" ? t.warning : tone === "muted" ? t.sub : t.ink;
 
   return (
-    <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
-      <Pressable
-        onPress={toggle}
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityState={{ expanded: open }}
-        className="min-h-[48px] flex-row items-center gap-2.5 px-4 py-3 active:opacity-70"
-      >
-        <Text className="text-[13px]" style={{ color: t.sub }}>
+    <View className="mt-3">
+      <View className="flex-row items-end justify-between px-7 pb-2">
+        <Text
+          className="text-[11px] font-bold uppercase"
+          style={{ color: "rgba(11,18,32,0.48)", letterSpacing: 1.4 }}
+        >
           {title}
         </Text>
-        <Text
-          className={`flex-1 text-right text-[15px] ${valueWeight}`}
-          style={{ color: valueColor }}
-          numberOfLines={1}
-        >
-          {value}
-        </Text>
-        <Chevron color={t.chevron} size={16} strokeWidth={2.2} />
-      </Pressable>
-
-      {open ? (
-        <View
-          className="px-3 pb-3 pt-1"
-          style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-        >
-          {children}
-        </View>
-      ) : null}
-    </Card>
+        {summary ? (
+          <Text
+            className="ml-3 shrink text-[13px] tabular-nums"
+            style={{ color: summaryColor }}
+            numberOfLines={1}
+          >
+            {summary}
+          </Text>
+        ) : null}
+      </View>
+      <Card style={{ marginHorizontal: 12 }}>
+        <View className="px-3 py-2">{children}</View>
+      </Card>
+    </View>
   );
 }

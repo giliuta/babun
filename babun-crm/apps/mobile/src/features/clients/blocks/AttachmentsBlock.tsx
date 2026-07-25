@@ -188,6 +188,8 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
     <CollapsibleCard
       title="Вложения"
       summary={items.length ? String(items.length) : ""}
+      hideWhenEmpty
+      empty={items.length === 0}
     >
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row items-center gap-2">
