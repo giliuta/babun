@@ -13,12 +13,19 @@ import {
   breakdownIncome,
   type BreakdownRow,
 } from "./breakdown";
+import { IncomeShareDonut } from "./IncomeShareDonut";
 
 // «Разбор прибыли» — port of the web ProfitPanel (bars view): profit hero,
 // then «Что принесло денег» (income by service/category, breakdownIncome
 // resolves an income tx to the linked appointment's service) and «Куда
 // ушёл расход» (expense by category), each row with its ×N operation
-// count and a proportion bar. The web «Доли %» donut toggle is deferred.
+// count and a proportion bar.
+//
+// The web «Доли %» donut (FinancePieChart, the last finance surface with
+// no mobile twin) now sits above the income rows as IncomeShareDonut —
+// share-of-total, where the bars below carry per-row amounts and counts.
+// It renders only with ≥2 positive buckets: one bucket is a full ring
+// that says nothing the total line doesn't already say.
 export function ProfitBreakdown({
   transactions,
   categories,
@@ -55,6 +62,11 @@ export function ProfitBreakdown({
   }, [transactions, categories, materialCost, materialAppointmentCount]);
   const income = incomeRows.reduce((s, r) => s + r.amount, 0);
   const expense = expenseRows.reduce((s, r) => s + r.amount, 0);
+  // The donut clamps negatives away (a refund bucket has no share of a
+  // whole), so decide its visibility on the same clamped set it will
+  // actually draw — otherwise one sale + one refund would look like two
+  // buckets and render a pointless full ring.
+  const positiveIncomeBuckets = incomeRows.filter((r) => r.amount > 0).length;
 
   if (incomeRows.length === 0 && expenseRows.length === 0) {
     return <EmptyState fill title="Нет данных за период" />;
@@ -137,7 +149,12 @@ export function ProfitBreakdown({
             Нет доходов за период
           </Text>
         ) : (
-          incomeRows.map((r) => renderRow(r, income, "income"))
+          <>
+            {positiveIncomeBuckets >= 2 ? (
+              <IncomeShareDonut rows={incomeRows} />
+            ) : null}
+            {incomeRows.map((r) => renderRow(r, income, "income"))}
+          </>
         )}
       </View>
 
