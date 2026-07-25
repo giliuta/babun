@@ -11,6 +11,21 @@ import {
 } from "@/features/clients/phone";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { haptics } from "@/lib/haptics";
+
+/** Нарушение частичного UNIQUE-индекса clients_tenant_phone_e164_idx.
+ *  Обёртки (offline-очередь, RPC) по дороге теряют структуру ошибки, так
+ *  что проверяем и код, и текст. */
+function isPhoneTakenError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: string; message?: string; details?: string };
+  if (e.code === "23505") return true;
+  const text = `${e.message ?? ""} ${e.details ?? ""}`;
+  return (
+    text.includes("clients_tenant_phone_e164_idx") ||
+    (text.includes("duplicate key") && text.includes("phone_e164"))
+  );
+}
 
 // expo-contacts can be absent in an older dev build. A guarded require keeps
 // every route bootable; the native picker simply stays hidden until rebuild.
@@ -109,26 +124,36 @@ export function useClientDraft(active: boolean) {
     );
   }, [active, draft]);
 
-  const digits = active ? draft.phone.replace(/\D/g, "").length : 0;
-  const canSave = active && (e164 !== null || digits >= 5) && !create.isPending;
+  // Владелец 2026-07-25: телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
+  // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —
+  // без разбираемого номера канонического ключа нет, а значит и дубль
+  // ловить нечем. Разбор чисто локальный, офлайну не мешает.
+  // Имя НЕ уникально: тёзок сколько угодно, дедуп только по номеру.
+  const canSave = active && e164 !== null && !create.isPending;
 
   const save = async () => {
     if (!canSave) return;
     setCreateError(null);
 
-    // Debounce may not finish before a fast tap on Done. Show the existing
-    // client first; a second tap intentionally allows a distinct person with
-    // the same household phone.
+    // Дебаунс мог не успеть к быстрому тапу — перепроверяем перед записью.
     if (e164 && !duplicate && tenantId) {
       try {
         const existing = await findClientByPhoneE164(supabase, e164, tenantId);
         if (existing) {
+          haptics.warning();
           setDuplicate(existing);
           return;
         }
       } catch {
-        // Offline creation is supported by the cached repository wrapper.
+        // Офлайн — создание разрешаем, финальный арбитр всё равно БД.
       }
+    }
+    // Дубль уже найден дебаунсом — создать нельзя. Раньше второй тап
+    // намеренно пропускал «другого человека на том же номере»; владелец
+    // это отменил: два клиента на одном номере невозможны.
+    if (duplicate) {
+      haptics.warning();
+      return;
     }
 
     try {
@@ -138,8 +163,30 @@ export function useClientDraft(active: boolean) {
         full_name: draft.full_name.trim(),
         phone_e164: e164,
       });
+      haptics.success();
       router.replace(`/clients/${created.id}`);
     } catch (error) {
+      // Настоящий арбитр уникальности — частичный UNIQUE-индекс
+      // clients_tenant_phone_e164_idx. Гонка двух устройств (или создание
+      // в офлайне, доехавшее позже) приходит сюда как 23505. Показываем
+      // того же существующего клиента, что и обычная ветка дедупа,
+      // вместо сырого текста ошибки из Postgres.
+      if (isPhoneTakenError(error)) {
+        haptics.warning();
+        if (e164 && tenantId) {
+          try {
+            const existing = await findClientByPhoneE164(supabase, e164, tenantId);
+            if (existing) {
+              setDuplicate(existing);
+              return;
+            }
+          } catch {
+            // Показать карточку не вышло — обойдёмся текстом ниже.
+          }
+        }
+        setCreateError("Клиент с таким номером уже есть");
+        return;
+      }
       setCreateError((error as Error).message);
     }
   };

@@ -447,7 +447,12 @@ export default function ClientDetailScreen() {
               stats={stats}
               serviceDue={serviceDue}
             />
-            <CardActions client={c} stats={stats} update={update} />
+            <CardActions
+              client={c}
+              stats={stats}
+              update={update}
+              appointments={appointments}
+            />
             <ServiceBlock
               client={c}
               stats={stats}

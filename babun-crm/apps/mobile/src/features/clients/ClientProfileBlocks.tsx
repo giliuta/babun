@@ -31,13 +31,19 @@ export function ClientProfileBlocks({
 }: ClientProfileBlocksProps) {
   return (
     <>
+      {/* Владелец 2026-07-25: содержательные заметки принадлежат ЗАЯВКЕ, а
+          не клиенту — «что делали/что сказали» относится к конкретному
+          выезду. На карточке остаётся только лёгкий признак «что это за
+          клиент», поэтому блок уехал со второго места в самый низ, под
+          справочные блоки. Сам журнал пока не трогаем: в нём лежат
+          реальные записи, и удалять их до появления поля заметки в заявке
+          нельзя. */}
       <ObjectsBlock
         client={client}
         appointments={appointments}
         stats={stats}
         update={update}
       />
-      <NotesBlock client={client} update={update} />
 
       {draft ? (
         <>
@@ -55,6 +61,8 @@ export function ClientProfileBlocks({
           <MetaBlock client={client} update={update} tags={tags} />
         </>
       )}
+
+      <NotesBlock client={client} update={update} />
     </>
   );
 }

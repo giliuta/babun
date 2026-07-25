@@ -11,13 +11,16 @@ export interface BookingTarget {
   clientId: string;
   locationId?: string | null;
   teamId?: string | null;
+  /** Услуги для предзаполнения — из последнего завершённого визита.
+   *  Экран записи читает их из параметра `services` (id через запятую). */
+  serviceIds?: readonly string[];
 }
 
 /** Returns a stable-enough callback that opens the calendar pre-aimed at
  *  the given client/object/team. */
 export function useBookingNav(): (target: BookingTarget) => void {
   const router = useRouter();
-  return ({ clientId, locationId, teamId }: BookingTarget) =>
+  return ({ clientId, locationId, teamId, serviceIds }: BookingTarget) =>
     router.push({
       pathname: "/(dashboard)",
       params: {
@@ -25,6 +28,9 @@ export function useBookingNav(): (target: BookingTarget) => void {
         clientId,
         ...(locationId ? { locationId } : {}),
         ...(teamId ? { teamId } : {}),
+        ...(serviceIds && serviceIds.length
+          ? { services: serviceIds.join(",") }
+          : {}),
       },
     });
 }

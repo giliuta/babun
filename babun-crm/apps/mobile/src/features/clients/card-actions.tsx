@@ -25,8 +25,10 @@
 //   считается как в списке: stats.debt, иначе
 //   отрицательный balance.
 
+import { useMemo, useState } from "react";
 import { Alert, Linking, Platform, Pressable, Text, View } from "react-native";
 import { Bell, Calendar, MessageCircle, Phone } from "lucide-react-native";
+import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
@@ -39,7 +41,9 @@ import {
   useSmsTemplates,
 } from "@/features/settings/sms-templates";
 import { useBookingNav } from "@/features/clients/card-booking";
-import { heroOffersBooking } from "@/features/clients/ClientNextJob";
+import { useTeams } from "@/features/reference/queries";
+import { OptionSheet } from "@/components/ui/OptionSheet";
+import { haptics } from "@/lib/haptics";
 import { formatShortDateRu, ymdInDays } from "@/features/clients/format";
 import { useThemeColors } from "@/theme/colors";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
@@ -48,16 +52,21 @@ interface CardActionsProps {
   client: Client;
   stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => void;
+  /** Заявки клиента — из них берём услуги последнего визита для предзаполнения. */
+  appointments?: Appointment[];
 }
 
 export default function CardActions({
   client,
   stats,
   update,
+  appointments = [],
 }: CardActionsProps) {
   const t = useThemeColors();
   const book = useBookingNav();
   const { data: smsTemplates = [] } = useSmsTemplates();
+  const { data: teams = [] } = useTeams();
+  const [teamPickerOpen, setTeamPickerOpen] = useState(false);
 
   const tel = telUrl(client.phone);
   const wa = whatsappUrl(client.whatsapp_phone || client.phone);
@@ -76,12 +85,37 @@ export default function CardActions({
         ? Math.abs(client.balance)
         : 0;
 
-  const onBook = () =>
+  // Услуги последнего ЗАВЕРШЁННОГО визита — предзаполнение записи
+  // (владелец 2026-07-25: «создать в два тапа»). Берём именно завершённый:
+  // отменённая заявка ничего не говорит о том, что клиенту нужно.
+  const lastServiceIds = useMemo(() => {
+    const done = appointments
+      .filter((a) => a.status === "completed" && a.service_ids?.length)
+      .sort((a, b) =>
+        `${b.date}T${b.time_start}`.localeCompare(`${a.date}T${a.time_start}`),
+      );
+    return done[0]?.service_ids ?? [];
+  }, [appointments]);
+
+  const goBook = (teamId: string | null) =>
     book({
       clientId: client.id,
       locationId: primaryLocationId,
-      teamId: stats?.lastTeamId ?? null,
+      teamId,
+      serviceIds: lastServiceIds,
     });
+
+  // Владелец 2026-07-25: «Записать» сначала спрашивает КОМАНДУ, потом всё
+  // остальное. Спрашивать есть смысл только когда есть из чего выбирать —
+  // при одной команде (и при нуле) вопрос был бы пустым тапом.
+  const onBook = () => {
+    haptics.tap();
+    if (teams.length > 1) {
+      setTeamPickerOpen(true);
+      return;
+    }
+    goBook(teams[0]?.id ?? stats?.lastTeamId ?? null);
+  };
 
   // Готовое SMS о долге: sms: с body (iOS — «&body», Android — «?body»).
   const debtSmsUrl = (() => {
@@ -142,11 +176,12 @@ export default function CardActions({
     );
   };
 
-  // Hero сам зовёт на создание записи во всех режимах кроме «есть
-  // предстоящая запись» — там он показывает ЕЁ и ведёт на дату. Только в
-  // этом случае «Записать» нужно здесь, иначе клиенту с записью новую
-  // было бы не создать с карточки.
-  const showBook = !heroOffersBooking(stats);
+  // Владелец 2026-07-25: «Записать» в ряду ВСЕГДА. Прежнее правило
+  // показывало её только когда hero не ведёт на создание — ряд из-за
+  // этого перестраивался под пальцем (у клиента появилась запись → кнопка
+  // уехала), а быстрая запись нужна одинаково в обоих состояниях.
+  // Дублирование с hero осознанное: hero — про КОНКРЕТНУЮ запись, ряд —
+  // про действие.
 
   return (
     <View className="mx-3 mb-1 mt-3 flex-row items-start justify-between px-1">
@@ -157,13 +192,11 @@ export default function CardActions({
         }
         onPress={tel ? () => Linking.openURL(tel) : undefined}
       />
-      {showBook ? (
-        <Action
-          label="Записать"
-          icon={<Calendar color={t.ink} size={21} strokeWidth={2} />}
-          onPress={onBook}
-        />
-      ) : null}
+      <Action
+        label="Записать"
+        icon={<Calendar color={t.ink} size={21} strokeWidth={2} />}
+        onPress={onBook}
+      />
       <Action
         label="WhatsApp"
         icon={
@@ -179,6 +212,24 @@ export default function CardActions({
         label="Напомнить"
         icon={<Bell color={t.ink} size={21} strokeWidth={2} />}
         onPress={onRemind}
+      />
+
+      {/* Шаг 1 записи — команда. Дальше экран записи открывается уже
+          наведённым: клиент, объект, команда и услуги прошлого визита. */}
+      <OptionSheet
+        visible={teamPickerOpen}
+        title="Какая команда поедет?"
+        options={teams.map((team) => ({
+          value: team.id,
+          label: team.name,
+        }))}
+        value={stats?.lastTeamId ?? teams[0]?.id ?? ""}
+        onPick={(teamId) => {
+          haptics.tap();
+          setTeamPickerOpen(false);
+          goBook(teamId);
+        }}
+        onClose={() => setTeamPickerOpen(false)}
       />
     </View>
   );

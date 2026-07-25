@@ -290,9 +290,12 @@ export default function ClientHeader({ client, stats, update, draft }: ClientHea
       {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания */}
       {draft?.footer}
 
-      {/* Debt atom (red, only when долг>0) */}
+      {/* Долг — янтарь, не красный (владелец 2026-07-25). Долг это «обрати
+          внимание», а не авария: красный на карточке остаётся только за
+          необратимым (чёрный список, удаление). Вес обычный, без плашки —
+          карточка держится минималистичной. */}
       {debt ? (
-        <Text className="mt-1.5 text-sm font-semibold" style={{ color: t.danger }}>{debt}</Text>
+        <Text className="mt-1.5 text-sm" style={{ color: t.warning }}>{debt}</Text>
       ) : null}
 
       {/* Reminder atom — grey upcoming, red when due */}
