@@ -39,7 +39,13 @@ describe("mobile UI product policy", () => {
       .map(({ path }) => path);
 
     assert.equal(appConfig.expo?.userInterfaceStyle, "light");
-    assert.match(bootstrap, /Appearance\.setColorScheme\("light"\)/);
+    // Вызов опциональный (`?.`): в react-native-web Appearance доступен
+    // только на чтение и метода не имеет — незащищённый вызов ронял весь
+    // boot веб-сборки. Политика от этого не слабеет: на нативе схема
+    // по-прежнему прибивается к light, а на вебе её держат
+    // userInterfaceStyle из app.json и собственные токены (тёмной темы в
+    // палитре просто нет).
+    assert.match(bootstrap, /Appearance\.setColorScheme\??\.?\("light"\)/);
     assert.deepEqual(offenders, []);
   });
 

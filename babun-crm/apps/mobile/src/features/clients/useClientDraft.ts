@@ -12,40 +12,10 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
-
-/** Текст ошибки для пользователя.
- *
- *  Владелец увидел на экране «createClient: function
- *  public.normalize_client_tag_ids(uuid, uuid[]) does not exist» — сырую
- *  ошибку Postgres. Такое показывать нельзя: человеку нечего с этим
- *  делать, а выглядит как поломка всего приложения.
- *
- *  Правило простое и честное: наши собственные сообщения (квоты, лимиты,
- *  доступ) написаны по-русски — их показываем как есть. Всё остальное —
- *  латиница из драйвера, PostgREST или самого Postgres — заменяем общей
- *  фразой, а техподробности уводим в консоль, чтобы не потерять их при
- *  отладке. */
-function friendlyCreateError(error: unknown): string {
-  const raw = error instanceof Error ? error.message : String(error);
-  console.error("createClient failed:", raw);
-  return /[А-Яа-яЁё]/.test(raw)
-    ? raw
-    : "Не удалось сохранить клиента. Попробуйте ещё раз.";
-}
-
-/** Нарушение частичного UNIQUE-индекса clients_tenant_phone_e164_idx.
- *  Обёртки (offline-очередь, RPC) по дороге теряют структуру ошибки, так
- *  что проверяем и код, и текст. */
-function isPhoneTakenError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const e = error as { code?: string; message?: string; details?: string };
-  if (e.code === "23505") return true;
-  const text = `${e.message ?? ""} ${e.details ?? ""}`;
-  return (
-    text.includes("clients_tenant_phone_e164_idx") ||
-    (text.includes("duplicate key") && text.includes("phone_e164"))
-  );
-}
+import {
+  friendlyCreateError,
+  isPhoneTakenError,
+} from "@/features/clients/client-create-errors";
 
 // expo-contacts can be absent in an older dev build. A guarded require keeps
 // every route bootable; the native picker simply stays hidden until rebuild.

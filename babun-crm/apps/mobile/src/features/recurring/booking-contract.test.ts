@@ -25,12 +25,27 @@ describe("recurring reminder → booking contract", () => {
   });
 
   test("marks the reminder only after appointment creation and keeps create errors separate", () => {
-    const booking = source("app/book/index.tsx");
-    const createdAt = booking.indexOf("await createMut.mutateAsync");
-    const bookedAt = booking.indexOf("await updateReminderStatus.mutateAsync");
+    // Инвариант прежний, дом другой: хвост сохранения переехал из
+    // app/book/index.tsx в общий useBookingSave, чтобы шторка «Записать»
+    // с карточки клиента не завела второй путь создания.
+    const save = source("src/features/appointments/useBookingSave.ts");
+    const createdAt = save.indexOf("await createMut.mutateAsync");
+    const bookedAt = save.indexOf("await updateReminderStatus.mutateAsync");
     assert.ok(createdAt >= 0, "booking must create the appointment");
     assert.ok(bookedAt > createdAt, "reminder may be booked only after create");
-    assert.match(booking, /reminderUpdateFailed\s*=\s*true/);
-    assert.match(booking, /напоминание осталось в списке/);
+    assert.match(save, /reminderUpdateFailed\s*=\s*true/);
+    assert.match(save, /напоминание осталось в списке/);
+  });
+
+  test("the booking page creates ONLY through the shared hook", () => {
+    // Смысл выноса — один путь создания на всё приложение. Если кто-то
+    // снова вызовет мутацию создания прямо на экране, побочные эффекты
+    // (закрытие напоминания, push события) тихо разъедутся с хуком.
+    const booking = source("app/book/index.tsx");
+    assert.match(booking, /useBookingSave\(\)/);
+    assert.ok(
+      !booking.includes("useCreateAppointment"),
+      "book screen must not create appointments directly — use useBookingSave",
+    );
   });
 });
