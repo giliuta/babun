@@ -21,13 +21,12 @@
 // ВМЕСТЕ с производным phone_e164 — иначе ключ дедупа
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import {
   Bell,
   Check,
   Contact,
-  MessageCircle,
   Phone as PhoneIcon,
   X,
 } from "lucide-react-native";
@@ -43,7 +42,7 @@ import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { ContactChannelSheet } from "@/features/clients/ContactChannelSheet";
+import ClientContactRow from "@/features/clients/ClientContactRow";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -78,40 +77,6 @@ function nextExtraLabel(existing: PhoneEntry[]): string {
   return EXTRA_LABELS.find((l) => !used.has(l)) ?? "Другой";
 }
 
-/** Круглая кнопка-канал в хвосте строки номера. 32pt — тап-цель добита
- *  hitSlop до 44. */
-function ChannelButton({
-  label,
-  color,
-  Icon,
-  onPress,
-}: {
-  label: string;
-  color: string;
-  Icon: typeof PhoneIcon;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={8}
-      style={({ pressed }) => ({
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${color}1a`,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <Icon color={color} size={15} strokeWidth={2.2} />
-    </Pressable>
-  );
-}
-
 export default function ClientHeader({
   client,
   stats,
@@ -119,7 +84,6 @@ export default function ClientHeader({
   draft,
 }: ClientHeaderProps) {
   const t = useThemeColors();
-  const [channelsOpen, setChannelsOpen] = useState(false);
 
   const extras = client.phones ?? [];
 
@@ -158,6 +122,7 @@ export default function ClientHeader({
   // «Напомнить» (card-actions) пишет reminder_at — строка делает дату
   // видимой: серая, когда впереди, красная — сегодня/прошло.
   const badge = reminderBadge(client.reminder_at);
+  const nextApt = stats?.nextApt ?? null;
   const trustSegments = (
     stats
       ? [
@@ -166,16 +131,41 @@ export default function ClientHeader({
           stats.lastVisitDate
             ? `был ${formatShortDateRu(stats.lastVisitDate)}`
             : null,
+          // Предстоящая запись — здесь же, а не отдельной строкой: это
+          // такой же факт «когда», как «был 27 мая».
+          nextApt
+            ? `записан ${formatShortDateRu(nextApt.date)} · ${nextApt.time}`
+            : null,
         ].filter(Boolean)
       : []
   ) as string[];
 
   return (
     <RowGroup>
-      {/* Телефон первым: это ключ клиента (дедуп, звонок, запись), и в
-          черновике курсор стоит именно здесь. Ярлык сверху, значение по
-          левому краю — печатать в правое выравнивание неудобно. */}
+      {/* Имя — ОБЯЗАТЕЛЬНОЕ (владелец 2026-07-26): безымянного клиента не
+          найти ни поиском, ни глазами, и в SMS-шаблон нечего подставить. */}
       <FieldRow
+        label="Имя"
+        value={client.full_name}
+        placeholder="Обязательно"
+        big
+        stacked
+        live={!!draft}
+        onSave={(v) =>
+          draft ? draft.onNameChange(v) : update({ full_name: v })
+        }
+        trailing={
+          draft && client.full_name.trim() ? (
+            <Check color={t.success} size={18} strokeWidth={2.5} />
+          ) : null
+        }
+      />
+
+      {/* Телефон вторым (порядок владельца 2026-07-26: сначала имя).
+          Ярлык сверху, значение по левому краю — печатать в правое
+          выравнивание неудобно. */}
+      <FieldRow
+        separated
         label="Телефон"
         value={client.phone}
         placeholder="Обязательно"
@@ -191,47 +181,18 @@ export default function ClientHeader({
             : update({ phone: v, phone_e164: tryToE164(v) })
         }
         trailing={
-          draft ? (
-            draft.valid ? (
-              <Check color={t.success} size={18} strokeWidth={2.5} />
-            ) : null
-          ) : (
-            // ОДНА кнопка связи вместо ряда иконок: тап → мини-лист «Как
-            // связаться» со всеми способами, которые у клиента есть и
-            // которые включены в настройках. Пять каналов не влезли бы в
-            // строку, а один тап открывает их все.
-            <ChannelButton
-              label="Как связаться"
-              color={t.success}
-              Icon={MessageCircle}
-              onPress={() => {
-                haptics.tap();
-                setChannelsOpen(true);
-              }}
-            />
-          )
-        }
-      />
-
-      {/* Имя — ОБЯЗАТЕЛЬНОЕ (владелец 2026-07-26): безымянного клиента не
-          найти ни поиском, ни глазами, и в SMS-шаблон нечего подставить. */}
-      <FieldRow
-        label="Имя"
-        value={client.full_name}
-        placeholder="Обязательно"
-        separated
-        big
-        stacked
-        live={!!draft}
-        onSave={(v) =>
-          draft ? draft.onNameChange(v) : update({ full_name: v })
-        }
-        trailing={
-          draft && client.full_name.trim() ? (
+          draft?.valid ? (
             <Check color={t.success} size={18} strokeWidth={2.5} />
           ) : null
         }
       />
+
+      {/* Способы связи и «Записать» — маленькими кнопками СРАЗУ под
+          номером (владелец: не листом снизу, а прямым действием). В
+          черновике их нет: звонить и записывать ещё некому. */}
+      {!draft ? (
+        <ClientContactRow client={client} stats={stats} />
+      ) : null}
 
       {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания.
           Стоит сразу под номером — там же, где его причина. */}
@@ -364,11 +325,6 @@ export default function ClientHeader({
           ) : null}
         </View>
       ) : null}
-      <ContactChannelSheet
-        visible={channelsOpen}
-        client={client}
-        onClose={() => setChannelsOpen(false)}
-      />
     </RowGroup>
   );
 }

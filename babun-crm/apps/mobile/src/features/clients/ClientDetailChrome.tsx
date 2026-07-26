@@ -14,6 +14,7 @@ interface ClientDetailChromeProps {
   onToggleMenu: () => void;
   onCloseMenu: () => void;
   onMessage: () => void;
+  onRemind: () => void;
   onShare: () => void;
   onToggleBlacklist: () => void;
   onArchive: () => void;
@@ -31,6 +32,7 @@ export function ClientDetailChrome({
   onToggleMenu,
   onCloseMenu,
   onMessage,
+  onRemind,
   onShare,
   onToggleBlacklist,
   onArchive,
@@ -100,6 +102,11 @@ export function ClientDetailChrome({
             style={{ backgroundColor: t.surface }}
           >
             <MenuItem label="Написать SMS" onPress={onMessage} disabled={!phoneAvailable} />
+            <Divider />
+            {/* «Напомнить» уехало сюда с карточки (владелец 2026-07-26:
+                кнопки «Напомнить» на карточке быть не должно) — действие
+                редкое, но терять его нельзя. */}
+            <MenuItem label="Напомнить о клиенте" onPress={onRemind} />
             <Divider />
             <MenuItem label="Поделиться" onPress={onShare} />
             <Divider />

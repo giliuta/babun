@@ -34,6 +34,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -52,6 +53,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
+import { ymdInDays } from "@/features/clients/format";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -71,7 +73,6 @@ import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
 import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import { useClientDraft } from "@/features/clients/useClientDraft";
-import ClientNextJob from "@/features/clients/ClientNextJob";
 import ServiceBlock from "@/features/clients/blocks/ServiceBlock";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
@@ -283,6 +284,30 @@ export default function ClientDetailScreen() {
 
   const phoneDigits = c.phone?.replace(/\D/g, "") ?? "";
 
+  // «Напомнить» живёт в меню ⋯ (с карточки кнопка убрана владельцем
+  // 2026-07-26). Те же пресеты, что были у кнопки: 1 / 7 / 30 дней.
+  const onRemind = () => {
+    setMenuOpen(false);
+    const options = ["Завтра", "Через неделю", "Через месяц"];
+    if (c.reminder_at) options.push("Убрать напоминание");
+    options.push("Отмена");
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: "Напомнить о клиенте",
+        options,
+        cancelButtonIndex: options.length - 1,
+        destructiveButtonIndex: c.reminder_at ? options.length - 2 : undefined,
+      },
+      (i) => {
+        if (i === 0) update({ reminder_at: ymdInDays(1) });
+        else if (i === 1) update({ reminder_at: ymdInDays(7) });
+        else if (i === 2) update({ reminder_at: ymdInDays(30) });
+        else if (c.reminder_at && i === options.length - 2)
+          update({ reminder_at: null });
+      },
+    );
+  };
+
   const onMessage = () => {
     setMenuOpen(false);
     if (phoneDigits) Linking.openURL(`sms:${phoneDigits}`);
@@ -361,6 +386,7 @@ export default function ClientDetailScreen() {
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onMessage={onMessage}
+        onRemind={onRemind}
         onShare={() => void onShare()}
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
@@ -435,12 +461,6 @@ export default function ClientDetailScreen() {
             реальный id, поэтому в черновике их нет (createBlankClient пуст). */}
         {!isDraft ? (
           <>
-            <ClientNextJob
-              client={c}
-              appointments={appointments}
-              stats={stats}
-              update={update}
-            />
             <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
           </>
         ) : null}
