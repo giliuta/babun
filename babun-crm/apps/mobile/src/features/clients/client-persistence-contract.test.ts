@@ -46,14 +46,16 @@ describe("client native persistence contract", () => {
     assert.match(unit, /Удалить кондиционер/);
   });
 
-  test("запись объектов идёт одной очередью из свежайшего массива", () => {
-    // locations — одна jsonb-колонка: патч перезаписывает весь массив. Патч,
-    // собранный из снимка рендера, затирает предыдущую правку, ответ на
-    // которую ещё в пути. Поэтому источник — latest.current, а записи
-    // выстроены в цепочку.
-    const writer = read("use-location-writer.ts");
+  test("json-массивы клиента пишутся одной очередью из свежайшего значения", () => {
+    // phones / locations / notes — каждый ОДНА jsonb-колонка: патч
+    // перезаписывает массив целиком. Патч, собранный из снимка рендера,
+    // затирает предыдущую правку, ответ на которую ещё в пути. Поэтому
+    // источник — latest.current, а записи выстроены в цепочку. Механика одна
+    // на все массивы: второй копии этой логики в проекте быть не должно.
+    const writer = read("use-json-writer.ts");
     assert.match(writer, /latest\.current/);
     assert.match(writer, /chain\.current = run/);
+    // Экраны и блоки не собирают массив сами.
     assert.doesNotMatch(
       read("../../../app/(dashboard)/clients/object.tsx"),
       /update\(\{\s*locations:/,
@@ -62,5 +64,16 @@ describe("client native persistence contract", () => {
       read("../../../app/(dashboard)/clients/unit.tsx"),
       /update\(\{\s*locations:/,
     );
+    assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
+    assert.match(read("ClientHeader.tsx"), /useJsonArrayWriter/);
+  });
+
+  test("обязательные имя и телефон защищены и на сохранённой карточке", () => {
+    // Гейт существовал только при СОЗДАНИИ: на карточке имя стиралось в ноль,
+    // а вместе с номером обнулялся phone_e164 — ключ, на котором держится
+    // защита от дублей.
+    const header = read("ClientHeader.tsx");
+    assert.match(header, /if \(!e164\) return;/);
+    assert.match(header, /v\.trim\(\)\s*\n?\s*\? update\(\{ full_name/);
   });
 });

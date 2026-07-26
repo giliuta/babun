@@ -46,7 +46,13 @@ export function clientReminderFireDate(
   value: string,
   now: Date = new Date(),
 ): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  // Приложение пишет ДАТУ («2026-08-02»), а колонка reminder_at —
+  // timestamptz: после синка то же значение возвращается как
+  // «2026-08-02T00:00:00+00:00». Регэксп на голую дату этого не принимал —
+  // напоминание МОЛЧА отменялось, а человек получал алерт «эта дата уже
+  // прошла» (format.ts этот случай уже учитывал, здесь нет). Берём
+  // дата-часть: это то же календарное число, которое и выбрали.
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
   if (!match) return null;
   const year = Number(match[1]);
   const monthIndex = Number(match[2]) - 1;

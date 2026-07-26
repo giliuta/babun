@@ -6,6 +6,7 @@ import {
   telUrl,
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
+import { isMessagingReady } from "@/features/chats/readiness";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // СПОСОБЫ СВЯЗИ — один список на весь продукт (владелец 2026-07-26:
@@ -201,7 +202,13 @@ export function resolveChannels(
         url = digits ? `sms:${digits}` : null;
         break;
       case "chat":
-        url = `/(dashboard)/chats`;
+        // Внутренний чат предлагаем ТОЛЬКО когда каналы реально подключены:
+        // MESSAGING_READINESS держит все семь предпосылок в false, а ссылка
+        // ведёт в КОРЕНЬ чужого таба «Чаты» — не в диалог с этим клиентом, и
+        // «назад» на карточку оттуда не существует. Мёртвых контролов не
+        // держим. Когда мессенджинг включат, здесь появится /chats/{chatId},
+        // найденный по client_id.
+        url = isMessagingReady() ? `/(dashboard)/chats` : null;
         internal = true;
         break;
     }

@@ -185,11 +185,13 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
   };
 
   return (
+    // hideWhenEmpty здесь был тупиком: при нуле файлов блок скрывался ЦЕЛИКОМ
+    // вместе с единственной кнопкой «Фото или файл», и первый файл приложить
+    // было физически нечем (заодно пропадала и ветка ошибки с «Повторить»).
+    // Пустой блок — это одна строка с кнопкой, и она честнее.
     <CollapsibleCard
       title="Вложения"
       summary={items.length ? String(items.length) : ""}
-      hideWhenEmpty
-      empty={items.length === 0}
     >
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row items-center gap-2">

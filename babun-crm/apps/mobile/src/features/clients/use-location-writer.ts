@@ -1,19 +1,11 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback } from "react";
 import type { ACUnit, Client, Location } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
+import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 
-// ЗАПИСЬ ОБЪЕКТОВ — одна очередь и одна свежая правда.
-//
-// `locations` — это ОДНА jsonb-колонка: патч перезаписывает весь массив, а не
-// поле объекта. Пока каждая строка собирала патч из снимка своего рендера,
-// две быстрые правки подряд на медленной сети затирали друг друга: вторая
-// уходила с ещё старым значением первой, применялась последней — и первая
-// правка исчезала навсегда (invalidate подтягивал авторитетную строку и
-// подтверждал потерю).
-//
-// Поэтому: (1) массив всегда берётся из `latest` — сервер, а до его ответа
-// наша собственная запись; (2) записи выстроены в цепочку, вторая уходит
-// после ответа на первую.
+// ЗАПИСЬ ОБЪЕКТОВ. Механика «свежайший массив + очередь» общая для всех
+// jsonb-массивов клиента и живёт в useJsonArrayWriter; здесь — только правила
+// самих объектов: кто основной, что делать при удалении, где живут юниты.
 
 export interface LocationWriter {
   /** Правка полей объекта. */
@@ -33,68 +25,50 @@ export function useLocationWriter(
   locations: Location[],
   update: (patch: Partial<Client>) => Promise<boolean>,
 ): LocationWriter {
-  const latest = useRef<Location[]>(locations);
-  // Рендер приносит авторитетную строку (в том числе после чужой правки по
-  // реалтайму) — она главнее нашего оптимистичного значения.
-  useEffect(() => {
-    latest.current = locations;
-  }, [locations]);
-
-  const chain = useRef<Promise<unknown>>(Promise.resolve());
-
   const write = useCallback(
-    (next: Location[]): Promise<boolean> => {
-      // Своё значение — правда до ответа сервера: следующая правка в этом же
-      // экране должна видеть предыдущую, даже если PATCH ещё в пути.
-      latest.current = next;
-      const run = chain.current.then(() => update({ locations: next }));
-      chain.current = run.catch(() => false);
-      return run;
-    },
+    (next: Location[]) => update({ locations: next }),
     [update],
   );
+  const { apply } = useJsonArrayWriter<Location>(locations, write);
 
   const patchLocation = useCallback(
     (id: string, patch: Partial<Location>) =>
-      write(
-        latest.current.map((l) => (l.id === id ? { ...l, ...patch } : l)),
-      ),
-    [write],
+      apply((all) => all.map((l) => (l.id === id ? { ...l, ...patch } : l))),
+    [apply],
   );
 
   const addLocation = useCallback(
     (draft: Omit<Location, "id" | "isPrimary">) =>
-      write([
-        ...latest.current,
-        { ...draft, id: randomUuid(), isPrimary: latest.current.length === 0 },
+      apply((all) => [
+        ...all,
+        { ...draft, id: randomUuid(), isPrimary: all.length === 0 },
       ]),
-    [write],
+    [apply],
   );
 
   const removeLocation = useCallback(
-    (id: string) => {
-      const next = latest.current.filter((l) => l.id !== id);
-      // Основной объект подставляется при записи, поэтому без него нельзя:
-      // сносим основной — повышаем первый оставшийся.
-      const promoted =
-        next.length > 0 && !next.some((l) => l.isPrimary)
+    (id: string) =>
+      apply((all) => {
+        const next = all.filter((l) => l.id !== id);
+        // Основной объект подставляется при записи, поэтому без него нельзя:
+        // сносим основной — повышаем первый оставшийся.
+        return next.length > 0 && !next.some((l) => l.isPrimary)
           ? next.map((l, i) => ({ ...l, isPrimary: i === 0 }))
           : next;
-      return write(promoted);
-    },
-    [write],
+      }),
+    [apply],
   );
 
   const makePrimary = useCallback(
     (id: string) =>
-      write(latest.current.map((l) => ({ ...l, isPrimary: l.id === id }))),
-    [write],
+      apply((all) => all.map((l) => ({ ...l, isPrimary: l.id === id }))),
+    [apply],
   );
 
   const saveUnit = useCallback(
     (locationId: string, unit: ACUnit) =>
-      write(
-        latest.current.map((l) => {
+      apply((all) =>
+        all.map((l) => {
           if (l.id !== locationId) return l;
           const units = l.equipment ?? [];
           return {
@@ -105,13 +79,13 @@ export function useLocationWriter(
           };
         }),
       ),
-    [write],
+    [apply],
   );
 
   const removeUnit = useCallback(
     (locationId: string, unitId: string) =>
-      write(
-        latest.current.map((l) =>
+      apply((all) =>
+        all.map((l) =>
           l.id === locationId
             ? {
                 ...l,
@@ -120,7 +94,7 @@ export function useLocationWriter(
             : l,
         ),
       ),
-    [write],
+    [apply],
   );
 
   return {

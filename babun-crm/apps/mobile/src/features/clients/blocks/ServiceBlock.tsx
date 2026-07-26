@@ -15,7 +15,7 @@ import type {
   ServiceDueSummary,
   UnitDue,
 } from "@babun/shared/local/selectors/service-due";
-import { useBookingNav } from "@/features/clients/card-booking";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
@@ -34,7 +34,9 @@ export default function ServiceBlock({
   excludeUnitId,
 }: ServiceBlockProps) {
   const t = useThemeColors();
-  const book = useBookingNav();
+  // Через guarded — иначе клиента из чёрного списка записывают молча,
+  // и это была единственная точка записи, обходившая предупреждение.
+  const book = useGuardedBookingNav();
 
   const overdue = serviceDue.overdue.filter((u) => u.unitId !== excludeUnitId);
   const soon = serviceDue.soon.filter((u) => u.unitId !== excludeUnitId);
@@ -43,11 +45,7 @@ export default function ServiceBlock({
   if (dueCount === 0 && serviceDue.onSchedule.length === 0) return null;
 
   const onBook = (locationId: string) =>
-    book({
-      clientId: client.id,
-      locationId,
-      teamId: stats?.lastTeamId ?? null,
-    });
+    book(client, { locationId, teamId: stats?.lastTeamId ?? null });
 
   const Row = ({ u, kind }: { u: UnitDue; kind: "over" | "soon" }) => {
     const tone = kind === "over" ? t.danger : t.warning;

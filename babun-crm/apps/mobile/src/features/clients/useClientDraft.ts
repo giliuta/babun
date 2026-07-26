@@ -75,6 +75,8 @@ export function useClientDraft(active: boolean) {
   };
 
   const sequence = useRef(0);
+  // Засов «идёт создание» — синхронный, в отличие от create.isPending.
+  const savingRef = useRef(false);
   useEffect(() => {
     if (!active) return;
     const currentSequence = ++sequence.current;
@@ -122,15 +124,24 @@ export function useClientDraft(active: boolean) {
   // ОБЯЗАТЕЛЬНО (владелец 2026-07-26): безымянный клиент не находится ни
   // поиском, ни глазами в списке, а в SMS-шаблон подставлять нечего.
   const nameFilled = draft.full_name.trim().length > 0;
+  // Дубль найден — сохранять НЕЧЕГО: два клиента на одном номере невозможны
+  // (решение владельца), и save() при дубле молча выходил. Кнопка при этом
+  // оставалась яркой и активной: тап давал вибрацию и ничего больше. Гасим её
+  // здесь, а баннер под номером говорит, что делать.
   const canSave =
-    active && e164 !== null && nameFilled && !create.isPending;
+    active && e164 !== null && nameFilled && !duplicate && !create.isPending;
 
   /** Возвращает id созданного клиента — карточке это нужно, чтобы после
    *  сохранения открыть страницу объекта: она живёт отдельным роутом и
    *  несохранённого черновика не видит. null = не создали (гейт, дубль,
    *  ошибка), и тогда никакой навигации быть не должно. */
   const save = async (): Promise<string | null> => {
-    if (!canSave) return null;
+    // Между тапом и появлением create.isPending есть незакрытое окно: сетевая
+    // перепроверка дубля. Кнопка в нём активна и молчит, поэтому второй тап
+    // запускал ВТОРОЕ создание — два клиента с одним номером. Засов ставим
+    // синхронно, до первого await.
+    if (!canSave || savingRef.current) return null;
+    savingRef.current = true;
     setCreateError(null);
 
     // Дебаунс мог не успеть к быстрому тапу — перепроверяем перед записью.
@@ -140,6 +151,7 @@ export function useClientDraft(active: boolean) {
         if (existing) {
           haptics.warning();
           setDuplicate(existing);
+          savingRef.current = false;
           return null;
         }
       } catch {
@@ -151,6 +163,7 @@ export function useClientDraft(active: boolean) {
     // это отменил: два клиента на одном номере невозможны.
     if (duplicate) {
       haptics.warning();
+      savingRef.current = false;
       return null;
     }
 
@@ -163,6 +176,8 @@ export function useClientDraft(active: boolean) {
       });
       haptics.success();
       router.replace(`/clients/${created.id}`);
+      // Засов не снимаем: экран уже уехал на карточку созданного клиента, и
+      // повторное создание из этого черновика недопустимо.
       return created.id;
     } catch (error) {
       // Настоящий арбитр уникальности — частичный UNIQUE-индекс
@@ -177,6 +192,7 @@ export function useClientDraft(active: boolean) {
             const existing = await findClientByPhoneE164(supabase, e164, tenantId);
             if (existing) {
               setDuplicate(existing);
+              savingRef.current = false;
               return null;
             }
           } catch {
@@ -184,10 +200,12 @@ export function useClientDraft(active: boolean) {
           }
         }
         setCreateError("Клиент с таким номером уже есть");
+        savingRef.current = false;
         return null;
       }
       setCreateError(friendlyCreateError(error));
     }
+    savingRef.current = false;
     return null;
   };
 

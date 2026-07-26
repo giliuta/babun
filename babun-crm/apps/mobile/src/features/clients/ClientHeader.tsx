@@ -35,6 +35,7 @@ import {
 } from "@/features/clients/format";
 import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
+import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -81,6 +82,12 @@ export default function ClientHeader({
   const t = useThemeColors();
 
   const extras = client.phones ?? [];
+  // Номера — тот же jsonb-массив, что объекты: писать его можно только из
+  // свежайшего значения и по очереди, иначе две быстрые правки затирают друг
+  // друга (patchPhone из снимка рендера + PATCH на всю колонку).
+  const phones = useJsonArrayWriter<PhoneEntry>(extras, (next) =>
+    Promise.resolve(update({ phones: next })).then(() => true),
+  );
 
   // Новый номер живёт ЛОКАЛЬНО, пока в нём нет цифр: тап по «+ Добавить
   // номер» раньше сразу писал в базу пустую запись, и у клиента навсегда
@@ -99,21 +106,19 @@ export default function ClientHeader({
       setPending(null);
       return;
     }
-    update({
-      phones: [
-        ...extras,
-        { id: randomUuid(), number: value, label: pending.label },
-      ],
-    });
+    void phones.apply((all) => [
+      ...all,
+      { id: randomUuid(), number: value, label: pending.label },
+    ]);
     setPending(null);
   };
   const patchPhone = (id: string, patch: Partial<PhoneEntry>) =>
-    update({
-      phones: extras.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    });
+    void phones.apply((all) =>
+      all.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    );
   const removePhone = (id: string) => {
     haptics.tap();
-    update({ phones: extras.filter((p) => p.id !== id) });
+    void phones.apply((all) => all.filter((p) => p.id !== id));
   };
   // Ярлык переключается по кругу — отдельный пикер на такую мелочь был бы
   // тяжелее самой задачи.
@@ -158,8 +163,16 @@ export default function ClientHeader({
         big
         stacked
         live={!!draft}
+        // Имя обязательно НЕ только при создании: на сохранённой карточке
+        // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
+        // поиском, ни глазами в списке. Пустое просто не пишем, строка
+        // возвращает прежнее значение.
         onSave={(v) =>
-          draft ? draft.onNameChange(v) : update({ full_name: v })
+          draft
+            ? draft.onNameChange(v)
+            : v.trim()
+              ? update({ full_name: v.trim() })
+              : undefined
         }
         trailing={
           draft && client.full_name.trim() ? (
@@ -182,11 +195,20 @@ export default function ClientHeader({
         stacked
         live={!!draft}
         autoFocus={!!draft}
-        onSave={(v) =>
-          draft
-            ? draft.onPhoneChange(v)
-            : update({ phone: v, phone_e164: tryToE164(v) })
-        }
+        // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
+        // номера у сохранённого клиента уносило и ключ: клиент становился
+        // невидимым для защиты от дублей, и его можно было создать заново.
+        // Пустое и неразбираемое значение не пишем.
+        onSave={(v) => {
+          if (draft) {
+            draft.onPhoneChange(v);
+            return;
+          }
+          const next = v.trim();
+          const e164 = next ? tryToE164(next) : null;
+          if (!e164) return;
+          update({ phone: next, phone_e164: e164 });
+        }}
         trailing={
           draft ? (
             draft.valid ? (

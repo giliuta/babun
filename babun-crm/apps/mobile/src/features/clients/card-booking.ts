@@ -13,6 +13,7 @@
 // Обработчик ?new=1 в app/(dashboard)/index.tsx остаётся для входов ИЗ
 // календаря (напоминания, тап по слоту) — там календарь и есть контекст.
 
+import { useRef } from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
@@ -34,7 +35,16 @@ export interface BookingTarget {
  *  the given client/object/team. */
 export function useBookingNav(): (target: BookingTarget) => void {
   const router = useRouter();
-  return ({ clientId, locationId, teamId, serviceIds, date }: BookingTarget) =>
+  // Засов от двойного тапа: два быстрых нажатия открывали ДВА экрана
+  // «Новая запись» друг за другом, и второй приходилось закрывать вручную.
+  // Снимается, когда экран записи закрылся (следующий тик после ухода).
+  const busy = useRef(false);
+  return ({ clientId, locationId, teamId, serviceIds, date }: BookingTarget) => {
+    if (busy.current) return;
+    busy.current = true;
+    setTimeout(() => {
+      busy.current = false;
+    }, 700);
     router.push({
       pathname: "/book",
       params: {
@@ -47,6 +57,7 @@ export function useBookingNav(): (target: BookingTarget) => void {
           : {}),
       },
     });
+  };
 }
 
 /** То же, но с предупреждением о чёрном списке. Записать такого клиента

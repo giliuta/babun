@@ -19,6 +19,7 @@ import {
   PROPERTY_LABELS,
 } from "@babun/shared/local/clients";
 import { serviceDueState } from "@babun/shared/local/equipment-sla";
+import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { extractAddressFromMapUrl } from "@babun/shared/common/utils/map-links";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -89,6 +90,10 @@ export default function ClientObjectScreen() {
   const { data: client, isLoading } = useClient(clientId ?? "");
   const updateClient = useUpdateClient(clientId ?? "");
   const { data: appointments = [] } = useClientAppointments(clientId ?? "");
+  const stats = useMemo(
+    () => (client ? buildStats(client, appointments) : undefined),
+    [client, appointments],
+  );
   const { data: labelPresets = [] } = useLocationLabels();
   const guardedBook = useGuardedBookingNav();
 
@@ -120,9 +125,14 @@ export default function ClientObjectScreen() {
   const canSave =
     !!draft.address.trim() || !!draft.mapUrl?.trim();
 
+  // Визит = СОСТОЯВШИЙСЯ визит, ровно как в client-stats. Без фильтра по
+  // статусу подпись считала визитами запланированные и отменённые заявки и
+  // показывала «посл.» датой день, который ещё не наступил.
   const history = useMemo(() => {
     if (!loc) return null;
-    const mine = appointments.filter((a) => a.location_id === loc.id);
+    const mine = appointments.filter(
+      (a) => a.location_id === loc.id && a.status === "completed",
+    );
     if (mine.length === 0) return null;
     const lastDate = mine.reduce((m, a) => (a.date > m ? a.date : m), "");
     return { count: mine.length, lastDate };
@@ -414,7 +424,14 @@ export default function ClientObjectScreen() {
                 loud
                 onPress={() =>
                   client
-                    ? guardedBook(client, { locationId: loc.id })
+                    ? guardedBook(client, {
+                        locationId: loc.id,
+                        // Одна формула бригады на все точки записи: последняя
+                        // бригада КЛИЕНТА. Без неё /book подставлял последнюю
+                        // бригаду ТЕНАНТА, и две кнопки записи одного клиента
+                        // давали разные бригады.
+                        teamId: stats?.lastTeamId ?? null,
+                      })
                     : undefined
                 }
               />

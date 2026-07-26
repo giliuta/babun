@@ -4,14 +4,11 @@
 // This screen does ALL data wiring; the blocks are presentational. It
 // fetches the client + its appointments, computes the shared `stats`
 // (client-stats selector) and `serviceDue` (service-due selector), then
-// renders in the web ClientCardPage order:
+// renders the page as ONE STACK OF ROWS (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
 //
-//   ClientHeader (карточка-идентичность) · ClientNextJob (hero)
-//   · CardActions (Звонок · WhatsApp · Чат · Напомнить [· Записать])
-//   · ServiceBlock («Обслуживание» spine, hero unit de-duped)
-//   · ObjectsBlock (equipment-first) · NotesBlock
-//   · collapsed reference: Visits · Finance · Attachments
-//     · Contacts · Personal · Meta
+//   ClientHeader (имя · телефон · доп. номера) · «Записать»
+//   · «Обслуживание» · Объекты · Визиты и деньги · Вложения
+//   · Мессенджеры · Личное · О клиенте · Заметки
 //
 // СОЗДАНИЕ = ЭТА ЖЕ СТРАНИЦА (решение владельца 2026-07-13, уточнено
 // 2026-07-14): роут /clients/new попадает сюда с id="new" → карточка
@@ -21,12 +18,13 @@
 // (clients-99 F1.5/F2.7). «Готово» создаёт клиента и router.replace
 // приводит на этот же экран уже с сервера.
 //
-// ЧТО ВИДНО В ЧЕРНОВИКЕ: идентичность + объекты + заметки — то, что
-// реально можно заполнить заранее; всё внесённое уезжает одним create.
-// Скрыты (а) блоки-ДЕЙСТВИЯ — hero, ряд, ТО, вложения: им нужен реальный
-// id; (б) блоки-ИСТОРИЯ и справочник — Визиты/Финансы/Контакты/Личное/
-// Мета: до создания у них НЕТ данных, и «Записей пока нет · Финансы —»
-// вокруг двух полей были чистым шумом.
+// ЧТО ВИДНО В ЧЕРНОВИКЕ: ВСЯ страница (владелец 2026-07-26: «добавить
+// клиента открывается чётко вся страница, как будет выглядеть в будущем»).
+// Каждое поле этих блоков проходит белый список create_client_with_tags,
+// то есть пишет в тот же объект, который уедет в базу по «Готово».
+// Единственное исключение — «Вложения»: путь в хранилище строится по id
+// клиента, которого ещё нет. Действия, которым нужен реальный id
+// («Записать»), не спрятаны, а пригашены с подписью-причиной.
 //
 // A top chrome row owns the back button + a ⋯ action menu (message via
 // Linking sms:, share via RN Share, blacklist toggle via update) — the
@@ -482,15 +480,13 @@ export default function ClientDetailScreen() {
           }
         />
 
-        {/* Действия уровня человека («Записать», «Чат») и спайн ТО: обоим
-            нужен реальный id, поэтому в черновике их нет — записывать и
-            писать в чат ещё некому. */}
-        {!isDraft ? (
-          <>
-            <ClientContactRow client={c} stats={stats} />
-            <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
-          </>
-        ) : null}
+        {/* Действия уровня человека. В черновике строка видна, но пригашена
+            с подписью «Записать можно после сохранения» — владелец требует
+            видеть страницу целиком, а мёртвого тапа быть не должно.
+            «Обслуживание» гейта не требует: блок сам возвращает null, пока у
+            клиента нет техники с датами ТО, и сети не касается. */}
+        <ClientContactRow client={c} stats={stats} draft={isDraft} />
+        <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
 
         <ClientProfileBlocks
           key={`blocks-${id}`}

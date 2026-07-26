@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { sanitizePhoneInput } from "@/features/clients/phone";
@@ -116,6 +116,27 @@ export function FieldRow({
   const clean = (v: string) =>
     keyboardType === "phone-pad" ? sanitizePhoneInput(v) : v;
 
+  // Коммит значения. Единственная точка: blur, Return и размонтирование
+  // строки. Раньше коммит был только в onBlur, а кнопки «Готово» и «Назад»
+  // живут вне прокрутки и фокус не снимают — уход с экрана с открытой
+  // клавиатурой стирал всё набранное.
+  const latest = useRef({ text, value, live: !!live, onSave });
+  latest.current = { text, value, live: !!live, onSave };
+  const commit = () => {
+    setEditing(false);
+    const cur = latest.current;
+    if (!cur.live && cur.text.trim() !== cur.value) cur.onSave(cur.text.trim());
+  };
+  useEffect(
+    () => () => {
+      const cur = latest.current;
+      if (!cur.live && cur.text.trim() !== cur.value) {
+        cur.onSave(cur.text.trim());
+      }
+    },
+    [],
+  );
+
   if (stacked) {
     return (
       <View
@@ -186,10 +207,11 @@ export function FieldRow({
                 setText(v);
                 if (live) onSave(v);
               }}
-              onBlur={() => {
-                setEditing(false);
-                if (!live && text.trim() !== value) onSave(text.trim());
-              }}
+              onBlur={commit}
+              onSubmitEditing={commit}
+              // «Готово»/«Назад» живут ВНЕ прокрутки и поле не разфокусируют:
+              // без коммита на размонтировании набранное уезжало с экраном.
+              blurOnSubmit={!multiline}
               placeholder={placeholder}
               placeholderTextColor={t.placeholder}
               selectionColor={t.accent}
@@ -285,10 +307,9 @@ export function FieldRow({
               setText(v);
               if (live) onSave(v);
             }}
-            onBlur={() => {
-              setEditing(false);
-              if (!live && text.trim() !== value) onSave(text.trim());
-            }}
+            onBlur={commit}
+            onSubmitEditing={commit}
+            blurOnSubmit={!multiline}
             placeholder={placeholder}
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
