@@ -116,6 +116,25 @@ function asArray<T>(v: Json | null | undefined): T[] {
   return Array.isArray(v) ? (v as unknown as T[]) : [];
 }
 
+/** JSON-юнит → доменный ACUnit. Один маппер на оба места, где юниты живут
+ *  (внутри объекта и легаси-массив на клиенте): расхождение между ними уже
+ *  один раз стоило нам графика ТО. */
+function rowToUnit(u: ACUnit): ACUnit {
+  return {
+    id: u.id,
+    room: u.room,
+    brand: u.brand,
+    model: u.model,
+    ac_type: u.ac_type ?? "split",
+    has_indoor: u.has_indoor ?? true,
+    has_outdoor: u.has_outdoor ?? true,
+    // Расписание обслуживания — читаем, иначе запись его затирает.
+    installed_at: u.installed_at,
+    last_service_at: u.last_service_at,
+    service_interval_months: u.service_interval_months,
+  };
+}
+
 function rowToClient(r: ClientRow): Client {
   return {
     id: r.id,
@@ -157,32 +176,26 @@ function rowToClient(r: ClientRow): Client {
       label: l.label,
       address: l.address,
       mapUrl: l.mapUrl,
+      // P0 2026-07-26: поля ниже маппер РАНЬШЕ НЕ ЧИТАЛ, хотя запись пишет
+      // весь JSON целиком (clientToUpdate: out.locations = patch.locations).
+      // Значит любой patch locations, построенный из прочитанного клиента,
+      // стирал их и в базе: график ТО, введённый диспетчером, исчезал при
+      // первой же правке объекта, а serviceDueState всегда возвращал null
+      // (нет service_interval_months — нет графика), из-за чего блок
+      // «Обслуживание» молчал. Перечисление полей вместо спреда — намеренно
+      // (не пускаем в домен мусор из JSON), поэтому новое поле объекта
+      // ОБЯЗАНО быть дописано здесь же.
+      property_type: l.property_type,
       isPrimary: l.isPrimary,
       note: l.note,
-      equipment: asArray<ACUnit>(l.equipment as unknown as Json).map((u) => ({
-        id: u.id,
-        room: u.room,
-        brand: u.brand,
-        model: u.model,
-        ac_type: u.ac_type ?? "split",
-        has_indoor: u.has_indoor ?? true,
-        has_outdoor: u.has_outdoor ?? true,
-      })),
+      equipment: asArray<ACUnit>(l.equipment as unknown as Json).map(rowToUnit),
     })),
     notes: asArray<ClientNote>(r.notes).map((n) => ({
       id: n.id,
       text: n.text,
       created_at: n.created_at,
     })),
-    equipment: asArray<ACUnit>(r.equipment).map((u) => ({
-      id: u.id,
-      room: u.room,
-      brand: u.brand,
-      model: u.model,
-      ac_type: u.ac_type ?? "split",
-      has_indoor: u.has_indoor ?? true,
-      has_outdoor: u.has_outdoor ?? true,
-    })),
+    equipment: asArray<ACUnit>(r.equipment).map(rowToUnit),
 
     // Filled by parallel query against client_tag_assignments.
     tag_ids: [],

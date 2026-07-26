@@ -334,6 +334,24 @@ export default function ClientDetailScreen() {
     update({ blacklisted: !c.blacklisted });
   };
 
+  // Объект живёт отдельной страницей, а она читает клиента по id — значит в
+  // черновике клиент должен появиться раньше объекта. Гейт тот же, что у
+  // «Готово» (имя + телефон), поэтому лишнего шага не возникает: без них
+  // строка «+ Добавить объект» пригашена.
+  const openObject = async (locId: string) => {
+    const go = (ownerId: string) =>
+      router.push({
+        pathname: "/clients/object",
+        params: { clientId: ownerId, locId },
+      });
+    if (!isDraft) {
+      go(id);
+      return;
+    }
+    const createdId = await saveDraft();
+    if (createdId) go(createdId);
+  };
+
   const onBack = () => {
     if (!isDraftDirty) {
       router.back();
@@ -473,6 +491,8 @@ export default function ClientDetailScreen() {
           tags={tags}
           stats={stats}
           update={update}
+          onOpenObject={openObject}
+          canAddObject={canSave}
         />
       </ScrollView>
       </KeyboardAvoidingView>

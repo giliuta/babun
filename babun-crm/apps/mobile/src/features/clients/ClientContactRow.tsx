@@ -1,4 +1,4 @@
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   CalendarPlus,
@@ -11,6 +11,7 @@ import {
   resolveChannels,
   useEnabledChannels,
 } from "@/features/clients/contact-channels";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -85,6 +86,7 @@ export default function ClientContactRow({
   const t = useThemeColors();
   const router = useRouter();
   const { data: enabled = [] } = useEnabledChannels();
+  const guardedBook = useGuardedBookingNav();
   // Из общих каналов остаётся только внутренний чат — он с человеком.
   const chat = resolveChannels(client, enabled).find((c) => c.id === "chat");
 
@@ -93,28 +95,13 @@ export default function ClientContactRow({
     client.locations?.[0]?.id ??
     null;
 
-  const book = () => {
-    haptics.tap();
-    const go = () =>
-      router.push({
-        pathname: "/(dashboard)",
-        params: {
-          new: "1",
-          clientId: client.id,
-          ...(primaryLocationId ? { locationId: primaryLocationId } : {}),
-          ...(stats?.lastTeamId ? { teamId: stats.lastTeamId } : {}),
-        },
-      });
-    // Записать человека из чёрного списка можно, но не молча.
-    if (client.blacklisted) {
-      Alert.alert("Клиент в чёрном списке", "Всё равно записать?", [
-        { text: "Отмена", style: "cancel" },
-        { text: "Записать", onPress: go },
-      ]);
-      return;
-    }
-    go();
-  };
+  // Предупреждение о чёрном списке живёт в общем хелпере: тем же путём
+  // записывают со страницы объекта и из «Обслуживания».
+  const book = () =>
+    guardedBook(client, {
+      locationId: primaryLocationId,
+      teamId: stats?.lastTeamId ?? null,
+    });
 
   return (
     <View

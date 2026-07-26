@@ -39,7 +39,11 @@ import type {
 import {
   APPOINTMENT_SOURCE_LABELS,
 } from "@babun/shared/local/appointments";
-import type { Client, Location } from "@babun/shared/local/clients";
+import {
+  locationAddressForBooking,
+  type Client,
+  type Location,
+} from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -786,7 +790,7 @@ export default function BookScreen() {
     setLocationId(id);
     const loc = clientLocations.find((l) => l.id === id);
     if (loc) {
-      setAddress(loc.address.trim() || loc.label.trim());
+      setAddress(locationAddressForBooking(loc));
       setAddressNote(loc.note?.trim() ?? "");
     }
     haptics.tap();

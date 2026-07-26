@@ -1,9 +1,10 @@
-import { ActionSheetIOS, Linking, Pressable } from "react-native";
+import { ActionSheetIOS, Linking } from "react-native";
 import { MessageCircle } from "lucide-react-native";
 import {
   resolveChannelsForNumber,
   useEnabledChannels,
 } from "@/features/clients/contact-channels";
+import { RowActionButton } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -55,23 +56,12 @@ export default function PhoneChannelButton({
   };
 
   return (
-    <Pressable
+    <RowActionButton
+      icon={MessageCircle}
+      color={t.success}
+      label={label ? `Связаться · ${label}` : "Связаться"}
+      hint="Выбор способа связи с этим номером"
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label ? `Связаться · ${label}` : "Связаться"}
-      accessibilityHint="Выбор способа связи с этим номером"
-      hitSlop={8}
-      style={({ pressed }) => ({
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${t.success}1a`,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <MessageCircle color={t.success} size={16} strokeWidth={2.2} />
-    </Pressable>
+    />
   );
 }

@@ -17,6 +17,12 @@ interface ClientProfileBlocksProps {
   tags: ClientTag[];
   stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => Promise<boolean>;
+  /** Открыть объект или создать новый ("new"). Навигацию держит карточка:
+   *  в черновике клиента она сначала сохраняет клиента — pushed-страница не
+   *  видит несохранённого черновика. */
+  onOpenObject: (locId: string) => void;
+  /** В черновике: клиента уже можно сохранить, значит и объект можно завести. */
+  canAddObject?: boolean;
 }
 
 export function ClientProfileBlocks({
@@ -27,6 +33,8 @@ export function ClientProfileBlocks({
   tags,
   stats,
   update,
+  onOpenObject,
+  canAddObject,
 }: ClientProfileBlocksProps) {
   return (
     <>
@@ -39,9 +47,8 @@ export function ClientProfileBlocks({
           нельзя. */}
       <ObjectsBlock
         client={client}
-        appointments={appointments}
-        stats={stats}
-        update={update}
+        onOpen={onOpenObject}
+        addDimmed={draft && !canAddObject}
       />
 
       {draft ? (

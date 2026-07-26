@@ -5,7 +5,10 @@
 // switches to that client's team calendar (so the new record is visible on
 // return) and then pushes the separate /book screen pre-aimed at the client.
 
+import { Alert } from "react-native";
 import { useRouter } from "expo-router";
+import type { Client } from "@babun/shared/local/clients";
+import { haptics } from "@/lib/haptics";
 
 export interface BookingTarget {
   clientId: string;
@@ -33,4 +36,27 @@ export function useBookingNav(): (target: BookingTarget) => void {
           : {}),
       },
     });
+}
+
+/** То же, но с предупреждением о чёрном списке. Записать такого клиента
+ *  можно, но не молча — и это правило должно быть одно на все точки записи
+ *  (ряд действий карточки, «Обслуживание», страница объекта), иначе одна из
+ *  них тихо проведёт мимо предупреждения. */
+export function useGuardedBookingNav(): (
+  client: Client,
+  target: Omit<BookingTarget, "clientId">,
+) => void {
+  const book = useBookingNav();
+  return (client, target) => {
+    haptics.tap();
+    const go = () => book({ ...target, clientId: client.id });
+    if (client.blacklisted) {
+      Alert.alert("Клиент в чёрном списке", "Всё равно записать?", [
+        { text: "Отмена", style: "cancel" },
+        { text: "Записать", onPress: go },
+      ]);
+      return;
+    }
+    go();
+  };
 }

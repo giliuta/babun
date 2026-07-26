@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
 // ЕДИНАЯ СТРОКА КАРТОЧКИ КЛИЕНТА — тот же диалект, что у строк фильтров:
@@ -78,7 +78,7 @@ export function FieldRow({
   value: string;
   placeholder: string;
   separated?: boolean;
-  keyboardType?: "phone-pad" | "email-address" | "default";
+  keyboardType?: "phone-pad" | "email-address" | "url" | "default";
   autoFocus?: boolean;
   live?: boolean;
   multiline?: boolean;
@@ -342,7 +342,11 @@ export function NavRow({
       <Text
         maxFontSizeMultiplier={1.2}
         numberOfLines={1}
+        // Ярлык уступает место значению: адрес объекта длиннее подписи
+        // «Дом», и без сжатия ярлык забирал бы ширину у того, ради чего
+        // строку и открывают.
         style={{
+          flexShrink: 1,
           fontSize: loud ? 17 : 15,
           fontWeight: "600",
           color: loud ? t.onAccent : t.ink,
@@ -378,27 +382,102 @@ export function NavRow({
   );
 }
 
-/** Ряд-действие внутри группы («+ Добавить номер»). */
-export function AddRow({
+/** Кнопка в ХВОСТЕ строки — действие над самим значением этой строки:
+ *  связаться с этим номером, проложить маршрут к этому адресу. Владелец
+ *  2026-07-26: «с правой стороны нажимаешь кнопку и выбираешь, что делать».
+ *
+ *  32pt кружок: меньше цели касания 44pt по кругу, поэтому hitSlop
+ *  добирает остальное — иначе палец бьёт по строке и уводит со экрана. */
+export function RowActionButton({
+  icon: Icon,
+  color,
   label,
-  separated,
+  hint,
   onPress,
 }: {
+  icon: LucideIcon;
+  color: string;
   label: string;
-  separated?: boolean;
+  hint?: string;
   onPress: () => void;
 }) {
-  const t = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={hint}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: `${color}1a`,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Icon color={color} size={16} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
+/** Ряд-действие внутри группы («+ Добавить номер»). Строго про добавление —
+ *  для действий над самой сущностью есть ActionRow. */
+export function AddRow({
+  label,
+  separated,
+  dimmed,
+  onPress,
+}: {
+  label: string;
+  separated?: boolean;
+  /** Добавлять пока нельзя (в черновике — до имени и телефона). */
+  dimmed?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <ActionRow
+      label={label}
+      separated={separated}
+      dimmed={dimmed}
+      onPress={onPress}
+    />
+  );
+}
+
+/** Ряд-действие над сущностью: «Сделать основным», «Удалить объект».
+ *  Отличается от AddRow только смыслом (и тоном), поэтому вёрстка общая, а
+ *  примитивы разные: «+ Добавить …» и «Удалить …» — не одно и то же, и
+ *  закон строки требует различать их по имени, а не по цвету. */
+export function ActionRow({
+  label,
+  tone = "accent",
+  separated,
+  dimmed,
+  onPress,
+}: {
+  label: string;
+  tone?: "accent" | "danger";
+  separated?: boolean;
+  dimmed?: boolean;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={dimmed ? undefined : onPress}
+      disabled={dimmed}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!dimmed }}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
         minHeight: 48,
         paddingHorizontal: 16,
+        opacity: dimmed ? 0.4 : 1,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
         backgroundColor: pressed ? t.pressed : "transparent",
@@ -406,10 +485,78 @@ export function AddRow({
     >
       <Text
         maxFontSizeMultiplier={1.2}
-        style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
+        style={{
+          fontSize: 15,
+          fontWeight: "600",
+          color: tone === "danger" ? t.danger : t.accent,
+        }}
       >
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Строка с ГОТОВЫМ КОНТРОЛОМ в хвосте: ярлык слева, нативный контрол
+ *  справа (дата ТО). Не FieldRow: значение здесь не текст, и тап по нему
+ *  должен открывать системный пикер, а не клавиатуру. */
+export function ControlRow({
+  label,
+  separated,
+  children,
+}: {
+  label: string;
+  separated?: boolean;
+  children: ReactNode;
+}) {
+  const t = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        minHeight: 48,
+        paddingHorizontal: 16,
+        gap: 12,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+      }}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{ flexShrink: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
+      >
+        {label}
+      </Text>
+      <View style={{ flex: 1, alignItems: "flex-end" }}>{children}</View>
+    </View>
+  );
+}
+
+/** Тихая подпись ПОД группой — то, что объясняет группу, но не является её
+ *  строкой: «7 визитов · посл. 14 апр», «Следующее ТО через 63 дн». Тон
+ *  несёт смысл: обычное серым, «скоро» янтарём, «просрочено» красным. */
+export function RowCaption({
+  text,
+  tone = "quiet",
+}: {
+  text: string;
+  tone?: "quiet" | "warning" | "danger";
+}) {
+  const t = useThemeColors();
+  return (
+    <Text
+      maxFontSizeMultiplier={1.3}
+      style={{
+        marginHorizontal: 16,
+        marginTop: 6,
+        fontSize: 13,
+        color:
+          tone === "danger" ? t.danger : tone === "warning" ? t.warning : t.sub,
+      }}
+    >
+      {text}
+    </Text>
   );
 }

@@ -31,14 +31,36 @@ describe("client native persistence contract", () => {
   test("inline note and object editors clear only after a confirmed save", () => {
     const screen = read("../../../app/(dashboard)/clients/[id].tsx");
     const notes = read("blocks/NotesBlock.tsx");
-    const objects = read("blocks/ObjectsBlock.tsx");
+    // Объекты и техника уехали с карточки на свои страницы (2026-07-26):
+    // правило то же — уходим с экрана только после подтверждённой записи,
+    // иначе набранное исчезает вместе с экраном.
+    const object = read("../../../app/(dashboard)/clients/object.tsx");
+    const unit = read("../../../app/(dashboard)/clients/unit.tsx");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
     assert.match(notes, /const saved = await update/);
     assert.match(notes, /if \(saved\)/);
-    assert.match(objects, /const saved = await update/);
-    assert.match(objects, /if \(saved\) setDraft\(null\)/);
-    assert.match(objects, /Удалить объект/);
-    assert.match(objects, /Удалить кондиционер/);
+    assert.match(object, /if \(ok\) router\.back\(\)/);
+    assert.match(unit, /if \(ok\) router\.back\(\)/);
+    assert.match(object, /Удалить объект/);
+    assert.match(unit, /Удалить кондиционер/);
+  });
+
+  test("запись объектов идёт одной очередью из свежайшего массива", () => {
+    // locations — одна jsonb-колонка: патч перезаписывает весь массив. Патч,
+    // собранный из снимка рендера, затирает предыдущую правку, ответ на
+    // которую ещё в пути. Поэтому источник — latest.current, а записи
+    // выстроены в цепочку.
+    const writer = read("use-location-writer.ts");
+    assert.match(writer, /latest\.current/);
+    assert.match(writer, /chain\.current = run/);
+    assert.doesNotMatch(
+      read("../../../app/(dashboard)/clients/object.tsx"),
+      /update\(\{\s*locations:/,
+    );
+    assert.doesNotMatch(
+      read("../../../app/(dashboard)/clients/unit.tsx"),
+      /update\(\{\s*locations:/,
+    );
   });
 });

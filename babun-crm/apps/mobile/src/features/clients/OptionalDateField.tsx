@@ -21,18 +21,26 @@ export function OptionalDateField({
   label,
   value,
   onChange,
+  align = "start",
 }: {
   /** Подпись над контролом; не передавать, если строка уже подписана. */
   label?: string;
   /** "" = не указано; иначе валидный YYYY-MM-DD. */
   value: string;
   onChange: (v: string) => void;
+  /** "end" — контрол в хвосте подписанной строки (страница кондиционера).
+   *  Пустое значение читается как у остальных строк — тихим «Указать» у
+   *  правого края, без плашки-пилюли. */
+  align?: "start" | "end";
 }) {
   const t = useThemeColors();
   const a11y = label ? `: ${label}` : "";
+  const end = align === "end";
   return (
-    <View className="flex-1">
-      {label ? (
+    <View className={end ? "items-end" : "flex-1"}>
+      {/* В хвосте подписанной строки ярлык уже есть — здесь он остаётся
+          только для озвучки, видимой подписи не рисуем. */}
+      {label && !end ? (
         <Text className="mb-1 text-[11px]" style={{ color: t.sub }}>
           {label}
         </Text>
@@ -61,8 +69,12 @@ export function OptionalDateField({
           onPress={() => onChange(formatYMD(new Date()))}
           accessibilityRole="button"
           accessibilityLabel={`Указать дату${a11y}`}
-          className="min-h-11 self-start justify-center rounded-lg px-3 py-2 active:opacity-60"
-          style={{ backgroundColor: t.fill }}
+          className={
+            end
+              ? "min-h-11 justify-center pl-3 active:opacity-60"
+              : "min-h-11 self-start justify-center rounded-lg px-3 py-2 active:opacity-60"
+          }
+          style={end ? undefined : { backgroundColor: t.fill }}
         >
           <Text className="text-[13px] font-medium" style={{ color: t.accent }}>
             Указать

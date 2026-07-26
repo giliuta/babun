@@ -125,8 +125,12 @@ export function useClientDraft(active: boolean) {
   const canSave =
     active && e164 !== null && nameFilled && !create.isPending;
 
-  const save = async () => {
-    if (!canSave) return;
+  /** Возвращает id созданного клиента — карточке это нужно, чтобы после
+   *  сохранения открыть страницу объекта: она живёт отдельным роутом и
+   *  несохранённого черновика не видит. null = не создали (гейт, дубль,
+   *  ошибка), и тогда никакой навигации быть не должно. */
+  const save = async (): Promise<string | null> => {
+    if (!canSave) return null;
     setCreateError(null);
 
     // Дебаунс мог не успеть к быстрому тапу — перепроверяем перед записью.
@@ -136,7 +140,7 @@ export function useClientDraft(active: boolean) {
         if (existing) {
           haptics.warning();
           setDuplicate(existing);
-          return;
+          return null;
         }
       } catch {
         // Офлайн — создание разрешаем, финальный арбитр всё равно БД.
@@ -147,7 +151,7 @@ export function useClientDraft(active: boolean) {
     // это отменил: два клиента на одном номере невозможны.
     if (duplicate) {
       haptics.warning();
-      return;
+      return null;
     }
 
     try {
@@ -159,6 +163,7 @@ export function useClientDraft(active: boolean) {
       });
       haptics.success();
       router.replace(`/clients/${created.id}`);
+      return created.id;
     } catch (error) {
       // Настоящий арбитр уникальности — частичный UNIQUE-индекс
       // clients_tenant_phone_e164_idx. Гонка двух устройств (или создание
@@ -172,17 +177,18 @@ export function useClientDraft(active: boolean) {
             const existing = await findClientByPhoneE164(supabase, e164, tenantId);
             if (existing) {
               setDuplicate(existing);
-              return;
+              return null;
             }
           } catch {
             // Показать карточку не вышло — обойдёмся текстом ниже.
           }
         }
         setCreateError("Клиент с таким номером уже есть");
-        return;
+        return null;
       }
       setCreateError(friendlyCreateError(error));
     }
+    return null;
   };
 
   return {

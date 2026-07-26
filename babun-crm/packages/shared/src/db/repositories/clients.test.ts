@@ -94,6 +94,48 @@ describe("client repository paging", () => {
     expect(result[1004]?.tag_ids).toEqual(["tag-1004"]);
   });
 
+  // Регресс 2026-07-26. Маппер перечисляет поля объекта руками, а запись
+  // (clientToUpdate) отдаёт locations в базу целиком. Пока маппер не читал
+  // график ТО и тип объекта, первая же правка объекта стирала их и на
+  // сервере, а serviceDueState всегда возвращал null — блок «Обслуживание»
+  // молчал при заполненных датах. Поле, добавленное в Location/ACUnit, но
+  // забытое здесь, воспроизводит ровно эту потерю.
+  test("объект и кондиционер доезжают до домена целиком (график ТО не теряется)", async () => {
+    const location = {
+      id: "loc-1",
+      label: "Дом",
+      address: "Агиос Тихонас 21",
+      mapUrl: "https://maps.app.goo.gl/abc",
+      property_type: "house",
+      isPrimary: true,
+      note: "Домофон 25",
+      equipment: [
+        {
+          id: "ac-1",
+          room: "Спальня",
+          brand: "Daikin",
+          model: "FTXS35",
+          ac_type: "split",
+          has_indoor: true,
+          has_outdoor: true,
+          installed_at: "2024-05-01",
+          last_service_at: "2026-04-14",
+          service_interval_months: 12,
+        },
+      ],
+    };
+
+    const [client] = await listClients(
+      pagedSupabase({
+        clients: [{ ...clientRow(1), locations: [location] }],
+        client_tag_assignments: [],
+      }) as never,
+      TENANT,
+    );
+
+    expect(client?.locations[0]).toEqual(location);
+  });
+
   test("returns reference tags beyond the first page", async () => {
     const tags = Array.from({ length: 1005 }, (_, index) => ({
       id: `tag-${String(index).padStart(4, "0")}`,

@@ -1,5 +1,8 @@
 import { ActionSheetIOS, Linking } from "react-native";
-import { buildMapUrl } from "@babun/shared/common/utils/map-links";
+import {
+  buildMapUrl,
+  parseAddress,
+} from "@babun/shared/common/utils/map-links";
 import { haptics } from "@/lib/haptics";
 
 // «МАРШРУТ» — один экшен-шит на весь продукт: экран записи, строка объекта,
@@ -21,11 +24,25 @@ export function routeTarget(
 }
 
 /** Открывает выбор карты для цели. Молча выходит, если цели нет — мёртвых
- *  контролов не держим, вызывающая сторона просто не рисует кнопку. */
+ *  контролов не держим, вызывающая сторона просто не рисует кнопку.
+ *
+ *  Присланная ссылка без координат (короткая maps.app.goo.gl и подобные) —
+ *  НЕ выбор: Apple Картам такую ссылку можно отдать только текстовым
+ *  запросом `?q=https%3A%2F%2F…`, и они честно ищут «https://…» вместо
+ *  адреса. Ссылку открываем как есть — её разберёт то приложение, которое
+ *  её понимает. Выбор карты остаётся там, где обе карты справятся: адрес
+ *  текстом или координаты. */
 export function openRouteMenu(target: string): void {
   const clean = target.trim();
   if (!clean) return;
   haptics.tap();
+  const parsed = parseAddress(clean);
+  if (parsed.isUrl && !parsed.coords) {
+    void Linking.openURL(
+      clean.startsWith("http") ? clean : `https://${clean}`,
+    );
+    return;
+  }
   ActionSheetIOS.showActionSheetWithOptions(
     {
       title: clean,

@@ -83,6 +83,24 @@ export const AC_TYPE_LABELS: Record<ACType, string> = {
   cassette: "Кассетный",
 };
 
+/** Порядок типов в выборе — от самого частого. Живёт рядом с подписями,
+ *  чтобы мобила и веб предлагали один и тот же список в одном порядке. */
+export const AC_TYPE_ORDER: ACType[] = ["split", "ducted", "cassette"];
+
+/** Что подставить в «Адрес» заявки при выборе объекта. Поле заявки принимает
+ *  и текст, и ссылку на карту, поэтому присланный пин честнее подписи: по
+ *  «Дом» бригада никуда не доедет, а по ссылке — доедет. Подпись остаётся
+ *  последним фолбэком, чтобы адрес заявки не был пустым. */
+export function locationAddressForBooking(loc: {
+  address?: string;
+  mapUrl?: string;
+  label?: string;
+}): string {
+  return (
+    loc.address?.trim() || loc.mapUrl?.trim() || loc.label?.trim() || ""
+  );
+}
+
 export interface ACUnit {
   id: string;
   room: string;

@@ -53,6 +53,7 @@ import {
 } from "@/features/appointments/payment";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { tierForVisits } from "@babun/shared/local/loyalty";
+import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -1347,7 +1348,7 @@ export function AppointmentSheet({
                     // Выбор объекта предзаполняет «Адрес» (label — фолбэк
                     // для link-only объекта); снятие набранное не стирает.
                     const loc = client.locations.find((l) => l.id === next);
-                    if (loc) setAddress(loc.address.trim() || loc.label.trim());
+                    if (loc) setAddress(locationAddressForBooking(loc));
                   }}
                 />
               </SectionCard>
@@ -2313,7 +2314,7 @@ export function AppointmentSheet({
           const locs = clients.find((c) => c.id === id)?.locations ?? [];
           const loc = locs.find((l) => l.isPrimary) ?? locs[0];
           setLocationId(loc?.id ?? null);
-          setAddress(loc ? loc.address.trim() || loc.label.trim() : "");
+          setAddress(loc ? locationAddressForBooking(loc) : "");
           setClientPicker(false);
         }}
         onCreate={async (name, phone) => {
