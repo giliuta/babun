@@ -120,6 +120,51 @@ export interface ResolvedChannel extends ChannelDef {
   internal?: boolean;
 }
 
+/** Каналы КОНКРЕТНОГО НОМЕРА (владелец 2026-07-26: «если я добавляю новый
+ *  номер телефона, то кнопка появляется чётко на этот номер»). Канал —
+ *  свойство номера, а не клиента: у мужа WhatsApp, у жены Viber, звонить
+ *  надо ровно на тот номер, у которого нажали.
+ *
+ *  Telegram-username — единственное исключение: он принадлежит клиенту,
+ *  поэтому у основного номера ведёт на @username, у остальных — на
+ *  t.me по цифрам самого номера. */
+export function resolveChannelsForNumber(
+  number: string,
+  enabled: ChannelId[],
+  opts?: { telegramUsername?: string | null },
+): ResolvedChannel[] {
+  const digits = (number || "").replace(/[^\d+]/g, "");
+  if (digits.replace(/\D/g, "").length < 5) return [];
+  const out: ResolvedChannel[] = [];
+  for (const def of CONTACT_CHANNELS) {
+    if (!enabled.includes(def.id)) continue;
+    let url: string | null = null;
+    switch (def.id) {
+      case "call":
+        url = telUrl(number);
+        break;
+      case "whatsapp":
+        url = whatsappUrl(number);
+        break;
+      case "telegram":
+        url = telegramUrl(opts?.telegramUsername ?? null, number);
+        break;
+      case "viber":
+        url = `viber://chat?number=${encodeURIComponent(digits)}`;
+        break;
+      case "sms":
+        url = `sms:${digits}`;
+        break;
+      case "chat":
+        // Внутренний чат — с КЛИЕНТОМ, не с номером: в меню номера его нет.
+        url = null;
+        break;
+    }
+    if (url) out.push({ ...def, url });
+  }
+  return out;
+}
+
 /** Что реально доступно ДЛЯ ЭТОГО клиента с учётом настроек. Канал без
  *  данных не показывается вовсе — мёртвых пунктов в листе не держим. */
 export function resolveChannels(

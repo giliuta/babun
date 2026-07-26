@@ -1,11 +1,8 @@
-import { Alert, Linking, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   CalendarPlus,
-  MessageCircle,
   MessageSquare,
-  Phone,
-  Send,
   type LucideIcon,
 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
@@ -13,38 +10,20 @@ import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
   resolveChannels,
   useEnabledChannels,
-  type ChannelId,
 } from "@/features/clients/contact-channels";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// РЯД МАЛЕНЬКИХ КНОПОК ПОД ТЕЛЕФОНОМ (владелец 2026-07-26: «не нравится,
-// что вылазит снизу; хочу под номером телефона сразу такие маленькие
-// кнопочки — WhatsApp, Telegram, Viber, чат; и кнопка "Записать" такого
-// же размера»).
+// РЯД КНОПОК УРОВНЯ КЛИЕНТА — «Записать» и «Чат» (владелец 2026-07-26).
 //
-// Отменяет предыдущий заход с одной кнопкой и мини-листом: лишний тап и
-// экран поверх экрана вместо прямого действия. Здесь каждый способ — это
-// одно нажатие, а «Записать» стоит в том же ряду и того же размера, то
-// есть большой синей строки-hero на карточке больше нет вообще.
+// Каналы связи (звонок, WhatsApp, Telegram, Viber, SMS) отсюда УБРАНЫ: они
+// свойство КОНКРЕТНОГО НОМЕРА и живут кнопкой в хвосте своей строки
+// (PhoneChannelButton) — у мужа WhatsApp, у жены Viber, и звонить надо
+// ровно на тот номер, у которого нажали.
 //
-// Кнопка появляется ТОЛЬКО если способ реально доступен этому клиенту и
-// включён в «Настройках клиентов → Способы связи».
-
-const ICONS: Record<ChannelId, LucideIcon> = {
-  call: Phone,
-  whatsapp: MessageCircle,
-  telegram: Send,
-  viber: MessageCircle,
-  sms: MessageSquare,
-  chat: MessageSquare,
-};
-
-/** Короткие подписи для тесного ряда. */
-const ROW_LABELS: Partial<Record<ChannelId, string>> = {
-  call: "Звонок",
-  chat: "Чат",
-};
+// Здесь остаётся то, что относится к человеку, а не к номеру: запись и
+// внутренний чат. Размер кнопок один и тот же — «Записать» не громче
+// остальных, большой синей строки-hero на карточке нет.
 
 function ActionButton({
   label,
@@ -106,7 +85,8 @@ export default function ClientContactRow({
   const t = useThemeColors();
   const router = useRouter();
   const { data: enabled = [] } = useEnabledChannels();
-  const channels = resolveChannels(client, enabled);
+  // Из общих каналов остаётся только внутренний чат — он с человеком.
+  const chat = resolveChannels(client, enabled).find((c) => c.id === "chat");
 
   const primaryLocationId =
     client.locations?.find((l) => l.isPrimary)?.id ??
@@ -147,23 +127,17 @@ export default function ClientContactRow({
         borderTopColor: t.separator,
       }}
     >
-      {channels.map((c) => (
+      {chat ? (
         <ActionButton
-          key={c.id}
-          // Подписи в ряду короткие — иначе обрезаются: полные имена
-          // живут в настройках («Чат в Babun»).
-          label={ROW_LABELS[c.id] ?? c.label}
-          color={c.color}
-          Icon={ICONS[c.id]}
+          label="Чат"
+          color={chat.color}
+          Icon={MessageSquare}
           onPress={() => {
             haptics.tap();
-            if (c.internal) router.push(c.url as never);
-            else void Linking.openURL(c.url);
+            router.push(chat.url as never);
           }}
         />
-      ))}
-      {/* «Записать» — того же размера, что каналы: это тоже одно действие
-          над клиентом, а не отдельная громкая поверхность. */}
+      ) : null}
       <ActionButton
         label="Записать"
         color={t.accent}

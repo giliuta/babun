@@ -22,14 +22,8 @@
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
 import { type ReactNode } from "react";
-import { Linking, Pressable, Text, View } from "react-native";
-import {
-  Bell,
-  Check,
-  Contact,
-  Phone as PhoneIcon,
-  X,
-} from "lucide-react-native";
+import { Pressable, Text, View } from "react-native";
+import { Bell, Check, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -43,6 +37,7 @@ import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import ClientContactRow from "@/features/clients/ClientContactRow";
+import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -181,9 +176,17 @@ export default function ClientHeader({
             : update({ phone: v, phone_e164: tryToE164(v) })
         }
         trailing={
-          draft?.valid ? (
-            <Check color={t.success} size={18} strokeWidth={2.5} />
-          ) : null
+          draft ? (
+            draft.valid ? (
+              <Check color={t.success} size={18} strokeWidth={2.5} />
+            ) : null
+          ) : (
+            <PhoneChannelButton
+              number={client.phone}
+              telegramUsername={client.telegram_username}
+              label="основной"
+            />
+          )
         }
       />
 
@@ -212,33 +215,9 @@ export default function ClientHeader({
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
             >
-              {/* Позвонить на ЭТОТ номер: у дополнительного номера звонок —
-                  единственный способ им воспользоваться, ряд действий внизу
-                  всегда работает с основным. */}
-              {p.number.replace(/\D/g, "").length >= 5 ? (
-                <Pressable
-                  onPress={() => {
-                    haptics.tap();
-                    void Linking.openURL(
-                      `tel:${p.number.replace(/[^\d+]/g, "")}`,
-                    );
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Позвонить на номер ${p.label}`}
-                  hitSlop={8}
-                  style={({ pressed }) => ({
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: `${t.success}1a`,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <PhoneIcon color={t.success} size={14} strokeWidth={2.2} />
-                </Pressable>
-              ) : null}
+              {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
+                  номера, а не клиента. */}
+              <PhoneChannelButton number={p.number} label={p.label} />
               <Pressable
                 onPress={() => removePhone(p.id)}
                 accessibilityRole="button"
@@ -329,7 +308,3 @@ export default function ClientHeader({
     </RowGroup>
   );
 }
-
-/** Контакт-иконка нужна экрану создания как аффорданс «взять из телефона»
- *  — оставлена экспортом, чтобы композер не тянул lucide напрямую. */
-export { Contact as ContactsIcon };
