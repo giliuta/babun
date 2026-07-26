@@ -2,8 +2,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
-import VisitsBlock from "@/features/clients/blocks/VisitsBlock";
-import FinanceBlock from "@/features/clients/blocks/FinanceBlock";
+import VisitsMoneyBlock from "@/features/clients/blocks/VisitsMoneyBlock";
 import AttachmentsBlock from "@/features/clients/blocks/AttachmentsBlock";
 import ContactsBlock from "@/features/clients/blocks/ContactsBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
@@ -55,8 +54,11 @@ export function ClientProfileBlocks({
         null
       ) : (
         <>
-          <VisitsBlock appointments={appointments} services={services} stats={stats} />
-          <FinanceBlock clientId={client.id} appointments={appointments} stats={stats} />
+          <VisitsMoneyBlock
+            appointments={appointments}
+            services={services}
+            stats={stats}
+          />
           <AttachmentsBlock clientId={client.id} />
           <ContactsBlock client={client} update={update} hidePhones />
           <PersonalBlock client={client} update={update} />
