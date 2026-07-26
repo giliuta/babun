@@ -178,220 +178,227 @@ export default function ClientHeader({
   ) as string[];
 
   return (
-    <RowGroup>
-      {/* Имя — ОБЯЗАТЕЛЬНОЕ (владелец 2026-07-26): безымянного клиента не
+    <>
+      <RowGroup>
+        {/* Имя — ОБЯЗАТЕЛЬНОЕ (владелец 2026-07-26): безымянного клиента не
           найти ни поиском, ни глазами, и в SMS-шаблон нечего подставить. */}
-      <FieldRow
-        label="Имя"
-        value={client.full_name}
-        placeholder="Обязательно"
-        big
-        stacked
-        live={!!draft}
-        // Имя обязательно НЕ только при создании: на сохранённой карточке
-        // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
-        // поиском, ни глазами в списке. Пустое просто не пишем, строка
-        // возвращает прежнее значение.
-        onSave={(v) => {
-          if (draft) {
-            draft.onNameChange(v);
-            return;
-          }
-          if (v.trim()) {
-            update({ full_name: v.trim() });
-            return;
-          }
-          haptics.warning();
-          toast("Имя обязательно", "error");
-        }}
-        trailing={
-          draft && client.full_name.trim() ? (
-            <Check color={t.success} size={18} strokeWidth={2.5} />
-          ) : null
-        }
-      />
-
-      {/* Телефон вторым (порядок владельца 2026-07-26: сначала имя).
-          Ярлык сверху, значение по левому краю — печатать в правое
-          выравнивание неудобно. */}
-      <FieldRow
-        separated
-        label="Телефон"
-        value={client.phone}
-        placeholder="Обязательно"
-        keyboardType="phone-pad"
-        tabular
-        big
-        stacked
-        live={!!draft}
-        autoFocus={!!draft}
-        // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
-        // номера у сохранённого клиента уносило и ключ: клиент становился
-        // невидимым для защиты от дублей, и его можно было создать заново.
-        // Пустое и неразбираемое значение не пишем.
-        onSave={(v) => {
-          if (draft) {
-            draft.onPhoneChange(v);
-            return;
-          }
-          const next = v.trim();
-          const e164 = next ? tryToE164(next) : null;
-          // Молча отклонять нельзя: строка возвращала прежний номер, и
-          // человек не понимал, почему правка «не сохранилась».
-          if (!e164) {
+        <FieldRow
+          label="Имя"
+          value={client.full_name}
+          placeholder="Обязательно"
+          big
+          stacked
+          live={!!draft}
+          // Имя обязательно НЕ только при создании: на сохранённой карточке
+          // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
+          // поиском, ни глазами в списке. Пустое просто не пишем, строка
+          // возвращает прежнее значение.
+          onSave={(v) => {
+            if (draft) {
+              draft.onNameChange(v);
+              return;
+            }
+            if (v.trim()) {
+              update({ full_name: v.trim() });
+              return;
+            }
             haptics.warning();
-            toast(
-              next
-                ? "Номер не распознан — проверьте код страны"
-                : "Телефон обязателен",
-              "error",
-            );
-            return;
-          }
-          update({ phone: next, phone_e164: e164 });
-        }}
-        trailing={
-          draft ? (
-            draft.valid ? (
+            toast("Имя обязательно", "error");
+          }}
+          trailing={
+            draft && client.full_name.trim() ? (
               <Check color={t.success} size={18} strokeWidth={2.5} />
             ) : null
-          ) : (
-            <PhoneChannelButton
-              number={client.phone}
-              telegramUsername={client.telegram_username}
-              label="основной"
-            />
-          )
-        }
-      />
+          }
+        />
 
-      {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания.
+        {/* Телефон вторым (порядок владельца 2026-07-26: сначала имя).
+          Ярлык сверху, значение по левому краю — печатать в правое
+          выравнивание неудобно. */}
+        <FieldRow
+          separated
+          label="Телефон"
+          value={client.phone}
+          placeholder="Обязательно"
+          keyboardType="phone-pad"
+          tabular
+          big
+          stacked
+          live={!!draft}
+          autoFocus={!!draft}
+          // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
+          // номера у сохранённого клиента уносило и ключ: клиент становился
+          // невидимым для защиты от дублей, и его можно было создать заново.
+          // Пустое и неразбираемое значение не пишем.
+          onSave={(v) => {
+            if (draft) {
+              draft.onPhoneChange(v);
+              return;
+            }
+            const next = v.trim();
+            const e164 = next ? tryToE164(next) : null;
+            // Молча отклонять нельзя: строка возвращала прежний номер, и
+            // человек не понимал, почему правка «не сохранилась».
+            if (!e164) {
+              haptics.warning();
+              toast(
+                next
+                  ? "Номер не распознан — проверьте код страны"
+                  : "Телефон обязателен",
+                "error",
+              );
+              return;
+            }
+            update({ phone: next, phone_e164: e164 });
+          }}
+          trailing={
+            draft ? (
+              draft.valid ? (
+                <Check color={t.success} size={18} strokeWidth={2.5} />
+              ) : null
+            ) : (
+              <PhoneChannelButton
+                number={client.phone}
+                telegramUsername={client.telegram_username}
+                label="основной"
+              />
+            )
+          }
+        />
+
+        {/* Слот черновика: дедуп «Похоже, такой уже есть» / ошибка создания.
           Стоит сразу под номером — там же, где его причина. */}
-      {draft?.footer ? (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          {draft.footer}
-        </View>
-      ) : null}
+        {draft?.footer ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            {draft.footer}
+          </View>
+        ) : null}
 
-      {/* Дополнительные номера — здесь же, у основного: муж/жена, рабочий,
+        {/* Дополнительные номера — здесь же, у основного: муж/жена, рабочий,
           WhatsApp на другом номере. Ярлык переключается тапом. */}
-      {extras
-        .filter((p) => p.id !== pending?.id)
-        .map((p) => (
+        {extras
+          .filter((p) => p.id !== pending?.id)
+          .map((p) => (
+            <FieldRow
+              key={p.id}
+              label={p.label || "Другой"}
+              value={p.number}
+              placeholder="Номер"
+              separated
+              keyboardType="phone-pad"
+              tabular
+              // Тот же вид, что у основного номера: ярлык сверху, номер по
+              // ЛЕВОМУ краю (владелец 2026-07-26: «когда я напишу второй номер,
+              // она с правой стороны пишет, хотя номер должен быть с левой»).
+              stacked
+              // В ЧЕРНОВИКЕ — live: «Готово» читает черновик из замыкания, и
+              // коммит по blur до него не долетал — второй номер просто не
+              // сохранялся вместе с клиентом.
+              live={!!draft}
+              onLabelPress={() => cyclePhoneLabel(p)}
+              onSave={(v) => patchPhone(p.id, { number: v })}
+              trailing={
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                >
+                  {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
+                  номера, а не клиента. */}
+                  <PhoneChannelButton number={p.number} label={p.label} />
+                  <Pressable
+                    onPress={() => removePhone(p.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Убрать номер ${p.label}`}
+                    hitSlop={10}
+                    style={({ pressed }) => ({
+                      width: 28,
+                      alignItems: "center",
+                      opacity: pressed ? 0.5 : 1,
+                    })}
+                  >
+                    <X color={t.faint} size={16} strokeWidth={2.4} />
+                  </Pressable>
+                </View>
+              }
+            />
+          ))}
+
+        {/* Новый номер: то же поле, но ещё не в данных. Пустым уйдёт — исчезнет
+          без следа, с цифрами — станет обычной строкой номера. */}
+        {pending ? (
           <FieldRow
-            key={p.id}
-            label={p.label || "Другой"}
-            value={p.number}
+            label={pending.label}
+            value=""
             placeholder="Номер"
             separated
             keyboardType="phone-pad"
             tabular
-            // Тот же вид, что у основного номера: ярлык сверху, номер по
-            // ЛЕВОМУ краю (владелец 2026-07-26: «когда я напишу второй номер,
-            // она с правой стороны пишет, хотя номер должен быть с левой»).
             stacked
-            // В ЧЕРНОВИКЕ — live: «Готово» читает черновик из замыкания, и
-            // коммит по blur до него не долетал — второй номер просто не
-            // сохранялся вместе с клиентом.
-            live={!!draft}
-            onLabelPress={() => cyclePhoneLabel(p)}
-            onSave={(v) => patchPhone(p.id, { number: v })}
+            autoFocus
+            // БЕЗ live: он писал PATCH на КАЖДЫЙ СИМВОЛ (восемь запросов на
+            // восьмизначный номер). Коммит по blur / Return / уходу со строки
+            // уже даёт примитив, а «Готово» на карточке снимает клавиатуру
+            // перед сохранением — значит черновик успевает получить номер.
+            onSave={commitPending}
+            // Правка закончилась — номер уже в данных, и строка становится
+            // обычной строкой-номером (с переключением подписи).
+            onEditEnd={() => setPendingRow(null)}
             trailing={
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              <Pressable
+                onPress={() => {
+                  const id = pending.id;
+                  setPendingRow(null);
+                  // Записи может ещё не быть — тогда и удалять нечего.
+                  if (phones.current().some((x) => x.id === id)) {
+                    void phones.apply((all) => all.filter((x) => x.id !== id));
+                  }
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Отменить добавление номера"
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  width: 28,
+                  alignItems: "center",
+                  opacity: pressed ? 0.5 : 1,
+                })}
               >
-                {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
-                  номера, а не клиента. */}
-                <PhoneChannelButton number={p.number} label={p.label} />
-                <Pressable
-                  onPress={() => removePhone(p.id)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Убрать номер ${p.label}`}
-                  hitSlop={10}
-                  style={({ pressed }) => ({
-                    width: 28,
-                    alignItems: "center",
-                    opacity: pressed ? 0.5 : 1,
-                  })}
-                >
-                  <X color={t.faint} size={16} strokeWidth={2.4} />
-                </Pressable>
-              </View>
+                <X color={t.faint} size={16} strokeWidth={2.4} />
+              </Pressable>
             }
           />
-        ))}
+        ) : (
+          <AddRow label="+ Добавить номер" separated onPress={addPhone} />
+        )}
 
-      {/* Новый номер: то же поле, но ещё не в данных. Пустым уйдёт — исчезнет
-          без следа, с цифрами — станет обычной строкой номера. */}
-      {pending ? (
-        <FieldRow
-          label={pending.label}
-          value=""
-          placeholder="Номер"
-          separated
-          keyboardType="phone-pad"
-          tabular
-          stacked
-          autoFocus
-          // БЕЗ live: он писал PATCH на КАЖДЫЙ СИМВОЛ (восемь запросов на
-          // восьмизначный номер). Коммит по blur / Return / уходу со строки
-          // уже даёт примитив, а «Готово» на карточке снимает клавиатуру
-          // перед сохранением — значит черновик успевает получить номер.
-          onSave={commitPending}
-          // Правка закончилась — номер уже в данных, и строка становится
-          // обычной строкой-номером (с переключением подписи).
-          onEditEnd={() => setPendingRow(null)}
-          trailing={
-            <Pressable
-              onPress={() => {
-                const id = pending.id;
-                setPendingRow(null);
-                // Записи может ещё не быть — тогда и удалять нечего.
-                if (phones.current().some((x) => x.id === id)) {
-                  void phones.apply((all) => all.filter((x) => x.id !== id));
-                }
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Отменить добавление номера"
-              hitSlop={10}
-              style={({ pressed }) => ({
-                width: 28,
-                alignItems: "center",
-                opacity: pressed ? 0.5 : 1,
-              })}
-            >
-              <X color={t.faint} size={16} strokeWidth={2.4} />
-            </Pressable>
-          }
-        />
-      ) : (
-        <AddRow label="+ Добавить номер" separated onPress={addPhone} />
-      )}
+        {draft?.onPickContacts ? (
+          <AddRow
+            label="Заполнить из контактов"
+            separated
+            onPress={draft.onPickContacts}
+          />
+        ) : null}
+      </RowGroup>
 
-      {draft?.onPickContacts ? (
-        <AddRow
-          label="Заполнить из контактов"
-          separated
-          onPress={draft.onPickContacts}
-        />
-      ) : null}
-
-      {/* Производное — не строки-факты, а тихая сводка: долг (янтарь —
-          «обрати внимание», не авария), напоминание и строка доверия. */}
+      {/* МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-
+          факты, а сводка: долг первым и янтарём («обрати внимание», не
+          авария), напоминание, и одной строкой доверие — визиты, сумма,
+          когда был, когда записан. Отдельной карточкой, а не хвостом блока
+          идентичности: это ПРОИЗВОДНОЕ, а не поле, которое правят. */}
       {debt || badge || trustSegments.length > 0 ? (
         <View
           style={{
+            marginHorizontal: 12,
+            marginTop: 8,
             paddingHorizontal: 16,
-            paddingVertical: 10,
+            paddingVertical: 12,
             gap: 4,
-            borderTopWidth: 1,
-            borderTopColor: t.separator,
+            borderRadius: t.radius.card,
+            backgroundColor: t.surface,
           }}
         >
           {debt ? (
             <Text
               maxFontSizeMultiplier={1.3}
-              style={{ fontSize: 14, fontWeight: "600", color: t.warning }}
+              style={{ fontSize: 15, fontWeight: "700", color: t.warning }}
             >
               {`Долг ${debt}`}
             </Text>
@@ -427,6 +434,6 @@ export default function ClientHeader({
           ) : null}
         </View>
       ) : null}
-    </RowGroup>
+    </>
   );
 }

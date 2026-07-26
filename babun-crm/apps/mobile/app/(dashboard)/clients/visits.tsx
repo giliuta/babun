@@ -1,9 +1,10 @@
-import { useMemo } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
+import { ScrollView, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
@@ -14,14 +15,17 @@ import { useServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// ИСТОРИЯ ВИЗИТОВ — своя страница (владелец 2026-07-26: «история визита
-// должна быть, её качественно надо проработать»).
+// ИСТОРИЯ ЗАПИСЕЙ — полноценная страница (владелец 2026-07-26: «должна быть
+// просто история записей: нажимаю — и там абсолютно все записи по этому
+// клиенту, полноценная страница»).
 //
-// На карточке истории быть не должно — он же раньше просил убрать оттуда
-// ленту: «не надо делать вот эту длинную запись, визиты вот это вот куча».
-// Поэтому карточка несёт ОДНУ строку «История визитов · N», а сама лента
-// живёт здесь и отвечает на вопросы в порядке их появления: когда → что
-// делали → сколько → всё ли заплачено.
+// На карточке — ОДНА строка «История записей · N»: ленты там он не хочет
+// («визиты вот это вот куча»). Здесь же отвечаем на вопросы в порядке их
+// появления: когда → что делали → сколько → всё ли заплачено.
+//
+// Запись открывается ПОВЕРХ этой страницы, поэтому «назад» из записи ведёт
+// в историю, а второй «назад» — к клиенту. Раньше тап уводил в таб
+// «Календарь», и возврат выбрасывал человека туда же.
 //
 // Группировка по годам: у постоянного клиента за три года набирается полсотни
 // визитов, и без года «12 мар» ничего не значит. Внутри года — от свежих к
@@ -34,7 +38,6 @@ function yearOf(date: string): string {
 
 export default function ClientVisitsScreen() {
   const t = useThemeColors();
-  const router = useRouter();
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const { data: client } = useClient(clientId ?? "");
   const { data: appointments = [], isLoading } = useClientAppointments(
@@ -80,16 +83,17 @@ export default function ClientVisitsScreen() {
     return [...groups.entries()];
   }, [past]);
 
+  // Запись открывается ПОВЕРХ истории, а не через таб «Календарь».
+  // Владелец 2026-07-26: «нажимаю на запись — оно открывает эту запись; если
+  // нажимаю назад, возвращает в историю записей; ещё раз назад — в клиента.
+  // Проблема в том, что когда захожу в запись и возвращаюсь, оно
+  // перебрасывает на календарь — она не должна так делать».
+  // Раньше тап уводил в другой ТАБ: история выпадала из стека, и «назад»
+  // возвращал не туда, откуда пришли.
+  const [editing, setEditing] = useState<Appointment | null>(null);
   const open = (a: Appointment) => {
     haptics.tap();
-    router.push({
-      pathname: "/(dashboard)",
-      params: {
-        appointmentId: a.id,
-        date: a.date,
-        ...(a.team_id ? { teamId: a.team_id } : {}),
-      },
-    });
+    setEditing(a);
   };
 
   /** Значение строки: услуги, а если их нет — статус. Деньги отдельным
@@ -115,14 +119,14 @@ export default function ClientVisitsScreen() {
   return (
     <Screen>
       <ScreenHeader
-        title="История визитов"
+        title="История записей"
         subtitle={client?.full_name || undefined}
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {isLoading ? (
           <RowCaption text="Загрузка…" />
         ) : sorted.length === 0 ? (
-          <RowCaption text="Визитов ещё не было." />
+          <RowCaption text="Записей ещё не было." />
         ) : null}
 
         {/* Итог сверху — то, ради чего историю чаще всего и открывают. */}
@@ -173,17 +177,15 @@ export default function ClientVisitsScreen() {
         ))}
 
         <View style={{ height: 8 }} />
-        <Text
-          maxFontSizeMultiplier={1.3}
-          style={{
-            marginHorizontal: 16,
-            fontSize: 13,
-            color: t.faint,
-          }}
-        >
-          Тап по визиту открывает его в календаре.
-        </Text>
       </ScrollView>
+
+      {/* Шит записи живёт ЗДЕСЬ же: закрытие возвращает в историю, а не на
+          календарь. */}
+      <AppointmentSheet
+        visible={editing !== null}
+        appointment={editing}
+        onClose={() => setEditing(null)}
+      />
     </Screen>
   );
 }

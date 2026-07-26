@@ -76,12 +76,7 @@ export function ClientProfileBlocks({
           «Визиты и деньги» скрывает себя сам, пока визитов и долга нет: у
           нового клиента их нет по определению, и у сохранённого без визитов
           страница выглядит точно так же. */}
-      <VisitsMoneyBlock
-        clientId={client.id}
-        appointments={appointments}
-        services={services}
-        stats={stats}
-      />
+      <VisitsMoneyBlock clientId={client.id} appointments={appointments} />
       {/* Фото — единственное, что физически нельзя приложить до сохранения:
           путь в хранилище строится по id клиента, которого ещё нет. Рисовать
           пригашенную кнопку «нельзя» = мёртвый контрол. */}
