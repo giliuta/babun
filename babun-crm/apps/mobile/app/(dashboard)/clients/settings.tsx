@@ -1,11 +1,13 @@
-import { type ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Archive,
+  Check,
   ChevronRight,
   Download,
   Eye,
+  MessageCircle,
   Tags,
   Upload,
 } from "lucide-react-native";
@@ -21,6 +23,13 @@ import {
   DEFAULT_CARD_FIELDS,
   useCardFields,
 } from "@/features/clients/card-prefs";
+import {
+  CONTACT_CHANNELS,
+  useEnabledChannels,
+  useToggleChannel,
+} from "@/features/clients/contact-channels";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { haptics } from "@/lib/haptics";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 
@@ -102,6 +111,12 @@ export default function ClientsSettingsScreen() {
   const tagsQuery = useClientTags();
   const clients = clientsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
+  const t = useThemeColors();
+  // Способы связи: у одного бизнеса весь Кипр в WhatsApp, у другого Viber —
+  // лишние каналы только удлиняют мини-лист на карточке.
+  const { data: channels = [] } = useEnabledChannels();
+  const toggleChannel = useToggleChannel();
+  const [channelsOpen, setChannelsOpen] = useState(false);
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
   const backToList = (param: "openImport") =>
@@ -161,6 +176,16 @@ export default function ClientsSettingsScreen() {
           />
           <Divider inset={56} />
           <Row
+            tile="#1F7A44"
+            icon={MessageCircle}
+            title="Способы связи"
+            sub={CONTACT_CHANNELS.filter((c) => channels.includes(c.id))
+              .map((c) => c.label)
+              .join(" · ")}
+            onPress={() => setChannelsOpen(true)}
+          />
+          <Divider inset={56} />
+          <Row
             tile="#8E44AD"
             icon={Tags}
             title="Теги клиентов"
@@ -210,6 +235,78 @@ export default function ClientsSettingsScreen() {
           />
         </SectionCard>
       </ScrollView>
+
+      {/* Какие каналы предлагать в мини-листе «Как связаться» на карточке.
+          «Позвонить» не отключается: без него кнопка теряет смысл. */}
+      <BottomSheet visible={channelsOpen} onClose={() => setChannelsOpen(false)}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
+          >
+            Способы связи
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ marginTop: 2, fontSize: 13, color: t.faint }}
+          >
+            Что предлагать в карточке клиента
+          </Text>
+        </View>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
+          <View
+            style={{
+              borderRadius: 12,
+              overflow: "hidden",
+              backgroundColor: t.rowFill,
+            }}
+          >
+            {CONTACT_CHANNELS.map((c, i) => {
+              const on = channels.includes(c.id);
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => {
+                    if (!c.optional) return;
+                    haptics.tap();
+                    toggleChannel.mutate(c.id);
+                  }}
+                  disabled={!c.optional}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: on, disabled: !c.optional }}
+                  accessibilityLabel={c.label}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    alignItems: "center",
+                    minHeight: 48,
+                    paddingHorizontal: 16,
+                    borderTopWidth: i > 0 ? 1 : 0,
+                    borderTopColor: t.separator,
+                    backgroundColor: pressed ? t.rowFillPressed : "transparent",
+                  })}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      flex: 1,
+                      fontSize: 15,
+                      fontWeight: "600",
+                      color: c.optional ? t.ink : t.faint,
+                    }}
+                  >
+                    {c.label}
+                    {c.optional ? "" : " · всегда"}
+                  </Text>
+                  {on ? (
+                    <Check color={t.accent} size={18} strokeWidth={2.6} />
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      </BottomSheet>
     </Screen>
   );
 }

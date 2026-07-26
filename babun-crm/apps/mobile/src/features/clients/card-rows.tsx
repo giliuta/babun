@@ -68,6 +68,8 @@ export function FieldRow({
   multiline,
   valueColor,
   tabular,
+  big,
+  stacked,
   trailing,
   onLabelPress,
   onSave,
@@ -82,6 +84,13 @@ export function FieldRow({
   multiline?: boolean;
   valueColor?: string;
   tabular?: boolean;
+  /** Значение крупнее — для имени и телефона (они и есть личность). */
+  big?: boolean;
+  /** Ярлык СВЕРХУ мелким капсом, значение под ним и ПО ЛЕВОМУ краю.
+   *  Так набирают текст: у правого выравнивания курсор стоит у кромки, а
+   *  строка растёт влево — печатать в такое поле физически неудобно
+   *  (владелец 2026-07-26: «не нравится, что оно справа записывается»). */
+  stacked?: boolean;
   trailing?: ReactNode;
   /** Ярлык тоже редактируем (доп. номера: «Жена», «Рабочий»). */
   onLabelPress?: () => void;
@@ -95,6 +104,93 @@ export function FieldRow({
   }, [value, editing]);
 
   const editingNow = editing || !!live;
+  const valueSize = big ? 17 : 15;
+
+  if (stacked) {
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          minHeight: 60,
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          borderTopWidth: separated ? 1 : 0,
+          borderTopColor: t.separator,
+        }}
+      >
+        <View style={{ flex: 1 }}>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              color: t.faint,
+              marginBottom: 2,
+            }}
+          >
+            {label}
+          </Text>
+          {editingNow ? (
+            <TextInput
+              autoFocus={autoFocus ?? editing}
+              value={text}
+              onChangeText={(v) => {
+                setText(v);
+                if (live) onSave(v);
+              }}
+              onBlur={() => {
+                setEditing(false);
+                if (!live && text.trim() !== value) onSave(text.trim());
+              }}
+              placeholder={placeholder}
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              keyboardType={keyboardType}
+              multiline={multiline}
+              accessibilityLabel={label}
+              maxFontSizeMultiplier={1.2}
+              style={{
+                padding: 0,
+                fontSize: valueSize,
+                fontWeight: "600",
+                color: t.ink,
+                fontVariant: tabular ? ["tabular-nums"] : undefined,
+              }}
+            />
+          ) : (
+            <Pressable
+              onPress={() => setEditing(true)}
+              accessibilityRole="button"
+              accessibilityLabel={value ? `${label}: ${value}` : label}
+              accessibilityHint="Нажмите, чтобы изменить"
+              hitSlop={{ top: 8, bottom: 8, right: 20 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={multiline ? 3 : 1}
+                style={{
+                  fontSize: valueSize,
+                  fontWeight: "600",
+                  color: value ? (valueColor ?? t.ink) : t.faint,
+                  fontVariant: tabular ? ["tabular-nums"] : undefined,
+                }}
+              >
+                {value || placeholder}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+        {trailing}
+      </View>
+    );
+  }
 
   return (
     <View

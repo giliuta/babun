@@ -21,7 +21,7 @@
 // ВМЕСТЕ с производным phone_e164 — иначе ключ дедупа
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import {
   Bell,
@@ -35,10 +35,6 @@ import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
-  telUrl,
-  whatsappUrl,
-} from "@babun/shared/common/utils/messenger-links";
-import {
   formatShortDateRu,
   reminderBadge,
   visitsWord,
@@ -47,7 +43,7 @@ import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
+import { ContactChannelSheet } from "@/features/clients/ContactChannelSheet";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -123,16 +119,9 @@ export default function ClientHeader({
   draft,
 }: ClientHeaderProps) {
   const t = useThemeColors();
+  const [channelsOpen, setChannelsOpen] = useState(false);
 
   const extras = client.phones ?? [];
-  const tel = telUrl(client.phone);
-  // WhatsApp может жить на отдельном номере или на доп. номере с ярлыком
-  // «WhatsApp» — иначе у таких клиентов кнопка молча пропадала.
-  const waNumber =
-    client.whatsapp_phone ||
-    extras.find((p) => p.label === "WhatsApp")?.number ||
-    client.phone;
-  const wa = whatsappUrl(waNumber);
 
   const addPhone = () => {
     haptics.tap();
@@ -183,23 +172,17 @@ export default function ClientHeader({
 
   return (
     <RowGroup>
-      <FieldRow
-        label="Имя"
-        value={client.full_name}
-        placeholder={draft ? "Можно позже" : "Указать"}
-        live={!!draft}
-        onSave={(v) =>
-          draft ? draft.onNameChange(v) : update({ full_name: v })
-        }
-      />
-
+      {/* Телефон первым: это ключ клиента (дедуп, звонок, запись), и в
+          черновике курсор стоит именно здесь. Ярлык сверху, значение по
+          левому краю — печатать в правое выравнивание неудобно. */}
       <FieldRow
         label="Телефон"
         value={client.phone}
         placeholder="Обязательно"
-        separated
         keyboardType="phone-pad"
         tabular
+        big
+        stacked
         live={!!draft}
         autoFocus={!!draft}
         onSave={(v) =>
@@ -213,29 +196,40 @@ export default function ClientHeader({
               <Check color={t.success} size={18} strokeWidth={2.5} />
             ) : null
           ) : (
-            // Связь живёт У НОМЕРА, а не отдельным рядом круглых кнопок:
-            // звонок и WhatsApp — действия над этим самым значением.
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              {tel ? (
-                <ChannelButton
-                  label="Позвонить"
-                  color={t.success}
-                  Icon={PhoneIcon}
-                  onPress={() => void Linking.openURL(tel)}
-                />
-              ) : null}
-              {wa ? (
-                <ChannelButton
-                  label="Написать в WhatsApp"
-                  color={MOBILE_CHANNEL_COLORS.whatsapp}
-                  Icon={MessageCircle}
-                  onPress={() => void Linking.openURL(wa)}
-                />
-              ) : null}
-            </View>
+            // ОДНА кнопка связи вместо ряда иконок: тап → мини-лист «Как
+            // связаться» со всеми способами, которые у клиента есть и
+            // которые включены в настройках. Пять каналов не влезли бы в
+            // строку, а один тап открывает их все.
+            <ChannelButton
+              label="Как связаться"
+              color={t.success}
+              Icon={MessageCircle}
+              onPress={() => {
+                haptics.tap();
+                setChannelsOpen(true);
+              }}
+            />
           )
+        }
+      />
+
+      {/* Имя — ОБЯЗАТЕЛЬНОЕ (владелец 2026-07-26): безымянного клиента не
+          найти ни поиском, ни глазами, и в SMS-шаблон нечего подставить. */}
+      <FieldRow
+        label="Имя"
+        value={client.full_name}
+        placeholder="Обязательно"
+        separated
+        big
+        stacked
+        live={!!draft}
+        onSave={(v) =>
+          draft ? draft.onNameChange(v) : update({ full_name: v })
+        }
+        trailing={
+          draft && client.full_name.trim() ? (
+            <Check color={t.success} size={18} strokeWidth={2.5} />
+          ) : null
         }
       />
 
@@ -370,6 +364,11 @@ export default function ClientHeader({
           ) : null}
         </View>
       ) : null}
+      <ContactChannelSheet
+        visible={channelsOpen}
+        client={client}
+        onClose={() => setChannelsOpen(false)}
+      />
     </RowGroup>
   );
 }
