@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
+import { sanitizePhoneInput } from "@/features/clients/phone";
 import { useThemeColors } from "@/theme/colors";
 
 // ЕДИНАЯ СТРОКА КАРТОЧКИ КЛИЕНТА — тот же диалект, что у строк фильтров:
@@ -97,7 +98,11 @@ export function FieldRow({
   onSave: (v: string) => void;
 }) {
   const t = useThemeColors();
-  const [editing, setEditing] = useState(false);
+  // autoFocus означает «начинай с ввода»: без этого строка рисовалась
+  // текстом-заглушкой, TextInput не монтировался вовсе, и по «+ Добавить
+  // номер» приходилось тапать по полю ВТОРОЙ раз, чтобы появилась
+  // клавиатура.
+  const [editing, setEditing] = useState(!!autoFocus);
   const [text, setText] = useState(value);
   useEffect(() => {
     if (!editing) setText(value);
@@ -105,6 +110,11 @@ export function FieldRow({
 
   const editingNow = editing || !!live;
   const valueSize = big ? 17 : 15;
+  // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
+  // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
+  // забыть её на новой строке-номере невозможно.
+  const clean = (v: string) =>
+    keyboardType === "phone-pad" ? sanitizePhoneInput(v) : v;
 
   if (stacked) {
     return (
@@ -121,25 +131,58 @@ export function FieldRow({
         }}
       >
         <View style={{ flex: 1 }}>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              letterSpacing: 1.2,
-              textTransform: "uppercase",
-              color: t.faint,
-              marginBottom: 2,
-            }}
-          >
-            {label}
-          </Text>
+          {/* Ярлык бывает редактируемым (подпись доп. номера: «Второй»,
+              «Супруг(а)») — тогда он нажимается и здесь, иначе перевод
+              строки на левое выравнивание отобрал бы смену подписи. */}
+          {onLabelPress ? (
+            <Pressable
+              onPress={onLabelPress}
+              accessibilityRole="button"
+              accessibilityLabel={`Подпись номера: ${label}`}
+              accessibilityHint="Нажмите, чтобы изменить подпись"
+              hitSlop={{ top: 8, bottom: 4, left: 8, right: 8 }}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 1.2,
+                  textTransform: "uppercase",
+                  color: t.accent,
+                  marginBottom: 2,
+                }}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{
+                fontSize: 11,
+                fontWeight: "700",
+                letterSpacing: 1.2,
+                textTransform: "uppercase",
+                color: t.faint,
+                marginBottom: 2,
+              }}
+            >
+              {label}
+            </Text>
+          )}
           {editingNow ? (
             <TextInput
               autoFocus={autoFocus ?? editing}
               value={text}
-              onChangeText={(v) => {
+              onChangeText={(raw) => {
+                const v = clean(raw);
                 setText(v);
                 if (live) onSave(v);
               }}
@@ -237,7 +280,8 @@ export function FieldRow({
           <TextInput
             autoFocus={autoFocus ?? editing}
             value={text}
-            onChangeText={(v) => {
+            onChangeText={(raw) => {
+              const v = clean(raw);
               setText(v);
               if (live) onSave(v);
             }}

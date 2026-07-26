@@ -1,9 +1,17 @@
-// card-booking — one shared «записать» deep-link for every surface on the
-// client card (NEXT-JOB hero, ряд действий card-actions, «Обслуживание»
-// spine, per-object «Записать сюда»). Navigates to the calendar tab with `new=1` +
-// client/location/team; the `?new=` handler in app/(dashboard)/index.tsx
-// switches to that client's team calendar (so the new record is visible on
-// return) and then pushes the separate /book screen pre-aimed at the client.
+// card-booking — one shared «записать» для всех поверхностей карточки
+// клиента (строка действий, спайн «Обслуживание», «Записать сюда» у объекта).
+//
+// РАНЬШЕ переход шёл через календарь: push на таб «Календарь» с ?new=1, там
+// обработчик переключал команду и день, и только потом открывал /book.
+// Пользователь видел вспышку чужого календаря, а после «Готово» или «Отмена»
+// оставался НА КАЛЕНДАРЕ — на дне, который выбрал не он (владелец 2026-07-26:
+// «нажимаю записать, она перекидывает запись непонятно на какой день»).
+//
+// ТЕПЕРЬ /book открывается НАПРЯМУЮ. Дата — сегодня (её ставит сам /book),
+// команда — последняя бригада клиента, объект — основной. «Готово» и
+// «Отмена» возвращают туда, откуда пришли: на карточку клиента.
+// Обработчик ?new=1 в app/(dashboard)/index.tsx остаётся для входов ИЗ
+// календаря (напоминания, тап по слоту) — там календарь и есть контекст.
 
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
@@ -17,20 +25,23 @@ export interface BookingTarget {
   /** Услуги для предзаполнения — из последнего завершённого визита.
    *  Экран записи читает их из параметра `services` (id через запятую). */
   serviceIds?: readonly string[];
+  /** YYYY-MM-DD, если дата известна («Записать» на дату ТО). Без неё
+   *  экран записи открывается на СЕГОДНЯ по времени тенанта. */
+  date?: string | null;
 }
 
 /** Returns a stable-enough callback that opens the calendar pre-aimed at
  *  the given client/object/team. */
 export function useBookingNav(): (target: BookingTarget) => void {
   const router = useRouter();
-  return ({ clientId, locationId, teamId, serviceIds }: BookingTarget) =>
+  return ({ clientId, locationId, teamId, serviceIds, date }: BookingTarget) =>
     router.push({
-      pathname: "/(dashboard)",
+      pathname: "/book",
       params: {
-        new: "1",
         clientId,
         ...(locationId ? { locationId } : {}),
         ...(teamId ? { teamId } : {}),
+        ...(date ? { date } : {}),
         ...(serviceIds && serviceIds.length
           ? { services: serviceIds.join(",") }
           : {}),

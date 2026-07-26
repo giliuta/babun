@@ -51,28 +51,30 @@ export function ClientProfileBlocks({
         addDimmed={draft && !canAddObject}
       />
 
-      {draft ? (
-        // В черновике — только то, что реально заполняют до сохранения:
-        // объект и заметка (имя с телефоном живут в шапке). Контакты,
-        // «Личное» и «О клиенте» отсюда убраны: у нового клиента они
-        // пустые по определению, и владелец увидел ровно это — столбик
-        // пустых секций на экране создания. Заполнить их можно сразу
-        // после сохранения, на той же странице.
-        null
-      ) : (
-        <>
-          <VisitsMoneyBlock
-            appointments={appointments}
-            services={services}
-            stats={stats}
-          />
-          <AttachmentsBlock clientId={client.id} />
-          <ContactsBlock client={client} update={update} hidePhones />
-          <PersonalBlock client={client} update={update} />
-          <MetaBlock client={client} update={update} tags={tags} />
-        </>
-      )}
-
+      {/* СОЗДАНИЕ ПОКАЗЫВАЕТ ВСЮ СТРАНИЦУ (владелец 2026-07-26: «страница
+          должна показываться сразу — добавить клиента открывается чётко вся
+          страница, как будет выглядеть в будущем»). Раньше в черновике
+          рисовались только объекты и заметка, и человек не видел, куда
+          вообще денутся Telegram, метка или день рождения.
+          Каждое поле этих блоков проходит белый список create_client_with_tags
+          (phones, locations, notes, city, birthday, language, telegram/
+          instagram/whatsapp) — то есть в черновике они пишут в тот же объект,
+          который уедет в базу по «Готово», а не в пустоту.
+          «Визиты и деньги» скрывает себя сам, пока визитов и долга нет: у
+          нового клиента их нет по определению, и у сохранённого без визитов
+          страница выглядит точно так же. */}
+      <VisitsMoneyBlock
+        appointments={appointments}
+        services={services}
+        stats={stats}
+      />
+      {/* Фото — единственное, что физически нельзя приложить до сохранения:
+          путь в хранилище строится по id клиента, которого ещё нет. Рисовать
+          пригашенную кнопку «нельзя» = мёртвый контрол. */}
+      {!draft ? <AttachmentsBlock clientId={client.id} /> : null}
+      <ContactsBlock client={client} update={update} hidePhones />
+      <PersonalBlock client={client} update={update} />
+      <MetaBlock client={client} update={update} tags={tags} />
       <NotesBlock client={client} update={update} />
     </>
   );

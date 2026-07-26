@@ -74,6 +74,7 @@ import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import { useClientDraft } from "@/features/clients/useClientDraft";
 import ServiceBlock from "@/features/clients/blocks/ServiceBlock";
+import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
 
@@ -450,7 +451,13 @@ export default function ClientDetailScreen() {
         {/* ОДНА карточка-идентичность на оба режима: в черновике те же
             поля пустые (телефон с автофокусом и ✓), «Из контактов» вместо
             бейджей, слот дедупа под номером. */}
+        {/* key по id — обязателен. Экран /clients/[id] переиспользуется при
+            смене параметра (дедуп «Открыть», переход на дубль, deep link), и
+            без ключа локальное состояние строк переживает смену клиента:
+            набранный, но не сохранённый номер закоммитился бы в ДРУГОГО
+            клиента при уходе фокуса. */}
         <ClientHeader
+          key={`header-${id}`}
           client={c}
           stats={stats}
           update={update}
@@ -475,15 +482,18 @@ export default function ClientDetailScreen() {
           }
         />
 
-        {/* Действия существующего клиента — hero, ряд и спайн ТО: всем нужен
-            реальный id, поэтому в черновике их нет (createBlankClient пуст). */}
+        {/* Действия уровня человека («Записать», «Чат») и спайн ТО: обоим
+            нужен реальный id, поэтому в черновике их нет — записывать и
+            писать в чат ещё некому. */}
         {!isDraft ? (
           <>
+            <ClientContactRow client={c} stats={stats} />
             <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
           </>
         ) : null}
 
         <ClientProfileBlocks
+          key={`blocks-${id}`}
           client={c}
           draft={isDraft}
           appointments={appointments}

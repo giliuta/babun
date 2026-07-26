@@ -21,10 +21,11 @@
 // ВМЕСТЕ с производным phone_e164 — иначе ключ дедупа
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Bell, Check, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
+import { randomUuid } from "@babun/shared/sync/uuid";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
@@ -36,7 +37,6 @@ import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import ClientContactRow from "@/features/clients/ClientContactRow";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 
 /** Режим создания: то, что знает только композер экрана.
@@ -82,18 +82,30 @@ export default function ClientHeader({
 
   const extras = client.phones ?? [];
 
+  // Новый номер живёт ЛОКАЛЬНО, пока в нём нет цифр: тап по «+ Добавить
+  // номер» раньше сразу писал в базу пустую запись, и у клиента навсегда
+  // оставалась строка «WHATSAPP — Номер», в которую никто не дописал номер.
+  // Пустое поле не является номером, и в данных его быть не должно.
+  const [pending, setPending] = useState<{ label: string } | null>(null);
+
   const addPhone = () => {
     haptics.tap();
+    setPending({ label: nextExtraLabel(extras) });
+  };
+  /** Уход из пустого нового поля просто убирает его — записывать нечего. */
+  const commitPending = (raw: string) => {
+    const value = raw.trim();
+    if (!pending || !/\d/.test(value)) {
+      setPending(null);
+      return;
+    }
     update({
       phones: [
         ...extras,
-        {
-          id: `phone-${Date.now()}`,
-          number: "",
-          label: nextExtraLabel(extras),
-        },
+        { id: randomUuid(), number: value, label: pending.label },
       ],
     });
+    setPending(null);
   };
   const patchPhone = (id: string, patch: Partial<PhoneEntry>) =>
     update({
@@ -209,6 +221,10 @@ export default function ClientHeader({
           separated
           keyboardType="phone-pad"
           tabular
+          // Тот же вид, что у основного номера: ярлык сверху, номер по
+          // ЛЕВОМУ краю (владелец 2026-07-26: «когда я напишу второй номер,
+          // она с правой стороны пишет, хотя номер должен быть с левой»).
+          stacked
           onLabelPress={() => cyclePhoneLabel(p)}
           onSave={(v) => patchPhone(p.id, { number: v })}
           trailing={
@@ -236,15 +252,38 @@ export default function ClientHeader({
         />
       ))}
 
-      <AddRow label="+ Добавить номер" separated onPress={addPhone} />
-
-      {/* Кнопки идут ПОСЛЕ всех номеров: они и служат границей блока
-          идентичности (владелец 2026-07-26 — «+ Добавить номер» должен
-          стоять при телефоне, а не за кнопками). В черновике их нет:
-          звонить и записывать ещё некому. */}
-      {!draft ? (
-        <ClientContactRow client={client} stats={stats} separated />
-      ) : null}
+      {/* Новый номер: то же поле, но ещё не в данных. Пустым уйдёт — исчезнет
+          без следа, с цифрами — станет обычной строкой номера. */}
+      {pending ? (
+        <FieldRow
+          label={pending.label}
+          value=""
+          placeholder="Номер"
+          separated
+          keyboardType="phone-pad"
+          tabular
+          stacked
+          autoFocus
+          onSave={commitPending}
+          trailing={
+            <Pressable
+              onPress={() => setPending(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Отменить добавление номера"
+              hitSlop={10}
+              style={({ pressed }) => ({
+                width: 28,
+                alignItems: "center",
+                opacity: pressed ? 0.5 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2.4} />
+            </Pressable>
+          }
+        />
+      ) : (
+        <AddRow label="+ Добавить номер" separated onPress={addPhone} />
+      )}
 
       {draft?.onPickContacts ? (
         <AddRow
