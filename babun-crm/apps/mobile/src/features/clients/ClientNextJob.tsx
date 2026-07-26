@@ -1,268 +1,188 @@
-// Mobile port of apps/web/src/components/clients/ClientNextJob.tsx (web v813).
+// «ЧТО ДАЛЬШЕ» — группа из трёх строк вместо постера-hero и ряда круглых
+// кнопок (арбитраж поблочного редизайна 2026-07-26; владелец: «компактно,
+// чем проще тем лучше, не надо накидывать куча всего»).
 //
-// The NEXT-JOB hero: the single loud surface on the client card. Owns the
-// alarm hue (solid red when ТО overdue). Priority:
-//   future appointment → overdue ТО → soon ТО → generic «Записать».
-// Tapping navigates to the calendar (pre-aimed at the appointment date,
-// or a new booking carrying client/location/team so the sheet opens with
-// the client preselected).
+// БЫЛО: большая цветная плашка с иконкой, заголовком и подзаголовком,
+// которая меняла и тон, и смысл (запись → просроченное ТО → скоро ТО →
+// «Записать»), плюс НИЖЕ ряд из четырёх кругов, где «Записать» дублировал
+// плашку, а звонок и WhatsApp жили в третьем месте.
 //
-// Presentational. NativeWind className on core RN components; icons from
-// lucide-react-native (color/size). No web router — uses expo-router.
+// СТАЛО:
+//   Запись      завтра · 14:00 · Лимассол   ›   (только если запись есть)
+//   Напомнить   14 мар / «Не стоит»         ›
+//   ▓ Записать                              ›   ← ЕДИНСТВЕННАЯ громкая строка
+//
+// Состояния ТО отсюда УБРАНЫ: они живут в своей группе «Обслуживание» —
+// один факт, один дом. Звонок и WhatsApp уехали в хвост строки телефона.
+// «Записать» на месте ВСЕГДА, поэтому его положение не «прыгает».
 
-import { Pressable, Text, View } from "react-native";
+import { ActionSheetIOS, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import {
-  Calendar,
-  ChevronRight,
-  Wrench,
-} from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import type { ServiceDueSummary } from "@babun/shared/local/selectors/service-due";
-import { MONTHS_RU_SHORT } from "@/features/clients/format";
+import {
+  formatShortDateRu,
+  MONTHS_RU_SHORT,
+  ymdInDays,
+} from "@/features/clients/format";
+import { NavRow, RowGroup } from "@/features/clients/card-rows";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 interface ClientNextJobProps {
   client: Client;
   appointments: Appointment[];
   stats: ClientStats | undefined;
-  serviceDue: ServiceDueSummary;
+  update: (patch: Partial<Client>) => void;
 }
 
-/**
- * Ведёт ли hero САМ на создание записи. Во всех режимах кроме «есть
- * предстоящая запись» — да (ТО просрочено / скоро ТО / generic «Записать»
- * зовут goToBooking). При предстоящей записи hero показывает ЕЁ и
- * открывает календарь на дате, создать новую оттуда нельзя.
- *
- * Ряд действий (card-actions) читает этот же предикат и показывает
- * «Записать» ровно тогда, когда hero его не даёт: так кнопка не двоится
- * и не пропадает. Единственный источник правды — здесь.
- */
-export function heroOffersBooking(stats: ClientStats | undefined): boolean {
-  return !stats?.nextApt;
-}
-
-type Tone = "accent" | "info" | "alert" | "warn";
-
-// Resolve the appointment the hero names — the selector's rule: the earliest
-// upcoming scheduled/in_progress at nextApt's date+time. Resolved ONCE so
-// its object AND its team come from the SAME row: a cancelled duplicate at
-// the same slot must never lend its team (or place) to the shown visit.
+/** Живая запись на дату+время из nextApt: селектор несёт только date+time,
+ *  а календарю нужен id и бригада — иначе визит чужой бригады открыл бы
+ *  пустой день. */
 function findHeroApt(
   appointments: Appointment[],
   nextApt: { date: string; time: string },
-): Appointment | undefined {
-  return appointments.find(
-    (a) =>
-      a.date === nextApt.date &&
-      a.time_start === nextApt.time &&
-      (a.status === "scheduled" || a.status === "in_progress"),
+): Appointment | null {
+  return (
+    appointments.find(
+      (a) =>
+        a.date === nextApt.date &&
+        a.time_start === nextApt.time &&
+        (a.status === "scheduled" || a.status === "in_progress"),
+    ) ?? null
   );
-}
-
-// WHERE the next job is — the dispatcher's first question after «when».
-// «Метка · адрес» of the resolved appointment's object; null → caller falls
-// back to the generic hint.
-function aptPlace(client: Client, apt: Appointment | undefined): string | null {
-  const loc = apt?.location_id
-    ? client.locations?.find((l) => l.id === apt.location_id)
-    : undefined;
-  if (!loc) return null;
-  return [loc.label, loc.address].filter(Boolean).join(" · ") || null;
 }
 
 function aptLabel(nextApt: { date: string; time: string }): string {
   const [y, m, d] = nextApt.date.split("-").map(Number);
   if (!y || !m || !d) return `${nextApt.date} · ${nextApt.time}`;
-  const dt = new Date(y, m - 1, d);
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const days = Math.round((dt.getTime() - today.getTime()) / 86400000);
+  const at = new Date(y, m - 1, d);
+  const days = Math.round(
+    (at.getTime() -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /
+      86400000,
+  );
   if (days === 0) return `сегодня · ${nextApt.time}`;
   if (days === 1) return `завтра · ${nextApt.time}`;
   return `${d} ${MONTHS_RU_SHORT[m - 1] ?? ""} · ${nextApt.time}`;
+}
+
+function placeLabel(client: Client, apt: Appointment | null): string | null {
+  const loc = apt?.location_id
+    ? client.locations?.find((l) => l.id === apt.location_id)
+    : null;
+  return loc?.label || null;
 }
 
 export default function ClientNextJob({
   client,
   appointments,
   stats,
-  serviceDue,
+  update,
 }: ClientNextJobProps) {
   const router = useRouter();
-  const th = useThemeColors();
+  const t = useThemeColors();
 
   const primaryLocationId =
     client.locations?.find((l) => l.isPrimary)?.id ??
     client.locations?.[0]?.id ??
     null;
 
-  let tone: Tone;
-  let Icon: typeof Calendar;
-  let title: string;
-  let subtitle: string;
-  let onPress: () => void;
+  const nextApt = stats?.nextApt ?? null;
+  const heroApt = nextApt ? findHeroApt(appointments, nextApt) : null;
 
-  // Navigate to the calendar tab. For an existing appointment we pass the
-  // date; for a new booking we carry client/location/team as params so the
-  // booking sheet can open pre-aimed (consumer side may ignore unknown
-  // params → degrades gracefully to a plain calendar open).
-  // The calendar lives at the dashboard index route («Календарь» tab).
-  const goToDate = (
-    appointmentId: string,
-    date: string,
-    teamId: string | null,
-  ) =>
+  const openApt = () => {
+    if (!nextApt) return;
+    haptics.tap();
     router.push({
       pathname: "/(dashboard)",
-      params: {
-        appointmentId,
-        date,
-        ...(teamId ? { teamId } : {}),
-      },
+      params: heroApt
+        ? {
+            appointmentId: heroApt.id,
+            date: nextApt.date,
+            ...(heroApt.team_id ? { teamId: heroApt.team_id } : {}),
+          }
+        : { date: nextApt.date },
     });
-  const goToBooking = (locationId: string | null, teamId: string | null) =>
-    router.push({
-      pathname: "/(dashboard)",
-      params: {
-        new: "1",
-        clientId: client.id,
-        ...(locationId ? { locationId } : {}),
-        ...(teamId ? { teamId } : {}),
-      },
-    });
-
-  const nextApt = stats?.nextApt;
-  if (nextApt) {
-    // Одна выборка записи — и место, и бригада берутся из неё (селектор
-    // nextApt несёт только date+time). Календарь переключается на бригаду
-    // записи, иначе визит чужой бригады открывал бы пустой день.
-    const heroApt = findHeroApt(appointments, nextApt);
-    tone = "info";
-    Icon = Calendar;
-    title = `Запись · ${aptLabel(nextApt)}`;
-    subtitle = aptPlace(client, heroApt) ?? "Открыть в календаре";
-    onPress = heroApt
-      ? () => goToDate(heroApt.id, nextApt.date, heroApt.team_id)
-      : () =>
-          router.push({
-            pathname: "/(dashboard)",
-            params: { date: nextApt.date },
-          });
-  } else if (serviceDue.overdue.length > 0) {
-    const u = serviceDue.overdue[0];
-    tone = "alert";
-    Icon = Wrench;
-    title = `ТО просрочено · ${Math.abs(u.due.daysUntil)} дн · ${u.room}`;
-    subtitle = "Записать на ТО — команда подставлена";
-    onPress = () => goToBooking(u.locationId, stats?.lastTeamId ?? null);
-  } else if (serviceDue.soon.length > 0) {
-    const u = serviceDue.soon[0];
-    const d = u.due.daysUntil;
-    tone = "warn";
-    Icon = Wrench;
-    title = `Скоро ТО · ${u.room}`;
-    // «через 0 дн» для юнита с дедлайном сегодня — это «сегодня» (селектор
-    // кладёт в soon 0…14 дн). Тот же словарь относительных дней, что и в
-    // aptLabel: сегодня / завтра / через N дн.
-    const when = d <= 0 ? "сегодня" : d === 1 ? "завтра" : `через ${d} дн`;
-    subtitle = `${when} · записать на ТО`;
-    onPress = () => goToBooking(u.locationId, stats?.lastTeamId ?? null);
-  } else {
-    tone = "accent";
-    Icon = Calendar;
-    title = "Записать";
-    subtitle =
-      stats && stats.visits > 0 ? "Новая запись" : "Первый визит этого клиента";
-    onPress = () => goToBooking(primaryLocationId, stats?.lastTeamId ?? null);
-  }
-
-  // Tone-specific resolved values
-  const toneStyles: Record<
-    Tone,
-    {
-      wrapBg: string;
-      iconBg: string;
-      iconColor: string;
-      titleColor: string;
-      subColor: string;
-      chevColor: string;
-    }
-  > = {
-    alert: {
-      wrapBg: th.danger,
-      iconBg: "rgba(255,255,255,0.20)",
-      iconColor: "#ffffff",
-      titleColor: "#ffffff",
-      subColor: "rgba(255,255,255,0.85)",
-      chevColor: "rgba(255,255,255,0.90)",
-    },
-    accent: {
-      wrapBg: th.accent,
-      iconBg: "rgba(255,255,255,0.20)",
-      iconColor: "#ffffff",
-      titleColor: "#ffffff",
-      subColor: "rgba(255,255,255,0.85)",
-      chevColor: "rgba(255,255,255,0.90)",
-    },
-    // Semantic tones are tints of the DS tokens (as in Badge /
-    // ClientHeader) — no parallel Tailwind amber or cobalt literals.
-    warn: {
-      wrapBg: `${th.warning}1a`,
-      iconBg: `${th.warning}2e`,
-      iconColor: th.warning,
-      titleColor: th.warning,
-      subColor: th.sub,
-      chevColor: th.warning,
-    },
-    info: {
-      wrapBg: `${th.accent}14`,
-      iconBg: `${th.accent}1f`,
-      iconColor: th.accent,
-      titleColor: th.accent,
-      subColor: th.sub,
-      chevColor: th.accent,
-    },
   };
 
-  const ts = toneStyles[tone];
+  const book = () => {
+    haptics.tap();
+    const go = () =>
+      router.push({
+        pathname: "/(dashboard)",
+        params: {
+          new: "1",
+          clientId: client.id,
+          ...(primaryLocationId ? { locationId: primaryLocationId } : {}),
+          ...(stats?.lastTeamId ? { teamId: stats.lastTeamId } : {}),
+        },
+      });
+    // Записать человека из чёрного списка можно, но не молча.
+    if (client.blacklisted) {
+      Alert.alert("Клиент в чёрном списке", "Всё равно записать?", [
+        { text: "Отмена", style: "cancel" },
+        { text: "Записать", onPress: go },
+      ]);
+      return;
+    }
+    go();
+  };
+
+  const remind = () => {
+    haptics.tap();
+    const options = ["Завтра", "Через неделю", "Через месяц"];
+    if (client.reminder_at) options.push("Убрать напоминание");
+    options.push("Отмена");
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: "Напомнить о клиенте",
+        options,
+        cancelButtonIndex: options.length - 1,
+        destructiveButtonIndex: client.reminder_at
+          ? options.length - 2
+          : undefined,
+      },
+      (i) => {
+        if (i === 0) update({ reminder_at: ymdInDays(1) });
+        else if (i === 1) update({ reminder_at: ymdInDays(7) });
+        else if (i === 2) update({ reminder_at: ymdInDays(30) });
+        else if (client.reminder_at && i === options.length - 2)
+          update({ reminder_at: null });
+      },
+    );
+  };
+
+  // Дата напоминания янтарём, когда срок уже наступил — «обрати внимание».
+  const reminderYmd = client.reminder_at?.slice(0, 10) ?? "";
+  const reminderDue = !!reminderYmd && reminderYmd <= ymdInDays(0);
 
   return (
-    <View className="mx-3 mt-2">
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}. ${subtitle}`}
-        className="min-h-[62px] flex-row items-center gap-3 rounded-2xl px-3.5 py-2.5 active:opacity-90"
-        style={{ backgroundColor: ts.wrapBg }}
-      >
-        <View
-          className="h-10 w-10 items-center justify-center rounded-xl"
-          style={{ backgroundColor: ts.iconBg }}
-        >
-          <Icon color={ts.iconColor} size={20} strokeWidth={2} />
-        </View>
-        <View className="flex-1">
-          <Text
-            className="text-base font-semibold"
-            style={{ color: ts.titleColor }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-          <Text
-            className="text-[13px]"
-            style={{ color: ts.subColor }}
-            numberOfLines={1}
-          >
-            {subtitle}
-          </Text>
-        </View>
-        <ChevronRight color={ts.chevColor} size={22} strokeWidth={2.2} />
-      </Pressable>
-    </View>
+    <RowGroup>
+      {nextApt ? (
+        <NavRow
+          label="Запись"
+          value={[aptLabel(nextApt), placeLabel(client, heroApt)]
+            .filter(Boolean)
+            .join(" · ")}
+          onPress={openApt}
+        />
+      ) : null}
+
+      <NavRow
+        label="Напомнить"
+        value={
+          reminderYmd ? formatShortDateRu(reminderYmd) || reminderYmd : null
+        }
+        placeholder="Не стоит"
+        valueColor={reminderDue ? t.warning : undefined}
+        separated={!!nextApt}
+        onPress={remind}
+      />
+
+      <NavRow label="Записать" loud separated onPress={book} />
+    </RowGroup>
   );
 }

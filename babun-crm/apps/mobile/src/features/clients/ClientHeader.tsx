@@ -27,12 +27,17 @@ import {
   Bell,
   Check,
   Contact,
+  MessageCircle,
   Phone as PhoneIcon,
   X,
 } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import {
+  telUrl,
+  whatsappUrl,
+} from "@babun/shared/common/utils/messenger-links";
 import {
   formatShortDateRu,
   reminderBadge,
@@ -42,6 +47,7 @@ import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 /** Режим создания: то, что знает только композер экрана.
  *
@@ -76,6 +82,40 @@ function nextExtraLabel(existing: PhoneEntry[]): string {
   return EXTRA_LABELS.find((l) => !used.has(l)) ?? "Другой";
 }
 
+/** Круглая кнопка-канал в хвосте строки номера. 32pt — тап-цель добита
+ *  hitSlop до 44. */
+function ChannelButton({
+  label,
+  color,
+  Icon,
+  onPress,
+}: {
+  label: string;
+  color: string;
+  Icon: typeof PhoneIcon;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: `${color}1a`,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Icon color={color} size={15} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
 export default function ClientHeader({
   client,
   stats,
@@ -85,6 +125,14 @@ export default function ClientHeader({
   const t = useThemeColors();
 
   const extras = client.phones ?? [];
+  const tel = telUrl(client.phone);
+  // WhatsApp может жить на отдельном номере или на доп. номере с ярлыком
+  // «WhatsApp» — иначе у таких клиентов кнопка молча пропадала.
+  const waNumber =
+    client.whatsapp_phone ||
+    extras.find((p) => p.label === "WhatsApp")?.number ||
+    client.phone;
+  const wa = whatsappUrl(waNumber);
 
   const addPhone = () => {
     haptics.tap();
@@ -160,9 +208,34 @@ export default function ClientHeader({
             : update({ phone: v, phone_e164: tryToE164(v) })
         }
         trailing={
-          draft?.valid ? (
-            <Check color={t.success} size={18} strokeWidth={2.5} />
-          ) : null
+          draft ? (
+            draft.valid ? (
+              <Check color={t.success} size={18} strokeWidth={2.5} />
+            ) : null
+          ) : (
+            // Связь живёт У НОМЕРА, а не отдельным рядом круглых кнопок:
+            // звонок и WhatsApp — действия над этим самым значением.
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              {tel ? (
+                <ChannelButton
+                  label="Позвонить"
+                  color={t.success}
+                  Icon={PhoneIcon}
+                  onPress={() => void Linking.openURL(tel)}
+                />
+              ) : null}
+              {wa ? (
+                <ChannelButton
+                  label="Написать в WhatsApp"
+                  color={MOBILE_CHANNEL_COLORS.whatsapp}
+                  Icon={MessageCircle}
+                  onPress={() => void Linking.openURL(wa)}
+                />
+              ) : null}
+            </View>
+          )
         }
       />
 

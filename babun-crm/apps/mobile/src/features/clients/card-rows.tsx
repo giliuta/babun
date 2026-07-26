@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
 // ЕДИНАЯ СТРОКА КАРТОЧКИ КЛИЕНТА — тот же диалект, что у строк фильтров:
@@ -194,6 +195,90 @@ export function FieldRow({
 
       {trailing}
     </View>
+  );
+}
+
+/** Строка-дверь: ярлык · значение · шеврон. Шеврон — единственный признак,
+ *  отличающий «уводит» от «правится на месте», когда обе строки выглядят
+ *  одинаково. `loud` — единственная громкая поверхность экрана («Записать»). */
+export function NavRow({
+  label,
+  value,
+  placeholder,
+  valueColor,
+  separated,
+  loud,
+  dimmed,
+  onPress,
+}: {
+  label: string;
+  value?: string | null;
+  placeholder?: string;
+  valueColor?: string;
+  separated?: boolean;
+  loud?: boolean;
+  dimmed?: boolean;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  const shown = value || placeholder || "";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={shown ? `${label}: ${shown}` : label}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        minHeight: loud ? 52 : 48,
+        paddingHorizontal: 16,
+        gap: 12,
+        opacity: dimmed ? 0.5 : 1,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+        backgroundColor: loud
+          ? t.accent
+          : pressed
+            ? t.pressed
+            : "transparent",
+      })}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{
+          fontSize: loud ? 17 : 15,
+          fontWeight: "600",
+          color: loud ? t.onAccent : t.ink,
+        }}
+      >
+        {label}
+      </Text>
+      <View style={{ flex: 1, alignItems: "flex-end" }}>
+        {shown ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{
+              fontSize: 15,
+              fontWeight: "500",
+              color: loud
+                ? t.onAccent
+                : value
+                  ? (valueColor ?? t.ink)
+                  : t.faint,
+            }}
+          >
+            {shown}
+          </Text>
+        ) : null}
+      </View>
+      <ChevronRight
+        color={loud ? t.onAccent : t.chevron}
+        size={17}
+        strokeWidth={2.2}
+      />
+    </Pressable>
   );
 }
 

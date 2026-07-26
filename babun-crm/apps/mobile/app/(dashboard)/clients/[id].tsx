@@ -72,7 +72,6 @@ import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import { useClientDraft } from "@/features/clients/useClientDraft";
 import ClientNextJob from "@/features/clients/ClientNextJob";
-import CardActions from "@/features/clients/card-actions";
 import ServiceBlock from "@/features/clients/blocks/ServiceBlock";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
@@ -166,13 +165,8 @@ export default function ClientDetailScreen() {
     [c],
   );
 
-  // The unit the NEXT-JOB hero already names — the «Обслуживание» spine
-  // drops it so the same overdue/soon fact never appears twice (web
-  // ClientCardPage parity: one home per fact).
-  const heroUnitId = useMemo(() => {
-    if (stats?.nextApt) return null;
-    return serviceDue.overdue[0]?.unitId ?? serviceDue.soon[0]?.unitId ?? null;
-  }, [serviceDue, stats]);
+  // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
+  // группу «Обслуживание» целиком — дублировать нечего.
 
   if (roleQuery.isPending) {
     return (
@@ -445,20 +439,9 @@ export default function ClientDetailScreen() {
               client={c}
               appointments={appointments}
               stats={stats}
-              serviceDue={serviceDue}
-            />
-            <CardActions
-              client={c}
-              stats={stats}
               update={update}
-              appointments={appointments}
             />
-            <ServiceBlock
-              client={c}
-              stats={stats}
-              serviceDue={serviceDue}
-              excludeUnitId={heroUnitId}
-            />
+            <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
           </>
         ) : null}
 
