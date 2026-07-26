@@ -1620,8 +1620,13 @@ export function AppointmentSheet({
                         }
                         keyboardType="decimal-pad"
                         accessibilityLabel={`Стоимость услуги: ${s?.name ?? "Услуга"}`}
-                        className="ml-2 min-h-11 w-14 text-right text-sm tabular-nums"
-                        style={{ color: t.sub }}
+                        // textAlign задаём СТИЛЕМ, а не классом: у TextInput
+                        // react-native-css объявляет nativeStyleMapping
+                        // { textAlign: true } и делает path.split(".") — на
+                        // `true` это падает красной ошибкой «path.split is not
+                        // a function». Класс text-right роняет ЛЮБОЙ TextInput.
+                        className="ml-2 min-h-11 w-14 text-sm tabular-nums"
+                        style={{ color: t.sub, textAlign: "right" }}
                         placeholderTextColor={t.placeholder}
                         selectionColor={t.accent}
                         keyboardAppearance="light"
