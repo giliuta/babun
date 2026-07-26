@@ -47,7 +47,7 @@ type Result = { data: unknown; error: unknown };
 
 interface Recorded {
   table: string;
-  op: "insert" | "update" | "delete";
+  op: "insert" | "update" | "delete" | "select";
   payload?: unknown;
   filters: Record<string, unknown>;
   usedMaybeSingle: boolean;
@@ -98,7 +98,9 @@ function makeFakeSupabase(
       if (current) current.filters[col] = val;
       return chain;
     };
-    chain.select = (_cols?: string) => chain;
+    // `select` без предшествующей терминальной операции — это ЧТЕНИЕ
+    // (реплеер спрашивает сервер, есть ли строка после 23505).
+    chain.select = (_cols?: string) => (current ? chain : start("select"));
     chain.maybeSingle = () => {
       if (current) current.usedMaybeSingle = true;
       return Promise.resolve(resolve());
@@ -162,7 +164,7 @@ describe("replayer — insert", () => {
     expect(calls[0]).toMatchObject({ table: "clients", op: "insert" });
   });
 
-  test("duplicate-key (23505) is treated as success and drains", async () => {
+  test("23505 по первичному ключу: строка УЖЕ на сервере — операция снимается", async () => {
     await enqueueOp({
       table: "clients",
       op: "insert",
@@ -170,13 +172,51 @@ describe("replayer — insert", () => {
       payload: { id: UUID_A, tenant_id: TENANT },
       expected_updated_at: null,
     });
-    const { client } = makeFakeSupabase(() => ({
-      data: null,
-      error: { code: "23505", message: 'duplicate key value violates unique constraint "clients_pkey"' },
-    }));
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "select"
+        ? { data: { id: UUID_A }, error: null }
+        : {
+            data: null,
+            error: {
+              code: "23505",
+              message:
+                'duplicate key value violates unique constraint "clients_pkey"',
+            },
+          },
+    );
 
     await kickReplayer({ supabase: asSupabase(client) });
     expect(await queueDepth()).toBe(0);
+  });
+
+  test("23505 по ЧУЖОМУ индексу (номер занят): операцию не хороним молча", async () => {
+    // Раньше любой 23505 считался успехом, и созданный офлайн клиент
+    // исчезал вместе с объектами и заметками: на телефоне он есть, на
+    // сервере его нет и не будет.
+    await enqueueOp({
+      table: "clients",
+      op: "insert",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "select"
+        ? { data: null, error: null }
+        : {
+            data: null,
+            error: {
+              code: "23505",
+              message:
+                'duplicate key value violates unique constraint "clients_tenant_phone_e164_idx"',
+            },
+          },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+    // Операция осталась в очереди и попадёт в панель ошибок с человеческим
+    // текстом — вместо тихой потери клиента.
+    expect(await queueDepth()).toBe(1);
   });
 
   test("tags op targets client_tags relation", async () => {

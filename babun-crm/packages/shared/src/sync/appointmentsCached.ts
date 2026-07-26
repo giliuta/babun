@@ -294,7 +294,10 @@ export async function updateAppointment(
     ? {
         ...existing,
         ...patch,
-        updated_at: new Date().toISOString(),
+        // updated_at НЕ трогаем — это серверный сентинел, он же уезжает в
+        // очередь как expected_updated_at (см. clientsCached: локальный
+        // штамп давал ложные «конфликты синхронизации» на каждой второй
+        // офлайн-правке).
       }
     : null;
 

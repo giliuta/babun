@@ -135,7 +135,7 @@ function rowToUnit(u: ACUnit): ACUnit {
   };
 }
 
-function rowToClient(r: ClientRow): Client {
+export function rowToClient(r: ClientRow): Client {
   return {
     id: r.id,
     full_name: r.full_name,

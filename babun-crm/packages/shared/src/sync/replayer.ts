@@ -30,15 +30,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../db/database.types";
 import {
   dequeueAll,
+  cacheGetOne,
   cacheUpsert,
   cacheDelete,
   type QueuedOp,
   type CachedTable,
   type CachedClient,
+  type CachedClientData,
   type CachedTag,
   type CachedAppointmentData,
 } from "../db/cache/sql";
 import { rowToAppointment } from "../db/repositories/appointments";
+import { rowToClient } from "../db/repositories/clients";
 // Go through the emit-wrappers so the OfflineIndicator badge updates the
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
@@ -410,6 +413,27 @@ async function dispatch(
       const dup =
         code === "23505" || /duplicate key/i.test(error.message);
       if (!dup) throw new Error(`replay insert: ${error.message}`);
+      // 23505 бывает ДВУХ РАЗНЫХ смыслов, и раньше они путались:
+      //   • конфликт по ПЕРВИЧНОМУ ключу — строка действительно уже на
+      //     сервере (ответ прошлой попытки потерялся), операцию можно снять;
+      //   • конфликт по ДРУГОМУ уникальному индексу — например,
+      //     clients_tenant_phone_e164_idx: номер занят ЧУЖИМ клиентом.
+      //     Строки на сервере НЕТ, и снятие операции молча хоронило
+      //     созданного офлайн клиента вместе с его объектами и заметками:
+      //     на телефоне он есть, на сервере его никогда не будет.
+      // Поэтому спрашиваем сервер прямо: есть ли строка с этим id.
+      const probe = await supabase
+        .from(tableName)
+        .select("id")
+        .eq("id", op.row_id)
+        .maybeSingle();
+      if (!probe.data) {
+        throw new Error(
+          tableName === "clients"
+            ? "Клиент с таким номером уже заведён — откройте его карточку, а этот черновик удалите"
+            : `replay insert: ${error.message}`,
+        );
+      }
     }
     if (stripped) {
       try {
@@ -475,7 +499,18 @@ async function dispatch(
       // ДОМЕННУЮ форму (cache-of-domain, slice 5) — сырую серверную
       // Row прогоняем через тот же row→domain маппер, что и обычное
       // чтение (иначе строка без photos:[] и с numeric-строками).
-      await cacheUpsert(op.table as CachedTable, toCachedRow(op.table, forced));
+      // Прошлая строка кэша нужна, чтобы не потерять теги: обычный UPDATE
+      // не трогает назначения, а в ответе их нет.
+      const prevCached =
+        op.table === "clients"
+          ? await cacheGetOne<CachedClientData>("clients", op.row_id).catch(
+              () => null,
+            )
+          : null;
+      await cacheUpsert(
+        op.table as CachedTable,
+        toCachedRow(op.table, forced, prevCached),
+      );
     }
     // forced === null → 0 rows: the update is unappliable (row gone /
     // not writable for this user). DROP the op (return true) instead of
@@ -510,12 +545,29 @@ function tableForOp(t: QueuedOp["table"]): "clients" | "appointments" | "client_
 function toCachedRow(
   table: QueuedOp["table"],
   row: Record<string, unknown>,
-): CachedClient | CachedTag | CachedAppointmentData {
+  /** Прошлая строка кэша — из неё берём то, чего нет в ответе UPDATE. */
+  previous?: Partial<CachedClientData> | null,
+): CachedClient | CachedTag | CachedAppointmentData | CachedClientData {
   if (table === "appointments") {
     const r = row as Database["public"]["Tables"]["appointments"]["Row"];
     return { ...rowToAppointment(r), tenant_id: r.tenant_id };
   }
-  return row as CachedClient | CachedTag;
+  if (table === "clients") {
+    // Кэш клиентов хранит ДОМЕННУЮ форму (Client + tenant_id + updated_at).
+    // Раньше сюда клалась СЫРАЯ серверная строка: у неё нет tag_ids, и
+    // вкладка «Клиенты» падала на `client.tag_ids.map` сразу после любого
+    // конфликта LWW.
+    const r = row as Database["public"]["Tables"]["clients"]["Row"];
+    const prevTags = previous?.tag_ids;
+    return {
+      ...rowToClient(r),
+      // Обычный UPDATE не трогает назначения тегов — сохраняем известные.
+      tag_ids: Array.isArray(prevTags) ? (prevTags as string[]) : [],
+      tenant_id: r.tenant_id,
+      updated_at: r.updated_at,
+    } satisfies CachedClientData;
+  }
+  return row as CachedTag;
 }
 
 function sleep(ms: number): Promise<void> {
