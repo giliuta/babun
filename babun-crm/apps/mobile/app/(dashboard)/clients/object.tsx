@@ -1,12 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  ActionSheetIOS,
-  Alert,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Tag } from "lucide-react-native";
 import type {
@@ -40,6 +33,7 @@ import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useLocationLabels } from "@/features/settings/local-settings";
+import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -176,40 +170,21 @@ export default function ClientObjectScreen() {
     patch({ mapUrl: value || undefined, address: merged.address });
   };
 
-  const pickLabel = () => {
-    haptics.tap();
-    const options = [...labelPresets.map((p) => p.name), "Отмена"];
-    ActionSheetIOS.showActionSheetWithOptions(
-      { title: "Метка объекта", options, cancelButtonIndex: options.length - 1 },
-      (i) => {
-        const chosen = labelPresets[i];
-        if (chosen) patch({ label: chosen.name });
-      },
+  const pickLabel = async () => {
+    const picked = await chooseValue(
+      "Метка объекта",
+      labelPresets.map((preset) => ({ value: preset.name, label: preset.name })),
     );
+    if (picked?.value) patch({ label: picked.value });
   };
 
-  const pickPropertyType = () => {
-    haptics.tap();
-    const keys = PROPERTY_ORDER;
-    const options = [...keys.map((k) => PROPERTY_LABELS[k])];
-    if (shown.property_type) options.push("Убрать");
-    options.push("Отмена");
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: "Тип объекта",
-        options,
-        cancelButtonIndex: options.length - 1,
-      },
-      (i) => {
-        if (i < keys.length) {
-          patch({ property_type: keys[i] as PropertyType });
-          return;
-        }
-        if (shown.property_type && i === keys.length) {
-          patch({ property_type: undefined });
-        }
-      },
+  const pickPropertyType = async () => {
+    const picked = await chooseValue<PropertyType>(
+      "Тип объекта",
+      PROPERTY_ORDER.map((k) => ({ value: k, label: PROPERTY_LABELS[k] })),
+      shown.property_type ? { clearLabel: "Убрать" } : undefined,
     );
+    if (picked) patch({ property_type: picked.value ?? undefined });
   };
 
   const confirmDelete = () => {
@@ -330,7 +305,7 @@ export default function ClientObjectScreen() {
                   icon={Tag}
                   color={t.accent}
                   label="Выбрать метку объекта"
-                  onPress={pickLabel}
+                  onPress={() => void pickLabel()}
                 />
               ) : undefined
             }
@@ -382,7 +357,7 @@ export default function ClientObjectScreen() {
             }
             placeholder="не выбран"
             separated
-            onPress={pickPropertyType}
+            onPress={() => void pickPropertyType()}
           />
         </RowGroup>
 

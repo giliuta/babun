@@ -13,12 +13,10 @@
 
 import { useState } from "react";
 import {
-  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   Image,
   Linking,
-  Platform,
   Pressable,
   Text,
   View,
@@ -36,6 +34,7 @@ import {
   type ClientAttachment,
 } from "@/features/clients/card-attachments";
 import { CollapsibleCard } from "@/features/clients/card-collapse";
+import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 
 interface AttachmentsBlockProps {
@@ -115,26 +114,15 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
     }
   };
 
-  const chooseAttachment = () => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          title: "Добавить вложение",
-          options: ["Фото из галереи", "Файл или документ", "Отмена"],
-          cancelButtonIndex: 2,
-        },
-        (index) => {
-          if (index === 0) void pickPhoto();
-          if (index === 1) void pickDocument();
-        },
-      );
-      return;
-    }
-    Alert.alert("Добавить вложение", undefined, [
-      { text: "Фото из галереи", onPress: () => void pickPhoto() },
-      { text: "Файл или документ", onPress: () => void pickDocument() },
-      { text: "Отмена", style: "cancel" },
+  const chooseAttachment = async () => {
+    // Обе ветки (iOS-шит и алерт) схлопнуты в общий адаптер: платформа теперь
+    // живёт в одном месте на весь продукт.
+    const i = await chooseOption("Добавить вложение", [
+      { label: "Фото из галереи" },
+      { label: "Файл или документ" },
     ]);
+    if (i === 0) void pickPhoto();
+    if (i === 1) void pickDocument();
   };
 
   // Снять «до/после» прямо на объекте — ключевой полевой сценарий.
@@ -196,7 +184,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
       <View className="gap-2 px-1 pt-1">
         <View className="flex-row items-center gap-2">
           <Pressable
-            onPress={chooseAttachment}
+            onPress={() => void chooseAttachment()}
             disabled={upload.isPending}
             accessibilityRole="button"
             accessibilityLabel="Добавить фото или файл"

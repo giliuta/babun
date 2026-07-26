@@ -1,11 +1,11 @@
-import { ActionSheetIOS, Linking } from "react-native";
+import { Linking } from "react-native";
 import { MessageCircle } from "lucide-react-native";
 import {
   resolveChannelsForNumber,
   useEnabledChannels,
 } from "@/features/clients/contact-channels";
 import { RowActionButton } from "@/features/clients/card-rows";
-import { haptics } from "@/lib/haptics";
+import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 
 // КНОПКА СВЯЗИ У КОНКРЕТНОГО НОМЕРА (владелец 2026-07-26: «с правой
@@ -16,7 +16,8 @@ import { useThemeColors } from "@/theme/colors";
 // звонить надо ровно на тот номер, у которого нажали. Поэтому кнопка живёт
 // в хвосте каждой строки-номера и знает только свой номер.
 //
-// Выбор — нативным ActionSheetIOS: это системное меню «что сделать», а не
+// Выбор — через общий chooseOption (на iOS это системное меню): «что
+// сделать», а не
 // экран поверх экрана (владелец отверг кастомный лист снизу).
 
 export default function PhoneChannelButton({
@@ -39,20 +40,13 @@ export default function PhoneChannelButton({
   // Нет разбираемого номера — нет и кнопки: мёртвых контролов не держим.
   if (channels.length === 0) return null;
 
-  const onPress = () => {
-    haptics.tap();
-    const options = [...channels.map((c) => c.label), "Отмена"];
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: number,
-        options,
-        cancelButtonIndex: options.length - 1,
-      },
-      (i) => {
-        const chosen = channels[i];
-        if (chosen) void Linking.openURL(chosen.url);
-      },
+  const onPress = async () => {
+    const i = await chooseOption(
+      number,
+      channels.map((c) => ({ label: c.label })),
     );
+    const chosen = i === null ? null : channels[i];
+    if (chosen) void Linking.openURL(chosen.url);
   };
 
   return (
@@ -61,7 +55,7 @@ export default function PhoneChannelButton({
       color={t.success}
       label={label ? `Связаться · ${label}` : "Связаться"}
       hint="Выбор способа связи с этим номером"
-      onPress={onPress}
+      onPress={() => void onPress()}
     />
   );
 }

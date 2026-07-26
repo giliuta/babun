@@ -1,14 +1,15 @@
-import { ActionSheetIOS, Linking } from "react-native";
+import { Linking } from "react-native";
 import {
   buildMapUrl,
   parseAddress,
 } from "@babun/shared/common/utils/map-links";
+import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 
 // «МАРШРУТ» — один экшен-шит на весь продукт: экран записи, строка объекта,
 // страница объекта. Раньше жил копией внутри app/book/index.tsx.
 //
-// Выбор карты — нативным ActionSheetIOS: у одних диспетчеров пробки в Google,
+// Выбор карты — через общий chooseOption: у одних диспетчеров пробки в Google,
 // у других CarPlay с Apple Картами, и навязывать одну карту нельзя. Кастомный
 // лист снизу для этого владелец отверг — это системное «что сделать».
 //
@@ -35,28 +36,22 @@ export function routeTarget(
 export function openRouteMenu(target: string): void {
   const clean = target.trim();
   if (!clean) return;
-  haptics.tap();
   const parsed = parseAddress(clean);
   if (parsed.isUrl && !parsed.coords) {
-    void Linking.openURL(
-      clean.startsWith("http") ? clean : `https://${clean}`,
-    );
+    haptics.tap();
+    void Linking.openURL(clean.startsWith("http") ? clean : `https://${clean}`);
     return;
   }
-  ActionSheetIOS.showActionSheetWithOptions(
-    {
-      title: clean,
-      options: ["Apple Карты", "Google Карты", "Отмена"],
-      cancelButtonIndex: 2,
-    },
-    (index) => {
-      const url =
-        index === 0
-          ? buildMapUrl("apple", clean)
-          : index === 1
-            ? buildMapUrl("google", clean)
-            : null;
-      if (url) void Linking.openURL(url);
-    },
-  );
+  void chooseOption(clean, [
+    { label: "Apple Карты" },
+    { label: "Google Карты" },
+  ]).then((index) => {
+    const url =
+      index === 0
+        ? buildMapUrl("apple", clean)
+        : index === 1
+          ? buildMapUrl("google", clean)
+          : null;
+    if (url) void Linking.openURL(url);
+  });
 }

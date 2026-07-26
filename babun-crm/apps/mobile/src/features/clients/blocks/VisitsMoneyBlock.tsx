@@ -17,7 +17,7 @@
 // действии, которое его закрывает. Полная история — в Календаре.
 
 import { useMemo } from "react";
-import { ActionSheetIOS, Alert } from "react-native";
+import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
@@ -32,6 +32,7 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { formatShortDateRu } from "@/features/clients/format";
 import { NavRow, RowGroup } from "@/features/clients/card-rows";
 import { useToast } from "@/components/ui/Toast";
+import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -88,33 +89,26 @@ export default function VisitsMoneyBlock({
     return done[0] ?? null;
   }, [appointments]);
 
-  const takePayment = () => {
+  const takePayment = async () => {
     if (!oldestDebt) return;
-    haptics.tap();
     const amount = getDebtAmount(oldestDebt);
     const methods = Object.keys(PAY_METHOD_LABELS) as PayMethod[];
-    const options = [...methods.map((m) => PAY_METHOD_LABELS[m]), "Отмена"];
-    ActionSheetIOS.showActionSheetWithOptions(
+    const picked = await chooseValue<PayMethod>(
+      // Заголовок называет КОНКРЕТНЫЙ визит: при нескольких долгах видно,
+      // какой именно закрывается, и «€100» в строке не обманывает.
+      `Визит ${formatShortDateRu(oldestDebt.date)} · ${formatEUR(amount)}`,
+      methods.map((m) => ({ value: m, label: PAY_METHOD_LABELS[m] })),
+    );
+    const method = picked?.value;
+    if (!method) return;
+    updateApt.mutate(
       {
-        // Заголовок называет КОНКРЕТНЫЙ визит: при нескольких долгах видно,
-        // какой именно закрывается, и «€100» в строке не обманывает.
-        title: `Визит ${formatShortDateRu(oldestDebt.date)} · ${formatEUR(amount)}`,
-        options,
-        cancelButtonIndex: options.length - 1,
+        id: oldestDebt.id,
+        patch: buildDebtPaidPatch(oldestDebt, { method, amount }),
       },
-      (i) => {
-        const method = methods[i];
-        if (!method) return;
-        updateApt.mutate(
-          {
-            id: oldestDebt.id,
-            patch: buildDebtPaidPatch(oldestDebt, { method, amount }),
-          },
-          {
-            onSuccess: () => toast(`Оплата ${formatEUR(amount)} получена`),
-            onError: (e) => Alert.alert("Ошибка", (e as Error).message),
-          },
-        );
+      {
+        onSuccess: () => toast(`Оплата ${formatEUR(amount)} получена`),
+        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
       },
     );
   };
@@ -149,7 +143,7 @@ export default function VisitsMoneyBlock({
           label="Принять оплату"
           value={formatEUR(totalDebt)}
           valueColor={t.warning}
-          onPress={takePayment}
+          onPress={() => void takePayment()}
         />
       ) : null}
       {lastVisit ? (

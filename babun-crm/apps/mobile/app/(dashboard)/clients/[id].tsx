@@ -32,7 +32,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  ActionSheetIOS,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -52,6 +51,7 @@ import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import { ymdInDays } from "@/features/clients/format";
+import { chooseValue } from "@/lib/choose";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -285,26 +285,21 @@ export default function ClientDetailScreen() {
 
   // «Напомнить» живёт в меню ⋯ (с карточки кнопка убрана владельцем
   // 2026-07-26). Те же пресеты, что были у кнопки: 1 / 7 / 30 дней.
-  const onRemind = () => {
+  const onRemind = async () => {
     setMenuOpen(false);
-    const options = ["Завтра", "Через неделю", "Через месяц"];
-    if (c.reminder_at) options.push("Убрать напоминание");
-    options.push("Отмена");
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: "Напомнить о клиенте",
-        options,
-        cancelButtonIndex: options.length - 1,
-        destructiveButtonIndex: c.reminder_at ? options.length - 2 : undefined,
-      },
-      (i) => {
-        if (i === 0) update({ reminder_at: ymdInDays(1) });
-        else if (i === 1) update({ reminder_at: ymdInDays(7) });
-        else if (i === 2) update({ reminder_at: ymdInDays(30) });
-        else if (c.reminder_at && i === options.length - 2)
-          update({ reminder_at: null });
-      },
+    const picked = await chooseValue<number | null>(
+      "Напомнить о клиенте",
+      [
+        { value: 1, label: "Завтра" },
+        { value: 7, label: "Через неделю" },
+        { value: 30, label: "Через месяц" },
+      ],
+      c.reminder_at ? { clearLabel: "Убрать напоминание" } : undefined,
     );
+    if (!picked) return;
+    update({
+      reminder_at: picked.value === null ? null : ymdInDays(picked.value),
+    });
   };
 
   const onMessage = () => {
@@ -403,7 +398,7 @@ export default function ClientDetailScreen() {
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
         onMessage={onMessage}
-        onRemind={onRemind}
+        onRemind={() => void onRemind()}
         onShare={() => void onShare()}
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}

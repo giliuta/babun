@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  ActionSheetIOS,
-  Alert,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { ACType, ACUnit, Client } from "@babun/shared/local/clients";
 import {
@@ -31,6 +24,7 @@ import {
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useClient, useUpdateClient } from "@/features/clients/queries";
+import { chooseValue } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 
 // СТРАНИЦА КОНДИЦИОНЕРА. Раньше эти шесть полей жили инлайн-редактором
@@ -121,33 +115,21 @@ export default function ClientUnitScreen() {
     }
   };
 
-  const pickType = () => {
-    const options = [...AC_TYPE_ORDER.map((k) => AC_TYPE_LABELS[k]), "Отмена"];
-    ActionSheetIOS.showActionSheetWithOptions(
-      { title: "Тип кондиционера", options, cancelButtonIndex: options.length - 1 },
-      (i) => {
-        const chosen = AC_TYPE_ORDER[i];
-        if (chosen) patch({ ac_type: chosen as ACType });
-      },
+  const pickType = async () => {
+    const picked = await chooseValue<ACType>(
+      "Тип кондиционера",
+      AC_TYPE_ORDER.map((k) => ({ value: k, label: AC_TYPE_LABELS[k] })),
     );
+    if (picked?.value) patch({ ac_type: picked.value });
   };
 
-  const pickInterval = () => {
-    const options = [
-      ...INTERVALS.map((m) => `Раз в ${m} мес`),
-      "Без графика",
-      "Отмена",
-    ];
-    ActionSheetIOS.showActionSheetWithOptions(
-      { title: "Интервал обслуживания", options, cancelButtonIndex: options.length - 1 },
-      (i) => {
-        if (i < INTERVALS.length) {
-          patch({ service_interval_months: INTERVALS[i] });
-          return;
-        }
-        if (i === INTERVALS.length) patch({ service_interval_months: undefined });
-      },
+  const pickInterval = async () => {
+    const picked = await chooseValue<number>(
+      "Интервал обслуживания",
+      INTERVALS.map((m) => ({ value: m, label: `Раз в ${m} мес` })),
+      { clearLabel: "Без графика" },
     );
+    if (picked) patch({ service_interval_months: picked.value ?? undefined });
   };
 
   const confirmDelete = () => {
@@ -267,7 +249,7 @@ export default function ClientUnitScreen() {
             label="Тип"
             value={AC_TYPE_LABELS[shown.ac_type]}
             separated
-            onPress={pickType}
+            onPress={() => void pickType()}
           />
         </RowGroup>
 
@@ -296,7 +278,7 @@ export default function ClientUnitScreen() {
             value={interval ? `Раз в ${interval} мес` : null}
             placeholder="без графика"
             separated
-            onPress={pickInterval}
+            onPress={() => void pickInterval()}
           />
         </RowGroup>
         {due ? (

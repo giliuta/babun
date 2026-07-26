@@ -1,7 +1,7 @@
 // О КЛИЕНТЕ — Источник обращения · Теги.
 //
 // Переведён на ЗАКОН СТРОКИ (2026-07-26). Источник — единичный выбор, поэтому
-// строка с шевроном и нативный ActionSheetIOS. Теги — множественный выбор, и
+// строка с шевроном и системное меню (chooseValue). Теги — множественный выбор, и
 // они остаются цветными чипами: чип и есть канонический вид тега во всём
 // продукте (список клиентов, фильтры), а нативного меню с галками у iOS нет.
 //
@@ -12,7 +12,7 @@
 // «В базе с …» показывается только у существующего клиента: в черновике блок
 // сообщал дату появления клиента, которого ещё нет.
 
-import { ActionSheetIOS, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import {
   ACQUISITION_LABELS,
@@ -23,6 +23,7 @@ import {
 import { Chip } from "@/components/ui/Chip";
 import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
 import { readableColorOnTint } from "@/components/ui/color-contrast";
+import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -63,20 +64,12 @@ export function MetaBlock({
     });
   };
 
-  const pickSource = () => {
-    haptics.tap();
-    const options = [...SOURCE_KEYS.map((k) => ACQUISITION_LABELS[k]), "Отмена"];
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: "Источник обращения",
-        options,
-        cancelButtonIndex: options.length - 1,
-      },
-      (i) => {
-        const key = SOURCE_KEYS[i];
-        if (key) update({ acquisition_source: key });
-      },
+  const pickSource = async () => {
+    const picked = await chooseValue<AcquisitionSource>(
+      "Источник обращения",
+      SOURCE_KEYS.map((k) => ({ value: k, label: ACQUISITION_LABELS[k] })),
     );
+    if (picked?.value) update({ acquisition_source: picked.value });
   };
 
   const source =
@@ -91,7 +84,7 @@ export function MetaBlock({
           label="Источник"
           value={source}
           placeholder="неизвестен"
-          onPress={pickSource}
+          onPress={() => void pickSource()}
         />
         {/* Теги — множественный выбор, поэтому чипы внутри подписанной
             строки, а не шеврон: нативного меню с галками у iOS нет, а свой
