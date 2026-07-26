@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
-  ActionSheetIOS,
   Alert,
   InputAccessoryView,
   Keyboard,
@@ -41,7 +40,6 @@ import {
   APPOINTMENT_SOURCE_LABELS,
 } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
-import { buildMapUrl } from "@babun/shared/common/utils/map-links";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -71,6 +69,7 @@ import { AddRow } from "@/components/ui/AddRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { openRouteMenu, routeTarget } from "@/lib/route-menu";
 
 import {
   useClients,
@@ -1197,30 +1196,12 @@ export default function BookScreen() {
     : t.separator;
 
   // «Маршрут» — реальное действие (его не было): открыть адрес в картах.
-  // Экшен-шит Apple/Google через общий buildMapUrl (паттерн дашборда).
-  // Если у выбранного объекта есть присланный клиентом пин (mapUrl) — ведём по
-  // нему: на кипрских виллах текстовый адрес часто не прокладывается.
+  // Выбор карты — общий openRouteMenu (тот же шит у строки объекта и на
+  // странице объекта). Присланный клиентом пин (mapUrl) важнее текстового
+  // адреса: на кипрских виллах текстовый адрес часто не прокладывается.
   const openRoute = () => {
     const selectedLoc = clientLocations.find((l) => l.id === locationId);
-    const target = selectedLoc?.mapUrl?.trim() || address.trim();
-    if (!target) return;
-    haptics.tap();
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: target,
-        options: ["Apple Карты", "Google Карты", "Отмена"],
-        cancelButtonIndex: 2,
-      },
-      (index) => {
-        const url =
-          index === 0
-            ? buildMapUrl("apple", target)
-            : index === 1
-              ? buildMapUrl("google", target)
-              : null;
-        if (url) void Linking.openURL(url);
-      },
-    );
+    openRouteMenu(routeTarget(selectedLoc?.mapUrl, address));
   };
 
   if (failedReference || referencesPending) {
