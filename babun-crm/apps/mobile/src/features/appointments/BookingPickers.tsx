@@ -11,7 +11,6 @@ import {
   type TextProps,
 } from "react-native";
 import { Check, Search, UserRound, X } from "lucide-react-native";
-import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
@@ -31,6 +30,7 @@ import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
 } from "@/features/appointments/booking-prefill";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -76,7 +76,7 @@ export function ClientPicker({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const tenantId = useTenantId();
   const [q, setQ] = useState("");
   const createClient = useCreateClient();
@@ -304,7 +304,7 @@ export function ServicePicker({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();

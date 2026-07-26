@@ -23,12 +23,12 @@ import Svg, {
 import Animated, {
   Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useAuthTheme } from "@/components/auth/theme";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // «Halo Cobalt» auth surfaces — one fixed-light styling dialect, formal «вы»,
 // §5 focus ring via useAuthTheme(). apps/mobile/docs/DESIGN-SYSTEM.md.
@@ -99,7 +99,7 @@ export function AuthCard({
   children: ReactNode;
 }) {
   const t = useAuthTheme();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const enter = useSharedValue(reduced ? 1 : 0);
   useEffect(() => {
     if (reduced) {

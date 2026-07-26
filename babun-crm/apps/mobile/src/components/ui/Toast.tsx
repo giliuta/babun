@@ -14,9 +14,9 @@ import {
   Text,
   View,
 } from "react-native";
-import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 type ToastType = "success" | "error" | "info";
 /** Кнопка-действие в тосте (Undo-паттерн): тост живёт дольше (5 с) и
@@ -42,7 +42,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
   const t = useThemeColors();
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useReduceMotion();
 
   const hide = useCallback(() => {
     if (reducedMotion) {

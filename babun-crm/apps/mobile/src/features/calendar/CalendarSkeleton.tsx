@@ -2,13 +2,13 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
 import { useThemeColors } from "@/theme/colors";
 import { HEADER_H, RAIL_W } from "@/features/calendar/DayView";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // Скелет сетки на первую загрузку: настоящий каркас (шапка + рельс +
 // «блоки» на реалистичных позициях) с мягким пульсом — «это мой календарь,
@@ -120,7 +120,7 @@ export type SkeletonMode = "day" | "week" | "month" | "agenda";
 
 export function CalendarSkeleton({ mode = "week" }: { mode?: SkeletonMode }) {
   const t = useThemeColors();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const pulse = useSharedValue(0);
   useEffect(() => {
     if (reduced) return;

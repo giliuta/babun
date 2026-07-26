@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
-import { useReducedMotion } from "react-native-reanimated";
 import { useThemeColors } from "@/theme/colors";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 export interface SheetOption<V extends string> {
   value: V;
@@ -35,7 +35,7 @@ export function OptionSheet<V extends string>({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useReduceMotion();
   return (
     <Modal
       visible={visible}

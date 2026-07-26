@@ -7,14 +7,16 @@ import {
 } from "react-native-gesture-handler";
 import Animated, {
   Easing,
+  ReduceMotion,
   runOnJS,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
 // ЕДИНСТВЕННЫЙ способ показать выезжающую снизу панель. Заменяет собой
@@ -49,7 +51,7 @@ export function BottomSheet({
   grabber?: boolean;
 }) {
   const t = useThemeColors();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
 
@@ -64,25 +66,28 @@ export function BottomSheet({
   useEffect(() => {
     if (!mounted) return;
     if (visible) {
-      // Вход: лист пружиной из-за нижнего края, скрим — плавно на месте.
-      ty.value = SCREEN_H;
+      // Вход: лист пружиной из-за нижнего края. Стартуем с ИЗМЕРЕННОЙ
+      // высоты (фолбэк — экран): телепорт на весь экран делал вход и
+      // выход несимметричными, вход «прилетал» из-под таб-бара.
+      ty.value = sheetH.value > 0 ? sheetH.value : SCREEN_H;
       ty.value = reduced
-        ? withTiming(0, { duration: 0 })
+        ? withTiming(0, { duration: 200, easing: Easing.out(Easing.quad) })
         : withSpring(0, SPRING);
       scrim.value = withTiming(1, {
-        duration: reduced ? 0 : 260,
+        duration: reduced ? 200 : 260,
         easing: Easing.out(Easing.quad),
       });
     } else {
       // Выход: лист вниз на свою высоту, скрим гаснет; затем размонтируем.
       const target = sheetH.value > 0 ? sheetH.value : SCREEN_H;
       ty.value = withTiming(target, {
-        duration: reduced ? 0 : 240,
+        duration: reduced ? 160 : 240,
         easing: Easing.in(Easing.cubic),
       });
       scrim.value = withTiming(
         0,
-        { duration: reduced ? 0 : 220, easing: Easing.in(Easing.quad) },
+        // 240 — в такт листу (было 220, скрим гас раньше панели).
+        { duration: reduced ? 160 : 240, easing: Easing.in(Easing.quad) },
         (fin) => {
           if (fin) runOnJS(setMounted)(false);
         },
@@ -102,13 +107,23 @@ export function BottomSheet({
   const drag = Gesture.Pan()
     .onChange((e) => {
       ty.value = Math.max(0, ty.value + e.changeY);
+      // Скрим следует за пальцем: панель уезжала, а затемнение стояло
+      // на месте до самого отпускания.
+      const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
+      scrim.value = Math.max(0, 1 - ty.value / h);
     })
     .onEnd((e) => {
       const h = sheetH.value > 0 ? sheetH.value : SCREEN_H;
       if (ty.value > h * 0.3 || e.velocityY > 800) {
         runOnJS(onClose)();
       } else {
-        ty.value = withSpring(0, SPRING);
+        // Возврат за пальцем не должен телепортироваться при Reduce
+        // Motion — это прямой отклик на жест, а не декорация.
+        ty.value = withSpring(0, {
+          ...SPRING,
+          reduceMotion: ReduceMotion.Never,
+        });
+        scrim.value = withTiming(1, { duration: 160 });
       }
     });
 
@@ -127,7 +142,10 @@ export function BottomSheet({
           style, не className: NativeWind v5 не красит компоненты-обёртки. */}
       <GestureHandlerRootView style={{ flex: 1, justifyContent: "flex-end" }}>
         <AnimatedPressable
-          onPress={onClose}
+          onPress={() => {
+            haptics.tap();
+            onClose();
+          }}
           accessibilityRole="button"
           accessibilityLabel="Закрыть"
           style={[
@@ -141,6 +159,9 @@ export function BottomSheet({
             sheetH.value = e.nativeEvent.layout.height;
           }}
           accessibilityViewIsModal
+          // Жест-escape VoiceOver: из попапа одиночного выбора иначе не
+          // выйти вообще, не выбрав значение.
+          onAccessibilityEscape={onClose}
           style={[
             {
               maxHeight: SCREEN_H * maxHeightRatio,

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { haptics } from "@/lib/haptics";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -49,19 +50,24 @@ export function PeriodPresetModal({
   ) => (
     <Pressable
       key={label}
-      accessibilityRole="button"
+      accessibilityRole="radio"
       accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
+      accessibilityLabel={hint ? `${label}, ${hint}` : label}
+      accessibilityHint="Применяет и закрывает"
       onPress={() => {
+        haptics.tap();
         onPress();
         onClose();
       }}
-      className="flex-row items-center px-3.5 active:opacity-70"
-      style={{
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 16,
         minHeight: 48,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
-      }}
+        backgroundColor: pressed ? t.rowFillPressed : "transparent",
+      })}
     >
       <Text
         className={`text-[15px] ${active ? "font-semibold" : ""}`}
@@ -85,7 +91,12 @@ export function PeriodPresetModal({
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <View className="px-5 pb-8 pt-1">
-        <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
+        <Text
+          accessibilityRole="header"
+          maxFontSizeMultiplier={1.2}
+          className="mb-3 text-[17px] font-semibold"
+          style={{ color: t.ink }}
+        >
           Период
         </Text>
         {allTime ? (
@@ -137,16 +148,28 @@ export function PeriodWheelsModal({
   const [to, setTo] = useState(current.to);
   const [side, setSide] = useState<"from" | "to">("from");
 
-  // Resync the wheels with the active period on every open, otherwise
-  // they keep showing the range from first mount.
+  // Ресинк — по ФРОНТУ открытия, а не на каждое изменение current: иначе
+  // догрузка записей (охват «Всего времени» приезжает позже) перескакивала
+  // диапазон, который человек прямо сейчас крутит.
+  const wasVisible = useRef(false);
   useEffect(() => {
-    if (!visible) return;
-    setFrom(current.from);
-    setTo(current.to);
-    setSide("from");
+    if (visible && !wasVisible.current) {
+      setFrom(current.from);
+      setTo(current.to);
+      setSide("from");
+    }
+    wasVisible.current = visible;
   }, [visible, current.from, current.to]);
 
   const apply = () => {
+    haptics.tap();
+    // Колесо не двигали — не стираем имя пресета: «Применить» после
+    // «Текущей недели» превращал её в безымянный «Свой период».
+    if (from === current.from && to === current.to) {
+      onApply({ preset: current.preset, from: current.from, to: current.to });
+      onClose();
+      return;
+    }
     // An inverted range would silently query an empty window — swap it.
     const [f, t2] = from <= to ? [from, to] : [to, from];
     onApply({ preset: "custom", from: f, to: t2 });
@@ -158,13 +181,17 @@ export function PeriodWheelsModal({
     return (
       <Pressable
         key={key}
-        accessibilityRole="button"
+        accessibilityRole="radio"
         accessibilityState={{ selected: active }}
         accessibilityLabel={`${label}: ${value}`}
-        onPress={() => setSide(key)}
+        onPress={() => {
+          haptics.tap();
+          setSide(key);
+        }}
         className="flex-1 items-center justify-center rounded-[10px]"
         style={{
-          height: 48,
+          minHeight: 48,
+          paddingVertical: 4,
           backgroundColor: active ? t.surface : "transparent",
         }}
       >
@@ -189,7 +216,12 @@ export function PeriodWheelsModal({
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <View className="px-5 pb-8 pt-1">
-        <Text className="mb-1 text-lg font-bold" style={{ color: t.ink }}>
+        <Text
+          accessibilityRole="header"
+          maxFontSizeMultiplier={1.2}
+          className="mb-1 text-[17px] font-semibold"
+          style={{ color: t.ink }}
+        >
           Свой период
         </Text>
         <Text

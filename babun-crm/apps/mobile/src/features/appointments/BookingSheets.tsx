@@ -5,13 +5,13 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { useReducedMotion } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { useThemeColors } from "@/theme/colors";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 const EVENT_COLORS = PRESET_COLOR_VALUES;
 
@@ -42,7 +42,7 @@ export function TeamMasterSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const teamMasters = masters.filter(
     (m) => !teamId || m.team_id === teamId || m.team_id == null,
   );
@@ -150,7 +150,7 @@ export function ColorSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const entity = isEvent ? "событие" : "запись";
   return (
     <Modal

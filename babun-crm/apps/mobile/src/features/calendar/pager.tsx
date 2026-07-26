@@ -6,10 +6,10 @@ import Animated, {
   cancelAnimation,
   runOnJS,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // Живой горизонтальный пейджинг периода (Bumpix / Apple Calendar): контент
 // ЕДЕТ ЗА ПАЛЬЦЕМ, отпускание доводит до соседней страницы, период
@@ -69,7 +69,7 @@ export function usePeriodPager({
   const dragGen = useRef(0);
   // Reduce Motion: доводка мгновенная (сам drag — прямое манипулирование,
   // его не трогаем).
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = useReduceMotion();
 
   const markDragStart = () => {
     dragGen.current = gen.current;

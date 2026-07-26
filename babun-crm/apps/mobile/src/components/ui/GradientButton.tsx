@@ -5,7 +5,6 @@ import Animated, {
   cancelAnimation,
   Easing,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withSpring,
@@ -13,6 +12,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useThemeColors } from "@/theme/colors";
 import { ctaGradient } from "@/components/ui/color-contrast";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // The «Halo Cobalt» primary action — full-width cobalt-gradient pill with a
 // floating accent shadow, a slow halo sheen sweep, and a press dip. The ONLY
@@ -40,7 +40,7 @@ export function GradientButton({
   tint?: string;
 }) {
   const t = useThemeColors();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const filled = loading || !disabled;
   const pressable = !disabled && !loading;
   const g = tint ? ctaGradient(tint) : null;

@@ -13,7 +13,6 @@ import Animated, {
   interpolateColor,
   useDerivedValue,
   useAnimatedStyle,
-  useReducedMotion,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,6 +48,7 @@ import {
   type SortKey,
 } from "./filter";
 import type { ClientFilterResult } from "./useClientFilters";
+import { useReduceMotion } from "@/lib/reduce-motion";
 
 // Лист «Фильтры» — полноценная страница (BottomSheet фиксированной
 // высоты): ПЯТЬ СТРОК ОДНОГО ДИАЛЕКТА (решение владельца + арбитраж
@@ -763,7 +763,7 @@ export function ClientsFilterSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const { height: winH } = useWindowDimensions();
 
   const [presetsOpen, setPresetsOpen] = useState(false);
