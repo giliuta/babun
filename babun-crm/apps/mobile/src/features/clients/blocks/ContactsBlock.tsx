@@ -42,6 +42,9 @@ interface ContactsBlockProps {
   update: (patch: Partial<Client>) => void;
   /** Creation already owns the primary phone in the identity card. */
   hidePrimaryPhone?: boolean;
+  /** Телефоны (основной + дополнительные) живут в блоке идентичности —
+   *  здесь остаются только мессенджеры. Один факт = одно место. */
+  hidePhones?: boolean;
 }
 
 function genId(prefix: string): string {
@@ -86,6 +89,7 @@ export default function ContactsBlock({
   client,
   update,
   hidePrimaryPhone = false,
+  hidePhones = false,
 }: ContactsBlockProps) {
   const t = useThemeColors();
   const extras = client.phones ?? [];
@@ -115,8 +119,12 @@ export default function ContactsBlock({
   const inputFill = t.fill;
 
   // Collapsed-row summary: primary phone «+357 99… · ещё 1» (mockup).
-  const summary =
-    !hidePrimaryPhone && client.phone
+  const messengerCount = [tg, ig, waDigits].filter(Boolean).length;
+  const summary = hidePhones
+    ? messengerCount > 0
+      ? `${messengerCount}`
+      : "Пусто"
+    : !hidePrimaryPhone && client.phone
       ? `${client.phone}${extras.length ? ` · ещё ${extras.length}` : ""}`
       : extras.length
         ? `ещё ${extras.length}`
@@ -126,7 +134,7 @@ export default function ContactsBlock({
     <CollapsibleCard title="Контакты" summary={summary}>
       <View className="gap-3 px-1 pt-1">
         {/* Primary phone */}
-        {!hidePrimaryPhone ? (
+        {!hidePrimaryPhone && !hidePhones ? (
           <View className="flex-row items-center gap-2">
             <Text className="w-28 shrink-0 text-xs" style={{ color: t.sub }}>
               Основной телефон
@@ -157,8 +165,8 @@ export default function ContactsBlock({
           </View>
         ) : null}
 
-        {/* Extra phones (wife / work / WhatsApp on a different number) */}
-        {extras.map((p) => (
+        {/* Extra phones — только если телефоны не уехали в идентичность */}
+        {(hidePhones ? [] : extras).map((p) => (
           <View key={p.id} className="flex-row items-center gap-2">
             <DraftInput
               value={p.name ?? ""}
@@ -205,6 +213,7 @@ export default function ContactsBlock({
           </View>
         ))}
 
+        {hidePhones ? null : (
         <Pressable
           onPress={addExtra}
           accessibilityRole="button"
@@ -218,6 +227,7 @@ export default function ContactsBlock({
             Добавить номер
           </Text>
         </Pressable>
+        )}
 
         {/* Messengers */}
         <View

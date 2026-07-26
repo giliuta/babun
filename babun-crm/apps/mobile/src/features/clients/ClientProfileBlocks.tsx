@@ -58,7 +58,7 @@ export function ClientProfileBlocks({
           <VisitsBlock appointments={appointments} services={services} stats={stats} />
           <FinanceBlock clientId={client.id} appointments={appointments} stats={stats} />
           <AttachmentsBlock clientId={client.id} />
-          <ContactsBlock client={client} update={update} />
+          <ContactsBlock client={client} update={update} hidePhones />
           <PersonalBlock client={client} update={update} />
           <MetaBlock client={client} update={update} tags={tags} />
         </>
