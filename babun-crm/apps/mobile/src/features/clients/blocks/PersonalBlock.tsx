@@ -65,6 +65,9 @@ export function PersonalBlock({ client, update, draft }: PersonalBlockProps) {
           <OptionalDateField
             align="end"
             label="День рождения"
+            // Колесо открывается не на сегодня: у дня рождения сегодняшняя
+            // дата — бессмысленная отправная точка.
+            seed="1990-01-01"
             value={normalizeYMD(client.birthday)}
             onChange={(v) => update({ birthday: v })}
           />

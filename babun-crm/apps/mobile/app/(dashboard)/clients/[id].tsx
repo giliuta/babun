@@ -281,8 +281,6 @@ export default function ClientDetailScreen() {
     );
   }
 
-  const phoneDigits = c.phone?.replace(/\D/g, "") ?? "";
-
   // «Напомнить» живёт в меню ⋯ (с карточки кнопка убрана владельцем
   // 2026-07-26). Те же пресеты, что были у кнопки: 1 / 7 / 30 дней.
   const onRemind = async () => {
@@ -300,11 +298,6 @@ export default function ClientDetailScreen() {
     update({
       reminder_at: picked.value === null ? null : ymdInDays(picked.value),
     });
-  };
-
-  const onMessage = () => {
-    setMenuOpen(false);
-    if (phoneDigits) Linking.openURL(`sms:${phoneDigits}`);
   };
 
   const onShare = async () => {
@@ -391,13 +384,11 @@ export default function ClientDetailScreen() {
         canSave={canSave}
         saving={isSaving}
         menuOpen={menuOpen}
-        phoneAvailable={!!phoneDigits}
         blacklisted={c.blacklisted}
         onBack={onBack}
         onSave={() => void saveDraft()}
         onToggleMenu={() => setMenuOpen((open) => !open)}
         onCloseMenu={() => setMenuOpen(false)}
-        onMessage={onMessage}
         onRemind={() => void onRemind()}
         onShare={() => void onShare()}
         onToggleBlacklist={onToggleBlacklist}

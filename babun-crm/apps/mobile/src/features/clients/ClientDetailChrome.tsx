@@ -7,13 +7,11 @@ interface ClientDetailChromeProps {
   canSave: boolean;
   saving: boolean;
   menuOpen: boolean;
-  phoneAvailable: boolean;
   blacklisted: boolean;
   onBack: () => void;
   onSave: () => void;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
-  onMessage: () => void;
   onRemind: () => void;
   onShare: () => void;
   onToggleBlacklist: () => void;
@@ -25,13 +23,11 @@ export function ClientDetailChrome({
   canSave,
   saving,
   menuOpen,
-  phoneAvailable,
   blacklisted,
   onBack,
   onSave,
   onToggleMenu,
   onCloseMenu,
-  onMessage,
   onRemind,
   onShare,
   onToggleBlacklist,
@@ -108,8 +104,6 @@ export function ClientDetailChrome({
             className="absolute right-3 top-12 z-20 w-52 overflow-hidden rounded-xl shadow-lg"
             style={{ backgroundColor: t.surface }}
           >
-            <MenuItem label="Написать SMS" onPress={onMessage} disabled={!phoneAvailable} />
-            <Divider />
             {/* «Напомнить» уехало сюда с карточки (владелец 2026-07-26:
                 кнопки «Напомнить» на карточке быть не должно) — действие
                 редкое, но терять его нельзя. */}

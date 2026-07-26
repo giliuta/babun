@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import type { Client } from "@babun/shared/local/clients";
 import {
+  smsUrl,
   telegramUrl,
   telUrl,
   whatsappUrl,
@@ -163,7 +164,7 @@ export function resolveChannelsForNumber(
         url = `viber://chat?number=${encodeURIComponent(digits)}`;
         break;
       case "sms":
-        url = `sms:${digits}`;
+        url = smsUrl(number);
         break;
       case "chat":
         // Внутренний чат — с КЛИЕНТОМ, не с номером: в меню номера его нет.
@@ -208,7 +209,7 @@ export function resolveChannels(
         url = digits ? `viber://chat?number=${encodeURIComponent(digits)}` : null;
         break;
       case "sms":
-        url = digits ? `sms:${digits}` : null;
+        url = smsUrl(client.phone);
         break;
       case "chat":
         // Внутренний чат предлагаем ТОЛЬКО когда каналы реально подключены:

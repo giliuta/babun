@@ -36,6 +36,7 @@ import {
 import { tryToE164 } from "@/features/clients/phone";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
+import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -84,6 +85,7 @@ export default function ClientHeader({
   draft,
 }: ClientHeaderProps) {
   const t = useThemeColors();
+  const toast = useToast();
 
   const extras = client.phones ?? EMPTY_PHONES;
   // Номера — тот же jsonb-массив, что объекты: писать его можно только из
@@ -190,13 +192,18 @@ export default function ClientHeader({
         // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
         // поиском, ни глазами в списке. Пустое просто не пишем, строка
         // возвращает прежнее значение.
-        onSave={(v) =>
-          draft
-            ? draft.onNameChange(v)
-            : v.trim()
-              ? update({ full_name: v.trim() })
-              : undefined
-        }
+        onSave={(v) => {
+          if (draft) {
+            draft.onNameChange(v);
+            return;
+          }
+          if (v.trim()) {
+            update({ full_name: v.trim() });
+            return;
+          }
+          haptics.warning();
+          toast("Имя обязательно", "error");
+        }}
         trailing={
           draft && client.full_name.trim() ? (
             <Check color={t.success} size={18} strokeWidth={2.5} />
@@ -229,7 +236,18 @@ export default function ClientHeader({
           }
           const next = v.trim();
           const e164 = next ? tryToE164(next) : null;
-          if (!e164) return;
+          // Молча отклонять нельзя: строка возвращала прежний номер, и
+          // человек не понимал, почему правка «не сохранилась».
+          if (!e164) {
+            haptics.warning();
+            toast(
+              next
+                ? "Номер не распознан — проверьте код страны"
+                : "Телефон обязателен",
+              "error",
+            );
+            return;
+          }
           update({ phone: next, phone_e164: e164 });
         }}
         trailing={

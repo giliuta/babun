@@ -85,7 +85,12 @@ describe("client native persistence contract", () => {
     // а вместе с номером обнулялся phone_e164 — ключ, на котором держится
     // защита от дублей.
     const header = read("ClientHeader.tsx");
-    assert.match(header, /if \(!e164\) return;/);
-    assert.match(header, /v\.trim\(\)\s*\n?\s*\? update\(\{ full_name/);
+    // Телефон: неразбираемое значение не пишем (иначе обнулился бы ключ
+    // дедупа phone_e164) и объясняем причину.
+    assert.match(header, /if \(!e164\) \{/);
+    assert.match(header, /Номер не распознан/);
+    // Имя: пустое не пишем и говорим почему (раньше правка отклонялась молча).
+    assert.match(header, /if \(v\.trim\(\)\) \{\s*\n\s*update\(\{ full_name/);
+    assert.match(header, /toast\("Имя обязательно"/);
   });
 });

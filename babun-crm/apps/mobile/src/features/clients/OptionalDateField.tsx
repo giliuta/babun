@@ -4,6 +4,7 @@
 // PersonalBlock использовал тот же нативный контрол вместо свободного
 // текстового ввода, кормившего селекторы мусором.
 
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { X } from "lucide-react-native";
@@ -22,6 +23,7 @@ export function OptionalDateField({
   value,
   onChange,
   align = "start",
+  seed,
 }: {
   /** Подпись над контролом; не передавать, если строка уже подписана. */
   label?: string;
@@ -32,10 +34,17 @@ export function OptionalDateField({
    *  Пустое значение читается как у остальных строк — тихим «Указать» у
    *  правого края, без плашки-пилюли. */
   align?: "start" | "end";
+  /** С какой даты открывать выбор, когда значения ещё нет (YYYY-MM-DD).
+   *  Для дня рождения «сегодня» — бессмысленная отправная точка. */
+  seed?: string;
 }) {
   const t = useThemeColors();
   const a11y = label ? `: ${label}` : "";
   const end = align === "end";
+  const [picking, setPicking] = useState(false);
+  // Точка отсчёта для ПЕРВОГО выбора: сегодня как отправная позиция колеса,
+  // но в данные она не попадает, пока человек не подтвердил.
+  const seedYmd = seed ?? formatYMD(new Date());
   return (
     <View className={end ? "items-end" : "flex-1"}>
       {/* В хвосте подписанной строки ярлык уже есть — здесь он остаётся
@@ -66,7 +75,11 @@ export function OptionalDateField({
         </View>
       ) : (
         <Pressable
-          onPress={() => onChange(formatYMD(new Date()))}
+          // Тап ОТКРЫВАЕТ выбор, а не пишет сегодняшнюю дату в базу. Раньше
+          // «Указать» немедленно сохраняло сегодня: у кондиционера появлялось
+          // «ТО сделано сегодня», у клиента — день рождения сегодня, и это
+          // уезжало на сервер до того, как человек что-то выбрал.
+          onPress={() => setPicking(true)}
           accessibilityRole="button"
           accessibilityLabel={`Указать дату${a11y}`}
           className={
@@ -81,6 +94,30 @@ export function OptionalDateField({
           </Text>
         </Pressable>
       )}
+
+      {/* Выбор ПЕРВОЙ даты: пока не подтвердили — в данных ничего нет. */}
+      {picking ? (
+        <View className={end ? "items-end" : "items-start"}>
+          <DateTimePicker
+            themeVariant="light"
+            value={parseYMD(seedYmd)}
+            mode="date"
+            display="compact"
+            maximumDate={new Date()}
+            onChange={(event, d) => {
+              // «dismissed» — человек закрыл выбор, значение не ставим.
+              if (event.type === "dismissed") {
+                setPicking(false);
+                return;
+              }
+              if (d) {
+                setPicking(false);
+                onChange(formatYMD(d));
+              }
+            }}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

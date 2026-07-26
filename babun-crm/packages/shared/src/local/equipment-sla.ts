@@ -46,10 +46,25 @@ interface UnitSchedule {
   service_interval_months?: number;
 }
 
+/** Валидная дата YYYY-MM-DD или null: свободный ввод и легаси приносили
+ *  сюда мусор, от которого график считался наугад. */
+function validYmd(v: string | undefined): string | null {
+  return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
 export function serviceDueState(unit: UnitSchedule): ServiceDueState | null {
   const interval = unit.service_interval_months;
   if (!interval || interval <= 0) return null;
-  const base = unit.last_service_at || unit.installed_at || todayKey();
+  // База = САМАЯ ПОЗДНЯЯ из известных дат. Фолбэка «сегодня» больше нет: он
+  // означал «обслужили сегодня», поэтому у техники без дат график НИКОГДА не
+  // срабатывал — план просто уезжал вперёд вместе с сегодняшним днём. Нет
+  // базы — нет и графика, и это честно: сначала надо указать дату.
+  const dates = [
+    validYmd(unit.last_service_at),
+    validYmd(unit.installed_at),
+  ].filter((d): d is string => d !== null);
+  if (dates.length === 0) return null;
+  const base = dates.sort()[dates.length - 1];
   const nextDate = addMonthsYYYYMMDD(base, interval);
   const today = parseKey(todayKey());
   const next = parseKey(nextDate);

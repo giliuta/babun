@@ -14,7 +14,11 @@ import {
   Pin,
 } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { whatsappUrl } from "@babun/shared/common/utils/messenger-links";
+import {
+  smsUrl,
+  telUrl,
+  whatsappUrl,
+} from "@babun/shared/common/utils/messenger-links";
 import { useThemeColors } from "@/theme/colors";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
@@ -107,12 +111,12 @@ export function ClientActionsSheet({
             <Row
               icon={<Phone color={t.accent} size={16} />}
               label="Позвонить"
-              onPress={run(() => Linking.openURL(`tel:${digits}`))}
+              onPress={run(() => Linking.openURL(telUrl(client.phone) ?? ""))}
             />
             <Row
               icon={<MessageSquare color={t.accent} size={16} />}
               label="Сообщение"
-              onPress={run(() => Linking.openURL(`sms:${digits}`))}
+              onPress={run(() => Linking.openURL(smsUrl(client.phone) ?? ""))}
             />
           </>
         ) : null}
