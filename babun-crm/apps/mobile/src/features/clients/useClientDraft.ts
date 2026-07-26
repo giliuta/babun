@@ -6,10 +6,10 @@ import { listClients as listClientsCached } from "@babun/shared/sync/clientsCach
 import { useCreateClient } from "@/features/clients/queries";
 import {
   countryDialCode,
-  DEFAULT_COUNTRY,
   formatPhoneAsYouType,
   tryToE164,
 } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/clients/default-country";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
@@ -32,12 +32,29 @@ export function useClientDraft(active: boolean) {
   const router = useRouter();
   const tenantId = useTenantId();
   const create = useCreateClient();
+  // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
+  // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
+  // «+30». Номер, введённый со своим «+», всё равно уважается как есть.
+  const country = useDefaultCountry();
+  const dial = countryDialCode(country);
   const [draft, setDraft] = useState<Client>(() =>
-    createBlankClient({ phone: `${countryDialCode(DEFAULT_COUNTRY)} ` }),
+    createBlankClient({ phone: `${countryDialCode(country)} ` }),
   );
+  // Профиль компании приезжает асинхронно: если поле ещё не тронули, а код
+  // оказался другим — подставляем правильный, не мешая набору.
+  const seededDial = useRef(dial);
+  useEffect(() => {
+    if (!active || seededDial.current === dial) return;
+    setDraft((cur) =>
+      cur.phone.trim() === seededDial.current.trim()
+        ? { ...cur, phone: `${dial} ` }
+        : cur,
+    );
+    seededDial.current = dial;
+  }, [active, dial]);
   const [duplicate, setDuplicate] = useState<Client | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const e164 = active ? tryToE164(draft.phone.trim(), DEFAULT_COUNTRY) : null;
+  const e164 = active ? tryToE164(draft.phone.trim(), country) : null;
 
   const updateDraft = (patch: Partial<Client>) =>
     setDraft((current) => ({ ...current, ...patch }));
@@ -48,7 +65,7 @@ export function useClientDraft(active: boolean) {
       phone:
         value.length < current.phone.length
           ? value
-          : formatPhoneAsYouType(value),
+          : formatPhoneAsYouType(value, country),
     }));
     setDuplicate(null);
     setCreateError(null);
@@ -66,7 +83,7 @@ export function useClientDraft(active: boolean) {
       setDraft((current) => ({
         ...current,
         full_name: name || current.full_name,
-        phone: rawPhone ? formatPhoneAsYouType(rawPhone) : current.phone,
+        phone: rawPhone ? formatPhoneAsYouType(rawPhone, country) : current.phone,
       }));
       setDuplicate(null);
       setCreateError(null);
@@ -120,7 +137,7 @@ export function useClientDraft(active: boolean) {
     if (!active) return false;
     return Boolean(
       draft.full_name.trim() ||
-        draft.phone.trim() !== countryDialCode(DEFAULT_COUNTRY) ||
+        draft.phone.trim() !== dial ||
         draft.email.trim() ||
         draft.city.trim() ||
         draft.birthday ||
@@ -135,7 +152,7 @@ export function useClientDraft(active: boolean) {
         draft.acquisition_source !== "unknown" ||
         draft.blacklisted
     );
-  }, [active, draft]);
+  }, [active, draft, dial]);
 
   // Владелец 2026-07-25: телефон ОБЯЗАТЕЛЕН и УНИКАЛЕН. Уникальность
   // держится на ключе phone_e164, поэтому «5+ цифр» больше не пропуск —

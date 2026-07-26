@@ -107,6 +107,18 @@ export function sanitizePhoneInput(raw: string): string {
   return plus ? `+${body}` : body;
 }
 
+/** Валидный код страны компании; неизвестное значение → дефолт продукта.
+ *  Живёт здесь, а не рядом с хуком: чистая функция без React и без
+ *  react-native, поэтому её можно и тестировать, и звать из веб-сборки. */
+export function normalizeCountry(
+  value: string | null | undefined,
+): CountryCode {
+  const code = (value ?? "").trim().toUpperCase();
+  return (SUPPORTED_COUNTRIES as readonly string[]).includes(code)
+    ? (code as CountryCode)
+    : DEFAULT_COUNTRY;
+}
+
 /** Живое форматирование по мере ввода (libphonenumber AsYouType):
  *  «+35799123456» → «+357 99 123 456», локальный «99123456» → по маске
  *  страны по умолчанию. Ведущий «+» сохраняется даже до кода страны,

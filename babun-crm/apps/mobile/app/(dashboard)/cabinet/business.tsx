@@ -3,6 +3,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -13,6 +14,14 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { ChevronRight } from "lucide-react-native";
+import {
+  COUNTRY_NAMES_RU,
+  countryDialCode,
+  normalizeCountry,
+  SUPPORTED_COUNTRIES,
+} from "@/features/clients/phone";
+import { chooseValue } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCurrentRole,
@@ -23,6 +32,7 @@ import {
 type FormKey =
   | "name"
   | "city"
+  | "country"
   | "contact_phone"
   | "contact_email"
   | "contact_whatsapp"
@@ -36,6 +46,7 @@ type FormKey =
 const EMPTY: Record<FormKey, string> = {
   name: "",
   city: "",
+  country: "",
   contact_phone: "",
   contact_email: "",
   contact_whatsapp: "",
@@ -55,6 +66,21 @@ export default function BusinessScreen() {
   const [form, setForm] = useState<Record<FormKey, string>>(EMPTY);
   const [dirty, setDirty] = useState(false);
 
+  const country = normalizeCountry(form.country);
+  const countryLabel = `${COUNTRY_NAMES_RU[country] ?? country} · ${countryDialCode(country)}`;
+  const pickCountry = async () => {
+    const picked = await chooseValue<string>(
+      "Код страны",
+      SUPPORTED_COUNTRIES.map((code) => ({
+        value: code as string,
+        label: `${COUNTRY_NAMES_RU[code] ?? code} · ${countryDialCode(code)}`,
+      })),
+    );
+    if (!picked?.value) return;
+    setForm((cur) => ({ ...cur, country: picked.value as string }));
+    setDirty(true);
+  };
+
   // RLS (tenants_update_owner) allows saving to the owner only — disable
   // upfront instead of letting the save fail with an opaque error.
   const owner = role === "owner";
@@ -65,6 +91,7 @@ export default function BusinessScreen() {
     setForm({
       name: tenant.name ?? "",
       city: tenant.city ?? "",
+      country: tenant.country ?? "",
       contact_phone: tenant.contact_phone ?? "",
       contact_email: tenant.contact_email ?? "",
       contact_whatsapp: tenant.contact_whatsapp ?? "",
@@ -90,6 +117,9 @@ export default function BusinessScreen() {
       await update.mutateAsync({
         name: form.name.trim() || tenant?.name || "",
         city: clean(form.city),
+        // Код страны храним как ISO-код («CY»): из него выводится и «+357»
+        // в поле нового клиента, и разбор местного номера без «+».
+        country: country,
         contact_phone: clean(form.contact_phone),
         contact_email: clean(form.contact_email),
         contact_whatsapp: clean(form.contact_whatsapp),
@@ -140,6 +170,52 @@ export default function BusinessScreen() {
         <SectionCard title="Компания" padded>
           <Field label="Название" value={form.name} onChangeText={set("name")} placeholder="AirFix" editable={owner} />
           <Field label="Город" value={form.city} onChangeText={set("city")} placeholder="Limassol" editable={owner} />
+          {/* КОД СТРАНЫ — свойство компании (владелец 2026-07-26: «чтобы он
+              ставил автоматически… в настройках можно было сразу выбирать»).
+              Не команда: номер принадлежит клиенту, а не бригаде; не
+              устройство: иначе у владельца и диспетчера новые клиенты
+              заводились бы с разными кодами и ключ дедупа расходился бы. */}
+          <Pressable
+            onPress={owner ? () => void pickCountry() : undefined}
+            disabled={!owner}
+            accessibilityRole="button"
+            accessibilityLabel={`Код страны: ${countryLabel}`}
+            accessibilityState={{ disabled: !owner }}
+            style={({ pressed }) => ({
+              minHeight: 48,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              opacity: owner ? (pressed ? 0.6 : 1) : 0.5,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+            >
+              Код страны
+            </Text>
+            <View style={{ flex: 1, alignItems: "flex-end" }}>
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{ fontSize: 15, fontWeight: "500", color: t.ink }}
+              >
+                {countryLabel}
+              </Text>
+            </View>
+            {owner ? (
+              <ChevronRight color={t.chevron} size={17} strokeWidth={2.2} />
+            ) : null}
+          </Pressable>
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ marginTop: 4, fontSize: 13, color: t.faint }}
+          >
+            Подставляется в новый номер клиента. Номер, введённый со своим
+            «+», сохраняется как есть — работать по нескольким странам можно
+            без переключения настройки.
+          </Text>
         </SectionCard>
 
         <SectionCard title="Контакты" padded>

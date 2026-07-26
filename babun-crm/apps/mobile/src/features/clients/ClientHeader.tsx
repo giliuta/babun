@@ -34,6 +34,7 @@ import {
   visitsWord,
 } from "@/features/clients/format";
 import { tryToE164 } from "@/features/clients/phone";
+import { useDefaultCountry } from "@/features/clients/default-country";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useToast } from "@/components/ui/Toast";
@@ -86,6 +87,7 @@ export default function ClientHeader({
 }: ClientHeaderProps) {
   const t = useThemeColors();
   const toast = useToast();
+  const country = useDefaultCountry();
 
   const extras = client.phones ?? EMPTY_PHONES;
   // Номера — тот же jsonb-массив, что объекты: писать его можно только из
@@ -236,7 +238,10 @@ export default function ClientHeader({
               return;
             }
             const next = v.trim();
-            const e164 = next ? tryToE164(next) : null;
+            // Разбираем номер кодом страны КОМПАНИИ: у греческой фирмы «99…»
+            // без «+» — греческий номер, а не кипрский. Номер со своим «+»
+            // уважается как есть.
+            const e164 = next ? tryToE164(next, country) : null;
             // Молча отклонять нельзя: строка возвращала прежний номер, и
             // человек не понимал, почему правка «не сохранилась».
             if (!e164) {
