@@ -12,6 +12,7 @@
 // «В базе с …» показывается только у существующего клиента: в черновике блок
 // сообщал дату появления клиента, которого ещё нет.
 
+import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import {
@@ -22,6 +23,7 @@ import {
 } from "@babun/shared/local/clients";
 import { Chip } from "@/components/ui/Chip";
 import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
+import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { readableColorOnTint } from "@/components/ui/color-contrast";
 import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
@@ -29,7 +31,7 @@ import { useThemeColors } from "@/theme/colors";
 
 interface MetaBlockProps {
   client: Client;
-  update: (patch: Partial<Client>) => void;
+  update: (patch: Partial<Client>) => Promise<boolean> | void;
   /** Каталог тегов тенанта. Пустой — рисуем честную пустую строку. */
   tags?: ClientTag[];
   draft?: boolean;
@@ -55,13 +57,27 @@ export function MetaBlock({
 }: MetaBlockProps) {
   const th = useThemeColors();
 
+  // Теги — набор, который RPC заменяет ЦЕЛИКОМ. Из снимка рендера два
+  // быстрых тапа затирали друг друга: второй уходил со старым набором.
+  // Пишем из свежайшего значения и по очереди, как номера и объекты.
+  const tagWriter = useJsonArrayWriter<string>(client.tag_ids, (next) =>
+    Promise.resolve(update({ tag_ids: next })).then((ok) => ok !== false),
+  );
+  // Отметка чипа — МГНОВЕННАЯ: набор тегов уезжает в RPC целиком и
+  // возвращается только после round-trip, а до него чип оставался
+  // неотмеченным, и человек жал второй раз. Локальное значение
+  // самоисцеляется от пропа (в том числе после отката неудачной записи).
+  const [shownTags, setShownTags] = useState<string[]>(client.tag_ids);
+  useEffect(() => setShownTags(client.tag_ids), [client.tag_ids]);
+
   const toggleTag = (id: string) => {
     haptics.tap();
-    update({
-      tag_ids: client.tag_ids.includes(id)
-        ? client.tag_ids.filter((t) => t !== id)
-        : [...client.tag_ids, id],
-    });
+    setShownTags((cur) =>
+      cur.includes(id) ? cur.filter((t) => t !== id) : [...cur, id],
+    );
+    void tagWriter.apply((all) =>
+      all.includes(id) ? all.filter((t) => t !== id) : [...all, id],
+    );
   };
 
   const pickSource = async () => {
@@ -120,7 +136,7 @@ export function MetaBlock({
           ) : (
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
               {tags.map((tag) => {
-                const active = client.tag_ids.includes(tag.id);
+                const active = shownTags.includes(tag.id);
                 return (
                   <Chip
                     key={tag.id}

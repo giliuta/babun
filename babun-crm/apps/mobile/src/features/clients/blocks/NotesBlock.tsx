@@ -20,6 +20,7 @@ import { X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { RowGroup } from "@/features/clients/card-rows";
+import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -28,11 +29,21 @@ interface NotesBlockProps {
   update: (patch: Partial<Client>) => Promise<boolean>;
 }
 
+/** Стабильная пустая ссылка: `client.notes ?? []` давал новый массив на
+ *  каждый рендер и дёргал синхронизацию писателя. */
+const EMPTY_NOTES: ClientNote[] = [];
+
 export default function NotesBlock({ client, update }: NotesBlockProps) {
   const t = useThemeColors();
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
-  const notes = client.notes ?? [];
+  const list = client.notes ?? EMPTY_NOTES;
+  // Заметки — тот же jsonb-массив, что номера и объекты: пишем из свежайшего
+  // значения и по очереди. Из снимка рендера два быстрых действия (удалить
+  // одну + добавить другую) воскрешали удалённую или теряли новую.
+  const notes = useJsonArrayWriter<ClientNote>(list, (next) =>
+    update({ notes: next }),
+  );
 
   const submit = async () => {
     const value = text.trim();
@@ -44,7 +55,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
     };
     setSaving(true);
     try {
-      const saved = await update({ notes: [note, ...notes] });
+      const saved = await notes.apply((all) => [note, ...all]);
       // Набранное во время запроса не стираем.
       if (saved) setText((cur) => (cur.trim() === value ? "" : cur));
     } finally {
@@ -54,7 +65,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
 
   const remove = (id: string) => {
     haptics.tap();
-    void update({ notes: notes.filter((n) => n.id !== id) });
+    void notes.apply((all) => all.filter((n) => n.id !== id));
   };
 
   return (
@@ -127,7 +138,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
         </Text>
       </Pressable>
 
-      {notes.map((n) => (
+      {list.map((n) => (
         <View
           key={n.id}
           style={{

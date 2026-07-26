@@ -72,8 +72,12 @@ export default function VisitsMoneyBlock({
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
     [appointments],
   );
-  const totalDebt = debtApts.reduce((n, a) => n + getDebtAmount(a), 0);
   const oldestDebt = debtApts[0] ?? null;
+  // Строка называет ИМЕННО ТУ сумму, которую закроет тап. Раньше в ней стояла
+  // сумма ВСЕГО долга, а платёж уходил только за самый старый визит: человек
+  // жал «€100», а закрывалось «€50». Дата в значении снимает второй вопрос —
+  // какой именно визит.
+  const oldestAmount = oldestDebt ? getDebtAmount(oldestDebt) : 0;
 
   // Ключ ДАТА+ВРЕМЯ: при двух визитах в один день сортировка только по дате
   // оставляла порядок исходного массива, и «прошлым» показывался произвольный
@@ -91,7 +95,7 @@ export default function VisitsMoneyBlock({
 
   const takePayment = async () => {
     if (!oldestDebt) return;
-    const amount = getDebtAmount(oldestDebt);
+    const amount = oldestAmount;
     const methods = Object.keys(PAY_METHOD_LABELS) as PayMethod[];
     const picked = await chooseValue<PayMethod>(
       // Заголовок называет КОНКРЕТНЫЙ визит: при нескольких долгах видно,
@@ -141,7 +145,7 @@ export default function VisitsMoneyBlock({
       {oldestDebt ? (
         <NavRow
           label="Принять оплату"
-          value={formatEUR(totalDebt)}
+          value={`${formatEUR(oldestAmount)} · ${formatShortDateRu(oldestDebt.date)}`}
           valueColor={t.warning}
           onPress={() => void takePayment()}
         />

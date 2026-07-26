@@ -39,9 +39,26 @@ export function useJsonArrayWriter<T>(
     (next: T[]): Promise<boolean> => {
       // Своё значение — правда до ответа сервера: следующая правка на этом же
       // экране должна видеть предыдущую, даже если запись ещё в пути.
+      const prev = latest.current;
       latest.current = next;
-      const run = chain.current.then(() => write(next));
-      chain.current = run.catch(() => false);
+      // НЕУДАЧНАЯ запись откатывает оптимистичное значение. Иначе фантом
+      // оставался в latest и уезжал в базу со СЛЕДУЮЩЕЙ удачной записью —
+      // например, удалённый номер воскресал вместе с правкой соседнего.
+      // Откатываем только если поверх ничего не успели написать.
+      const rollback = () => {
+        if (latest.current === next) latest.current = prev;
+      };
+      const run = chain.current.then(() => write(next)).then(
+        (ok) => {
+          if (!ok) rollback();
+          return ok;
+        },
+        () => {
+          rollback();
+          return false;
+        },
+      );
+      chain.current = run;
       return run;
     },
     [write],

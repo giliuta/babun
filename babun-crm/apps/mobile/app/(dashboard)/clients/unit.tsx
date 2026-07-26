@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import type { ACType, ACUnit, Client } from "@babun/shared/local/clients";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import type {
+  ACType,
+  ACUnit,
+  Client,
+  Location,
+} from "@babun/shared/local/clients";
 import {
   AC_TYPE_LABELS,
   AC_TYPE_ORDER,
@@ -39,6 +44,9 @@ import { useThemeColors } from "@/theme/colors";
 // «раз в год», а не печатает «12». Нестандартное легаси-значение печатается
 // как есть и не теряется.
 
+/** Стабильная пустая ссылка (см. ClientHeader). */
+const EMPTY_LOCATIONS: Location[] = [];
+
 /** Готовые сроки. Легаси-значения (18 мес) остаются в данных и печатаются. */
 const INTERVALS = [6, 12, 24];
 
@@ -70,7 +78,7 @@ export default function ClientUnitScreen() {
       return false;
     }
   };
-  const writer = useLocationWriter(client?.locations ?? [], update);
+  const writer = useLocationWriter(client?.locations ?? EMPTY_LOCATIONS, update);
 
   const loc = client?.locations?.find((l) => l.id === locId) ?? null;
   const unit = loc?.equipment?.find((u) => u.id === unitId) ?? null;
@@ -88,7 +96,9 @@ export default function ClientUnitScreen() {
       !!draft.model?.trim() ||
       !!draft.last_service_at ||
       !!draft.installed_at ||
-      !!draft.service_interval_months);
+      !!draft.service_interval_months ||
+      // Выбор типа — тоже набранное: свайп «назад» уносил его молча.
+      draft.ac_type !== EMPTY.ac_type);
 
   const patch = (p: Partial<ACUnit>) => {
     if (isNew) {
@@ -96,14 +106,14 @@ export default function ClientUnitScreen() {
       return;
     }
     if (!unit || !loc) return;
-    void writer.saveUnit(loc.id, { ...unit, ...p });
+    void writer.patchUnit(loc.id, unit.id, p);
   };
 
   const saveDraft = async () => {
     if (!canSave || saving || !loc) return;
     setSaving(true);
     try {
-      const ok = await writer.saveUnit(loc.id, {
+      const ok = await writer.addUnit(loc.id, {
         ...draft,
         id: writer.newId(),
         room: draft.room.trim(),
@@ -188,6 +198,10 @@ export default function ClientUnitScreen() {
   const interval = shown.service_interval_months;
 
   return (
+    <>
+      {/* Свайп от левого края — тот же уход, что кнопка «‹». Без этого он
+          молча сносил набранный черновик, хотя кнопка о нём спрашивает. */}
+      <Stack.Screen options={{ gestureEnabled: !draftDirty }} />
     <Screen>
       <ScreenHeader
         title={isNew ? "Новый кондиционер" : shown.room || "Кондиционер"}
@@ -231,7 +245,10 @@ export default function ClientUnitScreen() {
             stacked
             live={isNew}
             autoFocus={isNew}
-            onSave={(v) => patch({ room: v })}
+            // У сохранённого кондиционера комнату стереть нельзя: строка в
+            // списке объекта перестала бы отличаться от соседней. В черновике
+            // пустое пропускаем — там гейт «Готово».
+            onSave={(v) => (isNew || v.trim() ? patch({ room: v }) : undefined)}
           />
           <FieldRow
             label="Марка и модель"
@@ -303,5 +320,6 @@ export default function ClientUnitScreen() {
         ) : null}
       </ScrollView>
     </Screen>
+    </>
   );
 }

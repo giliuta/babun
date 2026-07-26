@@ -21,7 +21,7 @@
 // ВМЕСТЕ с производным phone_e164 — иначе ключ дедупа
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Bell, Check, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
@@ -66,6 +66,10 @@ interface ClientHeaderProps {
   draft?: ClientHeaderDraft;
 }
 
+/** Стабильная пустая ссылка: `?? []` давал новый массив на каждый рендер и
+ *  дёргал пересинхронизацию писателя. */
+const EMPTY_PHONES: PhoneEntry[] = [];
+
 const EXTRA_LABELS = ["Второй", "WhatsApp", "Рабочий", "Супруг(а)", "Другой"];
 
 function nextExtraLabel(existing: PhoneEntry[]): string {
@@ -81,7 +85,7 @@ export default function ClientHeader({
 }: ClientHeaderProps) {
   const t = useThemeColors();
 
-  const extras = client.phones ?? [];
+  const extras = client.phones ?? EMPTY_PHONES;
   // Номера — тот же jsonb-массив, что объекты: писать его можно только из
   // свежайшего значения и по очереди, иначе две быстрые правки затирают друг
   // друга (patchPhone из снимка рендера + PATCH на всю колонку).
@@ -100,10 +104,17 @@ export default function ClientHeader({
   const [pending, setPending] = useState<{ label: string; id: string } | null>(
     null,
   );
+  // Коммит строки происходит и на РАЗМОНТИРОВАНИИ — там читается замыкание
+  // прошлого рендера, поэтому актуальное состояние держим ещё и в ref.
+  const pendingRef = useRef(pending);
+  const setPendingRow = (next: { label: string; id: string } | null) => {
+    pendingRef.current = next;
+    setPending(next);
+  };
 
   const addPhone = () => {
     haptics.tap();
-    setPending({ label: nextExtraLabel(extras), id: randomUuid() });
+    setPendingRow({ label: nextExtraLabel(extras), id: randomUuid() });
   };
   /** Новый номер становится записью, как только в нём появилась ПЕРВАЯ цифра.
    *  Раньше это происходило только по blur — и в черновике «Готово» читало
@@ -111,8 +122,10 @@ export default function ClientHeader({
    *  Пустое поле записью не становится вовсе. */
   const commitPending = (raw: string) => {
     const value = raw.trim();
-    if (!pending) return;
-    const { id, label } = pending;
+    const row = pendingRef.current;
+    // Уже отменили крестиком или закоммитили — второй раз не пишем.
+    if (!row) return;
+    const { id, label } = row;
     void phones.apply((all) => {
       const rest = all.filter((p) => p.id !== id);
       // Пустое поле записью не становится, а уже созданную стирает: строки
@@ -302,18 +315,23 @@ export default function ClientHeader({
           tabular
           stacked
           autoFocus
-          live
+          // БЕЗ live: он писал PATCH на КАЖДЫЙ СИМВОЛ (восемь запросов на
+          // восьмизначный номер). Коммит по blur / Return / уходу со строки
+          // уже даёт примитив, а «Готово» на карточке снимает клавиатуру
+          // перед сохранением — значит черновик успевает получить номер.
           onSave={commitPending}
           // Правка закончилась — номер уже в данных, и строка становится
           // обычной строкой-номером (с переключением подписи).
-          onEditEnd={() => setPending(null)}
+          onEditEnd={() => setPendingRow(null)}
           trailing={
             <Pressable
               onPress={() => {
-                void phones.apply((all) =>
-                  all.filter((x) => x.id !== pending.id),
-                );
-                setPending(null);
+                const id = pending.id;
+                setPendingRow(null);
+                // Записи может ещё не быть — тогда и удалять нечего.
+                if (phones.current().some((x) => x.id === id)) {
+                  void phones.apply((all) => all.filter((x) => x.id !== id));
+                }
               }}
               accessibilityRole="button"
               accessibilityLabel="Отменить добавление номера"

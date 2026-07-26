@@ -8,15 +8,27 @@ import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 // самих объектов: кто основной, что делать при удалении, где живут юниты.
 
 export interface LocationWriter {
-  /** Правка полей объекта. */
-  patchLocation: (id: string, patch: Partial<Location>) => Promise<boolean>;
+  /** Правка полей объекта. Патч можно задать ФУНКЦИЕЙ от свежего объекта —
+   *  тогда значение не берётся из снимка рендера (вставка ссылки, считающая
+   *  адрес, иначе возвращала старый адрес поверх только что введённого). */
+  patchLocation: (
+    id: string,
+    patch: Partial<Location> | ((loc: Location) => Partial<Location>),
+  ) => Promise<boolean>;
   /** Новый объект в хвост. Первый созданный — основной. */
   addLocation: (draft: Omit<Location, "id" | "isPrimary">) => Promise<boolean>;
   /** Удаление с повышением основного, если снесли основной. */
   removeLocation: (id: string) => Promise<boolean>;
   makePrimary: (id: string) => Promise<boolean>;
-  /** Правка/добавление юнита: id из черновика или новый. */
-  saveUnit: (locationId: string, unit: ACUnit) => Promise<boolean>;
+  /** Правка СУЩЕСТВУЮЩЕГО юнита по id. Отдельно от добавления: слитый
+   *  «сохрани — а если id нет, добавь» воскрешал только что удалённый юнит и
+   *  терял правку, если два поля тронули подряд. */
+  patchUnit: (
+    locationId: string,
+    unitId: string,
+    patch: Partial<ACUnit>,
+  ) => Promise<boolean>;
+  addUnit: (locationId: string, unit: ACUnit) => Promise<boolean>;
   removeUnit: (locationId: string, unitId: string) => Promise<boolean>;
   newId: () => string;
 }
@@ -32,8 +44,17 @@ export function useLocationWriter(
   const { apply } = useJsonArrayWriter<Location>(locations, write);
 
   const patchLocation = useCallback(
-    (id: string, patch: Partial<Location>) =>
-      apply((all) => all.map((l) => (l.id === id ? { ...l, ...patch } : l))),
+    (
+      id: string,
+      patch: Partial<Location> | ((loc: Location) => Partial<Location>),
+    ) =>
+      apply((all) =>
+        all.map((l) =>
+          l.id === id
+            ? { ...l, ...(typeof patch === "function" ? patch(l) : patch) }
+            : l,
+        ),
+      ),
     [apply],
   );
 
@@ -65,19 +86,34 @@ export function useLocationWriter(
     [apply],
   );
 
-  const saveUnit = useCallback(
+  const patchUnit = useCallback(
+    (locationId: string, unitId: string, patch: Partial<ACUnit>) =>
+      apply((all) =>
+        all.map((l) =>
+          l.id === locationId
+            ? {
+                ...l,
+                // Именно map по свежему списку: юнита может уже не быть
+                // (удалили с другого устройства) — тогда правка ничего не
+                // воскрешает.
+                equipment: (l.equipment ?? []).map((u) =>
+                  u.id === unitId ? { ...u, ...patch } : u,
+                ),
+              }
+            : l,
+        ),
+      ),
+    [apply],
+  );
+
+  const addUnit = useCallback(
     (locationId: string, unit: ACUnit) =>
       apply((all) =>
-        all.map((l) => {
-          if (l.id !== locationId) return l;
-          const units = l.equipment ?? [];
-          return {
-            ...l,
-            equipment: units.some((u) => u.id === unit.id)
-              ? units.map((u) => (u.id === unit.id ? unit : u))
-              : [...units, unit],
-          };
-        }),
+        all.map((l) =>
+          l.id === locationId
+            ? { ...l, equipment: [...(l.equipment ?? []), unit] }
+            : l,
+        ),
       ),
     [apply],
   );
@@ -102,7 +138,8 @@ export function useLocationWriter(
     addLocation,
     removeLocation,
     makePrimary,
-    saveUnit,
+    patchUnit,
+    addUnit,
     removeUnit,
     newId: randomUuid,
   };

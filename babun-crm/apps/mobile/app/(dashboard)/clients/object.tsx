@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Tag } from "lucide-react-native";
 import type {
   Client,
@@ -50,6 +50,9 @@ import { useThemeColors } from "@/theme/colors";
 // существует, когда есть адрес или ссылка: метка одна ничего не значит, а по
 // адресу или ссылке бригада доедет. Ушли, не дойдя до гейта — не создалось
 // ничего, но набранное не выбрасываем молча: спрашиваем.
+
+/** Стабильная пустая ссылка (см. ClientHeader). */
+const EMPTY_LOCATIONS: Location[] = [];
 
 type Draft = Omit<Location, "id" | "isPrimary">;
 
@@ -101,7 +104,7 @@ export default function ClientObjectScreen() {
       return false;
     }
   };
-  const writer = useLocationWriter(client?.locations ?? [], update);
+  const writer = useLocationWriter(client?.locations ?? EMPTY_LOCATIONS, update);
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
@@ -115,7 +118,10 @@ export default function ClientObjectScreen() {
     (!!draft.label.trim() ||
       !!draft.address.trim() ||
       !!draft.mapUrl?.trim() ||
-      !!draft.note?.trim());
+      !!draft.note?.trim() ||
+      // Выбор в пикере — тоже набранное: без него свайп «назад» молча уносил
+      // выставленный тип объекта.
+      !!draft.property_type);
   const canSave =
     !!draft.address.trim() || !!draft.mapUrl?.trim();
 
@@ -160,14 +166,25 @@ export default function ClientObjectScreen() {
     void writer.patchLocation(loc.id, p);
   };
 
-  /** Ссылка и адрес уезжают одним патчем: иначе автозаполненный адрес — это
-   *  вторая запись в ту же колонку сразу за первой. */
+  /** Ссылка и адрес уезжают ОДНИМ патчем: иначе автозаполненный адрес — это
+   *  вторая запись в ту же колонку сразу за первой. Адрес берём из СВЕЖЕГО
+   *  объекта, а не из снимка рендера — иначе вставка ссылки сразу после
+   *  правки адреса возвращала старый адрес. */
   const patchMapUrl = (value: string) => {
-    const merged = withAddressFromLink({
-      address: shown.address,
-      mapUrl: value,
+    if (isNew) {
+      setDraft((d) =>
+        withAddressFromLink({ ...d, mapUrl: value }) as Draft,
+      );
+      return;
+    }
+    if (!loc) return;
+    void writer.patchLocation(loc.id, (fresh) => {
+      const merged = withAddressFromLink({
+        address: fresh.address,
+        mapUrl: value,
+      });
+      return { mapUrl: value || undefined, address: merged.address };
     });
-    patch({ mapUrl: value || undefined, address: merged.address });
   };
 
   const pickLabel = async () => {
@@ -256,6 +273,10 @@ export default function ClientObjectScreen() {
   });
 
   return (
+    <>
+      {/* Свайп от левого края — тот же уход, что кнопка «‹». Без этого он
+          молча сносил набранный черновик, хотя кнопка о нём спрашивает. */}
+      <Stack.Screen options={{ gestureEnabled: !draftDirty }} />
     <Screen>
       <ScreenHeader
         title={isNew ? "Новый объект" : shown.label || "Объект"}
@@ -319,7 +340,14 @@ export default function ClientObjectScreen() {
             multiline
             live={isNew}
             autoFocus={isNew}
-            onSave={(v) => patch({ address: v })}
+            // Последнее оставшееся «куда ехать» стереть нельзя: без адреса и
+            // без ссылки объект перестаёт быть объектом. Замена одного другим
+            // свободна.
+            onSave={(v) =>
+              isNew || v.trim() || shown.mapUrl?.trim()
+                ? patch({ address: v })
+                : undefined
+            }
             trailing={
               <ObjectRouteButton
                 mapUrl={shown.mapUrl}
@@ -447,5 +475,6 @@ export default function ClientObjectScreen() {
         ) : null}
       </ScrollView>
     </Screen>
+    </>
   );
 }

@@ -165,6 +165,10 @@ export function FieldRow({
         <Pressable
           onPress={editingNow ? undefined : () => setEditing(true)}
           disabled={editingNow}
+          // В РЕЖИМЕ ПРАВКИ контейнер перестаёт быть элементом доступности:
+          // иначе он склеивает TextInput внутрь себя, и VoiceOver не может
+          // войти в поле — клиента становится нельзя создать вслепую.
+          accessible={!editingNow}
           accessibilityRole={editingNow ? "none" : "button"}
           accessibilityLabel={value ? `${label}: ${value}` : label}
           accessibilityHint={editingNow ? undefined : "Нажмите, чтобы изменить"}

@@ -38,7 +38,9 @@ describe("client native persistence contract", () => {
     const unit = read("../../../app/(dashboard)/clients/unit.tsx");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
-    assert.match(notes, /const saved = await update/);
+    // Заметки пишутся через очередь (useJsonArrayWriter), но правило то же:
+    // поле очищается ТОЛЬКО после подтверждённой записи.
+    assert.match(notes, /const saved = await notes\.apply/);
     assert.match(notes, /if \(saved\)/);
     assert.match(object, /if \(ok\) router\.back\(\)/);
     assert.match(unit, /if \(ok\) router\.back\(\)/);
@@ -66,6 +68,16 @@ describe("client native persistence contract", () => {
     );
     assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
     assert.match(read("ClientHeader.tsx"), /useJsonArrayWriter/);
+    // Теги и заметки — те же jsonb-массивы: собственных копий механики быть
+    // не должно, иначе расхождение вернётся с другой стороны.
+    assert.match(read("blocks/MetaBlock.tsx"), /useJsonArrayWriter/);
+    assert.match(read("blocks/NotesBlock.tsx"), /useJsonArrayWriter/);
+    // Признак снимка рендера — сборка набора из client.tag_ids прямо в
+    // обработчике тапа. Через писателя набор берётся из свежайшего значения.
+    assert.doesNotMatch(
+      read("blocks/MetaBlock.tsx"),
+      /client\.tag_ids\.(filter|includes)\(/,
+    );
   });
 
   test("обязательные имя и телефон защищены и на сохранённой карточке", () => {
