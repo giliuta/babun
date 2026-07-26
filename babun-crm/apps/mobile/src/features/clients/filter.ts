@@ -329,14 +329,29 @@ export function clientSource(c: Client): AcquisitionSource {
   return (c.acquisition_source || "unknown") as AcquisitionSource;
 }
 
-/** Типы объектов клиента: legacy-поле карточки + все объекты. */
+/** Типы объектов клиента. Владелец 2026-07-26: «метка — это и есть тип
+ *  объекта: дом, офис, вилла — стандарт, и можно добавить своё». Значит
+ *  словарь принадлежит БИЗНЕСУ (пресеты кабинета «Типы объектов»), а не
+ *  зашитому перечислению — для SaaS это единственно верно: у автомойки свои
+ *  типы, у кондиционерщиков свои.
+ *
+ *  Поэтому фасет собирает и метки объектов, и legacy-перечисление (у старых
+ *  клиентов оно заполнено, и терять его нельзя). */
 export function clientPropertyTypes(c: Client): Set<string> {
   const out = new Set<string>();
   if (c.property_type) out.add(c.property_type);
   for (const loc of c.locations ?? []) {
     if (loc.property_type) out.add(loc.property_type);
+    const label = loc.label?.trim();
+    if (label) out.add(label);
   }
   return out;
+}
+
+/** Человеческая подпись значения фасета: legacy-перечисление переводим, а
+ *  метку бизнеса печатаем как есть — она уже на его языке. */
+export function propertyTypeLabel(value: string): string {
+  return PROPERTY_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
 // ── Period ─────────────────────────────────────────────────────────

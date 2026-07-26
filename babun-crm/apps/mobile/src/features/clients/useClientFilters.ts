@@ -7,12 +7,12 @@ import { nameInComment } from "@babun/shared/local/selectors/client-stats";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import {
   clientPropertyTypes,
+  propertyTypeLabel,
   clientSource,
   matchesSegment,
   sortClients,
   periodLabel,
   todayYMD,
-  PROPERTY_OPTIONS,
   SEGMENT_OPTIONS,
   SOURCE_OPTIONS,
   type ActiveToken,
@@ -517,9 +517,14 @@ export function useClientFilters(
         tokens.push({ key: "source", val: src, label: o.label, color: "" });
     }
     for (const p of propertyTypes) {
-      const o = PROPERTY_OPTIONS.find((x) => x.value === p);
-      if (o)
-        tokens.push({ key: "property", val: p, label: o.label, color: "" });
+      // Метка бизнеса печатается как есть; раньше токен молча исчезал, если
+      // значения не было в зашитом перечислении.
+      tokens.push({
+        key: "property",
+        val: p,
+        label: propertyTypeLabel(p),
+        color: "",
+      });
     }
     return tokens;
   }, [

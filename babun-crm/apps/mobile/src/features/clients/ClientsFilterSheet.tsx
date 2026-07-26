@@ -35,6 +35,7 @@ import {
   filterActiveCount,
   periodLabel,
   PROPERTY_OPTIONS,
+  propertyTypeLabel,
   resetFilters,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
@@ -901,9 +902,7 @@ export function ClientsFilterSheet({
         ...filter.sources
           .map((s) => SOURCE_OPTIONS.find((o) => o.value === s)?.label ?? "")
           .filter(Boolean),
-        ...filter.propertyTypes
-          .map((p) => PROPERTY_OPTIONS.find((o) => o.value === p)?.label ?? "")
-          .filter(Boolean),
+        ...filter.propertyTypes.map(propertyTypeLabel).filter(Boolean),
       ].join(" · ");
 
   // Сплит периода (диалект Финансов): слева имя, справа всегда даты —

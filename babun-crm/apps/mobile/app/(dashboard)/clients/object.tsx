@@ -2,15 +2,8 @@ import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Tag } from "lucide-react-native";
-import type {
-  Client,
-  Location,
-  PropertyType,
-} from "@babun/shared/local/clients";
-import {
-  AC_TYPE_LABELS,
-  PROPERTY_LABELS,
-} from "@babun/shared/local/clients";
+import type { Client, Location } from "@babun/shared/local/clients";
+import { AC_TYPE_LABELS } from "@babun/shared/local/clients";
 import { serviceDueState } from "@babun/shared/local/equipment-sla";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { extractAddressFromMapUrl } from "@babun/shared/common/utils/map-links";
@@ -28,7 +21,6 @@ import {
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
-import { PROPERTY_ORDER } from "@/features/clients/filter";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClient, useUpdateClient } from "@/features/clients/queries";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -118,10 +110,7 @@ export default function ClientObjectScreen() {
     (!!draft.label.trim() ||
       !!draft.address.trim() ||
       !!draft.mapUrl?.trim() ||
-      !!draft.note?.trim() ||
-      // Выбор в пикере — тоже набранное: без него свайп «назад» молча уносил
-      // выставленный тип объекта.
-      !!draft.property_type);
+      !!draft.note?.trim());
   const canSave =
     !!draft.address.trim() || !!draft.mapUrl?.trim();
 
@@ -166,42 +155,19 @@ export default function ClientObjectScreen() {
     void writer.patchLocation(loc.id, p);
   };
 
-  /** Ссылка и адрес уезжают ОДНИМ патчем: иначе автозаполненный адрес — это
-   *  вторая запись в ту же колонку сразу за первой. Адрес берём из СВЕЖЕГО
-   *  объекта, а не из снимка рендера — иначе вставка ссылки сразу после
-   *  правки адреса возвращала старый адрес. */
-  const patchMapUrl = (value: string) => {
-    if (isNew) {
-      setDraft((d) =>
-        withAddressFromLink({ ...d, mapUrl: value }) as Draft,
-      );
-      return;
-    }
-    if (!loc) return;
-    void writer.patchLocation(loc.id, (fresh) => {
-      const merged = withAddressFromLink({
-        address: fresh.address,
-        mapUrl: value,
-      });
-      return { mapUrl: value || undefined, address: merged.address };
-    });
-  };
+  /** Стандартный набор, если в кабинете «Типы объектов» пусто: владелец
+   *  назвал его прямо — «дом, офис, вилла — это стандарт». */
+  const typeOptions =
+    labelPresets.length > 0
+      ? labelPresets.map((preset) => preset.name)
+      : ["Дом", "Офис", "Вилла"];
 
   const pickLabel = async () => {
     const picked = await chooseValue(
-      "Метка объекта",
-      labelPresets.map((preset) => ({ value: preset.name, label: preset.name })),
+      "Тип объекта",
+      typeOptions.map((name) => ({ value: name, label: name })),
     );
     if (picked?.value) patch({ label: picked.value });
-  };
-
-  const pickPropertyType = async () => {
-    const picked = await chooseValue<PropertyType>(
-      "Тип объекта",
-      PROPERTY_ORDER.map((k) => ({ value: k, label: PROPERTY_LABELS[k] })),
-      shown.property_type ? { clearLabel: "Убрать" } : undefined,
-    );
-    if (picked) patch({ property_type: picked.value ?? undefined });
   };
 
   const confirmDelete = () => {
@@ -313,36 +279,44 @@ export default function ClientObjectScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <RowGroup>
+          {/* ТИП ОБЪЕКТА — он же метка (владелец 2026-07-26: «первая идёт как
+              метка, и это должен быть тип объекта; дом, офис, вилла — это
+              стандарт, и можно просто листать либо добавлять своё»).
+              Отдельной строки «Тип объекта» с зашитым перечислением больше
+              нет: два поля про одно и то же путали, а для SaaS словарь
+              принадлежит бизнесу — пресеты живут в кабинете. */}
           <FieldRow
-            label="Метка"
+            label="Тип объекта"
             value={shown.label}
             placeholder="Дом / Офис / Вилла"
             stacked
             live={isNew}
             onSave={(v) => patch({ label: v })}
             trailing={
-              labelPresets.length > 0 ? (
-                <RowActionButton
-                  icon={Tag}
-                  color={t.accent}
-                  label="Выбрать метку объекта"
-                  onPress={() => void pickLabel()}
-                />
-              ) : undefined
+              <RowActionButton
+                icon={Tag}
+                color={t.accent}
+                label="Выбрать тип объекта"
+                onPress={() => void pickLabel()}
+              />
             }
           />
+          {/* АДРЕС И ССЫЛКА — ОДНО поле (владелец: «адрес — это и есть ссылка
+              на объект, ссылка на карту; адрес и ссылка по сути одно и то
+              же»). Поле принимает и текст, и присланный пин: маршрут ведёт по
+              тому, что введено, а ссылку открывает то приложение, которое её
+              понимает. */}
           <FieldRow
-            label="Адрес"
+            label="Адрес или ссылка"
             value={shown.address}
-            placeholder="Улица, дом, город"
+            placeholder="Улица, дом, город — или ссылка на карту"
             stacked
             separated
             multiline
             live={isNew}
             autoFocus={isNew}
-            // Последнее оставшееся «куда ехать» стереть нельзя: без адреса и
-            // без ссылки объект перестаёт быть объектом. Замена одного другим
-            // свободна.
+            // Последнее «куда ехать» стереть нельзя: без него объект
+            // перестаёт быть объектом.
             onSave={(v) =>
               isNew || v.trim() || shown.mapUrl?.trim()
                 ? patch({ address: v })
@@ -356,18 +330,11 @@ export default function ClientObjectScreen() {
               />
             }
           />
+          {/* «КАК ВОЙТИ» — это и есть заметка (владелец: «как войти — это и
+              есть заметка, просто заметка; в заметку можно вписать и сам
+              адрес»). */}
           <FieldRow
-            label="Ссылка на карту"
-            value={shown.mapUrl ?? ""}
-            placeholder="Вставьте ссылку из Google Карт"
-            stacked
-            separated
-            keyboardType="url"
-            live={isNew}
-            onSave={patchMapUrl}
-          />
-          <FieldRow
-            label="Как войти"
+            label="Заметка"
             value={shown.note ?? ""}
             placeholder="Домофон 25, зелёная дверь, собака во дворе"
             stacked
@@ -375,17 +342,6 @@ export default function ClientObjectScreen() {
             multiline
             live={isNew}
             onSave={(v) => patch({ note: v || undefined })}
-          />
-          <NavRow
-            label="Тип объекта"
-            value={
-              shown.property_type
-                ? PROPERTY_LABELS[shown.property_type]
-                : null
-            }
-            placeholder="не выбран"
-            separated
-            onPress={() => void pickPropertyType()}
           />
         </RowGroup>
 
