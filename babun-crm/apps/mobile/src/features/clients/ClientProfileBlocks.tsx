@@ -72,9 +72,11 @@ export function ClientProfileBlocks({
           путь в хранилище строится по id клиента, которого ещё нет. Рисовать
           пригашенную кнопку «нельзя» = мёртвый контрол. */}
       {!draft ? <AttachmentsBlock clientId={client.id} /> : null}
-      <ContactsBlock client={client} update={update} hidePhones />
-      <PersonalBlock client={client} update={update} />
-      <MetaBlock client={client} update={update} tags={tags} />
+      <ContactsBlock client={client} update={update} draft={draft} />
+      <PersonalBlock client={client} update={update} draft={draft} />
+      {/* draft прокидывается ОБЯЗАТЕЛЬНО: без него блок писал «В базе с …» о
+          клиенте, которого ещё нет. */}
+      <MetaBlock client={client} update={update} tags={tags} draft={draft} />
       <NotesBlock client={client} update={update} />
     </>
   );

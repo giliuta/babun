@@ -1,15 +1,19 @@
-// MetaBlock (mobile port of apps/web/.../blocks/MetaBlock.tsx)
-// STORY-034 — Метаданные: Источник обращения · теги · «в базе с …».
-// Collapsed by default (CollapsibleCard) — the closed row shows
-// «{источник} · N тегов».
-// Plus a Чёрный список toggle (client.blacklisted) — the field exists
-// on Client and has no home in the other blocks, so it lives here.
-// Presentational only — receives client + update() + the tenant tag
-// catalog (the composer supplies `tags`; absent → empty-catalog state,
-// matching web).
+// О КЛИЕНТЕ — Источник обращения · Теги.
+//
+// Переведён на ЗАКОН СТРОКИ (2026-07-26). Источник — единичный выбор, поэтому
+// строка с шевроном и нативный ActionSheetIOS. Теги — множественный выбор, и
+// они остаются цветными чипами: чип и есть канонический вид тега во всём
+// продукте (список клиентов, фильтры), а нативного меню с галками у iOS нет.
+//
+// «Чёрный список» из блока УБРАН: тот же переключатель живёт в меню ⋯, и
+// двух путей к одному флагу быть не должно. Поднятый флаг остаётся видимым
+// тихой подписью под группой — иначе про него узнают только при записи.
+//
+// «В базе с …» показывается только у существующего клиента: в черновике блок
+// сообщал дату появления клиента, которого ещё нет.
 
-import { X } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { ActionSheetIOS, Text, View } from "react-native";
+import { Check } from "lucide-react-native";
 import {
   ACQUISITION_LABELS,
   type AcquisitionSource,
@@ -17,22 +21,20 @@ import {
   type ClientTag,
 } from "@babun/shared/local/clients";
 import { Chip } from "@/components/ui/Chip";
-import { CollapsibleCard } from "@/features/clients/card-collapse";
-import { useThemeColors } from "@/theme/colors";
+import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
 import { readableColorOnTint } from "@/components/ui/color-contrast";
+import { haptics } from "@/lib/haptics";
+import { useThemeColors } from "@/theme/colors";
 
 interface MetaBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => void;
-  /** Tenant-managed tag catalog (palette + label). The composer passes
-   *  this; when omitted we render the empty-catalog hint, same as web. */
+  /** Каталог тегов тенанта. Пустой — рисуем честную пустую строку. */
   tags?: ClientTag[];
   draft?: boolean;
 }
 
-const SOURCE_KEYS = Object.keys(
-  ACQUISITION_LABELS,
-) as AcquisitionSource[];
+const SOURCE_KEYS = Object.keys(ACQUISITION_LABELS) as AcquisitionSource[];
 
 function formatCreatedAt(iso: string): string {
   const d = new Date(iso);
@@ -44,59 +46,86 @@ function formatCreatedAt(iso: string): string {
   });
 }
 
-export function MetaBlock({ client, update, tags = [], draft = false }: MetaBlockProps) {
+export function MetaBlock({
+  client,
+  update,
+  tags = [],
+  draft = false,
+}: MetaBlockProps) {
   const th = useThemeColors();
 
-  const toggleTag = (id: string) =>
+  const toggleTag = (id: string) => {
+    haptics.tap();
     update({
       tag_ids: client.tag_ids.includes(id)
         ? client.tag_ids.filter((t) => t !== id)
         : [...client.tag_ids, id],
     });
+  };
 
-  // Collapsed-row summary: «Рекомендация · 2 тега» — only what's set.
-  const summary = [
+  const pickSource = () => {
+    haptics.tap();
+    const options = [...SOURCE_KEYS.map((k) => ACQUISITION_LABELS[k]), "Отмена"];
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: "Источник обращения",
+        options,
+        cancelButtonIndex: options.length - 1,
+      },
+      (i) => {
+        const key = SOURCE_KEYS[i];
+        if (key) update({ acquisition_source: key });
+      },
+    );
+  };
+
+  const source =
     client.acquisition_source && client.acquisition_source !== "unknown"
       ? ACQUISITION_LABELS[client.acquisition_source]
-      : null,
-    client.tag_ids.length
-      ? `${client.tag_ids.length} ${tagsWord(client.tag_ids.length)}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+      : null;
 
   return (
-    <CollapsibleCard title="О клиенте" summary={summary}>
-      <View className="gap-3 px-1 pt-1">
-        {/* Источник обращения — web uses a <select>; RN has no native
-            select, so render the options as a wrapping chip group. */}
-        <View>
-          <Text className="mb-1.5 text-xs" style={{ color: th.sub }}>
-            Источник обращения
+    <>
+      <RowGroup title="О клиенте">
+        <NavRow
+          label="Источник"
+          value={source}
+          placeholder="неизвестен"
+          onPress={pickSource}
+        />
+        {/* Теги — множественный выбор, поэтому чипы внутри подписанной
+            строки, а не шеврон: нативного меню с галками у iOS нет, а свой
+            лист снизу владелец для такого отверг. */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            gap: 8,
+            borderTopWidth: 1,
+            borderTopColor: th.separator,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              color: th.faint,
+            }}
+          >
+            Теги
           </Text>
-          <View className="flex-row flex-wrap gap-1.5">
-            {SOURCE_KEYS.map((k) => (
-              <Chip
-                key={k}
-                label={ACQUISITION_LABELS[k]}
-                radio
-                selected={client.acquisition_source === k}
-                onPress={() => update({ acquisition_source: k })}
-              />
-            ))}
-          </View>
-        </View>
-
-        {/* Теги */}
-        <View>
-          <Text className="mb-1.5 text-xs" style={{ color: th.sub }}>Теги</Text>
           {tags.length === 0 ? (
-            <Text className="text-xs italic" style={{ color: th.faint }}>
-              Нет тегов в каталоге.
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, color: th.faint }}
+            >
+              В каталоге нет тегов
             </Text>
           ) : (
-            <View className="flex-row flex-wrap gap-1.5">
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
               {tags.map((tag) => {
                 const active = client.tag_ids.includes(tag.id);
                 return (
@@ -109,16 +138,7 @@ export function MetaBlock({ client, update, tags = [], draft = false }: MetaBloc
                     onPress={() => toggleTag(tag.id)}
                     icon={
                       active ? (
-                        <X
-                          color={readableColorOnTint(
-                            tag.color,
-                            th.surface,
-                            th.ink,
-                            0x14 / 255,
-                          )}
-                          size={10}
-                          strokeWidth={2.5}
-                        />
+                        <TagCheck color={tag.color} surface={th.surface} ink={th.ink} />
                       ) : undefined
                     }
                   />
@@ -127,37 +147,36 @@ export function MetaBlock({ client, update, tags = [], draft = false }: MetaBloc
             </View>
           )}
         </View>
+      </RowGroup>
 
-        {/* Чёрный список — client.blacklisted. Not present in the web
-            block, but the field exists and belongs with meta flags. */}
-        <View className="flex-row items-center justify-between border-t pt-3" style={{ borderColor: th.separator }}>
-          <Text className="text-[13px]" style={{ color: th.sub }}>Чёрный список</Text>
-          <Chip
-            label={client.blacklisted ? "В списке" : "Нет"}
-            color={th.danger}
-            selected={!!client.blacklisted}
-            onPress={() => update({ blacklisted: !client.blacklisted })}
-            accessibilityLabel="Чёрный список"
-          />
-        </View>
-
-        {/* В базе с … */}
-        {!draft ? (
-          <Text className="border-t pt-3 text-xs" style={{ borderColor: th.separator, color: th.faint }}>
-            В базе с {formatCreatedAt(client.created_at)}
-          </Text>
-        ) : null}
-      </View>
-    </CollapsibleCard>
+      {client.blacklisted ? (
+        <RowCaption tone="danger" text="Клиент в чёрном списке." />
+      ) : null}
+      {!draft ? (
+        <RowCaption text={`В базе с ${formatCreatedAt(client.created_at)}`} />
+      ) : null}
+    </>
   );
 }
 
-function tagsWord(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "тег";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "тега";
-  return "тегов";
+/** Галка выбранного тега — иконкой, не текстовым знаком: цвет считается по
+ *  фону чипа, чтобы читалась и на светлых, и на тёмных тегах. */
+function TagCheck({
+  color,
+  surface,
+  ink,
+}: {
+  color: string;
+  surface: string;
+  ink: string;
+}) {
+  return (
+    <Check
+      color={readableColorOnTint(color, surface, ink, 0x14 / 255)}
+      size={10}
+      strokeWidth={2.8}
+    />
+  );
 }
 
 export default MetaBlock;
