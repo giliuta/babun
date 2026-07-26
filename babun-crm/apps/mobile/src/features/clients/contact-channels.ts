@@ -59,6 +59,15 @@ export const CONTACT_CHANNELS: ChannelDef[] = [
   { id: "chat", label: "Чат в Babun", color: "#5b6678", optional: true },
 ];
 
+/** Каналы, которые вообще имеет смысл ПРЕДЛАГАТЬ в настройках. Внутренний
+ *  чат исключён, пока каналы сообщений не подключены: тумблер, который ни на
+ *  что не влияет, — тот же мёртвый контрол, что и сама строка «Чат». */
+export function offeredChannels(): ChannelDef[] {
+  return CONTACT_CHANNELS.filter(
+    (c) => c.id !== "chat" || isMessagingReady(),
+  );
+}
+
 const DEFAULT_ENABLED: ChannelId[] = [
   "call",
   "whatsapp",

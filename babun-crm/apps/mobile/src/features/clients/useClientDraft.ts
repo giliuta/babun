@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
+import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
 import { useCreateClient } from "@/features/clients/queries";
 import {
   countryDialCode,
@@ -74,6 +75,30 @@ export function useClientDraft(active: boolean) {
     }
   };
 
+  /** Поиск клиента по каноническому номеру. Сеть — авторитет, но при её
+   *  отказе ищем в ОФЛАЙН-КЭШЕ: правило владельца «телефон уникален» не
+   *  должно отключаться вместе с сетью, когда весь список лежит в SQLite.
+   *  Тот же приём уже применён на экране чата. */
+  const findDuplicate = useCallback(async (key: string): Promise<Client | null> => {
+    if (!tenantId) return null;
+    try {
+      return (await findClientByPhoneE164(supabase, key, tenantId)) ?? null;
+    } catch {
+      try {
+        const cached = await listClientsCached(supabase, tenantId);
+        return (
+          cached.find(
+            (c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key,
+          ) ?? null
+        );
+      } catch {
+        // Ни сети, ни кэша — создать разрешаем, финальный арбитр всё равно
+        // UNIQUE-индекс в базе (23505 обрабатывается ниже).
+        return null;
+      }
+    }
+  }, [tenantId]);
+
   const sequence = useRef(0);
   // Засов «идёт создание» — синхронный, в отличие от create.isPending.
   const savingRef = useRef(false);
@@ -85,15 +110,11 @@ export function useClientDraft(active: boolean) {
       return;
     }
     const timer = setTimeout(async () => {
-      try {
-        const existing = await findClientByPhoneE164(supabase, e164, tenantId);
-        if (sequence.current === currentSequence) setDuplicate(existing ?? null);
-      } catch {
-        if (sequence.current === currentSequence) setDuplicate(null);
-      }
+      const existing = await findDuplicate(e164);
+      if (sequence.current === currentSequence) setDuplicate(existing);
     }, 350);
     return () => clearTimeout(timer);
-  }, [active, e164, tenantId]);
+  }, [active, e164, tenantId, findDuplicate]);
 
   const isDirty = useMemo(() => {
     if (!active) return false;
@@ -146,16 +167,12 @@ export function useClientDraft(active: boolean) {
 
     // Дебаунс мог не успеть к быстрому тапу — перепроверяем перед записью.
     if (e164 && !duplicate && tenantId) {
-      try {
-        const existing = await findClientByPhoneE164(supabase, e164, tenantId);
-        if (existing) {
-          haptics.warning();
-          setDuplicate(existing);
-          savingRef.current = false;
-          return null;
-        }
-      } catch {
-        // Офлайн — создание разрешаем, финальный арбитр всё равно БД.
+      const existing = await findDuplicate(e164);
+      if (existing) {
+        haptics.warning();
+        setDuplicate(existing);
+        savingRef.current = false;
+        return null;
       }
     }
     // Дубль уже найден дебаунсом — создать нельзя. Раньше второй тап
@@ -188,15 +205,11 @@ export function useClientDraft(active: boolean) {
       if (isPhoneTakenError(error)) {
         haptics.warning();
         if (e164 && tenantId) {
-          try {
-            const existing = await findClientByPhoneE164(supabase, e164, tenantId);
-            if (existing) {
-              setDuplicate(existing);
-              savingRef.current = false;
-              return null;
-            }
-          } catch {
-            // Показать карточку не вышло — обойдёмся текстом ниже.
+          const existing = await findDuplicate(e164);
+          if (existing) {
+            setDuplicate(existing);
+            savingRef.current = false;
+            return null;
           }
         }
         setCreateError("Клиент с таким номером уже есть");

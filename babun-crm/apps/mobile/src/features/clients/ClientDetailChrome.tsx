@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from "react-native";
+import { Keyboard, Pressable, Text, View } from "react-native";
 import { ChevronLeft, MoreHorizontal } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 
@@ -38,6 +38,13 @@ export function ClientDetailChrome({
   onArchive,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
+  // Кнопки хедера живут ВЫШЕ прокрутки с полями и фокус у поля не забирают:
+  // без явного снятия клавиатуры набранное в открытом поле не успевало
+  // закоммититься ни по «Готово», ни по «Назад».
+  const withCommit = (run: () => void) => () => {
+    Keyboard.dismiss();
+    run();
+  };
   return (
     <>
       <View
@@ -45,7 +52,7 @@ export function ClientDetailChrome({
         style={{ borderColor: t.separator }}
       >
         <Pressable
-          onPress={onBack}
+          onPress={withCommit(onBack)}
           disabled={saving}
           className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
           accessibilityRole="button"
@@ -60,7 +67,7 @@ export function ClientDetailChrome({
         </Text>
         {draft ? (
           <Pressable
-            onPress={onSave}
+            onPress={withCommit(onSave)}
             disabled={!canSave || saving}
             accessibilityRole="button"
             accessibilityLabel="Готово — сохранить клиента"

@@ -16,6 +16,7 @@ import type {
   UnitDue,
 } from "@babun/shared/local/selectors/service-due";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import { todayYMD } from "@/features/clients/filter";
 import { Card } from "@/components/ui/Card";
 import { useThemeColors } from "@/theme/colors";
 
@@ -44,8 +45,17 @@ export default function ServiceBlock({
 
   if (dueCount === 0 && serviceDue.onSchedule.length === 0) return null;
 
-  const onBook = (locationId: string) =>
-    book(client, { locationId, teamId: stats?.lastTeamId ?? null });
+  // Дату плана передаём ТОЛЬКО если она в будущем. У просроченных юнитов
+  // due.nextDate лежит в ПРОШЛОМ (база + интервал уже наступили), а просрочка
+  // рисуется первой — самый частый тап открывал бы запись на прошедшем дне,
+  // то есть ровно ту жалобу «перекидывает непонятно на какой день». Без даты
+  // экран записи открывается на сегодня.
+  const onBook = (locationId: string, planned?: string) =>
+    book(client, {
+      locationId,
+      teamId: stats?.lastTeamId ?? null,
+      date: planned && planned > todayYMD() ? planned : null,
+    });
 
   const Row = ({ u, kind }: { u: UnitDue; kind: "over" | "soon" }) => {
     const tone = kind === "over" ? t.danger : t.warning;
@@ -68,7 +78,7 @@ export default function ServiceBlock({
             : `через ${u.due.daysUntil} дн`}
         </Text>
         <Pressable
-          onPress={() => onBook(u.locationId)}
+          onPress={() => onBook(u.locationId, u.due.nextDate)}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={`Записать ТО: ${u.unitLabel}`}

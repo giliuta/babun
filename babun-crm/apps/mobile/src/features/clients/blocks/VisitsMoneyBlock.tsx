@@ -74,10 +74,17 @@ export default function VisitsMoneyBlock({
   const totalDebt = debtApts.reduce((n, a) => n + getDebtAmount(a), 0);
   const oldestDebt = debtApts[0] ?? null;
 
+  // Ключ ДАТА+ВРЕМЯ: при двух визитах в один день сортировка только по дате
+  // оставляла порядок исходного массива, и «прошлым» показывался произвольный
+  // из них.
   const lastVisit = useMemo(() => {
-    const done = appointments
+    const done = [...appointments]
       .filter((a) => a.status === "completed")
-      .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+      .sort((a, b) =>
+        `${b.date}${b.time_start ?? ""}`.localeCompare(
+          `${a.date}${a.time_start ?? ""}`,
+        ),
+      );
     return done[0] ?? null;
   }, [appointments]);
 
@@ -156,14 +163,3 @@ export default function VisitsMoneyBlock({
     </RowGroup>
   );
 }
-
-/** Долг клиента по визитам — для читателей вне блока (карточка/список).
- *  Оставлен здесь, чтобы формула жила рядом с действием, которое её
- *  закрывает. */
-export function visitsDebt(appointments: Appointment[]): number {
-  return appointments.reduce((n, a) => n + getDebtAmount(a), 0);
-}
-
-/** Совместимость: `stats.debt` уже считает то же самое; экспорт нужен
- *  только чтобы будущий читатель не заводил шестую копию формулы. */
-export type { ClientStats };

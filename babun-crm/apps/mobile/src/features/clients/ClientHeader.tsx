@@ -93,24 +93,32 @@ export default function ClientHeader({
   // номер» раньше сразу писал в базу пустую запись, и у клиента навсегда
   // оставалась строка «WHATSAPP — Номер», в которую никто не дописал номер.
   // Пустое поле не является номером, и в данных его быть не должно.
-  const [pending, setPending] = useState<{ label: string } | null>(null);
+  // Новый номер: id решается СРАЗУ (на тапе «+ Добавить номер»), но в данные
+  // ничего не пишется, пока нет первой цифры. Строка при этом не подменяется
+  // другой — иначе набор прерывался бы на середине, а запись создавалась бы
+  // на каждый символ.
+  const [pending, setPending] = useState<{ label: string; id: string } | null>(
+    null,
+  );
 
   const addPhone = () => {
     haptics.tap();
-    setPending({ label: nextExtraLabel(extras) });
+    setPending({ label: nextExtraLabel(extras), id: randomUuid() });
   };
-  /** Уход из пустого нового поля просто убирает его — записывать нечего. */
+  /** Новый номер становится записью, как только в нём появилась ПЕРВАЯ цифра.
+   *  Раньше это происходило только по blur — и в черновике «Готово» читало
+   *  объект без набранного номера, а на карточке уход по «Назад» терял его.
+   *  Пустое поле записью не становится вовсе. */
   const commitPending = (raw: string) => {
     const value = raw.trim();
-    if (!pending || !/\d/.test(value)) {
-      setPending(null);
-      return;
-    }
-    void phones.apply((all) => [
-      ...all,
-      { id: randomUuid(), number: value, label: pending.label },
-    ]);
-    setPending(null);
+    if (!pending) return;
+    const { id, label } = pending;
+    void phones.apply((all) => {
+      const rest = all.filter((p) => p.id !== id);
+      // Пустое поле записью не становится, а уже созданную стирает: строки
+      // «WHATSAPP — Номер» без номера в данных быть не должно.
+      return /\d/.test(value) ? [...rest, { id, number: value, label }] : rest;
+    });
   };
   const patchPhone = (id: string, patch: Partial<PhoneEntry>) =>
     void phones.apply((all) =>
@@ -138,7 +146,9 @@ export default function ClientHeader({
   const trustSegments = (
     stats
       ? [
-          stats.visits > 0 ? `${stats.visits} ${visitsWord(stats.visits)}` : null,
+          stats.visits > 0
+            ? `${stats.visits} ${visitsWord(stats.visits)}`
+            : null,
           stats.totalSpent > 0 ? formatEUR(stats.totalSpent) : null,
           stats.lastVisitDate
             ? `был ${formatShortDateRu(stats.lastVisitDate)}`
@@ -234,45 +244,51 @@ export default function ClientHeader({
 
       {/* Дополнительные номера — здесь же, у основного: муж/жена, рабочий,
           WhatsApp на другом номере. Ярлык переключается тапом. */}
-      {extras.map((p) => (
-        <FieldRow
-          key={p.id}
-          label={p.label || "Другой"}
-          value={p.number}
-          placeholder="Номер"
-          separated
-          keyboardType="phone-pad"
-          tabular
-          // Тот же вид, что у основного номера: ярлык сверху, номер по
-          // ЛЕВОМУ краю (владелец 2026-07-26: «когда я напишу второй номер,
-          // она с правой стороны пишет, хотя номер должен быть с левой»).
-          stacked
-          onLabelPress={() => cyclePhoneLabel(p)}
-          onSave={(v) => patchPhone(p.id, { number: v })}
-          trailing={
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-            >
-              {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
-                  номера, а не клиента. */}
-              <PhoneChannelButton number={p.number} label={p.label} />
-              <Pressable
-                onPress={() => removePhone(p.id)}
-                accessibilityRole="button"
-                accessibilityLabel={`Убрать номер ${p.label}`}
-                hitSlop={10}
-                style={({ pressed }) => ({
-                  width: 28,
-                  alignItems: "center",
-                  opacity: pressed ? 0.5 : 1,
-                })}
+      {extras
+        .filter((p) => p.id !== pending?.id)
+        .map((p) => (
+          <FieldRow
+            key={p.id}
+            label={p.label || "Другой"}
+            value={p.number}
+            placeholder="Номер"
+            separated
+            keyboardType="phone-pad"
+            tabular
+            // Тот же вид, что у основного номера: ярлык сверху, номер по
+            // ЛЕВОМУ краю (владелец 2026-07-26: «когда я напишу второй номер,
+            // она с правой стороны пишет, хотя номер должен быть с левой»).
+            stacked
+            // В ЧЕРНОВИКЕ — live: «Готово» читает черновик из замыкания, и
+            // коммит по blur до него не долетал — второй номер просто не
+            // сохранялся вместе с клиентом.
+            live={!!draft}
+            onLabelPress={() => cyclePhoneLabel(p)}
+            onSave={(v) => patchPhone(p.id, { number: v })}
+            trailing={
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
               >
-                <X color={t.faint} size={16} strokeWidth={2.4} />
-              </Pressable>
-            </View>
-          }
-        />
-      ))}
+                {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
+                  номера, а не клиента. */}
+                <PhoneChannelButton number={p.number} label={p.label} />
+                <Pressable
+                  onPress={() => removePhone(p.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Убрать номер ${p.label}`}
+                  hitSlop={10}
+                  style={({ pressed }) => ({
+                    width: 28,
+                    alignItems: "center",
+                    opacity: pressed ? 0.5 : 1,
+                  })}
+                >
+                  <X color={t.faint} size={16} strokeWidth={2.4} />
+                </Pressable>
+              </View>
+            }
+          />
+        ))}
 
       {/* Новый номер: то же поле, но ещё не в данных. Пустым уйдёт — исчезнет
           без следа, с цифрами — станет обычной строкой номера. */}
@@ -286,10 +302,19 @@ export default function ClientHeader({
           tabular
           stacked
           autoFocus
+          live
           onSave={commitPending}
+          // Правка закончилась — номер уже в данных, и строка становится
+          // обычной строкой-номером (с переключением подписи).
+          onEditEnd={() => setPending(null)}
           trailing={
             <Pressable
-              onPress={() => setPending(null)}
+              onPress={() => {
+                void phones.apply((all) =>
+                  all.filter((x) => x.id !== pending.id),
+                );
+                setPending(null);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Отменить добавление номера"
               hitSlop={10}

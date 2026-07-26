@@ -24,7 +24,7 @@ import {
   useCardFields,
 } from "@/features/clients/card-prefs";
 import {
-  CONTACT_CHANNELS,
+  offeredChannels,
   useEnabledChannels,
   useToggleChannel,
 } from "@/features/clients/contact-channels";
@@ -179,7 +179,7 @@ export default function ClientsSettingsScreen() {
             tile="#1F7A44"
             icon={MessageCircle}
             title="Способы связи"
-            sub={CONTACT_CHANNELS.filter((c) => channels.includes(c.id))
+            sub={offeredChannels().filter((c) => channels.includes(c.id))
               .map((c) => c.label)
               .join(" · ")}
             onPress={() => setChannelsOpen(true)}
@@ -262,7 +262,7 @@ export default function ClientsSettingsScreen() {
               backgroundColor: t.rowFill,
             }}
           >
-            {CONTACT_CHANNELS.map((c, i) => {
+            {offeredChannels().map((c, i) => {
               const on = channels.includes(c.id);
               return (
                 <Pressable

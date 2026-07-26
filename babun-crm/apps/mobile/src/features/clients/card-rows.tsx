@@ -73,6 +73,7 @@ export function FieldRow({
   stacked,
   trailing,
   onLabelPress,
+  onEditEnd,
   onSave,
 }: {
   label: string;
@@ -95,6 +96,9 @@ export function FieldRow({
   trailing?: ReactNode;
   /** Ярлык тоже редактируем (доп. номера: «Жена», «Рабочий»). */
   onLabelPress?: () => void;
+  /** Правка завершена (blur / Return / уход строки). Вызывающая сторона
+   *  использует это, чтобы снять своё локальное состояние. */
+  onEditEnd?: () => void;
   onSave: (v: string) => void;
 }) {
   const t = useThemeColors();
@@ -120,12 +124,13 @@ export function FieldRow({
   // строки. Раньше коммит был только в onBlur, а кнопки «Готово» и «Назад»
   // живут вне прокрутки и фокус не снимают — уход с экрана с открытой
   // клавиатурой стирал всё набранное.
-  const latest = useRef({ text, value, live: !!live, onSave });
-  latest.current = { text, value, live: !!live, onSave };
+  const latest = useRef({ text, value, live: !!live, onSave, onEditEnd });
+  latest.current = { text, value, live: !!live, onSave, onEditEnd };
   const commit = () => {
     setEditing(false);
     const cur = latest.current;
     if (!cur.live && cur.text.trim() !== cur.value) cur.onSave(cur.text.trim());
+    cur.onEditEnd?.();
   };
   useEffect(
     () => () => {
@@ -151,7 +156,20 @@ export function FieldRow({
           borderTopColor: t.separator,
         }}
       >
-        <View style={{ flex: 1 }}>
+        {/* Нажимается ВСЯ левая колонка, а не только текст значения: строка
+            60pt, а правка открывалась лишь прицельным попаданием в буквы —
+            капс-ярлык и пустота справа от короткого значения были мёртвыми,
+            хотя правка поля — самое частое действие на странице. Хвост
+            (кнопка связи, ✕) остаётся СНАРУЖИ: вложенный в нажимаемую
+            область он склеивается со строкой для VoiceOver. */}
+        <Pressable
+          onPress={editingNow ? undefined : () => setEditing(true)}
+          disabled={editingNow}
+          accessibilityRole={editingNow ? "none" : "button"}
+          accessibilityLabel={value ? `${label}: ${value}` : label}
+          accessibilityHint={editingNow ? undefined : "Нажмите, чтобы изменить"}
+          style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
+        >
           {/* Ярлык бывает редактируемым (подпись доп. номера: «Второй»,
               «Супруг(а)») — тогда он нажимается и здесь, иначе перевод
               строки на левое выравнивание отобрал бы смену подписи. */}
@@ -229,29 +247,20 @@ export function FieldRow({
               }}
             />
           ) : (
-            <Pressable
-              onPress={() => setEditing(true)}
-              accessibilityRole="button"
-              accessibilityLabel={value ? `${label}: ${value}` : label}
-              accessibilityHint="Нажмите, чтобы изменить"
-              hitSlop={{ top: 8, bottom: 8, right: 20 }}
-              style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={multiline ? 3 : 1}
+              style={{
+                fontSize: valueSize,
+                fontWeight: "600",
+                color: value ? (valueColor ?? t.ink) : t.faint,
+                fontVariant: tabular ? ["tabular-nums"] : undefined,
+              }}
             >
-              <Text
-                maxFontSizeMultiplier={1.2}
-                numberOfLines={multiline ? 3 : 1}
-                style={{
-                  fontSize: valueSize,
-                  fontWeight: "600",
-                  color: value ? (valueColor ?? t.ink) : t.faint,
-                  fontVariant: tabular ? ["tabular-nums"] : undefined,
-                }}
-              >
-                {value || placeholder}
-              </Text>
-            </Pressable>
+              {value || placeholder}
+            </Text>
           )}
-        </View>
+        </Pressable>
         {trailing}
       </View>
     );
