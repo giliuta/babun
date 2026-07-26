@@ -19,7 +19,13 @@ import { PERIOD_LABELS, type Period } from "@/features/finances/period";
 
 // ── Sort ───────────────────────────────────────────────────────────
 
-export type SortKey = "recent" | "stale" | "debt" | "revenue" | "name";
+export type SortKey =
+  | "recent"
+  | "stale"
+  | "debt"
+  | "revenue"
+  | "expected"
+  | "name";
 
 /** ЗАКОН СОРТИРОВКИ (владелец + арбитраж 2026-07-25): сортируем только по
  *  тому числу, которое НАПЕЧАТАНО в карточке списка, а подпись описывает
@@ -36,6 +42,10 @@ export const SORT_LABELS_LONG: Record<SortKey, string> = {
   // стороны у денег не бывает, поэтому направление в подписи не нужно.
   debt: "Долг",
   revenue: "Доход",
+  // Третье число карточки наконец стало осью: «Период: следующая неделя»
+  // + эта ось = самые дорогие предстоящие работы сверху. Подпись НЕ
+  // обещает «за период» — expectedRevenue суммирует все будущие записи.
+  expected: "Ожидается",
   name: "Имя (А–Я)",
 };
 
@@ -44,6 +54,7 @@ export const SORT_ORDER: SortKey[] = [
   "stale",
   "debt",
   "revenue",
+  "expected",
   "name",
 ];
 
@@ -51,7 +62,7 @@ export const SORT_ORDER: SortKey[] = [
  *  · алфавит. */
 export const SORT_BLOCKS: SortKey[][] = [
   ["recent", "stale"],
-  ["debt", "revenue"],
+  ["debt", "revenue", "expected"],
   ["name"],
 ];
 
@@ -100,6 +111,9 @@ export function sortClients(
     } else if (sort === "revenue") {
       num = s?.totalSpent ?? 0;
       has = num > 0 ? 1 : 0;
+    } else if (sort === "expected") {
+      num = s?.expectedRevenue ?? 0;
+      has = num > 0 ? 1 : 0;
     } else {
       // Имя — тоже ось: безымянный клиент не имеет значения и уходит в
       // хвост, а не встаёт первым в «Имя (А–Я)».
@@ -117,7 +131,11 @@ export function sortClients(
         if (a.str !== b.str) return a.str < b.str ? 1 : -1;
       } else if (sort === "stale") {
         if (a.str !== b.str) return a.str < b.str ? -1 : 1;
-      } else if (sort === "debt" || sort === "revenue") {
+      } else if (
+        sort === "debt" ||
+        sort === "revenue" ||
+        sort === "expected"
+      ) {
         if (a.num !== b.num) return b.num - a.num;
       } else {
         const n = collator.compare(a.c.full_name, b.c.full_name);
@@ -141,9 +159,11 @@ export function sortClients(
 export type Segment =
   | "all"
   | "debt"
+  | "debtNoUpcoming"
   | "noUpcoming"
   | "reminderDue"
   | "silent"
+  | "neverCame"
   | "birthday"
   | "new"
   | "loyal"
@@ -156,8 +176,8 @@ export type SegmentKey = Exclude<Segment, "all">;
  *  подписей): «дела» диспетчера на постоянных местах · «портрет» клиента.
  *  Все ряды видны всегда; при нуле — пригашены. */
 export const SEGMENT_BLOCKS: SegmentKey[][] = [
-  ["debt", "noUpcoming", "reminderDue"],
-  ["silent", "birthday", "new", "loyal", "blacklist"],
+  ["debt", "debtNoUpcoming", "noUpcoming", "reminderDue"],
+  ["silent", "neverCame", "birthday", "new", "loyal", "blacklist"],
 ];
 
 /** Порядок (деньги/действие вперёд) + RU-подписи. ЗАКОН ПОДПИСИ
@@ -171,9 +191,18 @@ export const SEGMENT_BLOCKS: SegmentKey[][] = [
  *  «Недавно добавлены» (заведён < 30 дней назад, а не «был один раз»). */
 export const SEGMENT_OPTIONS: { key: SegmentKey; label: string }[] = [
   { key: "debt", label: "Должники" },
+  // «Долг, не записан» — пересечь «Должники» × «Пора дозаписать» нельзя:
+  // внутри фасета семантика ИЛИ. Отдельный ряд закрывает главный
+  // денежный список: должен и больше не придёт.
+  { key: "debtNoUpcoming", label: "Долг, не записан" },
   { key: "noUpcoming", label: "Пора дозаписать" },
   { key: "reminderDue", label: "Пора напомнить" },
   { key: "silent", label: "Давно не были" },
+  // Дыра, которую не закрывало НИ ОДНО сочетание фильтров: заведён
+  // давно, ни одного визита и не записан — оплаченный рекламой лид,
+  // невидимый в CRM («Пора дозаписать» требует visits>0, «Недавно
+  // добавлены» — моложе 30 дней).
+  { key: "neverCame", label: "Так и не приехали" },
   { key: "birthday", label: "Скоро день рождения" },
   { key: "new", label: "Недавно добавлены" },
   { key: "loyal", label: "Постоянные" },
@@ -208,9 +237,19 @@ export function matchesSegment(
       // Тот же долг, что печатается в карточке и сортирует ось «Долг» —
       // одна формула на все три места.
       return clientDebt(c, s) > 0;
+    case "debtNoUpcoming":
+      // «Долг, не записан»: должен и не придёт — деньги уходят.
+      return clientDebt(c, s) > 0 && (s?.nextApt ?? null) === null;
     case "noUpcoming":
       // «Пора дозаписать»: был визит, но следующего нет (реактивация).
       return (s?.visits ?? 0) > 0 && (s?.nextApt ?? null) === null;
+    case "neverCame":
+      // «Так и не приехали»: заведён давно, визитов нет, не записан.
+      return (
+        (s?.visits ?? 0) === 0 &&
+        (s?.nextApt ?? null) === null &&
+        (s?.ageDays ?? 0) >= NEW_DAYS
+      );
     case "reminderDue":
       // Напоминание, поставленное руками, уже сработало (сегодня/прошло).
       // reminder_at приходит из БД как timestamptz («2026-07-24T…») после

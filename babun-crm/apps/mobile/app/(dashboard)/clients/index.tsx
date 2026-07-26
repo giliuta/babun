@@ -15,6 +15,7 @@ import ReanimatedSwipeable, {
 } from "react-native-gesture-handler/ReanimatedSwipeable";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  Ban,
   BarChart3,
   Bell,
   Check,
@@ -54,10 +55,15 @@ import {
   clientDebt,
   EMPTY_FILTER,
   resetFilters,
+  SORT_LABELS_LONG,
   type ActiveToken,
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
+import {
+  loadDayFilter,
+  saveDayFilter,
+} from "@/features/clients/filter-pref";
 import {
   useClientsSort,
   useSetClientsSort,
@@ -229,6 +235,7 @@ function ClientRow({
   const a11yLabel = [
     client.full_name || "Без имени",
     client.pinned_at ? "закреплён" : "",
+    client.blacklisted ? "чёрный список" : "",
     cardFields.debt && debt > 0 ? `долг ${formatEUR(debt)}` : "",
     cardFields.inc && income > 0 ? `доход ${formatEUR(income)}` : "",
     cardFields.exp && exp > 0 ? `ожидается ${formatEUR(exp)}` : "",
@@ -300,6 +307,12 @@ function ClientRow({
           <View className="flex-row items-center gap-1.5">
             {client.pinned_at ? (
               <Pin color={t.accent} size={12} strokeWidth={2.5} />
+            ) : null}
+            {/* Чёрный список: в списке забаненный клиент был НЕОТЛИЧИМ от
+                обычного (маркер жил только на карточке) — мастер мог
+                позвонить и записать того, кого владелец занёс. */}
+            {client.blacklisted ? (
+              <Ban color={t.danger} size={12} strokeWidth={2.5} />
             ) : null}
             <Text
               maxFontSizeMultiplier={1.3}
@@ -476,7 +489,14 @@ export default function ClientsListScreen() {
   const archiveClients = useArchiveClients();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<ClientsFilter>(EMPTY_FILTER);
+  // Набор живёт до конца дня: звонок/SMS выбрасывают из приложения, и
+  // собирать шесть условий заново каждый круг обзвона — потеря времени.
+  const [filter, setFilter] = useState<ClientsFilter>(
+    () => loadDayFilter() ?? EMPTY_FILTER,
+  );
+  useEffect(() => {
+    saveDayFilter(filter);
+  }, [filter]);
   const [sheetOpen, setSheetOpen] = useState(false);
   // С какого измерения открыть лист (тап по телу токена в баре).
   const [initialFacet, setInitialFacet] = useState<
@@ -883,6 +903,7 @@ export default function ClientsListScreen() {
           foundCount={result.filtered.length}
           activeCount={result.activeCount}
           tokens={result.activeTokens}
+          sortNote={sort === "recent" ? null : SORT_LABELS_LONG[sort]}
           onOpen={() => {
             setInitialFacet(null);
             setSheetOpen(true);

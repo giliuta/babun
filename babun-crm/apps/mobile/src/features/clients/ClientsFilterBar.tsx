@@ -23,6 +23,7 @@ export function ClientsFilterBar({
   foundCount,
   activeCount,
   tokens,
+  sortNote,
   onOpen,
   onOpenToken,
   onRemoveToken,
@@ -35,6 +36,10 @@ export function ClientsFilterBar({
   /** Число активных значений фильтра (бейдж). */
   activeCount: number;
   tokens: ActiveToken[];
+  /** Имя оси сортировки — печатается ТОЛЬКО когда она не по умолчанию:
+   *  ось персистентна, и молчаливый «верх списка» уводил обзвон не по тем
+   *  людям («вчера сортировал по долгу — сегодня читаю как свежих»). */
+  sortNote?: string | null;
   onOpen: () => void;
   /** Тап по телу токена — открыть лист сразу на его измерении. */
   onOpenToken: (token: ActiveToken) => void;
@@ -49,9 +54,10 @@ export function ClientsFilterBar({
   // Одна формула на оба состояния — счётчик не должен звучать по-разному
   // в зависимости от того, включён ли фильтр.
   const countLine =
-    foundCount < totalCount
+    (foundCount < totalCount
       ? `Найдено ${foundCount} из ${totalCount}`
-      : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`;
+      : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`) +
+    (sortNote ? ` · ${sortNote}` : "");
 
   return (
     <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
