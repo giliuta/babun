@@ -97,7 +97,9 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
           onChangeText={setText}
           onSubmitEditing={() => void submit()}
           returnKeyType="done"
-          placeholder="Звонок, встреча, наблюдение"
+          // Подсказки-инструкции внутри поля владелец убрал: ярлык строки и
+          // так говорит, что это заметка.
+          placeholder=""
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
           keyboardAppearance="light"

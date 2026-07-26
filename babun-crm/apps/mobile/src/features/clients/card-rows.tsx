@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronRight, type LucideIcon } from "lucide-react-native";
+import { Chip } from "@/components/ui/Chip";
 import { sanitizePhoneInput } from "@/features/clients/phone";
 import { useThemeColors } from "@/theme/colors";
 
@@ -73,6 +74,7 @@ export function FieldRow({
   stacked,
   trailing,
   onLabelPress,
+  addLabel,
   onEditEnd,
   onSave,
 }: {
@@ -96,6 +98,11 @@ export function FieldRow({
   trailing?: ReactNode;
   /** Ярлык тоже редактируем (доп. номера: «Жена», «Рабочий»). */
   onLabelPress?: () => void;
+  /** Что показать вместо ПОДСКАЗКИ, когда значения нет: «Добавить».
+   *  Владелец 2026-07-27: «убери подсказки внутри — есть чёткое добавление».
+   *  Инструкция в поле («Домофон 25, зелёная дверь…») читалась как введённый
+   *  текст и объясняла то, что и так понятно из ярлыка строки. */
+  addLabel?: string;
   /** Правка завершена (blur / Return / уход строки). Вызывающая сторона
    *  использует это, чтобы снять своё локальное состояние. */
   onEditEnd?: () => void;
@@ -234,8 +241,11 @@ export function FieldRow({
               // «Готово»/«Назад» живут ВНЕ прокрутки и поле не разфокусируют:
               // без коммита на размонтировании набранное уезжало с экраном.
               blurOnSubmit={!multiline}
-              placeholder={placeholder}
-              placeholderTextColor={t.placeholder}
+              // Пустое поле предлагает ДЕЙСТВИЕ («Добавить»), а не инструкцию:
+              // в режиме создания поле открыто для ввода, и без этого строка
+              // выглядела просто пустой.
+              placeholder={addLabel ?? placeholder}
+              placeholderTextColor={addLabel ? t.accent : t.placeholder}
               selectionColor={t.accent}
               keyboardAppearance="light"
               keyboardType={keyboardType}
@@ -257,11 +267,15 @@ export function FieldRow({
               style={{
                 fontSize: valueSize,
                 fontWeight: "600",
-                color: value ? (valueColor ?? t.ink) : t.faint,
+                color: value
+                  ? (valueColor ?? t.ink)
+                  : addLabel
+                    ? t.accent
+                    : t.faint,
                 fontVariant: tabular ? ["tabular-nums"] : undefined,
               }}
             >
-              {value || placeholder}
+              {value || addLabel || placeholder}
             </Text>
           )}
         </Pressable>
@@ -572,6 +586,109 @@ export function ActionRow({
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Строка ВЫБОРА КНОПКАМИ: капс-ярлык и готовые значения пилюлями + «+», чтобы
+ *  создать своё прямо здесь (владелец 2026-07-27: «тип объекта я выбираю
+ *  кнопками, чтоб там уже были готовые кнопки и кнопка плюс — типа добавить
+ *  своё, сразу можно будет создавать»).
+ *
+ *  Почему не лист снизу и не текстовое поле: значений три-пять и они короткие,
+ *  поэтому выбор — ОДИН тап без экрана поверх экрана. «+» превращается в поле
+ *  ввода на месте: новое значение сразу становится выбранным. */
+export function ChoiceRow({
+  label,
+  options,
+  value,
+  separated,
+  addPlaceholder,
+  onSelect,
+}: {
+  label: string;
+  options: readonly string[];
+  value: string;
+  separated?: boolean;
+  /** Подпись поля, когда создают своё значение. */
+  addPlaceholder?: string;
+  onSelect: (v: string) => void;
+}) {
+  const t = useThemeColors();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  const commit = () => {
+    const next = draft.trim();
+    setAdding(false);
+    setDraft("");
+    if (next) onSelect(next);
+  };
+
+  return (
+    <View
+      style={{
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        gap: 8,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+      }}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{
+          fontSize: 11,
+          fontWeight: "700",
+          letterSpacing: 1.2,
+          textTransform: "uppercase",
+          color: t.faint,
+        }}
+      >
+        {label}
+      </Text>
+
+      {adding ? (
+        <TextInput
+          autoFocus
+          value={draft}
+          onChangeText={setDraft}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          returnKeyType="done"
+          placeholder={addPlaceholder}
+          placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
+          keyboardAppearance="light"
+          accessibilityLabel={`Новый ${label.toLowerCase()}`}
+          maxLength={40}
+          maxFontSizeMultiplier={1.2}
+          style={{
+            padding: 0,
+            fontSize: 17,
+            fontWeight: "600",
+            color: t.ink,
+          }}
+        />
+      ) : (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {options.map((option) => (
+            <Chip
+              key={option}
+              label={option}
+              radio
+              selected={value.trim().toLowerCase() === option.trim().toLowerCase()}
+              onPress={() => onSelect(option)}
+            />
+          ))}
+          <Chip
+            label="+"
+            onPress={() => setAdding(true)}
+            accessibilityLabel={`Добавить свой ${label.toLowerCase()}`}
+          />
+        </View>
+      )}
+    </View>
   );
 }
 

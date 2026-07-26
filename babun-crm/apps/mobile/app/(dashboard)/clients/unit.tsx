@@ -241,7 +241,8 @@ export default function ClientUnitScreen() {
           <FieldRow
             label="Комната"
             value={shown.room}
-            placeholder="Спальня / Гостиная"
+            placeholder=""
+            addLabel="Добавить"
             stacked
             live={isNew}
             autoFocus={isNew}
@@ -256,7 +257,8 @@ export default function ClientUnitScreen() {
             // одной строкой, а разделение бренда и модели никто не заполнял.
             // Старая запись схлопывается при первой правке.
             value={[shown.brand, shown.model].filter(Boolean).join(" ")}
-            placeholder="Daikin FTXS35"
+            placeholder=""
+            addLabel="Добавить"
             stacked
             separated
             live={isNew}

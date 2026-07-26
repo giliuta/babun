@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { Tag } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { AC_TYPE_LABELS } from "@babun/shared/local/clients";
 import { serviceDueState } from "@babun/shared/local/equipment-sla";
@@ -12,9 +11,9 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import {
   ActionRow,
   AddRow,
+  ChoiceRow,
   FieldRow,
   NavRow,
-  RowActionButton,
   RowCaption,
   RowGroup,
 } from "@/features/clients/card-rows";
@@ -22,10 +21,14 @@ import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
-import { useClient, useUpdateClient } from "@/features/clients/queries";
+import { useClient, useClients, useUpdateClient } from "@/features/clients/queries";
+import {
+  defaultObjectType,
+  objectTypeVocabulary,
+  snapObjectType,
+} from "@/features/clients/object-types";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useLocationLabels } from "@/features/settings/local-settings";
-import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -84,6 +87,8 @@ export default function ClientObjectScreen() {
     [client, appointments],
   );
   const { data: labelPresets = [] } = useLocationLabels();
+  // Словарь типов строится по всем объектам бизнеса — список уже в кэше.
+  const { data: allClients = [] } = useClients();
   const guardedBook = useGuardedBookingNav();
 
   const update = async (patch: Partial<Client>) => {
@@ -105,10 +110,11 @@ export default function ClientObjectScreen() {
 
   // Что показываем и правим: черновик в создании, объект — в обычном режиме.
   const shown: Draft = isNew ? draft : (loc ?? EMPTY_DRAFT);
+  // Предзаполненный тип НЕ считается набранным: иначе уход с пустой формы
+  // спрашивал бы «Удалить черновик объекта?» на ровном месте.
   const draftDirty =
     isNew &&
-    (!!draft.label.trim() ||
-      !!draft.address.trim() ||
+    (!!draft.address.trim() ||
       !!draft.mapUrl?.trim() ||
       !!draft.note?.trim());
   const canSave =
@@ -134,7 +140,9 @@ export default function ClientObjectScreen() {
       const ready = withAddressFromLink(draft);
       const ok = await writer.addLocation({
         ...ready,
-        label: ready.label.trim() || "Объект",
+        // Раньше здесь стояло «Объект» — мусорное значение уезжало в базу и
+        // всплывало в фасете фильтра «Тип объекта».
+        label: ready.label.trim() || defaultType,
         address: ready.address.trim(),
         mapUrl: ready.mapUrl?.trim() || undefined,
         note: ready.note?.trim() || undefined,
@@ -155,20 +163,29 @@ export default function ClientObjectScreen() {
     void writer.patchLocation(loc.id, p);
   };
 
-  /** Стандартный набор, если в кабинете «Типы объектов» пусто: владелец
-   *  назвал его прямо — «дом, офис, вилла — это стандарт». */
-  const typeOptions =
-    labelPresets.length > 0
-      ? labelPresets.map((preset) => preset.name)
-      : ["Дом", "Офис", "Вилла"];
-
-  const pickLabel = async () => {
-    const picked = await chooseValue(
-      "Тип объекта",
-      typeOptions.map((name) => ({ value: name, label: name })),
-    );
-    if (picked?.value) patch({ label: picked.value });
-  };
+  // Словарь типов: сначала то, чем бизнес РЕАЛЬНО пользуется (по частоте),
+  // затем пресеты кабинета и стандартный набор. Текущее значение объекта
+  // показываем всегда, даже если оно больше нигде не встречается.
+  const typeOptions = useMemo(
+    () =>
+      objectTypeVocabulary(allClients, [
+        ...labelPresets.map((preset) => preset.name),
+        shown.label,
+      ]),
+    [allClients, labelPresets, shown.label],
+  );
+  // Обычный объект должен заводиться, НЕ КАСАЯСЬ этой строки: подставляем тип
+  // основного объекта того же клиента, иначе первый тип словаря, иначе «Дом».
+  const defaultType = useMemo(
+    () => defaultObjectType(client, typeOptions),
+    [client, typeOptions],
+  );
+  const typeSeeded = useRef(false);
+  useEffect(() => {
+    if (!isNew || typeSeeded.current || !defaultType) return;
+    typeSeeded.current = true;
+    setDraft((d) => (d.label.trim() ? d : { ...d, label: defaultType }));
+  }, [isNew, defaultType]);
 
   const confirmDelete = () => {
     if (!loc) return;
@@ -279,37 +296,30 @@ export default function ClientObjectScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <RowGroup>
-          {/* ТИП ОБЪЕКТА — он же метка (владелец 2026-07-26: «первая идёт как
-              метка, и это должен быть тип объекта; дом, офис, вилла — это
-              стандарт, и можно просто листать либо добавлять своё»).
-              Отдельной строки «Тип объекта» с зашитым перечислением больше
-              нет: два поля про одно и то же путали, а для SaaS словарь
-              принадлежит бизнесу — пресеты живут в кабинете. */}
-          <FieldRow
+          {/* ТИП ОБЪЕКТА — ГОТОВЫЕ КНОПКИ + «+» (владелец 2026-07-27: «тип
+              объекта я выбираю кнопками, чтоб там уже были готовые кнопки и
+              кнопка плюс — типа добавить своё, сразу можно будет создавать»).
+              Ни поля со свободным вводом, ни листа снизу: значений несколько,
+              они короткие, и выбор должен быть ОДНИМ тапом.
+              Словарь собирается из ФАКТИЧЕСКИХ объектов бизнеса (по частоте) +
+              стандартный набор: таблицы пресетов в базе нет, а типы у каждого
+              бизнеса свои. */}
+          <ChoiceRow
             label="Тип объекта"
+            options={typeOptions}
             value={shown.label}
-            placeholder="Дом / Офис / Вилла"
-            stacked
-            live={isNew}
-            onSave={(v) => patch({ label: v })}
-            trailing={
-              <RowActionButton
-                icon={Tag}
-                color={t.accent}
-                label="Выбрать тип объекта"
-                onPress={() => void pickLabel()}
-              />
-            }
+            addPlaceholder="Свой тип"
+            onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
           {/* АДРЕС И ССЫЛКА — ОДНО поле (владелец: «адрес — это и есть ссылка
-              на объект, ссылка на карту; адрес и ссылка по сути одно и то
-              же»). Поле принимает и текст, и присланный пин: маршрут ведёт по
-              тому, что введено, а ссылку открывает то приложение, которое её
-              понимает. */}
+              на объект, ссылка на карту; по сути одно и то же»). Принимает и
+              текст, и присланный пин. Пустое состояние — «Добавить», без
+              инструкции внутри поля. */}
           <FieldRow
             label="Адрес или ссылка"
             value={shown.address}
-            placeholder="Улица, дом, город — или ссылка на карту"
+            placeholder=""
+            addLabel="Добавить"
             stacked
             separated
             multiline
@@ -331,12 +341,12 @@ export default function ClientObjectScreen() {
             }
           />
           {/* «КАК ВОЙТИ» — это и есть заметка (владелец: «как войти — это и
-              есть заметка, просто заметка; в заметку можно вписать и сам
-              адрес»). */}
+              есть заметка, просто заметка»). */}
           <FieldRow
             label="Заметка"
             value={shown.note ?? ""}
-            placeholder="Домофон 25, зелёная дверь, собака во дворе"
+            placeholder=""
+            addLabel="Добавить"
             stacked
             separated
             multiline
