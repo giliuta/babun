@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useBookingNav } from "@/features/clients/card-booking";
 import {
   Archive,
   Calendar,
@@ -227,6 +228,7 @@ function DateSeparator({ label }: { label: string }) {
 export default function ChatThreadScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  const book = useBookingNav();
   const { id } = useLocalSearchParams<{ id: string }>();
   const chat = useChat(id);
   const { data: clients = [] } = useClients();
@@ -373,14 +375,14 @@ export default function ChatThreadScreen() {
     setReplyTo(null);
   };
 
-  // Next step of the «чат → клиент → запись» chain: the calendar's
-  // ?new= handler opens the appointment sheet at the nearest slot with
-  // the client prefilled (dashboard index.tsx:207).
-  const bookClient = (clientId?: string | null) =>
-    router.push({
-      pathname: "/",
-      params: { new: "1", ...(clientId ? { clientId } : {}) },
-    });
+  // «чат → клиент → запись». Раньше шло ЧЕРЕЗ таб «Календарь» (?new=1):
+  // человек видел вспышку чужого календаря, у него подменялись день и
+  // бригада, а после «Готово» он оставался в календаре, потеряв чат. Теперь
+  // экран записи открывается напрямую и возвращает в тот же диалог.
+  const bookClient = (clientId?: string | null) => {
+    if (!clientId) return;
+    book({ clientId });
+  };
 
   // ⋮ «Создать клиента» — web opens CreateClientModal prefilled with the
   // dialog contact (name always, phone only for whatsapp/sms — page.tsx:

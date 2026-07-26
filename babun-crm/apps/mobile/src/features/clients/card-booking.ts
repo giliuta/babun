@@ -29,6 +29,9 @@ export interface BookingTarget {
   /** YYYY-MM-DD, если дата известна («Записать» на дату ТО). Без неё
    *  экран записи открывается на СЕГОДНЯ по времени тенанта. */
   date?: string | null;
+  /** Повторное ТО: экран записи гасит напоминание только после
+   *  подтверждённой вставки заявки — иначе то же ТО осталось бы в «Пора». */
+  reminderId?: string | null;
 }
 
 /** Returns a stable-enough callback that opens the calendar pre-aimed at
@@ -39,7 +42,14 @@ export function useBookingNav(): (target: BookingTarget) => void {
   // «Новая запись» друг за другом, и второй приходилось закрывать вручную.
   // Снимается, когда экран записи закрылся (следующий тик после ухода).
   const busy = useRef(false);
-  return ({ clientId, locationId, teamId, serviceIds, date }: BookingTarget) => {
+  return ({
+    clientId,
+    locationId,
+    teamId,
+    serviceIds,
+    date,
+    reminderId,
+  }: BookingTarget) => {
     if (busy.current) return;
     busy.current = true;
     setTimeout(() => {
@@ -52,6 +62,7 @@ export function useBookingNav(): (target: BookingTarget) => void {
         ...(locationId ? { locationId } : {}),
         ...(teamId ? { teamId } : {}),
         ...(date ? { date } : {}),
+        ...(reminderId ? { reminderId } : {}),
         ...(serviceIds && serviceIds.length
           ? { services: serviceIds.join(",") }
           : {}),

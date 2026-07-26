@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useRouter } from "expo-router";
+import { useBookingNav } from "@/features/clients/card-booking";
 import { Check, Phone, Search, StickyNote, X } from "lucide-react-native";
 import {
   addMonthsYYYYMMDD,
@@ -80,7 +80,7 @@ export default function RecurringScreen() {
   const del = useDeleteReminder();
   const toast = useToast();
   const t = useThemeColors();
-  const router = useRouter();
+  const bookNav = useBookingNav();
 
   const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -130,24 +130,18 @@ export default function RecurringScreen() {
   // «Записать» — в календарь с предзаполненным клиентом/командой (веб шлёт
   // ?new=1&client_id=…; мобильный обработчик в (dashboard)/index.tsx читает
   // new/clientId/locationId/teamId).
+  // Экран записи открывается НАПРЯМУЮ, а не через таб «Календарь»: тот путь
+  // показывал вспышку чужого календаря, подменял день и активную бригаду и
+  // после «Готово» оставлял человека в календаре, а не в списке ТО.
   const book = (item: RecurringReminder) =>
-    router.push({
-      pathname: "/",
-      params: {
-        new: "1",
-        // Пустые значения не передаём: обработчик читает `?? null`, а пустая
-        // строка выглядела бы как «клиент с id ""».
-        ...(item.client_id ? { clientId: item.client_id } : {}),
-        ...(item.team_id ? { teamId: item.team_id } : {}),
-        // Дата ТО → черновик записи открывается сразу на нужный день
-        // (web parity: ?date= префиллит dateKey драфта).
-        ...(item.next_due_date ? { date: item.next_due_date } : {}),
-        // The booking screen marks this exact reminder as booked only after
-        // the appointment INSERT is server/offline-queue confirmed. Keeping
-        // the id through the calendar forwarding route prevents the same ТО
-        // from remaining in «Пора» and being booked twice.
-        reminderId: item.id,
-      },
+    bookNav({
+      clientId: item.client_id ?? "",
+      teamId: item.team_id ?? null,
+      // Дата ТО → черновик записи открывается сразу на нужный день.
+      date: item.next_due_date ?? null,
+      // Напоминание гасится только после подтверждённой вставки заявки —
+      // иначе то же ТО осталось бы в «Пора» и его записали бы дважды.
+      reminderId: item.id,
     });
 
   const renderReminder = (item: RecurringReminder) => {

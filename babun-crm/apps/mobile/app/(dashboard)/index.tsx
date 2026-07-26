@@ -336,9 +336,20 @@ export default function CalendarTab() {
   const [teamChoice, setTeamChoice] = useState<string | null>(
     () => getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId ?? null,
   );
-  useEffect(() => {
-    getStorage().set(CAL_VIEW_KEY, { mode, teamId: teamChoice });
-  }, [mode, teamChoice]);
+  // ПЕРСИСТ ТОЛЬКО ПО ВОЛЕ ЧЕЛОВЕКА. Раньше вид и активная бригада писались
+  // в MMKV эффектом на ЛЮБОЕ изменение — включая переходы ПО ПАРАМЕТРАМ
+  // («Прошлый визит» с карточки, вход мастера, напоминание). Человек открывал
+  // один визит, а календарь навсегда переключался на «День» и на чужую
+  // бригаду. Теперь параметрический переход показывает нужное, но
+  // предпочтения не трогает.
+  const prefRef = useRef({ mode, teamId: teamChoice });
+  const rememberView = (next: { mode?: CalMode; teamId?: string | null }) => {
+    prefRef.current = { ...prefRef.current, ...next };
+    getStorage().set(CAL_VIEW_KEY, prefRef.current);
+  };
+  // Стабильная ссылка для колбэков с пустыми зависимостями.
+  const rememberViewRef = useRef(rememberView);
+  rememberViewRef.current = rememberView;
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
@@ -839,6 +850,7 @@ export default function CalendarTab() {
       {
         onSuccess: (team) => {
           setTeamChoice(team.id);
+          rememberView({ teamId: team.id });
           // Не роутим в настройки: человек только что попросил календарь —
           // он должен увидеть СВОЙ КАЛЕНДАРЬ, а не допрос про часы. Имя
           // предлагаем поменять действием в тосте, необязательным.
@@ -1233,6 +1245,7 @@ export default function CalendarTab() {
       setDay(startOfDay(now));
     }
     setMode(m);
+    rememberView({ mode: m });
   };
   const jumpToDate = (d: Date) => {
     setDay(startOfDay(d));
@@ -1265,6 +1278,7 @@ export default function CalendarTab() {
     haptics.tap();
     setDay(startOfDay(d));
     setMode("week");
+    rememberViewRef.current({ mode: "week" });
   }, []);
 
   // Буфер после каждой записи (дорога/уборка) — общий для компании: свойство
@@ -1397,6 +1411,7 @@ export default function CalendarTab() {
     haptics.tap();
     setDay(startOfDay(d));
     setMode("day");
+    rememberView({ mode: "day" });
   };
 
   // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
@@ -1468,7 +1483,14 @@ export default function CalendarTab() {
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
-      <TeamChips teams={teams} activeId={activeTeamId} onSelect={setTeamChoice} />
+      <TeamChips
+        teams={teams}
+        activeId={activeTeamId}
+        onSelect={(id) => {
+          setTeamChoice(id);
+          rememberView({ teamId: id });
+        }}
+      />
 
       {calendarLoading ? (
         // mode известен синхронно (MMKV) — скелет обязан обещать ту же
