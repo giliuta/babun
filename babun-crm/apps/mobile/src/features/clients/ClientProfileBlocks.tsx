@@ -4,10 +4,20 @@ import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
 import VisitsMoneyBlock from "@/features/clients/blocks/VisitsMoneyBlock";
 import AttachmentsBlock from "@/features/clients/blocks/AttachmentsBlock";
-import ContactsBlock from "@/features/clients/blocks/ContactsBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
-import { MetaBlock } from "@/features/clients/blocks/MetaBlock";
+import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
+
+/** Что уже заполнено «под капотом» — чтобы строка «Ещё» не была немой. */
+function extrasSummary(client: Client): string | null {
+  const parts = [
+    client.telegram_username?.trim() ? "Telegram" : null,
+    client.instagram_username?.trim() ? "Instagram" : null,
+    client.whatsapp_phone?.trim() ? "WhatsApp" : null,
+    client.email?.trim() ? "почта" : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
 
 interface ClientProfileBlocksProps {
   client: Client;
@@ -23,6 +33,8 @@ interface ClientProfileBlocksProps {
   onOpenObject: (locId: string) => void;
   /** В черновике: клиента уже можно сохранить, значит и объект можно завести. */
   canAddObject?: boolean;
+  /** Открыть «Ещё» — мессенджеры, почта, источник. */
+  onOpenExtras: () => void;
 }
 
 export function ClientProfileBlocks({
@@ -35,6 +47,7 @@ export function ClientProfileBlocks({
   update,
   onOpenObject,
   canAddObject,
+  onOpenExtras,
 }: ClientProfileBlocksProps) {
   return (
     <>
@@ -64,6 +77,7 @@ export function ClientProfileBlocks({
           нового клиента их нет по определению, и у сохранённого без визитов
           страница выглядит точно так же. */}
       <VisitsMoneyBlock
+        clientId={client.id}
         appointments={appointments}
         services={services}
         stats={stats}
@@ -72,12 +86,25 @@ export function ClientProfileBlocks({
           путь в хранилище строится по id клиента, которого ещё нет. Рисовать
           пригашенную кнопку «нельзя» = мёртвый контрол. */}
       {!draft ? <AttachmentsBlock clientId={client.id} /> : null}
-      <ContactsBlock client={client} update={update} draft={draft} />
-      <PersonalBlock client={client} update={update} draft={draft} />
-      {/* draft прокидывается ОБЯЗАТЕЛЬНО: без него блок писал «В базе с …» о
-          клиенте, которого ещё нет. */}
-      <MetaBlock client={client} update={update} tags={tags} draft={draft} />
+      <PersonalBlock client={client} update={update} tags={tags} />
       <NotesBlock client={client} update={update} />
+      {/* «Ещё» — мессенджеры, почта, источник. Владелец 2026-07-26: они
+          будут подтягиваться из чата сами, вписывать их каждый день никто не
+          будет, поэтому на карточке им не место — но вписать руками можно.
+          В черновике страницы ещё нет: она читает клиента по id. */}
+      {!draft ? (
+        <RowGroup>
+          <NavRow
+            label="Ещё"
+            value={extrasSummary(client)}
+            placeholder="мессенджеры, почта, источник"
+            onPress={onOpenExtras}
+          />
+        </RowGroup>
+      ) : null}
+      {client.blacklisted ? (
+        <RowCaption tone="danger" text="Клиент в чёрном списке." />
+      ) : null}
     </>
   );
 }

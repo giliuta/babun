@@ -485,6 +485,9 @@ export default function ClientDetailScreen() {
           update={update}
           onOpenObject={openObject}
           canAddObject={canSave}
+          onOpenExtras={() =>
+            router.push({ pathname: "/clients/extras", params: { clientId: id } })
+          }
         />
       </ScrollView>
       </KeyboardAvoidingView>

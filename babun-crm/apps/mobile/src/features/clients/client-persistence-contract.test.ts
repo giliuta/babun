@@ -70,13 +70,15 @@ describe("client native persistence contract", () => {
     assert.match(read("ClientHeader.tsx"), /useJsonArrayWriter/);
     // Теги и заметки — те же jsonb-массивы: собственных копий механики быть
     // не должно, иначе расхождение вернётся с другой стороны.
-    assert.match(read("blocks/MetaBlock.tsx"), /useJsonArrayWriter/);
+    // Теги переехали в «Личное» (владелец 2026-07-26: «теги на уровне
+    // Личное, как метки»), заметки — там же внизу. Механика та же.
+    assert.match(read("blocks/PersonalBlock.tsx"), /useJsonArrayWriter/);
     assert.match(read("blocks/NotesBlock.tsx"), /useJsonArrayWriter/);
     // Признак снимка рендера — сборка набора из client.tag_ids прямо в
     // обработчике тапа. Через писателя набор берётся из свежайшего значения.
     assert.doesNotMatch(
-      read("blocks/MetaBlock.tsx"),
-      /client\.tag_ids\.(filter|includes)\(/,
+      read("blocks/PersonalBlock.tsx"),
+      /client\.tag_ids\.(filter)\(/,
     );
   });
 

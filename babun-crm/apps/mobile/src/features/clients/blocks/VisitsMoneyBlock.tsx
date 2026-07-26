@@ -37,10 +37,12 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 export default function VisitsMoneyBlock({
+  clientId,
   appointments,
   services,
   stats,
 }: {
+  clientId: string;
   appointments: Appointment[];
   services: readonly { id: string; name: string }[];
   stats: ClientStats | undefined;
@@ -137,8 +139,12 @@ export default function VisitsMoneyBlock({
         .join(", ") || formatShortDateRu(lastVisit.date)
     : null;
 
+  // Сколько всего визитов в истории — включая отменённые: в истории они
+  // видны, и счётчик обязан совпадать с тем, что там лежит.
+  const visitCount = appointments.length;
+
   // Ни долга, ни истории — блока нет вовсе (пустых полок не держим).
-  if (!oldestDebt && !lastVisit) return null;
+  if (!oldestDebt && !lastVisit && visitCount === 0) return null;
 
   return (
     <RowGroup title="Визиты и деньги">
@@ -156,6 +162,23 @@ export default function VisitsMoneyBlock({
           value={lastVisitValue}
           separated={!!oldestDebt}
           onPress={openLastVisit}
+        />
+      ) : null}
+      {/* Вся лента — на своей странице (владелец 2026-07-26: «история визита
+          должна быть, её качественно надо проработать»). На карточке ей не
+          место: он же просил убрать отсюда «кучу визитов». */}
+      {visitCount > 0 ? (
+        <NavRow
+          label="История визитов"
+          value={String(visitCount)}
+          separated={!!oldestDebt || !!lastVisit}
+          onPress={() => {
+            haptics.tap();
+            router.push({
+              pathname: "/clients/visits",
+              params: { clientId },
+            });
+          }}
         />
       ) : null}
     </RowGroup>
