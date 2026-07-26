@@ -1,15 +1,13 @@
-// AttachmentsBlock — photos & files on the client card (mobile port of
-// apps/web/src/components/clients/blocks/AttachmentsBlock.tsx, F3.10).
+// ВЛОЖЕНИЯ клиента — фото «до/после», договоры, акты.
 //
-// Reference block — collapsed by default (CollapsibleCard); the closed row
-// shows the file count. Expanded: 3-column grid of thumbnails (images via
-// 5-min signed URLs) / doc tiles, gallery + PDF/TXT document picker + camera,
-// long-press-free delete via an ✕ badge with Alert confirm, tap opens the
-// original through Linking.
+// Строки-действия «+ Фото или файл» и «+ Снять фото», под ними сетка
+// миниатюр. Раньше это была сворачиваемая карточка с синей кнопкой,
+// кнопкой-камерой и подсказкой в три колонки — единственный блок, живший не
+// по закону строки, и он же прятался целиком при нуле файлов, унося с собой
+// единственную кнопку добавления.
 //
-// Data path lives in card-attachments.ts (Supabase Storage bucket
-// client-attachments + public.client_attachments), the block itself only
-// renders states: loading / error+retry / empty / grid.
+// Файл принадлежит КЛИЕНТУ: путь в хранилище строится по его id, поэтому в
+// черновике блока нет вовсе (см. ClientProfileBlocks).
 
 import { useState } from "react";
 import {
@@ -23,7 +21,7 @@ import {
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Paperclip, X } from "lucide-react-native";
+import { FileText, X } from "lucide-react-native";
 import {
   formatBytes,
   getSignedUrl,
@@ -33,7 +31,7 @@ import {
   useUploadAttachments,
   type ClientAttachment,
 } from "@/features/clients/card-attachments";
-import { CollapsibleCard } from "@/features/clients/card-collapse";
+import { AddRow, RowGroup } from "@/features/clients/card-rows";
 import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 
@@ -173,64 +171,31 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
   };
 
   return (
-    // hideWhenEmpty здесь был тупиком: при нуле файлов блок скрывался ЦЕЛИКОМ
-    // вместе с единственной кнопкой «Фото или файл», и первый файл приложить
-    // было физически нечем (заодно пропадала и ветка ошибки с «Повторить»).
-    // Пустой блок — это одна строка с кнопкой, и она честнее.
-    <CollapsibleCard
-      title="Вложения"
-      summary={items.length ? String(items.length) : ""}
-    >
-      <View className="gap-2 px-1 pt-1">
-        <View className="flex-row items-center gap-2">
-          <Pressable
-            onPress={() => void chooseAttachment()}
-            disabled={upload.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить фото или файл"
-            className="min-h-11 flex-row items-center gap-1.5 rounded-[10px] px-3 py-2 active:opacity-80"
-            style={{
-              backgroundColor: upload.isPending ? t.disabledFill : t.accent,
-            }}
-          >
-            <Paperclip
-              color={upload.isPending ? t.faint : "#fff"}
-              size={14}
-              strokeWidth={2.5}
-            />
-            <Text
-              className="text-[13px] font-semibold"
-              style={{ color: upload.isPending ? t.faint : "#fff" }}
-            >
-              {upload.isPending ? "Загрузка…" : "Фото или файл"}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={shoot}
-            disabled={upload.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Снять фото"
-            className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-70"
-            style={{ backgroundColor: t.fill }}
-          >
-            <Camera
-              color={upload.isPending ? t.faint : t.ink}
-              size={16}
-              strokeWidth={2.2}
-            />
-          </Pressable>
-          <Text className="flex-1 text-[11px]" style={{ color: t.faint }}>
-            До 10 МБ. Фото «до/после», договоры.
-          </Text>
-        </View>
+    // Блок переведён на ЗАКОН СТРОКИ: строки-действия вместо синей кнопки с
+    // подсказкой в три колонки. hideWhenEmpty снят раньше — при нуле файлов
+    // блок скрывался ЦЕЛИКОМ вместе с единственной кнопкой добавления, и
+    // первый файл приложить было нечем.
+    <RowGroup title="Вложения">
+      <AddRow
+        label={upload.isPending ? "Загрузка…" : "+ Фото или файл"}
+        dimmed={upload.isPending}
+        onPress={() => void chooseAttachment()}
+      />
+      <AddRow
+        label="+ Снять фото"
+        separated
+        dimmed={upload.isPending}
+        onPress={shoot}
+      />
 
+      <View className="gap-2 px-4 pb-3 pt-1">
         {isLoading ? (
           <View className="items-center py-3">
             <ActivityIndicator />
           </View>
         ) : isError ? (
           <View className="flex-row items-center gap-2 py-1">
-            <Text className="flex-1 text-[12px]" style={{ color: t.danger }}>
+            <Text className="flex-1 text-[13px]" style={{ color: t.danger }}>
               Не удалось загрузить файлы.
             </Text>
             <Pressable
@@ -240,21 +205,14 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
               className="min-h-11 justify-center px-2 active:opacity-60"
             >
               <Text
-                className="text-[12px] font-semibold"
+                className="text-[13px] font-semibold"
                 style={{ color: t.accent }}
               >
                 Повторить
               </Text>
             </Pressable>
           </View>
-        ) : items.length === 0 ? (
-          <View className="flex-row items-center gap-1.5 py-1">
-            <Paperclip color={t.faint} size={12} />
-            <Text className="text-[12px] italic" style={{ color: t.faint }}>
-              Файлов пока нет
-            </Text>
-          </View>
-        ) : (
+        ) : items.length === 0 ? null : (
           <View className="flex-row flex-wrap gap-1.5">
             {items.map((a) => (
               <View
@@ -329,6 +287,6 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
           </View>
         )}
       </View>
-    </CollapsibleCard>
+    </RowGroup>
   );
 }
