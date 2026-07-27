@@ -35,9 +35,46 @@ export type Database = {
         }
         Relationships: []
       }
+      account_teams: {
+        Row: {
+          account_id: string
+          created_at: string
+          team_id: string
+          tenant_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          team_id: string
+          tenant_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          team_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_teams_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "account_teams_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts: {
         Row: {
-          brigade_id: string
+          balance_hidden: boolean
+          brigade_id: string | null
           color: string | null
           created_at: string
           created_by: string | null
@@ -49,11 +86,13 @@ export type Database = {
           opening_balance: number
           owner_master_id: string | null
           position: number
+          scope: string
           tenant_id: string
           updated_at: string
         }
         Insert: {
-          brigade_id: string
+          balance_hidden?: boolean
+          brigade_id?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -65,11 +104,13 @@ export type Database = {
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          scope?: string
           tenant_id: string
           updated_at?: string
         }
         Update: {
-          brigade_id?: string
+          balance_hidden?: boolean
+          brigade_id?: string | null
           color?: string | null
           created_at?: string
           created_by?: string | null
@@ -81,6 +122,7 @@ export type Database = {
           opening_balance?: number
           owner_master_id?: string | null
           position?: number
+          scope?: string
           tenant_id?: string
           updated_at?: string
         }
@@ -2731,6 +2773,10 @@ export type Database = {
         Returns: undefined
       }
       accept_invitation: { Args: { p_token: string }; Returns: string }
+      account_serves_team: {
+        Args: { p_account_id: string; p_team_id: string }
+        Returns: boolean
+      }
       activate_tenant: { Args: { p_tenant_id: string }; Returns: Json }
       add_platform_admin: { Args: { p_email: string }; Returns: undefined }
       admin_billing_history: {
@@ -2827,6 +2873,10 @@ export type Database = {
       list_dispatcher_services_safe: { Args: never; Returns: Json[] }
       list_operational_masters_safe: { Args: never; Returns: Json[] }
       list_operational_teams_safe: { Args: never; Returns: Json[] }
+      list_payment_accounts_safe: {
+        Args: { p_team_id: string }
+        Returns: Json[]
+      }
       normalize_client_tag_ids: {
         Args: { p_tag_ids: string[]; p_tenant_id: string }
         Returns: string[]
