@@ -12,6 +12,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import {
@@ -70,6 +71,10 @@ export default function ClientArchiveScreen() {
           retrying={archived.isRefetching}
         />
       ) : (
+        <>
+        <LoadingBar
+          visible={archived.isRefetching && !pull.refreshing}
+        />
         <FlatList
           data={archived.data ?? []}
           keyExtractor={(client) => client.id}
@@ -138,6 +143,7 @@ export default function ClientArchiveScreen() {
             />
           }
         />
+        </>
       )}
     </Screen>
   );

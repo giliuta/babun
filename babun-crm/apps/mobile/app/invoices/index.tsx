@@ -20,6 +20,7 @@ import {
   formatInvoiceMoney,
   todayYmd,
 } from "@/features/invoices/format";
+import { LoadingBar } from "@/components/ui/LoadingBar";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -142,7 +143,7 @@ export default function InvoicesScreen() {
           state="error"
           fill
           subtitle={(loadError as Error).message}
-          action={{ label: "Повторить", onPress: refresh }}
+          action={{ label: "Повторить", onPress: () => void refresh() }}
         />
       </Screen>
     );
@@ -200,6 +201,15 @@ export default function InvoicesScreen() {
         style={{ marginHorizontal: 12, marginTop: 12, marginBottom: 6 }}
       />
 
+      <LoadingBar
+        visible={
+          (invoices.isRefetching ||
+            paymentRows.isRefetching ||
+            clientsQuery.isRefetching ||
+            calendarSettingsQuery.isRefetching) &&
+          !pull.refreshing
+        }
+      />
       <FlatList
         style={{ flex: 1 }}
         data={data}

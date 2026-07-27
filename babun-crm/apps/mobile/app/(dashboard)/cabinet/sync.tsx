@@ -27,6 +27,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Spinner } from "@/components/ui/Spinner";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useTenantId } from "@/lib/tenant";
@@ -179,6 +180,14 @@ export default function SyncStatusScreen() {
             <Text className="flex-1 text-sm" style={{ color: t.body }}>
               Изменения хранятся только на этом iPhone и отправятся после подключения.
             </Text>
+          </View>
+        ) : null}
+
+        {/* Первое чтение очереди: раньше эту паузу «показывал» программно
+            выехавший контрол обновления, а без него экран был просто пустым. */}
+        {loading && operations.length === 0 ? (
+          <View className="items-center py-10">
+            <Spinner size={26} label="Читаем очередь изменений" />
           </View>
         ) : null}
 
