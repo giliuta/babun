@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useState } from "react";
 import type { Client } from "@babun/shared/local/clients";
 
 // СЛОВАРЬ ТИПОВ ОБЪЕКТА — собирается из ФАКТИЧЕСКИХ данных бизнеса.
@@ -111,6 +111,23 @@ export function defaultObjectType(
   return vocabulary[0] ?? STANDARD_OBJECT_TYPES[0];
 }
 
+/** Слияние БЕЗ ПЕРЕСТАНОВОК: уже показанный порядок сохраняется как есть, а
+ *  всё новое дописывается в хвост. Это и есть защита пальца — вынесена в
+ *  чистую функцию, чтобы её можно было проверить тестом, а не «на глаз». */
+export function appendOnly(
+  shown: readonly string[],
+  incoming: readonly string[],
+): string[] {
+  const seen = new Set(shown.map(objectTypeKey));
+  const extra = incoming.filter((v) => {
+    const key = objectTypeKey(v);
+    if (!v.trim() || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return extra.length > 0 ? [...shown, ...extra] : (shown as string[]);
+}
+
 /**
  * ЗАМОРОЖЕННЫЙ словарь на время жизни экрана.
  *
@@ -119,34 +136,29 @@ export function defaultObjectType(
  * которых частоты считаются. Второй контур обратной связи: чип снова уезжает
  * из-под пальца, просто через базу.
  *
- * Поэтому экран считает порядок ОДИН раз и дальше только дописывает в хвост
- * то, чего в нём ещё не было. Список, по которому человек уже целится пальцем,
- * не имеет права перестраиваться под ним ни от чего.
+ * Поэтому порядок фиксируется первым РЕАЛЬНЫМ расчётом (когда клиенты уже
+ * приехали) и дальше только дополняется: новые значения дописываются в хвост,
+ * ничего не переставляя. Список, по которому человек уже целится пальцем, не
+ * имеет права перестраиваться под ним ни от чего.
  */
 export function useFrozenObjectTypes(
   clients: readonly Client[],
   presets: readonly string[],
   current: string | undefined,
 ): string[] {
-  const frozen = useRef<string[] | null>(null);
-  const seeded = useRef(false);
+  const [frozen, setFrozen] = useState<string[] | null>(null);
+  const live = objectTypeVocabulary(clients, presets, current);
+  const ready = clients.length > 0 || presets.length > 0;
 
-  // Первый непустой расчёт и есть порядок на всю жизнь экрана. До прихода
-  // клиентов список ещё не «настоящий», поэтому ждём данные.
-  if (!seeded.current) {
-    const first = objectTypeVocabulary(clients, presets, current);
-    if (clients.length > 0 || presets.length > 0 || first.length > 0) {
-      frozen.current = first;
-      seeded.current = clients.length > 0 || presets.length > 0;
-    }
-  }
+  // Фиксируем и дополняем ЭФФЕКТОМ, а не по ходу рендера: рендер обязан быть
+  // чистым, иначе строгий режим и будущий конкурентный рендер дают разный
+  // порядок на двух проходах одного кадра.
+  useEffect(() => {
+    if (!ready) return;
+    setFrozen((cur) => (cur ? appendOnly(cur, live) : live));
+    // live — производная от clients/presets/current, поэтому следим за ними.
+  }, [ready, clients, presets, current]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const base = frozen.current ?? objectTypeVocabulary(clients, presets, current);
-  const name = (current ?? "").trim();
-  if (!name) return base;
-  const key = objectTypeKey(name);
-  if (base.some((v) => objectTypeKey(v) === key)) return base;
-  const next = [...base, name];
-  frozen.current = next;
-  return next;
+  // Текущее значение обязано быть видно сразу, даже если эффект ещё не успел.
+  return frozen ? appendOnly(frozen, [(current ?? "").trim()]) : live;
 }

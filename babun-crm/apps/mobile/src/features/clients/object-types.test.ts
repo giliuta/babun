@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  appendOnly,
   defaultObjectType,
   objectTypeKey,
   objectTypeVocabulary,
@@ -68,6 +69,50 @@ describe("словарь типов объекта", () => {
       "Квартира",
       "Офис",
     ]);
+  });
+});
+
+describe("защита пальца: словарь только дописывается", () => {
+  test("ЗАПИСЬ выбора не переставляет уже показанные чипы", () => {
+    // Реальный контур: тап по чипу переписывает метку объекта, то есть меняет
+    // ЧАСТОТЫ, из которых строится порядок. Чистый словарь обязан на это
+    // отреагировать — а экран обязан НЕ переставлять то, во что уже целится
+    // палец. За это отвечает appendOnly (аудит 2026-07-27).
+    const clients = [
+      client("Квартира", "Квартира"),
+      client("Ресторан"),
+      client("Дом"),
+    ];
+    const shown = objectTypeVocabulary(clients, []);
+    for (const picked of shown) {
+      const afterWrite = objectTypeVocabulary(
+        [
+          { locations: [{ label: picked }, { label: "Квартира" }] } as never,
+          ...clients.slice(1),
+        ],
+        [],
+        picked,
+      );
+      const next = appendOnly(shown, afterWrite);
+      assert.deepEqual(
+        next.slice(0, shown.length),
+        shown,
+        `выбор «${picked}» переставил уже показанные чипы`,
+      );
+    }
+  });
+
+  test("новое значение дописывается в хвост, дубли по регистру не плодятся", () => {
+    assert.deepEqual(appendOnly(["Дом", "Офис"], ["дом", "Склад", " СКЛАД "]), [
+      "Дом",
+      "Офис",
+      "Склад",
+    ]);
+  });
+
+  test("нечего дописывать — возвращается ТОТ ЖЕ массив", () => {
+    const shown = ["Дом", "Офис"];
+    assert.equal(appendOnly(shown, ["Дом"]), shown);
   });
 });
 

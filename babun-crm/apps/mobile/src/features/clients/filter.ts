@@ -308,8 +308,16 @@ export const SOURCE_OPTIONS = SOURCE_ORDER.map((key) => ({
   color: "",
 }));
 
-/** Канонический порядок типов объектов. */
-export const PROPERTY_ORDER: PropertyType[] = [
+// LEGACY-ПЕРЕЧИСЛЕНИЕ ТИПОВ ОБЪЕКТА — только словарь ПЕРЕВОДА.
+//
+// Живой словарь принадлежит бизнесу: строка выбора на объекте пишет в
+// `loc.label` его собственные слова («Дом», «Склад», «Бокс»), и фасет фильтра
+// собирается из фактических значений (useClientFilters.propertyOptions).
+// Здесь остались шесть значений старого enum'а — их надо уметь ПОКАЗАТЬ
+// человеку у клиентов, заведённых до перехода, и не более того. Предлагать их
+// как варианты выбора нельзя: у нового бизнеса таких значений в данных нет, и
+// фильтр честно отдавал пустой список (аудит 2026-07-27).
+const PROPERTY_ORDER: PropertyType[] = [
   "apartment",
   "house",
   "office",
@@ -318,7 +326,7 @@ export const PROPERTY_ORDER: PropertyType[] = [
   "other",
 ];
 
-export const PROPERTY_OPTIONS = PROPERTY_ORDER.map((key) => ({
+const PROPERTY_OPTIONS = PROPERTY_ORDER.map((key) => ({
   value: key as string,
   label: PROPERTY_LABELS[key],
   color: "",

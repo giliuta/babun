@@ -34,7 +34,6 @@ import {
 import {
   filterActiveCount,
   periodLabel,
-  PROPERTY_OPTIONS,
   propertyTypeLabel,
   resetFilters,
   SEGMENT_BLOCKS,
@@ -1053,7 +1052,7 @@ export function ClientsFilterSheet({
     property: {
       title: "Тип объекта",
       subtitle: FACET_SUBTITLES.property,
-      blocks: [PROPERTY_OPTIONS],
+      blocks: [result.propertyOptions],
       selected: filter.propertyTypes,
       counts: facetCounts.property,
       toggle: (v) =>
@@ -1077,7 +1076,7 @@ export function ClientsFilterSheet({
   const tagValue = summarize(tagOptions, filter.activeTags);
   const teamValue = summarize(teamOptions, filter.selectedTeams);
   const sourceValue = summarize(SOURCE_OPTIONS, filter.sources);
-  const propertyValue = summarize(PROPERTY_OPTIONS, filter.propertyTypes);
+  const propertyValue = summarize(result.propertyOptions, filter.propertyTypes);
 
   return (
     <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={1}>

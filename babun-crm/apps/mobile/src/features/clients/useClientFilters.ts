@@ -67,6 +67,8 @@ export interface ClientFilterResult {
   teamOptions: FacetOption[];
   cityOptions: FacetOption[];
   tagOptions: FacetOption[];
+  /** Типы объектов, которые РЕАЛЬНО есть в данных (порядок по частоте). */
+  propertyOptions: FacetOption[];
   facetCounts: FacetCounts;
   /** Строки Источник/Тип объекта появляются, когда данные есть хоть у
    *  одного клиента — пустой справочник не даёт мёртвую строку. */
@@ -234,6 +236,42 @@ export function useClientFilters(
     }
     return options;
   }, [clients, cities]);
+
+  const propertyOptions = useMemo<FacetOption[]>(() => {
+    // ИЗ ФАКТОВ, а не из зашитого перечисления. Строка выбора на объекте
+    // пишет в `loc.label` живые слова бизнеса («Дом», «Склад», «Бокс»), а
+    // фасет предлагал шесть значений старого enum'а (house/apartment/…) —
+    // выбрать можно было только то, чего в данных нет, и фильтр честно
+    // отдавал пустой список (аудит 2026-07-27).
+    //
+    // Порядок: по частоте, при равенстве по алфавиту — как во всех фасетах,
+    // где словарь принадлежит бизнесу, а не нам. Legacy-значения enum'а
+    // переводятся в человеческую подпись и живут наравне.
+    const uses = new Map<string, { value: string; count: number }>();
+    for (const c of clients) {
+      for (const value of clientPropertyTypes(c)) {
+        const key = value.trim().toLowerCase();
+        if (!key) continue;
+        const prev = uses.get(key);
+        if (prev) prev.count += 1;
+        else uses.set(key, { value, count: 1 });
+      }
+    }
+    return [...uses.values()]
+      .sort(
+        (a, b) =>
+          b.count - a.count ||
+          propertyTypeLabel(a.value).localeCompare(
+            propertyTypeLabel(b.value),
+            "ru",
+          ),
+      )
+      .map(({ value }) => ({
+        value,
+        label: propertyTypeLabel(value),
+        color: "",
+      }));
+  }, [clients]);
 
   const tagOptions = useMemo<FacetOption[]>(() => {
     // Весь справочник тегов, не только назначенные.
@@ -552,6 +590,7 @@ export function useClientFilters(
     teamOptions,
     cityOptions,
     tagOptions,
+    propertyOptions,
     facetCounts,
     hasSourceData,
     hasPropertyData,
