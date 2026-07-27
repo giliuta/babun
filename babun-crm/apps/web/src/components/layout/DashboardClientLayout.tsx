@@ -1520,6 +1520,7 @@ export default function DashboardClientLayout({
         // the table makes this idempotent in case the team was re-
         // created or the user lands here after a reload.
         void insertAccount(getSupabaseBrowser(), tenantId, {
+          scope: "team",
           brigade_id: team.id,
           name: "Наличка",
           kind: "cash",

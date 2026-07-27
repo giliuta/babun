@@ -228,6 +228,7 @@ export default function AccountsScreen() {
         });
       } else {
         await insert.mutateAsync({
+          scope: "team",
           name: name.trim(),
           kind,
           brigade_id: brigadeId,
@@ -362,8 +363,9 @@ export default function AccountsScreen() {
             // Счета строго per-brigade: подзаголовок = имя команды (это
             // единственное, что различает две «Налички»). Никаких «—»-
             // плейсхолдеров; оборванная ссылка читается как «Без бригады».
-            const team = teamById.get(item.brigade_id);
-            const teamLabel = team?.name ?? "Без бригады";
+            const team = item.brigade_id ? teamById.get(item.brigade_id) : undefined;
+            const teamLabel =
+              team?.name ?? (item.scope === "company" ? "Общий счёт" : "Без бригады");
             return (
               <Pressable
                 // Тап = открыть редактор (имя/тип/бригада + «Закрыть счёт»
@@ -541,7 +543,10 @@ export default function AccountsScreen() {
             {accounts.map((a) => (
               <Chip
                 key={a.id}
-                label={accountDisplayName(a, teamById.get(a.brigade_id)?.name)}
+                label={accountDisplayName(
+                  a,
+                  a.brigade_id ? teamById.get(a.brigade_id)?.name : undefined,
+                )}
                 color={th.danger}
                 selected={fromId === a.id}
                 onPress={() => {
@@ -564,7 +569,10 @@ export default function AccountsScreen() {
               .map((a) => (
                 <Chip
                   key={a.id}
-                  label={accountDisplayName(a, teamById.get(a.brigade_id)?.name)}
+                  label={accountDisplayName(
+                    a,
+                    a.brigade_id ? teamById.get(a.brigade_id)?.name : undefined,
+                  )}
                   color={th.success}
                   selected={toId === a.id}
                   onPress={() => setToId(a.id === toId ? null : a.id)}

@@ -88,6 +88,7 @@ export default function AddAccountSheet({
     try {
       const icon = KINDS.find((x) => x.kind === kind)?.icon ?? null;
       const draft: AccountDraft = {
+        scope: "team",
         brigade_id: brigadeId,
         name: name.trim(),
         kind,
