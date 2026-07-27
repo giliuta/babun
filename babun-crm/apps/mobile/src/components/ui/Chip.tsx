@@ -87,7 +87,9 @@ export function Chip({
       border = hue;
     } else {
       bg = t.fill;
-      fg = t.sub;
+      // Слово на пилюле в покое — ЧЁРНОЕ: серым главные слова не помечаем
+      // (владелец 2026-07-27). Выбранность читается заливкой, а не яркостью.
+      fg = t.ink;
     }
   } else {
     if (selected) {
@@ -98,7 +100,9 @@ export function Chip({
       fg = readableColorOnTint(idleColor, t.surface, t.ink, 0x24 / 255);
     } else {
       bg = t.fill;
-      fg = t.sub;
+      // Слово на пилюле в покое — ЧЁРНОЕ: серым главные слова не помечаем
+      // (владелец 2026-07-27). Выбранность читается заливкой, а не яркостью.
+      fg = t.ink;
     }
   }
 

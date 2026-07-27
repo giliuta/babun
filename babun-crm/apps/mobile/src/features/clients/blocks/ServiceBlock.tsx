@@ -96,7 +96,7 @@ export default function ServiceBlock({
     <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
       <Text
         className="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider"
-        style={{ color: t.sub }}
+        style={{ color: t.ink }}
       >
         Обслуживание
       </Text>

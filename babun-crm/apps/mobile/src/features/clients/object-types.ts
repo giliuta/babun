@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { Client } from "@babun/shared/local/clients";
 
 // СЛОВАРЬ ТИПОВ ОБЪЕКТА — собирается из ФАКТИЧЕСКИХ данных бизнеса.
@@ -108,4 +109,44 @@ export function defaultObjectType(
   const own = (locs.find((l) => l.isPrimary) ?? locs[0])?.label?.trim();
   if (own && objectTypeKey(own) !== "объект") return own;
   return vocabulary[0] ?? STANDARD_OBJECT_TYPES[0];
+}
+
+/**
+ * ЗАМОРОЖЕННЫЙ словарь на время жизни экрана.
+ *
+ * Порядок словаря не зависит от текущего значения — но он зависит от ЧАСТОТ, а
+ * тап по чипу переписывает метку объекта, то есть меняет сами данные, из
+ * которых частоты считаются. Второй контур обратной связи: чип снова уезжает
+ * из-под пальца, просто через базу.
+ *
+ * Поэтому экран считает порядок ОДИН раз и дальше только дописывает в хвост
+ * то, чего в нём ещё не было. Список, по которому человек уже целится пальцем,
+ * не имеет права перестраиваться под ним ни от чего.
+ */
+export function useFrozenObjectTypes(
+  clients: readonly Client[],
+  presets: readonly string[],
+  current: string | undefined,
+): string[] {
+  const frozen = useRef<string[] | null>(null);
+  const seeded = useRef(false);
+
+  // Первый непустой расчёт и есть порядок на всю жизнь экрана. До прихода
+  // клиентов список ещё не «настоящий», поэтому ждём данные.
+  if (!seeded.current) {
+    const first = objectTypeVocabulary(clients, presets, current);
+    if (clients.length > 0 || presets.length > 0 || first.length > 0) {
+      frozen.current = first;
+      seeded.current = clients.length > 0 || presets.length > 0;
+    }
+  }
+
+  const base = frozen.current ?? objectTypeVocabulary(clients, presets, current);
+  const name = (current ?? "").trim();
+  if (!name) return base;
+  const key = objectTypeKey(name);
+  if (base.some((v) => objectTypeKey(v) === key)) return base;
+  const next = [...base, name];
+  frozen.current = next;
+  return next;
 }

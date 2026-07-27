@@ -22,7 +22,7 @@
 // (findClientByPhoneE164 + DB unique index) остался бы от старого номера.
 
 import { useRef, useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { Bell, Check, X } from "lucide-react-native";
 import type { Client, PhoneEntry } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
@@ -38,6 +38,7 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { AddRow, FieldRow, RowGroup } from "@/features/clients/card-rows";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useToast } from "@/components/ui/Toast";
+import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -64,7 +65,11 @@ export interface ClientHeaderDraft {
 interface ClientHeaderProps {
   client: Client;
   stats: ClientStats | undefined;
-  update: (patch: Partial<Client>) => void;
+  /** Возвращает false, если запись не удалась: писатель массива номеров по
+   *  этому ответу ОТКАТЫВАЕТ оптимистичное значение. Подменённый `true`
+   *  выключал откат, и неудачная правка тихо уезжала в базу со следующей
+   *  удачной (найдено аудитом 2026-07-27). */
+  update: (patch: Partial<Client>) => Promise<boolean> | void;
   draft?: ClientHeaderDraft;
 }
 
@@ -72,7 +77,11 @@ interface ClientHeaderProps {
  *  дёргал пересинхронизацию писателя. */
 const EMPTY_PHONES: PhoneEntry[] = [];
 
-const EXTRA_LABELS = ["Второй", "WhatsApp", "Рабочий", "Супруг(а)", "Другой"];
+// СТАНДАРТНЫЙ НАБОР ПОДПИСЕЙ, как в контактах iPhone (владелец 2026-07-27:
+// «что значит „Второй"? напиши сотовый, рабочий — стандартная, как у iPhone;
+// не муж-жена»). Родственные подписи («Супруг(а)») убраны: это про отношения,
+// а не про номер, и у бизнес-клиента их не бывает.
+const EXTRA_LABELS = ["Мобильный", "Рабочий", "Домашний", "WhatsApp", "Другой"];
 
 function nextExtraLabel(existing: PhoneEntry[]): string {
   const used = new Set(existing.map((p) => p.label));
@@ -94,7 +103,7 @@ export default function ClientHeader({
   // свежайшего значения и по очереди, иначе две быстрые правки затирают друг
   // друга (patchPhone из снимка рендера + PATCH на всю колонку).
   const phones = useJsonArrayWriter<PhoneEntry>(extras, (next) =>
-    Promise.resolve(update({ phones: next })).then(() => true),
+    Promise.resolve(update({ phones: next })).then((ok) => ok !== false),
   );
 
   // Новый номер живёт ЛОКАЛЬНО, пока в нём нет цифр: тап по «+ Добавить
@@ -145,14 +154,31 @@ export default function ClientHeader({
     haptics.tap();
     void phones.apply((all) => all.filter((p) => p.id !== id));
   };
-  // Ярлык переключается по кругу — отдельный пикер на такую мелочь был бы
-  // тяжелее самой задачи.
-  const cyclePhoneLabel = (p: PhoneEntry) => {
-    haptics.tap();
-    const i = EXTRA_LABELS.indexOf(p.label);
-    patchPhone(p.id, {
-      label: EXTRA_LABELS[(i + 1) % EXTRA_LABELS.length],
-    });
+  /** Номер — контакт, а не черновик: удаление СПРАШИВАЕТ. Раньше тап (в том
+   *  числе случайный, зона крестика залезала на кнопку связи) сносил номер
+   *  молча и без отмены. */
+  const confirmRemovePhone = (p: PhoneEntry) => {
+    Alert.alert(
+      `Убрать номер «${p.label}»?`,
+      p.number.trim() || undefined,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Убрать",
+          style: "destructive",
+          onPress: () => removePhone(p.id),
+        },
+      ],
+    );
+  };
+  /** Подпись выбирается СНИЗУ из стандартного набора: перебор по кругу
+   *  требовал до пяти тапов и не давал увидеть, что вообще есть. */
+  const pickPhoneLabel = async (p: PhoneEntry) => {
+    const i = await chooseOption(
+      "Подпись номера",
+      EXTRA_LABELS.map((label) => ({ label })),
+    );
+    if (i !== null) patchPhone(p.id, { label: EXTRA_LABELS[i] });
   };
 
   const debt = stats && stats.debt > 0 ? formatEUR(stats.debt) : null;
@@ -300,27 +326,32 @@ export default function ClientHeader({
               // коммит по blur до него не долетал — второй номер просто не
               // сохранялся вместе с клиентом.
               live={!!draft}
-              onLabelPress={() => cyclePhoneLabel(p)}
+              onLabelPress={() => void pickPhoneLabel(p)}
               onSave={(v) => patchPhone(p.id, { number: v })}
               trailing={
                 <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                  // 12, а не 4: при зазоре 4 слоп «убрать номер» (10 влево)
+                  // залезал НА зелёную кнопку связи, и тап по её правому краю
+                  // молча удалял номер (аудит 2026-07-27).
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
                 >
                   {/* Кнопка знает ИМЕННО ЭТОТ номер: выбор канала — свойство
                   номера, а не клиента. */}
                   <PhoneChannelButton number={p.number} label={p.label} />
                   <Pressable
-                    onPress={() => removePhone(p.id)}
+                    onPress={() => confirmRemovePhone(p)}
                     accessibilityRole="button"
                     accessibilityLabel={`Убрать номер ${p.label}`}
-                    hitSlop={10}
+                    // Слоп только вправо и по высоте: влево нельзя — там
+                    // соседняя кнопка.
+                    hitSlop={{ top: 14, bottom: 14, left: 2, right: 10 }}
                     style={({ pressed }) => ({
                       width: 28,
                       alignItems: "center",
                       opacity: pressed ? 0.5 : 1,
                     })}
                   >
-                    <X color={t.faint} size={16} strokeWidth={2.4} />
+                    <X color={t.ink} size={16} strokeWidth={2.4} />
                   </Pressable>
                 </View>
               }

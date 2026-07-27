@@ -70,9 +70,12 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   }, []);
 
   const answer = (index: number | null) => {
-    request?.resolve(index);
-    setRequest((cur) => (cur === request ? cur : cur));
+    // Отвечаем РОВНО один раз: закрытие свайпом и тап по скриму могут прийти
+    // подряд, а обещание уже отдано.
+    const pending = request;
+    setRequest(null);
     setVisible(false);
+    pending?.resolve(index);
   };
 
   return (

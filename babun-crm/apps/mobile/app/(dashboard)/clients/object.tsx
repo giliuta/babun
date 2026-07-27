@@ -27,8 +27,8 @@ import {
   objectTarget,
 } from "@/features/clients/object-address";
 import {
-  objectTypeVocabulary,
   snapObjectType,
+  useFrozenObjectTypes,
 } from "@/features/clients/object-types";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useLocationLabels } from "@/features/settings/local-settings";
@@ -108,15 +108,12 @@ export default function ClientObjectScreen() {
   // Словарь типов: сначала то, чем бизнес РЕАЛЬНО пользуется (по частоте),
   // затем пресеты кабинета и стандартный набор. Тип этого объекта показываем
   // всегда, даже если он больше нигде не встречается.
-  const typeOptions = useMemo(
-    () =>
-      objectTypeVocabulary(
-        allClients,
-        labelPresets.map((preset) => preset.name),
-        loc?.label,
-      ),
-    [allClients, labelPresets, loc?.label],
+  const presetNames = useMemo(
+    () => labelPresets.map((preset) => preset.name),
+    [labelPresets],
   );
+  // Порядок ЗАМОРОЖЕН на время экрана — см. useFrozenObjectTypes.
+  const typeOptions = useFrozenObjectTypes(allClients, presetNames, loc?.label);
 
   const confirmDelete = () => {
     if (!loc) return;

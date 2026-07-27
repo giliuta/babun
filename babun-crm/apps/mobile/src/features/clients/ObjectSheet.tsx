@@ -10,7 +10,6 @@ import {
   RowActionButton,
   RowGroup,
 } from "@/features/clients/card-rows";
-import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import {
   addressOrLinkPatch,
@@ -18,8 +17,8 @@ import {
 } from "@/features/clients/object-address";
 import {
   defaultObjectType,
-  objectTypeVocabulary,
   snapObjectType,
+  useFrozenObjectTypes,
 } from "@/features/clients/object-types";
 import { useClients } from "@/features/clients/queries";
 import { useLocationLabels } from "@/features/settings/local-settings";
@@ -126,15 +125,14 @@ export function ObjectSheet({
 
   // Словарь типов — из фактических объектов бизнеса (по частоте) + стандартный
   // набор; текущий набранный тип показываем всегда, даже если он новый.
-  const typeOptions = useMemo(
-    () =>
-      objectTypeVocabulary(
-        allClients,
-        labelPresets.map((preset) => preset.name),
-        draft.label,
-      ),
-    [allClients, labelPresets, draft.label],
+  const presetNames = useMemo(
+    () => labelPresets.map((preset) => preset.name),
+    [labelPresets],
   );
+  // Порядок ЗАМОРОЖЕН: тап по чипу меняет метку объекта, а значит и частоты, по
+  // которым строится словарь — без заморозки чип уезжает из-под пальца через
+  // базу (владелец 2026-07-27: «нажимаю офис — перекладывает на виллу»).
+  const typeOptions = useFrozenObjectTypes(allClients, presetNames, draft.label);
   // Тип ПРЕДЗАПОЛНЕН: обычный объект заводится, не касаясь этой строки.
   // Считаем, а не сеем эффектом — после каждого добавления форма сбрасывается
   // в пустую, и тип должен подставиться заново сам.
@@ -320,9 +318,12 @@ export function ObjectSheet({
             // без записи на каждый символ она читала бы пустой черновик.
             live
             onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
-            trailing={
-              <ObjectRouteButton address={draft.target} label={type} />
-            }
+            // Кнопки маршрута здесь НЕТ намеренно: (1) ехать некуда — объект
+            // ещё не заведён; (2) выбор карты — это лист поверх листа, а
+            // системный хост выбора живёт в корне и под нашим листом
+            // невидим — тап по кнопке вешал ВСЕ последующие выборы в
+            // приложении (аудит 2026-07-27). Маршрут живёт у заведённого
+            // объекта: в его строке и на его странице.
           />
           <FieldRow
             label="Заметка"

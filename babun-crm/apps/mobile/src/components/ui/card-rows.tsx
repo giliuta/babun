@@ -697,7 +697,17 @@ export function ChoiceRow({
           }}
         />
       ) : (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+        // rowGap 14, а не общий gap 6: у чипа вертикальный hitSlop 6, поэтому
+        // при переносе на вторую строку зоны касания СМЫКАЛИСЬ и тап по нижней
+        // кромке чипа выбирал чип со строки ниже (аудит 2026-07-27).
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            rowGap: 14,
+            columnGap: 6,
+          }}
+        >
           {options.map((option) => (
             <Chip
               key={option}
@@ -772,7 +782,8 @@ export function RowCaption({
       style={{
         marginHorizontal: 16,
         marginTop: 6,
-        fontSize: 13,
+        // Пояснение приглушается РАЗМЕРОМ, а не серостью (закон 2026-07-27).
+        fontSize: 12,
         color:
           tone === "danger" ? t.danger : tone === "warning" ? t.warning : t.sub,
       }}
