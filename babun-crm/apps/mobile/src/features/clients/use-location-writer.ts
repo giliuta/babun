@@ -15,8 +15,12 @@ export interface LocationWriter {
     id: string,
     patch: Partial<Location> | ((loc: Location) => Partial<Location>),
   ) => Promise<boolean>;
-  /** Новый объект в хвост. Первый созданный — основной. */
-  addLocation: (draft: Omit<Location, "id" | "isPrimary">) => Promise<boolean>;
+  /** Новый объект в хвост. Первый созданный — основной. Возвращает id
+   *  созданного объекта (null — не записалось): лист добавления по нему
+   *  различает «только что добавил я» и «было раньше». */
+  addLocation: (
+    draft: Omit<Location, "id" | "isPrimary">,
+  ) => Promise<string | null>;
   /** Удаление с повышением основного, если снесли основной. */
   removeLocation: (id: string) => Promise<boolean>;
   makePrimary: (id: string) => Promise<boolean>;
@@ -59,11 +63,14 @@ export function useLocationWriter(
   );
 
   const addLocation = useCallback(
-    (draft: Omit<Location, "id" | "isPrimary">) =>
-      apply((all) => [
+    async (draft: Omit<Location, "id" | "isPrimary">) => {
+      const id = randomUuid();
+      const ok = await apply((all) => [
         ...all,
-        { ...draft, id: randomUuid(), isPrimary: all.length === 0 },
-      ]),
+        { ...draft, id, isPrimary: all.length === 0 },
+      ]);
+      return ok ? id : null;
+    },
     [apply],
   );
 

@@ -1,7 +1,9 @@
+import { useState } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
+import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import VisitsMoneyBlock from "@/features/clients/blocks/VisitsMoneyBlock";
 import AttachmentsBlock from "@/features/clients/blocks/AttachmentsBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
@@ -27,12 +29,10 @@ interface ClientProfileBlocksProps {
   tags: ClientTag[];
   stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => Promise<boolean>;
-  /** Открыть объект или создать новый ("new"). Навигацию держит карточка:
-   *  в черновике клиента она сначала сохраняет клиента — pushed-страница не
-   *  видит несохранённого черновика. */
+  /** Открыть страницу объекта. Навигацию держит карточка: в черновике клиента
+   *  она сначала сохраняет клиента — pushed-страница не видит несохранённого
+   *  черновика. Создание сюда больше не ходит: оно живёт в листе. */
   onOpenObject: (locId: string) => void;
-  /** В черновике: клиента уже можно сохранить, значит и объект можно завести. */
-  canAddObject?: boolean;
   /** Открыть «Ещё» — мессенджеры, почта, источник. */
   onOpenExtras: () => void;
 }
@@ -46,9 +46,9 @@ export function ClientProfileBlocks({
   stats,
   update,
   onOpenObject,
-  canAddObject,
   onOpenExtras,
 }: ClientProfileBlocksProps) {
+  const [objectsOpen, setObjectsOpen] = useState(false);
   return (
     <>
       {/* Владелец 2026-07-25: содержательные заметки принадлежат ЗАЯВКЕ, а
@@ -61,7 +61,15 @@ export function ClientProfileBlocks({
       <ObjectsBlock
         client={client}
         onOpen={onOpenObject}
-        addDimmed={draft && !canAddObject}
+        onAdd={() => setObjectsOpen(true)}
+      />
+      {/* Добавление объекта — лист снизу (владелец 2026-07-27). Живёт рядом с
+          блоком, а не в карточке: кроме открытия у карточки к нему дел нет. */}
+      <ObjectSheet
+        visible={objectsOpen}
+        client={client}
+        update={update}
+        onClose={() => setObjectsOpen(false)}
       />
 
       {/* СОЗДАНИЕ ПОКАЗЫВАЕТ ВСЮ СТРАНИЦУ (владелец 2026-07-26: «страница

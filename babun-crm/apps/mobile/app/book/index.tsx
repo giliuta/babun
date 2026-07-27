@@ -42,9 +42,8 @@ import {
 import {
   locationAddressForBooking,
   type Client,
-  type Location,
 } from "@babun/shared/local/clients";
-import { randomUuid } from "@babun/shared/sync/uuid";
+import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
   findBufferClash,
@@ -164,10 +163,6 @@ const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "completed", label: "Выполнено" },
   { value: "cancelled", label: "Отменено" },
 ];
-
-// Пресеты меток объекта для быстрого «Добавить объект» (у клиента может
-// быть несколько объектов — дом, офис, дача…).
-const OBJECT_LABELS = ["Дом", "Офис", "Дача", "Вилла", "Магазин"];
 
 const REPEAT_OPTIONS: readonly {
   value: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">;
@@ -369,11 +364,7 @@ export default function BookScreen() {
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [sourceSheetOpen, setSourceSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
-  const [objDraft, setObjDraft] = useState<{
-    label: string;
-    address: string;
-    note: string;
-  } | null>(null);
+  const [objectSheet, setObjectSheet] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -796,40 +787,18 @@ export default function BookScreen() {
     haptics.tap();
   };
 
-  // «Добавить объект» — пишет новый объект в карточку клиента (тот же
-  // механизм, что ObjectsBlock: locations[] через useUpdateClientById) и
-  // сразу выбирает его. Объектов у клиента может быть несколько.
-  const addObject = async () => {
-    if (
-      !clientId ||
-      !objDraft ||
-      !objDraft.address.trim() ||
-      updateClient.isPending
-    ) {
-      return;
-    }
-    const newLoc: Location = {
-      id: randomUuid(),
-      label: objDraft.label.trim() || "Объект",
-      address: objDraft.address.trim(),
-      isPrimary: clientLocations.length === 0,
-      note: objDraft.note.trim() || undefined,
-      equipment: [],
-    };
+  // Объект пишется ТОЛЬКО каноническим листом (ObjectSheet) — тем же, что на
+  // карточке клиента. Своя форма здесь собирала массив locations снимком
+  // рендера (взаимное затирание одной jsonb-колонки), знала свой список меток
+  // и в крайнем случае писала мусорный тип «Объект».
+  const updateClientPatch = async (patch: Partial<Client>) => {
+    if (!clientId) return false;
     try {
-      await updateClient.mutateAsync({
-        id: clientId,
-        patch: { locations: [...clientLocations, newLoc] },
-      });
-      setLocationId(newLoc.id);
-      setAddress(newLoc.address);
-      setAddressNote(newLoc.note ?? "");
-      setObjDraft(null);
-      haptics.tap();
-      toast("Объект сохранён");
+      await updateClient.mutateAsync({ id: clientId, patch });
+      return true;
     } catch {
-      // useUpdateClientById shows the connection/server error. Keep the
-      // draft open and do not select a location that was not persisted.
+      // useUpdateClientById показывает причину; правку не считаем записанной.
+      return false;
     }
   };
 
@@ -1580,63 +1549,12 @@ export default function BookScreen() {
                       </Pressable>
                     ) : null}
 
-                    {objDraft ? (
-                      <View
-                        className="px-4 py-3"
-                        style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-                      >
-                        <View className="flex-row flex-wrap gap-2">
-                          {OBJECT_LABELS.map((lbl) => (
-                            <Chip
-                              key={lbl}
-                              label={lbl}
-                              variant="tint"
-                              selected={objDraft.label === lbl}
-                              onPress={() => setObjDraft({ ...objDraft, label: lbl })}
-                            />
-                          ))}
-                        </View>
-                        <TextInput
-                          keyboardAppearance="light"
-                          accessibilityLabel="Адрес объекта"
-                          value={objDraft.address}
-                          onChangeText={(v) => setObjDraft({ ...objDraft, address: v })}
-                          placeholder="Адрес объекта"
-                          placeholderTextColor={t.placeholder}
-                          style={{ minHeight: 44, fontSize: 15, color: t.ink, paddingVertical: 6, marginTop: 6 }}
-                        />
-                        <TextInput
-                          keyboardAppearance="light"
-                          accessibilityLabel="Заметка об объекте"
-                          value={objDraft.note}
-                          onChangeText={(v) => setObjDraft({ ...objDraft, note: v })}
-                          placeholder="Заметка (домофон, этаж…)"
-                          placeholderTextColor={t.placeholder}
-                          style={{ minHeight: 44, fontSize: 13, color: t.sub, paddingVertical: 4 }}
-                        />
-                        <View className="mt-2 flex-row items-center gap-2">
-                          <Chip label="Отмена" variant="tint" onPress={() => setObjDraft(null)} />
-                          <View className="flex-1" />
-                          <Chip
-                            label={updateClient.isPending ? "Сохраняем…" : "Сохранить объект"}
-                            variant="filled"
-                            color={t.accent}
-                            selected
-                            disabled={updateClient.isPending}
-                            onPress={() => void addObject()}
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                        <AddRow
-                          label="Добавить объект"
-                          onPress={() =>
-                            setObjDraft({ label: "", address, note: addressNote })
-                          }
-                        />
-                      </View>
-                    )}
+                    <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
+                      <AddRow
+                        label="Добавить объект"
+                        onPress={() => setObjectSheet(true)}
+                      />
+                    </View>
                   </View>
                 ) : null}
               </SectionCard>
@@ -2342,6 +2260,24 @@ export default function BookScreen() {
         }}
         onClose={() => setWhenOpen(false)}
       />
+      {/* Добавление объекта — ТОТ ЖЕ лист, что на карточке клиента: один
+          диалект и одна дорога записи. Открывается с уже набранным здесь
+          адресом и сразу выбирает добавленный объект для этой записи. */}
+      {client ? (
+        <ObjectSheet
+          visible={objectSheet}
+          client={client}
+          update={updateClientPatch}
+          initialTarget={address}
+          onAdded={(added) => {
+            setLocationId(added.id);
+            setAddress(locationAddressForBooking(added));
+            setAddressNote(added.note ?? "");
+            toast("Объект сохранён");
+          }}
+          onClose={() => setObjectSheet(false)}
+        />
+      ) : null}
       <ClientPicker
         visible={clientPickerOpen}
         onClose={() => setClientPickerOpen(false)}

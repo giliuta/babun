@@ -27,10 +27,17 @@ export function useJsonArrayWriter<T>(
   write: (next: T[]) => Promise<boolean>,
 ): JsonArrayWriter<T> {
   const latest = useRef<T[]>(items);
+  // Сколько наших записей ещё в пути. Пока хоть одна не ответила, рендеру
+  // верить НЕЛЬЗЯ: инвалидация после первой записи запускает чтение, которое
+  // на медленной сети отвечает УЖЕ ПОСЛЕ второй записи и приносит массив без
+  // неё. Раньше такой ответ безусловно ложился в latest, и третья запись
+  // считалась от него — только что добавленный объект исчезал навсегда.
+  const pending = useRef(0);
   // Рендер приносит авторитетное значение (в том числе после чужой правки по
-  // реалтайму) — оно главнее нашего оптимистичного.
+  // реалтайму) — оно главнее нашего оптимистичного, но только когда своих
+  // незавершённых записей нет.
   useEffect(() => {
-    latest.current = items;
+    if (pending.current === 0) latest.current = items;
   }, [items]);
 
   const chain = useRef<Promise<unknown>>(Promise.resolve());
@@ -48,13 +55,19 @@ export function useJsonArrayWriter<T>(
       const rollback = () => {
         if (latest.current === next) latest.current = prev;
       };
+      pending.current += 1;
+      const settle = () => {
+        pending.current -= 1;
+      };
       const run = chain.current.then(() => write(next)).then(
         (ok) => {
           if (!ok) rollback();
+          settle();
           return ok;
         },
         () => {
           rollback();
+          settle();
           return false;
         },
       );

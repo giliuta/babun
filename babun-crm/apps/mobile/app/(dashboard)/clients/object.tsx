@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo } from "react";
+import { Alert, ScrollView, Text, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { AC_TYPE_LABELS } from "@babun/shared/local/clients";
 import { serviceDueState } from "@babun/shared/local/equipment-sla";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
-import { extractAddressFromMapUrl } from "@babun/shared/common/utils/map-links";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import {
@@ -23,7 +22,10 @@ import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClient, useClients, useUpdateClient } from "@/features/clients/queries";
 import {
-  defaultObjectType,
+  addressOrLinkPatch,
+  objectTarget,
+} from "@/features/clients/object-address";
+import {
   objectTypeVocabulary,
   snapObjectType,
 } from "@/features/clients/object-types";
@@ -32,43 +34,22 @@ import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// СТРАНИЦА ОБЪЕКТА — «чётко красиво обыгранное открытие самого объекта»
-// (владелец 2026-07-26). Отдельный экран, а не лист снизу: полей много, и
-// лист под них владелец отверг.
+// СТРАНИЦА ОБЪЕКТА — ИНФОРМАЦИЯ ОБЪЕКТА (владелец 2026-07-27: «если
+// [информация] закрепляется, тогда лучше сделать информацию объекта»
+// страницей). Отдельный экран, потому что к объекту крепится многое: техника
+// с датами ТО, «Записать сюда», история визитов, основной/удалить.
 //
 // Порядок отвечает на вопросы в том порядке, в котором они возникают у
-// диспетчера: как называется → куда ехать → по какой ссылке → как войти →
-// что за помещение → что там за техника → записать → служебное (основной,
-// удалить).
+// диспетчера: как называется → куда ехать → как войти → что там за техника →
+// записать → служебное (основной, удалить).
 //
-// Создание: страница держит ЧЕРНОВИК и пишет один патч по «Готово». Объект
-// существует, когда есть адрес или ссылка: метка одна ничего не значит, а по
-// адресу или ссылке бригада доедет. Ушли, не дойдя до гейта — не создалось
-// ничего, но набранное не выбрасываем молча: спрашиваем.
+// СОЗДАНИЯ ЗДЕСЬ НЕТ: объект добавляется листом снизу (ObjectSheet) — три поля
+// не стоят экрана поверх экрана, и объектов подряд заводят несколько. Поэтому
+// страница всегда работает над СУЩЕСТВУЮЩИМ объектом и пишет каждую правку
+// сразу, как остальные строки карточки.
 
 /** Стабильная пустая ссылка (см. ClientHeader). */
 const EMPTY_LOCATIONS: Location[] = [];
-
-type Draft = Omit<Location, "id" | "isPrimary">;
-
-const EMPTY_DRAFT: Draft = {
-  label: "",
-  address: "",
-  mapUrl: "",
-  note: "",
-  equipment: [],
-};
-
-/** Вставленная ссылка часто несёт в себе адрес — подставляем его, если поле
- *  адреса пустое. Короткая maps.app.goo.gl ничего не отдаёт, и это честно:
- *  адрес остаётся пустым, маршрут ведёт по ссылке. */
-function withAddressFromLink<T extends { address: string; mapUrl?: string }>(
-  next: T,
-): T {
-  if (next.address.trim() || !next.mapUrl?.trim()) return next;
-  const found = extractAddressFromMapUrl(next.mapUrl);
-  return found ? { ...next, address: found } : next;
-}
 
 export default function ClientObjectScreen() {
   const t = useThemeColors();
@@ -77,7 +58,6 @@ export default function ClientObjectScreen() {
     clientId: string;
     locId: string;
   }>();
-  const isNew = locId === "new";
 
   const { data: client, isLoading } = useClient(clientId ?? "");
   const updateClient = useUpdateClient(clientId ?? "");
@@ -103,22 +83,8 @@ export default function ClientObjectScreen() {
   };
   const writer = useLocationWriter(client?.locations ?? EMPTY_LOCATIONS, update);
 
-  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [saving, setSaving] = useState(false);
   const loc = client?.locations?.find((l) => l.id === locId) ?? null;
   const objectCount = client?.locations?.length ?? 0;
-
-  // Что показываем и правим: черновик в создании, объект — в обычном режиме.
-  const shown: Draft = isNew ? draft : (loc ?? EMPTY_DRAFT);
-  // Предзаполненный тип НЕ считается набранным: иначе уход с пустой формы
-  // спрашивал бы «Удалить черновик объекта?» на ровном месте.
-  const draftDirty =
-    isNew &&
-    (!!draft.address.trim() ||
-      !!draft.mapUrl?.trim() ||
-      !!draft.note?.trim());
-  const canSave =
-    !!draft.address.trim() || !!draft.mapUrl?.trim();
 
   // Визит = СОСТОЯВШИЙСЯ визит, ровно как в client-stats. Без фильтра по
   // статусу подпись считала визитами запланированные и отменённые заявки и
@@ -133,59 +99,22 @@ export default function ClientObjectScreen() {
     return { count: mine.length, lastDate };
   }, [appointments, loc]);
 
-  const saveDraft = async () => {
-    if (!canSave || saving) return;
-    setSaving(true);
-    try {
-      const ready = withAddressFromLink(draft);
-      const ok = await writer.addLocation({
-        ...ready,
-        // Раньше здесь стояло «Объект» — мусорное значение уезжало в базу и
-        // всплывало в фасете фильтра «Тип объекта».
-        label: ready.label.trim() || defaultType,
-        address: ready.address.trim(),
-        mapUrl: ready.mapUrl?.trim() || undefined,
-        note: ready.note?.trim() || undefined,
-        equipment: [],
-      });
-      if (ok) router.back();
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const patch = (p: Partial<Location>) => {
-    if (isNew) {
-      setDraft((d) => ({ ...d, ...p } as Draft));
-      return;
-    }
     if (!loc) return;
     void writer.patchLocation(loc.id, p);
   };
 
   // Словарь типов: сначала то, чем бизнес РЕАЛЬНО пользуется (по частоте),
-  // затем пресеты кабинета и стандартный набор. Текущее значение объекта
-  // показываем всегда, даже если оно больше нигде не встречается.
+  // затем пресеты кабинета и стандартный набор. Тип этого объекта показываем
+  // всегда, даже если он больше нигде не встречается.
   const typeOptions = useMemo(
     () =>
       objectTypeVocabulary(allClients, [
         ...labelPresets.map((preset) => preset.name),
-        shown.label,
+        loc?.label ?? "",
       ]),
-    [allClients, labelPresets, shown.label],
+    [allClients, labelPresets, loc?.label],
   );
-  // Обычный объект должен заводиться, НЕ КАСАЯСЬ этой строки: подставляем тип
-  // основного объекта того же клиента, иначе первый тип словаря, иначе «Дом».
-  const defaultType = useMemo(
-    () => defaultObjectType(client, typeOptions),
-    [client, typeOptions],
-  );
-  const typeSeeded = useRef(false);
-  useEffect(() => {
-    if (!isNew || typeSeeded.current || !defaultType) return;
-    typeSeeded.current = true;
-    setDraft((d) => (d.label.trim() ? d : { ...d, label: defaultType }));
-  }, [isNew, defaultType]);
 
   const confirmDelete = () => {
     if (!loc) return;
@@ -206,24 +135,9 @@ export default function ClientObjectScreen() {
     );
   };
 
-  const onBack = () => {
-    if (!draftDirty) {
-      router.back();
-      return;
-    }
-    Alert.alert(
-      "Удалить черновик объекта?",
-      "Адрес или ссылка не заполнены, поэтому объект ещё не создан.",
-      [
-        { text: "Продолжить заполнение", style: "cancel" },
-        { text: "Удалить", style: "destructive", onPress: () => router.back() },
-      ],
-    );
-  };
-
   // Объект мог быть удалён с другого устройства, пока страница открыта —
   // форма над несуществующим объектом писала бы патчи в пустоту.
-  if (!isNew && !loc) {
+  if (!loc) {
     return (
       <Screen>
         <ScreenHeader title="Объект" />
@@ -256,39 +170,10 @@ export default function ClientObjectScreen() {
   });
 
   return (
-    <>
-      {/* Свайп от левого края — тот же уход, что кнопка «‹». Без этого он
-          молча сносил набранный черновик, хотя кнопка о нём спрашивает. */}
-      <Stack.Screen options={{ gestureEnabled: !draftDirty }} />
     <Screen>
       <ScreenHeader
-        title={isNew ? "Новый объект" : shown.label || "Объект"}
+        title={loc.label || "Объект"}
         subtitle={client?.full_name || undefined}
-        onBack={onBack}
-        right={
-          isNew ? (
-            <Pressable
-              onPress={() => void saveDraft()}
-              disabled={!canSave || saving}
-              accessibilityRole="button"
-              accessibilityLabel="Готово"
-              accessibilityState={{ disabled: !canSave || saving, busy: saving }}
-              hitSlop={8}
-              style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}
-            >
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  fontSize: 17,
-                  fontWeight: "600",
-                  color: canSave && !saving ? t.accent : t.faint,
-                }}
-              >
-                {saving ? "Сохраняю…" : "Готово"}
-              </Text>
-            </Pressable>
-          ) : undefined
-        }
       />
 
       <ScrollView
@@ -307,36 +192,34 @@ export default function ClientObjectScreen() {
           <ChoiceRow
             label="Тип объекта"
             options={typeOptions}
-            value={shown.label}
+            value={loc.label}
             addPlaceholder="Свой тип"
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
           {/* АДРЕС И ССЫЛКА — ОДНО поле (владелец: «адрес — это и есть ссылка
               на объект, ссылка на карту; по сути одно и то же»). Принимает и
-              текст, и присланный пин. Пустое состояние — «Добавить», без
-              инструкции внутри поля. */}
+              текст, и присланный пин; куда что положить, решает
+              addressOrLinkPatch. Показываем адрес, а если его нет — ссылку:
+              иначе объект с одним присланным пином открывался с ПУСТЫМ полем,
+              будто «куда ехать» не заполнено. */}
           <FieldRow
             label="Адрес или ссылка"
-            value={shown.address}
+            value={objectTarget(loc)}
             placeholder=""
             addLabel="Добавить"
             stacked
             separated
             multiline
-            live={isNew}
-            autoFocus={isNew}
             // Последнее «куда ехать» стереть нельзя: без него объект
             // перестаёт быть объектом.
             onSave={(v) =>
-              isNew || v.trim() || shown.mapUrl?.trim()
-                ? patch({ address: v })
-                : undefined
+              v.trim() ? patch(addressOrLinkPatch(v, loc)) : undefined
             }
             trailing={
               <ObjectRouteButton
-                mapUrl={shown.mapUrl}
-                address={shown.address}
-                label={shown.label}
+                mapUrl={loc.mapUrl}
+                address={loc.address}
+                label={loc.label}
               />
             }
           />
@@ -344,103 +227,95 @@ export default function ClientObjectScreen() {
               есть заметка, просто заметка»). */}
           <FieldRow
             label="Заметка"
-            value={shown.note ?? ""}
+            value={loc.note ?? ""}
             placeholder=""
             addLabel="Добавить"
             stacked
             separated
             multiline
-            live={isNew}
             onSave={(v) => patch({ note: v || undefined })}
           />
         </RowGroup>
 
-        {/* Техника — только у существующего объекта: юниту нужен объект, в
-            который его положить. */}
-        {loc ? (
-          <>
-            <RowGroup title="Техника">
-              {dueRows.map(({ unit, value, color }, i) => (
-                <NavRow
-                  key={unit.id}
-                  label={unit.room || "Кондиционер"}
-                  value={value}
-                  valueColor={color}
-                  separated={i > 0}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/clients/unit",
-                      params: { clientId, locId: loc.id, unitId: unit.id },
-                    })
-                  }
-                />
-              ))}
-              <AddRow
-                label="+ Добавить кондиционер"
-                separated={dueRows.length > 0}
-                onPress={() =>
-                  router.push({
-                    pathname: "/clients/unit",
-                    params: { clientId, locId: loc.id, unitId: "new" },
+        <RowGroup title="Техника">
+          {dueRows.map(({ unit, value, color }, i) => (
+            <NavRow
+              key={unit.id}
+              label={unit.room || "Кондиционер"}
+              value={value}
+              valueColor={color}
+              separated={i > 0}
+              onPress={() =>
+                router.push({
+                  pathname: "/clients/unit",
+                  params: { clientId, locId: loc.id, unitId: unit.id },
+                })
+              }
+            />
+          ))}
+          <AddRow
+            label="+ Добавить кондиционер"
+            separated={dueRows.length > 0}
+            onPress={() =>
+              router.push({
+                pathname: "/clients/unit",
+                params: { clientId, locId: loc.id, unitId: "new" },
+              })
+            }
+          />
+        </RowGroup>
+
+        <RowGroup>
+          <NavRow
+            label="Записать сюда"
+            loud
+            onPress={() =>
+              client
+                ? guardedBook(client, {
+                    locationId: loc.id,
+                    // Одна формула бригады на все точки записи: последняя
+                    // бригада КЛИЕНТА. Без неё /book подставлял последнюю
+                    // бригаду ТЕНАНТА, и две кнопки записи одного клиента
+                    // давали разные бригады.
+                    teamId: stats?.lastTeamId ?? null,
                   })
-                }
-              />
-            </RowGroup>
+                : undefined
+            }
+          />
+        </RowGroup>
+        {history ? (
+          <RowCaption
+            text={`${history.count} ${visitsWord(history.count)}${
+              history.lastDate
+                ? ` · посл. ${formatShortDateRu(history.lastDate)}`
+                : ""
+            }`}
+          />
+        ) : null}
 
-            <RowGroup>
-              <NavRow
-                label="Записать сюда"
-                loud
-                onPress={() =>
-                  client
-                    ? guardedBook(client, {
-                        locationId: loc.id,
-                        // Одна формула бригады на все точки записи: последняя
-                        // бригада КЛИЕНТА. Без неё /book подставлял последнюю
-                        // бригаду ТЕНАНТА, и две кнопки записи одного клиента
-                        // давали разные бригады.
-                        teamId: stats?.lastTeamId ?? null,
-                      })
-                    : undefined
-                }
-              />
-            </RowGroup>
-            {history ? (
-              <RowCaption
-                text={`${history.count} ${visitsWord(history.count)}${
-                  history.lastDate
-                    ? ` · посл. ${formatShortDateRu(history.lastDate)}`
-                    : ""
-                }`}
-              />
-            ) : null}
-
-            {/* «Основной» — не бейдж и не строка-дверь: у неосновного это
-                действие, у основного — тихая подпись под группой. */}
-            <RowGroup>
-              {objectCount > 1 && !loc.isPrimary ? (
-                <ActionRow
-                  label="Сделать основным"
-                  onPress={() => {
-                    haptics.tap();
-                    void writer.makePrimary(loc.id);
-                  }}
-                />
-              ) : null}
-              <ActionRow
-                label="Удалить объект"
-                tone="danger"
-                separated={objectCount > 1 && !loc.isPrimary}
-                onPress={confirmDelete}
-              />
-            </RowGroup>
-            {objectCount > 1 && loc.isPrimary ? (
-              <RowCaption text="Основной объект — его подставляем при записи." />
-            ) : null}
-          </>
+        {/* «Основной» — не бейдж и не строка-дверь: у неосновного это
+            действие, у основного — тихая подпись под группой. */}
+        <RowGroup>
+          {objectCount > 1 && !loc.isPrimary ? (
+            <ActionRow
+              label="Сделать основным"
+              onPress={() => {
+                haptics.tap();
+                void writer.makePrimary(loc.id);
+              }}
+            />
+          ) : null}
+          <ActionRow
+            label="Удалить объект"
+            tone="danger"
+            separated={objectCount > 1 && !loc.isPrimary}
+            onPress={confirmDelete}
+          />
+        </RowGroup>
+        {objectCount > 1 && loc.isPrimary ? (
+          <RowCaption text="Основной объект — его подставляем при записи." />
         ) : null}
       </ScrollView>
     </Screen>
-    </>
   );
 }

@@ -46,6 +46,21 @@ describe("client native persistence contract", () => {
     assert.match(unit, /if \(ok\) router\.back\(\)/);
     assert.match(object, /Удалить объект/);
     assert.match(unit, /Удалить кондиционер/);
+    // Создание объекта уехало со страницы в лист снизу (2026-07-27). Правило
+    // то же: форма пустеет ТОЛЬКО после подтверждённой записи, иначе набранный
+    // адрес исчезал вместе с неудавшимся PATCH-ем.
+    const sheet = read("ObjectSheet.tsx");
+    assert.match(sheet, /const id = await writer\.addLocation\(/);
+    assert.match(sheet, /if \(!id\) \{/);
+    // Отказ записи выходит РАНЬШЕ очистки формы: сама очистка (сброс адреса и
+    // заметки с сохранением выбранного типа) стоит уже за этой веткой.
+    const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));
+    assert.match(afterGate, /return false;/);
+    assert.match(afterGate, /setDraft\(\(d\) => \(\{ \.\.\.EMPTY_DRAFT/);
+    // Страница объекта больше НЕ создаёт: черновика, «Готово» и гейта на ней
+    // быть не должно (иначе вернутся две расходящиеся дороги создания).
+    assert.doesNotMatch(object, /locId === "new"/);
+    assert.doesNotMatch(object, /saveDraft/);
   });
 
   test("json-массивы клиента пишутся одной очередью из свежайшего значения", () => {
@@ -67,6 +82,10 @@ describe("client native persistence contract", () => {
       /update\(\{\s*locations:/,
     );
     assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
+    // Лист добавления пишет объекты ТЕМ ЖЕ писателем: свой снимок массива
+    // вернул бы взаимное затирание одной jsonb-колонки.
+    assert.match(read("ObjectSheet.tsx"), /useLocationWriter/);
+    assert.doesNotMatch(read("ObjectSheet.tsx"), /update\(\{\s*locations:/);
     assert.match(read("ClientHeader.tsx"), /useJsonArrayWriter/);
     // Теги и заметки — те же jsonb-массивы: собственных копий механики быть
     // не должно, иначе расхождение вернётся с другой стороны.

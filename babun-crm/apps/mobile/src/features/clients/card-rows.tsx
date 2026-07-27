@@ -28,6 +28,9 @@ export function RowGroup({
     <View style={{ marginHorizontal: 12, marginTop: 12 }}>
       {title ? (
         <Text
+          // Заголовок раздела: VoiceOver умеет прыгать по заголовкам, а без
+          // роли группы карточки читались одним нерасчленимым потоком.
+          accessibilityRole="header"
           maxFontSizeMultiplier={1.3}
           style={{
             marginBottom: 6,
@@ -603,6 +606,7 @@ export function ChoiceRow({
   value,
   separated,
   addPlaceholder,
+  live,
   onSelect,
 }: {
   label: string;
@@ -611,6 +615,11 @@ export function ChoiceRow({
   separated?: boolean;
   /** Подпись поля, когда создают своё значение. */
   addPlaceholder?: string;
+  /** Режим черновика (как у FieldRow): своё значение отдаётся на каждый
+   *  символ. Нужен там, где кнопка сохранения живёт ВНЕ прокрутки и фокус не
+   *  снимает: набрал «Склад», сразу нажал «Добавить объект» — без live к
+   *  записи уехал бы прежний тип. */
+  live?: boolean;
   onSelect: (v: string) => void;
 }) {
   const t = useThemeColors();
@@ -623,6 +632,18 @@ export function ChoiceRow({
     setDraft("");
     if (next) onSelect(next);
   };
+
+  // Коммит на РАЗМОНТИРОВАНИИ — как у FieldRow. Без него набранный свой тип
+  // терялся молча: строка живёт и внутри нижнего листа, а лист закрывается
+  // свайпом за грабер и тапом по скриму, где blur не наступает вовсе.
+  const latest = useRef({ draft, onSelect });
+  latest.current = { draft, onSelect };
+  useEffect(() => {
+    return () => {
+      const next = latest.current.draft.trim();
+      if (next) latest.current.onSelect(next);
+    };
+  }, []);
 
   return (
     <View
@@ -652,7 +673,10 @@ export function ChoiceRow({
         <TextInput
           autoFocus
           value={draft}
-          onChangeText={setDraft}
+          onChangeText={(v) => {
+            setDraft(v);
+            if (live) onSelect(v);
+          }}
           onBlur={commit}
           onSubmitEditing={commit}
           returnKeyType="done"
