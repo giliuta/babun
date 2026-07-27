@@ -67,7 +67,11 @@ export function AgendaView({
         flexGrow: 1,
       }}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={t.accent}
+        />
       }
       renderItem={({ item }) => (
         <DaySection

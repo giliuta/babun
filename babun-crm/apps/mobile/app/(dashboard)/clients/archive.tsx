@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -13,11 +12,13 @@ import type { Client } from "@babun/shared/local/clients";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Spinner } from "@/components/ui/Spinner";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import {
   useArchivedClients,
   useRestoreClient,
 } from "@/features/clients/queries";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 
 function archivedLabel(client: Client): string {
@@ -34,6 +35,7 @@ function archivedLabel(client: Client): string {
 export default function ClientArchiveScreen() {
   const t = useThemeColors();
   const archived = useArchivedClients();
+  const pull = usePullRefresh(archived.refetch);
   const restore = useRestoreClient();
   const [restoringId, setRestoringId] = useState<string | null>(null);
 
@@ -57,7 +59,7 @@ export default function ClientArchiveScreen() {
       <ScreenHeader title="Архив клиентов" />
       {archived.isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={t.accent} accessibilityLabel="Загрузка архива" />
+          <Spinner size={28} label="Загрузка архива" />
         </View>
       ) : archived.isError ? (
         <ClientDataNotice
@@ -74,8 +76,9 @@ export default function ClientArchiveScreen() {
           contentContainerStyle={{ padding: 16, paddingBottom: 32, flexGrow: 1 }}
           refreshControl={
             <RefreshControl
-              refreshing={archived.isRefetching}
-              onRefresh={() => void archived.refetch()}
+              refreshing={pull.refreshing}
+              onRefresh={pull.onRefresh}
+              tintColor={t.accent}
             />
           }
           ItemSeparatorComponent={() => <View className="h-3" />}
@@ -116,7 +119,7 @@ export default function ClientArchiveScreen() {
                   style={{ backgroundColor: t.fill, opacity: restoringId && !busy ? 0.45 : 1 }}
                 >
                   {busy ? (
-                    <ActivityIndicator size="small" color={t.accent} />
+                    <Spinner size={18} label="Восстанавливаем" />
                   ) : (
                     <RotateCcw color={t.accent} size={17} />
                   )}

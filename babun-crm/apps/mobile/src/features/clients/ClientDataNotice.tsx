@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { AlertCircle, RefreshCw } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface ClientDataNoticeProps {
   title: string;
@@ -48,7 +49,7 @@ export function ClientDataNotice({
           style={{ backgroundColor: t.fill }}
         >
           {retrying ? (
-            <ActivityIndicator color={t.accent} />
+            <Spinner size={18} label="Повторяем" />
           ) : (
             <RefreshCw color={t.accent} size={16} strokeWidth={2.2} />
           )}

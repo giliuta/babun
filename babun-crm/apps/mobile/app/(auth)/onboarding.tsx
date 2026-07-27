@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Check } from "lucide-react-native";
+import { Spinner } from "@/components/ui/Spinner";
 import {
   AuthCard,
   AuthField,
@@ -110,11 +111,12 @@ export default function OnboardingScreen() {
 // ---------------------------------------------------------------------------
 
 function PendingCard() {
-  const t = useAuthTheme();
   return (
     <AuthCard>
-      <View accessibilityLabel="Загрузка" style={{ paddingVertical: 32, alignItems: "center" }}>
-        <ActivityIndicator color={t.accent} />
+      {/* Ярлык несёт сам спиннер: вложенный accessibilityLabel склеивал два
+          узла, и VoiceOver терял подпись. */}
+      <View style={{ paddingVertical: 32, alignItems: "center" }}>
+        <Spinner size={26} label="Загрузка" />
       </View>
     </AuthCard>
   );

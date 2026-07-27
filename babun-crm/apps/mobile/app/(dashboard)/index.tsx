@@ -33,6 +33,8 @@ import {
 } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingBar } from "@/components/ui/LoadingBar";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
@@ -208,6 +210,9 @@ export default function CalendarTab() {
       ]),
     [qc],
   );
+  // Контрол ленты отражает ЖЕСТ: раньше он питался от isRefetching, то есть
+  // выезжал сам при каждом возврате на календарь.
+  const pull = usePullRefresh(onRefresh);
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (!canMutateAppointment(apt)) {
@@ -1492,6 +1497,10 @@ export default function CalendarTab() {
         }}
       />
 
+      {/* Фоновое дообновление календаря: полоса под шапкой вместо контрола,
+          который сам выезжал и сдвигал ленту. */}
+      <LoadingBar visible={isRefetching && !pull.refreshing} />
+
       {calendarLoading ? (
         // mode известен синхронно (MMKV) — скелет обязан обещать ту же
         // геометрию, что придёт после загрузки (день ≠ 7 колонок недели,
@@ -1530,8 +1539,8 @@ export default function CalendarTab() {
           labelFor={labelFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
-          refreshing={isRefetching}
-          onRefresh={onRefresh}
+          refreshing={pull.refreshing}
+          onRefresh={pull.onRefresh}
         />
       ) : mode === "week" ? (
         <>

@@ -20,6 +20,7 @@ import {
   formatInvoiceMoney,
   todayYmd,
 } from "@/features/invoices/format";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
@@ -114,12 +115,15 @@ export default function InvoicesScreen() {
     (calendarSettingsQuery.data === undefined
       ? calendarSettingsQuery.error
       : null);
-  const refresh = () => void Promise.all([
-    invoices.refetch(),
-    paymentRows.refetch(),
-    clientsQuery.refetch(),
-    calendarSettingsQuery.refetch(),
-  ]);
+  // Промис ВОЗВРАЩАЕМ: без него контрол гаснет на тёплом кэше раньше данных.
+  const refresh = () =>
+    Promise.all([
+      invoices.refetch(),
+      paymentRows.refetch(),
+      clientsQuery.refetch(),
+      calendarSettingsQuery.refetch(),
+    ]);
+  const pull = usePullRefresh(refresh);
 
   if (loading) {
     return (
@@ -201,14 +205,11 @@ export default function InvoicesScreen() {
         data={data}
         keyExtractor={(invoice) => invoice.id}
         refreshControl={
+          // Контрол = ЖЕСТ. Раньше он питался от isRefetching четырёх
+          // запросов, то есть срабатывал сам при каждом возврате на экран.
           <RefreshControl
-            refreshing={
-              invoices.isRefetching ||
-              paymentRows.isRefetching ||
-              clientsQuery.isRefetching ||
-              calendarSettingsQuery.isRefetching
-            }
-            onRefresh={refresh}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             tintColor={t.accent}
           />
         }

@@ -43,6 +43,7 @@ import {
   locationAddressForBooking,
   type Client,
 } from "@babun/shared/local/clients";
+import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -1203,6 +1204,13 @@ export default function BookScreen() {
           <View style={{ minWidth: 72 }} />
         </View>
         <View className="flex-1 items-center justify-center px-7">
+          {/* Ожидание ДВИЖЕТСЯ: крупная надпись без движения читалась как
+              зависший экран (владелец 2026-07-27). */}
+          {referencesPending ? (
+            <View style={{ marginBottom: 14 }}>
+              <Spinner size={30} label="Загружаем данные записи" />
+            </View>
+          ) : null}
           <Text
             style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
           >

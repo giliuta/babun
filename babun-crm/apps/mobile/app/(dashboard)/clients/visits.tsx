@@ -7,6 +7,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -124,7 +125,9 @@ export default function ClientVisitsScreen() {
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {isLoading ? (
-          <RowCaption text="Загрузка…" />
+          <View className="items-center py-10">
+            <Spinner size={26} label="Загрузка истории записей" />
+          </View>
         ) : sorted.length === 0 ? (
           <RowCaption text="Записей ещё не было." />
         ) : null}

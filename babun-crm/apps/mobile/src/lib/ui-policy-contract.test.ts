@@ -22,6 +22,40 @@ function sourceFiles(root: string): string[] {
 }
 
 describe("mobile UI product policy", () => {
+  test("ожидание всегда ДВИЖЕТСЯ: системный ActivityIndicator в продукте не используется", () => {
+    // Владелец 2026-07-27: «оно как будто зависло… давай сделаем анимацию,
+    // чтоб крутилась, если оно думает». Системный индикатор серый (вне
+    // палитры), а в программно показанном RefreshControl iOS рисует его
+    // СТОЯЩИМ. Единственная крутилка продукта — components/ui/Spinner.
+    const entries = sourceFiles(resolve(here, ".."))
+      .concat(sourceFiles(resolve(here, "../../app")))
+      .map((path) => ({ path, source: readFileSync(path, "utf8") }));
+    const offenders = entries
+      .filter(({ source }) => /<ActivityIndicator\b/.test(source))
+      .map(({ path }) => path);
+    assert.deepEqual(offenders, [], `используйте <Spinner />: ${offenders.join(", ")}`);
+  });
+
+  test("контрол обновления отражает ЖЕСТ, а не фоновое дообновление", () => {
+    // refreshing={isRefetching} показывал контрол ПРОГРАММНО при каждом
+    // возврате на экран: список уезжал вниз сам. Источник — usePullRefresh.
+    const entries = sourceFiles(resolve(here, ".."))
+      .concat(sourceFiles(resolve(here, "../../app")))
+      .map((path) => ({ path, source: readFileSync(path, "utf8") }));
+    const offenders = entries
+      // Комментарии не код: правило объясняется словами в LoadingBar и в
+      // usePullRefresh, и объяснение не должно ронять свой же тест.
+      .map(({ path, source }) => ({
+        path,
+        code: source.replace(/^\s*(?:\/\/|\*|\/\*).*$/gm, ""),
+      }))
+      .filter(({ code }) =>
+        /refreshing=\{[^}]*is(?:Refetching|Fetching)/.test(code),
+      )
+      .map(({ path }) => path);
+    assert.deepEqual(offenders, [], `используйте usePullRefresh: ${offenders.join(", ")}`);
+  });
+
   test("is permanently light-only at both Expo and runtime boundaries", () => {
     const appConfig = JSON.parse(
       readFileSync(resolve(here, "../../app.json"), "utf8"),

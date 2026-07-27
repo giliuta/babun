@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Building2, Mail, ShieldCheck } from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
@@ -9,6 +9,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 import { useSession } from "@/providers/SessionProvider";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import {
@@ -95,7 +96,7 @@ export default function InvitationScreen() {
           />
         ) : preview.isLoading ? (
           <View className="items-center px-6 py-20">
-            <ActivityIndicator color={t.accent} />
+            <Spinner size={28} label="Проверяем приглашение" />
             <Text style={{ marginTop: 12, fontSize: 14, color: t.sub }}>
               Проверяем приглашение…
             </Text>

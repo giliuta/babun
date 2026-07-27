@@ -32,7 +32,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Linking,
@@ -55,6 +54,7 @@ import { chooseValue } from "@/lib/choose";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { Spinner } from "@/components/ui/Spinner";
 import { useThemeColors } from "@/theme/colors";
 import {
   useClient,
@@ -171,7 +171,7 @@ export default function ClientDetailScreen() {
   if (roleQuery.isPending) {
     return (
       <Screen className="items-center justify-center">
-        <ActivityIndicator accessibilityLabel="Проверяем доступ" />
+        <Spinner size={28} label="Проверяем доступ" />
       </Screen>
     );
   }
@@ -193,7 +193,7 @@ export default function ClientDetailScreen() {
   if (!isDraft && isLoading) {
     return (
       <Screen className="items-center justify-center">
-        <ActivityIndicator accessibilityLabel="Загрузка карточки клиента" />
+        <Spinner size={28} label="Загрузка карточки клиента" />
       </Screen>
     );
   }
@@ -601,7 +601,7 @@ function ArchivedClientView({
             style={{ backgroundColor: t.accent, opacity: restoring ? 0.6 : 1 }}
           >
             {restoring ? (
-              <ActivityIndicator color={t.onAccent} />
+              <Spinner size={20} color={t.onAccent} label="Восстанавливаем" />
             ) : (
               <RotateCcw color={t.onAccent} size={18} />
             )}

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -14,6 +13,7 @@ import type {
   PhotoKind,
 } from "@babun/shared/db/repositories/appointment-photos";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 
 const PHOTO_KIND_LABEL: Record<PhotoKind, string> = {
   before: "До работы",
@@ -68,7 +68,7 @@ export function AppointmentPhotoViewer({
         />
         {loading ? (
           <View className="absolute inset-0 items-center justify-center" pointerEvents="none">
-            <ActivityIndicator color={t.accent} accessibilityLabel="Загрузка фотографии" />
+            <Spinner size={26} label="Загрузка фотографии" />
           </View>
         ) : null}
         {failed ? (

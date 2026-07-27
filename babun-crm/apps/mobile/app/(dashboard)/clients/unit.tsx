@@ -14,6 +14,7 @@ import {
 import { serviceDueState } from "@babun/shared/local/equipment-sla";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import {
   ActionRow,
   ControlRow,
@@ -182,13 +183,17 @@ export default function ClientUnitScreen() {
       <Screen>
         <ScreenHeader title="Кондиционер" />
         <View className="flex-1 items-center justify-center px-8">
-          <Text
-            accessibilityRole="header"
-            className="text-center text-[15px]"
-            style={{ color: t.sub }}
-          >
-            {isLoading ? "Загрузка…" : "Кондиционер удалён"}
-          </Text>
+          {isLoading ? (
+            <Spinner size={28} label="Загрузка кондиционера" />
+          ) : (
+            <Text
+              accessibilityRole="header"
+              className="text-center text-[15px]"
+              style={{ color: t.sub }}
+            >
+              Кондиционер удалён
+            </Text>
+          )}
         </View>
       </Screen>
     );

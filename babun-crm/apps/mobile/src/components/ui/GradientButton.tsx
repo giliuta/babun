@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import Animated, {
   cancelAnimation,
@@ -13,6 +13,7 @@ import Animated, {
 import { useThemeColors } from "@/theme/colors";
 import { ctaGradient } from "@/components/ui/color-contrast";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import { Spinner } from "@/components/ui/Spinner";
 
 // The «Halo Cobalt» primary action — full-width cobalt-gradient pill with a
 // floating accent shadow, a slow halo sheen sweep, and a press dip. The ONLY
@@ -145,7 +146,7 @@ export function GradientButton({
           />
         ) : null}
         {loading ? (
-          <ActivityIndicator color={labelColor} />
+          <Spinner size={20} color={labelColor} label="Сохраняем" />
         ) : (
           <Text
             maxFontSizeMultiplier={1.3}

@@ -1,9 +1,10 @@
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import type { AcquisitionSource, Client } from "@babun/shared/local/clients";
 import { ACQUISITION_LABELS } from "@babun/shared/local/clients";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import {
   FieldRow,
   NavRow,
@@ -42,9 +43,13 @@ export default function ClientExtrasScreen() {
   };
 
   if (!client) {
+    // Было пустое белое полотно: экран выглядел сломанным, а он просто ждёт.
     return (
       <Screen>
         <ScreenHeader title="Ещё" />
+        <View className="flex-1 items-center justify-center">
+          <Spinner size={28} label="Загрузка" />
+        </View>
       </Screen>
     );
   }

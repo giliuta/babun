@@ -7,6 +7,7 @@ import { serviceDueState } from "@babun/shared/local/equipment-sla";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import {
   ActionRow,
   AddRow,
@@ -142,13 +143,19 @@ export default function ClientObjectScreen() {
       <Screen>
         <ScreenHeader title="Объект" />
         <View className="flex-1 items-center justify-center px-8">
-          <Text
-            className="text-center text-[15px]"
-            style={{ color: t.sub }}
-            accessibilityRole="header"
-          >
-            {isLoading ? "Загрузка…" : "Объект удалён"}
-          </Text>
+          {/* Ожидание ДВИЖЕТСЯ: статичная надпись «Загрузка…» читалась как
+              зависший экран (владелец 2026-07-27). */}
+          {isLoading ? (
+            <Spinner size={28} label="Загрузка объекта" />
+          ) : (
+            <Text
+              className="text-center text-[15px]"
+              style={{ color: t.sub }}
+              accessibilityRole="header"
+            >
+              Объект удалён
+            </Text>
+          )}
         </View>
       </Screen>
     );

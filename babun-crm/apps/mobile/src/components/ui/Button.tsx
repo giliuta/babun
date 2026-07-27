@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import { GradientButton } from "./GradientButton";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 
 type Variant = "primary" | "secondary";
 type Tone = "default" | "danger";
@@ -61,7 +62,7 @@ export function Button({
       })}
     >
       {loading ? (
-        <ActivityIndicator color={tone === "danger" ? t.danger : t.accent} />
+        <Spinner size={18} color={tone === "danger" ? t.danger : t.accent} label="Сохраняем" />
       ) : (
         <Text
           maxFontSizeMultiplier={1.3}

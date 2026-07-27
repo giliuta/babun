@@ -1,6 +1,7 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { useAuthTheme } from "@/components/auth/theme";
+import { Spinner } from "@/components/ui/Spinner";
 
 // «Вход в Babun» social stack — apps/mobile/docs/DESIGN-SYSTEM.md + the SaaS
 // login research spec. Three full-width 52pt pill buttons, equal weight,
@@ -76,7 +77,7 @@ function StackButton({
         opacity: disabled ? 0.5 : pressed ? 0.85 : 1,
       })}
     >
-      {busy ? <ActivityIndicator color={textColor} /> : icon}
+      {busy ? <Spinner size={18} color={textColor} label="Входим" /> : icon}
       <Text style={{ fontSize: 16, fontWeight: "600", color: textColor }}>{label}</Text>
     </Pressable>
   );

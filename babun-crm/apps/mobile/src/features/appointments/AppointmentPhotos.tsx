@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -33,6 +32,7 @@ import {
   type UploadAppointmentPhotosInput,
 } from "@/features/appointments/appointment-photos";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 
 const KIND_OPTIONS: readonly { value: PhotoKind; label: string }[] = [
   { value: "before", label: "До работы" },
@@ -241,7 +241,7 @@ export function AppointmentPhotos({
             className="flex-row items-center gap-2 px-4 py-3"
             style={{ borderTopWidth: 1, borderTopColor: t.separator }}
           >
-            <ActivityIndicator color={t.accent} accessibilityLabel="Загрузка фото" />
+            <Spinner size={18} label="Загрузка фото" />
             <Text className="text-sm" style={{ color: t.sub }}>
               Загружаем фото…
             </Text>
@@ -278,7 +278,7 @@ export function AppointmentPhotos({
         >
           {photosQuery.isLoading ? (
             <View className="items-center py-4">
-              <ActivityIndicator accessibilityLabel="Загрузка фотографий заявки" />
+              <Spinner size={24} label="Загрузка фотографий заявки" />
             </View>
           ) : photosQuery.isError ? (
             <View className="items-center py-2">
@@ -369,7 +369,7 @@ export function AppointmentPhotos({
                         style={{ backgroundColor: `${t.ink}94` }}
                       >
                         {deleting ? (
-                          <ActivityIndicator color={t.onAccent} />
+                          <Spinner size={20} color={t.onAccent} label="Удаляем фото" />
                         ) : (
                           <Trash2 color={t.onAccent} size={14} strokeWidth={2.2} />
                         )}

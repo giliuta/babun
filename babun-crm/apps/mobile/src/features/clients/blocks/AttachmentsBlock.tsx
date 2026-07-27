@@ -11,7 +11,6 @@
 
 import { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -34,6 +33,7 @@ import {
 import { AddRow, RowGroup } from "@/features/clients/card-rows";
 import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface AttachmentsBlockProps {
   clientId: string;
@@ -191,7 +191,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
       <View className="gap-2 px-4 pb-3 pt-1">
         {isLoading ? (
           <View className="items-center py-3">
-            <ActivityIndicator />
+            <Spinner size={24} label="Загрузка вложений" />
           </View>
         ) : isError ? (
           <View className="flex-row items-center gap-2 py-1">
@@ -248,7 +248,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
                       className="absolute inset-0 items-center justify-center"
                       style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
                     >
-                      <ActivityIndicator color="#fff" />
+                      <Spinner size={22} color="#ffffff" label="Загружаем файл" />
                     </View>
                   ) : null}
                 </Pressable>

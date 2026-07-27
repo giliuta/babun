@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Linking,
@@ -41,10 +40,13 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { LoadingBar } from "@/components/ui/LoadingBar";
+import { Spinner } from "@/components/ui/Spinner";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import {
   useClients,
   useClientTags,
@@ -477,6 +479,9 @@ export default function ClientsListScreen() {
     openImport?: string;
   }>();
   const { data, isLoading, isRefetching, refetch, error } = useClients();
+  // Контрол обновления отражает ЖЕСТ, а не любое дообновление: иначе список
+  // сам уезжал вниз с застывшей системной вертушкой.
+  const pull = usePullRefresh(refetch);
   const { data: tags = [] } = useClientTags();
   const { data: appointments = [] } = useAppointments();
   const { data: teams = [] } = useTeams();
@@ -921,7 +926,7 @@ export default function ClientsListScreen() {
 
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator accessibilityLabel="Загрузка клиентов" />
+          <Spinner size={30} label="Загрузка клиентов" />
         </View>
       ) : error ? (
         <ClientDataNotice
@@ -935,6 +940,10 @@ export default function ClientsListScreen() {
           retrying={isRefetching}
         />
       ) : (
+        <>
+        {/* Дообновление в фоне: данные на экране уже есть, поэтому индикация
+            не имеет права сдвигать список. */}
+        <LoadingBar visible={isRefetching && !pull.refreshing} />
         <FlatList
           style={{ flex: 1 }}
           accessibilityLabel="Список клиентов"
@@ -981,7 +990,11 @@ export default function ClientsListScreen() {
             // В режиме выбора pull-to-refresh отключаем — refetch мог бы
             // выронить выбранные строки из-под чекбоксов.
             selecting ? undefined : (
-              <RefreshControl refreshing={isRefetching} onRefresh={refetch} />
+              <RefreshControl
+                refreshing={pull.refreshing}
+                onRefresh={pull.onRefresh}
+                tintColor={t.accent}
+              />
             )
           }
           ListEmptyComponent={
@@ -1010,6 +1023,7 @@ export default function ClientsListScreen() {
             )
           }
         />
+        </>
       )}
 
       {/* В режиме выбора — нижняя панель массовых действий; вне выбора —

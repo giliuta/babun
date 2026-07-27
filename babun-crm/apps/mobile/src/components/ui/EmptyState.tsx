@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { Spinner } from "@/components/ui/Spinner";
 import { useThemeColors } from "@/theme/colors";
 
 // Consistent empty / loading / error surface. `fill` centers full-screen
@@ -27,13 +28,10 @@ export function EmptyState({
 
   if (state === "loading") {
     return (
-      <View
-        className={wrap}
-        accessible
-        accessibilityRole="progressbar"
-        accessibilityLabel={title ?? "Загрузка"}
-      >
-        <ActivityIndicator color={t.accent} />
+      // Роль и подпись несёт сам спиннер: два вложенных accessible-узла
+      // VoiceOver склеивает, и подпись пропадала.
+      <View className={wrap}>
+        <Spinner size={28} label={title ?? "Загрузка"} />
         {title ? (
           <Text
             style={{

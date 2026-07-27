@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -22,6 +21,7 @@ import { Card } from "@/components/ui/Card";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { Spinner } from "@/components/ui/Spinner";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useClientTags } from "../queries";
@@ -1023,7 +1023,7 @@ function ResultStep({
     return (
       <Card className="gap-3 p-5">
         <View className="flex-row items-center gap-2">
-          <ActivityIndicator color={t.accent} />
+          <Spinner size={20} label="Импортируем" />
           <Text className="text-[15px] font-semibold" style={{ color: t.ink }}>
             Импортируем…
           </Text>

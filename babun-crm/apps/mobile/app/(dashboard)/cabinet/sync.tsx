@@ -28,6 +28,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
+import { usePullRefresh } from "@/lib/pull-refresh";
 import { useTenantId } from "@/lib/tenant";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
@@ -51,6 +52,10 @@ export default function SyncStatusScreen() {
       setLoading(false);
     }
   }, [tenantId]);
+
+  // Контрол = ЖЕСТ. `loading` взводится и первым чтением очереди, и подпиской
+  // на её изменения — то есть контрол выезжал сам, стоило очереди дрогнуть.
+  const pull = usePullRefresh(refresh);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,8 +164,8 @@ export default function SyncStatusScreen() {
         contentContainerStyle={{ paddingBottom: 28 }}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
-            onRefresh={() => void refresh()}
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
             tintColor={t.accent}
           />
         }
