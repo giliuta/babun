@@ -245,7 +245,7 @@ export function BulkSmsSheet({
               keyboardAppearance="light"
               multiline
               maxLength={500}
-              className="min-h-[92px] rounded-2xl px-3 py-2.5 text-base"
+              className="min-h-[92px] rounded-[14px] px-3 py-2.5 text-base"
               style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
             />
             <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>

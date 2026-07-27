@@ -2,6 +2,7 @@ import { Linking } from "react-native";
 import {
   buildMapUrl,
   parseAddress,
+  type MapService,
 } from "@babun/shared/common/utils/map-links";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
@@ -42,16 +43,21 @@ export function openRouteMenu(target: string): void {
     void Linking.openURL(clean.startsWith("http") ? clean : `https://${clean}`);
     return;
   }
-  void chooseOption(clean, [
-    { label: "Apple Карты" },
-    { label: "Google Карты" },
-  ]).then((index) => {
-    const url =
-      index === 0
-        ? buildMapUrl("apple", clean)
-        : index === 1
-          ? buildMapUrl("google", clean)
-          : null;
+  // Четыре сервиса, а не два (владелец 2026-07-27: «оно определяет Google,
+  // Waze, Яндекс и так далее»). buildMapUrl умеет все четыре; какие из них
+  // предлагать — станет настройкой клиентов, когда владелец скажет свой набор.
+  const services: { label: string; service: MapService }[] = [
+    { label: "Google Карты", service: "google" },
+    { label: "Apple Карты", service: "apple" },
+    { label: "Waze", service: "waze" },
+    { label: "Яндекс Карты", service: "yandex" },
+  ];
+  void chooseOption(
+    clean,
+    services.map((s) => ({ label: s.label })),
+  ).then((index) => {
+    const picked = index === null ? null : services[index];
+    const url = picked ? buildMapUrl(picked.service, clean) : null;
     if (url) void Linking.openURL(url);
   });
 }

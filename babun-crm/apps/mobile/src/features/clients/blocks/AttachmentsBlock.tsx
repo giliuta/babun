@@ -217,7 +217,7 @@ export default function AttachmentsBlock({ clientId }: AttachmentsBlockProps) {
             {items.map((a) => (
               <View
                 key={a.id}
-                className="relative aspect-square w-[31%] overflow-hidden rounded-[10px]"
+                className="relative aspect-square w-[31%] overflow-hidden rounded-[14px]"
                 style={{ backgroundColor: t.fill }}
               >
                 <Pressable

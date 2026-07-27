@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import { AccessibilityInfo, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
@@ -93,6 +94,7 @@ export function ObjectSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
   const writer = useLocationWriter(client.locations ?? EMPTY_LOCATIONS, update);
@@ -298,10 +300,14 @@ export function ObjectSheet({
             label="Тип объекта"
             options={typeOptions}
             value={type}
-            addPlaceholder="Свой тип"
             // Кнопки листа фокус не снимают: набрал «Склад» и сразу нажал
             // «Добавить объект» — без live уехал бы прежний тип.
-            live
+            // Шестерёнка ведёт в настройки типов и ЗАКРЫВАЕТ лист: страница
+            // настроек не может жить под нашим листом.
+            onSettings={() => {
+              close();
+              router.push("/cabinet/object-types");
+            }}
             onSelect={(v) =>
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))
             }
@@ -310,13 +316,11 @@ export function ObjectSheet({
             label="Адрес или ссылка"
             value={draft.target}
             placeholder=""
-            addLabel="Добавить"
             stacked
             separated
             multiline
             // live: кнопка «Добавить» живёт в футере и фокус не отбирает —
             // без записи на каждый символ она читала бы пустой черновик.
-            live
             onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
             // Кнопки маршрута здесь НЕТ намеренно: (1) ехать некуда — объект
             // ещё не заведён; (2) выбор карты — это лист поверх листа, а
@@ -333,7 +337,6 @@ export function ObjectSheet({
             stacked
             separated
             multiline
-            live
             onSave={(v) => setDraft((d) => ({ ...d, note: v }))}
           />
         </RowGroup>

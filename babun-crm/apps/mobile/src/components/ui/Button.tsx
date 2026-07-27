@@ -17,6 +17,7 @@ export function Button({
   loading,
   variant = "primary",
   tone = "default",
+  accessibilityHint,
 }: {
   label: string;
   onPress: () => void;
@@ -24,6 +25,9 @@ export function Button({
   loading?: boolean;
   variant?: Variant;
   tone?: Tone;
+  /** VoiceOver-подсказка, когда label — одно слово и без контекста не
+   *  ясно, что случится по нажатию. */
+  accessibilityHint?: string;
 }) {
   const t = useThemeColors();
 
@@ -34,6 +38,7 @@ export function Button({
         onPress={onPress}
         disabled={disabled}
         loading={loading}
+        accessibilityHint={accessibilityHint}
       />
     );
   }
@@ -46,6 +51,7 @@ export function Button({
       disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: isDisabled, busy: !!loading }}
       style={({ pressed }) => ({
         // minHeight + padding so Dynamic Type can grow the label (see

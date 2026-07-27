@@ -546,7 +546,7 @@ function MultiPickSheet({
                 key={bi}
                 style={{
                   marginBottom: 8,
-                  borderRadius: 12,
+                  borderRadius: t.radius.card,
                   overflow: "hidden",
                   backgroundColor: t.rowFill,
                 }}
@@ -663,7 +663,7 @@ function SinglePickSheet({
               accessibilityRole="radiogroup"
               style={{
                 marginBottom: 8,
-                borderRadius: 12,
+                borderRadius: t.radius.card,
                 overflow: "hidden",
                 backgroundColor: t.rowFill,
               }}

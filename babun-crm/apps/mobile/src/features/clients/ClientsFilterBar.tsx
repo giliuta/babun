@@ -143,7 +143,7 @@ export function ClientsFilterBar({
                 flexDirection: "row",
                 alignItems: "center",
                 minHeight: 32,
-                borderRadius: 12,
+                borderRadius: t.radius.card,
                 backgroundColor: t.rowFill,
               }}
             >
@@ -221,7 +221,7 @@ export function ClientsFilterBar({
                 minHeight: 32,
                 justifyContent: "center",
                 paddingHorizontal: 10,
-                borderRadius: 12,
+                borderRadius: t.radius.card,
                 backgroundColor: t.rowFill,
                 opacity: pressed ? 0.6 : 1,
               })}

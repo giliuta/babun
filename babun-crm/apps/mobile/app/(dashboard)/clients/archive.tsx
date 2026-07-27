@@ -91,7 +91,7 @@ export default function ClientArchiveScreen() {
             const busy = restoringId === item.id;
             return (
               <View
-                className="rounded-2xl border px-4 py-3"
+                className="rounded-[14px] border px-4 py-3"
                 style={{ backgroundColor: t.surface, borderColor: t.separator }}
               >
                 <View className="flex-row items-center gap-3">
@@ -120,7 +120,7 @@ export default function ClientArchiveScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Восстановить ${item.full_name || "клиента"}`}
                   accessibilityState={{ disabled: !!restoringId }}
-                  className="mt-3 min-h-11 flex-row items-center justify-center gap-2 rounded-xl active:opacity-70"
+                  className="mt-3 min-h-11 flex-row items-center justify-center gap-2 rounded-[14px] active:opacity-70"
                   style={{ backgroundColor: t.fill, opacity: restoringId && !busy ? 0.45 : 1 }}
                 >
                   {busy ? (

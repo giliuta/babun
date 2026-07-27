@@ -47,10 +47,21 @@ export type ThemeColors = {
   googleBorder: string;
   googleText: string;
   // radii (scheme-invariant — colocated so one import drives a screen)
-  radius: { card: number; input: number; pill: number; logo: number };
+  radius: { card: number; input: number; pill: number };
 };
 
-const RADIUS = { card: 20, input: 14, pill: 999, logo: 18 } as const;
+// ОДИН РАДИУС НА ВСЁ (владелец 2026-07-27: «закругление краёв должно быть
+// везде одинаковое — не надо, если блок больше, делать больше закругление;
+// это хрень полная, должен быть стандарт везде»).
+//
+// Поэтому `card` и `input` — ОДНО число. Разными они и были той самой
+// «зависимостью радиуса от размера блока»: белая карточка 20, поле внутри 14.
+// Остаются ровно два геометрических исключения: `pill` — круг (аватар,
+// пилюля-кнопка, точка: круг не может стать прямоугольником) и верхние углы
+// нижнего листа (24, это край экрана, а не поверхность).
+//
+// `logo` удалён: мёртвый токен, ни одного чтения в продукте.
+const RADIUS = { card: 14, input: 14, pill: 999 } as const;
 
 export const light: ThemeColors = {
   statusBar: "dark",

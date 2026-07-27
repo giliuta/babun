@@ -207,7 +207,7 @@ export default function ClientTagsScreen() {
               <View>
                 <View className="items-center px-6 pb-4 pt-6">
                   <View
-                    className="mb-3 h-12 w-12 items-center justify-center rounded-2xl"
+                    className="mb-3 h-12 w-12 items-center justify-center rounded-[14px]"
                     style={{ backgroundColor: `${t.accent}14` }}
                   >
                     <Tags color={t.accent} size={ICON.md} strokeWidth={2} />

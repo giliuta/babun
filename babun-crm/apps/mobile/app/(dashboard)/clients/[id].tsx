@@ -225,7 +225,7 @@ export default function ClientDetailScreen() {
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Назад к списку клиентов"
-          className="min-h-11 justify-center rounded-xl px-4 py-2 active:opacity-80"
+          className="min-h-11 justify-center rounded-[14px] px-4 py-2 active:opacity-80"
           style={{ backgroundColor: t.accent }}
         >
           <Text className="font-semibold" style={{ color: t.onAccent }}>
@@ -532,7 +532,7 @@ function ArchivedClientView({
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-5 pb-5 pt-5">
           <View
-            className="h-14 w-14 items-center justify-center rounded-[18px]"
+            className="h-14 w-14 items-center justify-center rounded-[14px]"
             style={{ backgroundColor: t.fill }}
           >
             <Archive color={t.sub} size={26} />
@@ -597,7 +597,7 @@ function ArchivedClientView({
             accessibilityRole="button"
             accessibilityLabel="Восстановить клиента"
             accessibilityState={{ disabled: restoring }}
-            className="min-h-12 flex-row items-center justify-center gap-2 rounded-2xl active:opacity-70"
+            className="min-h-12 flex-row items-center justify-center gap-2 rounded-[14px] active:opacity-70"
             style={{ backgroundColor: t.accent, opacity: restoring ? 0.6 : 1 }}
           >
             {restoring ? (

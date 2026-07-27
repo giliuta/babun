@@ -156,7 +156,7 @@ export function ClientActionsSheet({
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Отмена"
-            className="items-center rounded-2xl py-3.5 active:opacity-70"
+            className="items-center rounded-[14px] py-3.5 active:opacity-70"
             style={{ backgroundColor: t.fill }}
           >
             <Text

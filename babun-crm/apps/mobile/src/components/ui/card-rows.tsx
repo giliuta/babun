@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { ChevronRight, type LucideIcon } from "lucide-react-native";
+import {
+  ChevronRight,
+  Settings2,
+  type LucideIcon,
+} from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
 import { sanitizePhoneInput } from "@/lib/phone-input";
 import { useThemeColors } from "@/theme/colors";
@@ -508,7 +512,9 @@ export function RowActionButton({
       style={({ pressed }) => ({
         width: 32,
         height: 32,
-        borderRadius: 16,
+        // Круг: w === h. Круг не может стать прямоугольником — это
+        // геометрическое исключение из закона одного радиуса.
+        borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: `${color}1a`,
@@ -607,123 +613,84 @@ export function ChoiceRow({
   options,
   value,
   separated,
-  addPlaceholder,
-  live,
+  onSettings,
   onSelect,
 }: {
   label: string;
   options: readonly string[];
   value: string;
   separated?: boolean;
-  /** Подпись поля, когда создают своё значение. */
-  addPlaceholder?: string;
-  /** Режим черновика (как у FieldRow): своё значение отдаётся на каждый
-   *  символ. Нужен там, где кнопка сохранения живёт ВНЕ прокрутки и фокус не
-   *  снимает: набрал «Склад», сразу нажал «Добавить объект» — без live к
-   *  записи уехал бы прежний тип. */
-  live?: boolean;
+  /** Открыть настройки этого словаря. Владелец 2026-07-27: «не плюсик — а
+   *  справа вверху шестерёнка, и там уже идёт редактирование». Свой тип
+   *  заводится один раз в настройках бизнеса, а не на бегу в каждой карточке:
+   *  иначе у одного бизнеса заводится «Склад», «склад» и «Склады». */
+  onSettings?: () => void;
   onSelect: (v: string) => void;
 }) {
   const t = useThemeColors();
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  const commit = () => {
-    const next = draft.trim();
-    setAdding(false);
-    setDraft("");
-    if (next) onSelect(next);
-  };
-
-  // Коммит на РАЗМОНТИРОВАНИИ — как у FieldRow. Без него набранный свой тип
-  // терялся молча: строка живёт и внутри нижнего листа, а лист закрывается
-  // свайпом за грабер и тапом по скриму, где blur не наступает вовсе.
-  const latest = useRef({ draft, onSelect });
-  latest.current = { draft, onSelect };
-  useEffect(() => {
-    return () => {
-      const next = latest.current.draft.trim();
-      if (next) latest.current.onSelect(next);
-    };
-  }, []);
 
   return (
     <View
       style={{
-        paddingHorizontal: 16,
+        paddingLeft: 16,
+        paddingRight: 12,
         paddingVertical: 10,
         gap: 8,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
       }}
     >
-      <Text
-        maxFontSizeMultiplier={1.2}
-        numberOfLines={1}
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          letterSpacing: 1.2,
-          textTransform: "uppercase",
-          color: t.ink,
-        }}
-      >
-        {label}
-      </Text>
-
-      {adding ? (
-        <TextInput
-          autoFocus
-          value={draft}
-          onChangeText={(v) => {
-            setDraft(v);
-            if (live) onSelect(v);
-          }}
-          onBlur={commit}
-          onSubmitEditing={commit}
-          returnKeyType="done"
-          placeholder={addPlaceholder}
-          placeholderTextColor={t.placeholder}
-          selectionColor={t.accent}
-          keyboardAppearance="light"
-          accessibilityLabel={`Новый ${label.toLowerCase()}`}
-          maxLength={40}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Text
           maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
           style={{
-            padding: 0,
-            fontSize: 17,
-            fontWeight: "600",
+            flex: 1,
+            fontSize: 11,
+            fontWeight: "700",
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
             color: t.ink,
           }}
-        />
-      ) : (
-        // rowGap 14, а не общий gap 6: у чипа вертикальный hitSlop 6, поэтому
-        // при переносе на вторую строку зоны касания СМЫКАЛИСЬ и тап по нижней
-        // кромке чипа выбирал чип со строки ниже (аудит 2026-07-27).
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            rowGap: 14,
-            columnGap: 6,
-          }}
         >
-          {options.map((option) => (
-            <Chip
-              key={option}
-              label={option}
-              radio
-              selected={value.trim().toLowerCase() === option.trim().toLowerCase()}
-              onPress={() => onSelect(option)}
-            />
-          ))}
+          {label}
+        </Text>
+        {onSettings ? (
+          <Pressable
+            onPress={onSettings}
+            accessibilityRole="button"
+            accessibilityLabel={`Настроить: ${label.toLowerCase()}`}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          >
+            <Settings2 color={t.ink} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* rowGap 14, а не общий gap 6: у чипа вертикальный hitSlop 6, поэтому
+          при переносе на вторую строку зоны касания СМЫКАЛИСЬ и тап по нижней
+          кромке чипа выбирал чип со строки ниже (аудит 2026-07-27). */}
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          rowGap: 14,
+          columnGap: 6,
+        }}
+      >
+        {options.map((option) => (
           <Chip
-            label="+"
-            onPress={() => setAdding(true)}
-            accessibilityLabel={`Добавить свой ${label.toLowerCase()}`}
+            key={option}
+            label={option}
+            radio
+            selected={
+              value.trim().toLowerCase() === option.trim().toLowerCase()
+            }
+            onPress={() => onSelect(option)}
           />
-        </View>
-      )}
+        ))}
+      </View>
     </View>
   );
 }

@@ -73,7 +73,7 @@ function Row({
       })}
     >
       <View
-        className="h-7 w-7 items-center justify-center rounded-[7px]"
+        className="h-7 w-7 items-center justify-center rounded-[14px]"
         style={{ backgroundColor: tile }}
       >
         <Icon color="#fff" size={16} strokeWidth={2} />
@@ -257,7 +257,7 @@ export default function ClientsSettingsScreen() {
         <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
           <View
             style={{
-              borderRadius: 12,
+              borderRadius: t.radius.card,
               overflow: "hidden",
               backgroundColor: t.rowFill,
             }}

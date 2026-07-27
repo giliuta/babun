@@ -32,6 +32,7 @@ export function GradientButton({
   loading,
   sheen = true,
   tint,
+  accessibilityHint,
 }: {
   label: string;
   onPress: () => void;
@@ -39,6 +40,9 @@ export function GradientButton({
   loading?: boolean;
   sheen?: boolean;
   tint?: string;
+  /** VoiceOver-подсказка, когда label — одно слово («Клиент») и без
+   *  контекста не ясно, что случится по нажатию. */
+  accessibilityHint?: string;
 }) {
   const t = useThemeColors();
   const reduced = useReduceMotion();
@@ -87,6 +91,7 @@ export function GradientButton({
       disabled={!pressable}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !pressable, busy: !!loading }}
     >
       <Animated.View

@@ -198,7 +198,7 @@ export default function ClientObjectScreen() {
             label="Тип объекта"
             options={typeOptions}
             value={loc.label}
-            addPlaceholder="Свой тип"
+            onSettings={() => router.push("/cabinet/object-types")}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
           {/* АДРЕС И ССЫЛКА — ОДНО поле (владелец: «адрес — это и есть ссылка
@@ -211,7 +211,6 @@ export default function ClientObjectScreen() {
             label="Адрес или ссылка"
             value={objectTarget(loc)}
             placeholder=""
-            addLabel="Добавить"
             stacked
             separated
             multiline

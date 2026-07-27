@@ -101,7 +101,7 @@ export default function CardFieldsScreen() {
         </SectionCard>
 
         <View
-          className="mx-3 mt-4 flex-row items-start gap-2 rounded-xl px-3.5 py-3"
+          className="mx-3 mt-4 flex-row items-start gap-2 rounded-[14px] px-3.5 py-3"
           style={{ backgroundColor: `${t.accent}14` }}
         >
           <Info color={t.accent} size={16} strokeWidth={2.2} />

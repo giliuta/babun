@@ -50,7 +50,7 @@ export function ClientDetailChrome({
         <Pressable
           onPress={withCommit(onBack)}
           disabled={saving}
-          className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
+          className="h-11 w-11 items-center justify-center rounded-[14px] active:opacity-60"
           accessibilityRole="button"
           accessibilityLabel="Назад"
           accessibilityState={{ disabled: saving, busy: saving }}
@@ -68,7 +68,7 @@ export function ClientDetailChrome({
             accessibilityRole="button"
             accessibilityLabel="Готово — сохранить клиента"
             accessibilityState={{ disabled: !canSave || saving, busy: saving }}
-            className="h-11 items-center justify-center rounded-lg px-3 active:opacity-60"
+            className="h-11 items-center justify-center rounded-[14px] px-3 active:opacity-60"
           >
             <Text
               className="text-[15px] font-semibold"
@@ -81,7 +81,7 @@ export function ClientDetailChrome({
           <Pressable
             onPress={onToggleMenu}
             disabled={saving}
-            className="h-11 w-11 items-center justify-center rounded-lg active:opacity-60"
+            className="h-11 w-11 items-center justify-center rounded-[14px] active:opacity-60"
             accessibilityRole="button"
             accessibilityLabel="Действия с клиентом"
             accessibilityState={{ expanded: menuOpen, disabled: saving, busy: saving }}
@@ -101,7 +101,7 @@ export function ClientDetailChrome({
             importantForAccessibility="no-hide-descendants"
           />
           <View
-            className="absolute right-3 top-12 z-20 w-52 overflow-hidden rounded-xl shadow-lg"
+            className="absolute right-3 top-12 z-20 w-52 overflow-hidden rounded-[14px] shadow-lg"
             style={{ backgroundColor: t.surface }}
           >
             {/* «Напомнить» уехало сюда с карточки (владелец 2026-07-26:
