@@ -40,6 +40,8 @@ export function TransactionsFeed({
   title,
   onReset,
   onTxTap,
+  contextMode = "default",
+  scroll = true,
 }: {
   transactions: FinanceTransaction[];
   accounts: Account[];
@@ -53,6 +55,12 @@ export function TransactionsFeed({
   /** Shown as an «Все» reset link when the feed is filtered. */
   onReset?: () => void;
   onTxTap: (tx: FinanceTransaction) => void;
+  /** «team» — лента одного счёта: имя счёта в контексте избыточно,
+   *  фолбэк-строка показывает только команду. */
+  contextMode?: "default" | "team";
+  /** false — плоский рендер для вложения в родительский ScrollView
+   *  (деталь счёта); SectionList внутри ScrollView не живёт. */
+  scroll?: boolean;
 }) {
   const t = useThemeColors();
 
@@ -128,7 +136,9 @@ export function TransactionsFeed({
     }
     if (!ctx) {
       ctx = [
-        tx.account_id ? lookups.account.get(tx.account_id)?.name : null,
+        contextMode === "team" || !tx.account_id
+          ? null
+          : lookups.account.get(tx.account_id)?.name,
         tx.team_id ? lookups.team.get(tx.team_id)?.name : null,
       ]
         .filter(Boolean)
@@ -176,12 +186,7 @@ export function TransactionsFeed({
     );
   };
 
-  return (
-    <SectionList
-      style={{ flex: 1 }}
-      sections={sections}
-      keyExtractor={(tx) => tx.id}
-      ListHeaderComponent={
+  const listHeader = (
         <View className="flex-row items-center px-4 pb-1 pt-2">
           <Text
             className="text-xs font-semibold uppercase tracking-wider"
@@ -202,27 +207,61 @@ export function TransactionsFeed({
             </Pressable>
           ) : null}
         </View>
-      }
+  );
+
+  const sectionHeader = (section: { title: string; net: number }) => (
+    <View
+      className="flex-row items-center justify-between px-4 py-1.5"
+      style={{ backgroundColor: t.canvas }}
+    >
+      <Text
+        className="text-xs font-semibold uppercase tracking-wider"
+        style={{ color: t.sub }}
+      >
+        {humanDay(section.title)}
+      </Text>
+      <Text
+        className="text-xs font-semibold tabular-nums"
+        style={{ color: section.net < 0 ? t.danger : t.success }}
+      >
+        {section.net < 0 ? "−" : ""}{formatEUR(Math.abs(section.net))}
+      </Text>
+    </View>
+  );
+
+  if (!scroll) {
+    return (
+      <View>
+        {listHeader}
+        {sections.length === 0 ? (
+          <EmptyState title="Нет операций за период" />
+        ) : (
+          sections.map((section) => (
+            <View key={section.title}>
+              {sectionHeader(section)}
+              {section.data.map((tx, i) => (
+                <View key={tx.id}>
+                  {i > 0 ? (
+                    <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
+                  ) : null}
+                  {renderRow(tx)}
+                </View>
+              ))}
+            </View>
+          ))
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <SectionList
+      style={{ flex: 1 }}
+      sections={sections}
+      keyExtractor={(tx) => tx.id}
+      ListHeaderComponent={listHeader}
       contentContainerStyle={{ paddingBottom: 96 }}
-      renderSectionHeader={({ section }) => (
-        <View
-          className="flex-row items-center justify-between px-4 py-1.5"
-          style={{ backgroundColor: t.canvas }}
-        >
-          <Text
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: t.sub }}
-          >
-            {humanDay(section.title)}
-          </Text>
-          <Text
-            className="text-xs font-semibold tabular-nums"
-            style={{ color: section.net < 0 ? t.danger : t.success }}
-          >
-            {section.net < 0 ? "−" : ""}{formatEUR(Math.abs(section.net))}
-          </Text>
-        </View>
-      )}
+      renderSectionHeader={({ section }) => sectionHeader(section)}
       renderItem={({ item }) => renderRow(item)}
       ItemSeparatorComponent={() => (
         <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />

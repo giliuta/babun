@@ -50,19 +50,35 @@ describe("finance CSV export", () => {
     ];
     const result = financeTransactionsToCsv(
       [
-        transaction({ category_id: "category-1", notes: "Первая\nстрока" }),
+        transaction({
+          category_id: "category-1",
+          notes: "Первая\nстрока",
+          team_id: "team-1",
+          account_id: "account-1",
+          payment_method: "cash",
+        }),
         transaction({ id: "transfer", type: "transfer", amount: -50 }),
         transaction({ id: "refund", type: "refund", amount: -20 }),
       ],
       categories,
+      {
+        teamName: new Map([["team-1", "Юра"]]),
+        accounts: [{ id: "account-1", name: "Наличка" }],
+      },
     );
 
     assert.equal(result.count, 2);
-    assert.ok(result.contents.startsWith("\uFEFFДата;Тип;Категория;Сумма;Заметка\r\n"));
+    assert.ok(
+      result.contents.startsWith(
+        "\uFEFFДата;Тип;Категория;Команда;Счёт;Способ оплаты;Сумма;Заметка\r\n",
+      ),
+    );
     assert.match(result.contents, /"Сервис; монтаж"/);
     assert.match(result.contents, /"Первая\nстрока"/);
-    assert.match(result.contents, /Возврат;;-20;/);
-    assert.doesNotMatch(result.contents, /Перевод/);
+    assert.match(result.contents, /Юра;Наличка;Наличные;125.5;/);
+    // NULL team_id — общекорпоративная операция: колонка «Команда» = Компания.
+    assert.match(result.contents, /Возврат;;Компания;;;-20;/);
+    assert.doesNotMatch(result.contents, /^.*Перевод;;/m);
   });
 
   test("neutralizes formulas in category names and notes", () => {
