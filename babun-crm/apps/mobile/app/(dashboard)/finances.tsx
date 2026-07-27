@@ -30,7 +30,6 @@ import {
 import { OperationSheet } from "@/features/finances/OperationSheet";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
-import { AccountsPanel } from "@/features/finances/AccountsPanel";
 import { TransactionsFeed } from "@/features/finances/TransactionsFeed";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import {
@@ -53,7 +52,6 @@ import {
 } from "@/features/finances/period";
 import { todayYmd } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
-import { InvoiceShortcut } from "@/features/invoices/InvoiceShortcut";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -143,7 +141,6 @@ function FinancesContent() {
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
   );
-  const accountsLoading = accountsQuery.isLoading;
   const delTransfer = useDeleteTransfer();
   const delTx = useDeleteTransaction();
   const insertTx = useInsertTransaction();
@@ -202,25 +199,6 @@ function FinancesContent() {
     () => visibleAccountsTotal(miniCardAccounts),
     [miniCardAccounts],
   );
-  // Приток команды на общие счета за период: income − |refund| по счёту.
-  // txs уже отфильтрованы по команде, когда скоуп задан.
-  const periodInflowByAccount = useMemo(() => {
-    const inflow = new Map<string, number>();
-    if (!scope) return inflow;
-    for (const tx of txs) {
-      if (!tx.account_id) continue;
-      if (tx.type === "income") {
-        inflow.set(tx.account_id, (inflow.get(tx.account_id) ?? 0) + tx.amount);
-      } else if (tx.type === "refund") {
-        inflow.set(
-          tx.account_id,
-          (inflow.get(tx.account_id) ?? 0) - Math.abs(tx.amount),
-        );
-      }
-    }
-    return inflow;
-  }, [scope, txs]);
-
   const materialSummary = useMemo(() => {
     let amount = 0;
     let appointmentCount = 0;
@@ -517,6 +495,9 @@ function FinancesContent() {
         totals={totals}
         acctTotal={acctTotal}
         acctMasked={acctMasked}
+        invoices={invoiceSummary}
+        onOpenAccounts={() => router.push("/cabinet/accounts")}
+        onOpenInvoices={openInvoices}
         view={view}
         onTap={toggleView}
       />
@@ -547,19 +528,7 @@ function FinancesContent() {
         </View>
       ) : null}
 
-      <InvoiceShortcut
-        {...invoiceSummary}
-        onPress={openInvoices}
-      />
-
-      {view === "accounts" ? (
-        <AccountsPanel
-          accounts={scopedAccounts}
-          isLoading={accountsLoading}
-          scopeTeamId={scope}
-          periodInflowByAccount={periodInflowByAccount}
-        />
-      ) : view === "profit" ? (
+      {view === "profit" ? (
         <ProfitBreakdown
           transactions={scopedTransactions}
           categories={categories}

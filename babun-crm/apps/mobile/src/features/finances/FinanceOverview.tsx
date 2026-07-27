@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, EyeOff, Wallet } from "lucide-react-native";
+import { ChevronDown, ChevronRight, EyeOff, FileText, Wallet } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -7,8 +7,15 @@ import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
 
 // Which panel the overview selects below (web parity: HomeView in
-// apps/web FinanceOverview.tsx — «accounts» is an inline panel too).
-export type HomeView = "all" | "accounts" | "income" | "expense" | "debt" | "profit";
+// apps/web FinanceOverview.tsx). «Счета» и «Инвойсы» — НЕ панели: это
+// отдельные страницы (решение владельца 2026-07-27), их плитки навигируют.
+export type HomeView = "all" | "income" | "expense" | "debt" | "profit";
+
+export interface InvoiceTileSummary {
+  openCount: number;
+  outstanding: number;
+  overdue: number;
+}
 
 export interface OverviewTotals {
   income: number;
@@ -32,6 +39,9 @@ export function FinanceOverview({
   totals,
   acctTotal,
   acctMasked,
+  invoices,
+  onOpenAccounts,
+  onOpenInvoices,
   view,
   onTap,
 }: {
@@ -45,6 +55,9 @@ export function FinanceOverview({
   acctTotal: number;
   /** Есть скрытые балансы: Σ неполная, рядом с числом — маркер EyeOff. */
   acctMasked?: boolean;
+  invoices: InvoiceTileSummary;
+  onOpenAccounts: () => void;
+  onOpenInvoices: () => void;
   view: HomeView;
   onTap: (v: HomeView) => void;
 }) {
@@ -135,35 +148,74 @@ export function FinanceOverview({
 
       {/* overview cards */}
       <View className="px-4 pb-2 pt-3" style={{ gap: 8 }}>
-        {/* Счета — отдельной мини-карточкой */}
-        <Pressable
-          onPress={() => onTap("accounts")}
-          accessibilityRole="button"
-          accessibilityState={{ selected: view === "accounts" }}
-          accessibilityLabel={`Счета: ${formatEUR(acctTotal)}`}
-          className="flex-row items-center rounded-xl px-3.5 active:opacity-70"
-          style={{
-            minHeight: 44,
-            backgroundColor: t.surface,
-            borderWidth: 1.5,
-            borderColor: view === "accounts" ? t.accent : "transparent",
-          }}
-        >
-          <Wallet color={t.sub} size={16} />
-          <Text className="ml-2.5 text-sm font-semibold" style={{ color: t.sub }}>
-            Счета
-          </Text>
-          <View className="ml-auto flex-row items-center gap-1">
-            {acctMasked ? <EyeOff color={t.faint} size={12} /> : null}
-            <Text
-              className="text-[15px] font-semibold tabular-nums"
-              style={{ color: t.ink }}
-            >
-              {formatEUR(acctTotal)}
-            </Text>
-            <ChevronRight color={t.chevron} size={16} />
-          </View>
-        </Pressable>
+        {/* Счета | Инвойсы — две плитки-СТРАНИЦЫ (не панели): счёт слева,
+            инвойсы справа, обе открываются отдельными экранами. */}
+        <View className="flex-row" style={{ gap: 8 }}>
+          <Pressable
+            onPress={onOpenAccounts}
+            accessibilityRole="button"
+            accessibilityLabel={`Счета: ${formatEUR(acctTotal)}`}
+            className="flex-1 rounded-xl px-3.5 py-2.5 active:opacity-70"
+            style={{ minHeight: 58, backgroundColor: t.surface }}
+          >
+            <View className="flex-row items-center gap-1.5">
+              <Wallet color={t.sub} size={14} />
+              <Text className="text-xs font-semibold" style={{ color: t.sub }}>
+                Счета
+              </Text>
+              <View className="ml-auto">
+                <ChevronRight color={t.chevron} size={14} />
+              </View>
+            </View>
+            <View className="mt-1 flex-row items-center gap-1">
+              {acctMasked ? <EyeOff color={t.faint} size={12} /> : null}
+              <Text
+                className="text-[17px] font-bold tabular-nums"
+                style={{ color: t.ink }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatEUR(acctTotal)}
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            onPress={onOpenInvoices}
+            accessibilityRole="button"
+            accessibilityLabel={`Инвойсы, к оплате ${formatEUR(invoices.outstanding)}`}
+            className="flex-1 rounded-xl px-3.5 py-2.5 active:opacity-70"
+            style={{ minHeight: 58, backgroundColor: t.surface }}
+          >
+            <View className="flex-row items-center gap-1.5">
+              <FileText color={t.sub} size={14} />
+              <Text className="text-xs font-semibold" style={{ color: t.sub }}>
+                Инвойсы
+              </Text>
+              <View className="ml-auto">
+                <ChevronRight color={t.chevron} size={14} />
+              </View>
+            </View>
+            <View className="mt-1 flex-row items-baseline gap-1.5">
+              <Text
+                className="text-[17px] font-bold tabular-nums"
+                style={{ color: t.ink }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatEUR(invoices.outstanding)}
+              </Text>
+              <Text
+                className="text-[11px] font-medium"
+                style={{ color: invoices.overdue > 0 ? t.danger : t.faint }}
+                numberOfLines={1}
+              >
+                {invoices.overdue > 0
+                  ? `просрочено ${formatEUR(invoices.overdue)}`
+                  : `${invoices.openCount} ждут`}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
 
         {/* Доход / Расход — одна карточка, две половины на тонких тинтах */}
         <View
