@@ -1168,12 +1168,12 @@ begin
   if not found then
     raise exception 'Финансовый счёт не найден или закрыт';
   end if;
-  if account_row.kind <> case p_payment_method
+  if account_row.kind <> (case p_payment_method
        when 'cash' then 'cash'
        when 'card' then 'card'
        when 'transfer' then 'bank'
        else 'other'
-     end then
+     end) then
     raise exception 'Способ оплаты не соответствует выбранному счёту';
   end if;
   if invoice_row.brigade_id is not null
@@ -1382,12 +1382,12 @@ begin
   ) then
     raise exception 'Финансовый счёт не найден или не относится к команде инвойса';
   end if;
-  if account_kind <> case new.payment_method
+  if account_kind <> (case new.payment_method
        when 'cash' then 'cash'
        when 'card' then 'card'
        when 'transfer' then 'bank'
        else 'other'
-     end then
+     end) then
     raise exception 'Способ оплаты не соответствует выбранному счёту';
   end if;
 

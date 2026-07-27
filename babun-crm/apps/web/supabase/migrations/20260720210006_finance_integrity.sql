@@ -1573,9 +1573,9 @@ begin
     raise exception 'После оплаты остатка предоплату отдельно менять нельзя';
   end if;
   if appointment_row.prepaid_amount = normalized_amount
-     and appointment_row.payment_method is not distinct from case
+     and appointment_row.payment_method is not distinct from (case
        when normalized_amount > 0 then p_payment_method else null
-     end then
+     end) then
     return appointment_row;
   end if;
 
