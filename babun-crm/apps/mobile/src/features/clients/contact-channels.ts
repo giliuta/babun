@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTenantId } from "@/lib/tenant";
 import { getStorage } from "@babun/shared/storage";
 import type { Client } from "@babun/shared/local/clients";
 import {
@@ -21,8 +22,17 @@ import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 // Настройка «какие каналы вообще предлагать» — device-local (MMKV, как
 // sort-pref и card-prefs): у одного бизнеса весь Кипр в WhatsApp, у
 // другого — Viber, и мешать им друг друга не нужно.
+//
+// НО КЛЮЧ — ПО ТЕНАНТУ. Мастер работает на две фирмы с одного телефона: на
+// общем ключе он отключал Viber в первой фирме и терял его во второй, где все
+// клиенты именно там (аудит 2026-07-27). Настройка остаётся местной, но у
+// каждой фирмы своя.
 
-const KEY = "babun-contact-channels";
+const KEY_PREFIX = "babun-contact-channels";
+
+function storageKey(tenantId: string | null): string {
+  return tenantId ? `${KEY_PREFIX}:${tenantId}` : KEY_PREFIX;
+}
 
 export type ChannelId =
   | "call"
@@ -77,9 +87,9 @@ const DEFAULT_ENABLED: ChannelId[] = [
   "chat",
 ];
 
-export function getEnabledChannels(): ChannelId[] {
+export function getEnabledChannels(tenantId: string | null = null): ChannelId[] {
   try {
-    const raw = getStorage().get<string[]>(KEY);
+    const raw = getStorage().get<string[]>(storageKey(tenantId));
     if (!Array.isArray(raw)) return DEFAULT_ENABLED;
     const valid = raw.filter((id) =>
       CONTACT_CHANNELS.some((c) => c.id === id),
@@ -94,20 +104,22 @@ export function getEnabledChannels(): ChannelId[] {
 /** Живой список включённых каналов — тумблер в настройках сразу меняет
  *  мини-лист на карточке. */
 export function useEnabledChannels() {
+  const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["contact-channels"],
-    queryFn: () => getEnabledChannels(),
+    queryKey: ["contact-channels", tenantId],
+    queryFn: () => getEnabledChannels(tenantId),
     staleTime: Infinity,
   });
 }
 
 export function useToggleChannel() {
   const qc = useQueryClient();
+  const tenantId = useTenantId();
   return useMutation({
     // Локальная запись — не должна ждать сети.
     networkMode: "always",
     mutationFn: async (id: ChannelId) => {
-      const cur = getEnabledChannels();
+      const cur = getEnabledChannels(tenantId);
       const next = cur.includes(id)
         ? cur.filter((x) => x !== id)
         : [...cur, id];
@@ -115,13 +127,14 @@ export function useToggleChannel() {
         (c) => c.id === "call" || next.includes(c.id),
       ).map((c) => c.id);
       try {
-        getStorage().set(KEY, ordered);
+        getStorage().set(storageKey(tenantId), ordered);
       } catch {
         // Запись best-effort.
       }
       return ordered;
     },
-    onSuccess: (next) => qc.setQueryData(["contact-channels"], next),
+    onSuccess: (next) =>
+      qc.setQueryData(["contact-channels", tenantId], next),
   });
 }
 
