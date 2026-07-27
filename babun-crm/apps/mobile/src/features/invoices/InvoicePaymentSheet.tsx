@@ -12,12 +12,16 @@ import {
 import { Check } from "lucide-react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import type { PaymentMethod } from "@babun/shared/local/finance/transaction";
-import { accountKindForPaymentMethod } from "@babun/shared/local/finance/integrity";
+import {
+  accountKindForPaymentMethod,
+  accountServesTeam,
+} from "@babun/shared/local/finance/integrity";
 import { randomUuid } from "@babun/shared/sync";
 import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import type { AccountWithBalance } from "@/features/finances/accounts";
+import { HIDDEN_BALANCE_LABEL } from "@/features/finances/account-ui";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceDate, formatInvoiceMoney, parseMoneyAmount } from "./format";
@@ -44,12 +48,22 @@ function accountsForPaymentMethod(
   method: InvoicePaymentMethod,
 ): AccountWithBalance[] {
   const kind = accountKindForPaymentMethod(method);
-  return accounts.filter(
-    (account) =>
-      account.is_active &&
-      account.kind === kind &&
-      (brigadeId == null || account.brigade_id === brigadeId),
-  );
+  // Командные счета раньше общих — тот же приоритет, что в OperationSheet
+  // и серверном resolve.
+  return accounts
+    .filter(
+      (account) =>
+        account.is_active &&
+        account.kind === kind &&
+        (brigadeId == null || accountServesTeam(account, brigadeId)),
+    )
+    .sort((a, b) =>
+      a.scope === b.scope
+        ? a.position - b.position
+        : a.scope === "team"
+          ? -1
+          : 1,
+    );
 }
 
 function defaultPaymentMethod(
@@ -129,7 +143,7 @@ export function InvoicePaymentSheet({
       accounts.filter(
         (account) =>
           account.is_active &&
-          (brigadeId == null || account.brigade_id === brigadeId),
+          (brigadeId == null || accountServesTeam(account, brigadeId)),
       ),
     [accounts, brigadeId],
   );
@@ -276,7 +290,11 @@ export function InvoicePaymentSheet({
                       key={account.id}
                       onPress={() => setAccountId(account.id)}
                       accessibilityRole="radio"
-                      accessibilityLabel={`${account.name}, ${formatInvoiceMoney(account.balance, currency)}`}
+                      accessibilityLabel={`${account.name}${account.scope === "company" ? ", общий счёт" : ""}, ${
+                        account.balance_hidden
+                          ? "баланс скрыт"
+                          : formatInvoiceMoney(account.balance, currency)
+                      }`}
                       accessibilityState={{ selected: account.id === accountId }}
                       className="flex-row items-center px-3 py-3 active:opacity-60"
                       style={{
@@ -287,8 +305,14 @@ export function InvoicePaymentSheet({
                       }}
                     >
                       <View className="flex-1">
-                        <Text className="text-base font-medium" style={{ color: t.ink }}>{account.name}</Text>
-                        <Text className="text-xs" style={{ color: t.sub }}>{formatInvoiceMoney(account.balance, currency)}</Text>
+                        <Text className="text-base font-medium" style={{ color: t.ink }}>
+                          {account.scope === "company" ? `${account.name} · Общий` : account.name}
+                        </Text>
+                        <Text className="text-xs" style={{ color: t.sub }}>
+                          {account.balance_hidden
+                            ? HIDDEN_BALANCE_LABEL
+                            : formatInvoiceMoney(account.balance, currency)}
+                        </Text>
                       </View>
                       {account.id === accountId ? <Check color={t.accent} size={ICON.sm} /> : null}
                     </Pressable>

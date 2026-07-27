@@ -186,6 +186,23 @@ export async function listAccountBalanceDeltas(
   return map;
 }
 
+/** Does the account carry ANY ledger rows? Mirrors the server-side
+ * `guard_account_financial_history` freeze checks: the settings screen uses
+ * this to disable kind/opening/brigade edits instead of surfacing a server
+ * error after the fact. */
+export async function accountHasLedgerHistory(
+  supabase: DbSupabase,
+  accountId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("finance_transactions")
+    .select("id")
+    .eq("account_id", accountId)
+    .limit(1);
+  if (error) throw new Error(`accountHasLedgerHistory: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
 /** All-time refunds grouped by original income. Refunds may fall outside the
  * currently viewed period, so this read is deliberately global and paged. */
 export async function listRefundTotals(

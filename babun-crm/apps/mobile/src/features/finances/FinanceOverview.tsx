@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, Wallet } from "lucide-react-native";
+import { ChevronDown, ChevronRight, EyeOff, Wallet } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -31,6 +31,7 @@ export function FinanceOverview({
   onOpenCustom,
   totals,
   acctTotal,
+  acctMasked,
   view,
   onTap,
 }: {
@@ -42,6 +43,8 @@ export function FinanceOverview({
   onOpenCustom: () => void;
   totals: OverviewTotals;
   acctTotal: number;
+  /** Есть скрытые балансы: Σ неполная, рядом с числом — маркер EyeOff. */
+  acctMasked?: boolean;
   view: HomeView;
   onTap: (v: HomeView) => void;
 }) {
@@ -151,6 +154,7 @@ export function FinanceOverview({
             Счета
           </Text>
           <View className="ml-auto flex-row items-center gap-1">
+            {acctMasked ? <EyeOff color={t.faint} size={12} /> : null}
             <Text
               className="text-[15px] font-semibold tabular-nums"
               style={{ color: t.ink }}

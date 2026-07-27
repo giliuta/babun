@@ -3,6 +3,7 @@ import { Alert, Pressable, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
+import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
@@ -44,6 +45,7 @@ import {
   useAccountsWithBalances,
   useDeleteTransfer,
 } from "@/features/finances/accounts";
+import { visibleAccountsTotal } from "@/features/finances/account-ui";
 import {
   defaultPeriod,
   makePeriod,
@@ -183,14 +185,41 @@ function FinancesContent() {
     [requestedClientId, txs],
   );
 
+  // Командный скоуп видит свои счета + общие, к которым команда подключена.
   const scopedAccounts = useMemo(
-    () => (scope ? accounts.filter((a) => a.brigade_id === scope) : accounts),
+    () => (scope ? accounts.filter((a) => accountServesTeam(a, scope)) : accounts),
     [accounts, scope],
   );
-  const acctTotal = useMemo(
-    () => scopedAccounts.reduce((s, a) => s + a.balance, 0),
-    [scopedAccounts],
+  // Σ мини-карточки: в командном скоупе — только командные счета (полный
+  // баланс общего умножался бы на число команд при переключении чипов);
+  // скрытые балансы в сумму не входят — маркер EyeOff говорит о неполноте.
+  const miniCardAccounts = useMemo(
+    () =>
+      scope ? scopedAccounts.filter((a) => a.scope === "team") : scopedAccounts,
+    [scope, scopedAccounts],
   );
+  const { total: acctTotal, hasHidden: acctMasked } = useMemo(
+    () => visibleAccountsTotal(miniCardAccounts),
+    [miniCardAccounts],
+  );
+  // Приток команды на общие счета за период: income − |refund| по счёту.
+  // txs уже отфильтрованы по команде, когда скоуп задан.
+  const periodInflowByAccount = useMemo(() => {
+    const inflow = new Map<string, number>();
+    if (!scope) return inflow;
+    for (const tx of txs) {
+      if (!tx.account_id) continue;
+      if (tx.type === "income") {
+        inflow.set(tx.account_id, (inflow.get(tx.account_id) ?? 0) + tx.amount);
+      } else if (tx.type === "refund") {
+        inflow.set(
+          tx.account_id,
+          (inflow.get(tx.account_id) ?? 0) - Math.abs(tx.amount),
+        );
+      }
+    }
+    return inflow;
+  }, [scope, txs]);
 
   const materialSummary = useMemo(() => {
     let amount = 0;
@@ -382,6 +411,10 @@ function FinancesContent() {
   const openFinanceSettings = () => {
     Alert.alert("Настройки финансов", undefined, [
       {
+        text: "Счета",
+        onPress: () => router.push("/cabinet/accounts"),
+      },
+      {
         text: "Категории операций",
         onPress: () => router.push("/cabinet/categories"),
       },
@@ -405,7 +438,10 @@ function FinancesContent() {
     // internal money moves, not income/expense — they are excluded, and
     // the amount is the raw t.amount (always positive); the sign
     // semantics live in the «Тип» column, same as the web file.
-    const report = financeTransactionsToCsv(scopedTransactions, categories);
+    const report = financeTransactionsToCsv(scopedTransactions, categories, {
+      teamName: new Map(teams.map((team) => [team.id, team.name])),
+      accounts,
+    });
     if (report.count === 0) {
       toast("За выбранный период нет операций", "info");
       return;
@@ -480,6 +516,7 @@ function FinancesContent() {
         onOpenCustom={() => setWheelsOpen(true)}
         totals={totals}
         acctTotal={acctTotal}
+        acctMasked={acctMasked}
         view={view}
         onTap={toggleView}
       />
@@ -516,7 +553,12 @@ function FinancesContent() {
       />
 
       {view === "accounts" ? (
-        <AccountsPanel accounts={scopedAccounts} isLoading={accountsLoading} />
+        <AccountsPanel
+          accounts={scopedAccounts}
+          isLoading={accountsLoading}
+          scopeTeamId={scope}
+          periodInflowByAccount={periodInflowByAccount}
+        />
       ) : view === "profit" ? (
         <ProfitBreakdown
           transactions={scopedTransactions}

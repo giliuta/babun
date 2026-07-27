@@ -241,6 +241,22 @@ export async function softCloseAccount(
   }
 }
 
+/** Reopen a soft-closed account (the reverse of {@link softCloseAccount}). */
+export async function reopenAccount(
+  supabase: DbSupabase,
+  id: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("accounts")
+    .update({ is_active: true })
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  if (error || !data) {
+    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
+  }
+}
+
 /**
  * Hard delete for an account without ledger history (a typo right after
  * creation). The server-side deletion guard rejects anything with rows.

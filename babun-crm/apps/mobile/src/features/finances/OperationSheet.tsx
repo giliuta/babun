@@ -27,7 +27,10 @@ import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
-import { isPaymentAccountCompatible } from "@babun/shared/local/finance/integrity";
+import {
+  accountServesTeam,
+  isPaymentAccountCompatible,
+} from "@babun/shared/local/finance/integrity";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -125,15 +128,24 @@ export function OperationSheet({
   );
   // A tender maps to exactly one account kind. Showing incompatible accounts
   // made it possible to save «Наличные» onto a card balance and discover the
-  // mismatch only after a server error.
+  // mismatch only after a server error. Командные счета идут раньше общих —
+  // тот же приоритет, что у серверного resolve.
   const teamAccounts = useMemo(
     () =>
       teamId
-        ? accounts.filter(
-            (a) =>
-              a.brigade_id === teamId &&
-              isPaymentAccountCompatible(payment, a.kind),
-          )
+        ? accounts
+            .filter(
+              (a) =>
+                accountServesTeam(a, teamId) &&
+                isPaymentAccountCompatible(payment, a.kind),
+            )
+            .sort((a, b) =>
+              a.scope === b.scope
+                ? a.position - b.position
+                : a.scope === "team"
+                  ? -1
+                  : 1,
+            )
         : [],
     [accounts, teamId, payment],
   );
@@ -144,22 +156,20 @@ export function OperationSheet({
   const accountMismatch =
     !!accountId &&
     (!selectedAccount ||
-      selectedAccount.brigade_id !== teamId ||
+      !teamId ||
+      !accountServesTeam(selectedAccount, teamId) ||
       !isPaymentAccountCompatible(payment, selectedAccount.kind));
 
-  // Дефолт счёта = счёт команды операции. Эффект (а не разовый сет при
-  // открытии), потому что счета приезжают асинхронно и команда меняется
-  // чипами; ручной выбор/сброс счёта (accountTouched) дефолт отключает.
+  // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
+  // (а не разовый сет при открытии), потому что счета приезжают асинхронно
+  // и команда меняется чипами; ручной выбор/сброс (accountTouched) дефолт
+  // отключает.
   useEffect(() => {
     if (!visible || accountTouched) return;
     if (!teamId || accountId !== null) return;
-    const def = accounts.find(
-      (a) =>
-        a.brigade_id === teamId &&
-        isPaymentAccountCompatible(payment, a.kind),
-    );
+    const def = teamAccounts[0];
     if (def) setAccountId(def.id);
-  }, [visible, accountTouched, teamId, accountId, accounts, payment]);
+  }, [visible, accountTouched, teamId, accountId, teamAccounts]);
 
   const amountCents = parseMoneyInputToCents(amount);
   const amountNum = (amountCents ?? 0) / 100;
@@ -354,7 +364,7 @@ export function OperationSheet({
                       const templateAccountFits =
                         !!templateAccount &&
                         !!nextTeamId &&
-                        templateAccount.brigade_id === nextTeamId &&
+                        accountServesTeam(templateAccount, nextTeamId) &&
                         isPaymentAccountCompatible(nextPayment, templateAccount.kind);
                       setType(t.kind);
                       setAmount(String(t.amount));
@@ -491,7 +501,7 @@ export function OperationSheet({
                   {teamAccounts.map((a) => (
                     <Chip
                       key={a.id}
-                      label={a.name}
+                      label={a.scope === "company" ? `${a.name} · Общий` : a.name}
                       selected={accountId === a.id}
                       onPress={() => {
                         setAccountTouched(true);
