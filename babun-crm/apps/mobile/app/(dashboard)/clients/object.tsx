@@ -245,7 +245,7 @@ export default function ClientObjectScreen() {
           {dueRows.map(({ unit, value, color }, i) => (
             <NavRow
               key={unit.id}
-              label={unit.room || "Кондиционер"}
+              label={unit.room || "Техника"}
               value={value}
               valueColor={color}
               separated={i > 0}
@@ -258,7 +258,7 @@ export default function ClientObjectScreen() {
             />
           ))}
           <AddRow
-            label="+ Добавить кондиционер"
+            label="+ Добавить технику"
             separated={dueRows.length > 0}
             onPress={() =>
               router.push({

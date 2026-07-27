@@ -128,7 +128,7 @@ export default function ClientUnitScreen() {
 
   const pickType = async () => {
     const picked = await chooseValue<ACType>(
-      "Тип кондиционера",
+      "Тип техники",
       AC_TYPE_ORDER.map((k) => ({ value: k, label: AC_TYPE_LABELS[k] })),
     );
     if (picked?.value) patch({ ac_type: picked.value });
@@ -146,7 +146,7 @@ export default function ClientUnitScreen() {
   const confirmDelete = () => {
     if (!unit || !loc) return;
     Alert.alert(
-      `Удалить кондиционер «${unit.room || "без комнаты"}»?`,
+      `Удалить «${unit.room || "без названия"}»?`,
       "Даты обслуживания будут удалены.",
       [
         { text: "Отмена", style: "cancel" },
@@ -168,8 +168,8 @@ export default function ClientUnitScreen() {
       return;
     }
     Alert.alert(
-      "Удалить черновик кондиционера?",
-      "Комната не заполнена, поэтому кондиционер ещё не добавлен.",
+      "Удалить черновик?",
+      "Название не заполнено, поэтому техника ещё не добавлена.",
       [
         { text: "Продолжить заполнение", style: "cancel" },
         { text: "Удалить", style: "destructive", onPress: () => router.back() },
@@ -181,17 +181,17 @@ export default function ClientUnitScreen() {
   if (!loc || (!isNew && !unit)) {
     return (
       <Screen>
-        <ScreenHeader title="Кондиционер" />
+        <ScreenHeader title="Техника" />
         <View className="flex-1 items-center justify-center px-8">
           {isLoading ? (
-            <Spinner size={28} label="Загрузка кондиционера" />
+            <Spinner size={28} label="Загрузка" />
           ) : (
             <Text
               accessibilityRole="header"
               className="text-center text-[15px]"
               style={{ color: t.sub }}
             >
-              Кондиционер удалён
+              Техника удалена
             </Text>
           )}
         </View>
@@ -209,7 +209,7 @@ export default function ClientUnitScreen() {
       <Stack.Screen options={{ gestureEnabled: !draftDirty }} />
     <Screen>
       <ScreenHeader
-        title={isNew ? "Новый кондиционер" : shown.room || "Кондиционер"}
+        title={isNew ? "Новая техника" : shown.room || "Техника"}
         subtitle={loc.label || "Объект"}
         onBack={onBack}
         right={
@@ -319,7 +319,7 @@ export default function ClientUnitScreen() {
         {!isNew ? (
           <RowGroup>
             <ActionRow
-              label="Удалить кондиционер"
+              label="Удалить"
               tone="danger"
               onPress={confirmDelete}
             />

@@ -45,7 +45,7 @@ describe("client native persistence contract", () => {
     assert.match(object, /if \(ok\) router\.back\(\)/);
     assert.match(unit, /if \(ok\) router\.back\(\)/);
     assert.match(object, /Удалить объект/);
-    assert.match(unit, /Удалить кондиционер/);
+    assert.match(unit, /Удалить«|Удалить»|label="Удалить"/);
     // Создание объекта уехало со страницы в лист снизу (2026-07-27). Правило
     // то же: форма пустеет ТОЛЬКО после подтверждённой записи, иначе набранный
     // адрес исчезал вместе с неудавшимся PATCH-ем.
