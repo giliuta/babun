@@ -1,11 +1,19 @@
 import { ActionSheetIOS, Alert, Platform } from "react-native";
+import {
+  choiceSheetReady,
+  presentChoiceSheet,
+} from "@/components/ui/ChoiceSheet";
 import { haptics } from "@/lib/haptics";
 
 // ВЫБОР «ЧТО СДЕЛАТЬ» / «КАКОЕ ЗНАЧЕНИЕ» — ОДНА ТОЧКА НА ВЕСЬ ПРОДУКТ.
 //
-// Владелец отверг кастомный лист снизу для такого выбора, поэтому на iOS это
-// нативный ActionSheetIOS. Но ActionSheetIOS существует ТОЛЬКО на iOS: при
-// сборке того же кода в веб-цель Expo (react-native-web) его нет вовсе, и
+// Владелец 2026-07-27: «мне не нравится, когда оно посередине вылазит — пусть
+// снизу выезжает, как и всё». Поэтому выбор рисует канонический нижний лист
+// (ChoiceSheetHost в корне приложения), а нативный ActionSheetIOS остался
+// только запасным путём — на случай, если хост почему-то не смонтирован.
+// Экраны об этом не знают: они по-прежнему зовут chooseOption().
+//
+// Второй смысл этой точки — веб: ActionSheetIOS существует ТОЛЬКО на iOS, и
 // каждый прямой вызов стал бы отдельной правкой при портировании.
 //
 // Поэтому экраны зовут chooseOption(), а платформа живёт здесь. Веб-версия —
@@ -28,6 +36,10 @@ export function chooseOption(
   const usable = choices.filter((c) => c.label.trim().length > 0);
   if (usable.length === 0) return Promise.resolve(null);
   if (opts?.haptic !== false) haptics.tap();
+
+  if (choiceSheetReady()) {
+    return presentChoiceSheet(title, usable, { message: opts?.message });
+  }
 
   if (Platform.OS === "ios") {
     const options = [...usable.map((c) => c.label), "Отмена"];

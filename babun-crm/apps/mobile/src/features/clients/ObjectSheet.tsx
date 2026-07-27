@@ -128,10 +128,11 @@ export function ObjectSheet({
   // набор; текущий набранный тип показываем всегда, даже если он новый.
   const typeOptions = useMemo(
     () =>
-      objectTypeVocabulary(allClients, [
-        ...labelPresets.map((preset) => preset.name),
+      objectTypeVocabulary(
+        allClients,
+        labelPresets.map((preset) => preset.name),
         draft.label,
-      ]),
+      ),
     [allClients, labelPresets, draft.label],
   );
   // Тип ПРЕДЗАПОЛНЕН: обычный объект заводится, не касаясь этой строки.

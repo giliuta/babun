@@ -30,6 +30,8 @@ export function RowGroup({
         <Text
           // Заголовок раздела: VoiceOver умеет прыгать по заголовкам, а без
           // роли группы карточки читались одним нерасчленимым потоком.
+          // Цвет — ПОЛНЫЙ ЧЁРНЫЙ: капс-ярлык это главное слово блока, а не
+          // подпись (владелец 2026-07-27: «серым не помечай главные слова»).
           accessibilityRole="header"
           maxFontSizeMultiplier={1.3}
           style={{
@@ -39,7 +41,7 @@ export function RowGroup({
             fontWeight: "700",
             letterSpacing: 1.4,
             textTransform: "uppercase",
-            color: t.faint,
+            color: t.ink,
           }}
         >
           {title}
@@ -223,7 +225,7 @@ export function FieldRow({
                 fontWeight: "700",
                 letterSpacing: 1.2,
                 textTransform: "uppercase",
-                color: t.faint,
+                color: t.ink,
                 marginBottom: 2,
               }}
             >
@@ -312,7 +314,7 @@ export function FieldRow({
           <Text
             maxFontSizeMultiplier={1.2}
             numberOfLines={1}
-            style={{ fontSize: 15, fontWeight: "600", color: t.sub }}
+            style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
           >
             {label}
           </Text>
@@ -663,7 +665,7 @@ export function ChoiceRow({
           fontWeight: "700",
           letterSpacing: 1.2,
           textTransform: "uppercase",
-          color: t.faint,
+          color: t.ink,
         }}
       >
         {label}

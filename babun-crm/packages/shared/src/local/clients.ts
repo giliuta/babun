@@ -62,19 +62,6 @@ export const PROPERTY_LABELS: Record<PropertyType, string> = {
   other: "Другое",
 };
 
-/** Языки клиента (SMS-шаблоны, фильтр «Язык») — единый список для
- *  карточки и фильтров. value хранится в `client.language`.
- *  Только текст — эмодзи/флагов в приложении нет (канон владельца). */
-export const CLIENT_LANGUAGES: {
-  value: string;
-  label: string;
-  short: string;
-}[] = [
-  { value: "ru", label: "Русский", short: "RU" },
-  { value: "en", label: "English", short: "EN" },
-  { value: "el", label: "Ελληνικά", short: "EL" },
-];
-
 export type ACType = "split" | "ducted" | "cassette";
 
 export const AC_TYPE_LABELS: Record<ACType, string> = {
@@ -198,7 +185,6 @@ export interface Client {
    *  location's `equipment` array on first load. */
   equipment: ACUnit[];
   /** v309 — язык клиента для SMS-шаблонов (ru/en/el на Кипре чаще всего). */
-  language?: string;
   /** Объекты клиента (дом/офис/вилла) — новое поле для STORY-002.
    *  Если у клиента несколько объектов, при записи явно выбирается
    *  один. Legacy-поле `address` оставлено для миграции. */
@@ -390,7 +376,6 @@ export function loadClients(): Client[] {
         instagram_username: c.instagram_username ?? "",
         property_type: c.property_type ?? "",
         equipment: equipmentLegacy,
-        language: c.language ?? "",
         notes: c.notes ?? [],
         birthday: c.birthday ?? "",
         blacklisted: c.blacklisted ?? false,

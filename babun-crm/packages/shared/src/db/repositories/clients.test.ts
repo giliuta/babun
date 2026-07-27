@@ -56,7 +56,6 @@ function clientRow(index: number) {
     address: "",
     city: "",
     property_type: "",
-    language: null,
     birthday: "",
     blacklisted: false,
     pinned_at: null,

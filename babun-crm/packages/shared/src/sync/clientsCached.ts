@@ -628,8 +628,11 @@ function makeServerRow(
     address: input.address ?? "",
     city: input.city ?? "",
     city_manual: input.city_manual ?? false,
+    // Колонка в базе осталась (данные не трогаем), но продукт язык клиента
+    // больше не ведёт: владелец 2026-07-27 убрал поле — переводы уедут в
+    // SMS-рассылки. Для NOT NULL-строки шлём пустую.
+    language: "",
     property_type: input.property_type ?? "",
-    language: input.language ?? null,
     birthday: input.birthday ?? "",
     blacklisted: input.blacklisted ?? false,
     pinned_at: input.pinned_at ?? null,
@@ -668,7 +671,6 @@ function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
   if (patch.city !== undefined) out.city = patch.city;
   if (patch.city_manual !== undefined) out.city_manual = patch.city_manual;
   if (patch.property_type !== undefined) out.property_type = patch.property_type;
-  if (patch.language !== undefined) out.language = patch.language;
   if (patch.birthday !== undefined) out.birthday = patch.birthday;
   if (patch.blacklisted !== undefined) out.blacklisted = patch.blacklisted;
   if (patch.pinned_at !== undefined) out.pinned_at = patch.pinned_at;

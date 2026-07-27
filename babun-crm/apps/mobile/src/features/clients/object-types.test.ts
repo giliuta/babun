@@ -13,41 +13,60 @@ const client = (...labels: string[]) =>
 
 describe("словарь типов объекта", () => {
   test("пустая база — только стандартный набор", () => {
-    assert.deepEqual(objectTypeVocabulary([]), ["Дом", "Офис", "Вилла"]);
+    assert.deepEqual(objectTypeVocabulary([]), ["Дом", "Квартира", "Офис"]);
+  });
+
+  test("типы из настроек идут ПЕРВЫМИ, в порядке настроек", () => {
+    // Бизнес объявил свой список — он и есть главный.
+    const vocab = objectTypeVocabulary([client("Ресторан")], ["Склад", "Цех"]);
+    assert.deepEqual(vocab, [
+      "Склад",
+      "Цех",
+      "Ресторан",
+      "Дом",
+      "Квартира",
+      "Офис",
+    ]);
   });
 
   test("используемое бизнесом идёт ПЕРЕД стандартным", () => {
-    // У кондиционерщика «Квартира» встречается чаще всего — она и первая,
-    // а наш «Дом» стоит после того, чем реально пользуются.
     const vocab = objectTypeVocabulary([
       client("Квартира", "Квартира"),
       client("Ресторан"),
     ]);
-    assert.deepEqual(vocab, ["Квартира", "Ресторан", "Дом", "Офис", "Вилла"]);
+    assert.deepEqual(vocab, ["Квартира", "Ресторан", "Дом", "Офис"]);
   });
 
   test("регистр и пробелы не плодят дубли", () => {
     const vocab = objectTypeVocabulary([client("дом", "Дом ", " ДОМ")]);
-    assert.deepEqual(vocab, ["дом", "Офис", "Вилла"]);
+    assert.deepEqual(vocab, ["дом", "Квартира", "Офис"]);
     assert.equal(objectTypeKey(" ДОМ "), "дом");
   });
 
-  test("текущее значение объекта попадает в список, даже если больше нигде нет", () => {
-    const vocab = objectTypeVocabulary([], ["Склад"]);
-    assert.deepEqual(vocab, ["Склад", "Дом", "Офис", "Вилла"]);
+  test("ПОРЯДОК НЕ ЗАВИСИТ ОТ ВЫБОРА — чип не уезжает из-под пальца", () => {
+    // Баг, который владелец увидел первым тапом: выбор «Офиса» пересобирал
+    // список, и выбранным оказывался сосед.
+    const clients = [client("Квартира", "Квартира"), client("Ресторан")];
+    const before = objectTypeVocabulary(clients, []);
+    for (const picked of before) {
+      assert.deepEqual(
+        objectTypeVocabulary(clients, [], picked),
+        before,
+        `выбор «${picked}» переставил список`,
+      );
+    }
   });
 
-  test("обязательные значения не обгоняют используемые", () => {
-    const vocab = objectTypeVocabulary([client("Офис", "Офис")], ["Склад"]);
-    assert.equal(vocab[0], "Офис");
-    assert.ok(vocab.includes("Склад"));
+  test("текущее значение дописывается В КОНЕЦ, если его нигде нет", () => {
+    const vocab = objectTypeVocabulary([], [], "Ангар");
+    assert.deepEqual(vocab, ["Дом", "Квартира", "Офис", "Ангар"]);
   });
 
   test("пустые и пробельные метки игнорируются", () => {
     assert.deepEqual(objectTypeVocabulary([client("", "   ")]), [
       "Дом",
+      "Квартира",
       "Офис",
-      "Вилла",
     ]);
   });
 });

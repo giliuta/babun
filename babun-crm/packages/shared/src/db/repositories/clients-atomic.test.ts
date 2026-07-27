@@ -24,7 +24,6 @@ const input: Client = {
   address: "",
   city: "",
   property_type: "",
-  language: "",
   birthday: "",
   blacklisted: false,
   pinned_at: null,
@@ -44,7 +43,6 @@ const input: Client = {
 const serverRow = {
   ...input,
   tenant_id: TENANT,
-  language: null,
   tag_ids: [TAG_ID],
   updated_at: "2026-07-20T12:01:00.000Z",
 };

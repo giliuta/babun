@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { AppProviders } from "@/providers/AppProviders";
 import { useSession } from "@/providers/SessionProvider";
+import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
 import {
   consumeLastAppointmentNotificationTarget,
@@ -178,7 +179,11 @@ export default function RootLayout() {
   return (
     <AppProviders>
       <ToastProvider>
-        <RootNavigator />
+        {/* Хост выбора «что сделать»: любой chooseOption() рисуется нижним
+            листом, а не системным попапом посередине. */}
+        <ChoiceSheetHost>
+          <RootNavigator />
+        </ChoiceSheetHost>
       </ToastProvider>
     </AppProviders>
   );

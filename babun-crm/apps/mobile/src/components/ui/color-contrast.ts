@@ -35,21 +35,47 @@ function luminance(rgb: RGB): number {
   );
 }
 
-export function contrastRatio(foreground: string, background: string): number {
-  const fg = parseHex(foreground);
-  const bg = parseHex(background);
-  if (!fg || !bg) return 0;
-  const lighter = Math.max(luminance(fg), luminance(bg));
-  const darker = Math.min(luminance(fg), luminance(bg));
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
 function composite(foreground: RGB, background: RGB, alpha: number): RGB {
   const clamped = Math.max(0, Math.min(1, alpha));
   return foreground.map((channel, index) =>
     Math.round(channel * clamped + background[index] * (1 - clamped)),
   ) as unknown as RGB;
 }
+
+/** `rgba(r,g,b,a)` — тиры текста теперь чернила с прозрачностью, а не серые
+ *  пигменты, и проверять их контраст надо ПОСЛЕ наложения на фон. */
+function parseRgba(value: string): { rgb: RGB; alpha: number } | null {
+  const m =
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([0-9.]+)\s*)?\)$/i.exec(
+      value.trim(),
+    );
+  if (!m) return null;
+  const rgb: RGB = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (rgb.some((c) => c > 255)) return null;
+  const alpha = m[4] === undefined ? 1 : Number(m[4]);
+  if (!Number.isFinite(alpha)) return null;
+  return { rgb, alpha };
+}
+
+/** Цвет как он ВЫГЛЯДИТ на этом фоне: полупрозрачный складывается с ним. */
+function resolve(value: string, background: RGB | null): RGB | null {
+  const hex = parseHex(value);
+  if (hex) return hex;
+  const rgba = parseRgba(value);
+  if (!rgba) return null;
+  if (rgba.alpha >= 1 || !background) return rgba.rgb;
+  return composite(rgba.rgb, background, rgba.alpha);
+}
+
+export function contrastRatio(foreground: string, background: string): number {
+  const bg = resolve(background, null);
+  const fg = resolve(foreground, bg);
+  if (!fg || !bg) return 0;
+  const lighter = Math.max(luminance(fg), luminance(bg));
+  const darker = Math.min(luminance(fg), luminance(bg));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 
 function toHex(rgb: RGB): string {
   return `#${rgb

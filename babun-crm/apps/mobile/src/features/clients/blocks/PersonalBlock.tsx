@@ -16,7 +16,6 @@
 
 import { useEffect, useState } from "react";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
-import { CLIENT_LANGUAGES } from "@babun/shared/local/clients";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { ControlRow, NavRow, RowGroup } from "@/features/clients/card-rows";
 import { LabelPickerSheet } from "@/features/clients/LabelPickerSheet";
@@ -27,7 +26,6 @@ import {
 } from "@/features/clients/OptionalDateField";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useCities } from "@/features/reference/queries";
-import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 
 interface PersonalBlockProps {
@@ -86,16 +84,6 @@ export function PersonalBlock({
         ? chosenTags.map((tag) => tag.name).join(", ")
         : `${chosenTags.length} ${tagsWord(chosenTags.length)}`;
 
-  const language = CLIENT_LANGUAGES.find((l) => l.value === client.language);
-  const pickLanguage = async () => {
-    const picked = await chooseValue<string>(
-      "Язык клиента",
-      CLIENT_LANGUAGES.map((l) => ({ value: l.value, label: l.label })),
-      client.language ? { clearLabel: "Убрать" } : undefined,
-    );
-    if (picked) update({ language: picked.value ?? "" });
-  };
-
   return (
     <>
       <RowGroup title="Личное">
@@ -130,13 +118,6 @@ export function PersonalBlock({
             onChange={(v) => update({ birthday: v })}
           />
         </ControlRow>
-        <NavRow
-          label="Язык"
-          value={language?.label ?? null}
-          placeholder="не выбран"
-          separated
-          onPress={() => void pickLanguage()}
-        />
       </RowGroup>
 
       <LabelPickerSheet

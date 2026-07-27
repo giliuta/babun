@@ -141,7 +141,6 @@ export function useClientDraft(active: boolean) {
         draft.email.trim() ||
         draft.city.trim() ||
         draft.birthday ||
-        draft.language ||
         draft.whatsapp_phone.trim() ||
         draft.telegram_username.trim() ||
         draft.instagram_username.trim() ||

@@ -23,6 +23,10 @@ A calm, premium, iOS-26-native system for an all-day HVAC field-service CRM. One
 | fill | `#EEF1F5` | the ONE inset fill: idle chip, segmented track, inset input, search field (`t.fill`) |
 | success / danger / warning | `#1FB47A` / `#F0473C` / `#F5A623` | money-in/profit · money-out/debt/destructive · caution |
 
+**СЕРОГО НЕТ — ЕСТЬ ЧЁРНЫЙ РАЗНОЙ ГРОМКОСТИ (LOCKED 2026-07-27).** Владелец: «серым не помечай главные слова — имя, телефон, объекты, „Записать" — это всё чёрным; серый убираем вообще, он мне в глаза не нравится». Отсюда два правила, и оба обязательны:
+1. **Тиры текста — это чернила с прозрачностью, а не серые пигменты.** `body/sub/faint/placeholder` = `rgba(11,18,32, .86/.74/.64/.62)`. Самостоятельные серые (`#39414e`, `#5b6678`, `#626c79`) удалены: они уводят в холодную грязь и читаются как «выключено». Побочный выигрыш — контраст вырос (все четыре ≥5:1 на surface, canvas и fill; `contrastRatio` умеет rgba и складывает его с фоном, тест `color-contrast.test.ts`).
+2. **Главное слово — ПОЛНЫЙ чёрный `ink`.** Это имя, телефон, значение строки, «Записать» и — обязательно — КАПС-ЯРЛЫКИ групп и строк («ИМЯ», «ТЕЛЕФОН», «ОБЪЕКТЫ», «ЛИЧНОЕ», «НОВАЯ ЗАМЕТКА», «ТИП ОБЪЕКТА»). Ярлык называет факт, а не комментирует его, поэтому тише значения он быть не имеет права. Приглушать разрешено только ПОЯСНЕНИЯ («Имя обязательно», «7 визитов · посл. 14 апр»), и приглушать их надо РАЗМЕРОМ (11–13pt), а не серостью.
+
 **Theme policy (LOCKED):** Babun is light-only. `app.json` and bootstrap force the light appearance; the app must not follow the system theme and must not expose a theme switch. Runtime source of truth: `src/theme/colors.ts` (`useThemeColors()`).
 
 ## 2. Type scale (System SF, tracking tightens with size)
@@ -40,6 +44,8 @@ A calm, premium, iOS-26-native system for an all-day HVAC field-service CRM. One
 
 ## 3. Spacing & radii
 8pt base, 4pt half-step for dense rows. Screen gutter 16 (28 on login). Card inner padding 16 (20 on hero cards). Inter-card gap 12. List row min-height 56 (input/chip 52/32). Section eyebrow: 24 top / 8 bottom. Separators left-inset 16 (68 on avatar rows). **Radii:** card 20 · input 14 · pill 999 · logo 18.
+
+**ОДИН РАДИУС НА ВСЁ (LOCKED 2026-07-27).** Владелец: «закругление краёв должно быть везде одинаковое — не надо, если блок больше, делать больше закругление; это хрень полная, должен быть стандарт везде». Значит: радиус НЕ зависит от размера элемента. Прямоугольная поверхность любого масштаба — карточка, группа строк, поле, кнопка, плитка, бейдж, миниатюра, лист — берёт **`t.radius.card` (20)**; вложенный в неё элемент — `t.radius.input` (14), и только чтобы не было касания двух дуг. Круглые по смыслу вещи (аватар, чип-пилюля, круглая кнопка) — `pill` (999): круг не может стать прямоугольником. Верхние углы нижнего листа — 24, это край экрана, а не поверхность. Литералов `borderRadius: 12/16/18` и классов `rounded-xl/2xl/3xl` в продукте быть не должно.
 
 **One radius scale — no literals.** Every corner reads from `t.radius`: selectable rectangular controls & inputs (grid pills, facet rows, primary sheet buttons, segment tracks) = **input (14)**; nested thumbs inset by their track padding (input − 4 = 10); grouped sub-panels inside a sheet = **card (20)**; pill toggles = **pill (999)**; the bottom sheet's own top corners = **24**. Never hand-write `borderRadius: 12`/`rounded-xl` where a token fits — mismatched roundings are the fastest way a screen reads unfinished.
 

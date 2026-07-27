@@ -16,8 +16,9 @@ import type { Client } from "@babun/shared/local/clients";
 // (по частоте), потом стандартный набор. Так у кондиционерщика первым будет
 // «Квартира», а не наш «Дом».
 
-/** Стандартный набор — ровно тот, что назвал владелец. */
-export const STANDARD_OBJECT_TYPES = ["Дом", "Офис", "Вилла"] as const;
+/** Стандартный набор — ровно тот, что назвал владелец 2026-07-27. «Вилла»
+ *  убрана им же: «дом и вилла по сути одно и то же». */
+export const STANDARD_OBJECT_TYPES = ["Дом", "Квартира", "Офис"] as const;
 
 /** Ключ сравнения: «дом», «Дом» и «ДОМ » — один тип, а не три. */
 export function objectTypeKey(name: string): string {
@@ -25,47 +26,62 @@ export function objectTypeKey(name: string): string {
 }
 
 /**
- * Словарь типов объекта для пикера: сначала используемые бизнесом (по
- * убыванию частоты, при равенстве — по алфавиту), затем стандартные, которых
- * бизнес ещё не использовал. Без дублей по регистру и пробелам.
+ * Словарь типов объекта для строки выбора.
  *
- * @param extra — значения, которые нужно показать обязательно: пресеты
- *   кабинета (если таблица однажды появится) и текущее значение объекта,
- *   даже если оно больше нигде не встречается.
+ * ПОРЯДОК НЕ ЗАВИСИТ ОТ ВЫБОРА. Это не украшение, а исправление бага, который
+ * владелец увидел первым же тапом (2026-07-27: «нажимаю офис — оно
+ * перекладывает на виллу»): раньше текущее значение подмешивалось в сортировку
+ * по частоте, поэтому в момент выбора список пересобирался и чип уезжал
+ * из-под пальца — выбранным оказывался сосед.
+ *
+ * Порядок: (1) типы, заведённые бизнесом в настройках, в их порядке;
+ * (2) фактически используемые, которых в настройках нет, по убыванию частоты;
+ * (3) стандартный набор, если он ещё не покрыт; (4) текущее значение объекта,
+ * если его нет нигде — оно ДОПИСЫВАЕТСЯ в конец и ничего не двигает.
+ *
+ * @param presets — типы из настроек (кабинет), в порядке настроек.
+ * @param current — текущее значение объекта: показать обязательно.
  */
 export function objectTypeVocabulary(
   clients: readonly Client[],
-  extra: readonly string[] = [],
+  presets: readonly string[] = [],
+  current?: string,
 ): string[] {
-  const uses = new Map<string, { name: string; count: number }>();
-
-  const add = (raw: string | undefined | null, weight: number) => {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (raw: string | undefined | null) => {
     const name = (raw ?? "").trim();
     if (!name) return;
     const key = objectTypeKey(name);
-    const prev = uses.get(key);
-    // Написание берём от первого встреченного: не «нормализуем» чужой язык.
-    if (prev) prev.count += weight;
-    else uses.set(key, { name, count: weight });
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(name);
   };
 
+  for (const preset of presets) push(preset);
+
+  // Используемые — по частоте, при равенстве по алфавиту. Считаем ВСЕГДА от
+  // объектов клиентов и никогда от текущего выбора.
+  const uses = new Map<string, { name: string; count: number }>();
   for (const client of clients) {
-    for (const loc of client.locations ?? []) add(loc.label, 1);
+    for (const loc of client.locations ?? []) {
+      const name = (loc.label ?? "").trim();
+      if (!name) continue;
+      const key = objectTypeKey(name);
+      const prev = uses.get(key);
+      // Написание берём от первого встреченного: не «нормализуем» чужой язык.
+      if (prev) prev.count += 1;
+      else uses.set(key, { name, count: 1 });
+    }
   }
-  // Обязательные значения весят 0: попадают в список, но не поднимаются выше
-  // того, чем реально пользуются.
-  for (const name of extra) add(name, 0);
-
-  const used = [...uses.values()]
+  [...uses.values()]
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ru"))
-    .map((u) => u.name);
+    .forEach((u) => push(u.name));
 
-  const seen = new Set(used.map(objectTypeKey));
-  const standard = STANDARD_OBJECT_TYPES.filter(
-    (name) => !seen.has(objectTypeKey(name)),
-  );
+  for (const name of STANDARD_OBJECT_TYPES) push(name);
+  push(current);
 
-  return [...used, ...standard];
+  return out;
 }
 
 /** Приводит введённое значение к уже существующему написанию: «дом» → «Дом».

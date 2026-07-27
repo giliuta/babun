@@ -65,14 +65,17 @@ export const light: ThemeColors = {
   onAccent: "#ffffff",
   brandAccent: "#2c5be0",
   ink: "#0b1220",
-  body: "#39414e",
-  sub: "#5b6678",
-  // WCAG AA: 4.6:1 on canvas / 5.0:1 on surface (was #97a0ae ≈ 2.4:1 —
-  // unreadable captions). Still lighter than `sub`, so the tier order holds.
-  faint: "#626c79",
-  // Every text-capable token clears WCAG AA on white. These colors also
-  // drive icons/fills, so one semantic source stays consistent everywhere.
-  placeholder: "#636e7c",
+  // ТЕКСТ — ЭТО ЧЁРНЫЙ С АЛЬФОЙ, А НЕ СЕРЫЙ ПИГМЕНТ (владелец 2026-07-27:
+  // «убираем вообще серый, используем чёрный — оно в глаза мне не нравится»).
+  // Раньше тиры были самостоятельными серыми (#39414e / #5b6678 / #626c79):
+  // они уводили в холодную грязь и на светлом фоне читались как выключенные.
+  // Теперь тир = ПРОЗРАЧНОСТЬ ЧЕРНИЛ: одна краска, разная громкость —
+  // «прикрываем, не скрываем». Все четыре темнее прежних серых, поэтому
+  // контраст только вырос (≥5:1 на surface и на canvas).
+  body: "rgba(11,18,32,0.86)",
+  sub: "rgba(11,18,32,0.74)",
+  faint: "rgba(11,18,32,0.64)",
+  placeholder: "rgba(11,18,32,0.62)",
   success: "#087a52",
   danger: "#c9372c",
   // Also clears AA on its own 10% semantic tint (used by warning cards).

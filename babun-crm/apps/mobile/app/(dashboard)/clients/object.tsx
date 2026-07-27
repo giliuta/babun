@@ -110,10 +110,11 @@ export default function ClientObjectScreen() {
   // всегда, даже если он больше нигде не встречается.
   const typeOptions = useMemo(
     () =>
-      objectTypeVocabulary(allClients, [
-        ...labelPresets.map((preset) => preset.name),
-        loc?.label ?? "",
-      ]),
+      objectTypeVocabulary(
+        allClients,
+        labelPresets.map((preset) => preset.name),
+        loc?.label,
+      ),
     [allClients, labelPresets, loc?.label],
   );
 

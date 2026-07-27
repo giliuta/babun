@@ -159,7 +159,6 @@ export function rowToClient(r: ClientRow): Client {
     city_manual: r.city_manual,
     property_type: (r.property_type ?? "") as PropertyType | "",
 
-    language: r.language ?? "",
     birthday: r.birthday,
     blacklisted: r.blacklisted,
     pinned_at: r.pinned_at,
@@ -234,7 +233,6 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
     city_manual: c.city_manual ?? false,
     property_type: c.property_type || "",
 
-    language: c.language ?? null,
     birthday: c.birthday ?? "",
     blacklisted: c.blacklisted ?? false,
     pinned_at: c.pinned_at ?? null,
@@ -276,7 +274,6 @@ function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   if (patch.city !== undefined) out.city = patch.city;
   if (patch.city_manual !== undefined) out.city_manual = patch.city_manual;
   if (patch.property_type !== undefined) out.property_type = patch.property_type || "";
-  if (patch.language !== undefined) out.language = patch.language || null;
   if (patch.birthday !== undefined) out.birthday = patch.birthday;
   if (patch.blacklisted !== undefined) out.blacklisted = patch.blacklisted;
   if (patch.pinned_at !== undefined) out.pinned_at = patch.pinned_at;
