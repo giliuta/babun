@@ -54,6 +54,15 @@ describe("client native persistence contract", () => {
     assert.match(sheet, /if \(!id\) \{/);
     // Отказ записи выходит РАНЬШЕ очистки формы: сама очистка (сброс адреса и
     // заметки с сохранением выбранного типа) стоит уже за этой веткой.
+    // Поля листа ОБЯЗАНЫ быть live: кнопка живёт в футере и фокус не снимает,
+    // поэтому коммит по blur не наступает — набранный адрес не доезжал до
+    // черновика, кнопка оставалась серой, «Готово» молча выбрасывало работу
+    // (регресс 2026-07-27, найден прогоном персонажей).
+    const addressRow = sheet.slice(
+      sheet.indexOf('label="Адрес или ссылка"'),
+      sheet.indexOf('label="Заметка"'),
+    );
+    assert.match(addressRow, /\n\s+live\n/);
     const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));
     assert.match(afterGate, /return false;/);
     assert.match(afterGate, /setDraft\(\(d\) => \(\{ \.\.\.EMPTY_DRAFT/);
