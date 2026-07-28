@@ -154,21 +154,27 @@ export async function listAccountBalanceDeltas(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<Map<string, number>> {
+  // Keyset-пагинация (.gt по id), не offset: конкурентная вставка сдвигала
+  // бы окно range и задваивала/пропускала строку в балансе.
   const rows: Array<Pick<Row, "id" | "account_id" | "type" | "amount">> = [];
-  for (let offset = 0; ; offset += LEDGER_PAGE_SIZE) {
-    const { data, error } = await supabase
+  let lastId: string | null = null;
+  for (;;) {
+    let q = supabase
       .from("finance_transactions")
       .select("id, account_id, type, amount")
       .eq("tenant_id", tenantId)
-      .not("account_id", "is", null)
+      .not("account_id", "is", null);
+    if (lastId) q = q.gt("id", lastId);
+    const { data, error } = await q
       .order("id", { ascending: true })
-      .range(offset, offset + LEDGER_PAGE_SIZE - 1);
+      .limit(LEDGER_PAGE_SIZE);
     if (error) throw new Error(`listAccountBalanceDeltas: ${error.message}`);
     const page = (data ?? []) as Array<
       Pick<Row, "id" | "account_id" | "type" | "amount">
     >;
     rows.push(...page);
     if (page.length < LEDGER_PAGE_SIZE) break;
+    lastId = page[page.length - 1].id;
   }
   const map = new Map<string, number>();
   for (const r of rows) {
@@ -252,6 +258,11 @@ export interface TransactionDraft {
   receipt_url?: string | null;
   invoice_id?: string | null;
   refund_of_id?: string | null;
+  /** Клиентский PK строки. Стабилен на время попытки: ретрай после
+   *  потерянного ответа или двойной тап упирается в duplicate key,
+   *  который трактуется как успех — деньги не задваиваются (паттерн
+   *  request_id переводов). */
+  request_id?: string;
 }
 
 export async function insertTransaction(
@@ -264,6 +275,7 @@ export async function insertTransaction(
   const occurredOn = draft.occurred_on ?? businessToday;
   rejectFutureLedgerDate(occurredOn, businessToday);
   const insert: Insert = {
+    ...(draft.request_id ? { id: draft.request_id } : {}),
     tenant_id: tenantId,
     type: draft.type,
     amount: draft.amount,
@@ -286,6 +298,18 @@ export async function insertTransaction(
     .insert(insert)
     .select("*")
     .single();
+  if (error && draft.request_id && error.code === "23505") {
+    // Строка с этим id уже закоммичена прошлой попыткой — это успех.
+    const { data: existing, error: readError } = await supabase
+      .from("finance_transactions")
+      .select("*")
+      .eq("id", draft.request_id)
+      .single();
+    if (readError || !existing) {
+      throw new Error(readError?.message ?? "Не удалось сохранить финансовую операцию");
+    }
+    return rowToTx(existing as Row);
+  }
   if (error || !data) {
     throw new Error(error?.message ?? "Не удалось сохранить финансовую операцию");
   }

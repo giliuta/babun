@@ -283,8 +283,10 @@ function AccountsListContent() {
     ]);
   };
 
+  // isPending, не isLoading: офлайн-paused запрос иначе рисовал «Нет
+  // счетов» с кнопкой добавления вместо честной загрузки/ошибки.
   const loading =
-    accountsQuery.isLoading || teamsQuery.isLoading || allTeamsQuery.isLoading;
+    accountsQuery.isPending || teamsQuery.isPending || allTeamsQuery.isPending;
   const loadError =
     (accountsQuery.data === undefined ? accountsQuery.error : null) ||
     (teamsQuery.data === undefined ? teamsQuery.error : null) ||
@@ -347,7 +349,10 @@ function AccountsListContent() {
                           ? (teamById.get(a.brigade_id)?.name ?? "Без бригады")
                           : "Без бригады"
                     }
-                    onPress={() => confirmReopen(a)}
+                    // История закрытого счёта остаётся смотрибельной:
+                    // тап — деталь, long-press — быстрая реанимация.
+                    onPress={() => router.push(`/accounts/${a.id}`)}
+                    onLongPress={() => confirmReopen(a)}
                   />
                 </View>
               ))}

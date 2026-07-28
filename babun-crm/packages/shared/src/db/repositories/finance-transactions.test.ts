@@ -56,11 +56,30 @@ function pagedSupabase(
           orders.push([column, options.ascending]);
           return builder;
         },
+        // Keyset-пагинация (listAccountBalanceDeltas): .gt("id", last) +
+        // терминальный .limit(n). Мок сортирует по id лексикографически —
+        // как PostgREST по uuid-строке.
+        gt: (_column: string, value: string) => {
+          cursor = value;
+          return builder;
+        },
+        limit: async (n: number) => {
+          const sorted = [...source].sort((a, b) =>
+            String(a.id).localeCompare(String(b.id)),
+          );
+          const startIdx = cursor
+            ? sorted.findIndex((row) => String(row.id) > (cursor as string))
+            : 0;
+          const from = startIdx < 0 ? sorted.length : startIdx;
+          ranges.push([from, from + n - 1]);
+          return { data: sorted.slice(from, from + n), error: null };
+        },
         range: async (from: number, to: number) => {
           ranges.push([from, to]);
           return { data: source.slice(from, to + 1), error: null };
         },
       };
+      let cursor: string | null = null;
       return builder;
     },
   };

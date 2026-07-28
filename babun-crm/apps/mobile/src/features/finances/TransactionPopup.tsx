@@ -124,9 +124,15 @@ export function TransactionPopup({
   // only be refunded through that appointment; a generic refund here would
   // leave its paid/prepaid fields disagreeing with the ledger.
   const isAppointmentLedger = tx.source === "auto";
-  const refundRemaining = Math.max(0, tx.amount - alreadyRefunded);
+  // Деньги сравниваются ТОЛЬКО в центах: float-вычитание (10 − 1.12 =
+  // 8.879999…) ломало префилл и запрещало вернуть ровно остаток.
+  const refundRemainingCents = Math.max(
+    0,
+    Math.round(tx.amount * 100) - Math.round(alreadyRefunded * 100),
+  );
+  const refundRemaining = refundRemainingCents / 100;
   const canRefund =
-    tx.type === "income" && !isAppointmentLedger && refundRemaining > 0;
+    tx.type === "income" && !isAppointmentLedger && refundRemainingCents > 0;
   const canEdit =
     !isAppointmentLedger &&
     !tx.invoice_id &&
@@ -138,7 +144,7 @@ export function TransactionPopup({
   const refundCents = parseMoneyInputToCents(refundAmount);
   const refundNum = (refundCents ?? 0) / 100;
   const refundValid =
-    refundCents != null && refundNum <= refundRemaining;
+    refundCents != null && refundCents <= refundRemainingCents;
 
   const handleDelete = () => {
     Alert.alert("Удалить операцию?", "Действие нельзя отменить.", [
@@ -298,10 +304,14 @@ export function TransactionPopup({
               {isAppointmentLedger ? (
                 <MetaRow label="Изменение" value="Через связанную заявку" />
               ) : null}
-              {canRefund && alreadyRefunded > 0 ? (
+              {Number.isFinite(alreadyRefunded) && alreadyRefunded > 0 ? (
                 <MetaRow
                   label="Уже возвращено"
-                  value={formatEUR(alreadyRefunded)}
+                  value={
+                    refundRemainingCents === 0
+                      ? `${formatEUR(alreadyRefunded)} · полностью`
+                      : formatEUR(alreadyRefunded)
+                  }
                 />
               ) : null}
             </View>

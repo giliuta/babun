@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -34,6 +35,9 @@ export function useTransactions(
   return useQuery({
     queryKey: ["transactions", tenantId, from, to, scope],
     enabled: !!tenantId,
+    // Смена периода/скоупа держит прошлый срез до прихода нового — экран
+    // не мигает полноэкранным спиннером и не показывает нулевые итоги.
+    placeholderData: keepPreviousData,
     queryFn: () =>
       listTransactionsForRange(
         supabase,

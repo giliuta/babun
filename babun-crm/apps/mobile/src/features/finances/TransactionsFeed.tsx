@@ -87,15 +87,20 @@ export function TransactionsFeed({
       .sort((a, b) => b[0].localeCompare(a[0]))
       .map(([date, data]) => ({
         title: date,
-        // transfers are balance-neutral — excluded from the day net (web
-        // groupByDay parity)
+        // Общая лента: переводы нейтральны для P&L и исключены из дневного
+        // итога (web groupByDay parity). Лента ОДНОГО счёта (contextMode
+        // "team"): перевод меняет именно этот баланс — включаем, иначе
+        // итог дня спорит с футером «За месяц» и балансом счёта.
         net: data.reduce(
-          (s, tx) => (tx.type === "transfer" ? s : s + signedAmount(tx)),
+          (s, tx) =>
+            tx.type === "transfer" && contextMode !== "team"
+              ? s
+              : s + signedAmount(tx),
           0,
         ),
         data,
       }));
-  }, [transactions]);
+  }, [transactions, contextMode]);
 
   const renderRow = (tx: FinanceTransaction) => {
     const isIncome = tx.type === "income";

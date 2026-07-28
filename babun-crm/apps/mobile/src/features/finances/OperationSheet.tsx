@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -27,6 +27,7 @@ import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
+import { randomUuid } from "@babun/shared/sync";
 import {
   accountServesTeam,
   isPaymentAccountCompatible,
@@ -91,9 +92,22 @@ export function OperationSheet({
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
   const [accountTouched, setAccountTouched] = useState(false);
+  // Идемпотентность вставки: клиентский PK, новый после каждого успеха.
+  const [requestId, setRequestId] = useState(randomUuid);
+  const savingRef = useRef(false);
 
+  // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
+  // в полночь или фоновый рефетч не должны стирать заполняемую форму.
+  const hydratedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      hydratedFor.current = null;
+      return;
+    }
+    const key = transaction?.id ?? "new";
+    if (hydratedFor.current === key) return;
+    hydratedFor.current = key;
+    setRequestId(randomUuid());
     setAccountTouched(false);
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
@@ -114,8 +128,7 @@ export function OperationSheet({
       setDate(businessToday);
       setNotes("");
     }
-    // Hydrate once per opened transaction id. Depending on the full query
-    // object would wipe operator edits on a background cache refresh.
+    // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, defaultTeamId, transaction?.id, businessToday]);
 
@@ -165,15 +178,15 @@ export function OperationSheet({
   // и команда меняется чипами; ручной выбор/сброс (accountTouched) дефолт
   // отключает.
   useEffect(() => {
-    if (!visible || accountTouched) return;
+    if (!visible || accountTouched || isEdit) return;
     if (!teamId || accountId !== null) return;
     const def = teamAccounts[0];
     if (def) setAccountId(def.id);
-  }, [visible, accountTouched, teamId, accountId, teamAccounts]);
+  }, [visible, accountTouched, isEdit, teamId, accountId, teamAccounts]);
 
   const amountCents = parseMoneyInputToCents(amount);
   const amountNum = (amountCents ?? 0) / 100;
-  const busy = insert.isPending || update.isPending;
+  const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
   const canSave =
     amountCents != null &&
@@ -185,6 +198,9 @@ export function OperationSheet({
   const isExpense = type === "expense";
 
   const save = async () => {
+    // Синхронный гард: isPending включается только после ре-рендера,
+    // сверхбыстрый двойной тап успевал бы дважды.
+    if (savingRef.current) return;
     if (amountCents == null) {
       Alert.alert(
         "Проверьте сумму",
@@ -203,6 +219,7 @@ export function OperationSheet({
       );
       return;
     }
+    savingRef.current = true;
     try {
       const draft = {
         amount: amountNum,
@@ -217,12 +234,17 @@ export function OperationSheet({
       if (isEdit && transaction) {
         await update.mutateAsync({ id: transaction.id, patch: draft });
       } else {
-        await insert.mutateAsync({ type, ...draft });
+        // request_id стабилен на время попытки: ретрай после потерянного
+        // ответа не задваивает деньги (duplicate key = успех в репозитории).
+        await insert.mutateAsync({ type, request_id: requestId, ...draft });
+        setRequestId(randomUuid());
       }
       toast(isEdit ? "Сохранено" : "Операция добавлена");
       onClose();
     } catch (e) {
       Alert.alert("Ошибка", (e as Error).message);
+    } finally {
+      savingRef.current = false;
     }
   };
 
@@ -457,7 +479,17 @@ export function OperationSheet({
             ) : null}
 
             {/* team */}
-            {teams.length > 0 ? (
+            {teams.length === 0 ? (
+              <SectionCard title="Команда">
+                <Text
+                  className="px-4 py-3 text-sm"
+                  style={{ color: th.faint }}
+                >
+                  Сначала добавьте команду в справочниках — операция всегда
+                  принадлежит команде и её счёту.
+                </Text>
+              </SectionCard>
+            ) : (
               <SectionCard title="Команда">
                 <ScrollView
                   horizontal
@@ -484,7 +516,7 @@ export function OperationSheet({
                   ))}
                 </ScrollView>
               </SectionCard>
-            ) : null}
+            )}
 
             {/* account */}
             {teamAccounts.length > 0 ? (

@@ -67,6 +67,14 @@ function FinancesContent() {
     ? params.clientId[0]
     : params.clientId;
   const { openInvoices, openTransactionInvoice } = useInvoiceNavigation();
+  // Сверхбыстрый двойной тап по плитке пушил экран дважды.
+  const lastPushRef = useRef(0);
+  const pushOnce = (href: "/accounts" | "/documents") => {
+    const now = Date.now();
+    if (now - lastPushRef.current < 700) return;
+    lastPushRef.current = now;
+    router.push(href);
+  };
   const calendarSettingsQuery = useCalendarSettings();
   const calendarSettings = calendarSettingsQuery.data;
   const businessTimezone = calendarSettings?.timezone ?? "Europe/Nicosia";
@@ -105,6 +113,9 @@ function FinancesContent() {
 
   const categoriesQuery = useFinanceCategories();
   const teamsQuery = useTeams();
+  // Активные — для чипов скоупа; ВСЕ (вкл. удалённые) — для подписей
+  // истории: лента/попап/CSV не должны терять имя расформированной команды.
+  const allTeamsQuery = useTeams({ includeInactive: true });
   const servicesQuery = useServices();
   const appointmentsQuery = useAppointments();
   const clientsQuery = useClients();
@@ -116,6 +127,16 @@ function FinancesContent() {
     [categoriesQuery.data],
   );
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  // Команду удалили, пока её скоуп был выбран: фильтр продолжал бы
+  // действовать невидимкой (чип исчез) — возвращаемся на «Компания».
+  useEffect(() => {
+    if (!scope || !teamsQuery.isSuccess) return;
+    if (teams.every((team) => team.id !== scope)) setScope(null);
+  }, [scope, teams, teamsQuery.isSuccess]);
+  const allTeams = useMemo(
+    () => allTeamsQuery.data ?? [],
+    [allTeamsQuery.data],
+  );
   const services = useMemo(
     () => servicesQuery.data ?? [],
     [servicesQuery.data],
@@ -187,8 +208,9 @@ function FinancesContent() {
     [accounts, scope],
   );
   // Σ мини-карточки: в командном скоупе — только командные счета (полный
-  // баланс общего умножался бы на число команд при переключении чипов);
-  // скрытые балансы в сумму не входят — маркер EyeOff говорит о неполноте.
+  // баланс общего умножался бы на число команд при переключении чипов).
+  // Скрытые балансы ВХОДЯТ в Σ (решение владельца: маркер-глазик у плитки
+  // снят; скрытие остатка живёт в списках и на странице счёта).
   const miniCardAccounts = useMemo(
     () =>
       scope ? scopedAccounts.filter((a) => a.scope === "team") : scopedAccounts,
@@ -262,18 +284,23 @@ function FinancesContent() {
   // render plausible-looking zeroes when one of them is still loading or has
   // failed: a user can otherwise make a financial decision from an
   // incomplete ledger without any visible warning.
+  // isPending, не isLoading: офлайн-paused запрос (isFetching=false) иначе
+  // проваливался под гейт и рисовал нулевой P&L как настоящие данные.
+  // transactions — вне полного гейта: смена периода/скоупа не должна прятать
+  // весь экран (хук держит прошлые данные до прихода новых); первый заход
+  // ловится общим transactionsQuery.isPending без данных.
   const loading =
-    transactionsQuery.isLoading ||
-    categoriesQuery.isLoading ||
-    teamsQuery.isLoading ||
-    servicesQuery.isLoading ||
-    appointmentsQuery.isLoading ||
-    clientsQuery.isLoading ||
-    invoicesQuery.isLoading ||
-    invoicePaymentsQuery.isLoading ||
-    accountsQuery.isLoading ||
-    refundTotalsQuery.isLoading ||
-    calendarSettingsQuery.isLoading;
+    (transactionsQuery.isPending && transactionsQuery.data === undefined) ||
+    categoriesQuery.isPending ||
+    teamsQuery.isPending ||
+    servicesQuery.isPending ||
+    appointmentsQuery.isPending ||
+    clientsQuery.isPending ||
+    invoicesQuery.isPending ||
+    invoicePaymentsQuery.isPending ||
+    accountsQuery.isPending ||
+    refundTotalsQuery.isPending ||
+    calendarSettingsQuery.isPending;
   const loadError =
     (transactionsQuery.data === undefined ? transactionsQuery.error : null) ||
     (categoriesQuery.data === undefined ? categoriesQuery.error : null) ||
@@ -307,6 +334,7 @@ function FinancesContent() {
     let overdue = 0;
     for (const invoice of scopedInvoices) {
       if (invoice.status === "void") continue;
+      if (scope && invoice.brigade_id !== scope) continue;
       const settlement = calculateInvoiceSettlement(
         invoice,
         invoicePayments[invoice.id] ?? [],
@@ -319,7 +347,7 @@ function FinancesContent() {
       }
     }
     return { openCount, outstanding, overdue };
-  }, [businessToday, invoicePayments, scopedInvoices]);
+  }, [businessToday, invoicePayments, scope, scopedInvoices]);
 
   // Feed filtered by the active overview card (web parity: feedTx).
   const feedTx = useMemo(() => {
@@ -418,7 +446,7 @@ function FinancesContent() {
     // the amount is the raw t.amount (always positive); the sign
     // semantics live in the «Тип» column, same as the web file.
     const report = financeTransactionsToCsv(scopedTransactions, categories, {
-      teamName: new Map(teams.map((team) => [team.id, team.name])),
+      teamName: new Map(allTeams.map((team) => [team.id, team.name])),
       accounts,
     });
     if (report.count === 0) {
@@ -496,8 +524,8 @@ function FinancesContent() {
         totals={totals}
         acctTotal={acctTotal}
         invoices={invoiceSummary}
-        onOpenAccounts={() => router.push("/accounts")}
-        onOpenDocuments={() => router.push("/documents")}
+        onOpenAccounts={() => pushOnce("/accounts")}
+        onOpenDocuments={() => pushOnce("/documents")}
         view={view}
         onTap={toggleView}
       />
@@ -549,7 +577,7 @@ function FinancesContent() {
         <TransactionsFeed
           transactions={feedTx}
           accounts={accounts}
-          teams={teams}
+          teams={allTeams}
           categories={categories}
           clients={clients}
           appointments={scopedAppointments}
@@ -581,7 +609,7 @@ function FinancesContent() {
         visible={!!popupTx}
         transaction={popupTx}
         accounts={accounts}
-        teams={teams}
+        teams={allTeams}
         categories={categories}
         // Пока Σ возвратов не загрузилась (refundTotals === undefined),
         // консервативно прячем «Создать возврат» (Infinity → остаток 0):
@@ -615,10 +643,9 @@ function FinancesContent() {
 
       <OperationSheet
         visible={opOpen}
-        onClose={() => {
-          setOpOpen(false);
-          setEditingTx(null);
-        }}
+        // editingTx НЕ обнуляется здесь: шапка мигала «Операция»→«Новая
+        // операция» пока лист уезжал; открывающие пути сами ставят нужное.
+        onClose={() => setOpOpen(false)}
         defaultTeamId={scope}
         businessToday={businessToday}
         transaction={editingTx}

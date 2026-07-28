@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ScrollView } from "react-native";
+import { Alert, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import { Screen } from "@/components/ui/Screen";
@@ -73,14 +73,24 @@ export default function DocumentsScreen() {
             placeholder="Скоро"
             separated
             dimmed
-            onPress={() => {}}
+            onPress={() =>
+              Alert.alert(
+                "Чеки",
+                "Чек будет создаваться автоматически при каждом приёме денег — по записи и по инвойсу. Раздел включится вместе с ними.",
+              )
+            }
           />
           <NavRow
             label="Договоры"
             placeholder="Скоро"
             separated
             dimmed
-            onPress={() => {}}
+            onPress={() =>
+              Alert.alert(
+                "Договоры",
+                "Договоры будут привязываться к клиентам и записям — следующий шаг после чеков.",
+              )
+            }
           />
         </RowGroup>
         <RowCaption text="Чек создаётся автоматически при каждом приёме денег — по записи и по инвойсу; раздел включится вместе с ними. Договоры привязываются к клиентам и записям — следующий шаг." />

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Eye, EyeOff, Settings } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
@@ -110,6 +110,11 @@ function AccountDetailContent() {
   useEffect(() => {
     setTempRevealed(false);
   }, [id]);
+  // Ушли со страницы (blur) — временный показ гаснет: вернувшись, владелец
+  // снова видит ••••, как и обещает настройка.
+  useFocusEffect(
+    useCallback(() => () => setTempRevealed(false), []),
+  );
   const hidden = !!account?.balance_hidden && !tempRevealed;
 
   const [transferOpen, setTransferOpen] = useState(false);
@@ -178,7 +183,7 @@ function AccountDetailContent() {
     }
   };
 
-  if (accountsQuery.isLoading || allTeamsQuery.isLoading) {
+  if (accountsQuery.isPending || allTeamsQuery.isPending) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Счёт" />
@@ -308,12 +313,27 @@ function AccountDetailContent() {
               )}
             </Pressable>
           </View>
-          <Text
-            className="mt-2 tabular-nums"
-            style={{ fontSize: 34, fontWeight: "800", color: t.ink }}
-          >
-            {hidden ? HIDDEN_BALANCE_LABEL : formatEUR(account.balance)}
-          </Text>
+          {hidden ? (
+            <Pressable
+              onPress={toggleEye}
+              accessibilityRole="button"
+              accessibilityLabel="Показать баланс"
+            >
+              <Text
+                className="mt-2 tabular-nums"
+                style={{ fontSize: 34, fontWeight: "800", color: t.ink }}
+              >
+                {HIDDEN_BALANCE_LABEL}
+              </Text>
+            </Pressable>
+          ) : (
+            <Text
+              className="mt-2 tabular-nums"
+              style={{ fontSize: 34, fontWeight: "800", color: t.ink }}
+            >
+              {formatEUR(account.balance)}
+            </Text>
+          )}
         </Card>
 
         {account.is_active ? (

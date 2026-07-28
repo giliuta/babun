@@ -105,11 +105,24 @@ function AccountSettingsContent() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState<number | null>(null);
 
-  if (accountsQuery.isLoading) {
+  if (accountsQuery.isPending) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Настройки счёта" />
         <EmptyState state="loading" fill />
+      </Screen>
+    );
+  }
+  if (accountsQuery.data === undefined && accountsQuery.error) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Настройки счёта" />
+        <EmptyState
+          state="error"
+          fill
+          title="Не удалось загрузить счёт"
+          action={{ label: "Повторить", onPress: () => void accountsQuery.refetch() }}
+        />
       </Screen>
     );
   }
@@ -201,7 +214,9 @@ function AccountSettingsContent() {
           style: "destructive",
           onPress: () =>
             deleteAcc.mutate(account.id, {
-              onSuccess: () => router.replace("/accounts"),
+              // dismissTo схлопывает стек до списка: replace оставлял бы
+              // деталь удалённого счёта в истории («назад» → «не найден»).
+              onSuccess: () => router.dismissTo("/accounts"),
               onError: alertError,
             }),
         },

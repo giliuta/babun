@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import type { AccountKind, AccountScope } from "@babun/shared/local/finance/account";
@@ -43,10 +43,17 @@ export function AccountCreateSheet({
   const [teamIds, setTeamIds] = useState<Set<string>>(new Set());
   const [opening, setOpening] = useState("");
 
-  // Каждое открытие листа начинает с чистой формы и пресетов цепочки
-  // «команда → счёт».
+  // Каждое ОТКРЫТИЕ листа начинает с чистой формы и пресетов цепочки
+  // «команда → счёт». Только по фронту открытия: фоновый рефетч команд
+  // при открытом листе не должен стирать набранное.
+  const wasVisible = useRef(false);
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      wasVisible.current = false;
+      return;
+    }
+    if (wasVisible.current) return;
+    wasVisible.current = true;
     setScope("team");
     setName(presetName ?? "");
     setKind("cash");
