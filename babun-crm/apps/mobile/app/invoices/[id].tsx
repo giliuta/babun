@@ -252,7 +252,7 @@ export default function InvoiceDetailScreen() {
         : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
       [
         { text: "Отмена", style: "cancel" },
-        { text: "Открыть счета", onPress: () => router.push("/cabinet/accounts") },
+        { text: "Открыть счета", onPress: () => router.push("/accounts") },
       ],
     );
   };

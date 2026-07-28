@@ -86,7 +86,7 @@ export default function TeamsScreen() {
               text: "Создать счёт",
               onPress: () =>
                 router.push({
-                  pathname: "/cabinet/accounts",
+                  pathname: "/accounts",
                   params: { create: "1", brigadeId: team.id },
                 }),
             },

@@ -44,7 +44,6 @@ import {
   useAccountsWithBalances,
   useDeleteTransfer,
 } from "@/features/finances/accounts";
-import { visibleAccountsTotal } from "@/features/finances/account-ui";
 import {
   defaultPeriod,
   makePeriod,
@@ -195,8 +194,10 @@ function FinancesContent() {
       scope ? scopedAccounts.filter((a) => a.scope === "team") : scopedAccounts,
     [scope, scopedAccounts],
   );
-  const { total: acctTotal, hasHidden: acctMasked } = useMemo(
-    () => visibleAccountsTotal(miniCardAccounts),
+  // Владелец 2026-07-27: маркер-глазик у плитки снят — Σ считается по
+  // ВСЕМ счетам скоупа (скрытие остатка живёт в списках и на счёте).
+  const acctTotal = useMemo(
+    () => miniCardAccounts.reduce((s, a) => s + a.balance, 0),
     [miniCardAccounts],
   );
   const materialSummary = useMemo(() => {
@@ -390,7 +391,7 @@ function FinancesContent() {
     Alert.alert("Настройки финансов", undefined, [
       {
         text: "Счета",
-        onPress: () => router.push("/cabinet/accounts"),
+        onPress: () => router.push("/accounts"),
       },
       {
         text: "Категории операций",
@@ -494,10 +495,9 @@ function FinancesContent() {
         onOpenCustom={() => setWheelsOpen(true)}
         totals={totals}
         acctTotal={acctTotal}
-        acctMasked={acctMasked}
         invoices={invoiceSummary}
-        onOpenAccounts={() => router.push("/cabinet/accounts")}
-        onOpenInvoices={openInvoices}
+        onOpenAccounts={() => router.push("/accounts")}
+        onOpenDocuments={() => router.push("/documents")}
         view={view}
         onTap={toggleView}
       />

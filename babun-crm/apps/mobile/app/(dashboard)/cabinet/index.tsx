@@ -487,7 +487,7 @@ export default function CabinetHome() {
             tone={TILE.mint}
             title="Счета"
             desc="Кассы и счета бригад"
-            href="/cabinet/accounts"
+            href="/accounts"
           />
             </SectionCard>
 

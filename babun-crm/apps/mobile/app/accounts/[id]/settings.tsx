@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { ActionSheetIOS, Alert, Platform, ScrollView, Switch, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import {
+  formatEURExact as formatEUR,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -18,7 +21,6 @@ import {
 } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useTeams } from "@/features/reference/queries";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import {
   useAccountHasHistory,
   useAccountsWithBalances,
@@ -118,7 +120,7 @@ function AccountSettingsContent() {
         <EmptyState
           fill
           title="Счёт не найден"
-          action={{ label: "К списку счетов", onPress: () => router.replace("/cabinet/accounts") }}
+          action={{ label: "К списку счетов", onPress: () => router.replace("/accounts") }}
         />
       </Screen>
     );
@@ -199,7 +201,7 @@ function AccountSettingsContent() {
           style: "destructive",
           onPress: () =>
             deleteAcc.mutate(account.id, {
-              onSuccess: () => router.replace("/cabinet/accounts"),
+              onSuccess: () => router.replace("/accounts"),
               onError: alertError,
             }),
         },
@@ -212,7 +214,16 @@ function AccountSettingsContent() {
         `${account.name}: остаток ${formatEUR(account.balance)}. Счёт с ненулевым балансом нельзя закрыть.`,
         [
           { text: "Понятно", style: "cancel" },
-          ...(account.balance > 0
+          ...(account.balance > 0 &&
+          activeAccounts.some(
+            (b) =>
+              b.id !== account.id &&
+              !(
+                account.scope === "team" &&
+                b.scope === "team" &&
+                account.brigade_id !== b.brigade_id
+              ),
+          )
             ? [{
                 text: "Перевести остаток",
                 onPress: () => {
@@ -277,8 +288,20 @@ function AccountSettingsContent() {
               separated
               tabular
               onSave={(next: string) => {
-                const num = Number(next.replace(",", "."));
-                if (!Number.isFinite(num) || num === account.opening_balance) return;
+                if (!next.trim()) return; // очистили поле — не значит «ноль»
+                const cents = parseMoneyInputToCents(next, {
+                  allowNegative: true,
+                  allowZero: true,
+                });
+                if (cents == null) {
+                  Alert.alert(
+                    "Проверьте баланс",
+                    "Введите сумму и не больше двух знаков после запятой.",
+                  );
+                  return;
+                }
+                const num = cents / 100;
+                if (num === account.opening_balance) return;
                 update.mutate(
                   { id: account.id, patch: { opening_balance: num } },
                   { onError: alertError },
@@ -418,9 +441,5 @@ function AccountSettingsContent() {
 }
 
 export default function AccountSettingsScreen() {
-  return (
-    <RoleCapabilityBoundary capability="view-finances" title="Настройки счёта">
-      <AccountSettingsContent />
-    </RoleCapabilityBoundary>
-  );
+  return <AccountSettingsContent />;
 }

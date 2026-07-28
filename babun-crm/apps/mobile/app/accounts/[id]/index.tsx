@@ -19,7 +19,6 @@ import { useServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 import {
   useAccountsWithBalances,
   useDeleteTransfer,
@@ -187,6 +186,28 @@ function AccountDetailContent() {
       </Screen>
     );
   }
+  // Ошибка сети — НЕ «счёт не найден»: у неё есть «Повторить».
+  const loadError =
+    (accountsQuery.data === undefined ? accountsQuery.error : null) ||
+    (allTeamsQuery.data === undefined ? allTeamsQuery.error : null);
+  if (loadError) {
+    return (
+      <Screen edges={["top"]}>
+        <ScreenHeader title="Счёт" />
+        <EmptyState
+          state="error"
+          fill
+          title="Не удалось загрузить счёт"
+          subtitle={loadError instanceof Error ? loadError.message : undefined}
+          action={{
+            label: "Повторить",
+            onPress: () =>
+              void Promise.all([accountsQuery.refetch(), allTeamsQuery.refetch()]),
+          }}
+        />
+      </Screen>
+    );
+  }
   if (!account) {
     return (
       <Screen edges={["top"]}>
@@ -195,7 +216,7 @@ function AccountDetailContent() {
           fill
           title="Счёт не найден"
           subtitle="Возможно, он был удалён"
-          action={{ label: "К списку счетов", onPress: () => router.replace("/cabinet/accounts") }}
+          action={{ label: "К списку счетов", onPress: () => router.replace("/accounts") }}
         />
       </Screen>
     );
@@ -221,7 +242,7 @@ function AccountDetailContent() {
         title={account.name}
         right={
           <Pressable
-            onPress={() => router.push(`/cabinet/accounts/${account.id}/settings`)}
+            onPress={() => router.push(`/accounts/${account.id}/settings`)}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Настройки счёта"
@@ -310,7 +331,7 @@ function AccountDetailContent() {
         </View>
 
         {account.scope === "company" ? (
-          txsQuery.isLoading ? null : (
+          txsQuery.isLoading || txsQuery.isError ? null : (
             <AccountTeamInflow
               account={account}
               breakdown={breakdown}
@@ -322,6 +343,13 @@ function AccountDetailContent() {
         <View style={{ marginTop: 8 }}>
           {txsQuery.isLoading ? (
             <EmptyState state="loading" />
+          ) : txsQuery.isError ? (
+            // Молчаливые нули врут — отказ месячного запроса показывается.
+            <EmptyState
+              state="error"
+              title="Не удалось загрузить операции"
+              action={{ label: "Повторить", onPress: () => void txsQuery.refetch() }}
+            />
           ) : (
             <TransactionsFeed
               transactions={accountTxs}
@@ -402,9 +430,5 @@ function AccountDetailContent() {
 }
 
 export default function AccountDetailScreen() {
-  return (
-    <RoleCapabilityBoundary capability="view-finances" title="Счёт">
-      <AccountDetailContent />
-    </RoleCapabilityBoundary>
-  );
+  return <AccountDetailContent />;
 }

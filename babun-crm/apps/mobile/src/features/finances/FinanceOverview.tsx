@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, EyeOff, FileText, Wallet } from "lucide-react-native";
+import { ChevronDown, ChevronRight, FileText, Wallet } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -38,10 +38,9 @@ export function FinanceOverview({
   onOpenCustom,
   totals,
   acctTotal,
-  acctMasked,
   invoices,
   onOpenAccounts,
-  onOpenInvoices,
+  onOpenDocuments,
   view,
   onTap,
 }: {
@@ -53,11 +52,9 @@ export function FinanceOverview({
   onOpenCustom: () => void;
   totals: OverviewTotals;
   acctTotal: number;
-  /** Есть скрытые балансы: Σ неполная, рядом с числом — маркер EyeOff. */
-  acctMasked?: boolean;
   invoices: InvoiceTileSummary;
   onOpenAccounts: () => void;
-  onOpenInvoices: () => void;
+  onOpenDocuments: () => void;
   view: HomeView;
   onTap: (v: HomeView) => void;
 }) {
@@ -148,8 +145,8 @@ export function FinanceOverview({
 
       {/* overview cards */}
       <View className="px-4 pb-2 pt-3" style={{ gap: 8 }}>
-        {/* Счета | Инвойсы — две плитки-СТРАНИЦЫ (не панели): счёт слева,
-            инвойсы справа, обе открываются отдельными экранами. */}
+        {/* Счета | Документы — две плитки-СТРАНИЦЫ (не панели): счета слева,
+            документы (инвойсы/чеки/договоры) справа. */}
         <View className="flex-row" style={{ gap: 8 }}>
           <Pressable
             onPress={onOpenAccounts}
@@ -167,29 +164,26 @@ export function FinanceOverview({
                 <ChevronRight color={t.chevron} size={14} />
               </View>
             </View>
-            <View className="mt-1 flex-row items-center gap-1">
-              {acctMasked ? <EyeOff color={t.faint} size={12} /> : null}
-              <Text
-                className="text-[17px] font-bold tabular-nums"
-                style={{ color: t.ink }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-              >
-                {formatEUR(acctTotal)}
-              </Text>
-            </View>
+            <Text
+              className="mt-1 text-[17px] font-bold tabular-nums"
+              style={{ color: t.ink }}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {formatEUR(acctTotal)}
+            </Text>
           </Pressable>
           <Pressable
-            onPress={onOpenInvoices}
+            onPress={onOpenDocuments}
             accessibilityRole="button"
-            accessibilityLabel={`Инвойсы, к оплате ${formatEUR(invoices.outstanding)}`}
+            accessibilityLabel={`Документы, к оплате ${formatEUR(invoices.outstanding)}`}
             className="flex-1 rounded-xl px-3.5 py-2.5 active:opacity-70"
             style={{ minHeight: 58, backgroundColor: t.surface }}
           >
             <View className="flex-row items-center gap-1.5">
               <FileText color={t.sub} size={14} />
               <Text className="text-xs font-semibold" style={{ color: t.sub }}>
-                Инвойсы
+                Документы
               </Text>
               <View className="ml-auto">
                 <ChevronRight color={t.chevron} size={14} />

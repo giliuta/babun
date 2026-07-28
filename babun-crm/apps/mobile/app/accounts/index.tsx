@@ -26,7 +26,6 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams, type Team } from "@/features/reference/queries";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 
 function teamsWord(n: number): string {
   const mod10 = n % 10;
@@ -363,7 +362,7 @@ function AccountsListContent() {
     <Screen edges={["top"]}>
       <ScreenHeader title={title} />
 
-      {accounts.length === 0 ? (
+      {accounts.length === 0 && closed.length === 0 ? (
         <EmptyState
           fill
           title="Нет счетов"
@@ -398,7 +397,7 @@ function AccountsListContent() {
                     <AccountRow
                       account={a}
                       subtitle={`Общий · ${a.team_ids.length} ${teamsWord(a.team_ids.length)}`}
-                      onPress={() => router.push(`/cabinet/accounts/${a.id}`)}
+                      onPress={() => router.push(`/accounts/${a.id}`)}
                       onLongPress={() => confirmClose(a)}
                     />
                   </View>
@@ -416,7 +415,7 @@ function AccountsListContent() {
                     {i > 0 ? <Divider inset={68} /> : null}
                     <AccountRow
                       account={a}
-                      onPress={() => router.push(`/cabinet/accounts/${a.id}`)}
+                      onPress={() => router.push(`/accounts/${a.id}`)}
                       onLongPress={() => confirmClose(a)}
                     />
                   </View>
@@ -449,7 +448,7 @@ function AccountsListContent() {
 
           {closed.length > 0 ? (
             <Pressable
-              onPress={() => router.push("/cabinet/accounts?archived=1")}
+              onPress={() => router.push("/accounts?archived=1")}
               accessibilityRole="button"
               accessibilityLabel={`Закрытые счета: ${closed.length}`}
               className="mx-4 mt-4 flex-row items-center justify-between px-2 py-2 active:opacity-60"
@@ -483,9 +482,5 @@ function AccountsListContent() {
 }
 
 export default function AccountsScreen() {
-  return (
-    <RoleCapabilityBoundary capability="view-finances" title="Счета">
-      <AccountsListContent />
-    </RoleCapabilityBoundary>
-  );
+  return <AccountsListContent />;
 }

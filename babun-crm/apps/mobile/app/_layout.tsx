@@ -168,6 +168,10 @@ function RootNavigator() {
       {/* Финансовые документы открываются поверх табов и сами fail-closed
           проверяют роль владельца в app/invoices/_layout.tsx. */}
       <Stack.Screen name="invoices" />
+      {/* Счета и хаб «Документы» — тот же приём: поверх табов, «назад»
+          возвращает ровно позвавшему (страница финансов, кабинет, инвойс). */}
+      <Stack.Screen name="accounts" />
+      <Stack.Screen name="documents" />
       {/* Invitation deep links stay outside auth/dashboard guards so a signed-
           out user can preserve the token, authenticate, and return here. */}
       <Stack.Screen name="invite" options={{ gestureEnabled: false }} />
