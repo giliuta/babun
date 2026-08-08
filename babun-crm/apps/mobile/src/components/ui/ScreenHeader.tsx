@@ -12,12 +12,17 @@ export function ScreenHeader({
   title,
   subtitle,
   onBack,
+  left,
   right,
   large,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /** Действие СЛЕВА от заголовка — место шестерёнки на корневых экранах
+   *  вкладок. Владелец 2026-08-09: «настройки должны быть с левой стороны и
+   *  везде, полностью всё одинаковое, чтоб не путаться». */
+  left?: ReactNode;
   right?: ReactNode;
   large?: boolean;
 }) {
@@ -26,7 +31,8 @@ export function ScreenHeader({
 
   if (large) {
     return (
-      <View className="flex-row items-end justify-between px-4 pb-2 pt-4">
+      <View className="flex-row items-end px-4 pb-2 pt-4" style={{ gap: 10 }}>
+        {left ? <View className="pb-1">{left}</View> : null}
         <View className="flex-1">
           <Text accessibilityRole="header" style={{ ...TYPE.display, color: t.ink }}>
             {title}

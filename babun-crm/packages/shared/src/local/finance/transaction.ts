@@ -22,6 +22,13 @@ export interface FinanceTransaction {
   master_id: string | null;
   payment_method: PaymentMethod | null;
   notes: string | null;
+  /** Ставка НДС, действовавшая В МОМЕНТ проводки. NULL — операция без НДС
+   *  (компания без налога или строка создана до его включения). Снимок, а не
+   *  ссылка на настройку: подняли ставку — прошлое не переписывается. */
+  vat_rate: number | null;
+  /** Налог ВНУТРИ суммы операции: в кассу пришло 480, здесь 80. Знак
+   *  повторяет знак суммы — возврат уносит и налог. */
+  vat_amount: number | null;
   occurred_on: string; // YYYY-MM-DD — drives day grouping
   receipt_url: string | null; // storage path in `receipts` bucket
   transfer_group_id: string | null;

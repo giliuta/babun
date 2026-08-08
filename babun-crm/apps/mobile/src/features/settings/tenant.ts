@@ -34,6 +34,11 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   logo_url: null,
   onboarded_at: null,
   personal_calendar_enabled: false,
+  // НДС: по умолчанию выключен — бизнес без налога не должен видеть его нигде.
+  vat_mode: "off",
+  vat_rate: 0,
+  vat_exemption_note: null,
+  document_language: "en",
   plan: "",
   plan_override: null,
   stripe_customer_id: null,

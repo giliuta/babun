@@ -25,6 +25,8 @@ function tx(partial: Partial<FinanceTransaction>): FinanceTransaction {
     type: "income",
     amount: 0,
     currency: "EUR",
+    vat_rate: null,
+    vat_amount: null,
     category_id: null,
     account_id: COMPANY_ACC,
     appointment_id: null,

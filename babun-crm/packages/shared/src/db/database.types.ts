@@ -1246,6 +1246,8 @@ export type Database = {
           team_id: string | null
           tenant_id: string
           transfer_group_id: string | null
+          vat_amount: number | null
+          vat_rate: number | null
           type: string
           updated_at: string
         }
@@ -1271,6 +1273,8 @@ export type Database = {
           team_id?: string | null
           tenant_id: string
           transfer_group_id?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
           type: string
           updated_at?: string
         }
@@ -1296,6 +1300,8 @@ export type Database = {
           team_id?: string | null
           tenant_id?: string
           transfer_group_id?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
           type?: string
           updated_at?: string
         }
@@ -2340,6 +2346,36 @@ export type Database = {
           },
         ]
       }
+      team_finance_settings: {
+        Row: {
+          created_at: string
+          team_id: string
+          tenant_id: string
+          updated_at: string
+          vat_exemption_note: string | null
+          vat_mode: string | null
+          vat_rate: number | null
+        }
+        Insert: {
+          created_at?: string
+          team_id: string
+          tenant_id: string
+          updated_at?: string
+          vat_exemption_note?: string | null
+          vat_mode?: string | null
+          vat_rate?: number | null
+        }
+        Update: {
+          created_at?: string
+          team_id?: string
+          tenant_id?: string
+          updated_at?: string
+          vat_exemption_note?: string | null
+          vat_mode?: string | null
+          vat_rate?: number | null
+        }
+        Relationships: []
+      }
       teams: {
         Row: {
           allow_overtime: boolean | null
@@ -2660,6 +2696,10 @@ export type Database = {
           trial_ends_at: string | null
           vat_number: string | null
           vertical: string | null
+          document_language: string
+          vat_exemption_note: string | null
+          vat_mode: string
+          vat_rate: number
         }
         Insert: {
           track_units?: boolean
@@ -2693,6 +2733,10 @@ export type Database = {
           trial_ends_at?: string | null
           vat_number?: string | null
           vertical?: string | null
+          document_language?: string
+          vat_exemption_note?: string | null
+          vat_mode?: string
+          vat_rate?: number
         }
         Update: {
           track_units?: boolean
@@ -2726,6 +2770,10 @@ export type Database = {
           trial_ends_at?: string | null
           vat_number?: string | null
           vertical?: string | null
+          document_language?: string
+          vat_exemption_note?: string | null
+          vat_mode?: string
+          vat_rate?: number
         }
         Relationships: []
       }

@@ -1,9 +1,7 @@
-import type { ComponentType } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Archive,
-  ChevronRight,
   Download,
   Eye,
   Home,
@@ -16,13 +14,13 @@ import {
 } from "lucide-react-native";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { Screen } from "@/components/ui/Screen";
+import { SettingsRow } from "@/components/ui/SettingsRow";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { CONTACTS_AVAILABLE } from "@/features/clients/import/ContactsImportSheet";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
-import { useThemeColors } from "@/theme/colors";
 import {
   cardFieldsSummary,
   DEFAULT_CARD_FIELDS,
@@ -48,67 +46,6 @@ import { useClients, useClientTags } from "@/features/clients/queries";
 //   • Данные — Импорт CSV (мастер ImportWizardSheet: выбор файла →
 //     маппинг колонок → превью+валидация → импорт с прогрессом/резюмом).
 //     Экспорт CSV выполняется через системный share sheet.
-
-type IconType = ComponentType<{
-  color?: string;
-  size?: number;
-  strokeWidth?: number;
-}>;
-
-function Row({
-  tile,
-  icon: Icon,
-  title,
-  sub,
-  onPress,
-}: {
-  tile: string;
-  icon: IconType;
-  title: string;
-  sub?: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-      className="min-h-[50px] flex-row items-center gap-3 px-4 py-2.5"
-      style={({ pressed }) => ({
-        backgroundColor: pressed ? t.pressed : "transparent",
-      })}
-    >
-      <View
-        className="h-7 w-7 items-center justify-center rounded-[14px]"
-        style={{ backgroundColor: tile }}
-      >
-        <Icon color="#fff" size={16} strokeWidth={2} />
-      </View>
-      <View className="flex-1">
-        <View className="flex-row items-center gap-1.5">
-          <Text
-            className="shrink text-[15px]"
-            style={{ color: t.ink }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
-        </View>
-        {sub ? (
-          <Text
-            className="mt-px text-xs"
-            style={{ color: t.faint }}
-            numberOfLines={1}
-          >
-            {sub}
-          </Text>
-        ) : null}
-      </View>
-      <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} />
-    </Pressable>
-  );
-}
 
 export default function ClientsSettingsScreen() {
   const router = useRouter();
@@ -177,7 +114,7 @@ export default function ClientsSettingsScreen() {
       >
         <SectionEyebrow>Отображение</SectionEyebrow>
         <SectionCard>
-          <Row
+          <SettingsRow
             tile="#2F6FD6"
             icon={Eye}
             title="Что показывать на карточке"
@@ -185,7 +122,7 @@ export default function ClientsSettingsScreen() {
             onPress={() => router.push("/clients/card-fields")}
           />
           <Divider inset={56} />
-          <Row
+          <SettingsRow
             tile="#1F7A44"
             icon={MessageCircle}
             title="Способы связи"
@@ -199,7 +136,7 @@ export default function ClientsSettingsScreen() {
           />
 
           <Divider inset={56} />
-          <Row
+          <SettingsRow
             tile="#2F6FD6"
             icon={Navigation}
             title="Карты для маршрута"
@@ -215,7 +152,7 @@ export default function ClientsSettingsScreen() {
             нужно, нужен вход отсюда, из места, где ими пользуются. */}
         <SectionEyebrow>Справочники</SectionEyebrow>
         <SectionCard>
-          <Row
+          <SettingsRow
             tile="#0E7C86"
             icon={Home}
             title="Типы объектов"
@@ -224,7 +161,7 @@ export default function ClientsSettingsScreen() {
           />
 
           <Divider inset={56} />
-          <Row
+          <SettingsRow
             tile="#8E44AD"
             icon={Tags}
             title="Теги клиентов"
@@ -249,7 +186,7 @@ export default function ClientsSettingsScreen() {
               нативного модуля строки нет вовсе. */}
           {CONTACTS_AVAILABLE ? (
             <>
-              <Row
+              <SettingsRow
                 tile="#2F6FD6"
                 icon={Smartphone}
                 title="Из контактов телефона"
@@ -259,7 +196,7 @@ export default function ClientsSettingsScreen() {
               <Divider inset={56} />
             </>
           ) : null}
-          <Row
+          <SettingsRow
             tile="#2F6FD6"
             icon={Upload}
             title="Импорт из CSV"
@@ -267,7 +204,7 @@ export default function ClientsSettingsScreen() {
             onPress={() => backToList("openImport")}
           />
           <Divider inset={56} />
-          <Row
+          <SettingsRow
             tile="#2E7D32"
             icon={Download}
             title="Выгрузить всех клиентов"
@@ -281,7 +218,7 @@ export default function ClientsSettingsScreen() {
             onPress={() => void exportAll()}
           />
           <Divider inset={56} />
-          <Row
+          <SettingsRow
             tile="#5B6678"
             icon={Archive}
             title="Архив клиентов"
@@ -292,7 +229,7 @@ export default function ClientsSettingsScreen() {
           {/* Две полки рядом и подписаны по-разному: архив — без срока,
               корзина — со счётчиком. Иначе «куда он делся» повторится, уже
               с двумя одинаковыми на вид дверями. */}
-          <Row
+          <SettingsRow
             tile="#C0392B"
             icon={Trash2}
             title="Недавно удалённые"

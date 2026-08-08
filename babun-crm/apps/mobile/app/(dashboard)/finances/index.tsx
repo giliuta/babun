@@ -62,14 +62,19 @@ function FinancesContent() {
   const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
-  const params = useLocalSearchParams<{ clientId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    clientId?: string | string[];
+    /** Nonce со страницы настроек: «Отчёт бухгалтеру» живёт там, а данные
+     *  (период и срез) — здесь. Отдельный экран ради выгрузки не нужен. */
+    exportReport?: string;
+  }>();
   const requestedClientId = Array.isArray(params.clientId)
     ? params.clientId[0]
     : params.clientId;
-  const { openInvoices, openTransactionInvoice } = useInvoiceNavigation();
+  const { openTransactionInvoice } = useInvoiceNavigation();
   // Сверхбыстрый двойной тап по плитке пушил экран дважды.
   const lastPushRef = useRef(0);
-  const pushOnce = (href: "/accounts" | "/documents") => {
+  const pushOnce = (href: "/accounts" | "/documents" | "/finances/settings") => {
     const now = Date.now();
     if (now - lastPushRef.current < 700) return;
     lastPushRef.current = now;
@@ -415,31 +420,6 @@ function FinancesContent() {
     });
   };
 
-  const openFinanceSettings = () => {
-    Alert.alert("Настройки финансов", undefined, [
-      {
-        text: "Счета",
-        onPress: () => router.push("/accounts"),
-      },
-      {
-        text: "Категории операций",
-        onPress: () => router.push("/cabinet/categories"),
-      },
-      {
-        text: "Шаблоны операций",
-        onPress: () => router.push("/cabinet/templates"),
-      },
-      {
-        text: "Инвойсы",
-        onPress: openInvoices,
-      },
-      // Экспорт переехал сюда из шапки: иконка без подписи не читалась.
-      // Подпись явно называет и действие, и его границы (текущий период).
-      { text: "Экспорт отчёта за период", onPress: () => exportCsv() },
-      { text: "Отмена", style: "cancel" },
-    ]);
-  };
-
   const exportCsv = async () => {
     // Web parity (AnalyticsSheet.handleExportCsv): transfer legs are
     // internal money moves, not income/expense — they are excluded, and
@@ -468,7 +448,24 @@ function FinancesContent() {
     }
   };
 
-  const headerRight = (
+  // Выгрузка запускается со страницы настроек, но живёт здесь: файл собирают
+  // текущий период и текущий срез, а они у этого экрана.
+  const exportNonce = params.exportReport;
+  const lastExportRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!exportNonce || lastExportRef.current === exportNonce) return;
+    lastExportRef.current = exportNonce;
+    void exportCsv();
+    // exportCsv пересоздаётся каждый рендер — гоняем строго по нонсу.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportNonce]);
+
+  // Настройки — ПОЛНОЦЕННАЯ СТРАНИЦА (закон продукта). Здесь был системный
+  // Alert со списком: он не умеет показывать текущие значения, и «включён ли
+  // НДС» приходилось выяснять, проваливаясь внутрь.
+  const openFinanceSettings = () => pushOnce("/finances/settings");
+
+  const headerGear = (
     <Pressable
       onPress={openFinanceSettings}
       hitSlop={8}
@@ -490,7 +487,7 @@ function FinancesContent() {
   if (loading) {
     return (
       <Screen>
-        <ScreenHeader large title="Финансы" right={headerRight} />
+        <ScreenHeader large title="Финансы" left={headerGear} />
         <EmptyState state="loading" fill />
       </Screen>
     );
@@ -499,7 +496,7 @@ function FinancesContent() {
   if (loadError) {
     return (
       <Screen>
-        <ScreenHeader large title="Финансы" right={headerRight} />
+        <ScreenHeader large title="Финансы" left={headerGear} />
         <EmptyState
           state="error"
           fill
@@ -512,7 +509,7 @@ function FinancesContent() {
 
   return (
     <Screen>
-      <ScreenHeader large title="Финансы" right={headerRight} />
+      <ScreenHeader large title="Финансы" left={headerGear} />
 
       <FinanceOverview
         teams={teams}

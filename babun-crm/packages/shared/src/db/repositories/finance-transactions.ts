@@ -88,6 +88,10 @@ function rowToTx(r: Row): FinanceTransaction {
     notes: r.notes,
     occurred_on: r.occurred_on,
     receipt_url: r.receipt_url,
+    // Налог снимком: считать его на лету по текущей ставке нельзя —
+    // изменение ставки бесшумно переписало бы прошлую отчётность.
+    vat_rate: r.vat_rate ?? null,
+    vat_amount: r.vat_amount ?? null,
     transfer_group_id: r.transfer_group_id,
     invoice_id: r.invoice_id,
     refund_of_id: r.refund_of_id,
