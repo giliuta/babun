@@ -21,7 +21,10 @@ yarn-error.log*
 .vscode/
 
 # AI worktrees (git worktrees created by Claude)
-.claude/worktrees/
+# Паттерн со слэшем якорится к корню — вложенные копии (например
+# apps/mobile/.claude/worktrees, 29 МБ) не игнорировались и уезжали бы в
+# коммит, а заодно ломали грепы дублями результатов.
+**/.claude/worktrees/
 
 # Reference screenshots (Bumpix analysis, one-off captures)
 bumpix-*.png
