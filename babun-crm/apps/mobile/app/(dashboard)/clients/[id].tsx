@@ -56,10 +56,10 @@ import { useThemeColors } from "@/theme/colors";
 import {
   useClient,
   useClientTags,
-  useArchiveClients,
   useRestoreClient,
   useUpdateClient,
 } from "@/features/clients/queries";
+import { useArchiveWithUndo } from "@/features/clients/archive-undo";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
@@ -93,7 +93,7 @@ export default function ClientDetailScreen() {
     refetch: retryClient,
   } = clientQuery;
   const updateClient = useUpdateClient(isDraft ? "" : id);
-  const archiveClients = useArchiveClients();
+  const archiveWithUndo = useArchiveWithUndo();
   const restoreClient = useRestoreClient();
   const appointmentsQuery = useClientAppointments(isDraft ? "" : id);
   const {
@@ -330,18 +330,22 @@ export default function ClientDetailScreen() {
     setMenuOpen(false);
     Alert.alert(
       "Архивировать клиента?",
-      "Клиент исчезнет из рабочего списка, но заявки, инвойсы и финансовая история сохранятся. Его можно восстановить в настройках клиентов.",
+      "Клиент исчезнет из рабочего списка, но заявки, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
       [
         { text: "Отмена", style: "cancel" },
         {
           text: "Архивировать",
           style: "destructive",
-          onPress: () =>
-            archiveClients.mutate([c.id], {
-              onSuccess: (res) => {
-                if (res.archived > 0) router.back();
-              },
-            }),
+          onPress: async () => {
+            try {
+              // Экран закрывается, поэтому «Отменить» живёт в тосте: он
+              // глобальный и переживает уход с карточки.
+              const res = await archiveWithUndo([c]);
+              if (res.archived > 0) router.back();
+            } catch (e) {
+              Alert.alert("Не удалось архивировать", (e as Error).message);
+            }
+          },
         },
       ],
     );

@@ -47,9 +47,9 @@ import { usePullRefresh } from "@/lib/pull-refresh";
 import {
   useClients,
   useClientTags,
-  useArchiveClients,
   useUpdateClientById,
 } from "@/features/clients/queries";
+import { useArchiveWithUndo } from "@/features/clients/archive-undo";
 import {
   clientDebt,
   EMPTY_FILTER,
@@ -593,7 +593,7 @@ export default function ClientsListScreen() {
   // «Фильтры»), не фильтр: «Сбросить» её не трогает.
   const { data: sort = "recent" } = useClientsSort();
   const setSort = useSetClientsSort();
-  const archiveClients = useArchiveClients();
+  const archiveWithUndo = useArchiveWithUndo();
   const updateById = useUpdateClientById();
   const [query, setQuery] = useState("");
   // Набор живёт до конца дня: звонок/SMS выбрасывают из приложения, и
@@ -758,7 +758,7 @@ export default function ClientsListScreen() {
   const confirmArchiveOne = (c: Client) => {
     Alert.alert(
       "Архивировать клиента?",
-      `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится, клиента можно будет восстановить.`,
+      `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».`,
       [
         { text: "Отмена", style: "cancel" },
         {
@@ -766,8 +766,7 @@ export default function ClientsListScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { archived } = await archiveClients.mutateAsync([c.id]);
-              if (archived > 0) toast("Клиент перемещён в архив", "success");
+              await archiveWithUndo([c]);
             } catch (e) {
               Alert.alert("Не удалось архивировать", (e as Error).message);
             }
@@ -838,7 +837,7 @@ export default function ClientsListScreen() {
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
     Alert.alert(
       `Архивировать ${n} ${word}?`,
-      "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; клиентов можно восстановить.",
+      "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».",
       [
         { text: "Отмена", style: "cancel" },
         {
@@ -846,19 +845,16 @@ export default function ClientsListScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              const { archived, failed } = await archiveClients.mutateAsync(
-                selectedClients.map((c) => c.id),
-              );
-              if (failed > 0 && archived > 0) {
-                toast(`В архиве: ${archived}, не удалось: ${failed}`, "error");
-              } else if (failed > 0) {
+              // Итог (в т.ч. частичный) и кнопка отмены — в одном тосте;
+              // здесь остаётся только случай «не уехал никто».
+              const { archived, failed } =
+                await archiveWithUndo(selectedClients);
+              if (archived === 0) {
                 Alert.alert(
                   "Не удалось архивировать",
                   `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
                 );
                 return;
-              } else {
-                toast(`Перемещено в архив: ${archived}`, "success");
               }
               exitSelection();
             } catch (e) {
