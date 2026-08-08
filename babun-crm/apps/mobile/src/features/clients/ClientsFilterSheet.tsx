@@ -37,7 +37,9 @@ import {
   propertyTypeLabel,
   resetFilters,
   SEGMENT_BLOCKS,
+  SEGMENT_BLOCK_TITLES,
   SEGMENT_OPTIONS,
+  SEGMENT_RULES,
   FACET_SUBTITLES,
   SORT_BLOCKS,
   SORT_LABELS_LONG,
@@ -68,6 +70,10 @@ const INK = "#0B1220";
 const SLOT = 92; // боковые слоты шапки: заголовок оптически по центру.
 const GRABBER_H = 19; // язычок листа (высота + его отступы)
 const TOP_GAP = 10; // зазор до статус-бара
+/** Доля экрана под лист «Фильтры» (владелец 2026-08-07: «в половину»).
+ *  Чуть больше половины: ровно 0.5 обрезает футер «Показать N» на
+ *  маленьких экранах, и кнопка уезжала под сгиб. */
+const HALF_RATIO = 0.58;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -131,8 +137,8 @@ function FilterRow({
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
-        minHeight: 48,
-        paddingVertical: 10,
+        minHeight: 44,
+        paddingVertical: 8,
         paddingHorizontal: 16,
         borderRadius: 14,
         backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
@@ -215,6 +221,7 @@ function FilterRow({
  *  контекстный счётчик; ряд с нулём пригашен и неактивен. */
 function PickRow({
   label,
+  rule,
   active,
   separated,
   tick,
@@ -223,6 +230,9 @@ function PickRow({
   onToggle,
 }: {
   label: string;
+  /** Правило ряда одним предложением. Без него «Постоянные» не говорит,
+   *  сколько это визитов, и статусу невозможно верить (владелец 2026-08-07). */
+  rule?: string;
   active: boolean;
   /** Волосок к соседу сверху (внутри блока). */
   separated: boolean;
@@ -284,6 +294,7 @@ function PickRow({
       style={[
         {
           minHeight: 48,
+          paddingVertical: rule ? 8 : 0,
           paddingHorizontal: 16,
           borderTopWidth: separated ? 1 : 0,
           borderTopColor: t.separator,
@@ -307,16 +318,24 @@ function PickRow({
       ) : null}
       {/* Вес подписи постоянный: на тапе менялся 500→600 и строка
           внезапно обзаводилась многоточием. */}
-      <Animated.Text
-        maxFontSizeMultiplier={1.3}
-        numberOfLines={1}
-        style={[
-          { flexShrink: 1, fontSize: 15, fontWeight: "600" },
-          labelStyle,
-        ]}
-      >
-        {label}
-      </Animated.Text>
+      <View style={{ flexShrink: 1 }}>
+        <Animated.Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={[{ fontSize: 15, fontWeight: "600" }, labelStyle]}
+        >
+          {label}
+        </Animated.Text>
+        {rule ? (
+          <Animated.Text
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={2}
+            style={[{ fontSize: 13, marginTop: 1 }, hintStyle]}
+          >
+            {rule}
+          </Animated.Text>
+        ) : null}
+      </View>
       <Animated.Text
         maxFontSizeMultiplier={1.3}
         style={[
@@ -375,25 +394,29 @@ function FooterCta({
         borderTopWidth: 1,
         borderTopColor: t.separator,
         paddingHorizontal: 20,
-        paddingTop: 10,
-        paddingBottom: Math.max(insets.bottom, 16) + 6,
+        paddingTop: 8,
+        paddingBottom: Math.max(insets.bottom, 12) + 2,
       }}
     >
-      <Text
-        maxFontSizeMultiplier={1.3}
-        numberOfLines={1}
-        accessibilityElementsHidden={!hint}
-        style={{
-          marginBottom: 8,
-          minHeight: 16,
-          textAlign: "center",
-          fontSize: 13,
-          color: t.faint,
-          opacity: hint ? 1 : 0,
-        }}
-      >
-        {hint ?? " "}
-      </Text>
+      {/* Подсказка печатается ТОЛЬКО когда есть что сказать. Прежде здесь
+          стояла невидимая строка-распорка (opacity 0, minHeight 16) — она
+          держала место «чтобы кнопка не прыгала», но в половинном листе это
+          25pt пустоты над главным действием. Кнопка и так не прыгает:
+          подсказка появляется вместе с изменением набора. */}
+      {hint ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={{
+            marginBottom: 8,
+            textAlign: "center",
+            fontSize: 13,
+            color: t.faint,
+          }}
+        >
+          {hint}
+        </Text>
+      ) : null}
       <Pressable
         onPress={() => {
           haptics.tap();
@@ -451,6 +474,8 @@ function MultiPickSheet({
   title,
   subtitle,
   blocks,
+  blockTitles,
+  rules,
   selected,
   counts,
   shownCount,
@@ -465,6 +490,11 @@ function MultiPickSheet({
   /** Подпись-семантика под заголовком — своя у каждого фасета. */
   subtitle: string;
   blocks: FacetOption[][];
+  /** Имена блоков — по одному на блок. Без них два соседних контейнера
+   *  читаются как случайный разрыв списка. */
+  blockTitles?: string[];
+  /** Правило ряда по его значению — печатается второй строкой. */
+  rules?: Record<string, string>;
   selected: string[];
   counts: Record<string, number>;
   shownCount: number;
@@ -541,27 +571,43 @@ function MultiPickSheet({
           {blocks.map((block, bi) =>
             block.length === 0 ? null : (
               // Материал несёт сам ряд (канон «Оттиск») — блок прозрачный.
-              <View
-                key={bi}
-                style={{
-                  marginBottom: 8,
-                  borderRadius: t.radius.card,
-                  overflow: "hidden",
-                  backgroundColor: t.rowFill,
-                }}
-              >
-                {block.map((o, i) => (
-                  <PickRow
-                    key={o.value}
-                    label={o.label}
-                    active={selected.includes(o.value)}
-                    separated={i > 0}
-                    tick={o.color || undefined}
-                    count={shown[o.value] ?? 0}
-                    reduced={reduced}
-                    onToggle={() => onToggle(o.value)}
-                  />
-                ))}
+              <View key={bi} style={{ marginBottom: 8 }}>
+                {blockTitles?.[bi] ? (
+                  <Text
+                    accessibilityRole="header"
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      marginBottom: 6,
+                      marginTop: bi > 0 ? 6 : 0,
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: t.sub,
+                    }}
+                  >
+                    {blockTitles[bi]}
+                  </Text>
+                ) : null}
+                <View
+                  style={{
+                    borderRadius: t.radius.card,
+                    overflow: "hidden",
+                    backgroundColor: t.rowFill,
+                  }}
+                >
+                  {block.map((o, i) => (
+                    <PickRow
+                      key={o.value}
+                      label={o.label}
+                      rule={rules?.[o.value]}
+                      active={selected.includes(o.value)}
+                      separated={i > 0}
+                      tick={o.color || undefined}
+                      count={shown[o.value] ?? 0}
+                      reduced={reduced}
+                      onToggle={() => onToggle(o.value)}
+                    />
+                  ))}
+                </View>
               </View>
             ),
           )}
@@ -812,8 +858,14 @@ export function ClientsFilterSheet({
   // мертва и из «ноль клиентов» не было выхода прямо из листа.
   const nothingActive = filterActiveCount(filter) === 0 && !trimmedSearch;
 
-  // Полная страница: высота окна минус верхний зазор и грабер листа.
-  const pageH = winH - insets.top - GRABBER_H - TOP_GAP;
+  // ПОЛОВИНА ЭКРАНА, А НЕ СТРАНИЦА (владелец 2026-08-07: «сделай фильтр в
+  // половину, как открывается всё остальное»). Лист во весь рост читался
+  // как отдельный экран и прятал список, ради которого фильтр и открывают:
+  // теперь под ним видно, что именно меняется. Содержимое не режется —
+  // строки прокручиваются внутри, футер остаётся на месте.
+  const pageH = Math.round(
+    (winH - insets.top - GRABBER_H - TOP_GAP) * HALF_RATIO,
+  );
 
   const countPart = `${shownCount} ${countWordRu(shownCount, "клиент", "клиента", "клиентов")}`;
   // Винительный падеж: «Показать 1 клиентА» (у «Готово · 1 клиент» —
@@ -964,6 +1016,10 @@ export function ClientsFilterSheet({
     label: s.label,
     color: "",
   }));
+  // ТИКА У СТАТУСОВ НЕТ (владелец 2026-08-07: «убери жёлтые штучки
+  // должников слева, всё в одном стиле»). Цветная полоска — признак
+  // СУЩНОСТИ со своим цветом (метка, тег, команда); у статуса цвета нет,
+  // и раскрашенные ряды рвали ровный список на пёстрый.
   const segmentBlocks: FacetOption[][] = SEGMENT_BLOCKS.map((block) =>
     block.map((key) => ({
       value: key as string,
@@ -977,6 +1033,9 @@ export function ClientsFilterSheet({
       title: string;
       subtitle: string;
       blocks: FacetOption[][];
+      /** Имена блоков — только у «Статуса»: у остальных фасетов блок один. */
+      blockTitles?: string[];
+      rules?: Record<string, string>;
       selected: string[];
       counts: Record<string, number>;
       toggle: (v: string) => void;
@@ -987,6 +1046,8 @@ export function ClientsFilterSheet({
       title: "Статус",
       subtitle: FACET_SUBTITLES.segment,
       blocks: segmentBlocks,
+      blockTitles: SEGMENT_BLOCK_TITLES,
+      rules: SEGMENT_RULES,
       selected: filter.segments,
       counts: facetCounts.segment,
       toggle: (v) =>
@@ -1079,16 +1140,16 @@ export function ClientsFilterSheet({
   const propertyValue = summarize(result.propertyOptions, filter.propertyTypes);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={1}>
+    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={HALF_RATIO}>
       <View style={{ height: pageH }}>
         {/* Шапка 92│центр│92 — «Фильтры» оптически по центру всегда. */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            minHeight: 44,
+            minHeight: 38,
             paddingHorizontal: 20,
-            paddingTop: 6,
+            paddingTop: 2,
           }}
         >
           <View style={{ width: SLOT }} />
@@ -1153,17 +1214,19 @@ export function ClientsFilterSheet({
           </Text>
         ) : null}
 
-        {/* Страница-бланк: абзацы строк (12 внутри, 28 между),
-            прижаты к шапке, ниже — намеренная пустота до футера.
+        {/* КОМПАКТНЫЙ РИТМ (владелец 2026-08-07: «сделай фильтр более
+            компактный»): абзацы 8 внутри / 14 между, строки 44pt. Прежние
+            28 между абзацами были рассчитаны на лист во весь экран — в
+            половине они съедали место, ради которого лист и уменьшали.
             Паддинги ТОЛЬКО через contentContainerStyle (NativeWind
             роняет className на ScrollView). */}
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingTop: 24,
+            paddingTop: 12,
             paddingHorizontal: 20,
-            paddingBottom: 28,
-            gap: 28,
+            paddingBottom: 16,
+            gap: 14,
           }}
         >
           {/* ── Как показывать: сортировка отдельным абзацем — это НЕ
@@ -1175,7 +1238,7 @@ export function ClientsFilterSheet({
           />
 
           {/* ── Абзац «когда и кого» ── */}
-          <View style={{ gap: 12 }}>
+          <View style={{ gap: 8 }}>
             {/* Период: сплит Финансов — имя → пресеты, даты → колёса.
                 Волосок между половинами: без него правая часть не
                 читалась как отдельная кнопка. */}
@@ -1183,7 +1246,7 @@ export function ClientsFilterSheet({
               style={{
                 flexDirection: "row",
                 alignItems: "stretch",
-                minHeight: 48,
+                minHeight: 44,
                 borderRadius: 14,
                 backgroundColor: t.rowFill,
               }}
@@ -1355,6 +1418,8 @@ export function ClientsFilterSheet({
             title={cfg.title}
             subtitle={cfg.subtitle}
             blocks={cfg.blocks}
+            blockTitles={cfg.blockTitles}
+            rules={cfg.rules}
             selected={cfg.selected}
             counts={cfg.counts}
             shownCount={shownCount}

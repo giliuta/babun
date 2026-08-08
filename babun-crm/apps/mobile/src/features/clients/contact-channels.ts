@@ -1,6 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTenantId } from "@/lib/tenant";
-import { getStorage } from "@babun/shared/storage";
+import {
+  MessageCircle,
+  MessageSquare,
+  MessagesSquare,
+  Phone,
+  PhoneCall,
+  Send,
+  type LucideIcon,
+} from "lucide-react-native";
+import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import type { Client } from "@babun/shared/local/clients";
 import {
   smsUrl,
@@ -9,6 +16,8 @@ import {
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
 import { isMessagingReady } from "@/features/chats/readiness";
+import type { CountryCode } from "libphonenumber-js";
+import { tryToE164 } from "@/features/clients/phone";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // СПОСОБЫ СВЯЗИ — один список на весь продукт (владелец 2026-07-26:
@@ -28,12 +37,6 @@ import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 // клиенты именно там (аудит 2026-07-27). Настройка остаётся местной, но у
 // каждой фирмы своя.
 
-const KEY_PREFIX = "babun-contact-channels";
-
-function storageKey(tenantId: string | null): string {
-  return tenantId ? `${KEY_PREFIX}:${tenantId}` : KEY_PREFIX;
-}
-
 export type ChannelId =
   | "call"
   | "whatsapp"
@@ -46,97 +49,92 @@ export interface ChannelDef {
   id: ChannelId;
   label: string;
   color: string;
+  /** Значок в листе «Как связаться» — тот же приём, что в листе «Добавить». */
+  icon: LucideIcon;
   /** Можно ли отключить в настройках. Звонок — нельзя. */
   optional: boolean;
 }
 
-/** Порядок = порядок в мини-листе и в настройках. */
+/** Набор по умолчанию; фактический порядок задаёт пользователь. */
 export const CONTACT_CHANNELS: ChannelDef[] = [
-  { id: "call", label: "Позвонить", color: "#1F7A44", optional: false },
+  {
+    id: "call",
+    label: "Позвонить",
+    color: "#1F7A44",
+    icon: Phone,
+    optional: false,
+  },
   {
     id: "whatsapp",
     label: "WhatsApp",
     color: MOBILE_CHANNEL_COLORS.whatsapp,
+    icon: MessageCircle,
     optional: true,
   },
   {
     id: "telegram",
     label: "Telegram",
     color: MOBILE_CHANNEL_COLORS.telegram,
+    icon: Send,
     optional: true,
   },
-  { id: "viber", label: "Viber", color: "#5b2d8e", optional: true },
-  { id: "sms", label: "SMS", color: MOBILE_CHANNEL_COLORS.sms, optional: true },
-  { id: "chat", label: "Чат в Babun", color: "#5b6678", optional: true },
+  {
+    id: "viber",
+    label: "Viber",
+    color: "#5b2d8e",
+    icon: PhoneCall,
+    optional: true,
+  },
+  {
+    id: "sms",
+    label: "SMS",
+    color: MOBILE_CHANNEL_COLORS.sms,
+    icon: MessageSquare,
+    optional: true,
+  },
+  {
+    id: "chat",
+    label: "Чат в Babun",
+    color: "#5b6678",
+    icon: MessagesSquare,
+    optional: true,
+  },
 ];
 
 /** Каналы, которые вообще имеет смысл ПРЕДЛАГАТЬ в настройках. Внутренний
  *  чат исключён, пока каналы сообщений не подключены: тумблер, который ни на
  *  что не влияет, — тот же мёртвый контрол, что и сама строка «Чат». */
 export function offeredChannels(): ChannelDef[] {
-  return CONTACT_CHANNELS.filter(
-    (c) => c.id !== "chat" || isMessagingReady(),
-  );
+  return CONTACT_CHANNELS.filter((c) => c.id !== "chat" || isMessagingReady());
 }
 
-const DEFAULT_ENABLED: ChannelId[] = [
-  "call",
-  "whatsapp",
-  "telegram",
-  "sms",
-  "chat",
-];
-
-export function getEnabledChannels(tenantId: string | null = null): ChannelId[] {
-  try {
-    const raw = getStorage().get<string[]>(storageKey(tenantId));
-    if (!Array.isArray(raw)) return DEFAULT_ENABLED;
-    const valid = raw.filter((id) =>
-      CONTACT_CHANNELS.some((c) => c.id === id),
-    ) as ChannelId[];
-    // Звонок не отключается: без него кнопка связи теряет смысл.
-    return valid.includes("call") ? valid : ["call", ...valid];
-  } catch {
-    return DEFAULT_ENABLED;
-  }
+/** Предлагаем ли этот канал вообще (см. offeredChannels). */
+export function isChannelOffered(id: ChannelId): boolean {
+  return offeredChannels().some((c) => c.id === id);
 }
 
-/** Живой список включённых каналов — тумблер в настройках сразу меняет
- *  мини-лист на карточке. */
-export function useEnabledChannels() {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["contact-channels", tenantId],
-    queryFn: () => getEnabledChannels(tenantId),
-    staleTime: Infinity,
-  });
+/** Определение канала по id — списки ходят по ПОРЯДКУ ПОЛЬЗОВАТЕЛЯ. */
+export function channelDef(id: ChannelId): ChannelDef | undefined {
+  return CONTACT_CHANNELS.find((c) => c.id === id);
 }
 
-export function useToggleChannel() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation({
-    // Локальная запись — не должна ждать сети.
-    networkMode: "always",
-    mutationFn: async (id: ChannelId) => {
-      const cur = getEnabledChannels(tenantId);
-      const next = cur.includes(id)
-        ? cur.filter((x) => x !== id)
-        : [...cur, id];
-      const ordered = CONTACT_CHANNELS.filter(
-        (c) => c.id === "call" || next.includes(c.id),
-      ).map((c) => c.id);
-      try {
-        getStorage().set(storageKey(tenantId), ordered);
-      } catch {
-        // Запись best-effort.
-      }
-      return ordered;
-    },
-    onSuccess: (next) =>
-      qc.setQueryData(["contact-channels", tenantId], next),
-  });
-}
+const prefs = createEnabledPrefs<ChannelId>({
+  storageKey: "babun-contact-channels",
+  queryKey: "contact-channels",
+  all: CONTACT_CHANNELS.map((c) => c.id),
+  defaults: ["call", "whatsapp", "telegram", "sms", "chat"],
+  // «Позвонить» всегда включён и всегда первый: без него кнопка связи
+  // теряет смысл, и переставлять его некуда (владелец 2026-08-02).
+  pinned: ["call"],
+});
+
+/** Включённые каналы В ПОРЯДКЕ ПОКАЗА — тумблер и перетаскивание в
+ *  настройках сразу меняют лист у номера. */
+export const useEnabledChannels = prefs.use;
+/** Полный порядок (включая выключенное) — для страницы настройки. */
+export const useChannelsOrder = prefs.useOrder;
+export const useToggleChannel = prefs.useToggle;
+export const useReorderChannels = prefs.useReorder;
 
 export interface ResolvedChannel extends ChannelDef {
   /** Куда вести. Для внутреннего чата — маршрут приложения. */
@@ -155,29 +153,38 @@ export interface ResolvedChannel extends ChannelDef {
 export function resolveChannelsForNumber(
   number: string,
   enabled: ChannelId[],
-  opts?: { telegramUsername?: string | null },
+  opts?: { telegramUsername?: string | null; country?: CountryCode },
 ): ResolvedChannel[] {
-  const digits = (number || "").replace(/[^\d+]/g, "");
+  // МЕССЕНДЖЕРУ НУЖЕН МЕЖДУНАРОДНЫЙ НОМЕР. Локально введённый «99 123456»
+  // давал wa.me/99123456 и t.me/+99123456 — код страны терялся, и ссылка
+  // вела в никуда. Приводим к E.164 по стране компании; неразбираемый
+  // номер оставляем как есть — звонилка с ним справится, а мессенджер
+  // всё равно не собрался бы.
+  const dial = tryToE164(number, opts?.country) ?? number;
+  const digits = (dial || "").replace(/[^\d+]/g, "");
   if (digits.replace(/\D/g, "").length < 5) return [];
   const out: ResolvedChannel[] = [];
-  for (const def of CONTACT_CHANNELS) {
-    if (!enabled.includes(def.id)) continue;
+  // Идём по ПОРЯДКУ ПОЛЬЗОВАТЕЛЯ (enabled уже отсортирован настройкой), а не
+  // по порядку константы: перетаскивание в настройках должно менять лист.
+  for (const id of enabled) {
+    const def = channelDef(id);
+    if (!def) continue;
     let url: string | null = null;
     switch (def.id) {
       case "call":
-        url = telUrl(number);
+        url = telUrl(dial);
         break;
       case "whatsapp":
-        url = whatsappUrl(number);
+        url = whatsappUrl(dial);
         break;
       case "telegram":
-        url = telegramUrl(opts?.telegramUsername ?? null, number);
+        url = telegramUrl(opts?.telegramUsername ?? null, dial);
         break;
       case "viber":
         url = `viber://chat?number=${encodeURIComponent(digits)}`;
         break;
       case "sms":
-        url = smsUrl(number);
+        url = smsUrl(dial);
         break;
       case "chat":
         // Внутренний чат — с КЛИЕНТОМ, не с номером: в меню номера его нет.
@@ -194,35 +201,44 @@ export function resolveChannelsForNumber(
 export function resolveChannels(
   client: Client,
   enabled: ChannelId[],
+  opts?: { country?: CountryCode },
 ): ResolvedChannel[] {
   const extras = client.phones ?? [];
-  const waNumber =
+  // Тот же перевод в E.164, что у кнопки номера; у основного телефона уже
+  // есть посчитанный `phone_e164` — он и есть канон.
+  const e164 = (raw: string | null | undefined) =>
+    tryToE164(raw ?? "", opts?.country) ?? raw ?? "";
+  const primary = client.phone_e164 || e164(client.phone);
+  const waNumber = e164(
     client.whatsapp_phone ||
-    extras.find((p) => p.label === "WhatsApp")?.number ||
-    client.phone;
-  const digits = (client.phone || "").replace(/[^\d+]/g, "");
+      extras.find((p) => p.label === "WhatsApp")?.number ||
+      client.phone,
+  );
+  const digits = (primary || "").replace(/[^\d+]/g, "");
 
   const out: ResolvedChannel[] = [];
-  for (const def of CONTACT_CHANNELS) {
-    if (!enabled.includes(def.id)) continue;
+  // По порядку пользователя — см. resolveChannelsForNumber.
+  for (const id of enabled) {
+    const def = channelDef(id);
+    if (!def) continue;
     let url: string | null = null;
     let internal = false;
     switch (def.id) {
       case "call":
-        url = telUrl(client.phone);
+        url = telUrl(primary);
         break;
       case "whatsapp":
         url = whatsappUrl(waNumber);
         break;
       case "telegram":
-        url = telegramUrl(client.telegram_username, client.phone);
+        url = telegramUrl(client.telegram_username, primary);
         break;
       case "viber":
         // Viber адресуется тем же номером; отдельного поля в модели нет.
         url = digits ? `viber://chat?number=${encodeURIComponent(digits)}` : null;
         break;
       case "sms":
-        url = smsUrl(client.phone);
+        url = smsUrl(primary);
         break;
       case "chat":
         // Внутренний чат предлагаем ТОЛЬКО когда каналы реально подключены:

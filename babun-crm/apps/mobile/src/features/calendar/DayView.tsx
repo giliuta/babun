@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { Pressable, Text, View, type DimensionValue } from "react-native";
+import {
+  Pressable,
+  Text,
+  useWindowDimensions,
+  View,
+  type DimensionValue,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -37,18 +43,19 @@ function addDaysYmd(ymd: string, days: number): string {
 // only drive the grey off-hours wash.
 const DEFAULT_START = 0;
 const DEFAULT_END = 24;
-// Snap granularity fallback — mirrors DEFAULT_CALENDAR_SETTINGS.gridStep.
-// Callers pass settings.gridStep (15/30/60) like the web DayColumn's
-// snapMinutes; it drives both drag snapping and empty-slot creation.
+// Snap granularity fallback. Календарь передаёт константные 15 мин
+// (настройка «Шаг сетки» удалена — см. stepMinutes в index.tsx); драг и
+// тап по пустому слоту снапятся к нему, кламп 5–60.
 const DEFAULT_STEP = 30;
 // All-day events render as thin strips on the left edge of the column
 // (web DayColumn v496) instead of joining the overlap layout.
 const ALL_DAY_W = 8;
 const ALL_DAY_GAP = 2;
-// Получасовые отметки (линия в колонке + «HH:30» на рельсе) появляются,
-// когда час достаточно высок, чтобы они читались, а не сливались в шум —
-// запрос владельца: «не вижу 23:30 по графику». Порог по КОММИЧЕННОМУ
-// hourH — как и текст-фит блоков, отметки догоняют зум на отпускании.
+// Получасовая волосяная линия В КОЛОНКЕ появляется, когда час достаточно
+// высок, чтобы она читалась, а не сливалась в шум. Порог по КОММИЧЕННОМУ
+// hourH — как и текст-фит блоков, линия догоняет зум на отпускании.
+// На рельсе подписей «HH:30» нет вовсе (запрос владельца 2026-07-27:
+// «только часовая») — время между часами называет красная капсула «сейчас».
 const HALF_MARK_MIN_H = 52;
 
 const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
@@ -61,6 +68,9 @@ export type WorkBand = {
   endMin: number;
   breaks?: { startMin: number; endMin: number }[];
 };
+
+// Отрезок свободного времени для режима «Записать» — один зелёный кубик.
+export type FreeSlotRange = { startMin: number; endMin: number };
 
 // ZOOM GEOMETRY. Pinch-to-zoom animates ONE value — the grid row height in
 // ZoomableTimeGrid — on the UI thread. Everything inside a column is
@@ -427,13 +437,10 @@ export function TimeRail({
   startHour = DEFAULT_START,
   endHour = DEFAULT_END,
   nowMinutes,
-  hourH,
 }: {
   startHour?: number;
   endHour?: number;
   nowMinutes?: number | null;
-  /** Коммиченные px/час — гейт получасовых подписей (HALF_MARK_MIN_H). */
-  hourH?: number;
 }) {
   const t = useThemeColors();
   const hours = useMemo(() => {
@@ -482,21 +489,6 @@ export function TimeRail({
               {`${pad2(h % 24)}:00`}
             </Text>
           )}
-          {/* Получас — вторичная подпись: мельче и тише часовой, чтобы
-              рельс не превратился в частокол (23:30 и т.п. видны, когда
-              зум даёт им место). */}
-          {(hourH ?? 0) >= HALF_MARK_MIN_H && !nearNow(h + 0.5) ? (
-            <Text
-              className="tabular-nums"
-              maxFontSizeMultiplier={1.3}
-              style={[
-                labelStyle,
-                { top: "50%", marginTop: -6, fontSize: 10, color: t.sub },
-              ]}
-            >
-              {`${pad2(h % 24)}:30`}
-            </Text>
-          ) : null}
         </View>
       ))}
       {/* endHour label — anchored to the rail bottom, no cell needed. */}
@@ -574,6 +566,7 @@ export function DayColumn({
   bufferMinutes = 0,
   nowMinutes,
   tintColor,
+  freeSlots,
 }: {
   dateYmd: string;
   appointments: Appointment[];
@@ -595,8 +588,8 @@ export function DayColumn({
   canReschedule?: (a: Appointment) => boolean;
   startHour?: number;
   endHour?: number;
-  /** Snap granularity for drag + empty-slot taps (settings.gridStep) —
-   *  web DayColumn `snapMinutes` semantics. */
+  /** Snap granularity for drag + empty-slot taps (календарь передаёт
+   *  константные 15) — web DayColumn `snapMinutes` semantics. */
   stepMinutes?: number;
   /** Committed pixels-per-hour (post-pinch) — px math only (tap→minutes,
    *  drag snap, text fit); on-screen geometry is percent/flex. */
@@ -609,6 +602,10 @@ export function DayColumn({
    *  null = нерабочий день → no wash at all (web v473: day-off body stays
    *  plain); undefined → fall back to workStartHour/EndHour. */
   workBand?: WorkBand | null;
+  /** РЕЖИМ ПОДБОРА ВРЕМЕНИ: зелёные кубики «сюда можно записать» прямо в
+   *  сетке — поверх серого нерабочих часов, под блоками записей. Пусто/не
+   *  задано — обычный календарь без подсветки. */
+  freeSlots?: readonly FreeSlotRange[];
   /** Minutes reserved after each live appointment (дорога/уборка) —
    *  rendered as a subtle band under the blocks, web DayColumn.tsx:558-580.
    *  0 = off. */
@@ -623,6 +620,7 @@ export function DayColumn({
   const t = useThemeColors();
   const blockColors = useBlockColors(teamColorFor);
   const [laneW, setLaneW] = useState(0);
+  const { fontScale } = useWindowDimensions();
 
   const hours = useMemo(() => {
     const out: number[] = [];
@@ -812,6 +810,14 @@ export function DayColumn({
             onPress={(e) => onSlotPress(h, e?.nativeEvent?.locationY ?? 0)}
             accessibilityRole="button"
             accessibilityLabel={`Создать запись в ${pad2(h)}:00`}
+            // В режиме подбора выбор — это кубики. Часы остаются кликабельными
+            // (родитель ответит «выберите зелёное»), но в озвучке молчат:
+            // иначе VoiceOver сначала читает дюжину одинаковых «Создать
+            // запись в HH:00» и только потом доходит до свободного времени.
+            accessibilityElementsHidden={freeSlots !== undefined}
+            importantForAccessibility={
+              freeSlots !== undefined ? "no-hide-descendants" : "auto"
+            }
             style={style}
           >
             {halfHourLine}
@@ -834,6 +840,82 @@ export function DayColumn({
           backgroundColor: gridLine,
         }}
       />
+
+      {/* СВОБОДНОЕ ВРЕМЯ (режим «Записать»). Кубики лежат в самой сетке, а не
+          на отдельном экране: диспетчер видит, ЧЕМ занят день вокруг
+          свободного окна, и выбирает осознанно.
+          Каждый слот — ОТДЕЛЬНАЯ плашка с зазором: сплошная заливка читалась
+          как «весь день свободен», а не как выбор из кубиков.
+          КУБИК — КНОПКА, и стоит ПОСЛЕ часовых ячеек: под ними он был
+          картинкой, тап проваливался в сетку и приезжал округлённым по 15
+          минут — с кубика «16:00» уходило 16:15. Кнопка отдаёт ровно своё
+          начало. Записи рисуются ниже по дереву и остаются сверху. */}
+      {freeSlots?.map((slot) => {
+        if (!(slot.endMin > winStartMin && slot.startMin < winEndMin)) {
+          return null;
+        }
+        const from = Math.max(slot.startMin, winStartMin);
+        const to = Math.min(slot.endMin, winEndMin);
+        const totalMin = winEndMin - winStartMin;
+        // Высота кубика в пикселях — по ней решаем, влезет ли подпись.
+        const slotH = ((to - from) / 60) * hourH;
+        const time = minToHM(slot.startMin);
+        return (
+          <Pressable
+            key={`free-${slot.startMin}`}
+            onPress={
+              onCreateAt ? () => onCreateAt(dateYmd, time) : undefined
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Свободно в ${time} — записать`}
+            style={{
+              position: "absolute",
+              left: 2,
+              right: 2,
+              top: pct(from - winStartMin, totalMin),
+              height: pct(to - from, totalMin),
+              paddingVertical: 1,
+            }}
+          >
+            {({ pressed }) => (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: t.radius.input,
+                  backgroundColor: `${t.success}${pressed ? "4d" : "33"}`,
+                  // Рамка — чтобы кубик оставался ФИГУРОЙ: одной заливкой в
+                  // 20% он даёт 1.33:1 к белой колонке, а при малой высоте,
+                  // когда подпись не влезает, исчезает для слабовидящего.
+                  borderWidth: 1,
+                  borderColor: `${t.success}66`,
+                }}
+              >
+                {/* ВРЕМЯ НА КУБИКЕ (владелец 2026-08-07). Часы слева отвечают
+                    за всю сетку, но при выборе смотрят на кубик, а не на
+                    рельс: подпись прямо на плашке снимает пересчёт глазами.
+                    Не рисуем, когда кубик ниже 16pt — обрезанная цифра хуже
+                    отсутствующей. */}
+                {slotH >= 16 * Math.min(fontScale, 1.2) ? (
+                  <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color: t.successInk,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {time}
+                  </Text>
+                ) : null}
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
 
       {/* Нерабочий день — тихая подпись по центру (web v473: сигнал в
           шапке, тело чистое; подпись убирает «мёртвую пустоту»). */}
@@ -1036,13 +1118,13 @@ export function DayView({
   workStartHour,
   workEndHour,
   workBandFor,
+  freeSlotsFor,
   labelTintFor,
   bufferMinutes,
   nowMinutes,
   scrollToHour,
   labelFor,
   onDayLabelTap,
-  onJumpToNow,
 }: {
   /** Центральная (закоммиченная) дата. Соседние страницы — ±1 день. */
   dateYmd: string;
@@ -1075,6 +1157,10 @@ export function DayView({
   workEndHour?: number;
   /** Per-date work band from team_schedules (see DayColumn.workBand). */
   workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Свободные слоты по дате — режим «Записать» (см. DayColumn.freeSlots).
+   *  День обязан показывать те же кубики, что и Неделя: без этого пропа
+   *  плашка «Выберите зелёное время» висела над сеткой без единого кубика. */
+  freeSlotsFor?: (dateYmd: string) => readonly FreeSlotRange[] | undefined;
   /** Per-date day-label colour → light column wash; undefined resolver
    *  when team.tint_days_by_label is off (see DayColumn.tintColor). */
   labelTintFor?: (dateYmd: string) => string | null;
@@ -1086,8 +1172,6 @@ export function DayView({
   /** Метка дня по дате (undefined — у бригады нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onDayLabelTap?: () => void;
-  /** Стрелка «к сейчас» на чужой дате — прыжок якоря на сегодня. */
-  onJumpToNow?: () => void;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
@@ -1130,17 +1214,11 @@ export function DayView({
         endHour={endHour}
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
-        nowMinutes={nowMinutes}
-        todayOffset={
-          dateYmd === todayYmd ? 0 : dateYmd > todayYmd ? -1 : 1
-        }
-        onJumpToNow={onJumpToNow}
       >
         <TimeRail
           startHour={startHour}
           endHour={endHour}
           nowMinutes={dateYmd === todayYmd ? nowMinutes : null}
-          hourH={hourH}
         />
         <PagedStrip
           pager={pager}
@@ -1167,6 +1245,7 @@ export function DayView({
                 workStartHour={workStartHour}
                 workEndHour={workEndHour}
                 workBand={workBandFor?.(d)}
+                freeSlots={freeSlotsFor?.(d)}
                 tintColor={labelTintFor?.(d) ?? null}
                 bufferMinutes={bufferMinutes}
                 nowMinutes={nowMinutes}

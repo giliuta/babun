@@ -1,67 +1,69 @@
 import { useState } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
-import type { Client, ClientTag } from "@babun/shared/local/clients";
-import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import type { Client, ClientTag, Location } from "@babun/shared/local/clients";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
+import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import VisitsMoneyBlock from "@/features/clients/blocks/VisitsMoneyBlock";
-import AttachmentsBlock from "@/features/clients/blocks/AttachmentsBlock";
+import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
+import { AttachmentsRow } from "@/features/clients/blocks/AttachmentsBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
-import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
+import { RowCaption } from "@/features/clients/card-rows";
 
-/** Что уже заполнено «под капотом» — чтобы строка «Ещё» не была немой. */
-function extrasSummary(client: Client): string | null {
-  const parts = [
-    client.telegram_username?.trim() ? "Telegram" : null,
-    client.instagram_username?.trim() ? "Instagram" : null,
-    client.whatsapp_phone?.trim() ? "WhatsApp" : null,
-    client.email?.trim() ? "почта" : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
+const EMPTY_LOCATIONS: Location[] = [];
 
 interface ClientProfileBlocksProps {
   client: Client;
+  /** Визиты клиента — блок объектов считает по ним срок обслуживания. */
+  appointments: readonly Appointment[];
   draft: boolean;
-  appointments: Appointment[];
-  services: readonly { id: string; name: string }[];
   tags: ClientTag[];
-  stats: ClientStats | undefined;
   update: (patch: Partial<Client>) => Promise<boolean>;
-  /** Открыть страницу объекта. Навигацию держит карточка: в черновике клиента
-   *  она сначала сохраняет клиента — pushed-страница не видит несохранённого
-   *  черновика. Создание сюда больше не ходит: оно живёт в листе. */
-  onOpenObject: (locId: string) => void;
-  /** Открыть «Ещё» — мессенджеры, почта, источник. */
-  onOpenExtras: () => void;
 }
 
 export function ClientProfileBlocks({
   client,
-  draft,
   appointments,
-  services,
+  draft,
   tags,
-  stats,
   update,
-  onOpenObject,
-  onOpenExtras,
 }: ClientProfileBlocksProps) {
   const [objectsOpen, setObjectsOpen] = useState(false);
+  // Правка объекта — лист, а не страница (владелец 2026-08-06). Страницы
+  // /clients/object и /clients/unit удалены вместе с уровнем «Информация».
+  // Правка и удаление — ОДИН лист с двумя настроениями: два экземпляра
+  // заводили по своей очереди записи и по своему снимку массива, и свайп
+  // «Удалить» после правки откатывал её вместе с чужими объектами.
+  const [sheet, setSheet] = useState<{
+    id: string;
+    askDelete?: boolean;
+  } | null>(null);
+  // ОДИН ПИСАТЕЛЬ НА `locations` ДЛЯ ВСЕЙ КАРТОЧКИ. Свой писатель в каждом
+  // листе означал три независимые очереди от трёх снимков: добавили объект в
+  // одном листе, тут же поправили другой — и новый объект стирался ответом
+  // из соседней очереди.
+  const locationWriter = useLocationWriter(
+    client.locations ?? EMPTY_LOCATIONS,
+    update,
+  );
   return (
     <>
-      {/* Владелец 2026-07-25: содержательные заметки принадлежат ЗАЯВКЕ, а
-          не клиенту — «что делали/что сказали» относится к конкретному
-          выезду. На карточке остаётся только лёгкий признак «что это за
-          клиент», поэтому блок уехал со второго места в самый низ, под
-          справочные блоки. Сам журнал пока не трогаем: в нём лежат
-          реальные записи, и удалять их до появления поля заметки в заявке
-          нельзя. */}
       <ObjectsBlock
         client={client}
-        onOpen={onOpenObject}
+        appointments={appointments}
+        onOpen={(id) => setSheet({ id })}
+        onDelete={(loc) => setSheet({ id: loc.id, askDelete: true })}
         onAdd={() => setObjectsOpen(true)}
+      />
+      {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
+          подтверждение и запись остаются в одном месте. */}
+      <ObjectEditSheet
+        visible={sheet !== null}
+        client={client}
+        locationId={sheet?.id ?? null}
+        askDelete={sheet?.askDelete}
+        writer={locationWriter}
+        onClose={() => setSheet(null)}
       />
       {/* Добавление объекта — лист снизу (владелец 2026-07-27). Живёт рядом с
           блоком, а не в карточке: кроме открытия у карточки к нему дел нет. */}
@@ -69,6 +71,7 @@ export function ClientProfileBlocks({
         visible={objectsOpen}
         client={client}
         update={update}
+        writer={locationWriter}
         onClose={() => setObjectsOpen(false)}
       />
 
@@ -80,31 +83,31 @@ export function ClientProfileBlocks({
           Каждое поле этих блоков проходит белый список create_client_with_tags
           (phones, locations, notes, city, birthday, language, telegram/
           instagram/whatsapp) — то есть в черновике они пишут в тот же объект,
-          который уедет в базу по «Готово», а не в пустоту.
-          «Визиты и деньги» скрывает себя сам, пока визитов и долга нет: у
-          нового клиента их нет по определению, и у сохранённого без визитов
-          страница выглядит точно так же. */}
-      <VisitsMoneyBlock clientId={client.id} appointments={appointments} />
-      {/* Фото — единственное, что физически нельзя приложить до сохранения:
-          путь в хранилище строится по id клиента, которого ещё нет. Рисовать
-          пригашенную кнопку «нельзя» = мёртвый контрол. */}
-      {!draft ? <AttachmentsBlock clientId={client.id} /> : null}
+          который уедет в базу по «Готово», а не в пустоту. */}
+      {/* Строки «История записей · N» здесь больше нет: в историю ведёт сама
+          сводка под номером — «6 визитов · €600 · был 30 мая» (владелец
+          2026-08-02). Число визитов и так стояло в сводке, и строка повторяла
+          его второй раз ради одного шеврона. */}
+
+      {/* ПОРЯДОК (владелец 2026-08-06): объекты → заметки → личное. Сразу под
+          объектами — то, что ЗАПИСЫВАЮТ по ходу дела (заметка, документ), и
+          только потом справочные свойства человека.
+
+          «Документация» — строка ВНУТРИ заметок. Своей карточки у файлов
+          больше нет: до сохранения клиента их всё равно нельзя приложить
+          (путь в хранилище строится по id), поэтому в черновике строки нет. */}
+      <NotesBlock
+        client={client}
+        update={update}
+        footerRow={
+          !draft ? <AttachmentsRow clientId={client.id} separated /> : null
+        }
+      />
       <PersonalBlock client={client} update={update} tags={tags} />
-      <NotesBlock client={client} update={update} />
-      {/* «Ещё» — мессенджеры, почта, источник. Владелец 2026-07-26: они
-          будут подтягиваться из чата сами, вписывать их каждый день никто не
-          будет, поэтому на карточке им не место — но вписать руками можно.
-          В черновике страницы ещё нет: она читает клиента по id. */}
-      {!draft ? (
-        <RowGroup>
-          <NavRow
-            label="Ещё"
-            value={extrasSummary(client)}
-            placeholder="мессенджеры, почта, источник"
-            onPress={onOpenExtras}
-          />
-        </RowGroup>
-      ) : null}
+      {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
+          уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют
+          плюсом в блоке контактов; источник — в «Личное», к метке и дню
+          рождения. Отдельная страница /clients/extras вместе с ней удалена. */}
       {client.blacklisted ? (
         <RowCaption tone="danger" text="Клиент в чёрном списке." />
       ) : null}

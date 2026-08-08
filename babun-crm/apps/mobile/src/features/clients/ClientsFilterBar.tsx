@@ -23,7 +23,6 @@ export function ClientsFilterBar({
   foundCount,
   activeCount,
   tokens,
-  sortNote,
   onOpen,
   onOpenToken,
   onRemoveToken,
@@ -36,10 +35,6 @@ export function ClientsFilterBar({
   /** Число активных значений фильтра (бейдж). */
   activeCount: number;
   tokens: ActiveToken[];
-  /** Имя оси сортировки — печатается ТОЛЬКО когда она не по умолчанию:
-   *  ось персистентна, и молчаливый «верх списка» уводил обзвон не по тем
-   *  людям («вчера сортировал по долгу — сегодня читаю как свежих»). */
-  sortNote?: string | null;
   onOpen: () => void;
   /** Тап по телу токена — открыть лист сразу на его измерении. */
   onOpenToken: (token: ActiveToken) => void;
@@ -51,13 +46,14 @@ export function ClientsFilterBar({
   const shown = tokens.slice(0, TOKEN_LIMIT);
   const hidden = tokens.length - shown.length;
 
-  // Одна формула на оба состояния — счётчик не должен звучать по-разному
-  // в зависимости от того, включён ли фильтр.
+  // ТОЛЬКО ЧИСЛО (владелец 2026-08-07: «просто четыре клиента, лучше вообще
+  // все слова убрать»). Ушли «Всего», «Найдено» и приписка сортировки: строка
+  // отвечает на один вопрос — сколько людей в списке под ней. Ось сортировки
+  // видна там, где её и меняют, — в самом листе.
   const countLine =
-    (foundCount < totalCount
-      ? `Найдено ${foundCount} из ${totalCount}`
-      : `Всего ${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`) +
-    (sortNote ? ` · ${sortNote}` : "");
+    foundCount < totalCount
+      ? `${foundCount} из ${totalCount}`
+      : `${totalCount} ${countWordRu(totalCount, "клиент", "клиента", "клиентов")}`;
 
   return (
     <View style={{ marginHorizontal: 16, marginBottom: 8 }}>

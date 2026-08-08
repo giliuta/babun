@@ -11,7 +11,9 @@ import { Spinner } from "@/components/ui/Spinner";
 import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
+import { todayYMD } from "@/features/clients/filter";
 import { useClient } from "@/features/clients/queries";
+import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
 import { useServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -62,24 +64,40 @@ export default function ClientVisitsScreen() {
     [appointments],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  // Локальная дата, а не UTC: `toISOString()` ночью на Кипре отдавал
+  // вчерашний день, и сегодняшние визиты уезжали в «Впереди».
+  const today = todayYMD();
   const upcoming = sorted.filter(
     (a) => a.date >= today && a.status !== "completed" && a.status !== "cancelled",
   );
-  const past = sorted.filter((a) => !upcoming.includes(a));
+  const pastAppts = sorted.filter((a) => !upcoming.includes(a));
 
-  const done = past.filter((a) => a.status === "completed");
+  const done = pastAppts.filter((a) => a.status === "completed");
   const spent = done.reduce(
     (n, a) => n + Math.max(0, (a.total_amount ?? 0) - getDebtAmount(a)),
     0,
   );
   const debt = done.reduce((n, a) => n + getDebtAmount(a), 0);
 
+  // ОДНА НИТЬ ВМЕСТО ТРЁХ РАЗДЕЛОВ (2026-08-07). Раньше «что было» жило в
+  // трёх местах: визиты здесь, заметки блоком на карточке, документы своей
+  // страницей — и перед звонком картину собирали вручную, переключая экраны.
+  // «Звонила вчера, просила перенести» и «приезжали 30 мая на €120» — это
+  // одна история клиента, а не две.
+  const past = useMemo(() => {
+    const upcomingIds = new Set(upcoming.map((a) => a.id));
+    return buildTimeline(
+      client ?? null,
+      appointments.filter((a) => !upcomingIds.has(a.id)),
+      (id) => serviceName.get(id) ?? null,
+    );
+  }, [client, appointments, upcoming, serviceName]);
+
   const byYear = useMemo(() => {
-    const groups = new Map<string, Appointment[]>();
-    for (const a of past) {
-      const y = yearOf(a.date);
-      groups.set(y, [...(groups.get(y) ?? []), a]);
+    const groups = new Map<string, TimelineEvent[]>();
+    for (const e of past) {
+      const y = yearOf(e.date);
+      groups.set(y, [...(groups.get(y) ?? []), e]);
     }
     return [...groups.entries()];
   }, [past]);
@@ -120,7 +138,7 @@ export default function ClientVisitsScreen() {
   return (
     <Screen>
       <ScreenHeader
-        title="История записей"
+        title="История"
         subtitle={client?.full_name || undefined}
       />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
@@ -128,8 +146,8 @@ export default function ClientVisitsScreen() {
           <View className="items-center py-10">
             <Spinner size={26} label="Загрузка истории записей" />
           </View>
-        ) : sorted.length === 0 ? (
-          <RowCaption text="Записей ещё не было." />
+        ) : sorted.length === 0 && past.length === 0 ? (
+          <RowCaption text="Пока ничего не было." />
         ) : null}
 
         {/* Итог сверху — то, ради чего историю чаще всего и открывают. */}
@@ -162,17 +180,37 @@ export default function ClientVisitsScreen() {
 
         {byYear.map(([year, list]) => (
           <RowGroup key={year} title={year}>
-            {list.map((a, i) => {
-              const m = money(a);
+            {list.map((e, i) => {
+              const appt = e.apptId
+                ? appointments.find((a) => a.id === e.apptId)
+                : undefined;
+              const m = appt ? money(appt) : null;
+              // Заметка и напоминание — та же строка, но без шеврона: внутрь
+              // них проваливаться некуда, они целиком видны здесь.
               return (
                 <NavRow
-                  key={a.id}
-                  label={`${formatShortDateRu(a.date)}${a.time_start ? ` · ${a.time_start}` : ""}`}
-                  value={m ? `${visitValue(a)} · ${m.text}` : visitValue(a)}
-                  valueColor={m?.color}
-                  dimmed={a.status === "cancelled"}
+                  key={e.id}
+                  label={`${formatShortDateRu(e.date)}${e.time ? ` · ${e.time}` : ""}`}
+                  // Значение берём из СОБЫТИЯ ЛЕНТЫ, а не пересобираем из
+                  // записи: `buildTimeline` уже разобрал услуги (новый
+                  // массив `services` + легаси `service_ids`) и подобрал
+                  // комментарий визита. Пересборка через `visitValue`
+                  // выбрасывала и то и другое — «звонила, просила перенести»
+                  // не появлялось в истории никогда, ради чего ленту и
+                  // затевали.
+                  value={[
+                    e.title,
+                    e.subtitle,
+                    appt ? m?.text : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  valueColor={
+                    appt ? m?.color : e.kind === "reminder" ? t.accent : t.sub
+                  }
+                  dimmed={e.cancelled}
                   separated={i > 0}
-                  onPress={() => open(a)}
+                  onPress={appt ? () => open(appt) : undefined}
                 />
               );
             })}

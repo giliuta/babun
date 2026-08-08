@@ -6,11 +6,18 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActionSheetIOS, Alert, Linking, View } from "react-native";
+import {
+  ActionSheetIOS,
+  Alert,
+  Linking,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
   duplicateAppointment,
@@ -22,6 +29,7 @@ import {
   randomUuid,
 } from "@babun/shared/sync";
 import { getStorage } from "@babun/shared/storage";
+import { freeSlotsForDay } from "@/features/calendar/free-slots";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import {
   findBufferClash,
@@ -31,6 +39,7 @@ import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
+import { X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
@@ -44,7 +53,11 @@ import {
   PAY_METHOD_LABELS,
   type PayMethod,
 } from "@/features/appointments/payment";
-import { DayView, type WorkBand } from "@/features/calendar/DayView";
+import {
+  DayView,
+  type FreeSlotRange,
+  type WorkBand,
+} from "@/features/calendar/DayView";
 import { HOUR_H_DEFAULT } from "@/features/calendar/zoom";
 import { WeekView } from "@/features/calendar/WeekView";
 import { type CalMode } from "@/features/calendar/ViewModeDropdown";
@@ -57,7 +70,8 @@ import {
   CalendarEmptyState,
   suggestFirstSlot,
 } from "@/features/calendar/CalendarEmptyState";
-import { CityPickerModal } from "@/features/calendar/CityPickerModal";
+import { DayLabelSheet } from "@/features/calendar/DayLabelSheet";
+import { BookSlotSheet, type SlotDraft } from "@/features/calendar/BookSlotSheet";
 import {
   dayCityKey,
   useDayCities,
@@ -304,7 +318,59 @@ export default function CalendarTab() {
     services?: string; // CSV service-id — префилл услуг («Повторить», ТО)
     kind?: string; // AppointmentKind черновика
     reminderId?: string; // recurring ТО → mark booked after successful create
+    // РЕЖИМ ПОДБОРА ВРЕМЕНИ: «Записать» с карточки/списка открывает ЭТОТ
+    // календарь, подсвечивает свободное зелёным и ждёт выбора (владелец
+    // 2026-08-07, по образцу Bumpix: «полноценно открывается календарь,
+    // который уже существует, и там просто выбираешь»).
+    pickClient?: string;
+    pickLocation?: string;
+    /** Бригада/услуги/напоминание того же задания — везём их до формы, а не
+     *  теряем на пересадке в календаре. */
+    pickTeam?: string;
+    pickServices?: string;
+    pickReminder?: string;
   }>();
+  // РЕЖИМ — СОСТОЯНИЕ ЭКРАНА, А НЕ АДРЕС. Параметр вкладки переживает всё:
+  // и уход в форму, и переключение табов — плашка «Записать: Иван» висела
+  // после сохранения (того же человека можно было записать второй раз) и
+  // встречала при возврате из «Клиентов». Параметр теперь только ДОСТАВЛЯЕТ
+  // задание: приняли — и сразу стёрли адрес, дальше режимом владеет экран.
+  const [pick, setPick] = useState<{
+    clientId: string;
+    locationId: string | null;
+    teamId: string | null;
+    services: string | null;
+    reminderId: string | null;
+  } | null>(null);
+  const pickClientId = pick?.clientId ?? null;
+  useEffect(() => {
+    if (!params.pickClient) return;
+    setPick({
+      clientId: params.pickClient,
+      locationId: params.pickLocation || null,
+      teamId: params.pickTeam || null,
+      services: params.pickServices || null,
+      reminderId: params.pickReminder || null,
+    });
+    router.setParams({
+      pickClient: "",
+      pickLocation: "",
+      pickTeam: "",
+      pickServices: "",
+      pickReminder: "",
+    });
+  }, [
+    params.pickClient,
+    params.pickLocation,
+    params.pickTeam,
+    params.pickServices,
+    params.pickReminder,
+    router,
+  ]);
+  // Уход с календаря снимает вопрос «когда?»: он задан один раз.
+  useFocusEffect(
+    useCallback(() => () => setPick(null), []),
+  );
 
   // Вид и команда переживают перезапуск (MMKV): владелец двух бригад в
   // «Неделе» не должен каждый старт возвращаться в «День» первой команды.
@@ -382,6 +448,17 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? null;
   const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+
+  // ПОДБОР ВРЕМЕНИ ПЕРЕКЛЮЧАЕТ КАЛЕНДАРЬ НА БРИГАДУ КЛИЕНТА. Иначе свободное
+  // время считалось по бригаде, открытой в чипе: постоянного клиента бригады
+  // Б показывали и записывали к бригаде А просто потому, что вчера смотрели
+  // её календарь.
+  const pickTeamId = pick?.teamId ?? null;
+  useEffect(() => {
+    if (!pickTeamId) return;
+    if (!teams.some((tm) => tm.id === pickTeamId)) return;
+    setTeamChoice((prev) => (prev === pickTeamId ? prev : pickTeamId));
+  }, [pickTeamId, teams]);
 
   // «Now» in the BUSINESS timezone, ticked every minute so the now-line /
   // past-wash / isToday stay live while the screen is open — including
@@ -621,6 +698,9 @@ export default function CalendarTab() {
   // Дата, чью метку правим (null = пикер закрыт): шапка Дня открывает свой
   // день, тап по дате в Неделе — свою (долгое нажатие там открывает день).
   const [cityPickerYmd, setCityPickerYmd] = useState<string | null>(null);
+  // Тапнутый пустой слот сетки (null = лист закрыт): лист «Новая запись»
+  // уточняет время барабаном и ведёт в /book Клиентом или Событием.
+  const [slotDraft, setSlotDraft] = useState<SlotDraft | null>(null);
   // Разбор финансов дня по тапу на футер Доход/Расход (null = закрыт).
   const [finModalYmd, setFinModalYmd] = useState<string | null>(null);
   // Date-label resolver: explicit (day_cities) → team default_city (web
@@ -645,7 +725,7 @@ export default function CalendarTab() {
     [activeTeamId, activeTeam?.default_city, dayCities, cities, t.faint],
   );
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
-  // CityPickerModal показывает честное пустое состояние и ведёт в настройки.
+  // DayLabelSheet показывает честное пустое состояние и ведёт в настройки.
   // Иначе новый диспетчер нажимал на дату в ожидании метки, а приложение
   // молча переключало вид календаря. Провал в День/Неделю остаётся на долгом
   // нажатии, как и подсказывает accessibilityHint в ячейке даты.
@@ -901,11 +981,27 @@ export default function CalendarTab() {
       {
         onSuccess: () => {
           haptics.success();
-          toast(done, "success", {
-            label: "Отменить",
-            onPress: () =>
-              updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
-          });
+          // Мастеру «Отменить» не предлагаем: переходы статуса для него
+          // односторонние по политике сервера (update_master_appointment_safe
+          // пускает только scheduled→in_progress→completed) — кнопка лишь
+          // мигала бы блоком и молча откатывалась.
+          toast(
+            done,
+            "success",
+            isCrew
+              ? undefined
+              : {
+                  label: "Отменить",
+                  onPress: () =>
+                    updateAppt.mutate(
+                      { id: apt.id, patch: { status: prev } },
+                      {
+                        onError: () =>
+                          toast("Не удалось вернуть статус", "error"),
+                      },
+                    ),
+                },
+          );
         },
         onError: () => toast("Не удалось изменить статус", "error"),
       },
@@ -927,7 +1023,15 @@ export default function CalendarTab() {
             {
               label: "Отменить",
               onPress: () =>
-                updateAppt.mutate({ id: apt.id, patch: { status: prev } }),
+                updateAppt.mutate(
+                  { id: apt.id, patch: { status: prev } },
+                  {
+                    // Без колбэка откат падал молча: options-level onError
+                    // хука гасит глобальный алерт MutationCache.
+                    onError: () =>
+                      toast("Не удалось вернуть запись", "error"),
+                  },
+                ),
             },
           );
         },
@@ -1202,7 +1306,12 @@ export default function CalendarTab() {
       }
       if (mutable) {
         items.push({
-          label: event && apt.event_repeat?.kind !== "none" ? "Удалить серию" : "Удалить",
+          // Явный null-чек: у одиночного события event_repeat = null, и
+          // «undefined !== "none"» обещал бы удаление несуществующей серии.
+          label:
+            event && apt.event_repeat && apt.event_repeat.kind !== "none"
+              ? "Удалить серию"
+              : "Удалить",
           destructive: true,
           run: () => deleteAppointmentConfirmed(apt),
         });
@@ -1334,6 +1443,26 @@ export default function CalendarTab() {
     [calSettings?.workStartHour, calSettings?.workEndHour, calSettings?.startHour, calSettings?.endHour],
   );
 
+  // Рабочая полоса дня для листа записи — тот же резолвер и фолбэк, что
+  // красят серый wash сетки (DayColumn): подсветка «вне рабочих часов» в
+  // колесе никогда не противоречит серому на сетке. Поэтому без явных
+  // рабочих часов (нет ни графика команды, ни настройки) сигнала НЕТ —
+  // сетка в этом случае wash не рисует, и колесо не должно гадать
+  // дефолтами 6–22 из globalWork.
+  const sheetBandFor = useMemo(
+    () =>
+      (ymd: string): WorkBand | null | undefined => {
+        const band = workBandFor?.(ymd);
+        // null (выходной) проходит как есть; undefined → настройка часов.
+        if (band !== undefined) return band;
+        const ws = calSettings?.workStartHour;
+        const we = calSettings?.workEndHour;
+        if (ws == null || we == null) return undefined;
+        return { startMin: ws * 60, endMin: we * 60 };
+      },
+    [workBandFor, calSettings?.workStartHour, calSettings?.workEndHour],
+  );
+
   // Видимое окно — ВЫВОДИТСЯ из рабочих часов просматриваемых дней и
   // раздвигается под записи, которые из них выпали (см. features/calendar/
   // window.ts). Настроек «Показывать с/до» больше нет: рельс обязан показывать
@@ -1361,6 +1490,129 @@ export default function CalendarTab() {
     [workBandFor, dayYmd, globalWork, visWindow],
   );
 
+  // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
+  // остаётся прежним, без зелени.
+  const freeSlotsFor = useMemo(() => {
+    if (!pickClientId) return undefined;
+    // Считаем каждую дату ОДИН раз: пейджер держит три страницы, и в Неделе
+    // резолвер зовётся 21 раз за рендер — без кэша это тысячи проходов по
+    // записям на каждый тик «сейчас» и на каждый свайп.
+    const cache = new Map<string, readonly FreeSlotRange[]>();
+    return (dateYmd: string): readonly FreeSlotRange[] => {
+      const hit = cache.get(dateYmd);
+      if (hit) return hit;
+      const out = compute(dateYmd);
+      cache.set(dateYmd, out);
+      return out;
+    };
+    function compute(dateYmd: string): readonly FreeSlotRange[] {
+      // Прошедшие дни не предлагаются вовсе: записать «во вчера» нельзя,
+      // туда можно только перенести уже существующую запись.
+      if (dateYmd < todayYmd) return [];
+      const appts = apptsFor(dateYmd) ?? [];
+      const step = activeTeam?.default_slot_minutes ?? 30;
+      return freeSlotsForDay({
+        band: workBandFor?.(dateYmd),
+        fallback: {
+          startMin: Math.round((calSettings?.workStartHour ?? 8) * 60),
+          endMin: Math.round((calSettings?.workEndHour ?? 20) * 60),
+        },
+        appts,
+        stepMinutes: step,
+        bufferMinutes,
+        nowMinutes: dateYmd === todayYmd ? nowMinutes ?? null : null,
+      }).map((slot) => ({
+        startMin: slot.startMin,
+        endMin: slot.startMin + step,
+      }));
+    }
+  }, [
+    pickClientId,
+    apptsFor,
+    workBandFor,
+    calSettings?.workStartHour,
+    calSettings?.workEndHour,
+    bufferMinutes,
+    activeTeam?.default_slot_minutes,
+    todayYmd,
+    nowMinutes,
+  ]);
+
+  const pickClientName = pickClientId
+    ? clients.find((c) => c.id === pickClientId)?.full_name ?? ""
+    : "";
+
+  /** В ПРОШЛОЕ НЕ ЗАПИСЫВАЮТ (владелец 2026-08-07: «как можно записать то,
+   *  что уже было — туда можно только перенести»). Прошедшее время в сетке
+   *  и так затемнено, но тап по нему открывал создание записи задним числом.
+   *  Перенос существующей записи это не трогает: у него свои правила и своё
+   *  предупреждение. */
+  const isPastSlot = (dateYmd: string, timeStart: string): boolean => {
+    if (dateYmd > todayYmd) return false;
+    if (dateYmd < todayYmd) return true;
+    const [h, m] = timeStart.split(":").map(Number);
+    const startMin = (h || 0) * 60 + (m || 0);
+    return nowMinutes != null && startMin < nowMinutes;
+  };
+
+  const rejectPast = (dateYmd: string, timeStart: string): boolean => {
+    if (!isPastSlot(dateYmd, timeStart)) return false;
+    haptics.warning();
+    toast("В прошлое записать нельзя — только перенести", "info");
+    return true;
+  };
+
+  /** В режиме подбора запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
+   *  у бригады свободно»; тап мимо неё (обед, нерабочий час, щель между
+   *  визитами) уходил в форму молча — и обещание оказывалось краской. */
+  const rejectOutsideFreeSlots = (
+    dateYmd: string,
+    timeStart: string,
+  ): boolean => {
+    if (!pickClientId) return false;
+    const [h, m] = timeStart.split(":").map(Number);
+    const startMin = (h || 0) * 60 + (m || 0);
+    if ((freeSlotsFor?.(dateYmd) ?? []).some((s) => s.startMin === startMin)) {
+      return false;
+    }
+    haptics.warning();
+    toast("Выберите зелёное время — там бригада свободна", "info");
+    return true;
+  };
+
+  /** Выбрали время в режиме подбора — уходим в форму записи с ним. */
+  const pickSlotForClient = (dateYmd: string, timeStart: string) => {
+    if (!pickClientId) return;
+    router.push({
+      pathname: "/book",
+      params: {
+        clientId: pickClientId,
+        ...(pick?.locationId ? { locationId: pick.locationId } : {}),
+        ...(activeTeamId ? { teamId: activeTeamId } : {}),
+        // Услуги прошлого визита («Повторить») и гашение напоминания о ТО
+        // доезжают до формы вместе с выбранным временем.
+        ...(pick?.services ? { services: pick.services } : {}),
+        ...(pick?.reminderId ? { reminderId: pick.reminderId } : {}),
+        date: dateYmd,
+        // Форма ждёт именно `time_start` — под именем `time` выбранный кубик
+        // молча терялся и запись открывалась на дефолтные 10:00.
+        time_start: timeStart,
+      },
+    });
+  };
+
+  /** Тап по пустому времени — одна дорога для Недели и Дня. */
+  const createAt = (dateYmd: string, timeStart: string) => {
+    if (rejectPast(dateYmd, timeStart)) return;
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
+    haptics.tap();
+    if (pickClientId) {
+      pickSlotForClient(dateYmd, timeStart);
+      return;
+    }
+    setSlotDraft({ date: dateYmd, time: timeStart });
+  };
+
   const gridProps = {
     clientName,
     serviceLabel,
@@ -1370,8 +1622,6 @@ export default function CalendarTab() {
     canReschedule: canMutateAppointment,
     startHour: visStartHour,
     endHour: visEndHour,
-    // «Шаг сетки» (15/30/60) — drives drag snapping and empty-slot taps,
-    // like the web DayColumn snapMinutes.
     // Привязка драга и тапа по пустому слоту — 15 мин, константа. «Шаг сетки»
     // как настройка убран: ни одной линии он не рисовал (сетку рисует зум —
     // граница часа безусловна, получас появляется при hourH ≥ 52), зато тайно
@@ -1381,6 +1631,7 @@ export default function CalendarTab() {
     workStartHour: calSettings?.workStartHour,
     workEndHour: calSettings?.workEndHour,
     workBandFor,
+    freeSlotsFor,
     labelTintFor,
     bufferMinutes,
     nowMinutes,
@@ -1488,6 +1739,60 @@ export default function CalendarTab() {
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />
+
+      {/* ПЛАШКА ПОДБОРА — «кого записываем». Пока она висит, свободное время
+          подсвечено зелёным, а тап по сетке ведёт сразу в форму записи.
+          Крестик выходит из режима, оставляя календарь там же, где стоите. */}
+      {pickClientId ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10,
+            marginHorizontal: 12,
+            marginTop: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: t.radius.input,
+            backgroundColor: `${t.success}1f`,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+            >
+              {`Записать: ${pickClientName || "клиент"}`}
+            </Text>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 13, color: t.sub }}
+            >
+              {`Выберите зелёное время · ${activeTeam?.default_slot_minutes ?? 30} мин`}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              setPick(null);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Отменить выбор времени"
+            hitSlop={10}
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <X color={t.sub} size={18} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <TeamChips
         teams={teams}
         activeId={activeTeamId}
@@ -1550,17 +1855,15 @@ export default function CalendarTab() {
               apptsFor={apptsFor}
               today={now}
               labelFor={labelFor}
-              onCreateAt={
-                canManageBookings
-                  ? (d, timeStart) => bookAt({ date: d, time_start: timeStart })
-                  : undefined
-              }
+              onCreateAt={canManageBookings ? createAt : undefined}
               onMenu={openActionMenu}
               onPickDay={pickDay}
-              onJumpToNow={goToday}
               onPickLabelDay={
                 canManageDayLabels && activeTeamId
-                  ? (ymd) => setCityPickerYmd(ymd)
+                  ? (ymd) => {
+                      haptics.tap();
+                      setCityPickerYmd(ymd);
+                    }
                   : undefined
               }
               onCommitPage={(dir) => setDay((d) => addDays(d, dir * 7))}
@@ -1600,16 +1903,14 @@ export default function CalendarTab() {
               labelFor={labelFor}
               onDayLabelTap={
                 canManageDayLabels && activeTeamId
-                  ? () => setCityPickerYmd(dayYmd)
+                  ? () => {
+                      haptics.tap();
+                      setCityPickerYmd(dayYmd);
+                    }
                   : undefined
               }
-              onJumpToNow={goToday}
               onMenu={openActionMenu}
-              onCreateAt={
-                canManageBookings
-                  ? (d, timeStart) => bookAt({ date: d, time_start: timeStart })
-                  : undefined
-              }
+              onCreateAt={canManageBookings ? createAt : undefined}
               onCommitPage={(dir) => setDay((d) => addDays(d, dir))}
               {...gridProps}
             />
@@ -1642,7 +1943,10 @@ export default function CalendarTab() {
                   onPickDay={openWeekFromMonth}
                   onPickLabelDay={
                     canManageDayLabels && activeTeamId
-                      ? (ymd) => setCityPickerYmd(ymd)
+                      ? (ymd) => {
+                          haptics.tap();
+                          setCityPickerYmd(ymd);
+                        }
                       : undefined
                   }
                 />
@@ -1705,10 +2009,23 @@ export default function CalendarTab() {
         />
       ) : null}
 
-      {/* Пикер метки дня — центрированная карточка (web CityPickerModal);
-          тап по активной строке снимает метку. Целевую дату задаёт
-          открывшая шапка (День — свой день, Неделя — тапнутая дата). */}
-      <CityPickerModal
+      {/* Тап по пустому слоту — лист «когда и кого записать»: барабан
+          даты/времени (шаг 5 минут) + две дороги создания. /book
+          открывается уже с выбранными временем и типом. */}
+      <BookSlotSheet
+        slot={slotDraft}
+        bandFor={sheetBandFor}
+        onClose={() => setSlotDraft(null)}
+        onPick={(kind, s) => {
+          setSlotDraft(null);
+          bookAt({ date: s.date, time_start: s.time, kind });
+        }}
+      />
+
+      {/* Метка дня — нижний лист (web parity CityPickerModal); тап по
+          активной строке снимает метку. Целевую дату задаёт открывшая
+          шапка (День — свой день, Неделя/Месяц — тапнутая дата). */}
+      <DayLabelSheet
         visible={cityPickerYmd != null}
         dateKey={cityPickerYmd ?? todayYmd}
         options={labelOptions}

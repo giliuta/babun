@@ -11,7 +11,7 @@ const appointmentSource = readFileSync(
 const clientSource = readFileSync(
   resolve(
     dirname(fileURLToPath(import.meta.url)),
-    "../clients/blocks/AttachmentsBlock.tsx",
+    "../../../app/(dashboard)/clients/attachments.tsx",
   ),
   "utf8",
 );

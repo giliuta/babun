@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
-  Linking,
   Pressable,
   RefreshControl,
   Text,
@@ -15,20 +14,18 @@ import ReanimatedSwipeable, {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Ban,
+  Archive,
   BarChart3,
   Bell,
+  CalendarPlus,
   Check,
   Clock,
-  MessageCircle,
-  MessageSquare,
-  Phone,
   Pin,
   Search,
   Settings,
   Users,
 } from "lucide-react-native";
 import type { Client, ClientTag } from "@babun/shared/local/clients";
-import { whatsappUrl } from "@babun/shared/common/utils/messenger-links";
 import {
   buildStatsMap,
   type ClientStats,
@@ -57,7 +54,7 @@ import {
   clientDebt,
   EMPTY_FILTER,
   resetFilters,
-  SORT_LABELS_LONG,
+  segmentEvidence,
   type ActiveToken,
   type ClientsFilter,
 } from "@/features/clients/filter";
@@ -78,13 +75,18 @@ import {
 import {
   formatShortDateRu,
   reminderBadge,
-  ymdInDays,
 } from "@/features/clients/format";
 import { ClientActionsSheet } from "@/features/clients/ClientActionsSheet";
+import { useGuardedBookingNav } from "@/features/clients/card-booking";
+import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
+import { useDefaultCountry } from "@/features/clients/default-country";
+import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientsFilterBar } from "@/features/clients/ClientsFilterBar";
 import { ClientsFilterSheet } from "@/features/clients/ClientsFilterSheet";
 import { ImportWizardSheet } from "@/features/clients/import/ImportWizardSheet";
+import { ContactsImportSheet } from "@/features/clients/import/ContactsImportSheet";
 import { BulkActionBar } from "@/features/clients/BulkActionBar";
 import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
@@ -93,7 +95,6 @@ import { useCities, useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 
 // v811 list card (approved web design, apps/web/.../clients/page.tsx
 // ClientCard): name row (+pin) · money row (grey expected · green income
@@ -101,31 +102,51 @@ import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
 // Field visibility is driven by the «Что показывать» prefs (cardFields).
 //
 // Bulk-mode (web-parity): long-press ENTERS selection mode; in it the avatar
-// becomes a checkbox, the phone-call button hides, and a tap toggles the pick
-// instead of opening the card. A right-swipe surfaces «Позвонить» as a visible
-// dup of the tap-to-call button (only outside selection, only with a phone).
+// becomes a checkbox, the contact button hides, and a tap toggles the pick
+// instead of opening the card.
+//
+// СВАЙПЫ (2026-08-06): вправо — «Записать», влево — «Напомнить» и «В архив».
+// Телефон для них не нужен; в режиме выбора свайпы отключены целиком.
 function ClientRow({
   client,
   stats,
   teamName,
   tags,
   cardFields,
+  evidence,
   selectionMode,
   picked,
   onPress,
   onLongPress,
+  onBook,
+  onRemind,
+  onArchive,
+  onSwipeOpen,
 }: {
   client: Client;
   stats: ClientStats | undefined;
   teamName: string | null;
   tags: ClientTag[];
   cardFields: CardFieldPrefs;
+  /** Почему этот человек попал в выбранный статус («не был 87 дн.»).
+   *  Печатается первым в мете — доказательство должно попадаться на глаза
+   *  раньше справочных полей. */
+  evidence: string | null;
   selectionMode: boolean;
   picked: boolean;
   onPress: () => void;
   onLongPress: () => void;
+  /** Свайп вправо: открыть запись для этого клиента. */
+  onBook: () => void;
+  /** Свайп влево: лист «Напомнить». */
+  onRemind: () => void;
+  /** Свайп влево: архив (спрашивает подтверждение сам). */
+  onArchive: () => void;
+  /** Открылся свайп этой строки — список закрывает предыдущий. */
+  onSwipeOpen: (row: SwipeableMethods | null) => void;
 }) {
   const t = useThemeColors();
+  const country = useDefaultCountry();
   const swipeRef = useRef<SwipeableMethods | null>(null);
   const exp = Math.round(stats?.expectedRevenue ?? 0);
   const income = Math.round(stats?.totalSpent ?? 0);
@@ -157,6 +178,27 @@ function ClientRow({
   // руками, — красный, когда пора (сегодня/прошло), серый — когда впереди.
   const reminder = reminderBadge(client.reminder_at);
   const metaLead: { key: string; node: React.ReactNode }[] = [];
+  // УЛИКА ВЫБРАННОГО СТАТУСА — первой: список, собранный фильтром, должен
+  // сам объяснять, за что сюда попал каждый человек (владелец 2026-08-07:
+  // «как убеждаться, что это правильные статусы»).
+  if (evidence) {
+    metaLead.push({
+      key: "evidence",
+      node: (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          className="text-[11px] font-semibold"
+          // Полные чернила: доказательство статуса не может быть бледнее
+          // справочного хвоста меты (город, команда, теги) — иначе главное
+          // на строке тише второстепенного.
+          style={{ color: t.ink }}
+        >
+          {evidence}
+        </Text>
+      ),
+    });
+  }
   if (reminder) {
     metaLead.push({
       key: "reminder",
@@ -325,6 +367,24 @@ function ClientRow({
               {client.full_name || "Без имени"}
             </Text>
           </View>
+          {/* НОМЕР ПОД ИМЕНЕМ (владелец 2026-08-06: «хочу, чтоб сразу было
+              видно номер телефона»). Он же — то, по чему ищут: поиск и так
+              понимает цифры, но раньше найденный номер нигде не показывался,
+              и совпадение приходилось проверять, открывая карточку. */}
+          {cardFields.phone && client.phone.trim() ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              className="mt-0.5 text-[13px]"
+              style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
+            >
+              {/* Тот же формат, что на карточке: в базе номера лежат как их
+                  когда-то ввели или как пришли из импорта, и рядом стояли
+                  «+357 97469998» и «+357 97 469998» — два вида одного
+                  номера читаются как два разных человека. */}
+              {formatPhoneAsYouType(client.phone, country)}
+            </Text>
+          ) : null}
           {figs.length > 0 ? (
             <View className="mt-1 flex-row items-center gap-2.5">
               {figs.map((f) => (
@@ -380,29 +440,43 @@ function ClientRow({
           ) : null}
         </View>
       </Pressable>
+      {/* КАК СВЯЗАТЬСЯ, а не «позвонить» (владелец 2026-08-06): та же кнопка
+          и тот же лист, что у номера в карточке. Звонок остался внутри листа
+          первым пунктом — тем, кто звонит всегда, это по-прежнему один тап
+          после открытия, а остальным больше не нужно заходить в карточку
+          ради WhatsApp. */}
       {phoneDigits && !selectionMode ? (
-        <Pressable
-          onPress={() => Linking.openURL(`tel:${phoneDigits}`)}
-          accessibilityRole="button"
-          accessibilityLabel={`Позвонить — ${client.full_name || client.phone}`}
-          className="mx-4 my-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
-          style={{ backgroundColor: `${t.accent}1a` }}
-        >
-          <Phone color={t.accent} size={16} />
-        </Pressable>
+        <View className="mx-4 my-3 self-center">
+          <PhoneChannelButton
+            number={client.phone}
+            telegramUsername={client.telegram_username}
+            label={client.full_name || undefined}
+            size={44}
+          />
+        </View>
       ) : null}
     </View>
   );
 
-  // Свайпы (RN-GH, паттерн из chats/index.tsx): влево → «Позвонить»
-  // (кнопка справа), вправо → «SMS» и «WhatsApp» (кнопки слева).
-  // Отключены в режиме выбора (мешали бы тапу-тоглу) и без телефона.
-  if (selectionMode || !phoneDigits) return row;
-  const wa = whatsappUrl(client.whatsapp_phone || client.phone);
-  const swipeAction = (url: string) => {
-    swipeRef.current?.close();
-    Linking.openURL(url);
-  };
+  // ЖЕСТЫ СТРОКИ (переосмыслены 2026-08-06 по разбору четырёх линз).
+  //
+  // БЫЛО: свайп влево — «Позвонить», свайп вправо — «SMS» + «WhatsApp». То
+  // есть СВЯЗЬ жила на свайпах, в листе long-press и в зелёной кнопке —
+  // четыре дороги к одному глаголу. При этом два действия, ради которых
+  // список и существует («Записать», «Напомнить»), жеста не имели вовсе.
+  //
+  // Хуже: свайп ВЛЕВО — то место, где во всех приложениях iPhone лежит
+  // «Удалить». Заученный флик «убери» звонил клиенту, а звонок не отменить.
+  //
+  // СТАЛО, по закону направления (он же в соседних «Чатах»):
+  //   вправо = продвинуть  → «Записать»
+  //   влево  = отложить/убрать → «Напомнить» + «Архив»
+  // Связи в жестах нет вовсе: она в зелёной кнопке — единственной
+  // поверхности, которая читает настройку «Способы связи» и её порядок.
+  // Свайп больше не зависит от наличия телефона: ни один из глаголов номера
+  // не требует (раньше у клиента без номера жеста не было совсем).
+  if (selectionMode) return row;
+  const closeSwipe = () => swipeRef.current?.close();
   return (
     <ReanimatedSwipeable
       ref={swipeRef}
@@ -411,55 +485,81 @@ function ClientRow({
       leftThreshold={44}
       overshootRight={false}
       overshootLeft={false}
-      renderRightActions={() => (
+      // Мёртвая зона у левого края: на всех остальных экранах эта же моторика
+      // означает системное «назад».
+      dragOffsetFromLeftEdge={30}
+      // Открытым может быть только ОДИН свайп: иначе на экране две-три
+      // раскрытые строки, и следующий тап попадает не туда, куда целились.
+      onSwipeableWillOpen={() => {
+        haptics.tap();
+        onSwipeOpen(swipeRef.current);
+      }}
+      renderLeftActions={() => (
         <Pressable
-          onPress={() => swipeAction(`tel:${phoneDigits}`)}
+          onPress={() => {
+            closeSwipe();
+            haptics.tap();
+            onBook();
+          }}
           accessibilityRole="button"
-          accessibilityLabel="Позвонить"
+          accessibilityLabel={`Записать — ${client.full_name || client.phone}`}
           className="w-[88px] items-center justify-center gap-1"
           style={{ backgroundColor: t.accent }}
         >
-          <Phone color="#fff" size={ICON.sm} />
-          <Text className="text-[11px] font-semibold" style={{ color: "#fff" }}>
-            Позвонить
+          <CalendarPlus color="#fff" size={ICON.sm} />
+          <Text
+            maxFontSizeMultiplier={1.3}
+            className="text-[11px] font-semibold"
+            style={{ color: "#fff" }}
+          >
+            Записать
           </Text>
         </Pressable>
       )}
-      renderLeftActions={() => (
+      renderRightActions={() => (
         <View className="flex-row">
           <Pressable
-            onPress={() => swipeAction(`sms:${phoneDigits}`)}
+            onPress={() => {
+              closeSwipe();
+              haptics.tap();
+              onRemind();
+            }}
             accessibilityRole="button"
-            accessibilityLabel={`Сообщение — ${client.full_name || client.phone}`}
+            accessibilityLabel={`Напомнить — ${client.full_name || client.phone}`}
             className="w-[88px] items-center justify-center gap-1"
-            style={{ backgroundColor: t.accent }}
+            style={{ backgroundColor: t.warning }}
           >
-            <MessageSquare color="#fff" size={ICON.sm} />
+            <Bell color="#fff" size={ICON.sm} />
             <Text
               maxFontSizeMultiplier={1.3}
               className="text-[11px] font-semibold"
               style={{ color: "#fff" }}
             >
-              SMS
+              Напомнить
             </Text>
           </Pressable>
-          {wa ? (
-            <Pressable
-              onPress={() => swipeAction(wa)}
-              accessibilityRole="button"
-              accessibilityLabel={`WhatsApp — ${client.full_name || client.phone}`}
-              className="w-[88px] items-center justify-center gap-1"
-              style={{ backgroundColor: MOBILE_CHANNEL_COLORS.whatsapp }}
+          {/* Архив спрашивает подтверждение (см. confirmArchiveOne) — поэтому
+              он допустим у пальца, а полного свайпа здесь нет вовсе. */}
+          <Pressable
+            onPress={() => {
+              closeSwipe();
+              haptics.warning();
+              onArchive();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`В архив — ${client.full_name || client.phone}`}
+            className="w-[88px] items-center justify-center gap-1"
+            style={{ backgroundColor: t.danger }}
+          >
+            <Archive color="#fff" size={ICON.sm} />
+            <Text
+              maxFontSizeMultiplier={1.3}
+              className="text-[11px] font-semibold"
+              style={{ color: "#fff" }}
             >
-              <MessageCircle color="#fff" size={ICON.sm} />
-              <Text
-                className="text-[11px] font-semibold"
-                style={{ color: "#fff" }}
-              >
-                WhatsApp
-              </Text>
-            </Pressable>
-          ) : null}
+              В архив
+            </Text>
+          </Pressable>
         </View>
       )}
     >
@@ -477,6 +577,8 @@ export default function ClientsListScreen() {
   // «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
     openImport?: string;
+    /** «Из контактов телефона» → openContacts. */
+    openContacts?: string;
   }>();
   const { data, isLoading, isRefetching, refetch, error } = useClients();
   // Контрол обновления отражает ЖЕСТ, а не любое дообновление: иначе список
@@ -508,6 +610,7 @@ export default function ClientsListScreen() {
     "segment" | "city" | "tag" | "team" | "source" | "property" | null
   >(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [contactsOpen, setContactsOpen] = useState(false);
 
   // ── Bulk-mode (multi-select) ──────────────────────────────────────
   const [selecting, setSelecting] = useState(false);
@@ -515,8 +618,9 @@ export default function ClientsListScreen() {
   const [smsOpen, setSmsOpen] = useState(false);
 
   useEffect(() => {
+    if (params.openContacts) setContactsOpen(true);
     if (params.openImport) setImportOpen(true);
-  }, [params.openImport]);
+  }, [params.openImport, params.openContacts]);
 
   const clients = useMemo(() => data ?? [], [data]);
 
@@ -627,38 +731,28 @@ export default function ClientsListScreen() {
   // ClientActionsSheet; здесь только состояние и обработчики.
   const [menuClient, setMenuClient] = useState<Client | null>(null);
 
-  const openRemindMenu = (c: Client) => {
-    Alert.alert("Напомнить о клиенте", c.full_name || undefined, [
-      {
-        text: "Завтра",
-        onPress: () =>
-          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(1) } }),
-      },
-      {
-        text: "Через неделю",
-        onPress: () =>
-          updateById.mutate({ id: c.id, patch: { reminder_at: ymdInDays(7) } }),
-      },
-      {
-        text: "Через месяц",
-        onPress: () =>
-          updateById.mutate({
-            id: c.id,
-            patch: { reminder_at: ymdInDays(30) },
-          }),
-      },
-      ...(c.reminder_at
-        ? [
-            {
-              text: "Убрать напоминание",
-              style: "destructive" as const,
-              onPress: () =>
-                updateById.mutate({ id: c.id, patch: { reminder_at: null } }),
-            },
-          ]
-        : []),
-      { text: "Отмена", style: "cancel" as const },
-    ]);
+  // Напоминание — ТОТ ЖЕ лист, что на карточке: одно действие не может
+  // выглядеть по-разному в двух местах (раньше здесь был системный Alert).
+  const [remindClient, setRemindClient] = useState<Client | null>(null);
+  const openRemindMenu = (c: Client) => setRemindClient(c);
+
+  // ЗАПИСАТЬ ПРЯМО ИЗ СПИСКА (свайп вправо и лист действий). Строка уже знает
+  // и основной объект, и последнюю бригаду — те же два поля, что подставляет
+  // карточка, поэтому лишний заход в карточку ради «Записать» больше не
+  // нужен. Чёрный список спрашивает через тот же общий гейт.
+  // Ссылка на открытую свайпом строку — чтобы закрыть её, когда открывают
+  // соседнюю.
+  const openSwipe = useRef<SwipeableMethods | null>(null);
+  const guardedBook = useGuardedBookingNav();
+  const bookFor = (c: Client) => {
+    const primary =
+      (c.locations ?? []).find((l) => l.isPrimary)?.id ??
+      (c.locations ?? [])[0]?.id ??
+      null;
+    guardedBook(c, {
+      locationId: primary,
+      teamId: statsMap.get(c.id)?.lastTeamId ?? null,
+    });
   };
 
   const confirmArchiveOne = (c: Client) => {
@@ -908,7 +1002,6 @@ export default function ClientsListScreen() {
           foundCount={result.filtered.length}
           activeCount={result.activeCount}
           tokens={result.activeTokens}
-          sortNote={sort === "recent" ? null : SORT_LABELS_LONG[sort]}
           onOpen={() => {
             setInitialFacet(null);
             setSheetOpen(true);
@@ -974,6 +1067,16 @@ export default function ClientsListScreen() {
                     ? toggleId(item.id)
                     : router.push(`/clients/${item.id}`)
                 }
+                evidence={segmentEvidence(item, filter.segments, stats)}
+                onSwipeOpen={(row) => {
+                  if (openSwipe.current && openSwipe.current !== row) {
+                    openSwipe.current.close();
+                  }
+                  openSwipe.current = row;
+                }}
+                onBook={() => bookFor(item)}
+                onRemind={() => setRemindClient(item)}
+                onArchive={() => confirmArchiveOne(item)}
                 onLongPress={() =>
                   selecting ? toggleId(item.id) : setMenuClient(item)
                 }
@@ -1047,8 +1150,23 @@ export default function ClientsListScreen() {
         </View>
       )}
 
+      <RemindSheet
+        visible={remindClient !== null}
+        clientName={remindClient?.full_name}
+        hasReminder={!!remindClient?.reminder_at}
+        onPick={(reminder_at) => {
+          if (remindClient) {
+            updateById.mutate({
+              id: remindClient.id,
+              patch: { reminder_at },
+            });
+          }
+        }}
+        onClose={() => setRemindClient(null)}
+      />
       <ClientActionsSheet
         client={menuClient}
+        onBook={bookFor}
         onClose={() => setMenuClient(null)}
         onSelectMany={(c) => enterSelection(c.id)}
         onTogglePin={onTogglePin}
@@ -1072,6 +1190,10 @@ export default function ClientsListScreen() {
       <ImportWizardSheet
         visible={importOpen}
         onClose={() => setImportOpen(false)}
+      />
+      <ContactsImportSheet
+        visible={contactsOpen}
+        onClose={() => setContactsOpen(false)}
       />
       <BulkSmsSheet
         visible={smsOpen}

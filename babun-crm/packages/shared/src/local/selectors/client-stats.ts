@@ -37,6 +37,29 @@ export interface ClientStats {
   nextApt: { date: string; time: string } | null;
   /** Days until nextApt (0 = today, 1 = tomorrow), or null. */
   nextAptDays: number | null;
+  /** ЛИЧНЫЙ РИТМ КЛИЕНТА — медиана промежутков между его завершёнными
+   *  визитами, в днях. null, когда визитов меньше двух: ритма ещё нет.
+   *
+   *  Нужен вместо общего порога «давно не был». Один порог на всех врёт в
+   *  обе стороны: клининг ездит раз в неделю, кондиционеры — раз в полгода,
+   *  и 60 дней для первого катастрофа, а для второго норма. Медиана, а не
+   *  среднее: один сезонный пропуск не должен сдвигать норму. */
+  medianGapDays: number | null;
+  /** Сколько объектов клиента ПРОСРОЧЕНО по своему интервалу обслуживания
+   *  (`Location.serviceEveryMonths`). 0 — обслуживать нечего или ещё рано.
+   *
+   *  Регулярное обслуживание — основная выручка сервиса, и до сих пор оно
+   *  было видно только внутри карточки: чтобы понять, кого пора звать,
+   *  приходилось открывать все карточки руками. */
+  serviceDue: number;
+  /** ПРОШЕДШИЕ НЕЗАКРЫТЫЕ ВИЗИТЫ: запись стоит «запланирована», а дата уже
+   *  прошла. Работу почти наверняка сделали, но её никто не закрыл — значит
+   *  визит не считается визитом, деньги не попали ни в долг, ни в выручку,
+   *  а клиент выглядит тем, кто «так и не приехал».
+   *
+   *  Календарь это состояние знает и красит янтарём; список клиентов до
+   *  сих пор не знал (аудит 2026-08-07). */
+  unclosedVisits: number;
   /** Sum of debt across all completed visits. */
   debt: number;
   /** Expected revenue — Σ total_amount of FUTURE scheduled/in-progress
@@ -60,6 +83,9 @@ const EMPTY_STATS: ClientStats = {
   lastVisitDays: null,
   nextApt: null,
   nextAptDays: null,
+  medianGapDays: null,
+  serviceDue: 0,
+  unclosedVisits: 0,
   debt: 0,
   expectedRevenue: 0,
   lastTeamId: null,
@@ -120,7 +146,10 @@ export function nameInComment(commentNorm: string, cnameNorm: string): boolean {
 }
 
 export function buildStats(
-  client: Pick<Client, "id" | "full_name" | "created_at" | "birthday">,
+  // `locations` нужен для срока обслуживания объектов; поле необязательное,
+  // чтобы старые вызовы с урезанным клиентом продолжали работать.
+  client: Pick<Client, "id" | "full_name" | "created_at" | "birthday"> &
+    Partial<Pick<Client, "locations">>,
   apts: Appointment[],
 ): ClientStats {
   if (apts.length === 0) {
@@ -136,6 +165,11 @@ export function buildStats(
   let expectedRevenue = 0;
   let lastTeamId: string | null = null;
   let lastTeamKey = "";
+  /** Даты завершённых визитов — из них считается личный ритм. */
+  const visitDates: string[] = [];
+  /** Последний завершённый визит НА КАЖДЫЙ объект — для срока обслуживания. */
+  const lastByLocation = new Map<string, string>();
+  let unclosedVisits = 0;
   const today = todayKey();
 
   for (const a of apts) {
@@ -150,6 +184,7 @@ export function buildStats(
       visits += 1;
       totalSpent += getPaidAmount(a);
       debt += getDebtAmount(a);
+      if (a.date) visitDates.push(a.date);
       if (a.date > lastVisitDate) lastVisitDate = a.date;
       // «команда» = team of the most-recent COMPLETED visit that had one.
       // Composite date+time key (mirrors nextApt) so same-day visits
@@ -163,9 +198,27 @@ export function buildStats(
       }
     }
 
+    // ПОСЛЕДНИЙ ВЫЕЗД НА ОБЪЕКТ — для срока обслуживания. Считаем ЛЮБУЮ
+    // неотменённую запись с прошедшей датой, а не только `completed`:
+    // незакрытая вчерашняя работа — это тоже «мы там были», и карточка
+    // объекта (service-plan.ts) считает ровно так же. Пока условия
+    // расходились, список говорил «пора обслужить», а карточка молчала.
+    if (
+      a.status !== "cancelled" &&
+      a.date &&
+      a.date <= today &&
+      a.location_id
+    ) {
+      const prev = lastByLocation.get(a.location_id);
+      if (!prev || a.date > prev) lastByLocation.set(a.location_id, a.date);
+    }
+
     // Future or in-progress visits → candidate for "next".
     const upcoming =
       a.status === "scheduled" || a.status === "in_progress";
+    // Прошедшая и незакрытая — не «следующая» и не визит. Считаем отдельно:
+    // это работа, повисшая без денег.
+    if (upcoming && a.date && a.date < today) unclosedVisits += 1;
     if (upcoming && a.date >= today) {
       expectedRevenue += a.total_amount ?? 0;
       const cur = nextApt;
@@ -187,6 +240,8 @@ export function buildStats(
   const nextAptDays = nextApt
     ? daysBetween(todayD, parseKey(nextApt.date)!)
     : null;
+  const medianGapDays = medianGap(visitDates);
+  const serviceDue = countServiceDue(client, lastByLocation, todayKey());
 
   return computeNonAptFields(client, {
     visits,
@@ -198,6 +253,9 @@ export function buildStats(
     lastVisitDays,
     nextApt,
     nextAptDays,
+    medianGapDays,
+    serviceDue,
+    unclosedVisits,
     ageDays: 0,
     birthdayInDays: null,
   });
@@ -296,8 +354,76 @@ export function buildStatsMap(
 }
 
 /** Fast helper for page-level segment counts. */
+/** «Пропал»: был у нас, давно не приезжал И НЕ ЗАПИСАН ВПЕРЁД.
+ *
+ *  Проверка `nextApt` добавлена 2026-08-07: без неё в список на обзвон
+ *  попадал клиент, который был 90 дней назад и приезжает завтра —
+ *  диспетчер звонил зря и переставал верить фильтру.
+ *
+ *  Порог сравнивается через `>=`: ряд называется «60+ дней», а строгое
+ *  `>` означало 61 — подпись обязана описывать РОВНО предикат. */
+/** Прибавить месяцы к YYYY-MM-DD, не перескакивая через конец месяца
+ *  (31 января + 1 месяц = 28/29 февраля, а не 3 марта). */
+function addMonthsKey(key: string, months: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  const target = m - 1 + months;
+  const year = y + Math.floor(target / 12);
+  const month = ((target % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${p(month + 1)}-${p(Math.min(d, lastDay))}`;
+}
+
+/** Сколько объектов клиента просрочено по своему интервалу. Отсчёт — от
+ *  ПОСЛЕДНЕГО визита на этот объект: даты «когда обслужили» никто не
+ *  заполняет руками, значит её невозможно забыть проставить. */
+function countServiceDue(
+  client: Partial<Pick<Client, "locations">>,
+  lastByLocation: Map<string, string>,
+  today: string,
+): number {
+  let due = 0;
+  for (const loc of client.locations ?? []) {
+    const months = loc.serviceEveryMonths ?? 0;
+    if (!months) continue;
+    const last = lastByLocation.get(loc.id);
+    // Ни одного визита — обслуживать ещё нечего, отсчёт начнётся с первого.
+    if (!last) continue;
+    if (addMonthsKey(last, months) <= today) due += 1;
+  }
+  return due;
+}
+
+/** Медиана промежутков между визитами (дни). Меньше двух визитов — ритма
+ *  ещё нет, возвращаем null: по одному приезду судить не о чем. */
+export function medianGap(dates: readonly string[]): number | null {
+  if (dates.length < 2) return null;
+  const days = [...dates]
+    .sort()
+    .map((d) => parseKey(d))
+    .filter((d): d is Date => d !== null);
+  if (days.length < 2) return null;
+  const gaps: number[] = [];
+  for (let i = 1; i < days.length; i += 1) {
+    const gap = daysBetween(days[i - 1], days[i]);
+    // Два визита в один день — не промежуток, а один выезд из двух работ.
+    if (gap > 0) gaps.push(gap);
+  }
+  if (gaps.length === 0) return null;
+  gaps.sort((a, b) => a - b);
+  const mid = Math.floor(gaps.length / 2);
+  return gaps.length % 2 === 1
+    ? gaps[mid]
+    : Math.round((gaps[mid - 1] + gaps[mid]) / 2);
+}
+
 export function isLongSilence(s: ClientStats, days = 60): boolean {
-  return s.visits > 0 && (s.lastVisitDays ?? 0) > days;
+  return (
+    s.visits > 0 &&
+    s.nextApt === null &&
+    (s.lastVisitDays ?? 0) >= days
+  );
 }
 export function isNewClient(s: ClientStats, days = 30): boolean {
   return s.ageDays >= 0 && s.ageDays < days;

@@ -25,6 +25,7 @@ export type ThemeColors = {
   placeholder: string;
   // semantic = meaning
   success: string;
+  successInk: string;
   danger: string;
   warning: string;
   // seams + depth
@@ -88,6 +89,10 @@ export const light: ThemeColors = {
   faint: "rgba(11,18,32,0.64)",
   placeholder: "rgba(11,18,32,0.62)",
   success: "#087a52",
+  // Чернила поверх СВОЕЙ ЖЕ 20-% заливки: сам `success` на ней даёт 4.03:1 и
+  // AA не проходит (подпись времени на зелёном кубике 11pt). Тон темнее —
+  // 5.8:1, и это по-прежнему один зелёный продукта, а не шестой оттенок.
+  successInk: "#065f40",
   danger: "#c9372c",
   // Also clears AA on its own 10% semantic tint (used by warning cards).
   warning: "#955f00",

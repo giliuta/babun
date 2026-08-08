@@ -1,19 +1,22 @@
-import { useState, type ComponentType } from "react";
+import type { ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Archive,
-  Check,
   ChevronRight,
   Download,
   Eye,
+  Home,
   MessageCircle,
+  Navigation,
   Tags,
+  Smartphone,
   Upload,
 } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { CONTACTS_AVAILABLE } from "@/features/clients/import/ContactsImportSheet";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { useToast } from "@/components/ui/Toast";
@@ -26,10 +29,12 @@ import {
 import {
   offeredChannels,
   useEnabledChannels,
-  useToggleChannel,
 } from "@/features/clients/contact-channels";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { haptics } from "@/lib/haptics";
+import { useEnabledContactFields } from "@/features/clients/contact-fields";
+import {
+  mapServicesSummary,
+  useEnabledMapServices,
+} from "@/lib/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 
@@ -111,15 +116,18 @@ export default function ClientsSettingsScreen() {
   const tagsQuery = useClientTags();
   const clients = clientsQuery.data ?? [];
   const tags = tagsQuery.data ?? [];
-  const t = useThemeColors();
   // Способы связи: у одного бизнеса весь Кипр в WhatsApp, у другого Viber —
   // лишние каналы только удлиняют мини-лист на карточке.
-  const { data: channels = [] } = useEnabledChannels();
-  const toggleChannel = useToggleChannel();
-  const [channelsOpen, setChannelsOpen] = useState(false);
+  const channels = useEnabledChannels();
+  // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
+  // только удлиняет каждый выезд (владелец 2026-08-02).
+  const mapServices = useEnabledMapServices();
+  // Что предлагать в листе «Добавить» на карточке (шестерёнка в самом листе
+  // ведёт сюда). Номер телефона не отключается — он в листе всегда.
+  const contactFields = useEnabledContactFields();
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
-  const backToList = (param: "openImport") =>
+  const backToList = (param: "openImport" | "openContacts") =>
     router.navigate({
       pathname: "/clients",
       params: { [param]: String(Date.now()) },
@@ -179,11 +187,40 @@ export default function ClientsSettingsScreen() {
             tile="#1F7A44"
             icon={MessageCircle}
             title="Способы связи"
-            sub={offeredChannels().filter((c) => channels.includes(c.id))
+            // Каналы перечисляем, поля — счётчиком: полный список обоих
+            // наборов в одну строку не влезает и читается как каша.
+            sub={`${offeredChannels()
+              .filter((c) => channels.includes(c.id))
               .map((c) => c.label)
-              .join(" · ")}
-            onPress={() => setChannelsOpen(true)}
+              .join(" · ")} · в карточку ${contactFields.length}`}
+            onPress={() => router.push("/clients/channels")}
           />
+
+          <Divider inset={56} />
+          <Row
+            tile="#2F6FD6"
+            icon={Navigation}
+            title="Карты для маршрута"
+            sub={mapServicesSummary(mapServices)}
+            onPress={() => router.push("/clients/maps")}
+          />
+        </SectionCard>
+
+        {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
+            («Вилла», «Дом»), метки, теги. Владелец 2026-08-02: «всё, что
+            можно делать в клиентах, потом редактировать и исправлять».
+            Экраны справочников общие с Кабинетом — заводить вторые не
+            нужно, нужен вход отсюда, из места, где ими пользуются. */}
+        <SectionEyebrow>Справочники</SectionEyebrow>
+        <SectionCard>
+          <Row
+            tile="#0E7C86"
+            icon={Home}
+            title="Типы объектов"
+            sub="Вилла, дом, квартира, офис"
+            onPress={() => router.push("/clients/object-types")}
+          />
+
           <Divider inset={56} />
           <Row
             tile="#8E44AD"
@@ -204,6 +241,22 @@ export default function ClientsSettingsScreen() {
 
         <SectionEyebrow>Данные</SectionEyebrow>
         <SectionCard>
+          {/* Контакты телефона — первый способ, а не второй: у малого
+              сервиса база лежит именно там, а CSV требует сначала где-то
+              собрать таблицу, то есть не сделать никогда. В сборке без
+              нативного модуля строки нет вовсе. */}
+          {CONTACTS_AVAILABLE ? (
+            <>
+              <Row
+                tile="#2F6FD6"
+                icon={Smartphone}
+                title="Из контактов телефона"
+                sub="Выбрать, кого добавить"
+                onPress={() => backToList("openContacts")}
+              />
+              <Divider inset={56} />
+            </>
+          ) : null}
           <Row
             tile="#2F6FD6"
             icon={Upload}
@@ -236,77 +289,6 @@ export default function ClientsSettingsScreen() {
         </SectionCard>
       </ScrollView>
 
-      {/* Какие каналы предлагать в мини-листе «Как связаться» на карточке.
-          «Позвонить» не отключается: без него кнопка теряет смысл. */}
-      <BottomSheet visible={channelsOpen} onClose={() => setChannelsOpen(false)}>
-        <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-          >
-            Способы связи
-          </Text>
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ marginTop: 2, fontSize: 13, color: t.faint }}
-          >
-            Что предлагать в карточке клиента
-          </Text>
-        </View>
-        <View style={{ paddingHorizontal: 20, paddingBottom: 28 }}>
-          <View
-            style={{
-              borderRadius: t.radius.card,
-              overflow: "hidden",
-              backgroundColor: t.rowFill,
-            }}
-          >
-            {offeredChannels().map((c, i) => {
-              const on = channels.includes(c.id);
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => {
-                    if (!c.optional) return;
-                    haptics.tap();
-                    toggleChannel.mutate(c.id);
-                  }}
-                  disabled={!c.optional}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: on, disabled: !c.optional }}
-                  accessibilityLabel={c.label}
-                  style={({ pressed }) => ({
-                    flexDirection: "row",
-                    alignItems: "center",
-                    minHeight: 48,
-                    paddingHorizontal: 16,
-                    borderTopWidth: i > 0 ? 1 : 0,
-                    borderTopColor: t.separator,
-                    backgroundColor: pressed ? t.rowFillPressed : "transparent",
-                  })}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    style={{
-                      flex: 1,
-                      fontSize: 15,
-                      fontWeight: "600",
-                      color: c.optional ? t.ink : t.faint,
-                    }}
-                  >
-                    {c.label}
-                    {c.optional ? "" : " · всегда"}
-                  </Text>
-                  {on ? (
-                    <Check color={t.accent} size={18} strokeWidth={2.6} />
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      </BottomSheet>
     </Screen>
   );
 }

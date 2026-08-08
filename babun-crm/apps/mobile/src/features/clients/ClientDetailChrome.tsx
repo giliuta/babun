@@ -1,5 +1,13 @@
 import { Keyboard, Pressable, Text, View } from "react-native";
-import { ChevronLeft, MoreHorizontal } from "lucide-react-native";
+import {
+  Archive,
+  Ban,
+  Bell,
+  ChevronLeft,
+  MoreHorizontal,
+  Share2,
+} from "lucide-react-native";
+import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useThemeColors } from "@/theme/colors";
 
 interface ClientDetailChromeProps {
@@ -91,71 +99,41 @@ export function ClientDetailChrome({
         )}
       </View>
 
-      {menuOpen ? (
-        <>
-          <Pressable
-            onPress={onCloseMenu}
-            className="absolute inset-0 z-10"
-            accessible={false}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          />
-          <View
-            className="absolute right-3 top-12 z-20 w-52 overflow-hidden rounded-[14px] shadow-lg"
-            style={{ backgroundColor: t.surface }}
-          >
-            {/* «Напомнить» уехало сюда с карточки (владелец 2026-07-26:
-                кнопки «Напомнить» на карточке быть не должно) — действие
-                редкое, но терять его нельзя. */}
-            <MenuItem label="Напомнить о клиенте" onPress={onRemind} />
-            <Divider />
-            <MenuItem label="Поделиться" onPress={onShare} />
-            <Divider />
-            <MenuItem
-              label={blacklisted ? "Убрать из чёрного списка" : "В чёрный список"}
-              onPress={onToggleBlacklist}
-              danger={!blacklisted}
-            />
-            <Divider />
-            <MenuItem label="Архивировать клиента" onPress={onArchive} danger />
-          </View>
-        </>
-      ) : null}
+      <PickerSheet
+        visible={menuOpen}
+        title="Клиент"
+        items={[
+          {
+            id: "remind",
+            label: "Напомнить",
+            icon: Bell,
+            color: t.accent,
+            onPress: onRemind,
+          },
+          {
+            id: "share",
+            label: "Поделиться",
+            icon: Share2,
+            color: t.accent,
+            onPress: onShare,
+          },
+          {
+            id: "blacklist",
+            label: blacklisted ? "Убрать из чёрного списка" : "В чёрный список",
+            icon: Ban,
+            color: blacklisted ? t.accent : t.danger,
+            onPress: onToggleBlacklist,
+          },
+          {
+            id: "archive",
+            label: "В архив",
+            icon: Archive,
+            color: t.danger,
+            onPress: onArchive,
+          },
+        ]}
+        onClose={onCloseMenu}
+      />
     </>
-  );
-}
-
-function Divider() {
-  const t = useThemeColors();
-  return <View className="h-px" style={{ backgroundColor: t.separator }} />;
-}
-
-function MenuItem({
-  label,
-  onPress,
-  disabled,
-  danger,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
-      className={`min-h-11 justify-center px-4 py-3 active:opacity-60 ${
-        disabled ? "opacity-40" : ""
-      }`}
-    >
-      <Text className="text-sm font-medium" style={{ color: danger ? t.danger : t.ink }}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }

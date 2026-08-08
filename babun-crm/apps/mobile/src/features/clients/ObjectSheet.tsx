@@ -11,7 +11,7 @@ import {
   RowActionButton,
   RowGroup,
 } from "@/features/clients/card-rows";
-import { useLocationWriter } from "@/features/clients/use-location-writer";
+import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   addressOrLinkPatch,
   objectTarget,
@@ -72,6 +72,7 @@ export function ObjectSheet({
   visible,
   client,
   update,
+  writer,
   initialTarget,
   onAdded,
   onClose,
@@ -80,6 +81,8 @@ export function ObjectSheet({
   client: Client;
   /** Единый persist-путь карточки: черновик — локально, клиент — PATCH. */
   update: (patch: Partial<Client>) => Promise<boolean>;
+  /** Писатель `locations` — общий с листом правки (см. ObjectEditSheet). */
+  writer: LocationWriter;
   /** Чем заполнить «Адрес или ссылка» при открытии. Экран записи открывает
    *  лист с уже набранным там адресом — перепечатывать его незачем. */
   initialTarget?: string;
@@ -97,7 +100,6 @@ export function ObjectSheet({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
-  const writer = useLocationWriter(client.locations ?? EMPTY_LOCATIONS, update);
   const { data: allClients = [] } = useClients();
   const { data: labelPresets = [] } = useLocationLabels();
 
@@ -157,8 +159,7 @@ export function ObjectSheet({
         address,
         mapUrl,
         note: draft.note.trim() || undefined,
-        equipment: [],
-      });
+        });
       if (!id) {
         // Причину показал useUpdateClient — набранное НЕ выбрасываем.
         haptics.error();
@@ -304,7 +305,7 @@ export function ObjectSheet({
             // настроек не может жить под нашим листом.
             onSettings={() => {
               close();
-              router.push("/cabinet/object-types");
+              router.push("/clients/object-types");
             }}
             onSelect={(v) =>
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))

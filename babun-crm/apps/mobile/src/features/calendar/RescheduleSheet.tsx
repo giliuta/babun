@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { AlertTriangle, X } from "lucide-react-native";
+import { AlertTriangle } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
@@ -127,7 +128,26 @@ export function RescheduleSheet({
           toast(`Перенесено: ${humanDay(date)}, ${timeStart}`, "success", {
             label: "Отменить",
             onPress: () =>
-              updateAppt.mutate({ id: appointment.id, patch: prev }),
+              updateAppt.mutate(
+                { id: appointment.id, patch: prev },
+                {
+                  onSuccess: () => {
+                    // Зеркало прямого пути: напоминания события снова целятся
+                    // в исходный слот (appointment и есть до-переносное
+                    // состояние), иначе до рефетча пуш стрелял бы по
+                    // отменённому времени.
+                    if (
+                      appointment.kind === "event" ||
+                      appointment.kind === "personal"
+                    ) {
+                      void syncEventAppointmentReminders(appointment, timeZone);
+                    }
+                  },
+                  // Без колбэка откат падал молча: options-level onError
+                  // хука гасит глобальный алерт MutationCache.
+                  onError: () => toast("Не удалось вернуть запись", "error"),
+                },
+              ),
           });
         },
         onError: () => toast("Не удалось перенести", "error"),
@@ -137,122 +157,101 @@ export function RescheduleSheet({
   };
 
   return (
-    <Modal
-      visible={appointment != null}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
-        <Pressable
-          className="flex-1"
-          onPress={onClose}
-          accessible={false}
-        />
+    <BottomSheet visible={appointment != null} onClose={onClose}>
+      {/* Тело скроллится, CTA прибит снизу: при AX-шрифтах inline-календарь
+          + строки не выталкивают «Перенести» за край листа. */}
+      <ScrollView bounces={false} style={{ flexShrink: 1 }}>
+        {/* header */}
         <View
-          className="overflow-hidden rounded-t-3xl"
-          style={{
-            backgroundColor: t.canvas,
-            paddingBottom: insets.bottom + 8,
-          }}
+          className="border-b px-4 pb-3 pt-1"
+          style={{ borderColor: t.separator }}
         >
-          {/* header */}
-          <View
-            className="flex-row items-center justify-between border-b px-4 py-3"
-            style={{ borderColor: t.separator }}
-          >
-            <View>
-              <Text className="text-[17px] font-semibold" style={{ color: t.ink }}>
-                Перенести запись
-              </Text>
-              {appointment ? (
-                <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }}>
-                  Сейчас: {humanDay(appointment.date)} ·{" "}
-                  {appointment.time_start}–{appointment.time_end}
-                </Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть"
-            >
-              <X color={t.faint} size={ICON.md} />
-            </Pressable>
-          </View>
+          <Text className="text-[17px] font-semibold" style={{ color: t.ink }}>
+            Перенести запись
+          </Text>
+          {appointment ? (
+            <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }}>
+              Сейчас: {humanDay(appointment.date)} ·{" "}
+              {appointment.time_start}–{appointment.time_end}
+            </Text>
+          ) : null}
+        </View>
 
-          {/* новая дата — inline-календарь */}
-          <View className="px-3">
+        {/* новая дата — inline-календарь */}
+        <View className="px-3">
+          <DateTimePicker
+            themeVariant="light"
+            value={date ? parseYMD(date) : new Date()}
+            mode="date"
+            display="inline"
+            locale="ru-RU"
+            accentColor={t.accent}
+            onChange={(_, d) => d && setDate(formatYMD(d))}
+          />
+        </View>
+
+        {/* новое время начала; конец пересчитывается сам */}
+        <View
+          className="mx-4 flex-row items-center justify-between border-t py-2"
+          style={{ borderColor: t.separator }}
+        >
+          <Text className="text-base" style={{ color: t.ink }}>
+            Время
+          </Text>
+          <View className="flex-row items-center">
+            {/* 5 мин — как на экране создания /book и в AppointmentSheet.
+                Раньше шаг колеса брался из «Шага сетки»
+                (30 мин), и запись, созданную на 11:35, физически нельзя было
+                перенести обратно на 11:35: две двери в одно время разной
+                ширины. */}
             <DateTimePicker
               themeVariant="light"
-              value={date ? parseYMD(date) : new Date()}
-              mode="date"
-              display="inline"
-              accentColor={t.accent}
-              onChange={(_, d) => d && setDate(formatYMD(d))}
+              value={timeStart ? parseHM(timeStart) : new Date()}
+              mode="time"
+              display="compact"
+              locale="ru-RU"
+              minuteInterval={5}
+              onChange={(_, d) => d && setTimeStart(formatHM(d))}
             />
-          </View>
-
-          {/* новое время начала; конец пересчитывается сам */}
-          <View
-            className="mx-4 flex-row items-center justify-between border-t py-2"
-            style={{ borderColor: t.separator }}
-          >
-            <Text className="text-base" style={{ color: t.ink }}>
-              Время
+            <Text className="pl-2 text-[13px] tabular-nums" style={{ color: t.faint }}>
+              до {timeEnd}
             </Text>
-            <View className="flex-row items-center">
-              {/* 5 мин — как на экране создания /book и в AppointmentSheet.
-                  Раньше шаг колеса брался из «Шага сетки»
-                  (30 мин), и запись, созданную на 11:35, физически нельзя было
-                  перенести обратно на 11:35: две двери в одно время разной
-                  ширины. */}
-              <DateTimePicker
-                themeVariant="light"
-                value={timeStart ? parseHM(timeStart) : new Date()}
-                mode="time"
-                display="compact"
-                minuteInterval={5}
-                onChange={(_, d) => d && setTimeStart(formatHM(d))}
-              />
-              <Text className="pl-2 text-[13px] tabular-nums" style={{ color: t.faint }}>
-                до {timeEnd}
-              </Text>
-            </View>
-          </View>
-          <Text className="px-4 pb-1 text-[12px]" style={{ color: t.faint }}>
-            Длительность сохраняется
-          </Text>
-
-          {/* пересечение — предупреждаем, не блокируем (web parity) */}
-          {warning ? (
-            <View
-              className="mx-4 mb-1 mt-1 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
-              style={{
-                backgroundColor: `${t.warning}14`,
-                borderColor: `${t.warning}33`,
-              }}
-            >
-              <AlertTriangle color={t.warning} size={ICON.sm} />
-              <Text
-                className="flex-1 text-[13px] font-medium"
-                style={{ color: t.warning }}
-              >
-                {warning}
-              </Text>
-            </View>
-          ) : null}
-
-          <View className="px-4 pt-2">
-            <Button
-              label="Перенести"
-              onPress={confirm}
-              disabled={unchanged || !date || !timeStart}
-            />
           </View>
         </View>
+        <Text className="px-4 pb-1 text-[12px]" style={{ color: t.faint }}>
+          Длительность сохраняется
+        </Text>
+
+        {/* пересечение — предупреждаем, не блокируем (web parity) */}
+        {warning ? (
+          <View
+            className="mx-4 mb-1 mt-1 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
+            style={{
+              backgroundColor: `${t.warning}14`,
+              borderColor: `${t.warning}33`,
+            }}
+          >
+            <AlertTriangle color={t.warning} size={ICON.sm} />
+            <Text
+              className="flex-1 text-[13px] font-medium"
+              style={{ color: t.warning }}
+            >
+              {warning}
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View
+        className="px-4 pt-2"
+        style={{ paddingBottom: insets.bottom + 8 }}
+      >
+        <Button
+          label="Перенести"
+          onPress={confirm}
+          disabled={unchanged || !date || !timeStart}
+        />
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }

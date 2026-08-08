@@ -36,6 +36,9 @@ const ALLOWED_MIME_TYPES = new Set([
 export interface ClientAttachment {
   id: string;
   client_id: string;
+  /** Запись, на которой файл приложили. null — заведён на карточке клиента
+   *  (или его запись удалена: файл переживает отмену визита). */
+  appointment_id: string | null;
   storage_path: string;
   filename: string;
   mime_type: string;
@@ -105,7 +108,7 @@ async function listAttachments(args: {
   const { data, error } = await supabase
     .from("client_attachments")
     .select(
-      "id, client_id, storage_path, filename, mime_type, size_bytes, created_at",
+      "id, client_id, appointment_id, storage_path, filename, mime_type, size_bytes, created_at",
     )
     .eq("tenant_id", args.tenantId)
     .eq("client_id", args.clientId)
@@ -118,8 +121,11 @@ async function uploadAttachment(args: {
   tenantId: string;
   clientId: string;
   file: PickedFile;
+  /** Файл, приложенный НА ЗАПИСИ, помнит её: страница вложений клиента
+   *  показывает такие отдельной группой «Из записей». */
+  appointmentId?: string | null;
 }): Promise<ClientAttachment> {
-  const { tenantId, clientId, file } = args;
+  const { tenantId, clientId, file, appointmentId } = args;
 
   // Read the local asset into bytes first — also gives us the real size
   // when the picker didn't report one.
@@ -149,13 +155,14 @@ async function uploadAttachment(args: {
       id,
       tenant_id: tenantId,
       client_id: clientId,
+      appointment_id: appointmentId ?? null,
       storage_path: path,
       filename: name,
       mime_type: mime,
       size_bytes: size,
     })
     .select(
-      "id, client_id, storage_path, filename, mime_type, size_bytes, created_at",
+      "id, client_id, appointment_id, storage_path, filename, mime_type, size_bytes, created_at",
     )
     .single();
   if (insertErr) throw new AttachmentError(`insert: ${insertErr.message}`);
@@ -262,14 +269,18 @@ export function useClientAttachments(clientId: string) {
   });
 }
 
-export function useUploadAttachments(clientId: string) {
+export function useUploadAttachments(
+  clientId: string,
+  /** Прикладываем В ЗАПИСИ — файл запомнит визит (экран записи). */
+  appointmentId?: string | null,
+) {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (files: PickedFile[]) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       for (const file of files) {
-        await uploadAttachment({ tenantId, clientId, file });
+        await uploadAttachment({ tenantId, clientId, file, appointmentId });
       }
       return files.length;
     },

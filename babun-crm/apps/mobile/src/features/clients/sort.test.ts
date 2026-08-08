@@ -18,6 +18,9 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     totalSpent: 0,
     lastVisitDate: "",
     lastVisitDays: null,
+    medianGapDays: null,
+    serviceDue: 0,
+    unclosedVisits: 0,
     nextApt: null,
     nextAptDays: null,
     debt: 0,
@@ -65,18 +68,19 @@ describe("sortClients", () => {
     ]);
   });
 
-  test("«Самый большой долг»: считает и отрицательный баланс карточки", () => {
+  test("«Самый большой долг»: считает ТОЛЬКО недоплату по визитам", () => {
+    // Легаси-колонка `balance` больше не долг (владелец 2026-08-07): её никто
+    // не считает и не даёт править, а она поднимала наверх списка человека,
+    // которому не сделали ни одной работы.
     const list = [
       client("без-долга"),
       client("баланс-минус", { balance: -300 }),
       client("долг-по-визитам"),
     ];
     const map = new Map([["долг-по-визитам", stats({ debt: 100 })]]);
-    assert.deepEqual(ids(sortClients(list, map, "debt")), [
-      "баланс-минус",
-      "долг-по-визитам",
-      "без-долга",
-    ]);
+    const sorted = ids(sortClients(list, map, "debt"));
+    assert.equal(sorted[0], "долг-по-визитам");
+    assert.equal(sorted.includes("баланс-минус"), true);
   });
 
   test("закреплённые сверху, внутри — тот же компаратор", () => {

@@ -7,7 +7,7 @@
 // renders the page as ONE STACK OF ROWS (ЗАКОН СТРОКИ, DESIGN-SYSTEM.md):
 //
 //   ClientHeader (имя · телефон · доп. номера) · «Записать»
-//   · «Обслуживание» · Объекты · Визиты и деньги · Вложения
+//   · Объекты · Заметки и документация · Личное
 //   · Мессенджеры · Личное · О клиенте · Заметки
 //
 // СОЗДАНИЕ = ЭТА ЖЕ СТРАНИЦА (решение владельца 2026-07-13, уточнено
@@ -22,7 +22,7 @@
 // клиента открывается чётко вся страница, как будет выглядеть в будущем»).
 // Каждое поле этих блоков проходит белый список create_client_with_tags,
 // то есть пишет в тот же объект, который уедет в базу по «Готово».
-// Единственное исключение — «Вложения»: путь в хранилище строится по id
+// Единственное исключение — «Документация»: путь в хранилище строится по id
 // клиента, которого ещё нет. Действия, которым нужен реальный id
 // («Записать»), не спрятаны, а пригашены с подписью-причиной.
 //
@@ -48,9 +48,6 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
-import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
-import { ymdInDays } from "@/features/clients/format";
-import { chooseValue } from "@/lib/choose";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -68,10 +65,11 @@ import { useServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
+import { RemindSheet } from "@/features/clients/RemindSheet";
 import { ClientDraftNotice } from "@/features/clients/ClientDraftNotice";
+import { DuplicateNotice } from "@/features/clients/DuplicateNotice";
 import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import { useClientDraft } from "@/features/clients/useClientDraft";
-import ServiceBlock from "@/features/clients/blocks/ServiceBlock";
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
@@ -120,6 +118,7 @@ export default function ClientDetailScreen() {
     refetch: retryServices,
   } = servicesQuery;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [remindOpen, setRemindOpen] = useState(false);
   const {
     draft,
     updateDraft,
@@ -159,10 +158,6 @@ export default function ClientDetailScreen() {
   const stats = useMemo(
     () => (c ? buildStats(c, appointments) : undefined),
     [c, appointments],
-  );
-  const serviceDue = useMemo(
-    () => buildServiceDue(c ?? { locations: [] }),
-    [c],
   );
 
   // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
@@ -282,22 +277,12 @@ export default function ClientDetailScreen() {
   }
 
   // «Напомнить» живёт в меню ⋯ (с карточки кнопка убрана владельцем
-  // 2026-07-26). Те же пресеты, что были у кнопки: 1 / 7 / 30 дней.
-  const onRemind = async () => {
+  // 2026-07-26) и открывает ТОТ ЖЕ лист, что long-press в списке.
+  // Паузу «второй лист ждёт, пока уедет первый» держит сам PickerSheet:
+  // своего таймера здесь больше нет, иначе ожидание удваивается.
+  const onRemind = () => {
     setMenuOpen(false);
-    const picked = await chooseValue<number | null>(
-      "Напомнить о клиенте",
-      [
-        { value: 1, label: "Завтра" },
-        { value: 7, label: "Через неделю" },
-        { value: 30, label: "Через месяц" },
-      ],
-      c.reminder_at ? { clearLabel: "Убрать напоминание" } : undefined,
-    );
-    if (!picked) return;
-    update({
-      reminder_at: picked.value === null ? null : ymdInDays(picked.value),
-    });
+    setRemindOpen(true);
   };
 
   const onShare = async () => {
@@ -325,20 +310,7 @@ export default function ClientDetailScreen() {
   // появиться раньше, чем откроется страница. Гейт тот же, что у «Готово»
   // (имя + телефон). ДОБАВЛЕНИЕ этого шага больше не требует: оно живёт в
   // листе снизу и пишет объект в тот же черновик.
-  const openObject = async (locId: string) => {
-    const go = (ownerId: string) =>
-      router.push({
-        pathname: "/clients/object",
-        params: { clientId: ownerId, locId },
-      });
-    if (!isDraft) {
-      go(id);
-      return;
-    }
-    const createdId = await saveDraft();
-    if (createdId) go(createdId);
-  };
-
+  
   const onBack = () => {
     if (!isDraftDirty) {
       router.back();
@@ -445,6 +417,18 @@ export default function ClientDetailScreen() {
           client={c}
           stats={stats}
           update={update}
+          // Сводка под номером = вход в историю записей. Записей нет — вести
+          // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
+          onOpenHistory={
+            !isDraft && appointments.length > 0
+              ? () => {
+                  router.push({
+                    pathname: "/clients/visits",
+                    params: { clientId: id },
+                  });
+                }
+              : undefined
+          }
           draft={
             isDraft
               ? {
@@ -471,26 +455,36 @@ export default function ClientDetailScreen() {
             видеть страницу целиком, а мёртвого тапа быть не должно.
             «Обслуживание» гейта не требует: блок сам возвращает null, пока у
             клиента нет техники с датами ТО, и сети не касается. */}
-        <ClientContactRow client={c} stats={stats} draft={isDraft} />
-        <ServiceBlock client={c} stats={stats} serviceDue={serviceDue} />
+        {/* Дубли ищутся не только при создании: карточка живёт годами, а
+            второй «тот же человек» заводится позже — импортом или звонком с
+            другого номера. */}
+        {!isDraft ? <DuplicateNotice client={c} /> : null}
+
+        <ClientContactRow
+          client={c}
+          stats={stats}
+          draft={isDraft}
+          update={update}
+        />
 
         <ClientProfileBlocks
           key={`blocks-${id}`}
           client={c}
-          draft={isDraft}
           appointments={appointments}
-          services={services}
+          draft={isDraft}
           tags={tags}
-          stats={stats}
           update={update}
-          onOpenObject={openObject}
-          onOpenExtras={() =>
-            router.push({ pathname: "/clients/extras", params: { clientId: id } })
-          }
         />
       </ScrollView>
       </KeyboardAvoidingView>
 
+      <RemindSheet
+        visible={remindOpen}
+        clientName={c.full_name}
+        hasReminder={!!c.reminder_at}
+        onPick={(reminder_at) => update({ reminder_at })}
+        onClose={() => setRemindOpen(false)}
+      />
     </Screen>
     </>
   );

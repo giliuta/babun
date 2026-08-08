@@ -2222,6 +2222,7 @@ export function AppointmentSheet({
             {isEdit && kind === "work" && appointment ? (
               <AppointmentPhotos
                 appointmentId={appointment.id}
+                clientId={appointment.client_id}
                 locationId={appointment.location_id}
                 consentGiven={appointment.consent_given}
                 canUpload={status !== "cancelled"}

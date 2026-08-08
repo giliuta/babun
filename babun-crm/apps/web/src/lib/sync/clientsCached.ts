@@ -383,6 +383,7 @@ function makeOptimisticRow(
     first_contact_date: input.first_contact_date ?? null,
     address: input.address ?? "",
     city: input.city ?? "",
+    city_manual: input.city_manual ?? false,
     property_type: input.property_type ?? "",
     language: input.language ?? null,
     birthday: input.birthday ?? "",

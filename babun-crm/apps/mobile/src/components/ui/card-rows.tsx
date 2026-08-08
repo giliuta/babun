@@ -74,6 +74,7 @@ export function FieldRow({
   placeholder,
   separated,
   keyboardType,
+  autoCapitalize,
   autoFocus,
   live,
   multiline,
@@ -81,10 +82,12 @@ export function FieldRow({
   tabular,
   big,
   stacked,
+  hideLabel,
   trailing,
   onLabelPress,
   addLabel,
   onEditEnd,
+  onType,
   onSave,
 }: {
   label: string;
@@ -92,6 +95,9 @@ export function FieldRow({
   placeholder: string;
   separated?: boolean;
   keyboardType?: "phone-pad" | "email-address" | "url" | "default";
+  /** «none» для @username и почты: клавиатура иначе пишет «@Artem_test» с
+   *  заглавной, и в данных остаётся искажённый логин. */
+  autoCapitalize?: "none" | "sentences" | "words";
   autoFocus?: boolean;
   live?: boolean;
   multiline?: boolean;
@@ -99,6 +105,11 @@ export function FieldRow({
   tabular?: boolean;
   /** Значение крупнее — для имени и телефона (они и есть личность). */
   big?: boolean;
+  /** Ярлык НЕ РИСУЕТСЯ над значением (владелец 2026-08-06: «и так понятно,
+   *  что это телефон — капсом сверху туповато»). Значение при этом остаётся
+   *  подписанным для VoiceOver, а видимая подпись, если она нужна, живёт в
+   *  хвосте строки — там, где различают номера. */
+  hideLabel?: boolean;
   /** Ярлык СВЕРХУ мелким капсом, значение под ним и ПО ЛЕВОМУ краю.
    *  Так набирают текст: у правого выравнивания курсор стоит у кромки, а
    *  строка растёт влево — печатать в такое поле физически неудобно
@@ -115,6 +126,10 @@ export function FieldRow({
   /** Правка завершена (blur / Return / уход строки). Вызывающая сторона
    *  использует это, чтобы снять своё локальное состояние. */
   onEditEnd?: () => void;
+  /** Каждый символ — БЕЗ записи в базу (в отличие от `live`). Нужен строкам,
+   *  у которых хвост зависит от набранного: значок «открыть Telegram» обязан
+   *  появиться, пока логин печатают, а не после ухода со строки. */
+  onType?: (v: string) => void;
   onSave: (v: string) => void;
 }) {
   const t = useThemeColors();
@@ -186,56 +201,75 @@ export function FieldRow({
           // войти в поле — клиента становится нельзя создать вслепую.
           accessible={!editingNow}
           accessibilityRole={editingNow ? "none" : "button"}
-          accessibilityLabel={value ? `${label}: ${value}` : label}
+          // Запятая, а не двоеточие: VoiceOver даёт паузу, и строка читается
+          // «Мобильный, +357 …», а не как «поле: значение».
+          accessibilityLabel={value ? `${label}, ${value}` : label}
           accessibilityHint={editingNow ? undefined : "Нажмите, чтобы изменить"}
+          // Смена подписи вложена в строку и потому недоступна VoiceOver:
+          // отдаём её действием ротора, не разбивая строку на две остановки.
+          accessibilityActions={
+            onLabelPress ? [{ name: "relabel", label: "Изменить подпись" }] : undefined
+          }
+          onAccessibilityAction={(e) => {
+            if (e.nativeEvent.actionName === "relabel") onLabelPress?.();
+          }}
           style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
         >
-          {/* Ярлык бывает редактируемым (подпись доп. номера: «Второй»,
-              «Супруг(а)») — тогда он нажимается и здесь, иначе перевод
-              строки на левое выравнивание отобрал бы смену подписи. */}
-          {onLabelPress ? (
-            <Pressable
-              onPress={onLabelPress}
-              accessibilityRole="button"
-              accessibilityLabel={`Подпись номера: ${label}`}
-              accessibilityHint="Нажмите, чтобы изменить подпись"
-              hitSlop={{ top: 8, bottom: 4, left: 8, right: 8 }}
-              style={({ pressed }) => ({
-                alignSelf: "flex-start",
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
+          {/* Ярлык бывает редактируемым (подпись доп. номера: «Мобильный»,
+              «Рабочий») — тогда он нажимается и здесь, иначе перевод строки
+              на левое выравнивание отобрал бы смену подписи.
+
+              ВЫГЛЯДИТ ОН ПРИ ЭТОМ ОДИНАКОВО с обычным (владелец 2026-08-02:
+              «второй номер должен соответствовать первому — всё стандартное,
+              одного размера»). Синий ярлык делал строку доп. номера громче
+              основного телефона, хотя это тот же номер того же клиента. */}
+          {hideLabel ? null : (() => {
+            // ПОДПИСЬ СТРОКИ — ПОЯСНЕНИЕ, А НЕ ЗАГОЛОВОК (владелец 2026-08-06:
+            // «сверху написано „телефон", потом „мобильный" — туповато»).
+            //
+            // Была ровно та же типографика, что у заголовка ГРУППЫ (11/700
+            // капс, полный ink) — и четыре номера подряд читались как четыре
+            // заголовка разделов: карточка человека выглядела анкетой. Теперь
+            // подпись КРУПНЕЕ (13), но тише: обычный регистр, приглушённые
+            // чернила. Капс в продукте после этого значит ровно одно —
+            // «начало группы».
+            //
+            // Это уточнение LOCKED-правила 2026-07-27: полный ink остаётся
+            // за ИМЕНЕМ ПОЛЯ (заголовки групп), а тип значения («Мобильный»,
+            // «Рабочий») — пояснение, и приглушается размером и альфой, а не
+            // серым пигментом (t.sub — те же чернила на 74%).
+            const labelNode = (
               <Text
                 maxFontSizeMultiplier={1.2}
                 numberOfLines={1}
                 style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  letterSpacing: 1.2,
-                  textTransform: "uppercase",
-                  color: t.accent,
+                  fontSize: 13,
+                  fontWeight: "500",
+                  color: t.sub,
                   marginBottom: 2,
                 }}
               >
                 {label}
               </Text>
-            </Pressable>
-          ) : (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                letterSpacing: 1.2,
-                textTransform: "uppercase",
-                color: t.ink,
-                marginBottom: 2,
-              }}
-            >
-              {label}
-            </Text>
-          )}
+            );
+            return onLabelPress ? (
+              <Pressable
+                onPress={onLabelPress}
+                accessibilityRole="button"
+                accessibilityLabel={`Подпись номера: ${label}`}
+                accessibilityHint="Нажмите, чтобы изменить подпись"
+                hitSlop={{ top: 8, bottom: 4, left: 8, right: 8 }}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                {labelNode}
+              </Pressable>
+            ) : (
+              labelNode
+            );
+          })()}
           {editingNow ? (
             <TextInput
               autoFocus={autoFocus ?? editing}
@@ -243,6 +277,7 @@ export function FieldRow({
               onChangeText={(raw) => {
                 const v = clean(raw);
                 setText(v);
+                onType?.(v);
                 if (live) onSave(v);
               }}
               onBlur={commit}
@@ -258,6 +293,8 @@ export function FieldRow({
               selectionColor={t.accent}
               keyboardAppearance="light"
               keyboardType={keyboardType}
+              autoCapitalize={autoCapitalize}
+              autoCorrect={autoCapitalize === "none" ? false : undefined}
               multiline={multiline}
               accessibilityLabel={label}
               maxFontSizeMultiplier={1.2}
@@ -341,6 +378,7 @@ export function FieldRow({
             onChangeText={(raw) => {
               const v = clean(raw);
               setText(v);
+              onType?.(v);
               if (live) onSave(v);
             }}
             onBlur={commit}
@@ -351,6 +389,8 @@ export function FieldRow({
             selectionColor={t.accent}
             keyboardAppearance="light"
             keyboardType={keyboardType}
+            autoCapitalize={autoCapitalize}
+            autoCorrect={autoCapitalize === "none" ? false : undefined}
             multiline={multiline}
             accessibilityLabel={label}
             maxFontSizeMultiplier={1.2}
@@ -415,14 +455,18 @@ export function NavRow({
   separated?: boolean;
   loud?: boolean;
   dimmed?: boolean;
-  onPress: () => void;
+  /** Без обработчика строка становится ПОКАЗАНИЕМ, а не дверью: тот же ритм
+   *  и типографика, но без шеврона, нажатия и роли кнопки (лента истории
+   *  печатает так заметки — внутрь них проваливаться некуда). */
+  onPress?: () => void;
 }) {
   const t = useThemeColors();
   const shown = value || placeholder || "";
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={shown ? `${label}: ${shown}` : label}
       style={({ pressed }) => ({
         flexDirection: "row",
@@ -474,11 +518,13 @@ export function NavRow({
           </Text>
         ) : null}
       </View>
-      <ChevronRight
-        color={loud ? t.onAccent : t.chevron}
-        size={17}
-        strokeWidth={2.2}
-      />
+      {onPress ? (
+        <ChevronRight
+          color={loud ? t.onAccent : t.chevron}
+          size={17}
+          strokeWidth={2.2}
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -494,12 +540,15 @@ export function RowActionButton({
   color,
   label,
   hint,
+  size = 32,
   onPress,
 }: {
   icon: LucideIcon;
   color: string;
   label: string;
   hint?: string;
+  /** Диаметр кружка. 32 — хвост строки, 44 — строка списка клиентов. */
+  size?: number;
   onPress: () => void;
 }) {
   return (
@@ -510,8 +559,8 @@ export function RowActionButton({
       accessibilityHint={hint}
       hitSlop={8}
       style={({ pressed }) => ({
-        width: 32,
-        height: 32,
+        width: size,
+        height: size,
         // Круг: w === h. Круг не может стать прямоугольником — это
         // геометрическое исключение из закона одного радиуса.
         borderRadius: 999,
@@ -521,7 +570,7 @@ export function RowActionButton({
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Icon color={color} size={16} strokeWidth={2.2} />
+      <Icon color={color} size={size >= 40 ? 18 : 16} strokeWidth={2.2} />
     </Pressable>
   );
 }

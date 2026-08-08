@@ -3,8 +3,13 @@ import { describe, test } from "node:test";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
+  BIRTHDAY_DAYS,
+  LOYAL_VISITS,
   matchesSegment,
   NEW_DAYS,
+  OUTREACH_SEGMENTS,
+  SEGMENT_RULES,
+  segmentEvidence,
   SEGMENT_BLOCKS,
   SEGMENT_OPTIONS,
   sortClients,
@@ -24,6 +29,9 @@ function stats(patch: Partial<ClientStats> = {}): ClientStats {
     totalSpent: 0,
     lastVisitDate: "",
     lastVisitDays: null,
+    medianGapDays: null,
+    serviceDue: 0,
+    unclosedVisits: 0,
     nextApt: null,
     nextAptDays: null,
     debt: 0,
@@ -53,10 +61,17 @@ describe("matchesSegment — денежные «дела»", () => {
       matchesSegment(client(), "debtNoUpcoming", booked, TODAY),
       false,
     );
-    // Долг с минусового баланса тоже считается — как в карточке.
+    // ДОЛГ РОЖДАЕТСЯ ТОЛЬКО ИЗ ВИЗИТА (владелец 2026-08-07: «как может
+    // образоваться долг и не быть записи?»). Минусовой `balance` — легаси-
+    // колонка, которую продукт не считает и не даёт править: раньше она
+    // печаталась как долг у человека без единой работы. Теперь не считается.
     assert.equal(
       matchesSegment(client({ balance: -50 }), "debtNoUpcoming", stats(), TODAY),
-      true,
+      false,
+    );
+    assert.equal(
+      matchesSegment(client({ balance: -50 }), "debt", stats(), TODAY),
+      false,
     );
   });
 
@@ -122,5 +137,138 @@ describe("ось «Ожидается»", () => {
       sortClients(list, map, "expected").map((c) => c.id),
       ["много", "мало", "нет"],
     );
+  });
+});
+
+describe("статусы после разбора 2026-08-07", () => {
+  test("ритм зажат снизу и сверху: «раз в 1 день» не делает пропавшим за двое суток", () => {
+    // Два выезда подряд дают медиану 1 — но тревожить раньше 28 дней нельзя.
+    const daily = stats({ visits: 6, medianGapDays: 1, lastVisitDays: 10 });
+    assert.equal(matchesSegment(client(), "silent", daily, TODAY), false);
+    const daily29 = stats({ visits: 6, medianGapDays: 1, lastVisitDays: 29 });
+    assert.equal(matchesSegment(client(), "silent", daily29, TODAY), true);
+    // Годовой интервал зажимается полугодом: ждать два года бессмысленно.
+    const yearly = stats({ visits: 3, medianGapDays: 365, lastVisitDays: 361 });
+    assert.equal(matchesSegment(client(), "silent", yearly, TODAY), true);
+  });
+
+  test("правило чёрного списка НЕ зависит от раскладки блоков", () => {
+    // Раньше вычитание висело на SEGMENT_BLOCKS[0] — перестановка ряда
+    // между блоками ради вёрстки молча меняла отбор.
+    for (const key of OUTREACH_SEGMENTS) {
+      assert.ok(
+        SEGMENT_OPTIONS.some((o) => o.key === key),
+        `${key} нет среди статусов`,
+      );
+    }
+    assert.equal(OUTREACH_SEGMENTS.includes("blacklist"), false);
+    assert.equal(OUTREACH_SEGMENTS.includes("loyal"), false);
+  });
+
+  test("улика второго статуса не гаснет из-за первого", () => {
+    // «Должники» идут в каноническом порядке раньше «Пропали» и своей
+    // улики не имеют (сумма и так в строке) — но пояснение второго
+    // выбранного статуса обязано доехать.
+    const s = stats({
+      debt: 100,
+      visits: 4,
+      medianGapDays: 30,
+      lastVisitDays: 87,
+      lastVisitDate: "2026-04-30",
+    });
+    assert.equal(
+      segmentEvidence(client(), ["debt", "silent"], s, TODAY),
+      "не был 87 дн. · обычно раз в 30 дн.",
+    );
+  });
+
+  test("склонения в улике считают по-русски", () => {
+    assert.equal(
+      segmentEvidence(client(), ["loyal"], stats({ visits: 22 }), TODAY),
+      "22 визита",
+    );
+    assert.equal(
+      segmentEvidence(client(), ["unclosed"], stats({ unclosedVisits: 5 }), TODAY),
+      "5 визитов не закрыто",
+    );
+  });
+
+  test("«Пропали» считает ЛИЧНЫЙ ритм, а не общий порог", () => {
+    // Ездит раз в месяц, не был 70 дней → пропал (порог 30×2).
+    const monthly = stats({
+      visits: 4,
+      medianGapDays: 30,
+      lastVisitDays: 70,
+      lastVisitDate: "2026-05-17",
+    });
+    assert.equal(matchesSegment(client(), "silent", monthly, TODAY), true);
+    // Ездит раз в полгода, не был 70 дней → это норма, звонить рано.
+    const halfYear = stats({
+      visits: 3,
+      medianGapDays: 180,
+      lastVisitDays: 70,
+      lastVisitDate: "2026-05-17",
+    });
+    assert.equal(matchesSegment(client(), "silent", halfYear, TODAY), false);
+  });
+
+  test("записанный вперёд не попадает в «Пропали»", () => {
+    const s = stats({
+      visits: 4,
+      medianGapDays: 30,
+      lastVisitDays: 200,
+      lastVisitDate: "2026-01-07",
+      nextApt: { date: "2026-08-01", time: "10:00" },
+    });
+    assert.equal(matchesSegment(client(), "silent", s, TODAY), false);
+  });
+
+  test("чёрный список вычитается из поводов связаться, но виден собой", () => {
+    const banned = client({ blacklisted: true });
+    const s = stats({ debt: 100, visits: 1 });
+    assert.equal(matchesSegment(banned, "debt", s, TODAY), false);
+    assert.equal(matchesSegment(banned, "birthday", stats({ birthdayInDays: 2 }), TODAY), false);
+    assert.equal(matchesSegment(banned, "blacklist", s, TODAY), true);
+  });
+
+  test("незакрытая прошедшая запись видна отдельным статусом", () => {
+    const s = stats({ unclosedVisits: 2 });
+    assert.equal(matchesSegment(client(), "unclosed", s, TODAY), true);
+    assert.equal(matchesSegment(client(), "unclosed", stats(), TODAY), false);
+  });
+
+  test("«Записаны вперёд» — единственный положительный ряд", () => {
+    const s = stats({ nextApt: { date: "2026-08-01", time: "10:00" } });
+    assert.equal(matchesSegment(client(), "booked", s, TODAY), true);
+    assert.equal(matchesSegment(client(), "booked", stats(), TODAY), false);
+  });
+
+  test("у каждого статуса есть правило, и цифры в нём настоящие", () => {
+    for (const o of SEGMENT_OPTIONS) {
+      const rule = SEGMENT_RULES[o.key];
+      assert.ok(rule && rule.length > 0, `нет правила у ${o.key}`);
+    }
+    assert.match(SEGMENT_RULES.loyal, new RegExp(String(LOYAL_VISITS)));
+    assert.match(SEGMENT_RULES.birthday, new RegExp(String(BIRTHDAY_DAYS)));
+  });
+
+  test("улика объясняет КАЖДУЮ строку выбранного статуса", () => {
+    const s = stats({
+      visits: 4,
+      medianGapDays: 30,
+      lastVisitDays: 87,
+      lastVisitDate: "2026-04-30",
+    });
+    assert.equal(
+      segmentEvidence(client(), ["silent"], s, TODAY),
+      "не был 87 дн. · обычно раз в 30 дн.",
+    );
+    // Долг уже напечатан в строке — второй раз не повторяем.
+    assert.equal(
+      segmentEvidence(client(), ["debt"], stats({ debt: 100, visits: 1 }), TODAY),
+      null,
+    );
+    // Без выбранного статуса улике неоткуда взяться.
+    assert.equal(segmentEvidence(client(), [], s, TODAY), null);
   });
 });

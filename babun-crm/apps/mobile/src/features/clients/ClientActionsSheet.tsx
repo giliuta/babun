@@ -1,31 +1,32 @@
-// ClientActionsSheet — мини-меню клиента по long-press в списке (замена
-// системного Alert: web v313 ContextMenu parity, но в мобильном диалекте —
-// нижний лист, как пикеры по всему приложению). Иконка + подпись на
-// строку, деструктив красным, «Отмена» отдельной кнопкой.
-
-import { Linking, Modal, Pressable, Text, View } from "react-native";
-import {
-  Bell,
-  Archive,
-  Check,
-  MessageCircle,
-  MessageSquare,
-  Phone,
-  Pin,
-} from "lucide-react-native";
+import { Archive, Bell, CalendarPlus, Check, Pin } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import {
-  smsUrl,
-  telUrl,
-  whatsappUrl,
-} from "@babun/shared/common/utils/messenger-links";
+import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
+import { useLastNonNull } from "@/lib/use-last-non-null";
 import { useThemeColors } from "@/theme/colors";
-import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
+
+// МЕНЮ КЛИЕНТА по long-press в списке.
+//
+// СВЯЗИ ЗДЕСЬ НЕТ (2026-08-06). Раньше первыми тремя строками стояли
+// «Позвонить · Сообщение · WhatsApp» — те же действия, что в зелёной кнопке
+// строки и на обоих свайпах: четыре дороги к одному глаголу. Хуже, эти три
+// строки НЕ читали настройку «Способы связи»: тенант, выключивший SMS, всё
+// равно её здесь получал, а Telegram и Viber не появлялись никогда. Связь
+// живёт ровно в одном месте — в кнопке у номера, которая уважает и набор, и
+// порядок каналов.
+//
+// Осталось то, чего в кнопке нет: записать, отложить, пометить, убрать.
+// «Записать» и «Напомнить» продублированы свайпами (вправо/влево) — жест
+// быстрее, лист обнаруживаемее, и по закону продукта у действия должна быть
+// видимая дорога, а не только жест.
+//
+// Сам лист — канонический `PickerSheet`: был самописный `Modal
+// animationType="slide"`, что DS запрещает дословно.
 
 interface ClientActionsSheetProps {
   /** null → лист закрыт. */
   client: Client | null;
   onClose: () => void;
+  onBook: (c: Client) => void;
   onSelectMany: (c: Client) => void;
   onTogglePin: (c: Client) => void;
   onRemind: (c: Client) => void;
@@ -35,139 +36,67 @@ interface ClientActionsSheetProps {
 export function ClientActionsSheet({
   client,
   onClose,
+  onBook,
   onSelectMany,
   onTogglePin,
   onRemind,
   onArchive,
 }: ClientActionsSheetProps) {
   const t = useThemeColors();
-  if (!client) return null;
+  // Держим последнего клиента, пока лист уезжает: ранний `return null` на
+  // закрытии размонтировал лист в том же кадре, и вся выездная анимация
+  // BottomSheet не проигрывалась — панель просто исчезала.
+  const shown = useLastNonNull(client);
+  if (!shown) return null;
 
-  const digits = client.phone?.replace(/\D/g, "") ?? "";
-  const wa = whatsappUrl(client.whatsapp_phone || client.phone);
-  const pinned = Boolean(client.pinned_at);
-
-  const run = (fn: () => void) => () => {
-    onClose();
-    fn();
-  };
-
-  const Row = ({
-    icon,
-    label,
-    danger,
-    onPress,
-  }: {
-    icon: React.ReactNode;
-    label: string;
-    danger?: boolean;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="min-h-[52px] flex-row items-center gap-3 px-5 active:opacity-60"
-    >
-      <View
-        className="h-8 w-8 items-center justify-center rounded-full"
-        style={{ backgroundColor: danger ? `${t.danger}14` : t.fill }}
-      >
-        {icon}
-      </View>
-      <Text
-        className="flex-1 text-[15px] font-medium"
-        style={{ color: danger ? t.danger : t.ink }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
+  const pinned = Boolean(shown.pinned_at);
+  const c = shown;
+  const items: PickerSheetItem[] = [
+    {
+      id: "book",
+      label: "Записать",
+      icon: CalendarPlus,
+      color: t.accent,
+      onPress: () => onBook(c),
+    },
+    {
+      id: "remind",
+      label: "Напомнить",
+      icon: Bell,
+      color: t.warning,
+      onPress: () => onRemind(c),
+    },
+    {
+      id: "pin",
+      label: pinned ? "Открепить" : "Закрепить",
+      icon: Pin,
+      color: t.accent,
+      onPress: () => onTogglePin(c),
+    },
+    {
+      id: "select",
+      label: "Выбрать несколько",
+      icon: Check,
+      color: t.accent,
+      onPress: () => onSelectMany(c),
+    },
+    {
+      id: "archive",
+      label: "В архив",
+      icon: Archive,
+      color: t.danger,
+      onPress: () => onArchive(c),
+    },
+  ];
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable
-        className="flex-1"
-        style={{ backgroundColor: t.scrim }}
-        onPress={onClose}
-        accessible={false}
-        accessibilityRole="button"
-        accessibilityLabel="Закрыть меню"
-      />
-      <View
-        className="rounded-t-3xl pb-8 pt-3"
-        style={{ backgroundColor: t.surface }}
-      >
-        <Text
-          className="px-5 pb-2 text-base font-semibold"
-          style={{ color: t.ink }}
-          numberOfLines={1}
-        >
-          {client.full_name || client.phone || "Клиент"}
-        </Text>
-
-        {digits ? (
-          <>
-            <Row
-              icon={<Phone color={t.accent} size={16} />}
-              label="Позвонить"
-              onPress={run(() => Linking.openURL(telUrl(client.phone) ?? ""))}
-            />
-            <Row
-              icon={<MessageSquare color={t.accent} size={16} />}
-              label="Сообщение"
-              onPress={run(() => Linking.openURL(smsUrl(client.phone) ?? ""))}
-            />
-          </>
-        ) : null}
-        {wa ? (
-          <Row
-            icon={
-              <MessageCircle color={MOBILE_CHANNEL_COLORS.whatsapp} size={16} />
-            }
-            label="WhatsApp"
-            onPress={run(() => Linking.openURL(wa))}
-          />
-        ) : null}
-        <Row
-          icon={<Check color={t.body} size={16} />}
-          label="Выбрать несколько"
-          onPress={run(() => onSelectMany(client))}
-        />
-        <Row
-          icon={<Pin color={t.accent} size={16} />}
-          label={pinned ? "Открепить" : "Закрепить"}
-          onPress={run(() => onTogglePin(client))}
-        />
-        <Row
-          icon={<Bell color={t.warning} size={16} />}
-          label="Напомнить"
-          onPress={run(() => onRemind(client))}
-        />
-        <Row
-          icon={<Archive color={t.danger} size={16} />}
-          label="Архивировать"
-          danger
-          onPress={run(() => onArchive(client))}
-        />
-
-        <View className="px-4 pt-2">
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Отмена"
-            className="items-center rounded-[14px] py-3.5 active:opacity-70"
-            style={{ backgroundColor: t.fill }}
-          >
-            <Text
-              className="text-[15px] font-semibold"
-              style={{ color: t.ink }}
-            >
-              Отмена
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+    <PickerSheet
+      visible={client !== null}
+      title={c.full_name || c.phone || "Клиент"}
+      items={items}
+      onClose={onClose}
+    />
   );
 }
+
+export default ClientActionsSheet;

@@ -79,7 +79,12 @@ export function expandRepeat(
   // until раньше даты seed не должен прятать событие целиком: исходное
   // вхождение рисуется всегда, поэтому терминатор не бывает раньше seed.
   if (untilDate && untilDate < seedDate) untilDate.setTime(seedDate.getTime());
-  const countLimit = rule.count && rule.count > 0 ? rule.count : MAX_OCCURRENCES;
+  // count задан → ровно N вхождений ОТ SEED (прематч-часть считается).
+  // count НЕ задан → серия бесконечна, и лимитировать её «365 вхождениями
+  // от seed» нельзя: ежедневное событие старше года молча исчезало бы из
+  // календаря (и его напоминания гасились). Память и так капят out.length
+  // < MAX_OCCURRENCES (вхождения В ОКНЕ) и HARD_WALK_DAYS.
+  const countLimit = rule.count && rule.count > 0 ? rule.count : Infinity;
 
   // Walk forward day-by-day from seed until we exit the window or hit
   // the rule's terminator. Day-by-day is simple to reason about; emitted

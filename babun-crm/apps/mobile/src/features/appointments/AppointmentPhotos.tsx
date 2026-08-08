@@ -6,9 +6,11 @@ import {
   Text,
   View,
 } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import {
   Camera,
+  FileText,
   ImageOff,
   Images,
   Trash2,
@@ -31,6 +33,7 @@ import {
   useUploadAppointmentPhotos,
   type UploadAppointmentPhotosInput,
 } from "@/features/appointments/appointment-photos";
+import { useUploadAttachments } from "@/features/clients/card-attachments";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 
@@ -50,6 +53,9 @@ const EMPTY_PHOTOS: AppointmentPhotoRecord[] = [];
 
 interface AppointmentPhotosProps {
   appointmentId: string;
+  /** Владелец документов (чек, акт). Без него кнопка «Документ» не рисуется:
+   *  файл кладётся в вложения КЛИЕНТА и помнит эту запись. */
+  clientId?: string | null;
   locationId?: string | null;
   consentGiven?: boolean;
   canUpload?: boolean;
@@ -58,6 +64,7 @@ interface AppointmentPhotosProps {
 
 export function AppointmentPhotos({
   appointmentId,
+  clientId,
   locationId,
   consentGiven = true,
   canUpload = true,
@@ -183,6 +190,35 @@ export function AppointmentPhotos({
   };
 
   const mutationError = upload.error ?? remove.error;
+  // Документ визита: тот же upload, что на карточке клиента, но с
+  // appointment_id — на странице вложений он подпишется «из записи 30 мая».
+  const uploadDoc = useUploadAttachments(clientId ?? "", appointmentId);
+  const pickDocument = async () => {
+    if (!clientId) return;
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "text/plain", "image/jpeg", "image/png"],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled || res.assets.length === 0) return;
+      uploadDoc.mutate(
+        res.assets.slice(0, 5).map((asset) => ({
+          uri: asset.uri,
+          fileName: asset.name,
+          mimeType: asset.mimeType ?? undefined,
+          fileSize: asset.size,
+        })),
+        { onSuccess: () => toast("Файл приложен к записи", "success") },
+      );
+    } catch (error) {
+      Alert.alert(
+        "Не удалось выбрать файл",
+        error instanceof Error ? error.message : "Попробуйте ещё раз.",
+      );
+    }
+  };
+
   const retryInput =
     upload.error instanceof RetryableAppointmentPhotoUploadError
       ? upload.error.retryInput
@@ -190,7 +226,7 @@ export function AppointmentPhotos({
 
   return (
     <>
-      <SectionCard title={`Фото заявки · ${photos.length}/${MAX_APPOINTMENT_PHOTOS}`}>
+      <SectionCard title={`Файлы заявки · ${photos.length}/${MAX_APPOINTMENT_PHOTOS}`}>
         {canUpload ? (
           <View className="px-4 py-3">
             {!consentGiven ? (
@@ -231,6 +267,27 @@ export function AppointmentPhotos({
                     disabled={!uploadEnabled}
                   />
                 </View>
+                {/* ЧЕК / АКТ / СЧЁТ — не фото и не в лимите 5: документ едет
+                    в вложения КЛИЕНТА с пометкой этой записи (миграция
+                    20260804090000). Владелец 2026-08-03: «все чеки, все
+                    инвойсы — всё в одном месте». */}
+                {clientId ? (
+                  <View className="mt-2 flex-row gap-2">
+                    <AppointmentPhotoAction
+                      label={
+                        uploadDoc.isPending ? "Загрузка…" : "Чек, акт, счёт"
+                      }
+                      icon={
+                        <FileText
+                          color={uploadDoc.isPending ? t.faint : t.accent}
+                          size={ICON.sm}
+                        />
+                      }
+                      onPress={() => void pickDocument()}
+                      disabled={uploadDoc.isPending}
+                    />
+                  </View>
+                ) : null}
               </>
             )}
           </View>

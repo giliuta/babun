@@ -289,6 +289,10 @@ export function useClientFilters(
     return (c: Client) => (q ? matchesClient(c, search) : true);
   }, [search]);
 
+  // Одна дата на весь проход фильтра. Пересчитывается вместе с набором
+  // статусов и картой статистики — этого достаточно: экран живёт минуты,
+  // а не сутки, и рассинхрон со счётчиками попапа закрыт.
+  const todayForSegments = todayYMD();
   const passesSegment = useMemo(() => {
     // OR по выбранным статусам («список на обзвон»: любой из выбранных) —
     // единая семантика с Метка/Теги/Команда. AND давал ловушку: второй
@@ -297,9 +301,12 @@ export function useClientFilters(
     return (c: Client): boolean => {
       if (segments.length === 0) return true;
       const s = statsMap.get(c.id);
-      return segments.some((seg) => matchesSegment(c, seg, s));
+      // `today` передаётся ЯВНО: без него `matchesSegment` звал `new Date()`
+      // на каждого клиента × каждый статус, и на границе суток счётчик в
+      // попапе (он дату передаёт) расходился со списком.
+      return segments.some((seg) => matchesSegment(c, seg, s, todayForSegments));
     };
-  }, [segments, statsMap]);
+  }, [segments, statsMap, todayForSegments]);
 
   const passesPeriod = useMemo(() => {
     return (c: Client): boolean => {

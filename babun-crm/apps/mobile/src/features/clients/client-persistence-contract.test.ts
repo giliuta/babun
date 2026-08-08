@@ -31,21 +31,22 @@ describe("client native persistence contract", () => {
   test("inline note and object editors clear only after a confirmed save", () => {
     const screen = read("../../../app/(dashboard)/clients/[id].tsx");
     const notes = read("blocks/NotesBlock.tsx");
-    // Объекты и техника уехали с карточки на свои страницы (2026-07-26):
-    // правило то же — уходим с экрана только после подтверждённой записи,
-    // иначе набранное исчезает вместе с экраном.
-    const object = read("../../../app/(dashboard)/clients/object.tsx");
-    const unit = read("../../../app/(dashboard)/clients/unit.tsx");
+    // Страницы объекта и техники удалены (2026-08-06): правка объекта живёт
+    // листом, уровень техники снесён целиком. Правило осталось прежним и
+    // проверяется на листе правки.
+    const objectSheet = read("ObjectEditSheet.tsx");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
-    // Заметки пишутся через очередь (useJsonArrayWriter), но правило то же:
-    // поле очищается ТОЛЬКО после подтверждённой записи.
+    // Заметки: композер пустеет СРАЗУ (иначе автокоррекция iOS дописывала
+    // слово, сверка «текст тот же» не сходилась, и отправленная заметка
+    // висела в поле второй раз). Правило смещено, но текст не теряется:
+    // при неудачной записи набранное возвращается в поле.
     assert.match(notes, /const saved = await notes\.apply/);
-    assert.match(notes, /if \(saved\)/);
-    assert.match(object, /if \(ok\) router\.back\(\)/);
-    assert.match(unit, /if \(ok\) router\.back\(\)/);
-    assert.match(object, /Удалить объект/);
-    assert.match(unit, /Удалить«|Удалить»|label="Удалить"/);
+    assert.match(notes, /if \(!saved\) setText/);
+    assert.match(notes, /catch \{\s*setText/);
+    // Лист правки объекта пишет ТЕМ ЖЕ писателем и удаляет с подтверждением.
+    assert.match(objectSheet, /writer: LocationWriter/);
+    assert.match(objectSheet, /Удалить объект/);
     // Создание объекта уехало со страницы в лист снизу (2026-07-27). Правило
     // то же: форма пустеет ТОЛЬКО после подтверждённой записи, иначе набранный
     // адрес исчезал вместе с неудавшимся PATCH-ем.
@@ -66,10 +67,10 @@ describe("client native persistence contract", () => {
     const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));
     assert.match(afterGate, /return false;/);
     assert.match(afterGate, /setDraft\(\(d\) => \(\{ \.\.\.EMPTY_DRAFT/);
-    // Страница объекта больше НЕ создаёт: черновика, «Готово» и гейта на ней
-    // быть не должно (иначе вернутся две расходящиеся дороги создания).
-    assert.doesNotMatch(object, /locId === "new"/);
-    assert.doesNotMatch(object, /saveDraft/);
+    // Дорога создания объекта ОДНА — лист. Лист правки не создаёт: ни
+    // черновика, ни гейта «Готово» на нём быть не должно.
+    assert.doesNotMatch(objectSheet, /locId === "new"/);
+    assert.doesNotMatch(objectSheet, /saveDraft/);
   });
 
   test("json-массивы клиента пишутся одной очередью из свежайшего значения", () => {
@@ -82,18 +83,19 @@ describe("client native persistence contract", () => {
     assert.match(writer, /latest\.current/);
     assert.match(writer, /chain\.current = run/);
     // Экраны и блоки не собирают массив сами.
+    assert.doesNotMatch(read("ObjectEditSheet.tsx"), /update\(\{\s*locations:/);
     assert.doesNotMatch(
-      read("../../../app/(dashboard)/clients/object.tsx"),
-      /update\(\{\s*locations:/,
-    );
-    assert.doesNotMatch(
-      read("../../../app/(dashboard)/clients/unit.tsx"),
+      read("blocks/ObjectsBlock.tsx"),
       /update\(\{\s*locations:/,
     );
     assert.match(read("use-location-writer.ts"), /useJsonArrayWriter/);
-    // Лист добавления пишет объекты ТЕМ ЖЕ писателем: свой снимок массива
-    // вернул бы взаимное затирание одной jsonb-колонки.
-    assert.match(read("ObjectSheet.tsx"), /useLocationWriter/);
+    // ПИСАТЕЛЬ `locations` — ОДИН НА КАРТОЧКУ. Листы получают его пропом:
+    // собственный хук в каждом листе означал три очереди от трёх снимков
+    // массива, и правка в одном листе откатывалась записью из другого.
+    assert.match(read("ObjectSheet.tsx"), /writer: LocationWriter/);
+    assert.doesNotMatch(read("ObjectSheet.tsx"), /useLocationWriter\(/);
+    assert.doesNotMatch(read("ObjectEditSheet.tsx"), /useLocationWriter\(/);
+    assert.match(read("ClientProfileBlocks.tsx"), /useLocationWriter\(/);
     assert.doesNotMatch(read("ObjectSheet.tsx"), /update\(\{\s*locations:/);
     assert.match(read("ClientHeader.tsx"), /useJsonArrayWriter/);
     // Теги и заметки — те же jsonb-массивы: собственных копий механики быть

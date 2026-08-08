@@ -7,14 +7,23 @@ import { getStorage } from "@babun/shared/storage";
 // Дефолт-мердж при чтении: объект от старой сборки не может скрыть
 // новое поле.
 
-export type CardField = "exp" | "inc" | "debt" | "last" | "meta";
+export type CardField = "phone" | "exp" | "inc" | "debt" | "last" | "meta";
 
 export type CardFieldPrefs = Record<CardField, boolean>;
 
-export const CARD_FIELDS: CardField[] = ["exp", "inc", "debt", "last", "meta"];
+export const CARD_FIELDS: CardField[] = [
+  "phone",
+  "exp",
+  "inc",
+  "debt",
+  "last",
+  "meta",
+];
 
 /** Всё видно по умолчанию — карточка до появления тогглов. */
 export const DEFAULT_CARD_FIELDS: CardFieldPrefs = {
+  // Владелец 2026-08-06: «хочу, чтоб сразу было видно номер телефона».
+  phone: true,
   exp: true,
   inc: true,
   debt: true,
@@ -77,6 +86,7 @@ export function useToggleCardField() {
  *  cardSummary). */
 export function cardFieldsSummary(p: CardFieldPrefs): string {
   const parts = ["Имя"];
+  if (p.phone) parts.push("телефон");
   if (p.exp) parts.push("ожид. прибыль");
   if (p.inc) parts.push("доход");
   if (p.debt) parts.push("долг");

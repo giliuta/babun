@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { ACUnit, Client, Location } from "@babun/shared/local/clients";
+import type { Client, Location } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 
@@ -27,13 +27,6 @@ export interface LocationWriter {
   /** Правка СУЩЕСТВУЮЩЕГО юнита по id. Отдельно от добавления: слитый
    *  «сохрани — а если id нет, добавь» воскрешал только что удалённый юнит и
    *  терял правку, если два поля тронули подряд. */
-  patchUnit: (
-    locationId: string,
-    unitId: string,
-    patch: Partial<ACUnit>,
-  ) => Promise<boolean>;
-  addUnit: (locationId: string, unit: ACUnit) => Promise<boolean>;
-  removeUnit: (locationId: string, unitId: string) => Promise<boolean>;
   newId: () => string;
 }
 
@@ -93,61 +86,14 @@ export function useLocationWriter(
     [apply],
   );
 
-  const patchUnit = useCallback(
-    (locationId: string, unitId: string, patch: Partial<ACUnit>) =>
-      apply((all) =>
-        all.map((l) =>
-          l.id === locationId
-            ? {
-                ...l,
-                // Именно map по свежему списку: юнита может уже не быть
-                // (удалили с другого устройства) — тогда правка ничего не
-                // воскрешает.
-                equipment: (l.equipment ?? []).map((u) =>
-                  u.id === unitId ? { ...u, ...patch } : u,
-                ),
-              }
-            : l,
-        ),
-      ),
-    [apply],
-  );
 
-  const addUnit = useCallback(
-    (locationId: string, unit: ACUnit) =>
-      apply((all) =>
-        all.map((l) =>
-          l.id === locationId
-            ? { ...l, equipment: [...(l.equipment ?? []), unit] }
-            : l,
-        ),
-      ),
-    [apply],
-  );
 
-  const removeUnit = useCallback(
-    (locationId: string, unitId: string) =>
-      apply((all) =>
-        all.map((l) =>
-          l.id === locationId
-            ? {
-                ...l,
-                equipment: (l.equipment ?? []).filter((u) => u.id !== unitId),
-              }
-            : l,
-        ),
-      ),
-    [apply],
-  );
 
   return {
     patchLocation,
     addLocation,
     removeLocation,
     makePrimary,
-    patchUnit,
-    addUnit,
-    removeUnit,
     newId: randomUuid,
   };
 }

@@ -42,6 +42,11 @@ const SCREEN_H = Dimensions.get("window").height;
 // дешёвого пружинения. Выход — короткий ease-in вниз.
 const SPRING = { damping: 28, stiffness: 300, mass: 1 } as const;
 
+/** Сколько лист уезжает вниз. Экспортируется, потому что действие, которое
+ *  открывает СВОЁ окно поверх (второй лист, Alert, «Поделиться»), обязано
+ *  дождаться конца этой анимации — иначе оно не появится вовсе. */
+export const SHEET_EXIT_MS = 260;
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export function BottomSheet({

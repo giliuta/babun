@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, type ReactNode } from "react";
+import { View } from "react-native";
 import {
   Gesture,
   GestureDetector,
   type PanGesture,
 } from "react-native-gesture-handler";
 import Animated, {
-  FadeIn,
-  FadeOut,
   runOnJS,
   scrollTo,
   useAnimatedProps,
@@ -18,8 +16,6 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
-import { ChevronDown, ChevronUp } from "lucide-react-native";
-import { useThemeColors } from "@/theme/colors";
 
 // Vertical scale of the time grid (pixels per hour). The LIVE value is a
 // Reanimated shared value (`hourHSv`) owned by the calendar screen: the
@@ -61,9 +57,6 @@ export function ZoomableTimeGrid({
   endHour,
   scrollToHour,
   pageGesture,
-  nowMinutes,
-  todayOffset,
-  onJumpToNow,
   children,
 }: {
   hourHSv: SharedValue<number>;
@@ -77,18 +70,8 @@ export function ZoomableTimeGrid({
   /** Горизонтальный pan пейджера периода (см. pager.tsx) — компонуется
    *  Race'ом с пинчем: один палец вбок = листание, два = зум. */
   pageGesture?: PanGesture;
-  /** Текущее время (минуты от полуночи, бизнес-таймзона) — цель стрелки
-   *  «к сейчас». null/undefined вместе с todayOffset → стрелки нет. */
-  nowMinutes?: number | null;
-  /** Где сегодня относительно видимого периода: 0 — внутри, -1 — раньше
-   *  (стрелка вверх), 1 — позже (вниз). undefined → стрелка выключена. */
-  todayOffset?: -1 | 0 | 1;
-  /** Прыжок периода на сегодня (родитель двигает якорь); после коммита
-   *  сетка сама докручивает к линии «сейчас». */
-  onJumpToNow?: () => void;
   children: ReactNode;
 }) {
-  const t = useThemeColors();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollY = useSharedValue(0);
   const viewportH = useSharedValue(0);
@@ -160,61 +143,6 @@ export function ZoomableTimeGrid({
     scrollY.value = e.contentOffset.y;
   });
 
-  // ── Стрелка «к сейчас» ──────────────────────────────────────────────
-  // Появляется, когда красная линия текущего времени вне вьюпорта (или
-  // открыт другой день/неделя); направление — куда до неё крутить.
-  // Видимость считается на UI-потоке от scrollY/viewportH/hourHSv, в React
-  // уходит только смена состояния (up/down/нет).
-  const [nowArrow, setNowArrow] = useState<"up" | "down" | null>(null);
-  useAnimatedReaction(
-    () => {
-      if (todayOffset === undefined || nowMinutes == null) return 0;
-      if (todayOffset !== 0) return todayOffset < 0 ? 1 : 2;
-      // Сейчас вне видимого окна часов — линии нет, докрутить не к чему.
-      if (nowMinutes < startHour * 60 || nowMinutes > endHour * 60) return 0;
-      const y = PAD_TOP + (nowMinutes / 60 - startHour) * hourHSv.value;
-      const margin = 28; // линия «почти у края» — уже считается скрытой
-      if (y < scrollY.value + margin) return 1;
-      if (y > scrollY.value + viewportH.value - margin) return 2;
-      return 0;
-    },
-    (v, prev) => {
-      if (v !== prev)
-        runOnJS(setNowArrow)(v === 1 ? "up" : v === 2 ? "down" : null);
-    },
-    [todayOffset, nowMinutes, startHour, endHour],
-  );
-  const scrollToNow = () => {
-    if (nowMinutes == null) return;
-    const h = hourHSv.value;
-    const contentH = PAD_TOP + (endHour - startHour) * h + PAD_BOTTOM;
-    const maxY = Math.max(0, contentH - viewportH.value);
-    const target =
-      PAD_TOP + (nowMinutes / 60 - startHour) * h - viewportH.value / 2;
-    scrollRef.current?.scrollTo({
-      y: Math.min(maxY, Math.max(0, target)),
-      animated: true,
-    });
-  };
-  // Чужой период: сначала родитель прыгает на сегодня, докрутка к линии —
-  // после коммита (todayOffset станет 0).
-  const pendingNowScroll = useRef(false);
-  const onNowPress = () => {
-    if (todayOffset !== 0) {
-      pendingNowScroll.current = true;
-      onJumpToNow?.();
-    } else {
-      scrollToNow();
-    }
-  };
-  useEffect(() => {
-    if (todayOffset === 0 && pendingNowScroll.current) {
-      pendingNowScroll.current = false;
-      scrollToNow();
-    }
-    // scrollToNow намеренно вне deps — важен только момент коммита периода.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayOffset]);
   // Two fingers down would otherwise ALSO pan the scroll view (iOS scrolls
   // on any touch count) — the native pan and the anchor scrollTo below then
   // fight over the offset. Disabling scroll for the pinch's lifetime keeps
@@ -357,51 +285,6 @@ export function ZoomableTimeGrid({
         </Animated.ScrollView>
       </GestureDetector>
       </GestureDetector>
-
-      {/* Explicit «Сейчас» is clearer than an unlabeled floating arrow: the
-          arrow only communicates whether the current-time line is above or
-          below the viewport. */}
-      {nowArrow ? (
-        <Animated.View
-          entering={FadeIn.duration(150)}
-          exiting={FadeOut.duration(150)}
-          style={{ position: "absolute", right: 12, bottom: 12 }}
-        >
-          <Pressable
-            onPress={onNowPress}
-            accessibilityRole="button"
-            accessibilityLabel="К текущему времени"
-            style={({ pressed }) => ({
-              minWidth: 92,
-              height: 44,
-              borderRadius: 22,
-              paddingHorizontal: 13,
-              flexDirection: "row",
-              gap: 6,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: t.surface,
-              borderWidth: 1,
-              borderColor: `${t.ink}1a`,
-              shadowColor: "#000",
-              shadowOpacity: 0.14,
-              shadowRadius: 8,
-              shadowOffset: { width: 0, height: 2 },
-              elevation: 4,
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text style={{ color: t.ink, fontSize: 14, fontWeight: "600" }}>
-              Сейчас
-            </Text>
-            {nowArrow === "up" ? (
-              <ChevronUp color={t.danger} size={18} strokeWidth={2.5} />
-            ) : (
-              <ChevronDown color={t.danger} size={18} strokeWidth={2.5} />
-            )}
-          </Pressable>
-        </Animated.View>
-      ) : null}
     </View>
   );
 }

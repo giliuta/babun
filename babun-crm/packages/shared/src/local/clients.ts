@@ -88,14 +88,28 @@ export function locationAddressForBooking(loc: {
   );
 }
 
+/** Позиция НА ОБЪЕКТЕ — то, что обслуживают повторно: кондиционер, пылесос,
+ *  бассейн, автомобиль, зона уборки. Продукт продаётся не только
+ *  кондиционерщикам (владелец 2026-08-06), поэтому здесь НЕТ ни закрытого
+ *  списка типов, ни «внутреннего/внешнего блока»: тип — свободное слово
+ *  бизнеса, а смысл уровня — график обслуживания и напоминание «пора». */
 export interface ACUnit {
   id: string;
+  /** Где стоит: комната, этаж, участок. Необязательно. */
   room: string;
   brand?: string;
   model?: string;
-  ac_type: ACType;
-  has_indoor: boolean;
-  has_outdoor: boolean;
+  /** Слово бизнеса: «Сплит», «Пылесос», «Бассейн». Пусто — тип не важен. */
+  type_name?: string;
+  /** @deprecated Наследие HVAC-версии: закрытый список сплит/канальный/
+   *  кассетный. Больше не пишется и не показывается; читается только чтобы
+   *  перенести старое значение в `type_name`. */
+  ac_type?: ACType;
+  /** @deprecated Внутренний/внешний блок — устройство кондиционера, у
+   *  пылесоса или маникюрного стола такого нет. */
+  has_indoor?: boolean;
+  /** @deprecated см. has_indoor. */
+  has_outdoor?: boolean;
   /** Beta #49 (CRM Core brief) — equipment service schedule. When
    *  `service_interval_months` is set, the system computes
    *  `next_service_date = max(installed_at, last_service_at) +
@@ -140,6 +154,17 @@ export interface Location {
   /** v309 — A/C юниты на этом объекте. До v309 хранилось на клиенте;
    *  миграция переносит client.equipment → locations[primary].equipment. */
   equipment?: ACUnit[];
+  /** РЕГУЛЯРНОЕ ОБСЛУЖИВАНИЕ ОБЪЕКТА, В МЕСЯЦАХ (2026-08-07).
+   *
+   *  Клининг раз в месяц, бассейн раз в месяц, кондиционеры раз в полгода —
+   *  регулярность есть у ОБЪЕКТА, а не у техники на нём. Прежний график ТО
+   *  жил на юнитах с брендами и моделями: для клининга или бьюти это был
+   *  пустой раздел с чужими словами, и вместе с юнитами он ушёл.
+   *
+   *  Срок считается от ПОСЛЕДНЕГО ВИЗИТА на этот объект — календарь и так
+   *  это знает, поэтому отдельного поля «когда обслужили» нет: его
+   *  невозможно забыть проставить. Пусто/0 — не регулярный объект. */
+  serviceEveryMonths?: number;
 }
 
 export interface PhoneEntry {
@@ -327,7 +352,9 @@ export function loadClients(): Client[] {
     return parsed.map((c: Partial<Client>) => {
       const equipmentLegacy = (c.equipment ?? []).map((u: Partial<ACUnit>) => ({
         ...u,
-        ac_type: u.ac_type ?? "split",
+        // Старый жёсткий тип переносим в свободное слово ОДИН РАЗ при
+        // чтении: «сплит» у клинингового пылесоса был чистой выдумкой.
+        type_name: u.type_name ?? (u.ac_type ? AC_TYPE_LABELS[u.ac_type] : undefined),
       })) as ACUnit[];
       // STORY-002 migration: legacy single-address clients get a
       // one-location array inferred from their stored address.

@@ -71,6 +71,8 @@ export function ViewModeDropdown({
           onPress={() => setOpen(false)}
         >
           <View
+            // Жест-escape VoiceOver: иначе из меню не выйти, не сменив режим.
+            onAccessibilityEscape={() => setOpen(false)}
             style={{
               position: "absolute",
               // Below the 48-pt header row, respecting the status-bar inset

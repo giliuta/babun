@@ -197,6 +197,8 @@ function DaySection({
             className="active:opacity-60"
             accessibilityRole="link"
             accessibilityLabel={`Маршрут дня, ${addresses.length} адресов`}
+            // 44 — минимальная тап-мишень HIG: текст 11pt, мишень — контейнер.
+            style={{ minHeight: 44, justifyContent: "center" }}
           >
             <Text style={{ fontSize: 11, fontWeight: "600", color: t.accent }}>
               Маршрут дня →

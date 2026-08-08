@@ -4,15 +4,19 @@ import {
   parseAddress,
   type MapService,
 } from "@babun/shared/common/utils/map-links";
-import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
+import { MAP_SERVICES } from "@/lib/map-services";
 
-// «МАРШРУТ» — один экшен-шит на весь продукт: экран записи, строка объекта,
-// страница объекта. Раньше жил копией внутри app/book/index.tsx.
+// «МАРШРУТ» — один выбор карты на весь продукт: экран записи и строка объекта.
 //
-// Выбор карты — через общий chooseOption: у одних диспетчеров пробки в Google,
-// у других CarPlay с Apple Картами, и навязывать одну карту нельзя. Кастомный
-// лист снизу для этого владелец отверг — это системное «что сделать».
+// Выбор нужен потому, что у одних диспетчеров пробки в Google, у других
+// CarPlay с Apple Картами, и навязывать одну карту нельзя. Рисует его лист
+// `RouteSheet` — тот же `PickerSheet` со значками, что «Добавить» и «Как
+// связаться» (владелец 2026-08-06: «чтобы это выглядело так же, как когда
+// нажимаю добавить номер телефона — красиво выезжает со значками»).
+//
+// Здесь остаётся только РЕШЕНИЕ, нужен ли выбор вообще: лист из одного пункта
+// был бы лишним тапом на каждом выезде.
 //
 // Приоритет цели: присланный клиентом пин (Location.mapUrl) выше текстового
 // адреса — на кипрских виллах текстовый адрес часто не прокладывается.
@@ -25,39 +29,46 @@ export function routeTarget(
   return (mapUrl || "").trim() || (address || "").trim();
 }
 
-/** Открывает выбор карты для цели. Молча выходит, если цели нет — мёртвых
- *  контролов не держим, вызывающая сторона просто не рисует кнопку.
+/** Карты, которые реально предлагаем, В ПОРЯДКЕ ПОЛЬЗОВАТЕЛЯ.
+ *  Идём по `enabled` (он уже отсортирован настройкой), а не по константе:
+ *  иначе перетаскивание на странице «Карты для маршрута» ничего не меняло бы
+ *  в листе — ручка есть, подпись обещает порядок, а лист рисует своё. */
+export function routeServices(enabled: MapService[]) {
+  return enabled
+    .map((id) => MAP_SERVICES.find((s) => s.id === id))
+    .filter((s): s is (typeof MAP_SERVICES)[number] => s !== undefined);
+}
+
+/** URL, который надо открыть БЕЗ выбора, или null — если выбор нужен.
  *
  *  Присланная ссылка без координат (короткая maps.app.goo.gl и подобные) —
- *  НЕ выбор: Apple Картам такую ссылку можно отдать только текстовым
- *  запросом `?q=https%3A%2F%2F…`, и они честно ищут «https://…» вместо
- *  адреса. Ссылку открываем как есть — её разберёт то приложение, которое
- *  её понимает. Выбор карты остаётся там, где обе карты справятся: адрес
- *  текстом или координаты. */
-export function openRouteMenu(target: string): void {
+ *  НЕ выбор: Apple Картам такую ссылку можно отдать только текстовым запросом
+ *  `?q=https%3A%2F%2F…`, и они честно ищут «https://…» вместо адреса. Ссылку
+ *  открываем как есть — её разберёт то приложение, которое её понимает. */
+export function directRouteUrl(
+  target: string,
+  enabled: MapService[],
+): string | null {
   const clean = target.trim();
-  if (!clean) return;
+  if (!clean) return null;
   const parsed = parseAddress(clean);
   if (parsed.isUrl && !parsed.coords) {
-    haptics.tap();
-    void Linking.openURL(clean.startsWith("http") ? clean : `https://${clean}`);
-    return;
+    return clean.startsWith("http") ? clean : `https://${clean}`;
   }
-  // Четыре сервиса, а не два (владелец 2026-07-27: «оно определяет Google,
-  // Waze, Яндекс и так далее»). buildMapUrl умеет все четыре; какие из них
-  // предлагать — станет настройкой клиентов, когда владелец скажет свой набор.
-  const services: { label: string; service: MapService }[] = [
-    { label: "Google Карты", service: "google" },
-    { label: "Apple Карты", service: "apple" },
-    { label: "Waze", service: "waze" },
-    { label: "Яндекс Карты", service: "yandex" },
-  ];
-  void chooseOption(
-    clean,
-    services.map((s) => ({ label: s.label })),
-  ).then((index) => {
-    const picked = index === null ? null : services[index];
-    const url = picked ? buildMapUrl(picked.service, clean) : null;
-    if (url) void Linking.openURL(url);
-  });
+  const services = routeServices(enabled);
+  if (services.length === 1) return buildMapUrl(services[0].id, clean);
+  return null;
+}
+
+/** Открыть цель в выбранной карте. */
+export function openInMap(service: MapService, target: string): void {
+  const url = buildMapUrl(service, target.trim());
+  if (!url) return;
+  haptics.tap();
+  void Linking.openURL(url);
+}
+
+export function openDirect(url: string): void {
+  haptics.tap();
+  void Linking.openURL(url);
 }

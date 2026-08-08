@@ -531,6 +531,7 @@ export type Database = {
       }
       client_attachments: {
         Row: {
+          appointment_id: string | null
           client_id: string
           created_at: string
           created_by: string | null
@@ -542,6 +543,7 @@ export type Database = {
           tenant_id: string
         }
         Insert: {
+          appointment_id?: string | null
           client_id: string
           created_at?: string
           created_by?: string | null
@@ -553,6 +555,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          appointment_id?: string | null
           client_id?: string
           created_at?: string
           created_by?: string | null
@@ -564,6 +567,13 @@ export type Database = {
           tenant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "client_attachments_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "client_attachments_client_id_fkey"
             columns: ["client_id"]
@@ -2613,6 +2623,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          track_units: boolean
           address: string | null
           bank_name: string | null
           booking_slug: string | null
@@ -2645,6 +2656,7 @@ export type Database = {
           vertical: string | null
         }
         Insert: {
+          track_units?: boolean
           address?: string | null
           bank_name?: string | null
           booking_slug?: string | null
@@ -2677,6 +2689,7 @@ export type Database = {
           vertical?: string | null
         }
         Update: {
+          track_units?: boolean
           address?: string | null
           bank_name?: string | null
           booking_slug?: string | null

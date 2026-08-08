@@ -39,6 +39,7 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   stripe_customer_id: null,
   stripe_subscription_id: null,
   subscription_status: null,
+  track_units: true,
   trial_ends_at: null,
   vat_number: null,
   vertical: null,

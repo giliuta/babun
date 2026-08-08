@@ -46,6 +46,21 @@ export function countryDialCode(code: CountryCode): string {
   }
 }
 
+/** «+357 » — то, с чего начинается ПУСТОЕ поле номера. Пробел намеренный:
+ *  курсор встаёт сразу за кодом, и человек печатает свои цифры, не думая. */
+export function dialPrefix(code: CountryCode): string {
+  return `${countryDialCode(code)} `;
+}
+
+/** В поле только код страны и ничего больше — значит номера НЕТ.
+ *  Подставленный «+357» не должен превращаться в запись: иначе у клиента
+ *  появлялся бы номер-призрак из одной подсказки. */
+export function isDialOnly(value: string, code: CountryCode): boolean {
+  const digits = (value ?? "").replace(/\D/g, "");
+  if (!digits) return true;
+  return digits === countryDialCode(code).replace(/\D/g, "");
+}
+
 /** Human-readable country name (RU); falls back to the ISO code. */
 export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> = {
   CY: "Кипр", GR: "Греция", RU: "Россия", UA: "Украина",

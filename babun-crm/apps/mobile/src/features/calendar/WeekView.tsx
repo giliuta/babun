@@ -9,6 +9,7 @@ import {
   RAIL_W,
   HEADER_H,
   type WorkBand,
+  type FreeSlotRange,
 } from "@/features/calendar/DayView";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -48,7 +49,6 @@ export function WeekView({
   onPickDay,
   onPickLabelDay,
   onCommitPage,
-  onJumpToNow,
   startHour,
   endHour,
   stepMinutes,
@@ -58,6 +58,7 @@ export function WeekView({
   workStartHour,
   workEndHour,
   workBandFor,
+  freeSlotsFor,
   labelFor,
   labelTintFor,
   bufferMinutes,
@@ -102,6 +103,8 @@ export function WeekView({
    *  weekday overrides / days off differ across the week (web DayColumn
    *  parity). See DayColumn.workBand for the null/undefined semantics. */
   workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
+  /** Режим подбора времени: зелёные кубики свободного в каждой колонке. */
+  freeSlotsFor?: (dateYmd: string) => readonly FreeSlotRange[] | undefined;
   /** Day label (city/tag) for the header — resolved by the parent:
    *  explicit day_cities → team default_city (web DayColumn city pill).
    *  No picker here: tapping a header opens the day view, whose header
@@ -114,8 +117,6 @@ export function WeekView({
   bufferMinutes?: number;
   nowMinutes?: number | null;
   scrollToHour?: number;
-  /** Стрелка «к сейчас» на чужой неделе — прыжок якоря на сегодня. */
-  onJumpToNow?: () => void;
 }) {
   const t = useThemeColors();
   const pager = usePeriodPager({
@@ -161,15 +162,6 @@ export function WeekView({
         endHour={endHour ?? 24}
         scrollToHour={scrollToHour}
         pageGesture={pager.pan}
-        nowMinutes={nowMinutes}
-        todayOffset={
-          days.some((d) => sameDay(d, today))
-            ? 0
-            : formatYMD(today) < formatYMD(days[0])
-              ? -1
-              : 1
-        }
-        onJumpToNow={onJumpToNow}
       >
         <TimeRail
           startHour={startHour}
@@ -177,7 +169,6 @@ export function WeekView({
           nowMinutes={
             days.some((d) => sameDay(d, today)) ? nowMinutes : null
           }
-          hourH={hourH}
         />
         <PagedStrip
           pager={pager}
@@ -208,6 +199,7 @@ export function WeekView({
                     workStartHour={workStartHour}
                     workEndHour={workEndHour}
                     workBand={workBandFor?.(ymd)}
+                    freeSlots={freeSlotsFor?.(ymd)}
                     tintColor={labelTintFor?.(ymd) ?? null}
                     bufferMinutes={bufferMinutes}
                     nowMinutes={nowMinutes}

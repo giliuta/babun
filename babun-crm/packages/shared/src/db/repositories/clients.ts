@@ -187,6 +187,11 @@ export function rowToClient(r: ClientRow): Client {
       property_type: l.property_type,
       isPrimary: l.isPrimary,
       note: l.note,
+      // Регулярное обслуживание объекта (2026-08-07). Без этой строки фича
+      // «Пора обслужить» стирала сама себя: поле читалось из кэша, но
+      // терялось на первом же ответе сервера, а следующая правка объекта
+      // записывала массив уже без интервала.
+      serviceEveryMonths: l.serviceEveryMonths,
       equipment: asArray<ACUnit>(l.equipment as unknown as Json).map(rowToUnit),
     })),
     notes: asArray<ClientNote>(r.notes).map((n) => ({

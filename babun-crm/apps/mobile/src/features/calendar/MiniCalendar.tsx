@@ -81,7 +81,9 @@ export function MiniCalendar({
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
     .replace(/\s*г\.?\s*$/i, "");
 
-  const CELL = 40;
+  // 44 — минимальная тап-мишень HIG: раньше 40pt-ячейки были единственным
+  // суб-минимальным контролом всего джампера.
+  const CELL = 44;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -96,11 +98,16 @@ export function MiniCalendar({
           // Stop taps inside the card from closing the modal.
           onPress={() => {}}
           accessible={false}
+          // Жест-escape VoiceOver: иначе из джампера не выйти, не сменив дату.
+          onAccessibilityEscape={onClose}
           style={{
             position: "absolute",
             top: insets.top + 52,
             left: 12,
-            width: 7 * CELL + 24,
+            // +24 паддинги, +2 рамка (RN border-box): без учёта рамки на
+            // контент оставалось 7×CELL−2 и седьмая ячейка переносилась —
+            // сетка ехала по 6 дней в ряду.
+            width: 7 * CELL + 24 + 2,
             backgroundColor: t.surface,
             borderRadius: 14,
             borderWidth: 1,
@@ -134,6 +141,7 @@ export function MiniCalendar({
               <ChevronLeft color={t.sub} size={16} strokeWidth={2.5} />
             </Pressable>
             <Text
+              maxFontSizeMultiplier={1.2}
               style={{ fontSize: 15, fontWeight: "600", color: t.ink, textTransform: "capitalize" }}
             >
               {monthTitle}
@@ -160,6 +168,7 @@ export function MiniCalendar({
             {DAY_HEADERS.map((d) => (
               <Text
                 key={d}
+                maxFontSizeMultiplier={1.2}
                 // 11/700/+0.6 — канон iOS-капса для подписей дней недели.
                 style={{
                   width: CELL,
@@ -213,6 +222,7 @@ export function MiniCalendar({
                   })}
                 >
                   <Text
+                    maxFontSizeMultiplier={1.2}
                     style={{
                       fontSize: 14,
                       fontWeight: isToday || isViewed ? "700" : "400",
@@ -263,7 +273,10 @@ export function MiniCalendar({
               opacity: pressed ? 0.7 : 1,
             })}
           >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
+            >
               Сегодня
             </Text>
           </Pressable>

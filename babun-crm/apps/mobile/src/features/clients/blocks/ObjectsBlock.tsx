@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { AddRow, RowGroup } from "@/components/ui/card-rows";
+import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { objectTarget } from "@/features/clients/object-address";
+import { servicePlan, type ServicePlan } from "@/features/clients/service-plan";
+import { todayYMD } from "@/features/clients/filter";
 import { useThemeColors } from "@/theme/colors";
 
 // ОБЪЕКТЫ на карточке клиента.
@@ -15,23 +18,34 @@ import { useThemeColors } from "@/theme/colors";
 // вылазит снизу шторка, и оно определяет Google, Waze, Яндекс».
 //
 // Поэтому строка объекта — не «ярлык · значение», а КАРТОЧКА АДРЕСА в три
-// строки: что это → куда ехать → как войти. Тип идёт сам по себе (он и есть
-// имя объекта), адрес крупнее заметки, заметка последняя и тише.
+// строки: что это → куда ехать → когда снова и как войти. Тип идёт сам по
+// себе (он и есть имя объекта), адрес крупнее, третья строка делится между
+// сроком обслуживания и заметкой через «·» — четвёртый этаж поднимал строку
+// до ~86pt и ломал ритм списка.
 //
-// Два действия в строке и ни одного лишнего: тап по строке открывает объект
-// (шеврон это и обещает), кнопка маршрута — едет. Зазор между ними 12 и слоп
-// только вправо: у соседней пары «связь / убрать номер» именно смыкание зон
-// приводило к тому, что палец делал не то, во что целился.
+// Тап по строке ОТКРЫВАЕТ ЛИСТ ПРАВКИ, а не страницу (владелец 2026-08-06:
+// «отдельная страница объекта вообще не открывается… если нажимаешь —
+// вылазит менюшка по поводу редактирования»). Шеврона поэтому нет: он обещал
+// бы этаж навигации, которого больше не существует.
+//
+// Удаление — СМАХНУТЬ ВЛЕВО (тот же жест, что у номеров в Контактах). Кнопки
+// удаления в строке нет: она занимала бы место всегда и смыкалась зоной с
+// кнопкой маршрута — именно так палец однажды делал не то, во что целился.
 
 export default function ObjectsBlock({
   client,
+  appointments,
   onOpen,
+  onDelete,
   onAdd,
 }: {
   client: Client;
-  /** Открыть страницу объекта — навигацию держит карточка (в черновике она
-   *  сначала сохраняет клиента: страница читает его по id). */
+  /** Визиты клиента — по ним считается, когда объект пора обслужить снова. */
+  appointments: readonly Appointment[];
+  /** Открыть лист правки этого объекта. */
   onOpen: (locId: string) => void;
+  /** Удалить объект (спрашивает подтверждение сама карточка). */
+  onDelete: (loc: Location) => void;
   /** Открыть лист добавления. Работает и в черновике: объект пишется в тот же
    *  черновик, поэтому пригашать строку больше не нужно. */
   onAdd: () => void;
@@ -49,12 +63,18 @@ export default function ObjectsBlock({
   return (
     <RowGroup title="Объекты">
       {ordered.map((loc, i) => (
-        <ObjectRow
+        <SwipeToDelete
           key={loc.id}
-          loc={loc}
-          separated={i > 0}
-          onPress={() => onOpen(loc.id)}
-        />
+          onDelete={() => onDelete(loc)}
+          accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
+        >
+          <ObjectRow
+            loc={loc}
+            plan={servicePlan(loc, appointments, todayYMD())}
+            separated={i > 0}
+            onPress={() => onOpen(loc.id)}
+          />
+        </SwipeToDelete>
       ))}
       {/* Пустого состояния нет: при нуле объектов группа — одна эта строка.
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
@@ -71,10 +91,13 @@ export default function ObjectsBlock({
 
 function ObjectRow({
   loc,
+  plan,
   separated,
   onPress,
 }: {
   loc: Location;
+  /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
+  plan: ServicePlan | null;
   separated?: boolean;
   onPress: () => void;
 }) {
@@ -103,7 +126,7 @@ function ObjectRow({
         accessibilityLabel={[loc.label || "Объект", target, note]
           .filter(Boolean)
           .join(", ")}
-        accessibilityHint="Открывает объект"
+        accessibilityHint="Открывает правку объекта"
         style={({ pressed }) => ({
           flex: 1,
           flexDirection: "row",
@@ -130,17 +153,34 @@ function ObjectRow({
           >
             {target || "адрес не указан"}
           </Text>
-          {note ? (
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{ fontSize: 12, color: t.sub }}
-            >
-              {note}
+          {/* ТРЕТЬЯ СТРОКА ОДНА НА ДВОИХ: заметка и срок обслуживания делят
+              её через «·». Каждому свой этаж — и строка объекта вырастала до
+              четырёх ярусов (~86pt), вдвое выше соседней «Записать», после
+              чего блок переставал читаться списком.
+              Срок идёт первым: он про деньги и сгорает по времени, заметка
+              («код домофона») ждёт у двери и не срочна. */}
+          {plan || note ? (
+            <Text maxFontSizeMultiplier={1.2} numberOfLines={1}>
+              {plan ? (
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: plan.due ? "600" : "400",
+                    color: plan.due ? t.warning : t.sub,
+                  }}
+                >
+                  {plan.text}
+                </Text>
+              ) : null}
+              {plan && note ? (
+                <Text style={{ fontSize: 13, color: t.faint }}>{"  ·  "}</Text>
+              ) : null}
+              {note ? (
+                <Text style={{ fontSize: 13, color: t.sub }}>{note}</Text>
+              ) : null}
             </Text>
           ) : null}
         </View>
-        <ChevronRight color={t.chevron} size={17} strokeWidth={2.2} />
       </Pressable>
 
       {/* Маршрут — отдельное действие над адресом этой строки; шторка выбора

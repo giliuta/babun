@@ -42,9 +42,11 @@ import {
 import {
   locationAddressForBooking,
   type Client,
+  type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
+import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
   findBufferClash,
@@ -73,7 +75,9 @@ import { AddRow } from "@/components/ui/AddRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
-import { openRouteMenu, routeTarget } from "@/lib/route-menu";
+import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
+import { RouteSheet } from "@/features/clients/RouteSheet";
+import { useEnabledMapServices } from "@/lib/map-services";
 
 import {
   useClients,
@@ -203,6 +207,7 @@ const durLabel = (min: number) => {
 };
 
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
+const EMPTY_LOCATIONS: Location[] = [];
 const KBD_ACCESSORY_ID = "bookKbdDone";
 const kbdAccessory = Platform.OS === "ios" ? KBD_ACCESSORY_ID : undefined;
 
@@ -803,6 +808,14 @@ export default function BookScreen() {
     }
   };
 
+  // Писатель объектов для листа добавления: на этом экране он единственный,
+  // но живёт снаружи листа — как на карточке, где писатель общий для всех
+  // листов сразу.
+  const locationWriter = useLocationWriter(
+    client?.locations ?? EMPTY_LOCATIONS,
+    updateClientPatch,
+  );
+
   const toggleService = (id: string) => {
     setServiceIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -1173,9 +1186,22 @@ export default function BookScreen() {
   // Выбор карты — общий openRouteMenu (тот же шит у строки объекта и на
   // странице объекта). Присланный клиентом пин (mapUrl) важнее текстового
   // адреса: на кипрских виллах текстовый адрес часто не прокладывается.
+  // Маршрут — тот же лист со значками, что у строки объекта.
+  const enabledMaps = useEnabledMapServices();
+  const [routeOpen, setRouteOpen] = useState(false);
+  const routeAim = routeTarget(
+    clientLocations.find((l) => l.id === locationId)?.mapUrl,
+    address,
+  );
   const openRoute = () => {
-    const selectedLoc = clientLocations.find((l) => l.id === locationId);
-    openRouteMenu(routeTarget(selectedLoc?.mapUrl, address));
+    if (!routeAim) return;
+    const direct = directRouteUrl(routeAim, enabledMaps);
+    if (direct) {
+      openDirect(direct);
+      return;
+    }
+    haptics.tap();
+    setRouteOpen(true);
   };
 
   if (failedReference || referencesPending) {
@@ -2276,6 +2302,7 @@ export default function BookScreen() {
           visible={objectSheet}
           client={client}
           update={updateClientPatch}
+          writer={locationWriter}
           initialTarget={address}
           onAdded={(added) => {
             setLocationId(added.id);
@@ -2357,6 +2384,12 @@ export default function BookScreen() {
           </View>
         </InputAccessoryView>
       ) : null}
+
+      <RouteSheet
+        visible={routeOpen}
+        target={routeAim}
+        onClose={() => setRouteOpen(false)}
+      />
     </Screen>
   );
 }

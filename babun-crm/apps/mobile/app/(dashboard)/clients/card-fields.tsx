@@ -28,6 +28,7 @@ interface FieldRow {
 // v811 gold — тот же литерал, что и на карточке (долг).
 const ROWS: FieldRow[] = [
   { field: null, label: "Имя клиента", sub: "всегда видно", dot: (t) => t.faint },
+  { field: "phone", label: "Телефон", sub: "под именем", dot: (t) => t.faint },
   { field: "exp", label: "Ожидаемая прибыль", sub: "серая", dot: (t) => t.sub },
   { field: "inc", label: "Доход", sub: "зелёный", dot: (t) => t.success },
   { field: "debt", label: "Долг", sub: "жёлтый", dot: (t) => t.warning },

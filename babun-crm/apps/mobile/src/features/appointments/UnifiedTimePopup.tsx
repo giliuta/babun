@@ -5,22 +5,27 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
-  ScrollView,
   Switch,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
+import {
+  DIGIT_FONT,
+  HOURS,
+  WheelColumn,
+  WheelWithLines,
+} from "@/components/ui/TimeWheel";
 
 // Портирован 1:1 из веба (apps/web UnifiedTimePopup + TimeWheels +
 // WheelColumn): один центрированный попап для выбора даты + начала/конца.
 // Полоса недель свайпается (снап по неделе), два колеса «Начало»/«Конец»,
 // переключатель «Весь день». Правки живут в локальном черновике и
 // применяются только по «Готово»; «Отмена» отбрасывает.
+// Само колесо вынесено в @/components/ui/TimeWheel (общее с BookSlotSheet).
 
 const WEEKDAYS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]; // понедельник-first
-const HOURS = Array.from({ length: 24 }, (_, i) => pad2(i));
 const MONTHS_GEN = [
   "января", "февраля", "марта", "апреля", "мая", "июня",
   "июля", "августа", "сентября", "октября", "ноября", "декабря",
@@ -33,14 +38,6 @@ const WEEKS_BACK = 26;
 const WEEKS_FWD = 26;
 const ALL_DAY_RANGE = { start: "00:00", end: "23:59" };
 const VALID_STEPS = new Set([5, 10, 15, 20, 30, 60]);
-
-// wheel geometry (= web TimeWheels)
-const ITEM_H = 40;
-const VISIBLE_ROWS = 3;
-const COLUMN_W = 58;
-const DIGIT_FONT = 26;
-const WHEEL_H = ITEM_H * VISIBLE_ROWS;
-const PAD = (WHEEL_H - ITEM_H) / 2;
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -453,7 +450,12 @@ function WheelSide({
             accessibilityLabel={`${label.toLowerCase()}, часы`}
           />
         </WheelWithLines>
-        <Text style={{ fontSize: DIGIT_FONT, fontWeight: "300", color: t.chevron, paddingHorizontal: 2 }}>
+        <Text
+          accessible={false}
+          importantForAccessibility="no"
+          maxFontSizeMultiplier={1.2}
+          style={{ fontSize: DIGIT_FONT, fontWeight: "300", color: t.chevron, paddingHorizontal: 2 }}
+        >
           :
         </Text>
         <WheelWithLines>
@@ -469,105 +471,3 @@ function WheelSide({
   );
 }
 
-function WheelWithLines({ children }: { children: React.ReactNode }) {
-  return (
-    <View style={{ position: "relative" }}>
-      {children}
-      <View
-        pointerEvents="none"
-        style={{ position: "absolute", left: 2, right: 2, top: PAD, height: 1, backgroundColor: "rgba(11,18,32,0.12)" }}
-      />
-      <View
-        pointerEvents="none"
-        style={{ position: "absolute", left: 2, right: 2, top: PAD + ITEM_H - 1, height: 1, backgroundColor: "rgba(11,18,32,0.12)" }}
-      />
-    </View>
-  );
-}
-
-function WheelColumn({
-  items,
-  selectedIndex,
-  onChange,
-  accessibilityLabel,
-}: {
-  items: string[];
-  selectedIndex: number;
-  onChange: (idx: number) => void;
-  accessibilityLabel: string;
-}) {
-  const t = useThemeColors();
-  const ref = useRef<ScrollView>(null);
-  const [live, setLive] = useState(selectedIndex);
-
-  useEffect(() => {
-    setLive(selectedIndex);
-    const id = requestAnimationFrame(() =>
-      ref.current?.scrollTo({ y: selectedIndex * ITEM_H, animated: false }),
-    );
-    return () => cancelAnimationFrame(id);
-  }, [selectedIndex]);
-
-  const idxAt = (y: number) => Math.max(0, Math.min(items.length - 1, Math.round(y / ITEM_H)));
-  const commit = (y: number) => {
-    const i = idxAt(y);
-    if (i !== selectedIndex) onChange(i);
-  };
-  const adjust = (delta: number) => {
-    const next = Math.max(0, Math.min(items.length - 1, live + delta));
-    if (next === live) return;
-    setLive(next);
-    onChange(next);
-    ref.current?.scrollTo({ y: next * ITEM_H, animated: true });
-  };
-
-  return (
-    <ScrollView
-      ref={ref}
-      showsVerticalScrollIndicator={false}
-      snapToInterval={ITEM_H}
-      decelerationRate="fast"
-      scrollEventThrottle={16}
-      onScroll={(e) => {
-        const i = idxAt(e.nativeEvent.contentOffset.y);
-        if (i !== live) setLive(i);
-      }}
-      // Оба события: быстрый флик → momentum-end, медленное перетаскивание
-      // без инерции → drag-end (momentum-end тогда не стреляет).
-      onMomentumScrollEnd={(e) => commit(e.nativeEvent.contentOffset.y)}
-      onScrollEndDrag={(e) => commit(e.nativeEvent.contentOffset.y)}
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityValue={{ text: items[live] ?? "" }}
-      accessibilityActions={[
-        { name: "increment", label: "Увеличить" },
-        { name: "decrement", label: "Уменьшить" },
-      ]}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "increment") adjust(1);
-        if (event.nativeEvent.actionName === "decrement") adjust(-1);
-      }}
-      style={{ width: COLUMN_W, height: WHEEL_H }}
-      contentContainerStyle={{ paddingVertical: PAD }}
-    >
-      {items.map((label, i) => {
-        const active = i === live;
-        return (
-          <View key={i} style={{ height: ITEM_H, alignItems: "center", justifyContent: "center" }}>
-            <Text
-              style={{
-                fontVariant: ["tabular-nums"],
-                color: active ? t.ink : t.placeholder,
-                fontWeight: active ? "700" : "500",
-                fontSize: active ? DIGIT_FONT : DIGIT_FONT - 3,
-              }}
-            >
-              {label}
-            </Text>
-          </View>
-        );
-      })}
-    </ScrollView>
-  );
-}
