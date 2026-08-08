@@ -95,6 +95,9 @@ export function rowToAppointment(r: Row): Appointment {
       (r.payment_status ?? undefined) as Appointment["payment_status"],
     payment_method:
       (r.payment_method ?? undefined) as Appointment["payment_method"],
+    // Счёт, выбранный при приёме денег. Без него сервер угадывает счёт по
+    // способу оплаты — и промахивается, когда счёта такого вида у команды нет.
+    payment_account_id: r.payment_account_id ?? null,
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined
@@ -178,6 +181,9 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     ...(a.payment_status !== undefined
       ? { payment_status: a.payment_status }
       : {}),
+    ...(a.payment_account_id !== undefined
+      ? { payment_account_id: a.payment_account_id ?? null }
+      : {}),
     ...(a.payment_method !== undefined
       ? { payment_method: a.payment_method ?? null }
       : {}),
@@ -252,6 +258,8 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
     out.payment_status = patch.payment_status;
   if (patch.payment_method !== undefined)
     out.payment_method = patch.payment_method ?? null;
+  if (patch.payment_account_id !== undefined)
+    out.payment_account_id = patch.payment_account_id ?? null;
   if (patch.paid_amount !== undefined) out.paid_amount = patch.paid_amount;
   if (patch.comment !== undefined) out.comment = patch.comment;
   if (patch.address !== undefined) out.address = patch.address;

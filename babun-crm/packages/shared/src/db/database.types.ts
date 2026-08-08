@@ -243,6 +243,7 @@ export type Database = {
           master_id: string | null
           paid_amount: number
           payment: Json | null
+          payment_account_id: string | null
           payment_method: string | null
           payment_status: string
           payments: Json
@@ -294,6 +295,7 @@ export type Database = {
           master_id?: string | null
           paid_amount?: number
           payment?: Json | null
+          payment_account_id?: string | null
           payment_method?: string | null
           payment_status?: string
           payments?: Json
@@ -345,6 +347,7 @@ export type Database = {
           master_id?: string | null
           paid_amount?: number
           payment?: Json | null
+          payment_account_id?: string | null
           payment_method?: string | null
           payment_status?: string
           payments?: Json

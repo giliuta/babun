@@ -65,6 +65,9 @@ const FINANCE_FIELDS = [
   "total_amount",
   "expenses",
   "client_id",
+  // Смена счёта меняет, НА КАКОЙ счёт сервер положит деньги — значит
+  // финансовые срезы после неё тоже устарели.
+  "payment_account_id",
 ] as const satisfies readonly (keyof Appointment)[];
 
 export function useCreateAppointment() {

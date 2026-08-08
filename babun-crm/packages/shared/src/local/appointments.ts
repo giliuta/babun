@@ -24,6 +24,10 @@ export interface Payment {
   method: PaymentMethod;
   amount: number;
   paid_at: string; // ISO date
+  /** Счёт, на который легли ИМЕННО ЭТИ деньги. Витрина для карточки записи:
+   *  леджер финансов owner-only и требует сети, а «куда положили» видно
+   *  всем и офлайн. Старые платежи без поля — «счёт определён автоматически». */
+  account_id?: string | null;
 }
 
 // STORY-002-FINAL: единый объект оплаты вместо массива payments.
@@ -162,6 +166,17 @@ export interface Appointment {
    *  «Карта / Нал / Перевод» on the appointment block without
    *  reading the `payment` jsonb. */
   payment_method?: "cash" | "card" | "transfer" | "other";
+  /** СЧЁТ, НА КОТОРЫЙ КЛАДУТ ДЕНЬГИ ПРЯМО СЕЙЧАС.
+   *
+   *  Поле-курьер, а не постоянное свойство записи: сервер читает его в момент
+   *  проводки и навсегда записывает счёт В САМУ ТРАНЗАКЦИЮ. Аванс картой и
+   *  остаток наличными — два разных счёта у одной записи, поэтому «куда легло»
+   *  спрашивают у платежей (`payments[].account_id`), а не у этой колонки.
+   *
+   *  NULL — счёт угадывается по способу оплаты (старые записи, закрытие дня,
+   *  импорт). Именно это угадывание и роняло приём денег у команд, у которых
+   *  счёта нужного вида не оказалось. */
+  payment_account_id?: string | null;
   /** Mirror — total actually received so far. The trigger uses
    *  total_amount for the income row; this field lets the UI show
    *  «частично оплачено» (paid_amount < total_amount). */

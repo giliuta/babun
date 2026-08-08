@@ -496,6 +496,9 @@ function makeServerRow(
     total_duration: input.total_duration ?? 0,
     payment_status: input.payment_status ?? "unpaid",
     payment_method: input.payment_method ?? null,
+    // БЕЗ ЭТОЙ СТРОКИ офлайн-реплей молча терял бы выбранный счёт, и деньги
+    // ложились бы на угаданный — ровно то, от чего мы уходим.
+    payment_account_id: input.payment_account_id ?? null,
     paid_amount: input.paid_amount ?? 0,
     // STORY-055 — created_by is filled server-side by the BEFORE
     // INSERT trigger; the optimistic cache row carries null and gets
@@ -553,6 +556,7 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.total_duration !== undefined) out.total_duration = patch.total_duration;
   if (patch.payment_status !== undefined) out.payment_status = patch.payment_status;
   if (patch.payment_method !== undefined) out.payment_method = patch.payment_method ?? null;
+  if (patch.payment_account_id !== undefined) out.payment_account_id = patch.payment_account_id ?? null;
   if (patch.paid_amount !== undefined) out.paid_amount = patch.paid_amount;
   // Event-поля личного календаря — по образцу makeServerRow. Без них
   // офлайн-правка события молча стирала event_* при реплее (payload

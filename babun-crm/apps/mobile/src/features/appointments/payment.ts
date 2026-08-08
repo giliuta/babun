@@ -46,11 +46,29 @@ export type PaidStateSnapshot = Pick<
   "payments" | "payment" | "payment_status" | "paid_amount"
 >;
 
+/** Вид счёта → способ оплаты. Способ перестаёт быть выбором человека: он
+ *  ВЫВОДИТСЯ из того, куда положили деньги. Одна биекция на весь продукт —
+ *  иначе «Перевод» и банковский счёт разъедутся в разных экранах. */
+export function paymentMethodForAccountKind(kind: string): PayMethod {
+  switch (kind) {
+    case "cash":
+      return "cash";
+    case "card":
+      return "card";
+    case "bank":
+      return "transfer";
+    default:
+      return "other";
+  }
+}
+
 /**
  * Патч «остаток `amount` получен способом `method`».
  *
  * @param apt    платёжное состояние записи ДО оплаты (undefined → пустое)
  * @param amount принимаемая сумма (остаток долга по getDebtAmount)
+ * @param accountId счёт, на который легли деньги. Без него сервер угадывает
+ *   счёт по способу — и падает, если счёта такого вида у команды нет.
  */
 export function buildDebtPaidPatch(
   apt: PaidStateSnapshot | null | undefined,
@@ -58,7 +76,13 @@ export function buildDebtPaidPatch(
     method,
     amount,
     remainingDebt = amount,
-  }: { method: PayMethod; amount: number; remainingDebt?: number },
+    accountId = null,
+  }: {
+    method: PayMethod;
+    amount: number;
+    remainingDebt?: number;
+    accountId?: string | null;
+  },
 ): Partial<Appointment> {
   const paidAt = new Date().toISOString();
   // Зеркально-учтённые деньги веба (payment-объект / колонка paid_amount)
@@ -96,10 +120,20 @@ export function buildDebtPaidPatch(
   const payments: Payment[] = [
     ...existing,
     ...seeded,
-    { id: generateId("pay"), method, amount, paid_at: paidAt },
+    // account_id прямо в платеже: аванс картой и остаток наличными — два
+    // разных счёта у одной записи, поэтому «куда легло» спрашивают у
+    // события денег, а не у колонки записи (она — курьер до сервера).
+    {
+      id: generateId("pay"),
+      method,
+      amount,
+      paid_at: paidAt,
+      ...(accountId ? { account_id: accountId } : {}),
+    },
   ];
   return {
     payments,
+    payment_account_id: accountId,
     // Legacy JSON mirror deliberately folds only cash/card. Canonical
     // transfer/other rows remain in payments[] + paid_amount and must not
     // masquerade as physical cash in the old web PaymentBlock.

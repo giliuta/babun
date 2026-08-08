@@ -48,9 +48,11 @@ import {
 } from "@babun/shared/common/utils/appointment-overlap";
 import {
   buildDebtPaidPatch,
+  paymentMethodForAccountKind,
   PAY_METHOD_LABELS,
   type PayMethod,
 } from "@/features/appointments/payment";
+import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { locationAddressForBooking } from "@babun/shared/local/clients";
@@ -335,6 +337,29 @@ export function AppointmentSheet({
   // «Выполнено» + долг → предлагаем сразу принять оплату.
   // null = «позже»: сохраняем без платежа, долг остаётся в «Должниках».
   const [payMethod, setPayMethod] = useState<PayMethod | null>(null);
+  // Куда кладут деньги. null при выбранном способе — легаси-путь (счетов у
+  // команды нет), сервер угадает счёт сам.
+  const [payAccountId, setPayAccountId] = useState<string | null>(null);
+  // Счета этой команды + подключённые общие. Без балансов: здесь выбирают
+  // кассу, а не смотрят деньги.
+  const { data: payAccounts = [] } = useTeamPaymentAccounts(teamId);
+  // «Куда легло» — по строке на каждое поступление. Имя счёта берём из
+  // справочника команды; платежи старых записей счёта не знают и честно
+  // говорят «счёт определён автоматически», а не выдумывают кассу.
+  const paidRows = useMemo(() => {
+    const byId = new Map(payAccounts.map((a) => [a.id, a.name]));
+    const rows: { key: string; text: string }[] = [];
+    for (const p of appointment?.payments ?? []) {
+      const where = p.account_id
+        ? (byId.get(p.account_id) ?? "счёт недоступен")
+        : "счёт определён автоматически";
+      rows.push({
+        key: p.id,
+        text: `${formatEUR(p.amount)} · ${where}`,
+      });
+    }
+    return rows;
+  }, [appointment?.payments, payAccounts]);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentAmountTouched, setPaymentAmountTouched] = useState(false);
 
@@ -379,6 +404,7 @@ export function AppointmentSheet({
     setSourceSheetOpen(false);
     setPrepaymentOpen(false);
     setPayMethod(null);
+    setPayAccountId(null);
     setPaymentAmount("");
     setPaymentAmountTouched(false);
     if (appointment) {
@@ -864,6 +890,7 @@ export function AppointmentSheet({
     setStatus(next);
     if (next !== "completed") {
       setPayMethod(null);
+    setPayAccountId(null);
       setPaymentAmount("");
       setPaymentAmountTouched(false);
     }
@@ -1056,6 +1083,7 @@ export function AppointmentSheet({
         method: payMethod,
         amount: settlementAmount,
         remainingDebt: debt,
+        accountId: payAccountId,
       });
       // A dispatcher can collect only part now and the remainder later,
       // potentially by another method. The cumulative mirrors stay in the
@@ -2078,28 +2106,60 @@ export function AppointmentSheet({
             ) : kind === "work" && status === "completed" ? (
               debt > 0 ? (
                 <SectionCard title={`Оплата · ${formatEUR(debt)}`}>
+                  {/* КУДА ПОЛОЖИЛИ ДЕНЬГИ, А НЕ «КАКИМ СПОСОБОМ».
+                      Раньше здесь стояли четыре абстрактных способа, а счёт
+                      сервер УГАДЫВАЛ — первый активный счёт нужного вида у
+                      команды. Не нашлось (нет карточного счёта, нет счёта
+                      «другое», общий счёт не подключён к этой команде) —
+                      приём денег ПАДАЛ, и бригадир не мог закрыть долг.
+                      Теперь тапают конкретную кассу: промахнуться она не
+                      может, а способ оплаты выводится из её вида.
+                      Счетов у команды нет вовсе → откат на прежние четыре
+                      способа: приём денег не блокируем никогда. */}
                   <View className="flex-row flex-wrap gap-2 p-3">
-                    {(
-                      [
-                        ...(
-                          ["cash", "card", "transfer", "other"] as const
-                        ).map((value) => ({
-                          v: value,
-                          label: PAY_METHOD_LABELS[value],
-                        })),
-                        { v: null, label: "Позже" },
-                      ] as const
-                    ).map((opt) => (
+                    {[
+                      ...(payAccounts.length > 0
+                        ? payAccounts.map((acc) => ({
+                            key: acc.id,
+                            label: acc.name,
+                            accountId: acc.id as string | null,
+                            method: paymentMethodForAccountKind(acc.kind) as
+                              | PayMethod
+                              | null,
+                          }))
+                        : (["cash", "card", "transfer", "other"] as const).map(
+                            (value) => ({
+                              key: value as string,
+                              label: PAY_METHOD_LABELS[value],
+                              accountId: null as string | null,
+                              method: value as PayMethod | null,
+                            }),
+                          )),
+                      {
+                        key: "later",
+                        label: "Позже",
+                        accountId: null as string | null,
+                        method: null as PayMethod | null,
+                      },
+                    ].map((opt) => (
                       <Chip
-                        key={opt.label}
+                        key={opt.key}
                         label={opt.label}
                         radio
-                        color={opt.v ? t.success : undefined}
-                        selected={payMethod === opt.v}
+                        color={opt.method ? t.success : undefined}
+                        selected={
+                          opt.method === null
+                            ? payMethod === null
+                            : opt.accountId
+                              ? payAccountId === opt.accountId
+                              : payAccountId === null &&
+                                payMethod === opt.method
+                        }
                         onPress={() => {
                           const startingPayment = payMethod === null;
-                          setPayMethod(opt.v);
-                          if (opt.v === null) {
+                          setPayMethod(opt.method);
+                          setPayAccountId(opt.accountId);
+                          if (opt.method === null) {
                             setPaymentAmount("");
                             setPaymentAmountTouched(false);
                           } else if (startingPayment) {
@@ -2170,6 +2230,23 @@ export function AppointmentSheet({
                       Оплачено · {formatEUR(alreadyPaid)}
                     </Text>
                   </View>
+                  {/* КУДА ЛЕГЛИ ДЕНЬГИ — по строке на каждое поступление.
+                      Спрашиваем у САМОГО платежа, а не у колонки записи:
+                      аванс мог уйти на карту, а остаток — в наличку, и одна
+                      колонка такую пару рассказать не может. */}
+                  {paidRows.length > 0 ? (
+                    <View className="gap-1 px-4 pb-3">
+                      {paidRows.map((row) => (
+                        <Text
+                          key={row.key}
+                          className="text-[13px]"
+                          style={{ color: t.sub }}
+                        >
+                          {row.text}
+                        </Text>
+                      ))}
+                    </View>
+                  ) : null}
                 </SectionCard>
               ) : null
             ) : null}
