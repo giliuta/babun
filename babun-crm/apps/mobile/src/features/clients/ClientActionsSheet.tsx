@@ -1,4 +1,11 @@
-import { Archive, Bell, CalendarPlus, Check, Pin } from "lucide-react-native";
+import {
+  Archive,
+  Bell,
+  CalendarPlus,
+  Check,
+  Pin,
+  Trash2,
+} from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { useLastNonNull } from "@/lib/use-last-non-null";
@@ -31,6 +38,7 @@ interface ClientActionsSheetProps {
   onTogglePin: (c: Client) => void;
   onRemind: (c: Client) => void;
   onArchive: (c: Client) => void;
+  onDelete: (c: Client) => void;
 }
 
 export function ClientActionsSheet({
@@ -41,6 +49,7 @@ export function ClientActionsSheet({
   onTogglePin,
   onRemind,
   onArchive,
+  onDelete,
 }: ClientActionsSheetProps) {
   const t = useThemeColors();
   // Держим последнего клиента, пока лист уезжает: ранний `return null` на
@@ -81,11 +90,21 @@ export function ClientActionsSheet({
       onPress: () => onSelectMany(c),
     },
     {
+      // Архив и удаление — разные исходы: первый бессрочный и сохраняет
+      // историю, второй кладёт в «Недавно удалённые» на 30 дней. Поэтому
+      // архив идёт обычным акцентом, красный остаётся за стиранием.
       id: "archive",
       label: "В архив",
       icon: Archive,
-      color: t.danger,
+      color: t.accent,
       onPress: () => onArchive(c),
+    },
+    {
+      id: "delete",
+      label: "Удалить",
+      icon: Trash2,
+      color: t.danger,
+      onPress: () => onDelete(c),
     },
   ];
 

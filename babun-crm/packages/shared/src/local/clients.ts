@@ -231,10 +231,17 @@ export interface Client {
   /** clients-99: optional avatar image. Empty/null → fall back to
    *  deterministic initials. */
   avatar_url?: string | null;
-  /** clients-99: soft-delete marker. NULL = live. Set by the
-   *  trash/undo flow; rows are purged by a background job after 30
-   *  days. */
+  /** Клиент убран из рабочего списка. NULL = живой.
+   *
+   *  ДВА СОСТОЯНИЯ НЕВИДИМОСТИ различаются ПАРОЙ полей, а не отдельной
+   *  таблицей — клиент остаётся клиентом со своей историей:
+   *    deleted_at есть, purge_at пуст  → АРХИВ, бессрочно;
+   *    deleted_at есть, purge_at стоит → КОРЗИНА, сотрётся в эту дату. */
   deleted_at?: string | null;
+  /** Дата полного стирания (корзина «Недавно удалённые», 30 дней как в
+   *  Фото на iPhone). Чистит ночное задание purge_expired_clients.
+   *  У активных и у архивных — NULL. */
+  purge_at?: string | null;
   /** clients-99: tenant_state master id. No FK on DB because masters
    *  live in tenant_state, not a physical table. */
   favorite_master_id?: string | null;
@@ -329,6 +336,7 @@ function mockToClient(m: MockClient): Client {
     phone_e164: null,
     avatar_url: null,
     deleted_at: null,
+    purge_at: null,
     favorite_master_id: null,
     created_at: new Date().toISOString(),
   };
@@ -413,6 +421,7 @@ export function loadClients(): Client[] {
         phone_e164: c.phone_e164 ?? null,
         avatar_url: c.avatar_url ?? null,
         deleted_at: c.deleted_at ?? null,
+        purge_at: c.purge_at ?? null,
         favorite_master_id: c.favorite_master_id ?? null,
         locations: migratedLocations,
       };
@@ -506,6 +515,7 @@ export function createBlankClient(overrides: Partial<Client> = {}): Client {
     phone_e164: null,
     avatar_url: null,
     deleted_at: null,
+    purge_at: null,
     favorite_master_id: null,
     created_at: new Date().toISOString(),
     ...overrides,

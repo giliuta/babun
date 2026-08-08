@@ -70,3 +70,44 @@ describe("rowToClient — объект клиента", () => {
     expect(loc.serviceEveryMonths).toBeUndefined();
   });
 });
+
+// АРХИВ И КОРЗИНА РАЗЛИЧАЮТСЯ ТОЛЬКО ПАРОЙ ПОЛЕЙ. Потеряется purge_at в
+// мапере — и «Недавно удалённые» станут вторым архивом: срок исчезнет, а
+// ночная очистка перестанет находить, кого стирать.
+describe("rowToClient — архив и корзина", () => {
+  const base = {
+    id: "c1",
+    tenant_id: "t1",
+    full_name: "Клиент",
+    phone: "+35799123456",
+    locations: [],
+    phones: [],
+    notes: [],
+    equipment: [],
+    created_at: "2026-01-01T00:00:00Z",
+  };
+
+  test("живой клиент — оба поля пусты", () => {
+    const c = rowToClient(base as never);
+    expect(c.deleted_at).toBeNull();
+    expect(c.purge_at).toBeNull();
+  });
+
+  test("архивный: дата ухода есть, срока стирания нет", () => {
+    const c = rowToClient({
+      ...base,
+      deleted_at: "2026-08-08T10:00:00Z",
+    } as never);
+    expect(c.deleted_at).toBe("2026-08-08T10:00:00Z");
+    expect(c.purge_at).toBeNull();
+  });
+
+  test("в корзине: срок стирания доезжает до домена", () => {
+    const c = rowToClient({
+      ...base,
+      deleted_at: "2026-08-08T10:00:00Z",
+      purge_at: "2026-09-07T10:00:00Z",
+    } as never);
+    expect(c.purge_at).toBe("2026-09-07T10:00:00Z");
+  });
+});

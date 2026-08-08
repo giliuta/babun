@@ -31,6 +31,8 @@ import {
   createClient,
   updateClient,
   listClients,
+  listArchivedClients,
+  listTrashedClients,
   archiveClient,
   restoreClient,
 } from "./clientsCached";
@@ -316,7 +318,21 @@ describe("clients cache-of-domain", () => {
     await createClient(stubSupabase, client, TENANT);
 
     await archiveClient(stubSupabase, CLIENT_ID, TENANT);
-    expect(await cacheRead("clients", TENANT)).toEqual([]);
+    // СТРОКА ОСТАЁТСЯ В КЭШЕ С ПОМЕТКОЙ. Раньше здесь стоял `toEqual([])`:
+    // кэш стирал архивного клиента, и, пока операция ждала сети, его не
+    // видел НИКТО — ни рабочий список, ни экран архива (тот читал прямо с
+    // сервера, где клиент ещё числился живым). Владелец 2026-08-08:
+    // «заархивировал — куда он делся». Теперь он всегда где-то виден.
+    const cached = (await cacheRead("clients", TENANT)) as Array<{
+      id: string;
+      deleted_at: string | null;
+      purge_at: string | null;
+    }>;
+    expect(cached).toHaveLength(1);
+    expect(cached[0]!.id).toBe(CLIENT_ID);
+    expect(typeof cached[0]!.deleted_at).toBe("string");
+    // Архив — без срока стирания: это не корзина.
+    expect(cached[0]!.purge_at).toBeNull();
     // This test started from a local-only create, not a server snapshot. Once
     // its sole row is archived, [] is still unknown until first sync.
     await expect(listClients(stubSupabase, TENANT)).rejects.toBeInstanceOf(
@@ -347,6 +363,72 @@ describe("clients cache-of-domain", () => {
         (op) => op.op === "update" && op.payload.deleted_at === null,
       ),
     ).toBe(true);
+  });
+
+  // ТА САМАЯ ДЫРА, из-за которой владелец не нашёл клиента: архивация без
+  // сети убирала его из рабочего списка, а экран архива читал напрямую с
+  // сервера — и не показывал ничего. Клиента не было НИГДЕ до синхронизации.
+  test("архивация без сети сразу видна в архиве, а не пропадает до синка", async () => {
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "Ушёл в архив" }),
+      TENANT,
+    );
+
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT);
+
+    const archived = await listArchivedClients(stubSupabase, TENANT);
+    expect(archived.map((c) => c.id)).toEqual([CLIENT_ID]);
+    expect(archived[0]!.full_name).toBe("Ушёл в архив");
+    // В корзине его нет: архив и корзина — разные полки.
+    expect(await listTrashedClients(stubSupabase, TENANT)).toEqual([]);
+  });
+
+  test("удаление без сети кладёт клиента в корзину со сроком, а не в архив", async () => {
+    await createClient(
+      stubSupabase,
+      createBlankClient({ id: CLIENT_ID, full_name: "Удалён" }),
+      TENANT,
+    );
+
+    const purgeAt = "2026-09-07T10:00:00.000Z";
+    await archiveClient(stubSupabase, CLIENT_ID, TENANT, purgeAt);
+
+    const trashed = await listTrashedClients(stubSupabase, TENANT);
+    expect(trashed.map((c) => c.id)).toEqual([CLIENT_ID]);
+    expect(trashed[0]!.purge_at).toBe(purgeAt);
+    // И он НЕ в архиве: срок стирания разводит полки.
+    expect(await listArchivedClients(stubSupabase, TENANT)).toEqual([]);
+    // Очередь несёт обе даты — сервер узнает и о сроке.
+    const op = (await dequeueAll()).find(
+      (o) => o.op === "update" && o.payload.purge_at === purgeAt,
+    );
+    expect(op).toBeDefined();
+  });
+
+  test("возврат из корзины снимает и срок стирания, а не только скрытость", async () => {
+    const client = createBlankClient({ id: CLIENT_ID, full_name: "Вернули" });
+    await createClient(stubSupabase, client, TENANT);
+    await archiveClient(
+      stubSupabase,
+      CLIENT_ID,
+      TENANT,
+      "2026-09-07T10:00:00.000Z",
+    );
+
+    await restoreClient(
+      stubSupabase,
+      { ...client, deleted_at: "2026-08-08T10:00:00.000Z", purge_at: "2026-09-07T10:00:00.000Z" },
+      TENANT,
+    );
+
+    const [back] = await listClients(stubSupabase, TENANT);
+    expect(back!.id).toBe(CLIENT_ID);
+    expect(back!.deleted_at).toBeNull();
+    // Иначе клиент вернулся бы в работу с тикающим сроком — и однажды исчез
+    // бы посреди рабочего списка.
+    expect(back!.purge_at).toBeNull();
+    expect(await listTrashedClients(stubSupabase, TENANT)).toEqual([]);
   });
 
   test("online semantic update rejection rolls back cache and is never queued", async () => {

@@ -60,6 +60,7 @@ import {
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
@@ -351,6 +352,47 @@ export default function ClientDetailScreen() {
     );
   };
 
+  // УДАЛИТЬ — не то же, что архив. Клиент едет в «Недавно удалённые» и
+  // через 30 дней стирается насовсем.
+  //
+  // Но за клиентом с визитами стоит финансовая история, и база стереть его
+  // не даст (guard_client_hard_delete_history). Честнее сказать это ДО
+  // действия и предложить архив, чем дать нажать и показать ошибку.
+  const onDelete = () => {
+    setMenuOpen(false);
+    const hasHistory = (stats?.visits ?? 0) > 0 || (stats?.totalSpent ?? 0) > 0;
+    if (hasHistory) {
+      Alert.alert(
+        "Этого клиента нельзя удалить",
+        "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
+        [
+          { text: "Отмена", style: "cancel" },
+          { text: "В архив", onPress: onArchive },
+        ],
+      );
+      return;
+    }
+    Alert.alert(
+      "Удалить клиента?",
+      `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
+      [
+        { text: "Отмена", style: "cancel" },
+        {
+          text: "Удалить",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const res = await archiveWithUndo([c], true);
+              if (res.archived > 0) router.back();
+            } catch (e) {
+              Alert.alert("Не удалось удалить", (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
@@ -369,6 +411,7 @@ export default function ClientDetailScreen() {
         onShare={() => void onShare()}
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
+        onDelete={onDelete}
       />
 
       <KeyboardAvoidingView

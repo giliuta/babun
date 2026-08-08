@@ -207,6 +207,7 @@ export function rowToClient(r: ClientRow): Client {
     phone_e164: r.phone_e164 ?? null,
     avatar_url: r.avatar_url ?? null,
     deleted_at: r.deleted_at ?? null,
+    purge_at: r.purge_at ?? null,
     favorite_master_id: r.favorite_master_id ?? null,
 
     created_at: r.created_at,
@@ -251,6 +252,7 @@ function clientToInsert(c: Client, tenantId: string): ClientInsert {
     phone_e164: c.phone_e164 ?? null,
     avatar_url: c.avatar_url ?? null,
     deleted_at: c.deleted_at ?? null,
+    purge_at: c.purge_at ?? null,
     favorite_master_id: c.favorite_master_id ?? null,
 
     // Preserve the moment the form was created. If empty (legacy or
@@ -290,6 +292,7 @@ function clientToUpdate(patch: Partial<Client>): ClientUpdate {
   if (patch.phone_e164 !== undefined) out.phone_e164 = patch.phone_e164 ?? null;
   if (patch.avatar_url !== undefined) out.avatar_url = patch.avatar_url ?? null;
   if (patch.deleted_at !== undefined) out.deleted_at = patch.deleted_at ?? null;
+  if (patch.purge_at !== undefined) out.purge_at = patch.purge_at ?? null;
   if (patch.favorite_master_id !== undefined) out.favorite_master_id = patch.favorite_master_id ?? null;
   return out;
 }
@@ -581,16 +584,35 @@ export async function deleteClient(
   // Junction rows cascade via FK.
 }
 
-// ─── Soft-delete + restore (clients-99 F3.2) ───────────────────
+// ─── Архив, корзина и возврат ──────────────────────────────────
+//
+// Оба состояния невидимости живут в одной строке клиента:
+//   deleted_at есть, purge_at пуст  → АРХИВ (бессрочно)
+//   deleted_at есть, purge_at стоит → КОРЗИНА (сотрётся в эту дату)
+// Поэтому каждая запись задаёт ОБА поля: архивация «поднимает» клиента из
+// корзины (срок снимается), удаление из архива — опускает.
+
+/** Сколько корзина держит клиента, прежде чем стереть навсегда. Столько же
+ *  держат «Недавно удалённые» в Фото на iPhone — привычка уже есть. */
+export const TRASH_DAYS = 30;
+
+/** Дата стирания для клиента, положенного в корзину сейчас. */
+export function purgeDateFromNow(days = TRASH_DAYS): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
 
 export async function softDeleteClient(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
+  /** Дата полного стирания — клиент едет в КОРЗИНУ. Без неё это архив. */
+  purgeAt: string | null = null,
 ): Promise<void> {
   const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString(), purge_at: purgeAt })
     .eq("id", id)
     .eq("tenant_id", tenantId)
     .select("id")
@@ -603,12 +625,13 @@ export async function softDeleteClients(
   supabase: DbSupabase,
   ids: string[],
   tenantId: string,
+  purgeAt: string | null = null,
 ): Promise<void> {
   if (!ids.length) return;
   const uniqueIds = [...new Set(ids)];
   const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: new Date().toISOString() })
+    .update({ deleted_at: new Date().toISOString(), purge_at: purgeAt })
     .in("id", uniqueIds)
     .eq("tenant_id", tenantId)
     .select("id");
@@ -625,7 +648,7 @@ export async function restoreClient(
 ): Promise<void> {
   const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: null })
+    .update({ deleted_at: null, purge_at: null })
     .eq("id", id)
     .eq("tenant_id", tenantId)
     .select("id")
@@ -643,7 +666,7 @@ export async function restoreClients(
   const uniqueIds = [...new Set(ids)];
   const { data, error } = await supabase
     .from("clients")
-    .update({ deleted_at: null })
+    .update({ deleted_at: null, purge_at: null })
     .in("id", uniqueIds)
     .eq("tenant_id", tenantId)
     .select("id");

@@ -129,9 +129,13 @@ export async function listClients(
   //    server [] as authoritative. Without that marker, offline [] means
   //    «unknown / never synced», not «this tenant has no clients».
   try {
-    const fresh = await repoListClients(supabase, tenantId);
-    await refreshCacheFromSupabase(supabase, tenantId, fresh).catch(() => {});
-    return fresh;
+    // Тянем ВСЕХ (со скрытыми) — этим наполняется кэш, из которого потом
+    // живут и архив, и корзина. Наверх отдаём только рабочий список.
+    const all = await repoListClients(supabase, tenantId, {
+      includeDeleted: true,
+    });
+    await refreshCacheFromSupabase(supabase, tenantId, all).catch(() => {});
+    return all.filter((c) => c.deleted_at == null);
   } catch (err) {
     // With a live connection, RLS/server failures reach the screen. Offline
     // may reuse a known-empty authoritative snapshot; a never-synced device
@@ -192,13 +196,20 @@ async function refreshCacheFromSupabase(
     void kickReplayer({ supabase });
     return false;
   }
-  const clients = domain ?? (await repoListClients(supabase, tenantId));
+  // ВКЛЮЧАЯ СКРЫТЫХ. Кэш зеркалит сервер целиком — активные, архивные и
+  // лежащие в корзине; каждый экран фильтрует своё. Без этого обновление
+  // (cacheReplaceTenant = снести и залить) вычищало бы архив из кэша при
+  // первом же ответе сервера, и экран архива снова остался бы без данных.
+  const clients =
+    domain ?? (await repoListClients(supabase, tenantId, { includeDeleted: true }));
   const updatedById = await fetchUpdatedAtById(supabase, tenantId);
   const rows = clients.map((c) =>
     makeCachedRow(c, tenantId, updatedById.get(c.id)),
   );
-  // Signature BEFORE the write — what the UI is currently showing.
-  const before = cacheSignature(await safeCacheReadClients(tenantId));
+  // Подпись ДО записи. Читаем нефильтрованно — иначе слева активные, справа
+  // все, подписи не совпадут никогда и «revalidated» будет уходить на каждый
+  // проход (тот самый цикл, от которого сторожок и заведён).
+  const before = cacheSignature(await allCachedClients(tenantId));
   await cacheReplaceTenant("clients", tenantId, rows);
   const after = cacheSignature(rows);
   return before !== after;
@@ -218,7 +229,8 @@ async function fetchUpdatedAtById(
       .from("clients")
       .select("id, updated_at")
       .eq("tenant_id", tenantId)
-      .is("deleted_at", null)
+      // Скрытые тоже: сторожок LWW нужен и архивному клиенту — его ещё
+      // восстанавливать, и без updated_at возврат пойдёт вслепую.
       .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (error) throw new Error(`refreshClients meta: ${error.message}`);
@@ -422,41 +434,60 @@ async function enqueueUpdate(
 
 // ─── Write — delete ───────────────────────────────────────────────
 
-/** Product-level removal: archive the client while preserving linked jobs,
- * invoices and ledger history. The active-list cache removes the row, but the
- * offline queue carries UPDATE deleted_at — never DELETE. */
+/** Убрать клиента из работы, сохранив заявки, инвойсы и деньги. Без даты
+ *  стирания это АРХИВ (бессрочно), с датой — КОРЗИНА «Недавно удалённые».
+ *  Очередь несёт UPDATE deleted_at — никогда DELETE.
+ *
+ *  СТРОКА ОСТАЁТСЯ В КЭШЕ С ПОМЕТКОЙ, а не удаляется из него. Раньше здесь
+ *  стоял `cacheDelete`, и это делало клиента невидимым ВЕЗДЕ, когда запись
+ *  уходила в очередь: из рабочего списка его уже убрали, а экран архива
+ *  читал напрямую с сервера, где он ещё числился живым. Владелец 2026-08-08:
+ *  «заархивировал — куда он делся, я не понимаю». Теперь оба экрана читают
+ *  один и тот же кэш, и клиент всегда где-то виден. */
 export async function archiveClient(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
+  /** Когда стереть навсегда. null — архив без срока. */
+  purgeAt: string | null = null,
 ): Promise<void> {
   const existing = await readCachedClient(id, tenantId);
   const archivedAt = new Date().toISOString();
+  // updated_at НЕ трогаем: это сторожок LWW, он принадлежит серверу. Своя
+  // дата здесь заставила бы следующую операцию сравниться с выдуманным
+  // значением и решить, что запись устарела.
+  const hidden = existing
+    ? { ...existing, deleted_at: archivedAt, purge_at: purgeAt }
+    : null;
   const archiveOp = {
     table: "clients" as const,
     op: "update" as const,
     row_id: id,
-    payload: { deleted_at: archivedAt },
+    payload: { deleted_at: archivedAt, purge_at: purgeAt },
     expected_updated_at: existing?.updated_at ?? null,
   };
+  const queue = () =>
+    hidden
+      ? enqueueOpWithCacheUpsertAndEmit(archiveOp, "clients", hidden)
+      : enqueueOpAndEmit(archiveOp);
 
   if (isOnline()) {
-    await cacheDelete("clients", id);
+    if (hidden) await cacheUpsert("clients", hidden);
     try {
-      await repoSoftDeleteClient(supabase, id, tenantId);
+      await repoSoftDeleteClient(supabase, id, tenantId, purgeAt);
       return;
     } catch (err) {
       if (!isTransientNetworkError(err)) {
         if (existing) await cacheUpsert("clients", existing).catch(() => {});
         throw err;
       }
-      await enqueueOpWithCacheDeleteAndEmit(archiveOp, "clients", id);
+      await queue();
       void kickReplayer({ supabase });
       return;
     }
   }
 
-  await enqueueOpWithCacheDeleteAndEmit(archiveOp, "clients", id);
+  await queue();
 }
 
 /** Restore an archived client into the active-list cache. Supplying the
@@ -468,8 +499,10 @@ export async function restoreClient(
   tenantId: string,
 ): Promise<void> {
   const restoredAt = new Date().toISOString();
+  // Возврат снимает ОБА признака невидимости разом: клиент из корзины
+  // возвращается в работу, а не в архив «на полпути».
   const cachedRow = makeCachedRow(
-    { ...client, deleted_at: null },
+    { ...client, deleted_at: null, purge_at: null },
     tenantId,
     restoredAt,
   );
@@ -477,7 +510,7 @@ export async function restoreClient(
     table: "clients" as const,
     op: "update" as const,
     row_id: client.id,
-    payload: { deleted_at: null },
+    payload: { deleted_at: null, purge_at: null },
     expected_updated_at: null,
   };
 
@@ -548,18 +581,71 @@ export async function deleteClient(
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
-async function safeCacheReadClients(
+/** ВСЕ строки тенанта из кэша — активные, архивные и лежащие в корзине.
+ *  Кэш зеркалит сервер; кто что показывает, решают читатели ниже. */
+async function allCachedClients(
   tenantId: string,
 ): Promise<CachedClientData[]> {
   try {
-    const rows = await cacheRead<CachedClientData>("clients", tenantId);
-    // An archive op deliberately removes the row from the active cache. This
-    // filter is a second wall for legacy/conflict replay rows that may still
-    // contain deleted_at in SQLite.
-    return rows.filter((row) => row.deleted_at == null);
+    return await cacheRead<CachedClientData>("clients", tenantId);
   } catch {
     return [];
   }
+}
+
+/** Рабочий список: всё, что не убрано с глаз. */
+async function safeCacheReadClients(
+  tenantId: string,
+): Promise<CachedClientData[]> {
+  const rows = await allCachedClients(tenantId);
+  return rows.filter((row) => row.deleted_at == null);
+}
+
+/** Скрытые клиенты: архив (`trashed=false`) или корзина (`trashed=true`).
+ *
+ *  Читается ИЗ КЭША, а не с сервера. Так экран архива видит и то, что ещё
+ *  не доехало до сервера: архивация в дороге кладёт клиента в кэш с
+ *  пометкой, и он сразу находится там, где его ищут. Сортировка разная,
+ *  потому что вопрос разный: в архиве важно «кого убрали последним», в
+ *  корзине — «кого сотрут первым». */
+async function listHiddenClients(
+  supabase: DbSupabase,
+  tenantId: string,
+  trashed: boolean,
+): Promise<Client[]> {
+  let rows = await allCachedClients(tenantId);
+  if (rows.length === 0) {
+    // Холодный кэш: пустой архив — это «не знаю», а не «пусто». Ждём ответа
+    // сервера, иначе экран соврёт, что архив чист.
+    await refreshCacheFromSupabase(supabase, tenantId).catch(() => {});
+    rows = await allCachedClients(tenantId);
+  } else {
+    void revalidateClients(supabase, tenantId);
+  }
+  return rows
+    .filter((r) => r.deleted_at != null && (r.purge_at != null) === trashed)
+    .sort((a, b) =>
+      trashed
+        ? (a.purge_at ?? "").localeCompare(b.purge_at ?? "")
+        : (b.deleted_at ?? "").localeCompare(a.deleted_at ?? ""),
+    )
+    .map(rowToClient);
+}
+
+/** Архив: убраны из работы бессрочно, срока стирания нет. */
+export function listArchivedClients(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Client[]> {
+  return listHiddenClients(supabase, tenantId, false);
+}
+
+/** Корзина «Недавно удалённые»: сотрутся в свой purge_at. */
+export function listTrashedClients(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<Client[]> {
+  return listHiddenClients(supabase, tenantId, true);
 }
 
 async function readCachedClient(
@@ -644,6 +730,7 @@ function makeServerRow(
     phone_e164: input.phone_e164 ?? null,
     avatar_url: input.avatar_url ?? null,
     deleted_at: input.deleted_at ?? null,
+    purge_at: input.purge_at ?? null,
     favorite_master_id: input.favorite_master_id ?? null,
     created_at: input.created_at ?? nowIso,
     updated_at: nowIso,
@@ -682,6 +769,7 @@ function patchToRow(patch: Partial<Client>): Partial<CachedClient> {
   if (patch.phone_e164 !== undefined) out.phone_e164 = patch.phone_e164 ?? null;
   if (patch.avatar_url !== undefined) out.avatar_url = patch.avatar_url ?? null;
   if (patch.deleted_at !== undefined) out.deleted_at = patch.deleted_at ?? null;
+  if (patch.purge_at !== undefined) out.purge_at = patch.purge_at ?? null;
   if (patch.favorite_master_id !== undefined) out.favorite_master_id = patch.favorite_master_id ?? null;
   return out;
 }

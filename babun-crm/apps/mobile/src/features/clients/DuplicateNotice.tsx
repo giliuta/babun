@@ -87,7 +87,7 @@ export function DuplicateNotice({ client }: { client: Client }) {
       //    неудач вместо исключения: без этой проверки слияние отчитывалось
       //    успехом, дубль оставался живым, плашка возвращалась — и второе
       //    слияние удваивало баланс.
-      const res = await archive.mutateAsync([dup.id]);
+      const res = await archive.mutateAsync({ ids: [dup.id] });
       if (res.failed > 0 || res.archived === 0) {
         throw new Error("Карточка объединена, но дубль не ушёл в архив");
       }

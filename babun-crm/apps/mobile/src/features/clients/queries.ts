@@ -17,14 +17,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // canonical row live.
 import {
   getClient,
-  listClients as listClientsDirect,
+  purgeDateFromNow,
 } from "@babun/shared/db/repositories/clients";
 import {
   listClients as listClientsCached,
+  listArchivedClients as listArchivedCached,
+  listTrashedClients as listTrashedCached,
   createClient as createClientCached,
   updateClient,
   archiveClient as archiveClientCached,
   restoreClient as restoreClientCached,
+  deleteClient as deleteClientCached,
 } from "@babun/shared/sync/clientsCached";
 import {
   createClientTag as createClientTagCached,
@@ -292,17 +295,31 @@ export interface ArchiveClientsResult {
   archivedIds: string[];
 }
 
+/** `trash: true` — клиент едет в «Недавно удалённые» со сроком 30 дней;
+ *  иначе в архив без срока. Одна мутация на обе полки: разница между ними
+ *  и в базе ровно одна — проставлен ли `purge_at`. */
+export interface ArchiveClientsInput {
+  ids: string[];
+  trash?: boolean;
+}
+
 export function useArchiveClients() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (ids: string[]): Promise<ArchiveClientsResult> => {
+    mutationFn: async (
+      input: ArchiveClientsInput,
+    ): Promise<ArchiveClientsResult> => {
+      const { ids, trash } = input;
       if (!tenantId) throw new Error("Нет активного тенанта");
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Архивировать клиентов может владелец или диспетчер.");
       }
+      // Один срок на весь заход: клиенты, удалённые одним действием, должны
+      // и стереться вместе, а не расползтись по секундам.
+      const purgeAt = trash ? purgeDateFromNow() : null;
       let archived = 0;
       let failed = 0;
       const archivedIds: string[] = [];
@@ -312,7 +329,7 @@ export function useArchiveClients() {
         // Settle each so one bad row (repo error / RLS online) doesn't abort
         // the remaining chunks — count fulfilled vs rejected instead.
         const settled = await Promise.allSettled(
-          chunk.map((id) => archiveClientCached(supabase, id, tenantId)),
+          chunk.map((id) => archiveClientCached(supabase, id, tenantId, purgeAt)),
         );
         for (const [index, res] of settled.entries()) {
           if (res.status === "fulfilled") {
@@ -329,28 +346,41 @@ export function useArchiveClients() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["archived-clients"] });
+      void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
     },
     meta: { errorHandled: true }, // caller messages the partial result itself
   });
 }
 
-export function useArchivedClients() {
+/** Архив и корзина ЧИТАЮТСЯ ИЗ КЭША (как рабочий список), а не напрямую с
+ *  сервера. Прямое чтение было дырой: архивация, ушедшая в очередь, делала
+ *  клиента невидимым везде — из списка его убрали, а сервер ещё считал
+ *  живым, и экран архива о нём не знал. */
+function useHiddenClients(
+  key: "archived-clients" | "trashed-clients",
+  read: (client: typeof supabase, tenantId: string) => Promise<Client[]>,
+) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["archived-clients", tenantId, role ?? "role-pending"],
+    queryKey: [key, tenantId, role ?? "role-pending"],
     enabled:
       !!tenantId &&
       roleQuery.isSuccess &&
       (role === "owner" || role === "dispatcher"),
-    queryFn: async (): Promise<Client[]> => {
-      const rows = await listClientsDirect(supabase, tenantId as string, {
-        includeDeleted: true,
-      });
-      return rows.filter((client) => client.deleted_at != null);
-    },
+    queryFn: () => read(supabase, tenantId as string),
   });
+}
+
+/** Архив: убраны из работы бессрочно. */
+export function useArchivedClients() {
+  return useHiddenClients("archived-clients", listArchivedCached);
+}
+
+/** «Недавно удалённые»: сотрутся по своему сроку. */
+export function useTrashedClients() {
+  return useHiddenClients("trashed-clients", listTrashedCached);
 }
 
 export function useRestoreClient() {
@@ -365,13 +395,52 @@ export function useRestoreClient() {
         throw new Error("Восстановить клиента может владелец или диспетчер.");
       }
       await restoreClientCached(supabase, client, tenantId);
-      return { ...client, deleted_at: null } satisfies Client;
+      return { ...client, deleted_at: null, purge_at: null } satisfies Client;
     },
     onSuccess: (restored, client) => {
       void qc.invalidateQueries({ queryKey: ["clients"] });
       void qc.invalidateQueries({ queryKey: ["archived-clients"] });
+      void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
       void qc.invalidateQueries({ queryKey: ["client", client.id] });
       if (restored.reminder_at) syncClientReminderWithFeedback(restored);
+    },
+    meta: { errorHandled: true },
+  });
+}
+
+/** СТЕРЕТЬ НАВСЕГДА — из корзины, без ожидания срока. Возврата нет.
+ *
+ *  База не даст стереть клиента, за которым есть заявки, инвойсы или деньги
+ *  (триггер guard_client_hard_delete_history): за ним стоит чужая финансовая
+ *  история. Такой клиент в корзину и не попадает — интерфейс предлагает ему
+ *  только архив, — но сообщение на этот случай честное, а не «ошибка базы». */
+export function useDeleteClientForever() {
+  const tenantId = useTenantId();
+  const roleQuery = useCurrentRole();
+  const role = roleQuery.data;
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenantId) throw new Error("Нет активного тенанта");
+      if (role !== "owner") {
+        throw new Error("Стереть клиента навсегда может только владелец.");
+      }
+      try {
+        await deleteClientCached(supabase, id, tenantId);
+      } catch (e) {
+        const text = (e as Error).message ?? "";
+        if (/history|истори/i.test(text)) {
+          throw new Error(
+            "У клиента есть заявки или деньги — стереть его нельзя. Такой клиент живёт в архиве.",
+          );
+        }
+        throw e;
+      }
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["clients"] });
+      void qc.invalidateQueries({ queryKey: ["trashed-clients"] });
+      void qc.invalidateQueries({ queryKey: ["archived-clients"] });
     },
     meta: { errorHandled: true },
   });

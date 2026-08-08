@@ -11,8 +11,10 @@ import {
   Navigation,
   Tags,
   Smartphone,
+  Trash2,
   Upload,
 } from "lucide-react-native";
+import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -283,8 +285,19 @@ export default function ClientsSettingsScreen() {
             tile="#5B6678"
             icon={Archive}
             title="Архив клиентов"
-            sub="Просмотреть и восстановить"
+            sub="Убраны из работы, история цела"
             onPress={() => router.push("/clients/archive")}
+          />
+          <Divider inset={56} />
+          {/* Две полки рядом и подписаны по-разному: архив — без срока,
+              корзина — со счётчиком. Иначе «куда он делся» повторится, уже
+              с двумя одинаковыми на вид дверями. */}
+          <Row
+            tile="#C0392B"
+            icon={Trash2}
+            title="Недавно удалённые"
+            sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
+            onPress={() => router.push("/clients/trash")}
           />
         </SectionCard>
       </ScrollView>

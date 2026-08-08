@@ -35,8 +35,15 @@ export function useArchiveWithUndo() {
   const toast = useToast();
 
   return useCallback(
-    async (clients: readonly Client[]): Promise<ArchiveClientsResult> => {
-      const res = await archive.mutateAsync(clients.map((c) => c.id));
+    async (
+      clients: readonly Client[],
+      /** true — в «Недавно удалённые» на 30 дней, иначе в архив. */
+      trash = false,
+    ): Promise<ArchiveClientsResult> => {
+      const res = await archive.mutateAsync({
+        ids: clients.map((c) => c.id),
+        trash,
+      });
       if (res.archived === 0) return res;
 
       // Восстанавливаем ровно тех, кто ДОШЁЛ до архива: при частичной
@@ -45,12 +52,13 @@ export function useArchiveWithUndo() {
       const one = done.length === 1;
       // Частичная неудача сообщается ЗДЕСЬ ЖЕ, а не вторым тостом от
       // вызывающего: второй перекрыл бы первый вместе с кнопкой отмены.
+      const where = trash ? "в удалённых" : "в архиве";
       toast(
         res.failed > 0
-          ? `В архиве: ${done.length}, не удалось: ${res.failed}`
+          ? `${trash ? "Удалено" : "В архиве"}: ${done.length}, не удалось: ${res.failed}`
           : one
-            ? "Клиент в архиве"
-            : `В архиве: ${done.length}`,
+            ? `Клиент ${where}`
+            : `${trash ? "Удалено" : "В архиве"}: ${done.length}`,
         res.failed > 0 ? "error" : "success",
         {
           label: "Отменить",
@@ -73,7 +81,7 @@ export function useArchiveWithUndo() {
               haptics.warning();
               const lost = done.length - back;
               toast(
-                `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они в архиве, восстановите вручную`,
+                `Не удалось вернуть ${lost} ${countWordRu(lost, "клиента", "клиентов", "клиентов")} — они ${where}, восстановите вручную`,
                 "error",
               );
             })();

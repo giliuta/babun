@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   MoreHorizontal,
   Share2,
+  Trash2,
 } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useThemeColors } from "@/theme/colors";
@@ -24,6 +25,7 @@ interface ClientDetailChromeProps {
   onShare: () => void;
   onToggleBlacklist: () => void;
   onArchive: () => void;
+  onDelete: () => void;
 }
 
 export function ClientDetailChrome({
@@ -40,6 +42,7 @@ export function ClientDetailChrome({
   onShare,
   onToggleBlacklist,
   onArchive,
+  onDelete,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
   // Кнопки хедера живут ВЫШЕ прокрутки с полями и фокус у поля не забирают:
@@ -125,11 +128,22 @@ export function ClientDetailChrome({
             onPress: onToggleBlacklist,
           },
           {
+            // ДВА РАЗНЫХ ИСХОДА, а не один с разной силой. Архив — «больше
+            // не работаем, история цела, срока нет». Удаление — корзина на
+            // 30 дней и потом насовсем. Раньше был только архив, и удалить
+            // клиента, заведённого по ошибке, было нечем.
             id: "archive",
             label: "В архив",
             icon: Archive,
-            color: t.danger,
+            color: t.accent,
             onPress: onArchive,
+          },
+          {
+            id: "delete",
+            label: "Удалить",
+            icon: Trash2,
+            color: t.danger,
+            onPress: onDelete,
           },
         ]}
         onClose={onCloseMenu}

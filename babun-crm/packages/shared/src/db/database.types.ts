@@ -688,6 +688,7 @@ export type Database = {
           phones: Json
           pinned_at: string | null
           property_type: string
+          purge_at: string | null
           referred_by_client_id: string | null
           reminder_at: string | null
           sms_name: string
@@ -724,6 +725,7 @@ export type Database = {
           phones?: Json
           pinned_at?: string | null
           property_type?: string
+          purge_at?: string | null
           referred_by_client_id?: string | null
           reminder_at?: string | null
           sms_name?: string
@@ -760,6 +762,7 @@ export type Database = {
           phones?: Json
           pinned_at?: string | null
           property_type?: string
+          purge_at?: string | null
           referred_by_client_id?: string | null
           reminder_at?: string | null
           sms_name?: string
