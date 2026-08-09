@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { FinanceTransaction } from "./transaction";
 import {
+  applyTxVat,
+  defaultTxVatMode,
   grossForPrice,
+  inputFromGross,
   grossFromNet,
   netFromGross,
   summarizeVat,
@@ -123,5 +126,53 @@ describe("сводка к уплате", () => {
       tx({ type: "expense", amount: 595, vat_amount: 95, vat_rate: 19 }),
     ]);
     expect(s.due).toBe(-76);
+  });
+});
+
+// ТРИ КЛАВИШИ НА ОПЕРАЦИИ. Ошибка здесь — это либо налог, начисленный на
+// наличку от частника, либо счёт, на который легло на 19% меньше денег.
+describe("режим НДС на операции", () => {
+  test("без НДС: сколько ввели, столько и легло", () => {
+    expect(applyTxVat(400, "none", 19)).toEqual({ gross: 400, vat: 0, net: 400 });
+  });
+
+  test("НДС включён: налог достаётся ИЗ суммы", () => {
+    expect(applyTxVat(476, "inclusive", 19)).toEqual({
+      gross: 476,
+      vat: 76,
+      net: 400,
+    });
+  });
+
+  test("плюс НДС: на счёт приходит больше введённого", () => {
+    expect(applyTxVat(400, "exclusive", 19)).toEqual({
+      gross: 476,
+      vat: 76,
+      net: 400,
+    });
+  });
+
+  test("нулевая ставка не меняет сумму ни в одном режиме", () => {
+    expect(applyTxVat(400, "exclusive", 0).gross).toBe(400);
+    expect(applyTxVat(400, "inclusive", 0).vat).toBe(0);
+  });
+
+  test("повторное открытие показывает введённое, а не валовое", () => {
+    expect(inputFromGross(476, "exclusive", 19)).toBe(400);
+    expect(inputFromGross(476, "inclusive", 19)).toBe(476);
+    expect(inputFromGross(476, "none", 19)).toBe(476);
+  });
+
+  test("выключенный НДС даёт операции «без НДС»", () => {
+    expect(defaultTxVatMode({ mode: "off", rate: 0, exemptionNote: null })).toBe(
+      "none",
+    );
+    expect(
+      defaultTxVatMode({ mode: "exclusive", rate: 19, exemptionNote: null }),
+    ).toBe("exclusive");
+    // Режим включён, а ставки нет — налога всё равно не будет.
+    expect(
+      defaultTxVatMode({ mode: "inclusive", rate: 0, exemptionNote: null }),
+    ).toBe("none");
   });
 });

@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { Percent } from "lucide-react-native";
 import type { VatMode } from "@babun/shared/local/finance/vat";
 import { grossFromNet } from "@babun/shared/local/finance/vat";
@@ -32,7 +33,11 @@ import { useThemeColors } from "@/theme/colors";
 // странах (Кипр 19, Греция 24). Компанейское значение — дефолт, команда
 // может его переопределить (паттерн настроек календаря).
 
-const MODES: VatMode[] = ["off", "inclusive", "exclusive"];
+// Выключатель отдельно от выбора режима: «не работаю с НДС» — это не третий
+// вариант ценообразования, а «уберите с глаз». Владелец 2026-08-09: «некоторые
+// вообще не пользуются НДС — брови, маникюр, наличка; тумблер выключаешь, и
+// всё это пропадает».
+const PRICING_MODES: VatMode[] = ["inclusive", "exclusive"];
 const EXAMPLE_PRICE = 400;
 
 export default function VatSettingsScreen() {
@@ -44,8 +49,14 @@ export default function VatSettingsScreen() {
   const { data: teams = [] } = useTeams();
 
   const [rateDraft, setRateDraft] = useState("");
+  // Каким режимом пользовались до выключения — чтобы включение вернуло его,
+  // а не поставило «включён» поверх «плюсом».
+  const [lastPricingMode, setLastPricingMode] = useState<VatMode | null>(null);
   useEffect(() => {
     if (settings.data) setRateDraft(String(settings.data.rate));
+    if (settings.data && settings.data.mode !== "off") {
+      setLastPricingMode(settings.data.mode);
+    }
   }, [settings.data]);
 
   if (settings.isLoading || !settings.data) {
@@ -81,10 +92,36 @@ export default function VatSettingsScreen() {
     <Screen>
       <ScreenHeader title="НДС и страна" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+        <SectionCard>
+          <SwitchRow
+            label="Работаем с НДС"
+            hint={
+              v.mode === "off"
+                ? "Приложение не спрашивает про налог и не считает его"
+                : "В каждой операции можно выбрать «Без НДС», «включён» или «плюсом»"
+            }
+            value={v.mode !== "off"}
+            onChange={(on) =>
+              save.mutate(
+                // Возвращаем ровно тот режим, каким пользовались: выключатель
+                // не должен молча менять «плюс НДС» на «включён».
+                { mode: on ? (lastPricingMode ?? "inclusive") : "off" },
+                {
+                  onSuccess: () => toast("Сохранено", "success"),
+                  onError: (e) =>
+                    Alert.alert("Не удалось сохранить", (e as Error).message),
+                },
+              )
+            }
+          />
+        </SectionCard>
+
+        {v.mode === "off" ? null : (
+        <>
         <SectionEyebrow>Как назначается цена</SectionEyebrow>
         <SectionCard>
           <View className="flex-row flex-wrap gap-2 p-3">
-            {MODES.map((mode) => (
+            {PRICING_MODES.map((mode) => (
               <Chip
                 key={mode}
                 label={VAT_MODE_LABELS[mode]}
@@ -106,8 +143,7 @@ export default function VatSettingsScreen() {
           </View>
           {/* ПОСЛЕДСТВИЕ В ЕВРО. Термины «inclusive/exclusive» ничего не
               говорят на бегу; сумма, которую заплатит клиент, — говорит. */}
-          {v.mode !== "off" ? (
-            <>
+          <>
               <Divider inset={16} />
               <View className="px-4 py-3">
                 <Text className="text-[13px]" style={{ color: t.sub }}>
@@ -123,11 +159,9 @@ export default function VatSettingsScreen() {
                 </Text>
               </View>
             </>
-          ) : null}
         </SectionCard>
 
-        {v.mode !== "off" ? (
-          <>
+        <>
             <SectionEyebrow>Ставка компании</SectionEyebrow>
             <SectionCard>
               <View className="flex-row items-center px-4 py-3" style={{ gap: 12 }}>
@@ -154,7 +188,8 @@ export default function VatSettingsScreen() {
             </SectionCard>
             <Text className="mx-4 mt-1.5 text-xs" style={{ color: t.sub }}>
               Кипр — 19%, Греция — 24%. Ставка запоминается в каждой операции:
-              если поднимете её завтра, прошлые отчёты не изменятся.
+              если поднимете её завтра, прошлые отчёты не изменятся. У каждой
+              операции остаётся свой выбор — «Без НДС», «включён» или «плюсом».
             </Text>
 
             <SectionEyebrow>Своя ставка у команды</SectionEyebrow>
@@ -192,7 +227,8 @@ export default function VatSettingsScreen() {
               )}
             </SectionCard>
           </>
-        ) : null}
+        </>
+        )}
       </ScrollView>
     </Screen>
   );

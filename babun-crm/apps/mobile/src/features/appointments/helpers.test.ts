@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   addMinutesHM,
   buildServices,
+  parseYMD,
   minutesBetweenHM,
   parseMoneyInput,
 } from "./helpers";
@@ -124,5 +125,30 @@ describe("appointment service economics", () => {
 
     assert.equal(line.pricePerUnit, 20);
     assert.equal(line.duration, 120);
+  });
+});
+
+// Дата записи в системном календаре: неверный разбор виден сразу — вместо
+// дня работы стоит «1 янв. 1970 г.», и сохранение уносит запись в 1970-й.
+describe("parseYMD", () => {
+  test("обычная дата", () => {
+    const d = parseYMD("2026-05-31");
+    assert.deepEqual(
+      [d.getFullYear(), d.getMonth() + 1, d.getDate()],
+      [2026, 5, 31],
+    );
+  });
+
+  test("ISO-штамп из кэша не ломает день", () => {
+    const d = parseYMD("2026-05-31T00:00:00.000Z");
+    assert.deepEqual(
+      [d.getFullYear(), d.getMonth() + 1, d.getDate()],
+      [2026, 5, 31],
+    );
+  });
+
+  test("мусор откатывается на сегодня, а не на 1970-й", () => {
+    assert.ok(parseYMD("").getFullYear() > 2000);
+    assert.ok(parseYMD("не дата").getFullYear() > 2000);
   });
 });

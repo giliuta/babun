@@ -53,6 +53,9 @@ import {
   type PayMethod,
 } from "@/features/appointments/payment";
 import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts";
+import { useRouter, type Href } from "expo-router";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { AppointmentDocuments } from "@/features/documents/AppointmentDocuments";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { locationAddressForBooking } from "@babun/shared/local/clients";
@@ -203,6 +206,7 @@ export function AppointmentSheet({
   };
 }) {
   const t = useThemeColors();
+  const router = useRouter();
   const isEdit = !!appointment;
   const { data: clients = [] } = useClients();
   const createClient = useCreateClient();
@@ -1450,14 +1454,21 @@ export function AppointmentSheet({
             <SectionCard title="Когда">
               <View className="flex-row items-center justify-between px-4 py-2.5">
                 <Text className="text-base" style={{ color: t.ink }}>Дата</Text>
-                <DateTimePicker
-                  themeVariant="light"
-                  locale="ru-RU"
-                  value={date ? parseYMD(date) : new Date()}
-                  mode="date"
-                  display="compact"
-                  onChange={(_, d) => d && setDate(formatYMD(d))}
-                />
+                {/* ПИКЕР РОЖДАЕТСЯ УЖЕ С ДАТОЙ. Системный компактный
+                    UIDatePicker запоминает значение, с которым его создали, и
+                    поздний проп его не двигает: смонтированный до гидрации
+                    (date === "") он навсегда показывал «1 янв. 1970 г.»,
+                    хотя в записи стояло 31 мая. */}
+                {date ? (
+                  <DateTimePicker
+                    themeVariant="light"
+                    locale="ru-RU"
+                    value={parseYMD(date)}
+                    mode="date"
+                    display="compact"
+                    onChange={(_, d) => d && setDate(formatYMD(d))}
+                  />
+                ) : null}
               </View>
               {kind === "event" && allDay ? null : (
                 <>
@@ -2240,6 +2251,25 @@ export function AppointmentSheet({
                   ) : null}
                 </SectionCard>
               ) : null
+            ) : null}
+
+            {/* Документы этой работы: счёт по кнопке, чеки — сами. Только у
+                сохранённой работы: у черновика нечего закреплять. */}
+            {kind === "work" && appointment ? (
+              <AppointmentDocuments
+                appointmentId={appointment.id}
+                clientId={clientId}
+                teamId={teamId}
+                amount={effectiveTotal}
+                title={comment.trim() || "Услуги"}
+                issuedOn={date}
+                onOpen={(href) => {
+                  // Лист уезжает ПЕРВЫМ: новый экран, открытый поверх модалки,
+                  // рисуется под ней — человек видит пустой лист.
+                  onClose();
+                  setTimeout(() => router.push(href as Href), SHEET_EXIT_MS);
+                }}
+              />
             ) : null}
 
             {/* cancel reason — статусная механика работ (у событий её нет) */}

@@ -89,6 +89,7 @@ export type Database = {
           scope: string
           tenant_id: string
           updated_at: string
+          vat_mode: string | null
         }
         Insert: {
           balance_hidden?: boolean
@@ -107,6 +108,7 @@ export type Database = {
           scope?: string
           tenant_id: string
           updated_at?: string
+          vat_mode?: string | null
         }
         Update: {
           balance_hidden?: boolean
@@ -125,6 +127,7 @@ export type Database = {
           scope?: string
           tenant_id?: string
           updated_at?: string
+          vat_mode?: string | null
         }
         Relationships: [
           {
@@ -1283,6 +1286,7 @@ export type Database = {
           vat_rate: number | null
           type: string
           updated_at: string
+          vat_mode: string | null
         }
         Insert: {
           account_id?: string | null
@@ -1310,6 +1314,7 @@ export type Database = {
           vat_rate?: number | null
           type: string
           updated_at?: string
+          vat_mode?: string | null
         }
         Update: {
           account_id?: string | null
@@ -1337,6 +1342,7 @@ export type Database = {
           vat_rate?: number | null
           type?: string
           updated_at?: string
+          vat_mode?: string | null
         }
         Relationships: [
           {

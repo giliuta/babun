@@ -13,6 +13,7 @@ function transaction(
     type: "income",
     amount: 125.5,
     currency: "EUR",
+    vat_mode: null,
     vat_rate: null,
     vat_amount: null,
     category_id: null,

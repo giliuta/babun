@@ -32,6 +32,7 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
     icon: r.icon,
     color: r.color,
     position: r.position,
+    vat_mode: (r.vat_mode as Account["vat_mode"]) ?? null,
     balance_hidden: r.balance_hidden,
     is_active: r.is_active,
     created_at: r.created_at,
@@ -85,6 +86,8 @@ export interface AccountDraft {
   color?: string | null;
   position?: number;
   balance_hidden?: boolean;
+  /** Режим НДС этого счёта. null — как у команды/компании. */
+  vat_mode?: "off" | "inclusive" | "exclusive" | null;
 }
 
 function assertOpeningBalance(amount: number | undefined): void {
@@ -134,6 +137,7 @@ export async function insertAccount(
       color: draft.color ?? null,
       position: draft.position ?? 0,
       balance_hidden: draft.balance_hidden ?? false,
+      vat_mode: draft.vat_mode ?? null,
       is_active: true,
     })
     .select("*")
@@ -174,6 +178,7 @@ export async function updateAccount(
   if (patch.color !== undefined) update.color = patch.color;
   if (patch.position !== undefined) update.position = patch.position;
   if (patch.balance_hidden !== undefined) update.balance_hidden = patch.balance_hidden;
+  if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
   const { data, error } = await supabase
     .from("accounts")
     .update(update)

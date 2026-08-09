@@ -22,11 +22,26 @@ import { OperationReceiptRow } from "./OperationReceiptRow";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import {
+  applyTxVat,
+  defaultTxVatMode,
+  inputFromGross,
+  TX_VAT_MODE_LABELS,
+  type TxVatMode,
+} from "@babun/shared/local/finance/vat";
+import {
+  effectiveVatSettings,
+  useTeamVatOverrides,
+  useVatSettings,
+} from "./vat-queries";
 import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import {
+  formatEURExact as formatEUR,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
 import { randomUuid } from "@babun/shared/sync";
 import {
   accountServesTeam,
@@ -86,6 +101,12 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  // Три клавиши НДС на самой операции. Владелец 2026-08-09: «не всегда надо
+  // указывать НДС — иногда есть оплаты без него, это надо самому
+  // регулировать». Пока не тронули руками, режим следует за настройкой
+  // счёта/команды/компании.
+  const [vatMode, setVatMode] = useState<TxVatMode>("none");
+  const [vatTouched, setVatTouched] = useState(false);
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
   const [accountTouched, setAccountTouched] = useState(false);
@@ -108,7 +129,19 @@ export function OperationSheet({
     setAccountTouched(false);
     if (transaction) {
       setType(transaction.type === "income" ? "income" : "expense");
-      setAmount(String(transaction.amount));
+      const txVat: TxVatMode =
+        transaction.vat_mode ?? (transaction.vat_amount ? "inclusive" : "none");
+      setVatMode(txVat);
+      setVatTouched(true);
+      setAmount(
+        String(
+          inputFromGross(
+            transaction.amount,
+            txVat,
+            Number(transaction.vat_rate ?? 0),
+          ),
+        ),
+      );
       setCategoryId(transaction.category_id ?? null);
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
@@ -118,6 +151,7 @@ export function OperationSheet({
       setReceiptUrl(transaction.receipt_url ?? null);
     } else {
       setType("expense");
+      setVatTouched(false);
       setAmount("");
       setCategoryId(null);
       setTeamId(defaultTeamId ?? null);
@@ -178,6 +212,17 @@ export function OperationSheet({
       !accountServesTeam(selectedAccount, teamId) ||
       !isPaymentAccountCompatible(payment, selectedAccount.kind));
 
+  // ДЕЙСТВУЮЩИЙ НАЛОГ ЭТОЙ ОПЕРАЦИИ: счёт → команда → компания.
+  const vatSettingsQuery = useVatSettings();
+  const teamVatOverrides = useTeamVatOverrides();
+  const vat = effectiveVatSettings(
+    vatSettingsQuery.data,
+    (teamVatOverrides.data ?? []).find((o) => o.teamId === teamId),
+    selectedAccount?.vat_mode ?? null,
+  );
+  // Компания с выключенным налогом не должна видеть слово «НДС» вообще.
+  const vatVisible = vat.mode !== "off" && vat.rate > 0;
+
   // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
   // (а не разовый сет при открытии), потому что счета приезжают асинхронно
   // и команда меняется чипами; ручной выбор/сброс (accountTouched) дефолт
@@ -189,8 +234,25 @@ export function OperationSheet({
     if (def) setAccountId(def.id);
   }, [visible, accountTouched, isEdit, teamId, accountId, teamAccounts]);
 
+  // Пока диспетчер не нажал клавишу сам, режим идёт за настройкой счёта.
+  // Зависимость — ПОЛЯ настройки, а не сам объект: effectiveVatSettings
+  // собирает новый объект на каждый рендер, и эффект зациклился бы.
+  const vatModeSetting = vat.mode;
+  const vatRateSetting = vat.rate;
+  useEffect(() => {
+    if (!visible || vatTouched || isEdit) return;
+    setVatMode(
+      defaultTxVatMode({
+        mode: vatModeSetting,
+        rate: vatRateSetting,
+        exemptionNote: null,
+      }),
+    );
+  }, [visible, vatTouched, isEdit, vatModeSetting, vatRateSetting]);
+
   const amountCents = parseMoneyInputToCents(amount);
   const amountNum = (amountCents ?? 0) / 100;
+  const vatBreakdown = applyTxVat(amountNum, vatMode, vat.rate);
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
   const canSave =
@@ -226,8 +288,10 @@ export function OperationSheet({
     }
     savingRef.current = true;
     try {
+      const breakdown = applyTxVat(amountNum, vatMode, vat.rate);
       const draft = {
-        amount: amountNum,
+        amount: breakdown.gross,
+        vat_mode: vatMode,
         category_id: categoryId,
         team_id: teamId,
         account_id: accountId,
@@ -417,6 +481,38 @@ export function OperationSheet({
                 <Text className="text-3xl font-bold" style={{ color: th.faint }}>€</Text>
               </View>
             </SectionCard>
+
+            {/* 4a. НДС — ТРИ КЛАВИШИ. Появляются только у тех, кто с налогом
+                работает: выключили в настройках — слова «НДС» в форме нет.
+                Под клавишами стоит последствие в евро, потому что разница
+                между «включён» и «плюсом» — это деньги, а не термин. */}
+            {vatVisible ? (
+              <SectionCard title="НДС">
+                <View className="flex-row flex-wrap gap-2 px-3 py-3">
+                  {(["none", "inclusive", "exclusive"] as TxVatMode[]).map(
+                    (m) => (
+                      <Chip
+                        key={m}
+                        label={TX_VAT_MODE_LABELS[m]}
+                        radio
+                        selected={vatMode === m}
+                        onPress={() => {
+                          setVatTouched(true);
+                          setVatMode(m);
+                        }}
+                      />
+                    ),
+                  )}
+                </View>
+                {amountCents != null && vatMode !== "none" ? (
+                  <Text className="px-4 pb-3 text-[13px]" style={{ color: th.sub }}>
+                    {vatMode === "exclusive"
+                      ? `На счёт придёт ${formatEUR(vatBreakdown.gross)} · налог ${formatEUR(vatBreakdown.vat)}`
+                      : `Из них налог ${formatEUR(vatBreakdown.vat)} · вам остаётся ${formatEUR(vatBreakdown.net)}`}
+                  </Text>
+                ) : null}
+              </SectionCard>
+            ) : null}
 
             {/* 5. Счёт — только кассы выбранной команды плюс подключённые
                 общие. Способ оплаты выводится из вида счёта: отдельного

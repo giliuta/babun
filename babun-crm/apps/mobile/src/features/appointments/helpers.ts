@@ -22,8 +22,11 @@ export function formatYMD(d: Date): string {
 export function parseYMD(s: string): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
-  const [y, m, day] = s.split("-").map(Number);
-  if (y) d.setFullYear(y, (m || 1) - 1, day || 1);
+  // Берём ТОЛЬКО первые 10 символов: из кэша дата иногда приезжает целым
+  // ISO-штампом («2026-05-31T00:00:00»), и тогда день превращался в NaN —
+  // а Invalid Date системный календарь показывает как «1 янв. 1970 г.».
+  const [y, m, day] = s.slice(0, 10).split("-").map(Number);
+  if (y && m && day) d.setFullYear(y, m - 1, day);
   return d;
 }
 

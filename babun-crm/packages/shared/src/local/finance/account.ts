@@ -24,6 +24,10 @@ export interface Account {
   icon: string | null;
   color: string | null;
   position: number;
+  /** Режим НДС по умолчанию для операций этого счёта. null — как у команды
+   *  и компании. «Счёт с НДС» — обычная практика: на расчётный приходят
+   *  деньги с налогом, а в кассу от частника — без. */
+  vat_mode: "off" | "inclusive" | "exclusive" | null;
   /** The "eye": balance masked on every surface, synced across devices. */
   balance_hidden: boolean;
   is_active: boolean;

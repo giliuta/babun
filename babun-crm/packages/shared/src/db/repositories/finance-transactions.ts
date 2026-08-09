@@ -90,6 +90,7 @@ function rowToTx(r: Row): FinanceTransaction {
     receipt_url: r.receipt_url,
     // Налог снимком: считать его на лету по текущей ставке нельзя —
     // изменение ставки бесшумно переписало бы прошлую отчётность.
+    vat_mode: (r.vat_mode as FinanceTransaction["vat_mode"]) ?? null,
     vat_rate: r.vat_rate ?? null,
     vat_amount: r.vat_amount ?? null,
     transfer_group_id: r.transfer_group_id,
@@ -260,6 +261,9 @@ export interface TransactionDraft {
   /** Tenant-local date supplied by the UI for preflight validation only. */
   business_today?: string;
   receipt_url?: string | null;
+  /** «Без НДС» здесь — не пустое значение, а решение оператора: триггер
+   *  обязан его уважать, даже когда у компании налог включён. */
+  vat_mode?: "none" | "inclusive" | "exclusive" | null;
   invoice_id?: string | null;
   refund_of_id?: string | null;
   /** Клиентский PK строки. Стабилен на время попытки: ретрай после
@@ -293,6 +297,7 @@ export async function insertTransaction(
     notes: draft.notes ?? null,
     occurred_on: occurredOn,
     receipt_url: draft.receipt_url ?? null,
+    vat_mode: draft.vat_mode ?? null,
     invoice_id: draft.invoice_id ?? null,
     refund_of_id: draft.refund_of_id ?? null,
     source: "manual",
@@ -343,6 +348,7 @@ export async function updateTransaction(
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.occurred_on !== undefined) update.occurred_on = patch.occurred_on;
   if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
+  if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
   const { data, error } = await supabase
     .from("finance_transactions")
     .update(update)

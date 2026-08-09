@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { VatMode, VatSettings } from "@babun/shared/local/finance/vat";
+
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -128,6 +129,27 @@ export function useSaveTeamVat() {
       void qc.invalidateQueries({ queryKey: ["vat-team-overrides"] });
     },
   });
+}
+
+/**
+ * Действующий НДС для конкретной операции: счёт → команда → компания.
+ *
+ * Счёт побеждает команду не по прихоти: «счёт с НДС» — это про то, КУДА
+ * приходят деньги. На расчётный падает выручка с налогом, а в кассу от
+ * частника — без, и обе операции живут в одной команде.
+ */
+export function effectiveVatSettings(
+  tenant: TenantVatSettings | undefined,
+  teamOverride: TeamVatOverride | undefined,
+  accountMode: VatMode | null | undefined,
+): VatSettings {
+  const base: VatSettings = tenant
+    ? { mode: tenant.mode, rate: tenant.rate, exemptionNote: tenant.exemptionNote }
+    : { mode: "off", rate: 0, exemptionNote: null };
+  const mode = accountMode ?? teamOverride?.mode ?? base.mode;
+  const rate = teamOverride?.rate ?? base.rate;
+  const exemptionNote = teamOverride?.exemptionNote ?? base.exemptionNote;
+  return { mode, rate, exemptionNote };
 }
 
 export const VAT_MODE_LABELS: Record<VatMode, string> = {

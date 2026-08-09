@@ -13,6 +13,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
   ActionRow,
+  ChoiceRow,
   ControlRow,
   FieldRow,
   NavRow,
@@ -33,7 +34,31 @@ import {
 import { KINDS } from "@/features/finances/account-ui";
 import { TeamChecklist } from "@/features/finances/TeamChecklist";
 import { TransferSheet } from "@/features/finances/TransferSheet";
-import type { AccountKind } from "@babun/shared/local/finance/account";
+import { useVatSettings } from "@/features/finances/vat-queries";
+import type { Account, AccountKind } from "@babun/shared/local/finance/account";
+
+// НДС СЧЁТА ЧЕЛОВЕЧЕСКИМИ СЛОВАМИ. «Как в настройках» — это null, а не режим:
+// счёт молчит, и решает команда или компания.
+const ACCOUNT_VAT_OPTIONS = [
+  "Как в настройках",
+  "Без НДС",
+  "НДС включён",
+  "Плюс НДС",
+] as const;
+
+function accountVatLabel(mode: Account["vat_mode"]): string {
+  if (mode === "off") return "Без НДС";
+  if (mode === "inclusive") return "НДС включён";
+  if (mode === "exclusive") return "Плюс НДС";
+  return "Как в настройках";
+}
+
+function accountVatValue(label: string): Account["vat_mode"] {
+  if (label === "Без НДС") return "off";
+  if (label === "НДС включён") return "inclusive";
+  if (label === "Плюс НДС") return "exclusive";
+  return null;
+}
 
 // Кросс-платформенный ActionSheet: iOS — системный, остальное — Alert.
 function pickSheet(
@@ -95,6 +120,10 @@ function AccountSettingsContent() {
   const hasHistory = historyQuery.data ?? true;
 
   const update = useUpdateAccount();
+  const vatSettings = useVatSettings();
+  const vatOn =
+    (vatSettings.data?.mode ?? "off") !== "off" &&
+    (vatSettings.data?.rate ?? 0) > 0;
   const setTeams = useSetAccountTeams();
   const closeAcc = useSoftCloseAccount();
   const reopenAcc = useReopenAccount();
@@ -367,6 +396,30 @@ function AccountSettingsContent() {
         ) : null}
         {account.scope === "company" ? (
           <RowCaption text="Тап по команде — отключение. История отключённой команды сохраняется, новые операции с неё не принимаются." />
+        ) : null}
+
+        {/* НДС СЧЁТА. Владелец 2026-08-09: «есть счёт с НДС — понятное дело,
+            что это счёт плюс НДС; можно устанавливать либо на самом счёте,
+            либо в настройках финансов». На расчётный приходят деньги с
+            налогом, в кассу от частника — без, и обе кассы у одной команды.
+            Показываем только тем, кто с налогом работает. */}
+        {vatOn ? (
+          <>
+            <RowGroup title="НДС">
+              <ChoiceRow
+                label="На этом счёте"
+                options={ACCOUNT_VAT_OPTIONS}
+                value={accountVatLabel(account.vat_mode)}
+                onSelect={(label: string) =>
+                  update.mutate(
+                    { id: account.id, patch: { vat_mode: accountVatValue(label) } },
+                    { onError: alertError },
+                  )
+                }
+              />
+            </RowGroup>
+            <RowCaption text="Значение подставляется в новую операцию по этому счёту. В самой операции его всегда можно переключить." />
+          </>
         ) : null}
 
         <RowGroup title="Приватность">

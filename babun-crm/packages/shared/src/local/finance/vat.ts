@@ -12,6 +12,64 @@ import type { FinanceTransaction } from "./transaction";
 
 export type VatMode = "off" | "inclusive" | "exclusive";
 
+/** Как назначен налог КОНКРЕТНОЙ операции. Три клавиши, которые владелец
+ *  жмёт руками: «Без НДС» — наличка от частника, «НДС включён» — цена уже с
+ *  налогом, «Плюс НДС» — налог сверху введённой цены. */
+export type TxVatMode = "none" | "inclusive" | "exclusive";
+
+export const TX_VAT_MODE_LABELS: Record<TxVatMode, string> = {
+  none: "Без НДС",
+  inclusive: "НДС включён",
+  exclusive: "Плюс НДС",
+};
+
+/** Режим операции по умолчанию — из действующей настройки (счёт → команда →
+ *  компания). Выключенный НДС означает «без налога», а не «спроси ещё раз». */
+export function defaultTxVatMode(settings: VatSettings): TxVatMode {
+  if (settings.mode === "off" || !(settings.rate > 0)) return "none";
+  return settings.mode;
+}
+
+export interface VatBreakdown {
+  /** Что уйдёт в базу и ляжет на счёт. */
+  gross: number;
+  /** Налог внутри валовой суммы. 0 — операция без налога. */
+  vat: number;
+  /** Что останется компании. */
+  net: number;
+}
+
+/**
+ * Введённая сумма → то, что реально движется по счёту.
+ *
+ * Здесь единственное место, где «плюс НДС» превращает цену в деньги: при
+ * exclusive человек вводит 400, а на счёт приходит 480. Считать это в UI
+ * нельзя — тогда запись, инвойс и чек разойдутся на ставку.
+ */
+export function applyTxVat(
+  input: number,
+  mode: TxVatMode,
+  rate: number,
+): VatBreakdown {
+  if (mode === "none" || !(rate > 0)) {
+    return { gross: round2(input), vat: 0, net: round2(input) };
+  }
+  const gross = mode === "exclusive" ? grossFromNet(input, rate) : round2(input);
+  const vat = vatFromGross(gross, rate);
+  return { gross, vat, net: round2(gross - vat) };
+}
+
+/** Обратный ход для повторного открытия операции: в поле показываем то, что
+ *  человек когда-то ввёл, а не то, что легло на счёт. */
+export function inputFromGross(
+  gross: number,
+  mode: TxVatMode,
+  rate: number,
+): number {
+  if (mode === "exclusive" && rate > 0) return netFromGross(gross, rate);
+  return round2(gross);
+}
+
 export interface VatSettings {
   mode: VatMode;
   /** Процент. 19 — Кипр, 24 — Греция. */
