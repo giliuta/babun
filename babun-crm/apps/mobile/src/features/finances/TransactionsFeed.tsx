@@ -31,6 +31,7 @@ function hhmm(iso: string): string {
 
 export function TransactionsFeed({
   transactions,
+  emptyTitle,
   accounts,
   teams,
   categories,
@@ -43,6 +44,9 @@ export function TransactionsFeed({
   contextMode = "default",
   scroll = true,
 }: {
+  /** Подпись пустого состояния. По умолчанию «Нет операций за период»;
+   *  при активном поиске экран честно говорит, где именно искали. */
+  emptyTitle?: string;
   transactions: FinanceTransaction[];
   accounts: Account[];
   teams: Team[];
@@ -239,7 +243,7 @@ export function TransactionsFeed({
       <View>
         {listHeader}
         {sections.length === 0 ? (
-          <EmptyState title="Нет операций за период" />
+          <EmptyState title={emptyTitle ?? "Нет операций за период"} />
         ) : (
           sections.map((section) => (
             <View key={section.title}>
@@ -272,7 +276,7 @@ export function TransactionsFeed({
         <View className="ml-4 h-px" style={{ backgroundColor: t.separator }} />
       )}
       ListEmptyComponent={
-        <EmptyState title="Нет операций за период" />
+        <EmptyState title={emptyTitle ?? "Нет операций за период"} />
       }
     />
   );

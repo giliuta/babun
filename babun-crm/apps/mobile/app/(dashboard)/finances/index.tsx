@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Settings, X } from "lucide-react-native";
+import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
@@ -14,11 +14,11 @@ import {
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
-import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
@@ -76,6 +76,11 @@ function FinancesContent() {
   const { openTransactionInvoice } = useInvoiceNavigation();
   // Сверхбыстрый двойной тап по плитке пушил экран дважды.
   const lastPushRef = useRef(0);
+  // Поиск по операциям — центр шапки. Ищет ВНУТРИ выбранного периода:
+  // лента грузится окном, и обещать больше было бы враньём.
+  const [query, setQuery] = useState("");
+  // Аналитика — только владельцу, как в Клиентах.
+  const role = useCurrentRole().data;
   const pushOnce = (href: "/accounts" | "/documents" | "/finances/settings") => {
     const now = Date.now();
     if (now - lastPushRef.current < 700) return;
@@ -383,16 +388,62 @@ function FinancesContent() {
     return { openCount, outstanding, overdue };
   }, [businessToday, invoicePayments, scope, scopedInvoices]);
 
+  // Словари для поиска: одна сборка на рендер вместо линейного поиска по
+  // четырём массивам на каждую строку ленты при каждой букве.
+  const clientName = useMemo(
+    () => new Map(clients.map((c) => [c.id, c.full_name])),
+    [clients],
+  );
+  const categoryName = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
+  const accountName = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.name])),
+    [accounts],
+  );
+  const teamName = useMemo(
+    () => new Map(allTeams.map((tm) => [tm.id, tm.name])),
+    [allTeams],
+  );
+
   // Feed filtered by the active overview card (web parity: feedTx).
   const feedTx = useMemo(() => {
-    if (view === "income")
-      return scopedTransactions.filter(
-        (tx) => tx.type === "income" || tx.type === "refund",
-      );
-    if (view === "expense")
-      return scopedTransactions.filter((tx) => tx.type === "expense");
-    return scopedTransactions;
-  }, [scopedTransactions, view]);
+    const byView =
+      view === "income"
+        ? scopedTransactions.filter(
+            (tx) => tx.type === "income" || tx.type === "refund",
+          )
+        : view === "expense"
+          ? scopedTransactions.filter((tx) => tx.type === "expense")
+          : scopedTransactions;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return byView;
+    // Ищем по тому, что человек видит в строке: заметка, клиент, категория,
+    // счёт, команда и сумма. Отдельного индекса не заводим — лента за период
+    // и так лежит в памяти, а лишний индекс разошёлся бы с показанным.
+    return byView.filter((tx) =>
+      [
+        tx.notes ?? "",
+        clientName.get(tx.client_id ?? "") ?? "",
+        categoryName.get(tx.category_id ?? "") ?? "",
+        accountName.get(tx.account_id ?? "") ?? "",
+        teamName.get(tx.team_id ?? "") ?? "",
+        String(tx.amount),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle),
+    );
+  }, [
+    scopedTransactions,
+    view,
+    query,
+    clientName,
+    categoryName,
+    accountName,
+    teamName,
+  ]);
 
   const toggleView = (v: HomeView) =>
     setView((prev) => (prev === v ? "all" : v));
@@ -494,16 +545,96 @@ function FinancesContent() {
   // НДС» приходилось выяснять, проваливаясь внутрь.
   const openFinanceSettings = () => pushOnce("/finances/settings");
 
-  const headerGear = (
-    <Pressable
-      onPress={openFinanceSettings}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel="Настройки финансов"
-      className="h-9 w-9 items-center justify-center rounded-full active:opacity-60"
+  // ШАПКА — ТА ЖЕ, ЧТО У КЛИЕНТОВ: шестерёнка · поиск · аналитика.
+  //
+  // Заголовка «Финансы» здесь больше нет (владелец 2026-08-09: «внизу и так
+  // вкладка с этим словом»). Период в центр тоже не годится — он стоит
+  // строкой ниже вместе с точными датами, и дублировать его нельзя.
+  //
+  // Поиск выбран потому, что он ЕДИНСТВЕННЫЙ не может задублировать цифры
+  // экрана: он не показывает ни одной. И он не стареет — в отличие от любого
+  // сигнала или бейджа, которые через месяц перестают замечать.
+  const header = (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 8,
+        minHeight: 48,
+        backgroundColor: t.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: t.separator,
+      }}
     >
-      <Settings color={t.body} size={18} />
-    </Pressable>
+      <Pressable
+        onPress={openFinanceSettings}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Настройки финансов"
+        style={({ pressed }) => ({
+          width: 44,
+          height: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 22,
+          backgroundColor: pressed ? t.pressed : "transparent",
+        })}
+      >
+        <Settings color={t.sub} size={21} strokeWidth={2} />
+      </Pressable>
+
+      <View
+        className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
+        style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
+      >
+        <Search color={t.faint} size={16} />
+        <TextInput
+          value={query}
+          onChangeText={(next) => {
+            setQuery(next);
+            // Начали печатать — возвращаем ленту: в разрезах «Долги» и
+            // «Прибыль» её на экране нет вовсе, и поиск фильтровал бы
+            // невидимое.
+            if (next.trim() && view !== "all" && view !== "income" && view !== "expense") {
+              setView("all");
+            }
+          }}
+          placeholder="Клиент, категория, сумма"
+          accessibilityLabel="Поиск по операциям"
+          placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
+          keyboardAppearance="light"
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          maxFontSizeMultiplier={1.3}
+          className="flex-1 text-[15px]"
+          style={{ color: t.ink, paddingVertical: 0 }}
+        />
+      </View>
+
+      {/* Аналитика — как в Клиентах, и с тем же гейтом: бригадиру не
+          показываем кнопку, которой у него нет. */}
+      {role === "owner" ? (
+        <Pressable
+          onPress={() => router.push("/cabinet/insights")}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Аналитика по финансам"
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 22,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
+        >
+          <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 
   const feedTitle =
@@ -516,7 +647,7 @@ function FinancesContent() {
   if (loading) {
     return (
       <Screen>
-        <ScreenHeader large title="Финансы" left={headerGear} />
+        {header}
         <EmptyState state="loading" fill />
       </Screen>
     );
@@ -525,7 +656,7 @@ function FinancesContent() {
   if (loadError) {
     return (
       <Screen>
-        <ScreenHeader large title="Финансы" left={headerGear} />
+        {header}
         <EmptyState
           state="error"
           fill
@@ -538,7 +669,7 @@ function FinancesContent() {
 
   return (
     <Screen>
-      <ScreenHeader large title="Финансы" left={headerGear} />
+      {header}
 
       <FinanceOverview
         teams={teams}
@@ -603,6 +734,13 @@ function FinancesContent() {
       ) : (
         <TransactionsFeed
           transactions={feedTx}
+          // Поиск ищет ВНУТРИ периода — лента грузится окном. Молчать об
+          // этом значит выдать «ничего не найдено» за «такого не было».
+          emptyTitle={
+            query.trim()
+              ? "В выбранном периоде ничего не найдено"
+              : undefined
+          }
           accounts={accounts}
           teams={allTeams}
           categories={categories}
