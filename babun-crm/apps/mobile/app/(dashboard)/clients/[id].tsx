@@ -60,6 +60,7 @@ import {
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useServices } from "@/features/services/queries";
@@ -360,7 +361,15 @@ export default function ClientDetailScreen() {
   // действия и предложить архив, чем дать нажать и показать ошибку.
   const onDelete = () => {
     setMenuOpen(false);
-    const hasHistory = (stats?.visits ?? 0) > 0 || (stats?.totalSpent ?? 0) > 0;
+    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
+    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
+    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
+    // его пропускает — он застревает между полками.
+    const hasHistory =
+      (stats?.visits ?? 0) > 0 ||
+      (stats?.totalSpent ?? 0) > 0 ||
+      (stats?.unclosedVisits ?? 0) > 0 ||
+      stats?.nextApt != null;
     if (hasHistory) {
       Alert.alert(
         "Этого клиента нельзя удалить",
@@ -553,6 +562,13 @@ function ArchivedClientView({
   onRestore: () => Promise<void>;
 }) {
   const t = useThemeColors();
+  // КОРЗИНА И АРХИВ — РАЗНЫЕ ПОЛКИ, и карточка обязана их различать.
+  // Раньше она смотрела только на deleted_at и писала «В архиве» клиенту,
+  // которого владелец только что удалил: страница противоречила экрану, с
+  // которого на неё пришли, и умалчивала главное — что через N дней его
+  // сотрут.
+  const trashed = !!client.purge_at;
+  const daysToPurge = trashed ? daysLeft(client.purge_at) : null;
   const archivedAt = client.deleted_at ? new Date(client.deleted_at) : null;
   const archivedLabel =
     archivedAt && !Number.isNaN(archivedAt.getTime())
@@ -569,7 +585,7 @@ function ArchivedClientView({
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Архивный клиент" onBack={onBack} />
+      <ScreenHeader title={trashed ? "Удалённый клиент" : "Архивный клиент"} onBack={onBack} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-5 pb-5 pt-5">
           <View
@@ -588,7 +604,17 @@ function ArchivedClientView({
             className="mt-1 text-center text-[13px] leading-5"
             style={{ color: t.sub }}
           >
-            {archivedLabel ? `В архиве с ${archivedLabel}. ` : "В архиве. "}
+            {trashed
+              ? `${archivedLabel ? `Удалён ${archivedLabel}. ` : "Удалён. "}${
+                  daysToPurge === null
+                    ? ""
+                    : daysToPurge <= 0
+                      ? "Будет стёрт сегодня. "
+                      : `Будет стёрт через ${daysToPurge} ${daysWordRu(daysToPurge)}. `
+                }`
+              : archivedLabel
+                ? `В архиве с ${archivedLabel}. `
+                : "В архиве. "}
             Карточка доступна только для чтения; история заявок и инвойсов сохранена.
           </Text>
         </View>

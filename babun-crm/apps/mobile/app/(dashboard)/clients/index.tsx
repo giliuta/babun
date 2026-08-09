@@ -296,7 +296,15 @@ export default function ClientsListScreen() {
   // стереть его не даст, поэтому говорим это ДО действия и предлагаем архив.
   const confirmDeleteOne = (c: Client) => {
     const stats = statsMap.get(c.id);
-    const hasHistory = (stats?.visits ?? 0) > 0 || (stats?.totalSpent ?? 0) > 0;
+    // ЛЮБАЯ запись — уже история, даже будущая. База запрещает стирать
+    // клиента с заявками (guard_client_hard_delete_history), поэтому такой
+    // клиент лёг бы в корзину НАВСЕГДА: счётчик тикает, а ночная очистка
+    // его пропускает — он застревает между полками.
+    const hasHistory =
+      (stats?.visits ?? 0) > 0 ||
+      (stats?.totalSpent ?? 0) > 0 ||
+      (stats?.unclosedVisits ?? 0) > 0 ||
+      stats?.nextApt != null;
     if (hasHistory) {
       Alert.alert(
         "Этого клиента нельзя удалить",

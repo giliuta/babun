@@ -181,6 +181,19 @@ export default function CalendarTab() {
     error: teamsQueryError,
     refetch: refetchTeams,
   } = useTeams();
+  // АРХИВНАЯ КОМАНДА НЕ УНОСИТ СВОЮ РАБОТУ С СОБОЙ.
+  //
+  // Календарь показывает записи только активной команды, а список команд
+  // отдаёт лишь `is_active = true`. Значит после архивации ВСЕ записи
+  // бригады — включая будущие визиты и деньги дня — исчезали из Дня, Недели,
+  // Месяца и футера: чипа нет, вернуть в вид нечем. Диалог при этом обещает
+  // «история заявок и финансов сохранится». История и правда сохранялась —
+  // просто до неё не было дороги.
+  //
+  // Поэтому архивная команда остаётся ЧИПОМ, пока у неё есть записи, но
+  // только для показа: выбор по умолчанию и все пикеры продолжают жить на
+  // активных, иначе архивная бригада стала бы календарём по умолчанию.
+  const { data: allTeamsForCalendar = [] } = useTeams({ includeInactive: true });
   const calSettingsQuery = useCalendarSettings();
   const calSettings = calSettingsQuery.data;
   const roleQuery = useCurrentRole();
@@ -440,14 +453,29 @@ export default function CalendarTab() {
     null,
   );
 
+  // Чипы календаря: активные команды плюс архивные, за которыми осталась
+  // работа. Порядок сохраняем — архивные уходят в хвост.
+  const calendarTeams = useMemo(() => {
+    const active = new Set(teams.map((tm) => tm.id));
+    const withWork = new Set(
+      appts.map((a) => a.team_id).filter((id): id is string => !!id),
+    );
+    const retired = allTeamsForCalendar.filter(
+      (tm) => !active.has(tm.id) && withWork.has(tm.id),
+    );
+    return retired.length > 0 ? [...teams, ...retired] : teams;
+  }, [teams, allTeamsForCalendar, appts]);
+
   // Active team calendar. Derived (not stored) so it self-heals: falls back
   // to the first team until the user picks one, and re-anchors if the chosen
   // team disappears. Null only while there are no teams (→ first-run gate).
   const activeTeamId =
-    teamChoice && teams.some((tm) => tm.id === teamChoice)
+    // Выбрать можно и архивную (её чип виден), а вот ПО УМОЛЧАНИЮ открывается
+    // всегда активная: иначе архив стал бы стартовым экраном.
+    teamChoice && calendarTeams.some((tm) => tm.id === teamChoice)
       ? teamChoice
-      : teams[0]?.id ?? null;
-  const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+      : teams[0]?.id ?? calendarTeams[0]?.id ?? null;
+  const activeTeam = calendarTeams.find((tm) => tm.id === activeTeamId);
 
   // ПОДБОР ВРЕМЕНИ ПЕРЕКЛЮЧАЕТ КАЛЕНДАРЬ НА БРИГАДУ КЛИЕНТА. Иначе свободное
   // время считалось по бригаде, открытой в чипе: постоянного клиента бригады
@@ -1509,7 +1537,15 @@ export default function CalendarTab() {
       // Прошедшие дни не предлагаются вовсе: записать «во вчера» нельзя,
       // туда можно только перенести уже существующую запись.
       if (dateYmd < todayYmd) return [];
-      const appts = apptsFor(dateYmd) ?? [];
+      // ТОЛЬКО ЗАНЯТОСТЬ ЭТОЙ БРИГАДЫ. Общий срез календаря содержит ещё и
+      // личные события без бригады — они видны в КАЖДОМ календаре, и одно
+      // событие «весь день» обнуляло свободное время у всех бригад разом:
+      // зелёных кубиков нет нигде, а тап мимо кубика ловится запретом
+      // «Выберите зелёное время». Записать становилось физически нельзя,
+      // хотя бригады работают.
+      const appts = (apptsFor(dateYmd) ?? []).filter(
+        (a) => a.team_id === activeTeamId,
+      );
       const step = activeTeam?.default_slot_minutes ?? 30;
       return freeSlotsForDay({
         band: workBandFor?.(dateYmd),
@@ -1529,6 +1565,7 @@ export default function CalendarTab() {
   }, [
     pickClientId,
     apptsFor,
+    activeTeamId,
     workBandFor,
     calSettings?.workStartHour,
     calSettings?.workEndHour,
@@ -1794,7 +1831,7 @@ export default function CalendarTab() {
       ) : null}
 
       <TeamChips
-        teams={teams}
+        teams={calendarTeams}
         activeId={activeTeamId}
         onSelect={(id) => {
           setTeamChoice(id);

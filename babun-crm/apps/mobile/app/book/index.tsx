@@ -98,8 +98,10 @@ import {
   useLoyalty,
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
+import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts";
 import {
   buildDebtPaidPatch,
+  paymentMethodForAccountKind,
   PAY_METHOD_LABELS,
   type PayMethod,
 } from "@/features/appointments/payment";
@@ -360,6 +362,10 @@ export default function BookScreen() {
   const [allDay, setAllDay] = useState(false);
   const [prepayDraft, setPrepayDraft] = useState("");
   const [payMethod, setPayMethod] = useState<PayMethod | null>(null);
+  // Куда кладут деньги. Как в карточке записи: тапают кассу, способ
+  // выводится из её вида. Без счёта сервер угадывает — и промахивается.
+  const [payAccountId, setPayAccountId] = useState<string | null>(null);
+  const { data: payAccounts = [] } = useTeamPaymentAccounts(teamId);
   const [reminderOn, setReminderOn] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -943,6 +949,8 @@ export default function BookScreen() {
       // а полностью предоплаченная затем могла упасть в серверном резолвере
       // с payment_method=null.
       payment_method: prepay > 0 ? (payMethod ?? undefined) : undefined,
+      // Предоплата ложится на ту же кассу, что выбрана чипом.
+      payment_account_id: prepay > 0 ? payAccountId : null,
       reminder_enabled: reminderOn && Boolean(client?.phone),
       source,
     };
@@ -952,7 +960,11 @@ export default function BookScreen() {
     if (status === "completed" && payMethod && debtAfter > 0) {
       Object.assign(
         patch,
-        buildDebtPaidPatch(null, { method: payMethod, amount: debtAfter }),
+        buildDebtPaidPatch(null, {
+          method: payMethod,
+          amount: debtAfter,
+          accountId: payAccountId,
+        }),
       );
     } else if (prepay > 0 && debtAfter === 0) {
       // A fully prepaid visit is paid as soon as the money is received,
@@ -1809,22 +1821,44 @@ export default function BookScreen() {
                       />
                       <Text style={{ fontSize: 20, color: t.sub }}>€</Text>
                     </View>
+                    {/* КАССА, А НЕ СПОСОБ. Тот же выбор, что в карточке
+                        записи: счета этой бригады плюс подключённые общие.
+                        Счетов нет вовсе — откат на четыре способа, приём
+                        денег не блокируем никогда. */}
                     <View className="mt-3 flex-row flex-wrap gap-2">
-                      {(["cash", "card", "transfer", "other"] as const).map(
-                        (method) => (
-                          <Chip
-                            key={method}
-                            label={PAY_METHOD_LABELS[method]}
-                            variant="tint"
-                            radio
-                            selected={payMethod === method}
-                            onPress={() => {
-                              setPayMethod(payMethod === method ? null : method);
-                              haptics.tap();
-                            }}
-                          />
-                        ),
-                      )}
+                      {payAccounts.length > 0
+                        ? payAccounts.map((acc) => (
+                            <Chip
+                              key={acc.id}
+                              label={acc.name}
+                              variant="tint"
+                              radio
+                              selected={payAccountId === acc.id}
+                              onPress={() => {
+                                const off = payAccountId === acc.id;
+                                setPayAccountId(off ? null : acc.id);
+                                setPayMethod(
+                                  off ? null : paymentMethodForAccountKind(acc.kind),
+                                );
+                                haptics.tap();
+                              }}
+                            />
+                          ))
+                        : (["cash", "card", "transfer", "other"] as const).map(
+                            (method) => (
+                              <Chip
+                                key={method}
+                                label={PAY_METHOD_LABELS[method]}
+                                variant="tint"
+                                radio
+                                selected={payMethod === method}
+                                onPress={() => {
+                                  setPayMethod(payMethod === method ? null : method);
+                                  haptics.tap();
+                                }}
+                              />
+                            ),
+                          )}
                     </View>
                     {prepay > 0 && effectiveTotal > 0 ? (
                       <Text style={{ fontSize: 13, color: t.sub, marginTop: 10 }}>
@@ -2282,7 +2316,13 @@ export default function BookScreen() {
         timeEnd={timeEnd}
         allDay={allDay}
         allowAllDay={kind === "event"}
-        stepMinutes={kind === "event" ? 5 : slotFallback}
+        // ВСЕГДА 5 МИНУТ. Здесь стояла «Длительность записи» тенанта, и
+        // настройка «30 минут» превращала колонку минут в «00 / 30»: запись
+        // на 10:15 создать было нельзя, а время 09:35 из листа слота
+        // отображалось как 09:30 и молча дописывалось при первом касании.
+        // Длительность задаёт КОНЕЦ записи, а не сетку выбора времени —
+        // так же, как в карточке записи и в «Перенести».
+        stepMinutes={5}
         onCommit={(next) => {
           dateTouchedRef.current = true;
           setDate(next.date);
