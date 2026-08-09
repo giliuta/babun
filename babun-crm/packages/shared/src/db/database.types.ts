@@ -1456,7 +1456,9 @@ export type Database = {
           currency: string
           due_on: string | null
           id: string
+          credit_note_of_id: string | null
           issued_on: string
+          kind: string
           notes: string | null
           number: string
           pdf_url: string | null
@@ -1481,7 +1483,9 @@ export type Database = {
           currency?: string
           due_on?: string | null
           id?: string
+          credit_note_of_id?: string | null
           issued_on?: string
+          kind?: string
           notes?: string | null
           number: string
           pdf_url?: string | null
@@ -1506,7 +1510,9 @@ export type Database = {
           currency?: string
           due_on?: string | null
           id?: string
+          credit_note_of_id?: string | null
           issued_on?: string
+          kind?: string
           notes?: string | null
           number?: string
           pdf_url?: string | null
@@ -2044,6 +2050,75 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      receipts: {
+        Row: {
+          account_id: string | null
+          amount: number
+          appointment_id: string | null
+          client_id: string | null
+          client_snapshot: Json | null
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string | null
+          issued_on: string
+          number: string
+          payment_method: string | null
+          seller_snapshot: Json
+          seq: number
+          status: string
+          tenant_id: string
+          transaction_id: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+          year: number
+        }
+        Insert: {
+          account_id?: string | null
+          amount: number
+          appointment_id?: string | null
+          client_id?: string | null
+          client_snapshot?: Json | null
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id?: string | null
+          issued_on: string
+          number: string
+          payment_method?: string | null
+          seller_snapshot?: Json
+          seq: number
+          status?: string
+          tenant_id: string
+          transaction_id?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+          year: number
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number
+          appointment_id?: string | null
+          client_id?: string | null
+          client_snapshot?: Json | null
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_id?: string | null
+          issued_on?: string
+          number?: string
+          payment_method?: string | null
+          seller_snapshot?: Json
+          seq?: number
+          status?: string
+          tenant_id?: string
+          transaction_id?: string | null
+          vat_amount?: number | null
+          vat_rate?: number | null
+          year?: number
+        }
+        Relationships: []
       }
       services: {
         Row: {

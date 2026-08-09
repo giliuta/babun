@@ -8,6 +8,7 @@ import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceMoney, todayYmd } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
+import { useReceipts } from "@/features/documents/receipts-queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
 // «Документы» — одна дверь ко всем финансовым бумагам компании: инвойсы,
@@ -21,6 +22,7 @@ export default function DocumentsScreen() {
     useCalendarSettings().data?.timezone ?? "Europe/Nicosia",
   );
   const invoicesQuery = useInvoices();
+  const receipts = useReceipts();
   const invoicePaymentsQuery = useInvoicePayments();
   const invoicesData = invoicesQuery.data;
   const invoicePaymentsData = invoicePaymentsQuery.data;
@@ -68,17 +70,19 @@ export default function DocumentsScreen() {
             valueColor={summary.overdue > 0 ? t.danger : undefined}
             onPress={() => router.push("/invoices")}
           />
+          {/* Чеки выписываются сами при каждом приёме денег (триггер
+              issue_receipt_for_income). Строка живая с 2026-08-09. */}
           <NavRow
             label="Чеки"
-            placeholder="Скоро"
-            separated
-            dimmed
-            onPress={() =>
-              Alert.alert(
-                "Чеки",
-                "Чек будет создаваться автоматически при каждом приёме денег — по записи и по инвойсу. Раздел включится вместе с ними.",
-              )
+            value={
+              receipts.data === undefined
+                ? "…"
+                : receipts.data.length > 0
+                  ? `Выдано ${receipts.data.length}`
+                  : "Ещё не выдавались"
             }
+            separated
+            onPress={() => router.push("/documents/receipts")}
           />
           <NavRow
             label="Договоры"
@@ -93,7 +97,7 @@ export default function DocumentsScreen() {
             }
           />
         </RowGroup>
-        <RowCaption text="Чек создаётся автоматически при каждом приёме денег — по записи и по инвойсу; раздел включится вместе с ними. Договоры привязываются к клиентам и записям — следующий шаг." />
+        <RowCaption text="Чек выписывается сам при каждом приёме денег — по записи и по инвойсу. Договоры привязываются к клиентам и записям — следующий шаг." />
       </ScrollView>
     </Screen>
   );
