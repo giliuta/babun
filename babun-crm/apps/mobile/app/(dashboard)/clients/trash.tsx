@@ -11,6 +11,7 @@ import {
   DeletedOn,
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 
 // «НЕДАВНО УДАЛЁННЫЕ» — как в Фото на iPhone.
@@ -28,6 +29,10 @@ export default function ClientTrashScreen() {
   const restore = useRestoreClient();
   const archive = useArchiveClients();
   const erase = useDeleteClientForever();
+  // «Стереть навсегда» разрешено только владельцу (гейт в самой мутации).
+  // Показывать его диспетчеру значит обещать действие, которое ответит
+  // отказом, — предлагать нужно только то, что человек может сделать.
+  const isOwner = useCurrentRole().data === "owner";
 
   return (
     <HiddenClientsScreen
@@ -67,13 +72,14 @@ export default function ClientTrashScreen() {
             }
           },
         },
-        {
+        ...(isOwner
+          ? [{
           id: "erase",
           label: "Стереть навсегда",
           icon: Trash2,
           danger: true,
           run: () =>
-            new Promise((resolve, reject) => {
+            new Promise<void>((resolve, reject) => {
               Alert.alert(
                 "Стереть навсегда?",
                 `${client.full_name || "Клиент"} исчезнет без возможности вернуть.`,
@@ -89,7 +95,8 @@ export default function ClientTrashScreen() {
                 ],
               );
             }),
-        },
+        }]
+          : []),
       ]}
     />
   );

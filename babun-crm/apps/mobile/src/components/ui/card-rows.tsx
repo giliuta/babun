@@ -575,30 +575,6 @@ export function RowActionButton({
   );
 }
 
-/** Ряд-действие внутри группы («+ Добавить номер»). Строго про добавление —
- *  для действий над самой сущностью есть ActionRow. */
-export function AddRow({
-  label,
-  separated,
-  dimmed,
-  onPress,
-}: {
-  label: string;
-  separated?: boolean;
-  /** Добавлять пока нельзя (в черновике — до имени и телефона). */
-  dimmed?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <ActionRow
-      label={label}
-      separated={separated}
-      dimmed={dimmed}
-      onPress={onPress}
-    />
-  );
-}
-
 /** Ряд-действие над сущностью: «Сделать основным», «Удалить объект».
  *  Отличается от AddRow только смыслом (и тоном), поэтому вёрстка общая, а
  *  примитивы разные: «+ Добавить …» и «Удалить …» — не одно и то же, и

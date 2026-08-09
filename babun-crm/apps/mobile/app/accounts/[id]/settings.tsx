@@ -5,6 +5,7 @@ import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
+import { AddRow } from "@/components/ui/AddRow";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,7 +13,6 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
   ActionRow,
-  AddRow,
   ControlRow,
   FieldRow,
   NavRow,

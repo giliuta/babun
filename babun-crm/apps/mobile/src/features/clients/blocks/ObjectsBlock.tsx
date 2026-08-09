@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
-import { AddRow, RowGroup } from "@/components/ui/card-rows";
+import { RowGroup } from "@/components/ui/card-rows";
+import { AddRow } from "@/components/ui/AddRow";
 import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { objectTarget } from "@/features/clients/object-address";
@@ -81,7 +82,7 @@ export default function ObjectsBlock({
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
           заводят несколько. */}
       <AddRow
-        label="+ Добавить объект"
+        label="Добавить объект"
         separated={ordered.length > 0}
         onPress={onAdd}
       />

@@ -12,11 +12,14 @@ export function AddRow({
   label,
   onPress,
   disabled,
+  separated,
 }: {
   /** Полная подпись действия: «Добавить счёт», «Добавить услугу»… */
   label: string;
   onPress: () => void;
   disabled?: boolean;
+  /** Верхняя линия — когда строка идёт под списком, а не одна в группе. */
+  separated?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -31,6 +34,8 @@ export function AddRow({
       style={({ pressed }) => ({
         minHeight: 52,
         opacity: disabled ? 0.4 : 1,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >

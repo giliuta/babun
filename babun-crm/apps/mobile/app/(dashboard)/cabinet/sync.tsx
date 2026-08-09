@@ -28,6 +28,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useTenantId } from "@/lib/tenant";
@@ -155,7 +156,7 @@ export default function SyncStatusScreen() {
         subtitle={
           online
             ? operations.length > 0
-              ? `${operations.length} изменений ожидают сервер`
+              ? `${operations.length} ${countWordRu(operations.length, "изменение", "изменения", "изменений")} ${operations.length === 1 ? "ожидает" : "ожидают"} сервер`
               : "Данные актуальны"
             : "Нет соединения"
         }

@@ -204,14 +204,6 @@ export function useImportRows() {
  *  (same source the list renders from). Kept as the instant fallback for the
  *  preview display. The import decision itself requires the canonical paged
  *  server read below; a stale cache is not safe enough to prevent duplicates. */
-export function existingPhoneSet(clients: Client[]): Set<string> {
-  const set = new Set<string>();
-  for (const c of clients) {
-    const key = c.phone_e164 ?? tryToE164(c.phone ?? "");
-    if (key) set.add(key);
-  }
-  return set;
-}
 
 /** Fresh tenant phone set for dedup, read straight from the DB (parity with
  *  the web's fetchExistingPhones — the round-trip IS the correctness

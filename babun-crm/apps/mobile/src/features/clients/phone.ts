@@ -29,14 +29,6 @@ export const SUPPORTED_COUNTRIES: readonly CountryCode[] = [
   "AT", "CH", "DK", "SE", "NO", "FI", "LV", "LT", "EE",
 ] as const;
 
-/** Flag emoji: each ASCII letter → regional-indicator symbol. */
-export function countryFlag(code: CountryCode): string {
-  const base = 0x1f1e6 - "A".charCodeAt(0);
-  return [...code]
-    .map((c) => String.fromCodePoint(base + c.charCodeAt(0)))
-    .join("");
-}
-
 /** «+357»-style dial code; never throws. */
 export function countryDialCode(code: CountryCode): string {
   try {
@@ -147,30 +139,3 @@ export function formatPhoneAsYouType(
  *  формата (без «+») — страна по умолчанию, которой его и разбирают.
  *  Пустой номер → undefined (флагу нечего показывать). Один хелпер на
  *  оба режима карточки клиента: черновик и сохранённая строка. */
-export function phoneCountry(
-  raw: string,
-  defaultCountry: CountryCode = DEFAULT_COUNTRY,
-): CountryCode | undefined {
-  const s = (raw ?? "").trim();
-  if (!s) return undefined;
-  return countryFromDialPrefix(s) ?? (s.startsWith("+") ? undefined : defaultCountry);
-}
-
-/** Страна по НАБРАННОМУ коду: «+35799…» → CY, «+7 999…» → RU. Живёт на
- *  каждый ввод (частичный номер ещё не парсится libphonenumber), поэтому
- *  матчим самый длинный dial-код из поддержанных стран. Не начинается с
- *  «+» → undefined (локальный формат, действует страна по умолчанию). */
-export function countryFromDialPrefix(raw: string): CountryCode | undefined {
-  const s = (raw ?? "").trim().replace(/[\s()\-]/g, "");
-  if (!s.startsWith("+")) return undefined;
-  let best: CountryCode | undefined;
-  let bestLen = 0;
-  for (const cc of SUPPORTED_COUNTRIES) {
-    const code = countryDialCode(cc);
-    if (code.length > bestLen && s.startsWith(code)) {
-      best = cc;
-      bestLen = code.length;
-    }
-  }
-  return best;
-}

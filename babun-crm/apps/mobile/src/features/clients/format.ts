@@ -19,17 +19,6 @@ export function formatShortDateRu(key: string): string {
   return y === curYear ? base : `${base} ’${String(y).slice(2)}`;
 }
 
-/** "2024-05-10" → "10 мая 2024 г." (ru-RU, with year); invalid → input. */
-export function formatVisitDate(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return ymd;
-  return new Date(y, m - 1, d).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 /** 1 → «визит», 2–4 → «визита», 5+ → «визитов» (mod10/mod100 rules,
  *  so 21 → «визит», 22 → «визита»). */
 export function visitsWord(n: number): string {

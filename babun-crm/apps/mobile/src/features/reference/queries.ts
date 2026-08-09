@@ -428,7 +428,6 @@ function useRefDelete(table: RefTable) {
 }
 
 export const useUpdateTeam = () => useRefUpdate("teams");
-export const useDeleteTeam = () => useRefDelete("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
 export const useUpdateCity = () => useRefUpdate("cities");

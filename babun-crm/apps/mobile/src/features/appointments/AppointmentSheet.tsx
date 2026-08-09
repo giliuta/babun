@@ -59,6 +59,8 @@ import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { ColorPicker } from "@/components/ui/ColorPicker";
+import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -1925,32 +1927,18 @@ export function AppointmentSheet({
             {/* event color (event only) */}
             {kind === "event" ? (
               <SectionCard title="Цвет">
-                <View className="flex-row flex-wrap gap-3 p-3">
-                  {(
-                    [
-                      ["#4338ca", "Индиго"],
-                      ["#10b981", "Зелёный"],
-                      ["#ef4444", "Красный"],
-                      ["#f59e0b", "Оранжевый"],
-                      ["#06b6d4", "Голубой"],
-                      ["#a855f7", "Фиолетовый"],
-                      ["#ec4899", "Розовый"],
-                      ["#737373", "Серый"],
-                    ] as const
-                  ).map(([c, name]) => (
-                    <Pressable
-                      key={c}
-                      onPress={() => setEventColor(c)}
-                      accessibilityRole="button"
-                      accessibilityLabel={name}
-                      accessibilityState={{ selected: eventColor === c }}
-                      className="h-11 w-11 rounded-full"
-                      style={[
-                        { backgroundColor: c },
-                        eventColor === c ? { borderWidth: 2, borderColor: t.ink } : null,
-                      ]}
-                    />
-                  ))}
+                {/* ОДНА ПАЛИТРА НА ПРОДУКТ. Здесь была своя сетка из восьми
+                    tailwind-хексов с теми же русскими именами, что у общей
+                    палитры: «Индиго» при создании события давал #5856D6, а
+                    при редактировании — #4338ca. Ни один кружок не совпадал
+                    с выбранным, и тап по «тому же» цвету менял цвет события. */}
+                <View className="p-3">
+                  <ColorPicker
+                    label={null}
+                    value={eventColor}
+                    onChange={setEventColor}
+                    colors={PRESET_COLOR_VALUES}
+                  />
                 </View>
               </SectionCard>
             ) : null}

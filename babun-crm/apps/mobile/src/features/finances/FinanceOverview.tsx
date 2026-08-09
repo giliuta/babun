@@ -246,10 +246,15 @@ export function FinanceOverview({
               backgroundColor: t.success + (view === "income" ? "26" : "0d"),
             }}
           >
+            {/* ЦВЕТ = СМЫСЛ. Возвраты могут увести доход за период в минус,
+                и тогда зелёная цифра под зелёной точкой означала бы прибыль
+                там, где деньги ушли. Отрицательный доход красный. */}
             <View className="mb-1 flex-row items-center gap-1.5">
               <View
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: t.success }}
+                style={{
+                  backgroundColor: totals.income < 0 ? t.danger : t.success,
+                }}
               />
               <Text className="text-xs font-semibold" style={{ color: t.sub }}>
                 Доход
@@ -257,9 +262,10 @@ export function FinanceOverview({
             </View>
             <Text
               className="text-[22px] font-bold tabular-nums"
-              style={{ color: t.success }}
+              style={{ color: totals.income < 0 ? t.danger : t.success }}
             >
-              {formatEUR(totals.income)}
+              {totals.income < 0 ? "−" : ""}
+              {formatEUR(Math.abs(totals.income))}
             </Text>
           </Pressable>
           <View className="my-2.5 w-px" style={{ backgroundColor: t.separator }} />

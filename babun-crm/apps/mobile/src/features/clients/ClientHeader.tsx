@@ -52,7 +52,6 @@ import {
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { clientDebt } from "@/features/clients/filter";
 import {
-  AddRow,
   FieldRow,
   RowActionButton,
   RowGroup,
@@ -68,6 +67,7 @@ import {
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useToast } from "@/components/ui/Toast";
 import { PickerSheet } from "@/components/ui/PickerSheet";
+import { AddRow } from "@/components/ui/AddRow";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -523,7 +523,7 @@ export default function ClientHeader({
         {/* ОДИН ПЛЮС НА ВСЁ (владелец 2026-08-02): номер, WhatsApp, Telegram,
           Instagram, почта — выбираются в листе снизу, как метка или тег. */}
         <AddRow
-          label="+ Добавить"
+          label="Добавить"
           separated
           onPress={() => {
             haptics.tap();

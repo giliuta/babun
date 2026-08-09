@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import type React from "react";
 import { Alert, FlatList, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { UseQueryResult } from "@tanstack/react-query";
@@ -123,6 +124,21 @@ export function HiddenClientsScreen({
                 onRefresh={pull.onRefresh}
                 tintColor={t.accent}
               />
+            }
+            // ДЕЙСТВИЯ ЖИВУТ ЗА ДОЛГИМ НАЖАТИЕМ, и без подписи их не найти:
+            // на этих экранах нет ни свайпов, ни кнопок в строке. Одна
+            // тихая строка сверху дешевле, чем кнопка в каждой строке.
+            ListHeaderComponent={
+              (clients.length > 0
+                ? (
+                    <Text
+                      className="px-4 pb-1 pt-2 text-xs"
+                      style={{ color: t.sub }}
+                    >
+                      Нажмите и удерживайте строку — вернуть или стереть
+                    </Text>
+                  )
+                : null) as React.ReactElement | null
             }
             ItemSeparatorComponent={() => (
               <View
