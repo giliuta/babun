@@ -1452,6 +1452,7 @@ export function AppointmentSheet({
                 <Text className="text-base" style={{ color: t.ink }}>Дата</Text>
                 <DateTimePicker
                   themeVariant="light"
+                  locale="ru-RU"
                   value={date ? parseYMD(date) : new Date()}
                   mode="date"
                   display="compact"
@@ -1466,6 +1467,7 @@ export function AppointmentSheet({
                     <View className="flex-row items-center">
                       <DateTimePicker
                         themeVariant="light"
+                        locale="ru-RU"
                         value={parseHM(timeStart)}
                         mode="time"
                         display="compact"
@@ -1475,6 +1477,7 @@ export function AppointmentSheet({
                       <Text className="px-1" style={{ color: t.faint }}>–</Text>
                       <DateTimePicker
                         themeVariant="light"
+                        locale="ru-RU"
                         value={parseHM(timeEnd)}
                         mode="time"
                         display="compact"

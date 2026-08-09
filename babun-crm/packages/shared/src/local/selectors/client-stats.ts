@@ -60,7 +60,9 @@ export interface ClientStats {
    *  Календарь это состояние знает и красит янтарём; список клиентов до
    *  сих пор не знал (аудит 2026-08-07). */
   unclosedVisits: number;
-  /** Sum of debt across all completed visits. */
+  /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
+   *  записи, по которым бригада не отчиталась, — для владельца это одно и
+   *  то же «нам не заплатили». */
   debt: number;
   /** Expected revenue — Σ total_amount of FUTURE scheduled/in-progress
    *  appointments (today or later). Powers the card's grey «ожидаемая
@@ -179,6 +181,19 @@ export function buildStats(
     const matchByName =
       a.client_id == null && nameInComment(normName(a.comment), cname);
     if (!matchById && !matchByName) continue;
+
+    // ДОЛГ ВОЗНИКАЕТ И БЕЗ ОТМЕТКИ БРИГАДЫ. Владелец 2026-08-09: «прошло
+    // время записи — оно автоматически перебрасывается в долг, всё равно
+    // надо принимать решение по клиенту». Прошедшая неотменённая работа,
+    // по которой бригадир не отчитался, — это те же неполученные деньги,
+    // что и закрытый визит без оплаты. Отдельной корзины «не закрыто» в
+    // деньгах нет: она делила одно и то же надвое.
+    //
+    // ВИЗИТОМ такая запись не считается — визитов у клиента ровно столько,
+    // сколько подтверждённых работ; на них живут ритм, «Пропали» и доход.
+    if (a.status !== "completed" && a.status !== "cancelled" && a.date < today) {
+      debt += getDebtAmount(a);
+    }
 
     if (a.status === "completed") {
       visits += 1;

@@ -18,6 +18,7 @@ import type {
 } from "@babun/shared/local/finance/transaction";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { paymentMethodForAccountKind } from "@/features/appointments/payment";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
@@ -147,11 +148,10 @@ export function OperationSheet({
     () =>
       teamId
         ? accounts
-            .filter(
-              (a) =>
-                accountServesTeam(a, teamId) &&
-                isPaymentAccountCompatible(payment, a.kind),
-            )
+            // Способ оплаты НЕ фильтрует счета: он из счёта и выводится.
+            // Раньше эти два контрола фильтровали друг друга, и человек
+            // выбирал одно и то же дважды — сначала «Карта», потом «Карта».
+            .filter((a) => accountServesTeam(a, teamId))
             .sort((a, b) =>
               a.scope === b.scope
                 ? a.position - b.position
@@ -160,7 +160,7 @@ export function OperationSheet({
                   : 1,
             )
         : [],
-    [accounts, teamId, payment],
+    [accounts, teamId],
   );
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
@@ -537,7 +537,11 @@ export function OperationSheet({
                       selected={accountId === a.id}
                       onPress={() => {
                         setAccountTouched(true);
-                        setAccountId(accountId === a.id ? null : a.id);
+                        const off = accountId === a.id;
+                        setAccountId(off ? null : a.id);
+                        // Куда положили — тем и заплатили. Отдельного выбора
+                        // способа больше нет: он повторял вид счёта.
+                        if (!off) setPayment(paymentMethodForAccountKind(a.kind));
                       }}
                     />
                   ))}
@@ -545,9 +549,14 @@ export function OperationSheet({
               </SectionCard>
             ) : null}
 
-            {/* payment + date */}
-            <SectionCard title="Оплата">
-              <View className="flex-row flex-wrap gap-2 p-3">
+            {/* СПОСОБ — ТОЛЬКО КОГДА СЧЕТОВ НЕТ. При живых счетах он
+                выводится из выбранной кассы: два контрола про одно и то же
+                заставляли выбирать дважды и умели противоречить друг другу. */}
+            <SectionCard title={teamAccounts.length > 0 ? "Когда" : "Оплата"}>
+              <View
+                className="flex-row flex-wrap gap-2 p-3"
+                style={{ display: teamAccounts.length > 0 ? "none" : "flex" }}
+              >
                 {PAYMENTS.map((p) => (
                   <Chip
                     key={p.value}
@@ -577,6 +586,10 @@ export function OperationSheet({
                   mode="date"
                   display="compact"
                   themeVariant="light"
+                  // Без локали системный пикер печатает «9 Aug 2026» посреди
+                  // русского экрана. Все остальные даты в приложении её
+                  // задают — этот лист был единственным исключением.
+                  locale="ru-RU"
                   onChange={(_, d) => d && setDate(formatYMD(d))}
                 />
               </View>

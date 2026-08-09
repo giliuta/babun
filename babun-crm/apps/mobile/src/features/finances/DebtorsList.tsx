@@ -36,12 +36,15 @@ export function DebtorsList({
   teamId,
   fromDate,
   toDate,
+  todayYmd,
 }: {
   appointments: Appointment[];
   clients: Client[];
   teamId: string | null;
   fromDate: string;
   toDate: string;
+  /** Сегодня по времени бизнеса — граница «уже прошло». */
+  todayYmd: string;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -51,7 +54,12 @@ export function DebtorsList({
       appointments
         .filter(
           (a) =>
-            a.status === "completed" &&
+            // ТОТ ЖЕ НАБОР, ЧТО В ПЛИТКЕ «ДОЛГИ»: завершённые визиты без
+            // оплаты плюс прошедшие записи, по которым бригада не
+            // отчиталась. Иначе список под цифрой не сходится с самой
+            // цифрой — и владелец перестаёт верить обеим.
+            a.status !== "cancelled" &&
+            (a.status === "completed" || a.date < todayYmd) &&
             a.date >= fromDate &&
             a.date <= toDate &&
             (!teamId || a.team_id === teamId),
@@ -75,7 +83,7 @@ export function DebtorsList({
         })
         .filter((r) => r.owed > 0)
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [appointments, clients, teamId, fromDate, toDate],
+    [appointments, clients, teamId, fromDate, toDate, todayYmd],
   );
 
   // SMS-напоминание: сумма подставляется всегда; дата визита — только в
