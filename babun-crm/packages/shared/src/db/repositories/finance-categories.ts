@@ -18,12 +18,14 @@ export interface FinanceCategory {
   type: FinanceCategoryKind;
   icon: string | null;
   color: string | null;
+  /** Тенант убрал строку из своего списка (finance_category_hidden). */
+  hidden: boolean;
 }
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_categories"]["Row"];
 
-function rowToCategory(r: Row): FinanceCategory {
+function rowToCategory(r: Row, hidden = false): FinanceCategory {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
@@ -32,22 +34,55 @@ function rowToCategory(r: Row): FinanceCategory {
     type: r.type as FinanceCategoryKind,
     icon: r.icon,
     color: r.color,
+    hidden,
   };
 }
 
-/** Returns ALL categories visible to this tenant — globals + own. */
+/** Returns ALL categories visible to this tenant — globals + own.
+ *  Скрытые тенантом строки приходят с hidden: true, а не пропадают: экран
+ *  настроек должен их показать (чтобы вернуть), а выбор — отфильтровать. */
 export async function listFinanceCategories(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<FinanceCategory[]> {
-  const { data, error } = await supabase
-    .from("finance_categories")
-    .select("*")
-    .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
-    .order("type", { ascending: true })
-    .order("name", { ascending: true });
-  if (error) throw new Error(`listFinanceCategories: ${error.message}`);
-  return ((data ?? []) as Row[]).map(rowToCategory);
+  const [list, hidden] = await Promise.all([
+    supabase
+      .from("finance_categories")
+      .select("*")
+      .or(`tenant_id.is.null,tenant_id.eq.${tenantId}`)
+      .order("type", { ascending: true })
+      .order("name", { ascending: true }),
+    supabase
+      .from("finance_category_hidden")
+      .select("category_id")
+      .eq("tenant_id", tenantId),
+  ]);
+  if (list.error) throw new Error(`listFinanceCategories: ${list.error.message}`);
+  if (hidden.error) throw new Error(`listFinanceCategories: ${hidden.error.message}`);
+  const off = new Set((hidden.data ?? []).map((r) => r.category_id));
+  return ((list.data ?? []) as Row[]).map((r) => rowToCategory(r, off.has(r.id)));
+}
+
+/** Прячет/возвращает категорию в списке этого тенанта. */
+export async function setFinanceCategoryHidden(
+  supabase: DbSupabase,
+  tenantId: string,
+  categoryId: string,
+  hidden: boolean,
+): Promise<void> {
+  const { error } = hidden
+    ? await supabase
+        .from("finance_category_hidden")
+        .upsert(
+          { tenant_id: tenantId, category_id: categoryId },
+          { onConflict: "tenant_id,category_id" },
+        )
+    : await supabase
+        .from("finance_category_hidden")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("category_id", categoryId);
+  if (error) throw new Error(error.message);
 }
 
 export interface NewFinanceCategory {

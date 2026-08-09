@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Trash2 } from "lucide-react-native";
+import { EyeOff, Trash2 } from "lucide-react-native";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
@@ -27,6 +27,7 @@ import {
   useDeleteCategory,
   useFinanceCategories,
   useInsertCategory,
+  useSetCategoryHidden,
   useUpdateCategory,
 } from "@/features/finances/queries";
 
@@ -41,6 +42,7 @@ export default function CategoriesScreen() {
   const insert = useInsertCategory();
   const update = useUpdateCategory();
   const del = useDeleteCategory();
+  const setHidden = useSetCategoryHidden();
 
   const [type, setType] = useState<"expense" | "income">("expense");
   const [open, setOpen] = useState(false);
@@ -63,6 +65,16 @@ export default function CategoriesScreen() {
     setColor(DEFAULT_COLOR);
     setOpen(true);
   };
+  // СТАНДАРТНУЮ КАТЕГОРИЮ НЕЛЬЗЯ ПЕРЕИМЕНОВАТЬ — она общая на весь продукт,
+  // и правка задела бы чужие компании. Зато её можно убрать из СВОЕГО списка:
+  // владелец 2026-08-09 просил, чтобы список менялся полностью.
+  const toggleHidden = (c: FinanceCategory) => {
+    setHidden.mutate(
+      { id: c.id, hidden: !c.hidden },
+      { onError: (e) => Alert.alert("Ошибка", e.message) },
+    );
+  };
+
   const openEdit = (c: FinanceCategory) => {
     setEditing(c);
     setName(c.name);
@@ -139,16 +151,24 @@ export default function CategoriesScreen() {
           keyExtractor={(c) => c.id}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => (
-            <View className="flex-row items-stretch">
+            <View className="flex-row items-stretch" style={{ opacity: item.hidden ? 0.45 : 1 }}>
               <Pressable
-                onPress={item.tenant_id ? () => openEdit(item) : undefined}
-                disabled={!item.tenant_id}
-                accessible={!!item.tenant_id}
-                accessibilityRole={item.tenant_id ? "button" : undefined}
-                accessibilityLabel={
-                  item.tenant_id ? `Категория ${item.name}, редактировать` : undefined
+                onPress={
+                  item.hidden
+                    ? () => toggleHidden(item)
+                    : item.tenant_id
+                      ? () => openEdit(item)
+                      : () => toggleHidden(item)
                 }
-                className={`min-h-[52px] flex-1 flex-row items-center py-3 pl-4 ${item.tenant_id ? "active:opacity-60" : ""}`}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  item.hidden
+                    ? `Категория ${item.name}, скрыта — вернуть в список`
+                    : item.tenant_id
+                      ? `Категория ${item.name}, редактировать`
+                      : `Категория ${item.name}, убрать из списка`
+                }
+                className="min-h-[52px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60"
               >
                 <View
                   className="mr-3 h-7 w-7 rounded-full"
@@ -156,7 +176,12 @@ export default function CategoriesScreen() {
                 />
                 <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
               </Pressable>
-              {item.tenant_id ? (
+              {item.hidden ? (
+                <View className="min-h-[52px] flex-row items-center gap-1.5 pr-4">
+                  <EyeOff color={th.faint} size={ICON.sm} />
+                  <Text className="text-xs" style={{ color: th.faint }}>скрыта</Text>
+                </View>
+              ) : item.tenant_id ? (
                 <Pressable
                   onPress={() => confirmDelete(item)}
                   accessibilityRole="button"
@@ -178,6 +203,14 @@ export default function CategoriesScreen() {
               <>
                 <Divider inset={56} />
                 <AddRow label="Добавить категорию" onPress={openCreate} />
+                <Text
+                  className="px-4 pb-6 pt-2 text-xs"
+                  style={{ color: th.faint }}
+                >
+                  Свою категорию можно переименовать или удалить. Стандартную —
+                  убрать из списка: нажмите на неё, и она перестанет
+                  предлагаться. Прошлые операции сохранят своё название.
+                </Text>
               </>
             ) : null
           }

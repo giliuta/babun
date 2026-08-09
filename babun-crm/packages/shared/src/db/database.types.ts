@@ -1094,6 +1094,39 @@ export type Database = {
           },
         ]
       }
+      finance_category_hidden: {
+        Row: {
+          category_id: string
+          created_at: string
+          tenant_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          tenant_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_category_hidden_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "finance_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_category_hidden_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_templates: {
         Row: {
           account_id: string | null

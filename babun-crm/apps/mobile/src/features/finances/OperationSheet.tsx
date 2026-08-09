@@ -11,29 +11,29 @@ import {
   View,
 } from "react-native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { X } from "lucide-react-native";
+import { ChevronRight, X } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { OperationReceiptRow } from "./OperationReceiptRow";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
 import { ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
-import {
-  formatEURExact as formatEUR,
-  parseMoneyInputToCents,
-} from "@babun/shared/common/utils/money";
+import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { randomUuid } from "@babun/shared/sync";
 import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
+import { useRouter } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
 import {
   useDeleteTransaction,
@@ -42,14 +42,6 @@ import {
   useUpdateTransaction,
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
-import { useFinanceTemplates, useInsertTemplate } from "./templates-queries";
-
-const PAYMENTS: { value: PaymentMethod; label: string }[] = [
-  { value: "cash", label: "Наличные" },
-  { value: "card", label: "Карта" },
-  { value: "transfer", label: "Перевод" },
-  { value: "other", label: "Другое" },
-];
 
 export function OperationSheet({
   visible,
@@ -71,13 +63,12 @@ export function OperationSheet({
   // Shares the ["accounts", tenantId, "balances"] cache with the finances
   // screen — one network round-trip instead of a duplicate listAccounts.
   const { data: accounts = [] } = useAccountsWithBalances();
-  const { data: templates = [] } = useFinanceTemplates();
-  const insertTemplate = useInsertTemplate();
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
   const toast = useToast();
   const isEdit = !!transaction;
+  const router = useRouter();
 
   // No free-form «Возврат» here — a real refund is created from the
   // tx-detail popup («Создать возврат»): negative amount + refund_of_id
@@ -90,6 +81,11 @@ export function OperationSheet({
   const [payment, setPayment] = useState<PaymentMethod>("cash");
   const [date, setDate] = useState(businessToday);
   const [notes, setNotes] = useState("");
+  // Документ, подтверждающий операцию (путь в приватном бакете).
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
+  // десятка, и половина ленты всегда за краем экрана.
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
   // «Умный дефолт» счёта: пока диспетчер сам не трогал чипы счёта,
   // счёт следует за командой операции (счета строго per-team).
   const [accountTouched, setAccountTouched] = useState(false);
@@ -119,6 +115,7 @@ export function OperationSheet({
       setPayment((transaction.payment_method as PaymentMethod) ?? "cash");
       setDate(transaction.occurred_on);
       setNotes(transaction.notes ?? "");
+      setReceiptUrl(transaction.receipt_url ?? null);
     } else {
       setType("expense");
       setAmount("");
@@ -128,17 +125,25 @@ export function OperationSheet({
       setPayment("cash");
       setDate(businessToday);
       setNotes("");
+      setReceiptUrl(null);
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, defaultTeamId, transaction?.id, businessToday]);
 
+  const categoryName =
+    categories.find((c) => c.id === categoryId)?.name ?? null;
+
+  // Скрытые тенантом категории не предлагаются — кроме той, что уже стоит в
+  // редактируемой операции: молча снять с неё категорию нельзя.
   const cats = useMemo(
     () =>
-      categories.filter((c) =>
-        type === "expense" ? c.type === "expense" : c.type === "income",
+      categories.filter(
+        (c) =>
+          c.type === (type === "expense" ? "expense" : "income") &&
+          (!c.hidden || c.id === categoryId),
       ),
-    [categories, type],
+    [categories, type, categoryId],
   );
   // A tender maps to exactly one account kind. Showing incompatible accounts
   // made it possible to save «Наличные» onto a card balance and discover the
@@ -229,6 +234,7 @@ export function OperationSheet({
         payment_method: payment,
         notes: notes.trim() || null,
         occurred_on: date,
+        receipt_url: receiptUrl,
         business_today: businessToday,
       };
       if (isEdit && transaction) {
@@ -245,64 +251,6 @@ export function OperationSheet({
       Alert.alert("Ошибка", (e as Error).message);
     } finally {
       savingRef.current = false;
-    }
-  };
-
-  // «+ Шаблон» — инлайн-создание шаблона из заполненной формы (labeled,
-  // не голый глиф): следующая такая же операция становится 3 тапа
-  // Быстрое создание открывается из подписанного действия. CRUD-экран остаётся в Кабинете.
-  const createTemplate = async (name: string) => {
-    try {
-      await insertTemplate.mutateAsync({
-        name,
-        kind: type,
-        amount: amountNum,
-        category_id: categoryId,
-        brigade_id: teamId,
-        account_id: accountId,
-        payment_method: payment,
-      });
-      toast("Шаблон сохранён");
-    } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
-    }
-  };
-  const saveAsTemplate = () => {
-    if (amountCents == null) {
-      toast("Введите сумму с точностью не больше двух знаков");
-      return;
-    }
-    if (!teamId || !accountId) {
-      toast("Выберите команду и счёт для шаблона");
-      return;
-    }
-    if (accountMismatch) {
-      toast("Выберите счёт, подходящий способу оплаты");
-      return;
-    }
-    const fallback =
-      notes.trim() ||
-      (categoryId
-        ? categories.find((c) => c.id === categoryId)?.name
-        : undefined) ||
-      (isExpense ? "Расход" : "Доход");
-    if (Platform.OS === "ios") {
-      Alert.prompt(
-        "Название шаблона",
-        "Появится чипом наверху этой формы",
-        [
-          { text: "Отмена", style: "cancel" },
-          {
-            text: "Сохранить",
-            onPress: (v: string | undefined) =>
-              void createTemplate((v ?? "").trim() || fallback),
-          },
-        ],
-        "plain-text",
-        fallback,
-      );
-    } else {
-      void createTemplate(fallback);
     }
   };
 
@@ -363,60 +311,16 @@ export function OperationSheet({
           </View>
 
           <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
-            {/* template quick-chips + labeled inline «+ Шаблон» */}
-            {!isEdit ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ flexGrow: 0, maxHeight: 50 }}
-                contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, gap: 8, alignItems: "center" }}
-              >
-                {templates.map((t) => (
-                  <Chip
-                    key={t.id}
-                    label={`${t.name} · ${formatEUR(Number(t.amount))}`}
-                    variant="outline"
-                    onPress={() => {
-                      const nextPayment =
-                        (t.payment_method as PaymentMethod | null) ?? payment;
-                      const nextTeamId = t.brigade_id ?? teamId;
-                      const templateAccount = t.account_id
-                        ? accounts.find((a) => a.id === t.account_id)
-                        : null;
-                      const templateAccountFits =
-                        !!templateAccount &&
-                        !!nextTeamId &&
-                        accountServesTeam(templateAccount, nextTeamId) &&
-                        isPaymentAccountCompatible(nextPayment, templateAccount.kind);
-                      setType(t.kind);
-                      setAmount(String(t.amount));
-                      setCategoryId(t.category_id ?? null);
-                      setPayment(nextPayment);
-                      if (t.brigade_id) setTeamId(t.brigade_id);
-                      if (templateAccountFits) {
-                        setAccountId(templateAccount.id);
-                        setAccountTouched(true);
-                      } else {
-                        setAccountId(null);
-                        setAccountTouched(false);
-                        if (t.account_id) {
-                          toast("В шаблоне устарел счёт — выберите доступный");
-                        }
-                      }
-                    }}
-                  />
-                ))}
-                <Chip
-                  label="Сохранить шаблон"
-                  variant="outline"
-                  color={th.accent}
-                  onPress={saveAsTemplate}
-                  accessibilityLabel="Сохранить заполненную форму как шаблон"
-                />
-              </ScrollView>
-            ) : null}
+            {/* ПОРЯДОК ПОЛЕЙ — КАК ЧЕЛОВЕК ДУМАЕТ (владелец 2026-08-09):
+                расход/доход → команда и дата → категория → сумма → счёт →
+                заметка → документ. Компактно: каждая строка ровно на своё
+                содержимое, лист не растянут на весь экран.
 
-            {/* type segmented */}
+                Полосы шаблонов здесь больше нет: она первой встречала на
+                экране создания и занимала место под то, чем пользуются раз в
+                месяц. Шаблоны живут в настройках финансов. */}
+
+            {/* 1. Расход | Доход */}
             <SegmentedControl
               options={[
                 { value: "expense", label: "Расход", color: th.danger },
@@ -431,7 +335,70 @@ export function OperationSheet({
               style={{ marginHorizontal: 12, marginTop: 12 }}
             />
 
-            {/* amount */}
+            {/* 2. Команда и дата ОДНОЙ карточкой. Команда не выбирается: она
+                уже выбрана чипом наверху экрана, и второй выбор того же —
+                лишний вопрос. Здесь она просто подписана. */}
+            <SectionCard>
+              <View className="flex-row items-center justify-between px-4 py-2.5">
+                <Text className="text-base" style={{ color: th.sub }}>
+                  Команда
+                </Text>
+                <Text
+                  className="text-base font-semibold"
+                  style={{ color: th.ink }}
+                  numberOfLines={1}
+                >
+                  {teamId
+                    ? (teams.find((t) => t.id === teamId)?.name ?? "Команда")
+                    : "Компания"}
+                </Text>
+              </View>
+              <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
+              <View className="flex-row items-center justify-between px-4 py-2.5">
+                <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
+                <DateTimePicker
+                  value={parseYMD(date)}
+                  maximumDate={parseYMD(businessToday)}
+                  mode="date"
+                  display="compact"
+                  themeVariant="light"
+                  locale="ru-RU"
+                  onChange={(_, d) => d && setDate(formatYMD(d))}
+                />
+              </View>
+            </SectionCard>
+
+            {/* 3. Категория — СТРОКА, а не полоса чипов: категорий бывает
+                два десятка, и горизонтальная лента прячет половину за краем.
+                Свои категории заводятся в настройках, и дорога туда лежит
+                внутри выбора — там, где рука уже находится. */}
+            <SectionCard>
+              <Pressable
+                onPress={() => setCategoryPickerOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Категория: ${categoryName ?? "не выбрана"}`}
+                className="min-h-[48px] flex-row items-center px-4 py-2.5"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? th.pressed : "transparent",
+                })}
+              >
+                <Text className="text-base" style={{ color: th.ink }}>
+                  Категория
+                </Text>
+                <View className="ml-auto flex-row items-center gap-1.5">
+                  <Text
+                    className="text-base"
+                    style={{ color: categoryName ? th.ink : th.faint }}
+                    numberOfLines={1}
+                  >
+                    {categoryName ?? "Выбрать"}
+                  </Text>
+                  <ChevronRight color={th.chevron} size={17} strokeWidth={2.2} />
+                </View>
+              </Pressable>
+            </SectionCard>
+
+            {/* 4. Сумма */}
             <SectionCard title="Сумма">
               <View className="flex-row items-center px-4 py-2.5">
                 <TextInput
@@ -451,74 +418,9 @@ export function OperationSheet({
               </View>
             </SectionCard>
 
-            {/* category */}
-            {cats.length > 0 ? (
-              <SectionCard title="Категория">
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    gap: 8,
-                  }}
-                >
-                  {cats.map((c) => (
-                    <Chip
-                      key={c.id}
-                      label={c.name}
-                      selected={categoryId === c.id}
-                      color={isExpense ? th.danger : th.success}
-                      onPress={() =>
-                        setCategoryId(categoryId === c.id ? null : c.id)
-                      }
-                    />
-                  ))}
-                </ScrollView>
-              </SectionCard>
-            ) : null}
-
-            {/* team */}
-            {teams.length === 0 ? (
-              <SectionCard title="Команда">
-                <Text
-                  className="px-4 py-3 text-sm"
-                  style={{ color: th.faint }}
-                >
-                  Сначала добавьте команду в справочниках — операция всегда
-                  принадлежит команде и её счёту.
-                </Text>
-              </SectionCard>
-            ) : (
-              <SectionCard title="Команда">
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    gap: 8,
-                  }}
-                >
-                  {teams.map((t) => (
-                    <Chip
-                      key={t.id}
-                      label={t.name}
-                      selected={teamId === t.id}
-                      onPress={() => {
-                        setTeamId(teamId === t.id ? null : t.id);
-                        // смена команды = новый контекст счёта: сброс к
-                        // дефолту «счёт команды» (эффект выше подхватит)
-                        setAccountId(null);
-                        setAccountTouched(false);
-                      }}
-                    />
-                  ))}
-                </ScrollView>
-              </SectionCard>
-            )}
-
-            {/* account */}
+            {/* 5. Счёт — только кассы выбранной команды плюс подключённые
+                общие. Способ оплаты выводится из вида счёта: отдельного
+                выбора «нал/карта» здесь нет, он повторял бы кассу. */}
             {teamAccounts.length > 0 ? (
               <SectionCard title="Счёт">
                 <ScrollView
@@ -539,63 +441,23 @@ export function OperationSheet({
                         setAccountTouched(true);
                         const off = accountId === a.id;
                         setAccountId(off ? null : a.id);
-                        // Куда положили — тем и заплатили. Отдельного выбора
-                        // способа больше нет: он повторял вид счёта.
                         if (!off) setPayment(paymentMethodForAccountKind(a.kind));
                       }}
                     />
                   ))}
                 </ScrollView>
               </SectionCard>
-            ) : null}
+            ) : (
+              <SectionCard title="Счёт">
+                <Text className="px-4 py-3 text-sm" style={{ color: th.faint }}>
+                  {teamId
+                    ? "У этой команды нет активного счёта — заведите его в «Счетах»."
+                    : "Выберите команду наверху экрана, чтобы появились её кассы."}
+                </Text>
+              </SectionCard>
+            )}
 
-            {/* СПОСОБ — ТОЛЬКО КОГДА СЧЕТОВ НЕТ. При живых счетах он
-                выводится из выбранной кассы: два контрола про одно и то же
-                заставляли выбирать дважды и умели противоречить друг другу. */}
-            <SectionCard title={teamAccounts.length > 0 ? "Когда" : "Оплата"}>
-              <View
-                className="flex-row flex-wrap gap-2 p-3"
-                style={{ display: teamAccounts.length > 0 ? "none" : "flex" }}
-              >
-                {PAYMENTS.map((p) => (
-                  <Chip
-                    key={p.value}
-                    label={p.label}
-                    selected={payment === p.value}
-                    radio
-                    onPress={() => {
-                      if (payment === p.value) return;
-                      setPayment(p.value);
-                      if (
-                        !selectedAccount ||
-                        !isPaymentAccountCompatible(p.value, selectedAccount.kind)
-                      ) {
-                        setAccountId(null);
-                        setAccountTouched(false);
-                      }
-                    }}
-                  />
-                ))}
-              </View>
-              <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-              <View className="flex-row items-center justify-between px-4 py-2.5">
-                <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
-                <DateTimePicker
-                  value={parseYMD(date)}
-                  maximumDate={parseYMD(businessToday)}
-                  mode="date"
-                  display="compact"
-                  themeVariant="light"
-                  // Без локали системный пикер печатает «9 Aug 2026» посреди
-                  // русского экрана. Все остальные даты в приложении её
-                  // задают — этот лист был единственным исключением.
-                  locale="ru-RU"
-                  onChange={(_, d) => d && setDate(formatYMD(d))}
-                />
-              </View>
-            </SectionCard>
-
-            {/* notes */}
+            {/* 6. Заметка */}
             <SectionCard title="Заметка">
               <TextInput
                 value={notes}
@@ -610,8 +472,41 @@ export function OperationSheet({
               />
             </SectionCard>
 
+            {/* 7. Документ, подтверждающий операцию: скан чека или накладная.
+                Бухгалтеру нужна не сумма, а бумага под ней. */}
+            <SectionCard title="Документ">
+              <OperationReceiptRow
+                receiptUrl={receiptUrl}
+                onPick={setReceiptUrl}
+                disabled={busy}
+              />
+            </SectionCard>
+
             <View className="h-6" />
           </ScrollView>
+
+          {/* Выбор категории — тот же лист, что и везде. Шестерёнка внутри
+              ведёт на страницу категорий: свои категории заводятся там, а не
+              выдумываются заметкой в поле «Заметка». */}
+          <ValuePickerSheet
+            visible={categoryPickerOpen}
+            title={isExpense ? "Категория расхода" : "Категория дохода"}
+            options={cats.map((c) => ({
+              id: c.id,
+              label: c.name,
+              color: c.color,
+            }))}
+            selectedId={categoryId}
+            emptyLabel={
+              isExpense
+                ? "Пока нет ни одной категории расходов"
+                : "Пока нет ни одной категории доходов"
+            }
+            onPick={setCategoryId}
+            onSettings={() => router.push("/cabinet/categories")}
+            settingsLabel="Категории операций"
+            onClose={() => setCategoryPickerOpen(false)}
+          />
 
           <View className="px-4 pb-7 pt-3" style={{ backgroundColor: th.surface, borderTopWidth: 1, borderTopColor: th.separator }}>
             {amount.length > 0 && amountCents == null ? (

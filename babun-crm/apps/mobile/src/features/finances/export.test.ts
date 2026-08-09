@@ -48,6 +48,7 @@ describe("finance CSV export", () => {
         type: "income",
         icon: null,
         color: null,
+        hidden: false,
       },
     ];
     const result = financeTransactionsToCsv(
@@ -93,6 +94,7 @@ describe("finance CSV export", () => {
         type: "expense",
         icon: null,
         color: null,
+        hidden: false,
       },
     ];
     const result = financeTransactionsToCsv(

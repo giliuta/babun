@@ -15,6 +15,7 @@ import {
 import {
   deleteFinanceCategory,
   insertFinanceCategory,
+  setFinanceCategoryHidden,
   listFinanceCategories,
   updateFinanceCategory,
   type FinanceCategoryPatch,
@@ -129,6 +130,20 @@ export function useUpdateCategory() {
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: FinanceCategoryPatch }) =>
       updateFinanceCategory(supabase, id, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true }, // call sites alert themselves
+  });
+}
+
+/** Скрыть/вернуть категорию в списке этого тенанта. Стандартные строки
+ *  нельзя ни переименовать, ни удалить (они общие на весь продукт) — зато
+ *  можно убрать из своего списка. */
+export function useSetCategoryHidden() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
+      setFinanceCategoryHidden(supabase, tenantId as string, id, hidden),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true }, // call sites alert themselves
   });
