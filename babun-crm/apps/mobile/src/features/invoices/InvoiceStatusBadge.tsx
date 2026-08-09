@@ -12,6 +12,7 @@ const VARIANT: Record<ReturnType<typeof invoiceDisplayStatus>, BadgeVariant> = {
   overdue: "danger",
   paid: "success",
   void: "neutral",
+  cancelled: "neutral",
 };
 
 export function InvoiceStatusBadge({

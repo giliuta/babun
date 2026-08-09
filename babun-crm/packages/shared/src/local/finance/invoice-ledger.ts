@@ -3,7 +3,10 @@
 // which is the legacy localStorage-era jsPDF generator — these are the
 // authoritative records that live in the public.invoices table.
 
-export type InvoiceStatus = "issued" | "paid" | "void";
+/** `cancelled` — сторнирован кредит-нотой (2026-08-09); `void` остаётся
+ *  легаси-статусом «внутренне аннулирован» и не переиспользуется:
+ *  «удалили по ошибке» и «сторнировали документом» — разные события. */
+export type InvoiceStatus = "issued" | "paid" | "void" | "cancelled";
 export type InvoiceDisplayStatus = InvoiceStatus | "partial" | "overdue";
 export type InvoiceVatMode = "off" | "inclusive" | "exclusive";
 
@@ -351,6 +354,9 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceDisplayStatus, string> = {
   overdue: "Просрочен",
   paid: "Оплачен",
   void: "Аннулирован",
+  // Сторнирован встречным документом: у клиента на руках и инвойс, и
+  // кредит-нота, поэтому слово другое — «отменён», а не «аннулирован».
+  cancelled: "Отменён",
 };
 
 function round2(n: number): number {

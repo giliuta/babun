@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
+import { summarizeVat } from "@babun/shared/local/finance/vat";
+import { visibleAccountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
@@ -221,12 +223,15 @@ function FinancesContent() {
       scope ? scopedAccounts.filter((a) => a.scope === "team") : scopedAccounts,
     [scope, scopedAccounts],
   );
-  // Владелец 2026-07-27: маркер-глазик у плитки снят — Σ считается по
-  // ВСЕМ счетам скоупа (скрытие остатка живёт в списках и на счёте).
-  const acctTotal = useMemo(
-    () => miniCardAccounts.reduce((s, a) => s + a.balance, 0),
+  // ОДНА ФОРМУЛА С ЭКРАНОМ СЧЕТОВ. Плитка складывала ВСЕ счета, включая
+  // скрытые глазиком, а страница «Счета» — только видимые: на один вопрос
+  // «сколько у нас денег» два разных числа. Хуже, скрытый остаток
+  // восстанавливался вычитанием, и глазик переставал что-либо скрывать.
+  const acctVisible = useMemo(
+    () => visibleAccountsTotal(miniCardAccounts),
     [miniCardAccounts],
   );
+  const acctTotal = acctVisible.total;
   const materialSummary = useMemo(() => {
     let amount = 0;
     let appointmentCount = 0;
@@ -254,23 +259,47 @@ function FinancesContent() {
     // payment_status/paid_amount fields are never mapped by the mobile
     // repository, so «total − paid_amount» would flag every completed
     // visit as fully unpaid (same helper as close-day / dashboard).
+    // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
+    //
+    // «Долги» — работа сделана, деньги не получены и ничем не оформлены.
+    // Как только на эту работу выставлен инвойс, те же деньги показывает
+    // плитка «Документы» («ждут оплату»). Без этого исключения одна сотня
+    // евро сидела в обеих цифрах сразу, и прибыль с долгами врали вместе.
+    // Аннулированный инвойс не считается — он ничего не ждёт.
+    const invoicedAppointments = new Set(
+      invoices
+        .filter(
+          (inv) =>
+            inv.appointment_id &&
+            inv.status !== "void" &&
+            inv.status !== "cancelled",
+        )
+        .map((inv) => inv.appointment_id as string),
+    );
     let debt = 0;
     for (const a of scopedAppointments) {
       if (a.status !== "completed") continue;
       if (a.date < period.from || a.date > period.to) continue;
       if (scope && a.team_id !== scope) continue;
+      if (invoicedAppointments.has(a.id)) continue;
       debt += getDebtAmount(a);
     }
     const expenseWithMaterials = expense + materialSummary.amount;
+    // НДС — ЧУЖИЕ ДЕНЬГИ ВНУТРИ ОБОРОТА. В кассу пришло 480, но 400 — твоё,
+    // а 80 держишь для государства. Считать все 480 доходом значит завысить
+    // прибыль ровно на эти 80 и узнать об этом в конце квартала.
+    const vat = summarizeVat(scopedTransactions);
     return {
       income,
       expense: expenseWithMaterials,
       profit: income - expenseWithMaterials,
       debt,
+      vat,
     };
   }, [
     scopedTransactions,
     scopedAppointments,
+    invoices,
     period.from,
     period.to,
     scope,
@@ -520,6 +549,7 @@ function FinancesContent() {
         onOpenCustom={() => setWheelsOpen(true)}
         totals={totals}
         acctTotal={acctTotal}
+        acctHasHidden={acctVisible.hasHidden}
         invoices={invoiceSummary}
         onOpenAccounts={() => pushOnce("/accounts")}
         onOpenDocuments={() => pushOnce("/documents")}

@@ -1,5 +1,11 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { ChevronDown, ChevronRight, FileText, Wallet } from "lucide-react-native";
+import {
+  ChevronDown,
+  ChevronRight,
+  EyeOff,
+  FileText,
+  Wallet,
+} from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import { Chip } from "@/components/ui/Chip";
 import { useThemeColors } from "@/theme/colors";
@@ -22,6 +28,9 @@ export interface OverviewTotals {
   expense: number;
   profit: number;
   debt: number;
+  /** Собранный и уплаченный налог за период. Не показывать его — значит
+   *  выдавать чужие деньги за прибыль. */
+  vat?: { collected: number; paid: number; due: number };
 }
 
 // LOCKED v5 overview #6 «grouped-iOS premium» (finances-design.html +
@@ -38,6 +47,7 @@ export function FinanceOverview({
   onOpenCustom,
   totals,
   acctTotal,
+  acctHasHidden,
   invoices,
   onOpenAccounts,
   onOpenDocuments,
@@ -52,6 +62,9 @@ export function FinanceOverview({
   onOpenCustom: () => void;
   totals: OverviewTotals;
   acctTotal: number;
+  /** Часть счетов скрыта глазиком — Σ считает только видимые, и об этом
+   *  надо сказать, иначе цифра выглядит полной суммой и врёт. */
+  acctHasHidden?: boolean;
   invoices: InvoiceTileSummary;
   onOpenAccounts: () => void;
   onOpenDocuments: () => void;
@@ -151,7 +164,11 @@ export function FinanceOverview({
           <Pressable
             onPress={onOpenAccounts}
             accessibilityRole="button"
-            accessibilityLabel={`Счета: ${formatEUR(acctTotal)}`}
+            accessibilityLabel={
+              acctHasHidden
+                ? `Счета: ${formatEUR(acctTotal)}, часть счетов скрыта`
+                : `Счета: ${formatEUR(acctTotal)}`
+            }
             className="flex-1 rounded-xl px-3.5 py-2.5 active:opacity-70"
             style={{ minHeight: 58, backgroundColor: t.surface }}
           >
@@ -164,14 +181,17 @@ export function FinanceOverview({
                 <ChevronRight color={t.chevron} size={14} />
               </View>
             </View>
-            <Text
-              className="mt-1 text-[17px] font-bold tabular-nums"
-              style={{ color: t.ink }}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {formatEUR(acctTotal)}
-            </Text>
+            <View className="mt-1 flex-row items-center gap-1.5">
+              <Text
+                className="text-[17px] font-bold tabular-nums"
+                style={{ color: t.ink }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {formatEUR(acctTotal)}
+              </Text>
+              {acctHasHidden ? <EyeOff color={t.faint} size={13} /> : null}
+            </View>
           </Pressable>
           <Pressable
             onPress={onOpenDocuments}
@@ -333,6 +353,35 @@ export function FinanceOverview({
             </Text>
           </Pressable>
         </View>
+
+        {/* НДС К УПЛАТЕ — отдельной строкой под прибылью, а не внутри неё.
+            Владелец 2026-08-09: «400 моё, а 80 отдельно, считать наперёд».
+            Цифра появляется, только когда налог включён: бизнесу без НДС
+            пустая строка ничего не объясняет. */}
+        {totals.vat && (totals.vat.collected !== 0 || totals.vat.paid !== 0) ? (
+          <View
+            className="mt-2 flex-row items-center rounded-xl px-3.5 py-2"
+            style={{ backgroundColor: t.surface }}
+          >
+            <Text className="text-sm font-semibold" style={{ color: t.sub }}>
+              НДС к уплате
+            </Text>
+            <Text
+              className="ml-2 text-[11px]"
+              style={{ color: t.faint }}
+              numberOfLines={1}
+            >
+              собрал {formatEUR(totals.vat.collected)} · зачёл{" "}
+              {formatEUR(totals.vat.paid)}
+            </Text>
+            <Text
+              className="ml-auto text-[15px] font-bold tabular-nums"
+              style={{ color: totals.vat.due > 0 ? t.warning : t.success }}
+            >
+              {formatEUR(totals.vat.due)}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
