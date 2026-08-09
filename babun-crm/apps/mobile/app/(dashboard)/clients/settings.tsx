@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -37,6 +38,8 @@ import {
 } from "@/lib/map-services";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
+import { useAppointments } from "@/features/calendar/queries";
+import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -53,7 +56,13 @@ export default function ClientsSettingsScreen() {
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
-  const clients = clientsQuery.data ?? [];
+  const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
+  // Долг для выгрузки считается тем же селектором, что везде.
+  const { data: appointmentsForStats = [] } = useAppointments();
+  const statsMap = useMemo(
+    () => buildStatsMap(clients, appointmentsForStats),
+    [clients, appointmentsForStats],
+  );
   const tags = tagsQuery.data ?? [];
   // Способы связи: у одного бизнеса весь Кипр в WhatsApp, у другого Viber —
   // лишние каналы только удлиняют мини-лист на карточке.
@@ -94,7 +103,7 @@ export default function ClientsSettingsScreen() {
         toast("Нет клиентов для выгрузки", "info");
         return;
       }
-      const shared = await shareClientsCsv(exportClients, exportTags);
+      const shared = await shareClientsCsv(exportClients, exportTags, statsMap);
       if (shared)
         toast(`Выгружено клиентов: ${exportClients.length}`, "success");
     } catch (error) {

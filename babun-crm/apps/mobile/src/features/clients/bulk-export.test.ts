@@ -34,19 +34,38 @@ function client(patch: Partial<Client>): Client {
   };
 }
 
+const EMPTY_STATS = {
+  visits: 0,
+  totalSpent: 0,
+  debt: 0,
+  lastVisitDate: "",
+  lastVisitDays: null,
+  nextApt: null,
+  nextAptDays: null,
+  expectedRevenue: 0,
+  lastTeamId: null,
+  medianGapDays: null,
+  serviceDue: 0,
+  unclosedVisits: 0,
+} as unknown as import("@babun/shared/local/selectors/client-stats").ClientStats;
+
 describe("mobile client CSV export", () => {
   test("produces an Excel-friendly UTF-8 file with CRLF and escaped values", () => {
     const tags: ClientTag[] = [
       { id: "vip", name: "VIP; важный", color: "#000000" },
     ];
+    // Долг берётся из сводки — ТОЙ ЖЕ, что кормит список и карточку.
+    // Мёртвое поле `balance` в выгрузку больше не попадает.
+    const stats = new Map([["client-1", { ...EMPTY_STATS, debt: 1200 }]]);
     const csv = clientsToCsv(
-      [client({ full_name: 'Иван "Иваныч"', tag_ids: ["vip"], balance: -1200 })],
+      [client({ full_name: 'Иван "Иваныч"', tag_ids: ["vip"] })],
       tags,
+      stats,
     );
 
-    assert.ok(csv.startsWith("\uFEFFИмя;Телефон;Город;Баланс;Теги\r\n"));
+    assert.ok(csv.startsWith("\uFEFFИмя;Телефон;Город;Долг;Теги\r\n"));
     assert.match(csv, /"Иван ""Иваныч"""/);
-    assert.match(csv, /−€1\u00A0200/);
+    assert.match(csv, /€1\u00A0200/);
     assert.match(csv, /"VIP; важный"/);
   });
 

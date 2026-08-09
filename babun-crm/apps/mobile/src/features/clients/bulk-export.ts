@@ -9,6 +9,8 @@
 // gear→Экспорт path (future) can carry the wide sheet.
 //
 import type { Client, ClientTag } from "@babun/shared/local/clients";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { clientDebt } from "@/features/clients/filter";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   csvCell,
@@ -17,7 +19,11 @@ import {
   shareCsvFile,
 } from "@/lib/share-csv";
 
-const HEADER = ["Имя", "Телефон", "Город", "Баланс", "Теги"] as const;
+// «Долг», а не «Баланс»: колонка `balance` — мёртвое поле, оставшееся от
+// старой модели, и печаталась она всегда пустой либо неверной. Долг
+// считается ТОЙ ЖЕ формулой, что в списке и на карточке, — иначе выгрузка
+// станет четвёртым мнением о том, сколько человек должен.
+const HEADER = ["Имя", "Телефон", "Город", "Долг", "Теги"] as const;
 
 /**
  * Build the CSV body (with leading BOM) for `clients`. `tags` is the tag
@@ -26,6 +32,9 @@ const HEADER = ["Имя", "Телефон", "Город", "Баланс", "Те�
 export function clientsToCsv(
   clients: readonly Client[],
   tags: readonly ClientTag[],
+  /** Сводка по клиенту — из неё берётся долг. Без неё колонка пустая:
+   *  выдумывать долг из мёртвого поля хуже, чем не печатать его вовсе. */
+  stats?: ReadonlyMap<string, ClientStats>,
 ): string {
   const tagName = (id: string) => tags.find((t) => t.id === id)?.name ?? id;
   const rows: string[][] = [HEADER.map(csvCell)];
@@ -34,9 +43,13 @@ export function clientsToCsv(
         csvTextCell(c.full_name),
         csvTextCell(c.phone),
         csvTextCell(c.city),
-        // Balance as a signed EUR string — the operator reads a spreadsheet,
-        // not a machine; formatEUR keeps the sign for debtors (negative).
-        csvCell(c.balance ? formatEUR(c.balance) : ""),
+        // Сумма читается человеком в таблице, поэтому строкой с валютой.
+        csvCell(
+          (() => {
+            const debt = clientDebt(c, stats?.get(c.id));
+            return debt > 0 ? formatEUR(debt) : "";
+          })(),
+        ),
         csvTextCell((c.tag_ids ?? []).map(tagName).join(", ")),
       ]);
   }
@@ -59,8 +72,9 @@ function todayStamp(): string {
 export async function shareClientsCsv(
   clients: readonly Client[],
   tags: readonly ClientTag[],
+  stats?: ReadonlyMap<string, ClientStats>,
 ): Promise<boolean> {
-  const csv = clientsToCsv(clients, tags);
+  const csv = clientsToCsv(clients, tags, stats);
   const stamp = todayStamp();
   await shareCsvFile({
     contents: csv,

@@ -381,7 +381,7 @@ export default function ClientsListScreen() {
   const onExport = async () => {
     if (selectedClients.length === 0) return;
     try {
-      const shared = await shareClientsCsv(selectedClients, tags);
+      const shared = await shareClientsCsv(selectedClients, tags, statsMap);
       if (shared) {
         toast(`CSV выгружен (${selectedClients.length})`, "success");
         exitSelection();
