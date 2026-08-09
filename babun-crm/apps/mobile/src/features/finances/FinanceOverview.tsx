@@ -48,6 +48,8 @@ export function FinanceOverview({
   totals,
   acctTotal,
   acctHasHidden,
+  unclosed,
+  onOpenUnclosed,
   invoices,
   onOpenAccounts,
   onOpenDocuments,
@@ -65,6 +67,10 @@ export function FinanceOverview({
   /** Часть счетов скрыта глазиком — Σ считает только видимые, и об этом
    *  надо сказать, иначе цифра выглядит полной суммой и врёт. */
   acctHasHidden?: boolean;
+  /** Прошедшие записи без исхода: единственные деньги, не попавшие ни в
+   *  одну цифру выше. При нуле строка не рисуется вовсе. */
+  unclosed?: { count: number; amount: number };
+  onOpenUnclosed?: () => void;
   invoices: InvoiceTileSummary;
   onOpenAccounts: () => void;
   onOpenDocuments: () => void;
@@ -359,6 +365,39 @@ export function FinanceOverview({
             </Text>
           </Pressable>
         </View>
+
+        {/* НЕ ЗАКРЫТО — прошедшая работа без исхода. Стоит сразу под
+            «Долгами», которые она поправляет: пока бригадир не отчитался,
+            эти деньги не считаются ни доходом, ни долгом. */}
+        {unclosed && unclosed.count > 0 ? (
+          <Pressable
+            onPress={onOpenUnclosed}
+            accessibilityRole="button"
+            accessibilityLabel={`Не закрыто: ${unclosed.count}, на сумму ${formatEUR(unclosed.amount)}`}
+            className="mt-2 flex-row items-center rounded-xl px-3.5 py-2 active:opacity-70"
+            style={{ backgroundColor: t.surface }}
+          >
+            <View
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: t.warning }}
+            />
+            <Text className="ml-2 text-sm font-semibold" style={{ color: t.sub }}>
+              Не закрыто
+            </Text>
+            <Text className="ml-2 text-[11px]" style={{ color: t.faint }}>
+              бригада не отчиталась
+            </Text>
+            <View className="ml-auto flex-row items-center gap-1">
+              <Text
+                className="text-[15px] font-bold tabular-nums"
+                style={{ color: t.warning }}
+              >
+                {formatEUR(unclosed.amount)}
+              </Text>
+              <ChevronRight color={t.chevron} size={14} />
+            </View>
+          </Pressable>
+        ) : null}
 
         {/* НДС К УПЛАТЕ — отдельной строкой под прибылью, а не внутри неё.
             Владелец 2026-08-09: «400 моё, а 80 отдельно, считать наперёд».

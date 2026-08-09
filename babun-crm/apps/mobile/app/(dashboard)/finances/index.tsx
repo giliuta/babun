@@ -5,6 +5,10 @@ import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
+import {
+  unclosedAppointments,
+  unclosedTotal,
+} from "@babun/shared/local/selectors/unclosed";
 import { visibleAccountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
@@ -237,6 +241,22 @@ function FinancesContent() {
     [miniCardAccounts],
   );
   const acctTotal = acctVisible.total;
+  // НЕ ЗАКРЫТО — деньги, которых нет ни в одной цифре выше: «Долги» считают
+  // только завершённые визиты, «Документы» — только инвойсы, «Доход» —
+  // только проведённые оплаты. Прошедшая запись, оставшаяся «Запланирована»,
+  // не попадает никуда, и прибыль занижена ровно на эту сумму.
+  //
+  // Стоит СТРОКОЙ ПОД ПЛИТКАМИ, а не в шапке: величина подчиняется срезу
+  // команды, живёт рядом с «Долгами», которые поправляет, и спокойно
+  // исчезает при нуле, не оставляя дыры в шапке.
+  const unclosed = useMemo(() => {
+    const rows = unclosedAppointments(
+      scope ? scopedAppointments.filter((a) => a.team_id === scope) : scopedAppointments,
+      businessToday,
+    );
+    return { count: rows.length, amount: unclosedTotal(rows) };
+  }, [scopedAppointments, scope, businessToday]);
+
   const materialSummary = useMemo(() => {
     let amount = 0;
     let appointmentCount = 0;
@@ -682,6 +702,8 @@ function FinancesContent() {
         acctTotal={acctTotal}
         acctHasHidden={acctVisible.hasHidden}
         invoices={invoiceSummary}
+        unclosed={unclosed}
+        onOpenUnclosed={() => router.push("/finances/unclosed")}
         onOpenAccounts={() => pushOnce("/accounts")}
         onOpenDocuments={() => pushOnce("/documents")}
         view={view}

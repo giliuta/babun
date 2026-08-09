@@ -36,6 +36,7 @@ import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { buildDebtPaidPatch } from "@/features/appointments/payment";
+import { unclosedAppointments } from "@babun/shared/local/selectors/unclosed";
 import {
   cashCentsToInput,
   parseCashInputToCents,
@@ -193,13 +194,7 @@ export default function CloseDayScreen() {
   // Следующий шаг после закрытия: бэклог прошлых дней (тот же фильтр, что
   // и в unclosed.tsx / бейдже хаба) — деньги «под вопросом» важнее всего.
   const unclosedPast = useMemo(
-    () =>
-      appts.filter(
-        (a) =>
-          (a.kind === undefined || a.kind === "work") &&
-          a.status === "scheduled" &&
-          a.date < todayKey,
-      ).length,
+    () => unclosedAppointments(appts, todayKey).length,
     [appts, todayKey],
   );
 

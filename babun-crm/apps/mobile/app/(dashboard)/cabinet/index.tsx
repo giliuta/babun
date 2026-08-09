@@ -60,6 +60,7 @@ import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { ROLE_LABELS, type UserRole } from "@/features/settings/role-policy";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
+import { unclosedAppointments } from "@babun/shared/local/selectors/unclosed";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useQueueDepth } from "@babun/shared/sync";
 
@@ -249,14 +250,10 @@ export default function CabinetHome() {
   // Бейдж «Незакрытые дни» — тот же фильтр, что и в unclosed.tsx, но хабу
   // нужен только count; useAppointments — локальный кэш, тяжёлого нет.
   const { data: appts = [] } = useAppointments();
-  const unclosedCount = useMemo(() => {
-    return appts.filter(
-      (a) =>
-        (a.kind === undefined || a.kind === "work") &&
-        a.status === "scheduled" &&
-        a.date < todayKey,
-    ).length;
-  }, [appts, todayKey]);
+  const unclosedCount = useMemo(
+    () => unclosedAppointments(appts, todayKey).length,
+    [appts, todayKey],
+  );
 
   return (
     <Screen>
