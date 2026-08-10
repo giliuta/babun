@@ -17,6 +17,7 @@ import type {
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
 import { Button } from "@/components/ui/Button";
+import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
 import { OperationReceiptRow } from "./OperationReceiptRow";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
@@ -64,6 +65,10 @@ export function OperationSheet({
   defaultTeamId,
   businessToday,
   transaction,
+  onInvoice,
+  onClientOpen,
+  onRefund,
+  refundedTotal = 0,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -71,6 +76,13 @@ export function OperationSheet({
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
+  /** Действия существующей операции — живут внизу той же формы, а не в
+   *  отдельной витрине: владелец 2026-08-10 «всё сразу в редакции». */
+  onInvoice?: (tx: FinanceTransaction) => void;
+  onClientOpen?: (clientId: string) => void;
+  onRefund?: (tx: FinanceTransaction) => void;
+  /** Сколько уже вернули — по нему прячем «Создать возврат». */
+  refundedTotal?: number;
 }) {
   const th = useThemeColors();
   const { data: categories = [] } = useFinanceCategories();
@@ -365,12 +377,20 @@ export function OperationSheet({
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Удалить операцию"
-                className="min-h-10 w-10 items-center justify-center"
+                // Ширина по содержимому: в w-10 слово «Удалить» ломалось на
+                // две строки («Удал/ить»).
+                className="min-h-10 items-center justify-center px-1"
               >
-                <Text className="text-sm font-medium" style={{ color: th.danger }}>Удалить</Text>
+                <Text
+                className="text-sm font-medium"
+                numberOfLines={1}
+                style={{ color: th.danger }}
+              >
+                Удалить
+              </Text>
               </Pressable>
             ) : (
-              <View className="w-10" />
+              <View className="w-12" />
             )}
           </View>
 
@@ -567,6 +587,36 @@ export function OperationSheet({
                 style={{ color: th.ink }}
               />
             </SectionCard>
+
+            {/* 8. Действия этой операции. Раньше они жили в отдельной витрине,
+                и до правки надо было пройти лишний экран. Теперь всё в одной
+                форме: открыл — правь, а рядом то, что ещё можно сделать. */}
+            {isEdit && transaction ? (
+              <SectionCard title="Ещё">
+                {transaction.client_id && onClientOpen ? (
+                  <ActionRow
+                    label="Открыть клиента"
+                    onPress={() => onClientOpen(transaction.client_id as string)}
+                  />
+                ) : null}
+                {transaction.type === "income" && onInvoice ? (
+                  <ActionRow
+                    separated={!!transaction.client_id}
+                    label={transaction.invoice_id ? "Открыть счёт" : "Выставить счёт"}
+                    onPress={() => onInvoice(transaction)}
+                  />
+                ) : null}
+                {transaction.type === "income" &&
+                onRefund &&
+                transaction.amount - refundedTotal > 0.005 ? (
+                  <ActionRow
+                    separated
+                    label="Создать возврат"
+                    onPress={() => onRefund(transaction)}
+                  />
+                ) : null}
+              </SectionCard>
+            ) : null}
 
             {/* 7. Документ, подтверждающий операцию: скан чека или накладная.
                 Бухгалтеру нужна не сумма, а бумага под ней. */}

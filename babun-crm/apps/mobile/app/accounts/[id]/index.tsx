@@ -46,6 +46,8 @@ import { TransferSheet } from "@/features/finances/TransferSheet";
 import { TransactionsFeed } from "@/features/finances/TransactionsFeed";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import { OperationSheet } from "@/features/finances/OperationSheet";
+import { canEditTransaction } from "@babun/shared/local/finance/transaction";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 
 function AccountDetailContent() {
   const t = useThemeColors();
@@ -387,6 +389,12 @@ function AccountDetailContent() {
                   confirmDeleteTransfer(tx);
                   return;
                 }
+                // Тап открывает правку — та же дорога, что в «Финансах».
+                if (canEditTransaction(tx)) {
+                  setEditingTx(tx);
+                  setOpOpen(true);
+                  return;
+                }
                 setPopupTx(tx);
               }}
             />
@@ -416,11 +424,6 @@ function AccountDetailContent() {
             : 0
         }
         onClose={() => setPopupTx(null)}
-        onEdit={(tx) => {
-          setPopupTx(null);
-          setEditingTx(tx);
-          setOpOpen(true);
-        }}
         onInvoice={(tx) => {
           setPopupTx(null);
           openTransactionInvoice(tx);
@@ -444,6 +447,19 @@ function AccountDetailContent() {
         defaultTeamId={account.scope === "team" ? account.brigade_id : null}
         businessToday={businessToday}
         transaction={editingTx}
+        onInvoice={(tx) => {
+          setOpOpen(false);
+          openTransactionInvoice(tx);
+        }}
+        onClientOpen={(clientId) => {
+          setOpOpen(false);
+          router.push(`/clients/${clientId}`);
+        }}
+        onRefund={(tx) => {
+          setOpOpen(false);
+          setTimeout(() => setPopupTx(tx), SHEET_EXIT_MS);
+        }}
+        refundedTotal={editingTx ? refundTotals?.get(editingTx.id) ?? 0 : 0}
       />
     </Screen>
   );

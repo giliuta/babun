@@ -91,15 +91,10 @@ export function FinanceOverview({
             alignItems: "center",
           }}
         >
-          <Chip
-            label="Компания"
-            variant="outline"
-            color={t.accent}
-            radio
-            selected={scopeTeamId === null}
-            onPress={() => onScopeChange(null)}
-            accessibilityLabel="Все команды компании"
-          />
+          {/* Чипа «Компания» здесь нет намеренно (владелец 2026-08-10):
+              деньги в продукте всегда чьи-то, а итог по компании живёт в
+              сводках Кабинета. Общий чип показывал сумму, за которую никто
+              не отвечает. */}
           {teams.map((team) => (
             <Chip
               key={team.id}

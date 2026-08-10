@@ -58,7 +58,7 @@ function MetaRow({ label, value }: { label: string; value: string }) {
 }
 
 // Tx-detail popup — port of the web TransactionPopup: centered card with
-// the headline amount, meta rows and actions. Mobile adds «Редактировать»
+// the headline amount, meta rows and actions.
 // (opens the OperationSheet); «Создать возврат» writes a negative refund
 // row tied via refund_of_id and capped by «до остатка» (web semantics).
 export function TransactionPopup({
@@ -69,7 +69,6 @@ export function TransactionPopup({
   categories,
   alreadyRefunded = 0,
   onClose,
-  onEdit,
   onInvoice,
   onClientOpen,
   onDelete,
@@ -83,7 +82,6 @@ export function TransactionPopup({
   /** Σ already-refunded for this income — caps the new refund. */
   alreadyRefunded?: number;
   onClose: () => void;
-  onEdit: (tx: FinanceTransaction) => void;
   onInvoice: (tx: FinanceTransaction) => void;
   onClientOpen: (clientId: string) => void;
   onDelete: (tx: FinanceTransaction) => Promise<void>;
@@ -133,10 +131,6 @@ export function TransactionPopup({
   const refundRemaining = refundRemainingCents / 100;
   const canRefund =
     tx.type === "income" && !isAppointmentLedger && refundRemainingCents > 0;
-  const canEdit =
-    !isAppointmentLedger &&
-    !tx.invoice_id &&
-    (tx.type === "income" || tx.type === "expense");
   const canDelete =
     !isAppointmentLedger && !tx.invoice_id && tx.type !== "transfer";
   const canInvoice = tx.type === "income";
@@ -332,9 +326,6 @@ export function TransactionPopup({
                       () => onClientOpen(tx.client_id as string),
                       "plain",
                     )
-                  : null}
-                {canEdit
-                  ? actionBtn("Редактировать", () => onEdit(tx), "primary")
                   : null}
                 {canDelete || canRefund ? (
                   <View className="flex-row" style={{ gap: 8 }}>

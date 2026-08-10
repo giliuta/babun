@@ -65,3 +65,18 @@ export function isIncomeLike(t: FinanceTransaction): boolean {
 export function isExpense(t: FinanceTransaction): boolean {
   return t.type === "expense";
 }
+
+/**
+ * Можно ли править операцию прямо в её форме.
+ *
+ * Нельзя двоим: проводке, рождённой записью (`source === "auto"`) — она меняется
+ * в самой записи, иначе деньги разъедутся с работой; и операции, привязанной к
+ * инвойсу — её меняет документ. Всё остальное человек правит там же, где видит.
+ */
+export function canEditTransaction(tx: FinanceTransaction): boolean {
+  return (
+    tx.source !== "auto" &&
+    !tx.invoice_id &&
+    (tx.type === "income" || tx.type === "expense")
+  );
+}

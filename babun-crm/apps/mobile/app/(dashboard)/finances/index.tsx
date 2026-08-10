@@ -34,6 +34,8 @@ import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
 import { TransactionsFeed } from "@/features/finances/TransactionsFeed";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
+import { canEditTransaction } from "@babun/shared/local/finance/transaction";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import {
   FinanceOverview,
   type HomeView,
@@ -139,11 +141,15 @@ function FinancesContent() {
     [categoriesQuery.data],
   );
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
-  // Команду удалили, пока её скоуп был выбран: фильтр продолжал бы
-  // действовать невидимкой (чип исчез) — возвращаемся на «Компания».
+  // ДЕНЬГИ ВСЕГДА ЧЬИ-ТО. Владелец 2026-08-10: «компания в целом не нужна,
+  // только разбивка по командам — итог по компании смотрят в сводках».
+  // Поэтому скоуп никогда не бывает пустым: открываем ту команду, с которой
+  // человек работает, а если её удалили — первую живую.
   useEffect(() => {
-    if (!scope || !teamsQuery.isSuccess) return;
-    if (teams.every((team) => team.id !== scope)) setScope(null);
+    if (!teamsQuery.isSuccess || teams.length === 0) return;
+    if (!scope || teams.every((team) => team.id !== scope)) {
+      setScope(teams[0].id);
+    }
   }, [scope, teams, teamsQuery.isSuccess]);
   const allTeams = useMemo(
     () => allTeamsQuery.data ?? [],
@@ -766,6 +772,16 @@ function FinancesContent() {
               confirmDeleteTransfer(tx);
               return;
             }
+            // ТАП ОТКРЫВАЕТ ПРАВКУ, А НЕ ВИТРИНУ. Владелец 2026-08-10: «чтобы
+            // не надо было по пять раз нажимать редактировать — сразу всё
+            // открывается и правится». Витрина остаётся только для того, что
+            // править нельзя: проводка из записи и операция с инвойсом
+            // меняются в своём документе, иначе деньги разъедутся с ним.
+            if (canEditTransaction(tx)) {
+              setEditingTx(tx);
+              setOpOpen(true);
+              return;
+            }
             setPopupTx(tx);
           }}
         />
@@ -799,11 +815,6 @@ function FinancesContent() {
             : 0
         }
         onClose={() => setPopupTx(null)}
-        onEdit={(tx) => {
-          setPopupTx(null);
-          setEditingTx(tx);
-          setOpOpen(true);
-        }}
         onInvoice={(tx) => {
           setPopupTx(null);
           openTransactionInvoice(tx);
@@ -826,6 +837,22 @@ function FinancesContent() {
         defaultTeamId={scope}
         businessToday={businessToday}
         transaction={editingTx}
+        onInvoice={(tx) => {
+          setOpOpen(false);
+          openTransactionInvoice(tx);
+        }}
+        onClientOpen={(clientId) => {
+          setOpOpen(false);
+          router.push(`/clients/${clientId}`);
+        }}
+        onRefund={(tx) => {
+          // Возврат — форма витрины: там уже посчитан остаток и кап.
+          setOpOpen(false);
+          setTimeout(() => setPopupTx(tx), SHEET_EXIT_MS);
+        }}
+        refundedTotal={
+          editingTx ? refundTotals?.get(editingTx.id) ?? 0 : 0
+        }
       />
 
       <PeriodPresetModal
