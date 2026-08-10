@@ -13,6 +13,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
+import { LogoRow } from "@/features/settings/LogoRow";
 import { Button } from "@/components/ui/Button";
 import { ChevronRight } from "lucide-react-native";
 import {
@@ -246,7 +247,22 @@ export default function BusinessScreen() {
         </SectionCard>
 
         {owner ? (
-          <SectionCard title="Реквизиты для счетов" padded>
+          <SectionCard title="Реквизиты для счетов">
+            {/* Логотип сохраняется СРАЗУ, не дожидаясь «Сохранить»: файл уже
+                лежит в хранилище, и держать ссылку в форме — значит потерять
+                её при выходе с экрана. */}
+            <LogoRow
+              logoUrl={tenant?.logo_url ?? null}
+              onChange={(url) =>
+                update.mutate(
+                  { logo_url: url },
+                  {
+                    onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+                  },
+                )
+              }
+            />
+            <View className="px-4">
             <Field label="Юр. название" value={form.legal_name} onChangeText={set("legal_name")} />
             <Field
               label="Юридический адрес"
@@ -257,12 +273,10 @@ export default function BusinessScreen() {
             <Field label="VAT / рег. номер" value={form.vat_number} onChangeText={set("vat_number")} />
             <Field label="IBAN" value={form.iban} onChangeText={set("iban")} />
             <Field label="Банк" value={form.bank_name} onChangeText={set("bank_name")} />
-            <Field
-              label="Префикс счёта"
-              value={form.invoice_prefix}
-              onChangeText={set("invoice_prefix")}
-              placeholder="INV-"
-            />
+            {/* Нумерация переехала на свою страницу (Финансы → Настройки →
+                Нумерация счетов): там кроме префикса живут ширина номера,
+                сброс по годам и «продолжить с номера» при переезде. */}
+            </View>
           </SectionCard>
         ) : null}
 
