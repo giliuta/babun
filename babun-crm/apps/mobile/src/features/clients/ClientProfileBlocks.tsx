@@ -6,6 +6,7 @@ import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { AttachmentsRow } from "@/features/clients/blocks/AttachmentsBlock";
+import { ClientDocumentsRow } from "@/features/clients/blocks/ClientDocumentsRow";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/features/clients/card-rows";
@@ -100,7 +101,14 @@ export function ClientProfileBlocks({
         client={client}
         update={update}
         footerRow={
-          !draft ? <AttachmentsRow clientId={client.id} separated /> : null
+          !draft ? (
+            <>
+              <AttachmentsRow clientId={client.id} separated />
+              {/* Счета и чеки — отдельной строкой от «Документации»: первое
+                  выдали клиенту, второе сложили про него. */}
+              <ClientDocumentsRow clientId={client.id} separated />
+            </>
+          ) : null
         }
       />
       <PersonalBlock client={client} update={update} tags={tags} />

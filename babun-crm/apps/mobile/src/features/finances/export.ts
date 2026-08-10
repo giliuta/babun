@@ -10,6 +10,14 @@ const TYPE_LABEL: Record<FinanceTransaction["type"], string> = {
   refund: "Возврат",
 };
 
+// Три клавиши операции человеческими словами: бухгалтер должен видеть, как
+// назначали налог, а не догадываться по сумме.
+const VAT_MODE_LABEL: Record<string, string> = {
+  none: "Без НДС",
+  inclusive: "НДС включён",
+  exclusive: "Плюс НДС",
+};
+
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: "Наличные",
   card: "Карта",
@@ -21,6 +29,11 @@ export interface CsvLookups {
   /** id команды → имя; NULL team_id печатается как «Компания». */
   teamName?: ReadonlyMap<string, string>;
   accounts?: readonly Pick<Account, "id" | "name">[];
+}
+
+/** Копейки без хвостов с плавающей точкой: 476 − 76 не должно давать 399.99. */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export function financeTransactionsToCsv(
@@ -44,6 +57,21 @@ export function financeTransactionsToCsv(
     csvTextCell(tx.account_id ? accountName.get(tx.account_id) ?? "" : ""),
     csvTextCell(tx.payment_method ? METHOD_LABEL[tx.payment_method] : ""),
     csvCell(tx.amount),
+    // НАЛОГ ОТДЕЛЬНОЙ КОЛОНКОЙ. Бухгалтеру нужна не валовая сумма, а разбор:
+    // сколько из неё налог и сколько осталось компании.
+    csvCell(tx.vat_amount ?? 0),
+    csvCell(round2(tx.amount - (tx.vat_amount ?? 0))),
+    csvTextCell(tx.vat_rate != null ? String(tx.vat_rate) : ""),
+    csvTextCell(
+      tx.vat_mode
+        ? VAT_MODE_LABEL[tx.vat_mode] ?? ""
+        : tx.vat_amount != null
+          ? "НДС включён"
+          : "",
+    ),
+    // Подтверждающий документ: «есть/нет» — по нему бухгалтер сразу видит,
+    // какие расходы нельзя принять к зачёту, и что просить у бригады.
+    csvTextCell(tx.receipt_url ? "есть" : ""),
     csvTextCell(tx.notes ?? ""),
   ]);
 
@@ -57,6 +85,11 @@ export function financeTransactionsToCsv(
         "Счёт",
         "Способ оплаты",
         "Сумма",
+        "НДС",
+        "Без НДС",
+        "Ставка",
+        "Режим НДС",
+        "Документ",
         "Заметка",
       ].map(csvCell),
       ...rows,

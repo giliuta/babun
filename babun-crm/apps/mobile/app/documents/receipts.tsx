@@ -1,4 +1,5 @@
 import { FlatList, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { Receipt as ReceiptIcon } from "lucide-react-native";
 import { receiptClientName } from "@babun/shared/local/finance/receipt";
 import { formatEUR } from "@babun/shared/common/utils/money";
@@ -9,6 +10,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { formatShortDateRu } from "@/features/clients/format";
+import { useClients } from "@/features/clients/queries";
 import { useThemeColors } from "@/theme/colors";
 
 // ЧЕКИ — ЛЕНТА ВЫДАННЫХ ДОКУМЕНТОВ.
@@ -19,7 +21,14 @@ import { useThemeColors } from "@/theme/colors";
 
 export default function ReceiptsScreen() {
   const t = useThemeColors();
-  const receipts = useReceipts();
+  // Чеки одного клиента: та же лента, отфильтрованная сервером. Отдельного
+  // экрана «документы клиента» нет — иначе один список жил бы в двух вёрстках.
+  const { clientId } = useLocalSearchParams<{ clientId?: string }>();
+  const receipts = useReceipts(clientId ? { clientId } : undefined);
+  const { data: clients = [] } = useClients();
+  const clientName = clientId
+    ? clients.find((c) => c.id === clientId)?.full_name
+    : undefined;
 
   if (receipts.isLoading) {
     return (
@@ -31,7 +40,7 @@ export default function ReceiptsScreen() {
   if (receipts.isError) {
     return (
       <Screen>
-        <ScreenHeader title="Чеки" />
+        <ScreenHeader title="Чеки" subtitle={clientName} />
         <ClientDataNotice
           fullScreen
           title="Не удалось загрузить чеки"
@@ -45,7 +54,7 @@ export default function ReceiptsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="Чеки" />
+      <ScreenHeader title="Чеки" subtitle={clientName} />
       <FlatList
         data={receipts.data ?? []}
         keyExtractor={(r) => r.id}

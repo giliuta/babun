@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { Alert, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
+import { useClients } from "@/features/clients/queries";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceMoney, todayYmd } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
@@ -21,8 +22,17 @@ export default function DocumentsScreen() {
   const businessToday = todayYmd(
     useCalendarSettings().data?.timezone ?? "Europe/Nicosia",
   );
+  // Карточка клиента приводит сюда со своим clientId: те же две двери, но
+  // считают и открывают только его бумаги.
+  const { clientId } = useLocalSearchParams<{ clientId?: string }>();
+  // Имя клиента в подзаголовке: без него сужённый список выглядит как общий,
+  // и «Ещё не выдавались» читается как «во всей компании ни одного чека».
+  const { data: clients = [] } = useClients();
+  const clientName = clientId
+    ? clients.find((c) => c.id === clientId)?.full_name
+    : undefined;
   const invoicesQuery = useInvoices();
-  const receipts = useReceipts();
+  const receipts = useReceipts(clientId ? { clientId } : undefined);
   const invoicePaymentsQuery = useInvoicePayments();
   const invoicesData = invoicesQuery.data;
   const invoicePaymentsData = invoicePaymentsQuery.data;
@@ -30,7 +40,9 @@ export default function DocumentsScreen() {
     invoicesData !== undefined && invoicePaymentsData !== undefined;
 
   const summary = useMemo(() => {
-    const invoices = invoicesData ?? [];
+    const invoices = (invoicesData ?? []).filter(
+      (i) => !clientId || i.client_id === clientId,
+    );
     const invoicePayments = invoicePaymentsData ?? {};
     let openCount = 0;
     let outstanding = 0;
@@ -49,11 +61,11 @@ export default function DocumentsScreen() {
       }
     }
     return { openCount, outstanding, overdue };
-  }, [businessToday, invoicePaymentsData, invoicesData]);
+  }, [businessToday, invoicePaymentsData, invoicesData, clientId]);
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Документы" />
+      <ScreenHeader title="Документы" subtitle={clientName} />
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <RowGroup>
           <NavRow
@@ -68,7 +80,9 @@ export default function DocumentsScreen() {
                     : "Все оплачены"
             }
             valueColor={summary.overdue > 0 ? t.danger : undefined}
-            onPress={() => router.push("/invoices")}
+            onPress={() =>
+              router.push(clientId ? `/invoices?clientId=${clientId}` : "/invoices")
+            }
           />
           {/* Чеки выписываются сами при каждом приёме денег (триггер
               issue_receipt_for_income). Строка живая с 2026-08-09. */}
@@ -82,7 +96,13 @@ export default function DocumentsScreen() {
                   : "Ещё не выдавались"
             }
             separated
-            onPress={() => router.push("/documents/receipts")}
+            onPress={() =>
+              router.push(
+                clientId
+                  ? `/documents/receipts?clientId=${clientId}`
+                  : "/documents/receipts",
+              )
+            }
           />
           <NavRow
             label="Договоры"

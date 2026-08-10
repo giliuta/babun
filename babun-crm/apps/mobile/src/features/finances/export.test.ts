@@ -74,15 +74,34 @@ describe("finance CSV export", () => {
     assert.equal(result.count, 2);
     assert.ok(
       result.contents.startsWith(
-        "\uFEFFДата;Тип;Категория;Команда;Счёт;Способ оплаты;Сумма;Заметка\r\n",
+        "\uFEFFДата;Тип;Категория;Команда;Счёт;Способ оплаты;Сумма;НДС;Без НДС;Ставка;Режим НДС;Документ;Заметка\r\n",
       ),
     );
     assert.match(result.contents, /"Сервис; монтаж"/);
     assert.match(result.contents, /"Первая\nстрока"/);
-    assert.match(result.contents, /Юра;Наличка;Наличные;125.5;/);
+    assert.match(result.contents, /Юра;Наличка;Наличные;125.5;0;125.5;;;;/);
     // NULL team_id — общекорпоративная операция: колонка «Команда» = Компания.
-    assert.match(result.contents, /Возврат;;Компания;;;-20;/);
+    assert.match(result.contents, /Возврат;;Компания;;;-20;0;-20;/);
     assert.doesNotMatch(result.contents, /^.*Перевод;;/m);
+  });
+
+  // Бухгалтеру нужен РАЗБОР суммы, а не валовая цифра: сколько налога и что
+  // осталось компании. Отдельная колонка «Документ» отвечает на вопрос, какие
+  // расходы вообще можно принять к зачёту.
+  test("печатает налог, ставку, режим и наличие документа", () => {
+    const result = financeTransactionsToCsv(
+      [
+        transaction({
+          amount: 476,
+          vat_mode: "exclusive",
+          vat_rate: 19,
+          vat_amount: 76,
+          receipt_url: "tenant/receipt.jpg",
+        }),
+      ],
+      [],
+    );
+    assert.match(result.contents, /476;76;400;19;Плюс НДС;есть;/);
   });
 
   test("neutralizes formulas in category names and notes", () => {
