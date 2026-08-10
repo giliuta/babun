@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import {
   Building2,
   FileText,
+  Hash,
   Percent,
   Receipt,
   Share2,
@@ -19,6 +20,23 @@ import {
   useVatSettings,
   vatSummaryLine,
 } from "@/features/finances/vat-queries";
+import { useTenant, type Tenant } from "@/features/settings/tenant";
+import { formatInvoiceNumber } from "@/features/invoices/numbering";
+
+/** Подпись строки: показывает, как выглядит номер, не проваливаясь внутрь. */
+function numberingLine(tenant: Tenant | undefined): string {
+  if (!tenant) return "Загрузка…";
+  const sample = formatInvoiceNumber({
+    prefix: tenant.invoice_prefix || "INV",
+    year: new Date().getFullYear(),
+    seq: tenant.invoice_next_number ?? 1,
+    padding: tenant.invoice_number_padding,
+    yearlyReset: tenant.invoice_number_yearly_reset,
+  });
+  return tenant.invoice_next_number
+    ? `Следующий — ${sample}`
+    : `Вид номера: ${sample}`;
+}
 
 // НАСТРОЙКИ ФИНАНСОВ — СТРАНИЦА, А НЕ СПИСОК В ALERT.
 //
@@ -30,6 +48,7 @@ import {
 export default function FinanceSettingsScreen() {
   const router = useRouter();
   const vat = useVatSettings();
+  const tenant = useTenant();
 
   return (
     <Screen>
@@ -78,6 +97,14 @@ export default function FinanceSettingsScreen() {
             title="Инвойсы"
             sub="Выставленные счета и их оплата"
             onPress={() => router.push("/documents")}
+          />
+          <Divider inset={56} />
+          <SettingsRow
+            tile="#3157A4"
+            icon={Hash}
+            title="Нумерация счетов"
+            sub={numberingLine(tenant.data)}
+            onPress={() => router.push("/finances/numbering")}
           />
         </SectionCard>
 

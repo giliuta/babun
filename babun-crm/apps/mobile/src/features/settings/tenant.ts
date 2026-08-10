@@ -207,7 +207,12 @@ export function useUpdateTenant() {
       if (count === 0)
         throw new Error(friendlyTenantError("row-level security"));
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tenant"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenant"] });
+      // Реквизиты и нумерация печатаются в документах: «следующий номер» и
+      // предпросмотр обязаны пересчитаться сразу, а не после перезахода.
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
