@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Text, View } from "react-native";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import type { AccountKind, AccountScope } from "@babun/shared/local/finance/account";
@@ -6,17 +6,33 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Chip } from "@/components/ui/Chip";
 import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
 import { useInsertAccount } from "./accounts";
 import { KINDS } from "./account-ui";
 import { TeamChecklist } from "./TeamChecklist";
 
-// Создание счёта — канонический BottomSheet. Охват выбирается сегментом
-// «Команды | Общий»; у общего счёта команды-владельца нет, вместо неё —
-// явный список подключённых команд (account_teams). Правка существующего
-// счёта живёт на странице его настроек.
+// СОЗДАНИЕ СЧЁТА — ДВА ТАПА В ОБЫЧНОМ СЛУЧАЕ.
+//
+// Владелец 2026-08-10: «максимально просто и удобно, как можно меньше тапов,
+// но создавать полноценно всё». Поэтому порядок вопросов перевёрнут: сначала
+// ВИД (наличные/карта/банк), и он же подставляет название — «Касса», «Карта»,
+// «Банк». Команда уже выбрана той, откуда пришли. Остаётся нажать «Создать».
+//
+// «Общий счёт» перестал быть режимом наверху: это переключатель под командой.
+// Сегмент «Команды | Общий» заставлял выбирать конструкцию продукта раньше,
+// чем человек назвал счёт, а общий счёт — редкий случай.
+//
+// Правка существующего счёта живёт на странице его настроек.
+
+/** Название по виду счёта: обычная касса не заслуживает набора текста. */
+const NAME_BY_KIND: Record<AccountKind, string> = {
+  cash: "Касса",
+  card: "Карта",
+  bank: "Банк",
+  other: "Счёт",
+};
 export function AccountCreateSheet({
   visible,
   onClose,
@@ -42,6 +58,8 @@ export function AccountCreateSheet({
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
   const [teamIds, setTeamIds] = useState<Set<string>>(new Set());
   const [opening, setOpening] = useState("");
+  // Человек начал печатать имя сам — вид его больше не перебивает.
+  const [nameTouched, setNameTouched] = useState(false);
 
   // Каждое ОТКРЫТИЕ листа начинает с чистой формы и пресетов цепочки
   // «команда → счёт». Только по фронту открытия: фоновый рефетч команд
@@ -55,9 +73,12 @@ export function AccountCreateSheet({
     if (wasVisible.current) return;
     wasVisible.current = true;
     setScope("team");
-    setName(presetName ?? "");
+    setName(presetName ?? NAME_BY_KIND.cash);
+    setNameTouched(!!presetName);
     setKind("cash");
-    setBrigadeId(presetBrigadeId ?? (teams.length === 1 ? teams[0].id : null));
+    // Команда выбрана заранее: пришли из команды — её, иначе первую. Пустой
+    // выбор гасил кнопку «Создать» и требовал лишний тап ни за чем.
+    setBrigadeId(presetBrigadeId ?? teams[0]?.id ?? null);
     setTeamIds(new Set());
     setOpening("");
   }, [visible, presetBrigadeId, presetName, teams]);
@@ -100,46 +121,43 @@ export function AccountCreateSheet({
     }
   };
 
-  const scopeOptions = useMemo(
-    () =>
-      [
-        { value: "team" as const, label: "Команды" },
-        { value: "company" as const, label: "Общий" },
-      ] as const,
-    [],
-  );
-
   return (
     <BottomSheet visible={visible} onClose={onClose} avoidKeyboard>
       <View className="px-5 pb-2">
         <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
           Новый счёт
         </Text>
-        <Field
-          label="Название"
-          value={name}
-          onChangeText={setName}
-          placeholder="Напр. Касса"
-          autoFocus
-        />
 
-        <SegmentedControl
-          options={scopeOptions}
-          value={scope}
-          onChange={changeScope}
-          style={{ marginBottom: 12 }}
-        />
+        {/* 1. ВИД — первый вопрос и единственный обязательный: он же даёт имя. */}
+        <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
+          Вид
+        </Text>
+        <View className="mb-3 flex-row flex-wrap gap-2">
+          {KINDS.map((k) => (
+            <Chip
+              key={k.value}
+              label={k.label}
+              radio
+              selected={kind === k.value}
+              onPress={() => {
+                setKind(k.value);
+                if (!nameTouched) setName(NAME_BY_KIND[k.value]);
+              }}
+            />
+          ))}
+        </View>
 
+        {/* 2. ЧЕЙ СЧЁТ. Команда уже выбрана — обычно менять нечего. */}
         {scope === "team" ? (
-          <>
-            <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-              Команда
+          teams.length === 0 ? (
+            <Text className="mb-3 text-sm" style={{ color: t.faint }}>
+              Сначала добавьте команду в справочниках.
             </Text>
-            {teams.length === 0 ? (
-              <Text className="mb-3 text-sm" style={{ color: t.faint }}>
-                Сначала добавьте команду в справочниках.
+          ) : (
+            <>
+              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
+                Команда
               </Text>
-            ) : (
               <View className="mb-3 flex-row flex-wrap gap-2">
                 {teams.map((team) => (
                   <Chip
@@ -151,12 +169,12 @@ export function AccountCreateSheet({
                   />
                 ))}
               </View>
-            )}
-          </>
+            </>
+          )
         ) : (
           <>
             <Text className="mb-1 text-xs font-medium" style={{ color: t.sub }}>
-              Команды счёта
+              Кто пользуется
             </Text>
             <TeamChecklist
               teams={teams}
@@ -177,39 +195,40 @@ export function AccountCreateSheet({
                 )
               }
             />
-            <Text className="mb-3 text-xs" style={{ color: t.faint }}>
-              Счёт увидят только выбранные команды.
-            </Text>
           </>
         )}
 
-        <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-          Вид
-        </Text>
-        <View className="mb-3 flex-row flex-wrap gap-2">
-          {KINDS.map((k) => (
-            <Chip
-              key={k.value}
-              label={k.label}
-              radio
-              selected={kind === k.value}
-              onPress={() => setKind(k.value)}
-            />
-          ))}
-        </View>
-
-        <Field
-          label="Начальный баланс €"
-          value={opening}
-          onChangeText={setOpening}
-          placeholder="0"
-          keyboardType="decimal-pad"
+        <SwitchRow
+          label="Общий счёт"
+          hint="Одна касса или банк на несколько команд"
+          value={scope === "company"}
+          onChange={(on) => changeScope(on ? "company" : "team")}
         />
-        {opening.length > 0 && openingCents == null ? (
-          <Text className="mb-3 text-sm" style={{ color: t.danger }}>
-            Введите сумму и не больше двух знаков после запятой.
-          </Text>
-        ) : null}
+
+        {/* 3. Имя уже подставлено — правят его редко, поэтому оно ниже. */}
+        <View className="mt-3">
+          <Field
+            label="Название"
+            value={name}
+            onChangeText={(v) => {
+              setNameTouched(true);
+              setName(v);
+            }}
+            placeholder="Напр. Касса"
+          />
+          <Field
+            label="Сколько сейчас на счёте €"
+            value={opening}
+            onChangeText={setOpening}
+            placeholder="0"
+            keyboardType="decimal-pad"
+          />
+          {opening.length > 0 && openingCents == null ? (
+            <Text className="mb-3 text-sm" style={{ color: t.danger }}>
+              Введите сумму и не больше двух знаков после запятой.
+            </Text>
+          ) : null}
+        </View>
 
         <GradientButton
           label="Создать счёт"

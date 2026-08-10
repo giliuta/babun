@@ -14,6 +14,7 @@ import { TransferSheet } from "@/features/finances/TransferSheet";
 import {
   HIDDEN_BALANCE_LABEL,
   KIND_ICON,
+  KIND_TILE,
   visibleAccountsTotal,
 } from "@/features/finances/account-ui";
 import { Card } from "@/components/ui/Card";
@@ -75,24 +76,26 @@ function AccountRow({
         account.balance_hidden ? "баланс скрыт" : formatEUR(account.balance)
       }`}
       className="flex-row items-center gap-3 px-4 active:opacity-60"
-      style={{ minHeight: 56 }}
+      style={{ minHeight: 50 }}
     >
+      {/* Плитка ровно как в строках настроек: 28×28, r14, белый значок на
+          цвете — «зелёная = наличные» запоминается быстрее слова. */}
       <View
-        className="items-center justify-center rounded-lg"
-        style={{ width: 32, height: 32, backgroundColor: t.highlight }}
+        className="h-7 w-7 items-center justify-center rounded-[14px]"
+        style={{ backgroundColor: KIND_TILE[account.kind] }}
       >
-        <Icon color={t.accent} size={ICON.sm} />
+        <Icon color="#fff" size={16} strokeWidth={2} />
       </View>
       <View className="min-w-0 flex-1">
         <Text
-          className="text-[17px] font-semibold"
+          className="text-[15px]"
           style={{ color: t.ink }}
           numberOfLines={1}
         >
           {account.name}
         </Text>
         {subtitle ? (
-          <Text className="mt-0.5 text-xs" style={{ color: t.sub }} numberOfLines={1}>
+          <Text className="mt-px text-xs" style={{ color: t.faint }} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
@@ -103,7 +106,7 @@ function AccountRow({
       >
         {balanceLabel}
       </Text>
-      <ChevronRight color={t.chevron} size={16} />
+      <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} />
     </Pressable>
   );
 }
@@ -339,7 +342,7 @@ function AccountsListContent() {
             <Card style={{ marginHorizontal: 12, marginTop: 12 }}>
               {closed.map((a, i) => (
                 <View key={a.id}>
-                  {i > 0 ? <Divider inset={68} /> : null}
+                  {i > 0 ? <Divider inset={56} /> : null}
                   <AccountRow
                     account={a}
                     subtitle={
@@ -398,7 +401,7 @@ function AccountsListContent() {
               <Card style={{ marginHorizontal: 12 }}>
                 {companyAccounts.map((a, i) => (
                   <View key={a.id}>
-                    {i > 0 ? <Divider inset={68} /> : null}
+                    {i > 0 ? <Divider inset={56} /> : null}
                     <AccountRow
                       account={a}
                       subtitle={`Общий · ${a.team_ids.length} ${teamsWord(a.team_ids.length)}`}
@@ -417,7 +420,7 @@ function AccountsListContent() {
               <Card style={{ marginHorizontal: 12 }}>
                 {section.accounts.map((a, i) => (
                   <View key={a.id}>
-                    {i > 0 ? <Divider inset={68} /> : null}
+                    {i > 0 ? <Divider inset={56} /> : null}
                     <AccountRow
                       account={a}
                       onPress={() => router.push(`/accounts/${a.id}`)}

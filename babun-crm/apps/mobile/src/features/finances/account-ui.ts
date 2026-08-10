@@ -12,6 +12,15 @@ import {
 import type { AccountKind } from "@babun/shared/local/finance/account";
 import type { AccountWithBalance } from "./accounts";
 
+/** Цвет плитки по виду счёта. Цвет = смысл: наличные зелёные, карта синяя,
+ *  банк индиго, прочее серое — строка узнаётся раньше, чем прочитана. */
+export const KIND_TILE: Record<AccountKind, string> = {
+  cash: "#1F7A44",
+  card: "#2F6FD6",
+  bank: "#5856D6",
+  other: "#5B6678",
+};
+
 export const KIND_ICON: Record<AccountKind, LucideIcon> = {
   cash: Banknote,
   card: CreditCard,
