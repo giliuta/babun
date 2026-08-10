@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   CalendarClock,
-  ChevronRight,
   Clock,
   Eye,
   Globe,
@@ -26,7 +25,6 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCalendarSettings,
@@ -35,6 +33,7 @@ import {
 import { useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
+import { TeamChips } from "@/features/calendar/TeamChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import {
   BUFFER_CHOICES,
@@ -123,7 +122,6 @@ export default function CalendarSettingsScreen() {
     ? schedulePreview(sched)
     : `${hourLabel(work.start)}–${hourLabel(work.end)}`;
 
-  const others = teams.filter((x) => x.id !== team?.id);
 
   if (teamsLoading || settingsQuery.isLoading) {
     return (
@@ -158,6 +156,15 @@ export default function CalendarSettingsScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Календарь" right={<SavedIndicator tick={savedTick} />} />
+      {/* КОМАНДЫ СВЕРХУ, КАК ВЕЗДЕ. Владелец 2026-08-10: «зачем делать другой
+          дизайн внизу, если можно всё в едином стиле» — те же чипы, что в
+          календаре и в финансах, и настройки каждой команды правятся не выходя
+          с экрана. Раньше переключатель лежал последней секцией внизу. */}
+      <TeamChips
+        teams={teams}
+        activeId={team?.id ?? null}
+        onSelect={(id) => router.setParams({ team: id })}
+      />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {team ? (
           <>
@@ -241,58 +248,6 @@ export default function CalendarSettingsScreen() {
             onPress={() => router.push("/calendar/labels")}
           />
         </SectionCard>
-
-        {/* Список — только когда календарей больше одного: секция из одной
-            строки «переключись на себя же» была бы чистым шумом. */}
-        {others.length > 0 ? (
-          <>
-            <SectionEyebrow>Другие календари</SectionEyebrow>
-            <SectionCard>
-              {others.map((o, i) => (
-                <View key={o.id}>
-                  {i > 0 ? <Divider inset={42} /> : null}
-                  <Pressable
-                    onPress={() => router.setParams({ team: o.id })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Настроить календарь ${o.name}`}
-                    style={({ pressed }) => ({
-                      minHeight: 52,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      backgroundColor: pressed ? t.pressed : "transparent",
-                    })}
-                  >
-                    <View
-                      style={{
-                        height: 10,
-                        width: 10,
-                        borderRadius: 5,
-                        backgroundColor: o.color ?? t.faint,
-                      }}
-                    />
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 16, color: t.ink }} numberOfLines={1}>
-                        {o.name}
-                      </Text>
-                      <Text
-                        style={{ fontSize: 13, color: t.faint, marginTop: 1 }}
-                        numberOfLines={1}
-                      >
-                        {schedules[o.id]
-                          ? schedulePreview(schedules[o.id])
-                          : `${hourLabel(work.start)}–${hourLabel(work.end)}`}
-                      </Text>
-                    </View>
-                    <ChevronRight color={t.chevron} size={ICON.sm} />
-                  </Pressable>
-                </View>
-              ))}
-            </SectionCard>
-          </>
-        ) : null}
 
         {teams.length === 0 ? (
           <SectionCard>
