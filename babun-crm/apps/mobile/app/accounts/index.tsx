@@ -19,13 +19,13 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { TeamChips } from "@/features/calendar/TeamChips";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
-import { AddRow } from "@/components/ui/AddRow";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { useTeams, type Team } from "@/features/reference/queries";
+import { useTeams } from "@/features/reference/queries";
 
 function teamsWord(n: number): string {
   const mod10 = n % 10;
@@ -106,39 +106,6 @@ function AccountRow({
   );
 }
 
-// Ибровь секции команды: 6pt цветная точка + имя (том же кегле, что
-// SectionEyebrow — вручную, из-за точки перед текстом).
-function TeamEyebrow({ team, fallback }: { team?: Team; fallback: string }) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row items-center gap-1.5"
-      style={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8 }}
-    >
-      <View
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: team?.color || t.faint,
-        }}
-      />
-      <Text
-        accessibilityRole="header"
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          color: t.sub,
-        }}
-      >
-        {team?.name ?? fallback}
-      </Text>
-    </View>
-  );
-}
-
 function AccountsListContent() {
   const t = useThemeColors();
   const router = useRouter();
@@ -169,51 +136,35 @@ function AccountsListContent() {
     () => accounts.filter((a) => a.scope === "company"),
     [accounts],
   );
-  // Секции по командам: порядок команд справочника, «осиротевшие» счета
-  // (команда удалена) — последней группой.
-  const teamSections = useMemo(() => {
-    const byTeam = new Map<string, AccountWithBalance[]>();
-    for (const a of accounts) {
-      if (a.scope !== "team") continue;
-      const key = a.brigade_id ?? "";
-      const list = byTeam.get(key);
-      if (list) list.push(a);
-      else byTeam.set(key, [a]);
-    }
-    const orderedIds = [
-      ...allTeams.map((team) => team.id).filter((id) => byTeam.has(id)),
-      ...[...byTeam.keys()].filter((id) => !teamById.has(id)),
-    ];
-    return orderedIds.map((id) => ({
-      teamId: id,
-      team: teamById.get(id),
-      accounts: byTeam.get(id) ?? [],
-    }));
-  }, [accounts, allTeams, teamById]);
+  // ОБЛАСТЬ ЭКРАНА — ОДНА КОМАНДА. Владелец 2026-08-10: «сверху поставь, чтобы
+  // можно было чередовать; всего на счетах — только по одной, а не со всех».
+  // Разбивка списком под итогом убрана: она отвечала на вопрос, которого не
+  // задавали, и мешала прочитать главную цифру.
+  const [scope, setScope] = useState<string>("company");
+  useEffect(() => {
+    // Первый заход открывает первую команду, а не счета компании: деньги
+    // бригад смотрят каждый день, компанейские — раз в месяц.
+    if (scope === "company" && teams.length > 0) setScope(teams[0].id);
+    // Только на первый приезд списка команд.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teams.length]);
 
-  const total = useMemo(() => accountsTotal(accounts), [accounts]);
+  const chipTeams = useMemo(
+    () => [
+      ...teams.map((team) => ({ id: team.id, name: team.name, color: team.color })),
+      { id: "company", name: "Компания", color: null },
+    ],
+    [teams],
+  );
 
-  // Сколько у каждой команды ПО ВСЕМ её счетам. Общий счёт компании в сумму
-  // команды не входит: он не её, иначе одни и те же деньги посчитались бы у
-  // трёх бригад сразу и итог сверху не сошёлся бы с суммой строк.
-  const teamTotals = useMemo(() => {
-    const rows = teamSections.map((section) => ({
-      id: section.teamId || "orphan",
-      name: section.team?.name ?? "Без бригады",
-      color: section.team?.color || t.faint,
-      total: accountsTotal(section.accounts),
-    }));
-    const company = accounts.filter((a) => a.scope === "company");
-    if (company.length > 0) {
-      rows.push({
-        id: "company",
-        name: "Счета компании",
-        color: t.faint,
-        total: accountsTotal(company),
-      });
-    }
-    return rows;
-  }, [teamSections, accounts, t.faint]);
+  const scopeAccounts = useMemo(
+    () =>
+      scope === "company"
+        ? companyAccounts
+        : accounts.filter((a) => a.scope === "team" && a.brigade_id === scope),
+    [scope, accounts, companyAccounts],
+  );
+  const total = useMemo(() => accountsTotal(scopeAccounts), [scopeAccounts]);
 
   const closeAcc = useSoftCloseAccount();
   const reopenAcc = useReopenAccount();
@@ -382,7 +333,29 @@ function AccountsListContent() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title={title} />
+      <ScreenHeader
+        title={title}
+        right={
+          hasTransferPair(accounts) ? (
+            <Pressable
+              onPress={() => openTransfer()}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Перевод между счетами"
+              className="h-10 w-10 items-center justify-center active:opacity-60"
+            >
+              <ArrowLeftRight color={t.accent} size={ICON.md} />
+            </Pressable>
+          ) : undefined
+        }
+      />
+      {/* КОМАНДЫ СВЕРХУ, КАК В ФИНАНСАХ И КАЛЕНДАРЕ. Плюс «Компания» —
+          счета, которые не принадлежат бригаде (расчётный, общий банк). */}
+      <TeamChips
+        teams={chipTeams}
+        activeId={scope}
+        onSelect={setScope}
+      />
 
       {accounts.length === 0 && closed.length === 0 ? (
         <EmptyState
@@ -393,10 +366,7 @@ function AccountsListContent() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-          {/* ИТОГ И СРАЗУ РАЗБИВКА. Владелец 2026-08-10: «всего на счетах —
-              хорошо, но надо видеть, сколько у каждой команды по всем её
-              счетам». Одна цифра без разбивки не отвечает на вопрос «кому
-              звонить, если денег нет». */}
+          {/* Одна цифра — по выбранной наверху команде. */}
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 16 }}>
             <Text className="text-xs" style={{ color: t.sub }}>
               Всего на счетах
@@ -407,99 +377,36 @@ function AccountsListContent() {
             >
               {formatEUR(total)}
             </Text>
-            {teamTotals.length > 0 ? (
-              <View className="mt-3" style={{ gap: 6 }}>
-                {teamTotals.map((row) => (
-                  <View
-                    key={row.id}
-                    className="flex-row items-center"
-                    style={{ gap: 8 }}
-                  >
-                    <View
-                      style={{
-                        height: 8,
-                        width: 8,
-                        borderRadius: 4,
-                        backgroundColor: row.color,
-                      }}
-                    />
-                    <Text
-                      className="flex-1 text-[13px]"
-                      style={{ color: t.sub }}
-                      numberOfLines={1}
-                    >
-                      {row.name}
-                    </Text>
-                    <Text
-                      className="text-[13px] font-semibold tabular-nums"
-                      style={{ color: row.total < 0 ? t.danger : t.ink }}
-                    >
-                      {formatEUR(row.total)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
           </Card>
 
-          {companyAccounts.length > 0 ? (
-            <>
-              <SectionEyebrow>Компания</SectionEyebrow>
-              <Card style={{ marginHorizontal: 12 }}>
-                {companyAccounts.map((a, i) => (
-                  <View key={a.id}>
-                    {i > 0 ? <Divider inset={56} /> : null}
-                    <AccountRow
-                      account={a}
-                      subtitle={`Общий · ${a.team_ids.length} ${teamsWord(a.team_ids.length)}`}
-                      onPress={() => router.push(`/accounts/${a.id}`)}
-                      onLongPress={() => confirmClose(a)}
-                    />
-                  </View>
-                ))}
-              </Card>
-            </>
-          ) : null}
-
-          {teamSections.map((section) => (
-            <View key={section.teamId || "orphan"}>
-              <TeamEyebrow team={section.team} fallback="Без бригады" />
-              <Card style={{ marginHorizontal: 12 }}>
-                {section.accounts.map((a, i) => (
-                  <View key={a.id}>
-                    {i > 0 ? <Divider inset={56} /> : null}
-                    <AccountRow
-                      account={a}
-                      onPress={() => router.push(`/accounts/${a.id}`)}
-                      onLongPress={() => confirmClose(a)}
-                    />
-                  </View>
-                ))}
-              </Card>
-            </View>
-          ))}
-
-          <View style={{ height: 16 }} />
-          <Card style={{ marginHorizontal: 12 }}>
-            {hasTransferPair(accounts) ? (
-              <>
-                <Pressable
-                  onPress={() => openTransfer()}
-                  accessibilityRole="button"
-                  accessibilityLabel="Перевод между счетами"
-                  className="flex-row items-center gap-3 px-4 active:opacity-60"
-                  style={{ minHeight: 48 }}
-                >
-                  <ArrowLeftRight color={t.accent} size={ICON.sm} />
-                  <Text className="text-[15px] font-medium" style={{ color: t.accent }}>
-                    Перевод между счетами
-                  </Text>
-                </Pressable>
-                <Divider inset={16} />
-              </>
-            ) : null}
-            <AddRow label="Добавить счёт" onPress={openCreate} />
-          </Card>
+          {scopeAccounts.length === 0 ? (
+            <Text
+              className="mx-4 mt-6 text-center text-[15px]"
+              style={{ color: t.faint }}
+            >
+              {scope === "company"
+                ? "У компании пока нет счетов"
+                : "У этой команды пока нет счетов"}
+            </Text>
+          ) : (
+            <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
+              {scopeAccounts.map((a, i) => (
+                <View key={a.id}>
+                  {i > 0 ? <Divider inset={56} /> : null}
+                  <AccountRow
+                    account={a}
+                    subtitle={
+                      a.scope === "company"
+                        ? `${a.team_ids.length} ${teamsWord(a.team_ids.length)}`
+                        : undefined
+                    }
+                    onPress={() => router.push(`/accounts/${a.id}`)}
+                    onLongPress={() => confirmClose(a)}
+                  />
+                </View>
+              ))}
+            </Card>
+          )}
 
           {closed.length > 0 ? (
             <Pressable
@@ -516,6 +423,13 @@ function AccountsListContent() {
           ) : null}
         </ScrollView>
       )}
+
+      {/* Одна подписанная кнопка внизу — ровно там же, где «Добавить клиента»
+          и «Добавить операцию». Две строки в карточке внизу списка владельцу
+          не нравились и выпадали из языка продукта. */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <GradientButton label="Добавить счёт" onPress={openCreate} />
+      </View>
 
       <AccountCreateSheet
         visible={createOpen}
