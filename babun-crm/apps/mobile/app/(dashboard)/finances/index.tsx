@@ -5,7 +5,7 @@ import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { summarizeVat } from "@babun/shared/local/finance/vat";
-import { visibleAccountsTotal } from "@/features/finances/account-ui";
+import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
@@ -234,16 +234,12 @@ function FinancesContent() {
       scope ? scopedAccounts.filter((a) => a.scope === "team") : scopedAccounts,
     [scope, scopedAccounts],
   );
-  // ОДНА ФОРМУЛА С ЭКРАНОМ СЧЕТОВ. Плитка складывала ВСЕ счета, включая
-  // скрытые глазиком, а страница «Счета» — только видимые: на один вопрос
-  // «сколько у нас денег» два разных числа. Хуже, скрытый остаток
-  // восстанавливался вычитанием, и глазик переставал что-либо скрывать.
-  const acctVisible = useMemo(
-    () => visibleAccountsTotal(miniCardAccounts),
+  // Одна цифра «сколько у нас денег» на весь продукт: и плитка «Счета», и
+  // страница счетов считают ПОЛНУЮ сумму. Скрытых балансов в продукте нет.
+  const acctTotal = useMemo(
+    () => accountsTotal(miniCardAccounts),
     [miniCardAccounts],
-  );
-  const acctTotal = acctVisible.total;
-  const materialSummary = useMemo(() => {
+  );  const materialSummary = useMemo(() => {
     let amount = 0;
     let appointmentCount = 0;
     for (const appointment of scopedAppointments) {
@@ -697,7 +693,6 @@ function FinancesContent() {
         onOpenCustom={() => setWheelsOpen(true)}
         totals={totals}
         acctTotal={acctTotal}
-        acctHasHidden={acctVisible.hasHidden}
         invoices={invoiceSummary}
         onOpenAccounts={() => pushOnce("/accounts")}
         onOpenDocuments={() => pushOnce("/documents")}

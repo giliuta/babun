@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActionSheetIOS, Alert, Platform, ScrollView, Switch, View } from "react-native";
+import { ActionSheetIOS, Alert, Platform, ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   formatEURExact as formatEUR,
@@ -14,13 +14,11 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
   ActionRow,
   ChoiceRow,
-  ControlRow,
   FieldRow,
   NavRow,
   RowCaption,
   RowGroup,
 } from "@/components/ui/card-rows";
-import { haptics } from "@/lib/haptics";
 import { useTeams } from "@/features/reference/queries";
 import {
   useAccountHasHistory,
@@ -421,22 +419,6 @@ function AccountSettingsContent() {
             <RowCaption text="Значение подставляется в новую операцию по этому счёту. В самой операции его всегда можно переключить." />
           </>
         ) : null}
-
-        <RowGroup title="Приватность">
-          <ControlRow label="Скрывать баланс">
-            <Switch
-              value={account.balance_hidden}
-              onValueChange={(next) => {
-                haptics.tap();
-                update.mutate(
-                  { id: account.id, patch: { balance_hidden: next } },
-                  { onError: alertError },
-                );
-              }}
-            />
-          </ControlRow>
-        </RowGroup>
-        <RowCaption text="Баланс печатается как •••• во всех списках. Тап по числу на странице счёта показывает его временно." />
 
         <RowGroup title="Архив">
           {account.is_active ? (

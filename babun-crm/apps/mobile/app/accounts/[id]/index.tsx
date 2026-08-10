@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { Eye, EyeOff, Settings } from "lucide-react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Settings } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { todayYmd } from "@/features/invoices/format";
@@ -12,7 +12,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { NavRow } from "@/components/ui/card-rows";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { haptics } from "@/lib/haptics";
 import { useTeams } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useServices } from "@/features/services/queries";
@@ -21,8 +20,7 @@ import { useClients } from "@/features/clients/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import {
   useAccountsWithBalances,
-  useDeleteTransfer,
-  useUpdateAccount,
+  useDeleteTransfer
 } from "@/features/finances/accounts";
 import {
   useDeleteTransaction,
@@ -31,7 +29,7 @@ import {
   useRefundTotals,
   useTransactions,
 } from "@/features/finances/queries";
-import { HIDDEN_BALANCE_LABEL, KIND_ICON, KINDS } from "@/features/finances/account-ui";
+import { KIND_ICON, KINDS } from "@/features/finances/account-ui";
 import {
   breakdownAccountInflowByTeam,
 } from "@/features/finances/account-inflow";
@@ -101,23 +99,9 @@ function AccountDetailContent() {
   const refundTotals = useRefundTotals().data;
   const { openTransactionInvoice } = useInvoiceNavigation();
 
-  const updateAcc = useUpdateAccount();
   const delTransfer = useDeleteTransfer();
   const delTx = useDeleteTransaction();
   const insertTx = useInsertTransaction();
-
-  // Глазик: скрытие — постоянное (синкается), показ по тапу — временный,
-  // до ухода со страницы.
-  const [tempRevealed, setTempRevealed] = useState(false);
-  useEffect(() => {
-    setTempRevealed(false);
-  }, [id]);
-  // Ушли со страницы (blur) — временный показ гаснет: вернувшись, владелец
-  // снова видит ••••, как и обещает настройка.
-  useFocusEffect(
-    useCallback(() => () => setTempRevealed(false), []),
-  );
-  const hidden = !!account?.balance_hidden && !tempRevealed;
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [popupTx, setPopupTx] = useState<FinanceTransaction | null>(null);
@@ -171,19 +155,6 @@ function AccountDetailContent() {
     });
   };
 
-  const toggleEye = () => {
-    if (!account) return;
-    haptics.tap();
-    if (!account.balance_hidden) {
-      updateAcc.mutate(
-        { id: account.id, patch: { balance_hidden: true } },
-        { onError: (e) => Alert.alert("Ошибка", e.message) },
-      );
-      setTempRevealed(false);
-    } else {
-      setTempRevealed((v) => !v);
-    }
-  };
 
   if (accountsQuery.isPending || allTeamsQuery.isPending) {
     return (
@@ -296,39 +267,8 @@ function AccountDetailContent() {
                 </Text>
               ) : null}
             </View>
-            <Pressable
-              onPress={toggleEye}
-              accessibilityRole="button"
-              accessibilityLabel={
-                account.balance_hidden
-                  ? tempRevealed
-                    ? "Скрыть баланс"
-                    : "Показать баланс"
-                  : "Скрывать баланс"
-              }
-              className="h-11 w-11 items-center justify-center active:opacity-60"
-            >
-              {hidden ? (
-                <EyeOff color={t.sub} size={22} />
-              ) : (
-                <Eye color={t.sub} size={22} />
-              )}
-            </Pressable>
           </View>
-          {hidden ? (
-            <Pressable
-              onPress={toggleEye}
-              accessibilityRole="button"
-              accessibilityLabel="Показать баланс"
-            >
-              <Text
-                className="mt-2 tabular-nums"
-                style={{ fontSize: 34, fontWeight: "800", color: t.ink }}
-              >
-                {HIDDEN_BALANCE_LABEL}
-              </Text>
-            </Pressable>
-          ) : (
+          {(
             <Text
               className="mt-2 tabular-nums"
               style={{ fontSize: 34, fontWeight: "800", color: t.ink }}

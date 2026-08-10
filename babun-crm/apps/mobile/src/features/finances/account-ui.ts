@@ -35,21 +35,12 @@ export const KINDS: { value: AccountKind; label: string }[] = [
   { value: "other", label: "Другое" },
 ];
 
-// Monospaced dots in the same tabular slot — the row must not jump when
-// the balance is masked. Ink-coloured at the call site (never grey).
-export const HIDDEN_BALANCE_LABEL = "••••";
-
-// Aggregates never leak a hidden balance: Σ counts only visible accounts,
-// the EyeOff marker tells the owner the number is partial.
-export function visibleAccountsTotal(accounts: readonly AccountWithBalance[]): {
-  total: number;
-  hasHidden: boolean;
-} {
+// СКРЫТЫХ БАЛАНСОВ В ПРОДУКТЕ НЕТ. Владелец 2026-08-10: «этот перечёркнутый
+// глаз на хрен не нужен, мы скрывать ничего не будем». Итог всегда полный —
+// цифра, которая иногда неполная и говорит об этом значком, хуже отсутствия
+// цифры: её всё равно читают как «всего».
+export function accountsTotal(accounts: readonly AccountWithBalance[]): number {
   let total = 0;
-  let hasHidden = false;
-  for (const a of accounts) {
-    if (a.balance_hidden) hasHidden = true;
-    else total += a.balance;
-  }
-  return { total, hasHidden };
+  for (const a of accounts) total += a.balance;
+  return total;
 }

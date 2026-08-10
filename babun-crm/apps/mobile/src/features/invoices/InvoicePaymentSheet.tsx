@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/Button";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ICON } from "@/components/ui/tokens";
 import type { AccountWithBalance } from "@/features/finances/accounts";
-import { HIDDEN_BALANCE_LABEL } from "@/features/finances/account-ui";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceDate, formatInvoiceMoney, parseMoneyAmount } from "./format";
@@ -309,9 +308,7 @@ export function InvoicePaymentSheet({
                           {account.scope === "company" ? `${account.name} · Общий` : account.name}
                         </Text>
                         <Text className="text-xs" style={{ color: t.sub }}>
-                          {account.balance_hidden
-                            ? HIDDEN_BALANCE_LABEL
-                            : formatInvoiceMoney(account.balance, currency)}
+                          {formatInvoiceMoney(account.balance, currency)}
                         </Text>
                       </View>
                       {account.id === accountId ? <Check color={t.accent} size={ICON.sm} /> : null}

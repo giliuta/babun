@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeftRight, ChevronRight, EyeOff } from "lucide-react-native";
+import { ArrowLeftRight, ChevronRight } from "lucide-react-native";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { AccountWithBalance } from "@/features/finances/accounts";
 import {
@@ -12,10 +12,9 @@ import {
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
 import { TransferSheet } from "@/features/finances/TransferSheet";
 import {
-  HIDDEN_BALANCE_LABEL,
   KIND_ICON,
   KIND_TILE,
-  visibleAccountsTotal,
+  accountsTotal,
 } from "@/features/finances/account-ui";
 import { Card } from "@/components/ui/Card";
 import { Screen } from "@/components/ui/Screen";
@@ -64,17 +63,13 @@ function AccountRow({
 }) {
   const t = useThemeColors();
   const Icon = KIND_ICON[account.kind];
-  const balanceLabel = account.balance_hidden
-    ? HIDDEN_BALANCE_LABEL
-    : formatEUR(account.balance);
+  const balanceLabel = formatEUR(account.balance);
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={`${account.name}${subtitle ? `, ${subtitle}` : ""}, ${
-        account.balance_hidden ? "баланс скрыт" : formatEUR(account.balance)
-      }`}
+      accessibilityLabel={`${account.name}${subtitle ? `, ${subtitle}` : ""}, ${formatEUR(account.balance)}`}
       className="flex-row items-center gap-3 px-4 active:opacity-60"
       style={{ minHeight: 50 }}
     >
@@ -102,7 +97,7 @@ function AccountRow({
       </View>
       <Text
         className="text-[15px] font-semibold tabular-nums"
-        style={{ color: account.balance < 0 && !account.balance_hidden ? t.danger : t.ink }}
+        style={{ color: account.balance < 0 ? t.danger : t.ink }}
       >
         {balanceLabel}
       </Text>
@@ -196,10 +191,29 @@ function AccountsListContent() {
     }));
   }, [accounts, allTeams, teamById]);
 
-  const { total, hasHidden } = useMemo(
-    () => visibleAccountsTotal(accounts),
-    [accounts],
-  );
+  const total = useMemo(() => accountsTotal(accounts), [accounts]);
+
+  // Сколько у каждой команды ПО ВСЕМ её счетам. Общий счёт компании в сумму
+  // команды не входит: он не её, иначе одни и те же деньги посчитались бы у
+  // трёх бригад сразу и итог сверху не сошёлся бы с суммой строк.
+  const teamTotals = useMemo(() => {
+    const rows = teamSections.map((section) => ({
+      id: section.teamId || "orphan",
+      name: section.team?.name ?? "Без бригады",
+      color: section.team?.color || t.faint,
+      total: accountsTotal(section.accounts),
+    }));
+    const company = accounts.filter((a) => a.scope === "company");
+    if (company.length > 0) {
+      rows.push({
+        id: "company",
+        name: "Счета компании",
+        color: t.faint,
+        total: accountsTotal(company),
+      });
+    }
+    return rows;
+  }, [teamSections, accounts, t.faint]);
 
   const closeAcc = useSoftCloseAccount();
   const reopenAcc = useReopenAccount();
@@ -379,20 +393,53 @@ function AccountsListContent() {
         />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-          {/* Hero: Σ только видимых; EyeOff говорит, что число неполное. */}
+          {/* ИТОГ И СРАЗУ РАЗБИВКА. Владелец 2026-08-10: «всего на счетах —
+              хорошо, но надо видеть, сколько у каждой команды по всем её
+              счетам». Одна цифра без разбивки не отвечает на вопрос «кому
+              звонить, если денег нет». */}
           <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 16 }}>
             <Text className="text-xs" style={{ color: t.sub }}>
               Всего на счетах
             </Text>
-            <View className="flex-row items-center gap-1.5">
-              <Text
-                className="mt-0.5 text-2xl font-bold tabular-nums"
-                style={{ color: t.brandAccent }}
-              >
-                {formatEUR(total)}
-              </Text>
-              {hasHidden ? <EyeOff color={t.faint} size={12} /> : null}
-            </View>
+            <Text
+              className="mt-0.5 text-2xl font-bold tabular-nums"
+              style={{ color: t.brandAccent }}
+            >
+              {formatEUR(total)}
+            </Text>
+            {teamTotals.length > 0 ? (
+              <View className="mt-3" style={{ gap: 6 }}>
+                {teamTotals.map((row) => (
+                  <View
+                    key={row.id}
+                    className="flex-row items-center"
+                    style={{ gap: 8 }}
+                  >
+                    <View
+                      style={{
+                        height: 8,
+                        width: 8,
+                        borderRadius: 4,
+                        backgroundColor: row.color,
+                      }}
+                    />
+                    <Text
+                      className="flex-1 text-[13px]"
+                      style={{ color: t.sub }}
+                      numberOfLines={1}
+                    >
+                      {row.name}
+                    </Text>
+                    <Text
+                      className="text-[13px] font-semibold tabular-nums"
+                      style={{ color: row.total < 0 ? t.danger : t.ink }}
+                    >
+                      {formatEUR(row.total)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
           </Card>
 
           {companyAccounts.length > 0 ? (
