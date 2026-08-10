@@ -1,103 +1,45 @@
-import type { Client } from "@babun/shared/local/clients";
 import {
-  INVOICE_STATUS_LABELS,
-  invoiceDisplayStatus,
-  type InvoiceLedgerWithLines,
-  type InvoicePaymentLedger,
-  type InvoiceSettlement,
-} from "@babun/shared/local/finance/invoice-ledger";
-import type { Tenant } from "@/features/settings/tenant";
-import {
-  formatInvoiceDate,
-  formatInvoiceMoney,
-  invoiceVatMode,
-} from "./format";
+  buildInvoiceDocument,
+  type DraftDocumentInput,
+  type InvoiceDocument,
+  type IssuedDocumentInput,
+} from "./document";
 
-type InvoicePdfInput = {
-  invoice: InvoiceLedgerWithLines;
-  tenant?: Tenant;
-  client?: Client;
-  settlement: InvoiceSettlement;
-  payments: readonly InvoicePaymentLedger[];
-  accountNames?: ReadonlyMap<string, string>;
-  businessToday?: string;
-};
+// PDF — ЭТО ТОТ ЖЕ ДОКУМЕНТ, ЧТО НА ЭКРАНЕ.
+//
+// Раньше здесь и собирались данные, и рисовалась разметка. Теперь сборка живёт
+// в document.ts, а тут остаётся только рисование: экранное «зеркало» берёт ту
+// же модель и печатает её компонентами RN. Одна модель — один документ, что бы
+// человек ни открыл.
 
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Другое",
-};
+export function buildInvoicePdfHtml(
+  input: IssuedDocumentInput | DraftDocumentInput,
+): string {
+  return renderInvoiceHtml(buildInvoiceDocument(input));
+}
 
-export function buildInvoicePdfHtml({
-  invoice,
-  tenant,
-  client,
-  settlement,
-  payments,
-  accountNames,
-  businessToday,
-}: InvoicePdfInput): string {
-  const displayStatus = invoiceDisplayStatus(invoice, businessToday, settlement);
-  const seller = invoice.seller_snapshot;
-  const recipient = invoice.client_snapshot;
-  // Once a snapshot exists it is the whole legal source, including fields
-  // that were intentionally blank on issue. Falling through field-by-field
-  // to a renamed live profile would silently rewrite an old document.
-  const sellerName = seller
-    ? firstNonEmpty(seller.legal_name, seller.name, seller.display_name)
-      || "Продавец не указан"
-    : firstNonEmpty(tenant?.legal_name, tenant?.name) || "Продавец не указан";
-  const sellerAddress = seller
-    ? firstNonEmpty(seller.address, seller.business_address)
-    : firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city));
-  const clientName = recipient
-    ? clean(recipient.full_name)
-    : clean(client?.full_name);
-  const clientAddress = recipient
-    ? firstNonEmpty(recipient.primary_address, recipient.address)
-    : client
-      ? primaryClientAddress(client)
-      : "";
-  const clientEmail = recipient ? clean(recipient.email) : clean(client?.email);
-  const clientPhone = recipient ? clean(recipient.phone) : clean(client?.phone);
-  const sellerEmail = seller ? clean(seller.contact_email) : clean(tenant?.contact_email);
-  const sellerPhone = seller ? clean(seller.contact_phone) : clean(tenant?.contact_phone);
-  const sellerVat = seller ? clean(seller.vat_number) : clean(tenant?.vat_number);
-  const sellerIban = seller ? clean(seller.iban) : clean(tenant?.iban);
-  const sellerBank = seller ? clean(seller.bank_name) : clean(tenant?.bank_name);
-  const vatMode = invoiceVatMode(invoice);
-  const vatModeLabel = vatMode === "inclusive"
-    ? "VAT включён в цены"
-    : vatMode === "exclusive"
-      ? "VAT начислен сверху"
-      : "Без VAT";
-
-  const lineRows = invoice.lines.map((line, index) => `
+export function renderInvoiceHtml(doc: InvoiceDocument): string {
+  const lineRows = doc.lines.map((line, index) => `
     <tr>
       <td class="line-number">${index + 1}</td>
       <td class="line-title">${escapeHtml(line.title)}</td>
-      <td class="number">${formatQty(line.qty)}</td>
-      <td class="number">${escapeHtml(formatInvoiceMoney(line.unit_price, invoice.currency))}</td>
-      <td class="number total-cell">${escapeHtml(formatInvoiceMoney(line.total, invoice.currency))}</td>
+      <td class="number">${escapeHtml(line.qty)}</td>
+      <td class="number">${escapeHtml(line.unitPrice)}</td>
+      <td class="number total-cell">${escapeHtml(line.total)}</td>
     </tr>`).join("");
 
-  const paymentRows = payments.map((payment) => {
-    const account = payment.account_id ? accountNames?.get(payment.account_id) : undefined;
-    const method = payment.payment_method
-      ? PAYMENT_METHOD_LABEL[payment.payment_method] ?? payment.payment_method
-      : "";
-    const details = [account, method].filter(Boolean).join(" · ");
-    const isRefund = payment.type === "refund";
-    const amount = `${isRefund ? "−" : ""}${formatInvoiceMoney(Math.abs(payment.amount), invoice.currency)}`;
-    return `
+  const paymentRows = doc.payments.map((payment) => `
       <tr>
-        <td>${escapeHtml(formatInvoiceDate(payment.occurred_on))}</td>
-        <td>${isRefund ? "Возврат" : "Платёж"}${details ? `<div class="muted small">${escapeHtml(details)}</div>` : ""}</td>
-        <td class="number ${isRefund ? "refund" : "payment"}">${escapeHtml(amount)}</td>
-      </tr>`;
-  }).join("");
+        <td>${escapeHtml(payment.date)}</td>
+        <td>${escapeHtml(payment.title)}${payment.details ? `<div class="muted small">${escapeHtml(payment.details)}</div>` : ""}</td>
+        <td class="number ${payment.refund ? "refund" : "payment"}">${escapeHtml(payment.amount)}</td>
+      </tr>`).join("");
+
+  const totalRows = doc.totals.map((total) => `
+        <div class="total-row${total.grand ? " grand-total" : ""}">
+          <span>${escapeHtml(total.label)}</span>
+          <strong>${escapeHtml(total.value)}</strong>
+        </div>`).join("");
 
   return `<!doctype html>
 <html lang="ru">
@@ -119,6 +61,7 @@ export function buildInvoicePdfHtml({
     .page { width: 100%; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 26px; }
     .brand { max-width: 58%; }
+    .logo { max-width: 190px; max-height: 64px; margin-bottom: 8px; }
     .brand-name { font-size: 20px; font-weight: 750; letter-spacing: -0.2px; color: #111827; margin-bottom: 5px; }
     .doc { text-align: right; }
     .eyebrow { color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.15px; text-transform: uppercase; }
@@ -160,45 +103,38 @@ export function buildInvoicePdfHtml({
   <main class="page">
     <header class="header">
       <div class="brand">
-        <div class="brand-name">${escapeHtml(sellerName)}</div>
-        ${sellerAddress ? `<div class="detail">${escapeHtml(sellerAddress)}</div>` : ""}
-        ${sellerEmail ? `<div class="detail">${escapeHtml(sellerEmail)}</div>` : ""}
-        ${sellerPhone ? `<div class="detail">${escapeHtml(sellerPhone)}</div>` : ""}
+        ${doc.logoUrl ? `<img class="logo" src="${escapeHtml(doc.logoUrl)}" alt="" />` : ""}
+        <div class="brand-name">${escapeHtml(doc.seller.name)}</div>
+        ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
       <div class="doc">
         <div class="eyebrow">Инвойс</div>
-        <h1>${escapeHtml(invoice.number)}</h1>
-        <span class="status">${escapeHtml(INVOICE_STATUS_LABELS[displayStatus])}</span>
+        <h1>${escapeHtml(doc.number)}</h1>
+        <span class="status">${escapeHtml(doc.statusLabel)}</span>
       </div>
     </header>
 
     <section class="party-grid">
       <div class="party">
         <div class="party-title">Продавец</div>
-        <div class="party-name">${escapeHtml(sellerName)}</div>
-        ${sellerVat ? `<div class="detail">VAT: ${escapeHtml(sellerVat)}</div>` : ""}
-        ${sellerIban ? `<div class="detail">IBAN: ${escapeHtml(sellerIban)}</div>` : ""}
-        ${sellerBank ? `<div class="detail">Банк: ${escapeHtml(sellerBank)}</div>` : ""}
+        <div class="party-name">${escapeHtml(doc.seller.name)}</div>
+        ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
       <div class="party">
         <div class="party-title">Получатель</div>
-        ${clientName ? `
-          <div class="party-name">${escapeHtml(clientName)}</div>
-          ${clientAddress ? `<div class="detail">${escapeHtml(clientAddress)}</div>` : ""}
-          ${clientEmail ? `<div class="detail">${escapeHtml(clientEmail)}</div>` : ""}
-          ${clientPhone ? `<div class="detail">${escapeHtml(clientPhone)}</div>` : ""}
-        ` : `<div class="party-name">Получатель не указан</div>`}
+        <div class="party-name">${escapeHtml(doc.client.name)}</div>
+        ${doc.client.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
     </section>
 
     <section class="party-grid">
       <div class="party" style="min-height:0">
         <div class="party-title">Дата выставления</div>
-        <div class="party-name">${escapeHtml(formatInvoiceDate(invoice.issued_on))}</div>
+        <div class="party-name">${escapeHtml(doc.issuedOn)}</div>
       </div>
       <div class="party" style="min-height:0">
         <div class="party-title">Оплатить до</div>
-        <div class="party-name">${escapeHtml(formatInvoiceDate(invoice.due_on))}</div>
+        <div class="party-name">${escapeHtml(doc.dueOn)}</div>
       </div>
     </section>
 
@@ -210,64 +146,41 @@ export function buildInvoicePdfHtml({
     </table>
 
     <div class="totals-wrap">
-      <div class="totals">
-        <div class="total-row"><span>Без VAT</span><strong>${escapeHtml(formatInvoiceMoney(invoice.subtotal_net, invoice.currency))}</strong></div>
-        <div class="total-row"><span>${escapeHtml(vatModeLabel)}${invoice.vat_amount > 0 ? ` · ${formatPercent(invoice.vat_percent)}` : ""}</span><strong>${escapeHtml(formatInvoiceMoney(invoice.vat_amount, invoice.currency))}</strong></div>
-        <div class="total-row grand-total"><span>К оплате</span><span>${escapeHtml(formatInvoiceMoney(invoice.total, invoice.currency))}</span></div>
-      </div>
+      <div class="totals">${totalRows}</div>
     </div>
 
-    <section class="section">
-      <h2>Оплата</h2>
-      <div class="settlement">
-        <div class="metric"><div class="metric-label">Статус</div><div class="metric-value">${escapeHtml(INVOICE_STATUS_LABELS[displayStatus])}</div></div>
-        <div class="metric"><div class="metric-label">Оплачено</div><div class="metric-value">${escapeHtml(formatInvoiceMoney(settlement.paid, invoice.currency))}</div></div>
-        <div class="metric"><div class="metric-label">Остаток</div><div class="metric-value">${escapeHtml(formatInvoiceMoney(settlement.remaining, invoice.currency))}</div></div>
-      </div>
-      ${paymentRows ? `
-        <table aria-label="История платежей">
-          <thead><tr><th>Дата</th><th>Операция</th><th class="number">Сумма</th></tr></thead>
-          <tbody>${paymentRows}</tbody>
-        </table>
-      ` : `<div class="muted">Подтверждённых операций оплаты пока нет.</div>`}
-    </section>
+    ${doc.payTo.length > 0 ? `
+      <section class="section">
+        <h2>Реквизиты для оплаты</h2>
+        ${doc.payTo.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
+        <div class="muted small">В назначении платежа укажите ${escapeHtml(doc.number)}.</div>
+      </section>
+    ` : ""}
 
-    ${invoice.notes ? `<section class="section"><h2>Комментарий</h2><div class="notes">${escapeHtml(invoice.notes)}</div></section>` : ""}
+    ${doc.settlement.length > 0 ? `
+      <section class="section">
+        <h2>Оплата</h2>
+        <div class="settlement">
+          <div class="metric"><div class="metric-label">Статус</div><div class="metric-value">${escapeHtml(doc.statusLabel)}</div></div>
+          ${doc.settlement.map((metric) => `
+            <div class="metric"><div class="metric-label">${escapeHtml(metric.label)}</div><div class="metric-value">${escapeHtml(metric.value)}</div></div>
+          `).join("")}
+        </div>
+        ${paymentRows ? `
+          <table aria-label="История платежей">
+            <thead><tr><th>Дата</th><th>Операция</th><th class="number">Сумма</th></tr></thead>
+            <tbody>${paymentRows}</tbody>
+          </table>
+        ` : `<div class="muted">Подтверждённых операций оплаты пока нет.</div>`}
+      </section>
+    ` : ""}
 
-    <footer class="footer">Документ сформирован из данных инвойса ${escapeHtml(invoice.number)}. Валюта: ${escapeHtml(invoice.currency)}.</footer>
+    ${doc.notes ? `<section class="section"><h2>Комментарий</h2><div class="notes">${escapeHtml(doc.notes)}</div></section>` : ""}
+
+    <footer class="footer">${escapeHtml(doc.footer)}</footer>
   </main>
 </body>
 </html>`;
-}
-
-function primaryClientAddress(client: Client): string {
-  const primary = client.locations.find((location) => location.isPrimary)
-    ?? client.locations.find((location) => clean(location.address));
-  return clean(primary?.address) || joinParts(client.address, client.city);
-}
-
-function firstNonEmpty(...values: (string | null | undefined)[]): string {
-  for (const value of values) {
-    const normalized = clean(value);
-    if (normalized) return normalized;
-  }
-  return "";
-}
-
-function joinParts(...values: (string | null | undefined)[]): string {
-  return values.map(clean).filter(Boolean).join(", ");
-}
-
-function clean(value: string | null | undefined): string {
-  return value?.trim() ?? "";
-}
-
-function formatQty(value: number): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 }).format(value);
-}
-
-function formatPercent(value: number): string {
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
 export function escapeHtml(value: string): string {

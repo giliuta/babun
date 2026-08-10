@@ -22,6 +22,9 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
+import type { Tenant } from "@/features/settings/tenant";
+import { buildInvoiceDocument } from "./document";
+import { InvoicePaper } from "./InvoicePaper";
 import { EntityPickerSheet } from "./EntityPickerSheet";
 import { InvoiceDateRow } from "./InvoiceDateRow";
 import {
@@ -78,6 +81,8 @@ export function InvoiceEditor({
   appointments,
   teams,
   businessToday,
+  tenant,
+  nextNumber,
   submitting,
   onSubmit,
 }: {
@@ -90,10 +95,18 @@ export function InvoiceEditor({
   appointments: Appointment[];
   teams: Team[];
   businessToday: string;
+  /** Реквизиты и логотип компании — их печатает документ. */
+  tenant?: Tenant;
+  /** Номер, который документ получит при выставлении. */
+  nextNumber?: string;
   submitting: boolean;
   onSubmit: (value: InvoiceEditorValue) => Promise<void>;
 }) {
   const t = useThemeColors();
+  // ДВА РЕЖИМА ОДНОГО ЭКРАНА, А НЕ СПЛИТ. Так устроены все телефонные
+  // редакторы инвойсов: правка — это форма, документ — отдельный вид, и
+  // выставляют его именно с документа, глядя на то, что уйдёт клиенту.
+  const [mode, setMode] = useState<"edit" | "paper">("edit");
   const serial = useRef(0);
   const newLine = (title = "", qty = "1", price = "") => ({
     id: `invoice-line-${serial.current++}`,
@@ -165,6 +178,54 @@ export function InvoiceEditor({
     Math.max(0, rate),
   );
 
+  // Зеркало собирается из ТЕХ ЖЕ данных, что уедут на сервер: показываем не
+  // «примерно как будет», а сам документ.
+  const paperDoc = useMemo(
+    () =>
+      initial
+        ? buildInvoiceDocument({
+            invoice: initial,
+            tenant,
+            client: selectedClient ?? undefined,
+            settlement: {
+              income: 0,
+              refunded: 0,
+              paid: 0,
+              remaining: initial.total,
+              overpaid: 0,
+              isPartial: false,
+              isPaid: false,
+            },
+            payments: [],
+            businessToday,
+          })
+        : buildInvoiceDocument({
+            tenant,
+            client: selectedClient ?? undefined,
+            draft: {
+              number: nextNumber ?? "Номер присвоится при выставлении",
+              issuedOn,
+              dueOn,
+              clientId,
+              lines: parsedLines.map((line) => ({
+                title: line.title,
+                qty: line.qty,
+                unitPrice: Math.max(0, line.unit_price),
+              })),
+              vatMode,
+              vatPercent: Math.max(0, rate),
+              subtotalNet: totals.subtotal_net,
+              vatAmount: totals.vat_amount,
+              total: totals.total,
+              currency: tenant?.currency || "EUR",
+              notes,
+            },
+          }),
+    // Пересобираем на каждое изменение формы — в этом весь смысл зеркала.
+    [initial, tenant, selectedClient, nextNumber, issuedOn, dueOn, clientId,
+     parsedLines, vatMode, rate, totals, notes, businessToday],
+  );
+
   const setLine = (next: EditableInvoiceLine) =>
     setLines((current) => current.map((line) => (line.id === next.id ? next : line)));
 
@@ -219,8 +280,47 @@ export function InvoiceEditor({
     }
   };
 
+  const actionLabel = `${initial ? "Сохранить" : "Выставить инвойс"} · ${formatInvoiceMoney(totals.total)}`;
+
+  if (mode === "paper") {
+    return (
+      <View className="flex-1">
+        <ModeSwitch mode={mode} onChange={setMode} />
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 12, paddingBottom: 28 }}
+        >
+          <InvoicePaper doc={paperDoc} />
+        </ScrollView>
+        {/* КНОПКА ВЫПУСКА ЖИВЁТ НА ДОКУМЕНТЕ. Человек нажимает её, глядя на то,
+            что уйдёт клиенту, а не на форму с полями. */}
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          {error ? (
+            <Text
+              accessibilityRole="alert"
+              className="mb-2 text-center text-sm"
+              style={{ color: t.danger }}
+            >
+              {error}
+            </Text>
+          ) : null}
+          <Button
+            label={actionLabel}
+            onPress={submit}
+            loading={submitting}
+            disabled={submitting}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <ModeSwitch mode={mode} onChange={setMode} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -346,7 +446,7 @@ export function InvoiceEditor({
         ) : null}
         <View className="mx-4 mt-5">
           <Button
-            label={`${initial ? "Сохранить" : "Выставить инвойс"} · ${formatInvoiceMoney(totals.total)}`}
+            label={actionLabel}
             onPress={submit}
             loading={submitting}
             disabled={submitting}
@@ -385,6 +485,26 @@ export function InvoiceEditor({
         onClose={() => setPicker(null)}
       />
     </KeyboardAvoidingView>
+  );
+}
+
+function ModeSwitch({
+  mode,
+  onChange,
+}: {
+  mode: "edit" | "paper";
+  onChange: (next: "edit" | "paper") => void;
+}) {
+  return (
+    <SegmentedControl
+      options={[
+        { value: "edit", label: "Правка" },
+        { value: "paper", label: "Документ" },
+      ]}
+      value={mode}
+      onChange={onChange}
+      style={{ marginHorizontal: 12, marginTop: 10, marginBottom: 2 }}
+    />
   );
 }
 

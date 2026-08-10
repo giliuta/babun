@@ -65,6 +65,9 @@ export interface InvoiceSellerSnapshot {
   contact_phone: string | null;
   iban: string | null;
   bank_name: string | null;
+  /** Логотип на момент выставления. null у документов, выписанных до того,
+   *  как логотип начали печатать. */
+  logo_url?: string | null;
   currency: string | null;
 }
 

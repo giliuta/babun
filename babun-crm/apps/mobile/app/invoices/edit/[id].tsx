@@ -15,6 +15,7 @@ import {
   useInvoicePayments,
 } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
 export default function EditInvoiceScreen() {
@@ -29,6 +30,7 @@ export default function EditInvoiceScreen() {
   const businessToday = todayYmd(
     calendarSettings.data?.timezone ?? "Europe/Nicosia",
   );
+  const tenant = useTenant();
   const edit = useEditInvoice(id, invoice.data?.issued_on ?? businessToday);
 
   const loading =
@@ -99,6 +101,7 @@ export default function EditInvoiceScreen() {
         <InvoiceEditor
           key={invoice.data.updated_at}
           initial={invoice.data}
+          tenant={tenant.data}
           defaultVatMode="off"
           clients={clients.data ?? []}
           appointments={appointments.data ?? []}

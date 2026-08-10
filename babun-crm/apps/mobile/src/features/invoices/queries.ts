@@ -37,6 +37,32 @@ export function useInvoice(id: string | undefined) {
   });
 }
 
+/**
+ * Номер, который получит СЛЕДУЮЩИЙ инвойс.
+ *
+ * Считает сервер той же функцией, что и выпуск, — предпросмотр не имеет права
+ * показывать один номер, а документ получать другой. Это прогноз: пока человек
+ * заполняет форму, коллега может выставить свой счёт, и номер сдвинется.
+ */
+export function useNextInvoiceNumber(year: number) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["invoices", tenantId, "next-number", year],
+    enabled: !!tenantId,
+    // Свежесть важнее кэша: номер меняется от каждого выставленного счёта.
+    staleTime: 0,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase.rpc("next_invoice_number", {
+        p_tenant_id: tenantId as string,
+        p_year: year,
+      });
+      if (error) throw new Error(error.message);
+      const row = Array.isArray(data) ? data[0] : null;
+      return row?.number ?? null;
+    },
+  });
+}
+
 export function useInvoicePayments() {
   const tenantId = useTenantId();
   return useQuery({

@@ -1,4 +1,4 @@
-import { Alert, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import {
   Building2,
@@ -101,12 +101,7 @@ export default function FinanceSettingsScreen() {
             icon={Building2}
             title="Реквизиты компании"
             sub="Печатаются в инвойсах и чеках"
-            onPress={() =>
-              Alert.alert(
-                "Реквизиты компании",
-                "Пока печатаются данные из профиля компании. Отдельная страница появится вместе с шаблонами документов.",
-              )
-            }
+            onPress={() => router.push("/cabinet/business")}
           />
         </SectionCard>
       </ScrollView>

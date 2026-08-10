@@ -10,7 +10,10 @@ import {
   InvoiceEditor,
   type InvoiceEditorValue,
 } from "@/features/invoices/InvoiceEditor";
-import { useIssueInvoice } from "@/features/invoices/queries";
+import {
+  useIssueInvoice,
+  useNextInvoiceNumber,
+} from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -35,11 +38,14 @@ export default function NewInvoiceScreen() {
   const calendarSettings = useCalendarSettings();
   const issue = useIssueInvoice();
   const vat = useVatSettings();
+  const nextNumber = useNextInvoiceNumber(new Date().getFullYear());
   const requestId = useRef(randomUuid()).current;
 
   const amount = params.amount ? Number(params.amount) : null;
+  // Ждём и настройки НДС: редактор берёт режим ОДИН РАЗ при рождении, и
+  // смонтированный раньше ответа он навсегда оставался «Без НДС».
   const loading = clients.isLoading || appointments.isLoading || teams.isLoading
-    || tenant.isLoading || calendarSettings.isLoading;
+    || tenant.isLoading || calendarSettings.isLoading || vat.isLoading;
   // A failed background refetch must not unmount InvoiceEditor and erase the
   // user's draft. Only replace the editor when a required query has no usable
   // data at all; retrying keeps all local form state intact.
@@ -96,6 +102,8 @@ export default function NewInvoiceScreen() {
           appointments={appointments.data ?? []}
           teams={teams.data ?? []}
           businessToday={businessToday}
+          tenant={tenant.data}
+          nextNumber={nextNumber.data ?? undefined}
           submitting={issue.isPending}
           onSubmit={submit}
         />

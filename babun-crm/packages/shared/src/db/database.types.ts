@@ -2814,6 +2814,9 @@ export type Database = {
           vat_exemption_note: string | null
           vat_mode: string
           vat_rate: number
+          invoice_number_padding: number
+          invoice_number_yearly_reset: boolean
+          invoice_next_number: number | null
         }
         Insert: {
           track_units?: boolean
@@ -2851,6 +2854,9 @@ export type Database = {
           vat_exemption_note?: string | null
           vat_mode?: string
           vat_rate?: number
+          invoice_number_padding?: number
+          invoice_number_yearly_reset?: boolean
+          invoice_next_number?: number | null
         }
         Update: {
           track_units?: boolean
@@ -2888,6 +2894,9 @@ export type Database = {
           vat_exemption_note?: string | null
           vat_mode?: string
           vat_rate?: number
+          invoice_number_padding?: number
+          invoice_number_yearly_reset?: boolean
+          invoice_next_number?: number | null
         }
         Relationships: []
       }
@@ -2949,6 +2958,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      next_invoice_number: {
+        Args: { p_tenant_id: string; p_year: number }
+        Returns: { seq: number; number: string }[]
+      }
       _dispatch_push: {
         Args: { p_data: Json; p_event_type: string; p_recipients: string[] }
         Returns: undefined
