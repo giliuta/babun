@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   CalendarClock,
   ChevronRight,
+  Clock,
   Eye,
   Globe,
   Route,
@@ -38,6 +39,7 @@ import { schedulePreview } from "@/features/calendar/schedule-days";
 import {
   BUFFER_CHOICES,
   bufferLabel,
+  HOUR_CHOICES,
   effectiveWorkHours,
   hourLabel,
   SLOT_CHOICES,
@@ -74,7 +76,9 @@ export default function CalendarSettingsScreen() {
   const save = useSaveCalendarSettings();
   const update = useUpdateTeam();
   const [savedTick, setSavedTick] = useState(0);
-  const [picker, setPicker] = useState<"slot" | "buffer" | "tz" | null>(null);
+  const [picker, setPicker] = useState<
+    "slot" | "buffer" | "tz" | "workStart" | "workEnd" | null
+  >(null);
 
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
@@ -185,6 +189,14 @@ export default function CalendarSettingsScreen() {
 
         <SectionEyebrow>Все календари</SectionEyebrow>
         <SectionCard>
+          <SettingsRow
+            tile="#1F7A44"
+            icon={Clock}
+            title="Рабочие часы по умолчанию"
+            sub={`${hourLabel(work.start)}–${hourLabel(work.end)}`}
+            onPress={() => setPicker("workStart")}
+          />
+          <Divider inset={56} />
           <SettingsRow
             tile="#FF9500"
             icon={Route}
@@ -316,6 +328,33 @@ export default function CalendarSettingsScreen() {
         options={BUFFER_CHOICES}
         value={String(buffer)}
         onPick={(v) => patchCompany({ bufferMinutes: Number(v) })}
+        onClose={() => setPicker(null)}
+      />
+      {/* ЧАСЫ ЗАДАЮТСЯ ДВУМЯ ЛИСТАМИ ПОДРЯД: сначала начало, сразу за ним
+          конец. Так это устроено и в редакторе дня — человек уже знает движение,
+          и одна строка настройки не превращается в подэкран ради двух чисел. */}
+      <OptionSheet
+        visible={picker === "workStart"}
+        title="Начало рабочего дня"
+        options={HOUR_CHOICES}
+        value={String(work.start)}
+        onPick={(v) => {
+          const start = Number(v);
+          // Конец обязан быть позже начала, иначе сетка молча отвергает пару.
+          patchCompany({
+            workStartHour: start,
+            workEndHour: Math.max(work.end, start + 1),
+          });
+          setPicker("workEnd");
+        }}
+        onClose={() => setPicker(null)}
+      />
+      <OptionSheet
+        visible={picker === "workEnd"}
+        title="Конец рабочего дня"
+        options={HOUR_CHOICES.filter((o) => Number(o.value) > work.start)}
+        value={String(work.end)}
+        onPick={(v) => patchCompany({ workEndHour: Number(v) })}
         onClose={() => setPicker(null)}
       />
       <OptionSheet

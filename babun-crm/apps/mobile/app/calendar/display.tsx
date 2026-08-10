@@ -8,7 +8,6 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SectionFooter } from "@/components/ui/SectionFooter";
-import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import {
@@ -58,18 +57,15 @@ export default function CalendarDisplayScreen() {
             value={!!s.hideCancelled}
             onChange={(v) => patch({ hideCancelled: v })}
           />
-          <Divider inset={16} />
-          <SwitchRow
-            label="Разрешать заканчивать позже"
-            hint="Запись может выходить за конец рабочего дня — календарь не мешает"
-            value={!!s.allowOvertime}
-            onChange={(v) => patch({ allowOvertime: v })}
-          />
         </SectionCard>
         <SectionFooter>
           Настройка про ВИД, а не про данные: скрытая запись никуда не девается —
           она есть в истории клиента и в деньгах.
         </SectionFooter>
+        {/* Тумблера «разрешать заканчивать позже» здесь нет намеренно: поле
+            allowOvertime не читает НИКТО, и переключатель был бы обманом —
+            человек его двигает, а календарь ведёт себя одинаково. Запись и так
+            может выходить за конец дня: календарь предупреждает, но не мешает. */}
 
         <SectionEyebrow>Неделя</SectionEyebrow>
         <SectionCard>

@@ -6,6 +6,12 @@ import type { SheetOption } from "@/components/ui/OptionSheet";
 // буфера разъедутся ровно так же, как разъехались степперы и чипы, которые
 // они заменили.
 
+/** Часы суток для листов «начало/конец рабочего дня». */
+export const HOUR_CHOICES: SheetOption<string>[] = Array.from(
+  { length: 25 },
+  (_, h) => ({ value: String(h), label: hourLabel(h) }),
+);
+
 export function hourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
 }

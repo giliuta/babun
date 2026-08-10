@@ -58,6 +58,8 @@ import {
   type FreeSlotRange,
   type WorkBand,
 } from "@/features/calendar/DayView";
+import { DEFAULT_CALENDAR_SETTINGS } from "@babun/shared/local/calendar-settings";
+import { effectiveWorkHours } from "@/features/calendar/setting-options";
 import { HOUR_H_DEFAULT } from "@/features/calendar/zoom";
 import { WeekView } from "@/features/calendar/WeekView";
 import { type CalMode } from "@/features/calendar/ViewModeDropdown";
@@ -1463,13 +1465,17 @@ export default function CalendarTab() {
 
   // Общие рабочие часы — фолбэк, когда у команды нет своего графика (у части
   // живых команд строки team_schedules нет вовсе, и красит их именно это).
+  // ОДИН РЕЗОЛВЕР НА ВЕСЬ ПРОДУКТ. Свои «?? 6 / ?? 22» здесь давали третий
+  // ответ на вопрос «какие у нас рабочие часы»: экран настроек показывал одно,
+  // сетка красила другое, свободные слоты считали третье.
   const globalWork = useMemo(
-    () => ({
-      start: calSettings?.workStartHour ?? calSettings?.startHour ?? 6,
-      end: calSettings?.workEndHour ?? calSettings?.endHour ?? 22,
-    }),
-    [calSettings?.workStartHour, calSettings?.workEndHour, calSettings?.startHour, calSettings?.endHour],
+    () => effectiveWorkHours(calSettings ?? DEFAULT_CALENDAR_SETTINGS),
+    [calSettings],
   );
+  // Разложено на числа: массив зависимостей у хука ниже сравнивает по ссылке,
+  // а объект globalWork пересобирается на каждый рендер.
+  const workStartMin = globalWork.start * 60;
+  const workEndMin = globalWork.end * 60;
 
   // Рабочая полоса дня для листа записи — тот же резолвер и фолбэк, что
   // красят серый wash сетки (DayColumn): подсветка «вне рабочих часов» в
@@ -1550,8 +1556,8 @@ export default function CalendarTab() {
       return freeSlotsForDay({
         band: workBandFor?.(dateYmd),
         fallback: {
-          startMin: Math.round((calSettings?.workStartHour ?? 8) * 60),
-          endMin: Math.round((calSettings?.workEndHour ?? 20) * 60),
+          startMin: Math.round(workStartMin),
+          endMin: Math.round(workEndMin),
         },
         appts,
         stepMinutes: step,
@@ -1567,8 +1573,8 @@ export default function CalendarTab() {
     apptsFor,
     activeTeamId,
     workBandFor,
-    calSettings?.workStartHour,
-    calSettings?.workEndHour,
+    workStartMin,
+    workEndMin,
     bufferMinutes,
     activeTeam?.default_slot_minutes,
     todayYmd,
