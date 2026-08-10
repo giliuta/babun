@@ -663,7 +663,7 @@ function FinancesContent() {
 
   if (loading) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
         {header}
         <EmptyState state="loading" fill />
       </Screen>
@@ -672,7 +672,7 @@ function FinancesContent() {
 
   if (loadError) {
     return (
-      <Screen>
+      <Screen edges={["top"]}>
         {header}
         <EmptyState
           state="error"
@@ -685,7 +685,7 @@ function FinancesContent() {
   }
 
   return (
-    <Screen>
+    <Screen edges={["top"]}>
       {header}
 
       <FinanceOverview
@@ -787,10 +787,13 @@ function FinancesContent() {
         />
       )}
 
-      {/* Создание операции — понятная подписанная нижняя кнопка. */}
+      {/* Создание операции — та же кнопка и то же место, что «Добавить
+          клиента» на вкладке «Клиенты»: экран берёт только верхний отступ
+          (edges=["top"]), иначе нижняя безопасная зона поднимала кнопку выше
+          клиентской, и при переходе между вкладками она прыгала. */}
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         <GradientButton
-          label="Новая операция"
+          label="Добавить операцию"
           onPress={() => {
             setEditingTx(null);
             setOpOpen(true);
