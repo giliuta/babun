@@ -88,7 +88,11 @@ export function AccountCreateSheet({
   const changeScope = (next: AccountScope) => {
     if (next === scope) return;
     setScope(next);
-    setKind(next === "company" ? "bank" : "cash");
+    const nextKind: AccountKind = next === "company" ? "bank" : "cash";
+    setKind(nextKind);
+    // Имя идёт за видом: переключили на общий — «Касса» превращалась в счёт
+    // вида «Банк» с чужим названием.
+    if (!nameTouched) setName(NAME_BY_KIND[nextKind]);
   };
 
   const openingCents = opening.trim()

@@ -263,8 +263,13 @@ export async function reopenAccount(
 }
 
 /**
- * Hard delete for an account without ledger history (a typo right after
- * creation). The server-side deletion guard rejects anything with rows.
+ * Удаление счёта, у которого нет истории (описка сразу после создания).
+ *
+ * Серверный триггер guard_account_delete_with_history отклоняет счёт с
+ * операциями, чеками или оплатами заявок. До 2026-08-10 этого триггера НЕ БЫЛО,
+ * а комментарий здесь обещал обратное: все ссылки стоят с `on delete set null`,
+ * поэтому удаление молча обнуляло привязку — операции оставались в «Финансах»,
+ * но пропадали из всех балансов.
  */
 export async function deleteAccount(
   supabase: DbSupabase,
