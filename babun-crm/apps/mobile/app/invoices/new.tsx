@@ -15,6 +15,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/features/invoices/format";
+import { useVatSettings } from "@/features/finances/vat-queries";
 
 export default function NewInvoiceScreen() {
   const router = useRouter();
@@ -33,6 +34,7 @@ export default function NewInvoiceScreen() {
   const tenant = useTenant();
   const calendarSettings = useCalendarSettings();
   const issue = useIssueInvoice();
+  const vat = useVatSettings();
   const requestId = useRef(randomUuid()).current;
 
   const amount = params.amount ? Number(params.amount) : null;
@@ -85,7 +87,11 @@ export default function NewInvoiceScreen() {
             title: params.title,
             issuedOn: params.issuedOn,
           }}
-          defaultVatMode={tenant.data?.vat_number ? "inclusive" : "off"}
+          // Налог инвойса — из НАСТРОЙКИ, а не из догадки по наличию VAT-номера:
+          // раньше компания, работающая «плюсом», получала счёт с налогом
+          // внутри цены, то есть на 19% меньше денег.
+          defaultVatMode={vat.data?.mode ?? "off"}
+          defaultVatPercent={vat.data?.rate ?? 0}
           clients={clients.data ?? []}
           appointments={appointments.data ?? []}
           teams={teams.data ?? []}

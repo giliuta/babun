@@ -60,16 +60,20 @@ export interface InvoiceEditorValue {
   link_to_tx_id: string | null;
 }
 
+// ОДИН ЯЗЫК НАЛОГА НА ВЕСЬ ПРОДУКТ. В листе операции стоят те же три клавиши
+// теми же словами: «VAT» латиницей и «Сверху» — это второй словарь для одного
+// и того же решения (владелец 2026-08-09).
 const VAT_OPTIONS = [
-  { value: "off", label: "Без VAT" },
-  { value: "inclusive", label: "Включён" },
-  { value: "exclusive", label: "Сверху" },
+  { value: "off", label: "Без НДС" },
+  { value: "inclusive", label: "НДС включён" },
+  { value: "exclusive", label: "Плюс НДС" },
 ] as const;
 
 export function InvoiceEditor({
   initial,
   prefill,
   defaultVatMode,
+  defaultVatPercent,
   clients,
   appointments,
   teams,
@@ -80,6 +84,8 @@ export function InvoiceEditor({
   initial?: InvoiceLedgerWithLines;
   prefill?: InvoicePrefill;
   defaultVatMode: InvoiceVatMode;
+  /** Ставка компании/команды. 0 — берём привычные 19. */
+  defaultVatPercent?: number;
   clients: Client[];
   appointments: Appointment[];
   teams: Team[];
@@ -116,7 +122,7 @@ export function InvoiceEditor({
     initial ? invoiceVatMode(initial) : defaultVatMode,
   );
   const [vatPercent, setVatPercent] = useState(
-    String(initial?.vat_percent || 19),
+    String(initial?.vat_percent || defaultVatPercent || 19),
   );
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [lines, setLines] = useState<EditableInvoiceLine[]>(() =>
@@ -192,7 +198,7 @@ export function InvoiceEditor({
       return;
     }
     if (rate < 0 || rate > 100) {
-      setError("VAT должен быть от 0 до 100% и не больше двух знаков.");
+      setError("Ставка НДС должна быть от 0 до 100% и не больше двух знаков.");
       return;
     }
     try {
@@ -301,7 +307,7 @@ export function InvoiceEditor({
           {vatMode !== "off" ? (
             <View className="mt-4">
               <Field
-                label="Ставка VAT, %"
+                label="Ставка НДС, %"
                 value={vatPercent}
                 onChangeText={setVatPercent}
                 keyboardType="decimal-pad"
@@ -310,9 +316,9 @@ export function InvoiceEditor({
             </View>
           ) : null}
           <View className="rounded-xl px-3 py-2" style={{ backgroundColor: t.canvas }}>
-            <SummaryRow label="Без VAT" value={formatInvoiceMoney(totals.subtotal_net)} />
+            <SummaryRow label="Без НДС" value={formatInvoiceMoney(totals.subtotal_net)} />
             {vatMode !== "off" ? (
-              <SummaryRow label={`VAT ${Math.max(0, rate)}%`} value={formatInvoiceMoney(totals.vat_amount)} />
+              <SummaryRow label={`НДС ${Math.max(0, rate)}%`} value={formatInvoiceMoney(totals.vat_amount)} />
             ) : null}
             <SummaryRow label="Итого" value={formatInvoiceMoney(totals.total)} strong />
           </View>

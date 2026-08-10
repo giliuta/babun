@@ -362,11 +362,11 @@ export default function InvoiceDetailScreen() {
         </SectionCard>
 
         <SectionCard title="Итого">
-          <InfoRow label="Без VAT" value={formatInvoiceMoney(row.subtotal_net, row.currency)} />
+          <InfoRow label="Без НДС" value={formatInvoiceMoney(row.subtotal_net, row.currency)} />
           {row.vat_amount > 0 ? (
             <>
               <Divider inset={16} />
-              <InfoRow label={`VAT ${row.vat_percent}%`} value={formatInvoiceMoney(row.vat_amount, row.currency)} />
+              <InfoRow label={`НДС ${row.vat_percent}%`} value={formatInvoiceMoney(row.vat_amount, row.currency)} />
             </>
           ) : null}
           <Divider inset={16} />
