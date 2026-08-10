@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
+import {
+  CalendarClock,
+  ChevronRight,
+  Eye,
+  Globe,
+  Route,
+  Tags,
+  Timer,
+} from "lucide-react-native";
 import { getStorage } from "@babun/shared/storage";
 import {
   DEFAULT_CALENDAR_SETTINGS,
@@ -15,8 +23,7 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { SectionFooter } from "@/components/ui/SectionFooter";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ValueRow } from "@/components/ui/ValueRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
+import { SettingsRow } from "@/components/ui/SettingsRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -153,36 +160,19 @@ export default function CalendarSettingsScreen() {
             {/* Заголовок секции = имя календаря: он и есть область действия. */}
             <SectionEyebrow>{team.name}</SectionEyebrow>
             <SectionCard>
-              <Pressable
+              <SettingsRow
+                tile="#2F6FD6"
+                icon={CalendarClock}
+                title="Рабочие дни и часы"
+                sub={schedText}
                 onPress={() => router.push(`/calendar/${team.id}/schedule`)}
-                accessibilityRole="button"
-                accessibilityLabel={`Рабочие дни и часы: ${schedText}`}
-                style={({ pressed }) => ({
-                  minHeight: 52,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: pressed ? t.pressed : "transparent",
-                })}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 16, color: t.ink }} numberOfLines={1}>
-                    Рабочие дни и часы
-                  </Text>
-                  <Text
-                    style={{ fontSize: 13, color: t.sub, marginTop: 1 }}
-                    numberOfLines={1}
-                  >
-                    {schedText}
-                  </Text>
-                </View>
-                <ChevronRight color={t.chevron} size={ICON.sm} />
-              </Pressable>
-              <Divider inset={16} />
-              <ValueRow
-                label="Длительность записи"
-                value={slotMinutes == null ? "30 мин" : slotLabel(slotMinutes)}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile="#0E7C86"
+                icon={Timer}
+                title="Длительность записи"
+                sub={slotMinutes == null ? "30 мин" : slotLabel(slotMinutes)}
                 onPress={() => setPicker("slot")}
               />
             </SectionCard>
@@ -195,21 +185,27 @@ export default function CalendarSettingsScreen() {
 
         <SectionEyebrow>Все календари</SectionEyebrow>
         <SectionCard>
-          <ValueRow
-            label="Буфер"
-            value={bufferLabel(buffer)}
+          <SettingsRow
+            tile="#FF9500"
+            icon={Route}
+            title="Буфер"
+            sub={bufferLabel(buffer)}
             onPress={() => setPicker("buffer")}
           />
-          <Divider inset={16} />
-          <SwitchRow
-            label="Скрывать отменённые"
-            value={!!s.hideCancelled}
-            onChange={(v) => patchCompany({ hideCancelled: v })}
+          <Divider inset={56} />
+          <SettingsRow
+            tile="#5856D6"
+            icon={Eye}
+            title="Что показывать"
+            sub={s.hideCancelled ? "Отменённые скрыты" : "Показываем всё"}
+            onPress={() => router.push("/calendar/display")}
           />
-          <Divider inset={16} />
-          <ValueRow
-            label="Часовой пояс"
-            value={tzLabel(timezone)}
+          <Divider inset={56} />
+          <SettingsRow
+            tile="#5B6678"
+            icon={Globe}
+            title="Часовой пояс"
+            sub={tzLabel(timezone)}
             onPress={() => setPicker("tz")}
           />
         </SectionCard>
@@ -225,9 +221,11 @@ export default function CalendarSettingsScreen() {
             маршрут бригады, а карточка клиента её только показывает. */}
         <SectionEyebrow>Справочники</SectionEyebrow>
         <SectionCard>
-          <ValueRow
-            label="Метки"
-            value="Города и районы"
+          <SettingsRow
+            tile="#AF52DE"
+            icon={Tags}
+            title="Метки дня"
+            sub="Города и районы"
             onPress={() => router.push("/calendar/labels")}
           />
         </SectionCard>
