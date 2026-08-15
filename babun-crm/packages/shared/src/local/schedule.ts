@@ -135,8 +135,15 @@ export function getDayScheduleForDate(
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   const dateKey = `${yyyy}-${mm}-${dd}`;
-  // Vacations win over every other rule — brigade simply isn't
-  // available that day.
+  // Precision order: the explicit date override beats a vacation RANGE —
+  // «в эту дату так» is the sharper statement of intent, and the mobile
+  // special-day editor writes overrides, so a vacation that silently
+  // outranked them would make that editor a liar (toggle "рабочий день"
+  // on, grid stays grey). Flipped from vacation-first 2026-08-15; prod
+  // had zero overrides and zero vacations, so no stored data changed
+  // meaning.
+  const dayOverride = schedule.date_overrides?.[dateKey];
+  if (dayOverride) return dayOverride;
   if (isInVacation(schedule, dateKey)) {
     return {
       is_working: false,
@@ -145,8 +152,6 @@ export function getDayScheduleForDate(
       breaks: [],
     };
   }
-  const dayOverride = schedule.date_overrides?.[dateKey];
-  if (dayOverride) return dayOverride;
   return getDaySchedule(schedule, date.getDay());
 }
 

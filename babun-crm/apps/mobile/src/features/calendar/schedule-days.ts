@@ -6,6 +6,7 @@ import {
   type TeamSchedule,
   type WeekdayKey,
 } from "@babun/shared/local/schedule";
+import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
 
 // Рабочий график по дням. TeamSchedule НЕ имеет поля «дни»: рабочий день
 // живёт в overrides[key].is_working, а schedule.start/end помечены как
@@ -142,4 +143,33 @@ export function schedulePreview(schedule: TeamSchedule): string {
       : `${names[idx[0]]}–${names[idx[idx.length - 1]]}`
     : idx.map((i) => names[i]).join(", ");
   return `${label} · ${hours}`;
+}
+
+// ─── Особые дни (date_overrides) ─────────────────────────────────────
+
+/** Настоящий ли это ключ даты «YYYY-MM-DD». Round-trip через parseYMD
+ *  отвергает и мусор из адресной строки, и несуществующие даты вроде
+ *  «2026-02-31»: setFullYear молча перекатил бы их в март. */
+export function isDateKey(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) && formatYMD(parseYMD(v)) === v;
+}
+
+/** «Сб, 22 августа» — подпись особого дня (заголовок экрана и строка
+ *  списка). Год дописывается только чужой: особые дни живут вблизи
+ *  сегодняшнего, и вечное «2026» в каждой строке было бы шумом. */
+export function specialDayLabel(dateKey: string): string {
+  const s = humanDay(dateKey);
+  const label = s.charAt(0).toUpperCase() + s.slice(1);
+  const year = Number(dateKey.slice(0, 4));
+  return year === new Date().getFullYear() ? label : `${label} ${year}`;
+}
+
+/** Особые дни по возрастанию даты — ISO-ключи сортируются строкой. */
+export function listSpecialDays(
+  schedule: TeamSchedule | null | undefined,
+): { dateKey: string; day: DaySchedule }[] {
+  const map = schedule?.date_overrides ?? {};
+  return Object.keys(map)
+    .sort()
+    .map((dateKey) => ({ dateKey, day: map[dateKey] }));
 }
