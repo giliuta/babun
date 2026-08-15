@@ -34,6 +34,7 @@ import {
   effectiveWorkHours,
   hourLabel,
 } from "@/features/calendar/setting-options";
+import { BreaksSection } from "@/features/calendar/BreaksSection";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 
 // Редактор ОСОБОГО ДНЯ — графика одной конкретной даты: смена короче,
@@ -192,6 +193,15 @@ export default function SpecialDayEditorScreen() {
               : "В эту дату календарь выходной: сетка без рабочей полосы. Записать клиента всё равно можно."
             : "Пока дата живёт по недельному графику. Поменяйте часы или выключите день — появится особый день."}
         </SectionFooter>
+
+        {day.is_working ? (
+          <BreaksSection
+            dayStart={day.start}
+            dayEnd={day.end}
+            breaks={day.breaks}
+            onChange={(next) => patch({ breaks: next })}
+          />
+        ) : null}
 
         {override ? (
           <>

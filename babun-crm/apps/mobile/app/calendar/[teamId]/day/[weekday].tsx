@@ -27,6 +27,7 @@ import {
   effectiveWorkHours,
   hourLabel,
 } from "@/features/calendar/setting-options";
+import { BreaksSection } from "@/features/calendar/BreaksSection";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 
 // Редактор одного дня недели. Минуты здесь реальны (смена до 15:30), поэтому
@@ -144,6 +145,15 @@ export default function WeekdayEditorScreen() {
             ? "Вне этих часов сетка серая. Записи ставить можно — приложение просто предупредит."
             : "В выходной сетка без рабочей полосы. Записать клиента всё равно можно."}
         </SectionFooter>
+
+        {day.is_working ? (
+          <BreaksSection
+            dayStart={day.start}
+            dayEnd={day.end}
+            breaks={day.breaks}
+            onChange={(next) => commit(withDay(base, weekday, { breaks: next }))}
+          />
+        ) : null}
 
         {day.is_working ? (
           <>
