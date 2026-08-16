@@ -35,32 +35,55 @@ function apptBounds(appts: readonly Appointment[]): [number, number] | null {
   return lo === Infinity ? null : [lo, hi];
 }
 
+/** Пара «весь день» (0–24) — кодовое «Автоматически»: окно выводится.
+ *  Отдельного null в колонках нет (start/end_hour NOT NULL), а окно на все
+ *  сутки и так ничего не ограничивает — сентинел совпадает со смыслом. */
+export function isAutoWindow(w: { start: number; end: number } | undefined): boolean {
+  return !w || (w.start <= 0 && w.end >= 24);
+}
+
 /**
  * Окно для набора видимых дней.
  * @param bands действующие рабочие полосы этих дней (null = выходной)
  * @param fallback общие рабочие часы — когда у команды нет своего графика
  *                 (у половины живых команд строки расписания нет вовсе)
+ * @param explicit «Часы календаря» (владелец 2026-08-16: «должно быть два —
+ *                 часы календаря и рабочие часы»). Заданная пара становится
+ *                 БАЗОЙ рельса вместо вывода из полос; записи по-прежнему
+ *                 раздвигают окно — «запись вне окна не потеряется» остаётся
+ *                 правдой при любой настройке. Пара 0–24 = «Автоматически».
  */
 export function deriveWindow(
   bands: readonly (WorkBand | null | undefined)[],
   fallback: { start: number; end: number },
   appts: readonly Appointment[],
+  explicit?: { start: number; end: number },
 ): { startHour: number; endHour: number } {
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const b of bands) {
-    if (!b) continue; // выходной / нет графика — молчит, решает fallback ниже
-    lo = Math.min(lo, Math.floor(b.startMin / 60));
-    hi = Math.max(hi, Math.ceil(b.endMin / 60));
-  }
-  // Все дни выходные или графика нет — рельс всё равно должен быть осмысленным.
-  if (lo === Infinity) {
-    lo = fallback.start;
-    hi = fallback.end;
-  }
+  let lo: number;
+  let hi: number;
 
-  lo -= PAD_HOURS;
-  hi += PAD_HOURS;
+  if (explicit && !isAutoWindow(explicit)) {
+    // Явное окно берётся как есть, без ±1: человек назвал границы сам,
+    // и «показывать с 08:00» не должно тихо превращаться в 07:00.
+    lo = explicit.start;
+    hi = explicit.end;
+  } else {
+    lo = Infinity;
+    hi = -Infinity;
+    for (const b of bands) {
+      if (!b) continue; // выходной / нет графика — молчит, решает fallback ниже
+      lo = Math.min(lo, Math.floor(b.startMin / 60));
+      hi = Math.max(hi, Math.ceil(b.endMin / 60));
+    }
+    // Все дни выходные или графика нет — рельс всё равно должен быть осмысленным.
+    if (lo === Infinity) {
+      lo = fallback.start;
+      hi = fallback.end;
+    }
+
+    lo -= PAD_HOURS;
+    hi += PAD_HOURS;
+  }
 
   const bounds = apptBounds(appts);
   if (bounds) {
