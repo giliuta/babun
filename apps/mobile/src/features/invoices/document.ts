@@ -2,6 +2,7 @@ import type { Client } from "@babun/shared/local/clients";
 import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
 import {
   invoiceDisplayStatus,
+  invoiceLineTotal,
   type InvoiceLedgerWithLines,
   type InvoicePaymentLedger,
   type InvoiceSettlement,
@@ -274,8 +275,11 @@ function draftDocument({
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
       unitPrice: formatInvoiceMoney(line.unitPrice, draft.currency, dict.locale),
+      // ОДИН СЧЁТ НА ВЕСЬ ПРОДУКТ: своё `round2(qty * price)` в double
+      // печатало в строке 3,01 там, где итог документа (и сервер) говорят
+      // 3,02 — на одном экране два разных числа за одну и ту же позицию.
       total: formatInvoiceMoney(
-        round2(line.qty * line.unitPrice),
+        invoiceLineTotal(line.qty, line.unitPrice),
         draft.currency,
         dict.locale,
       ),
@@ -375,10 +379,6 @@ function joinParts(...values: (string | null | undefined)[]): string {
 
 function clean(value: string | null | undefined): string {
   return value?.trim() ?? "";
-}
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 /** «4 м» вместо голого «4» (2026-08-25). Колонка «Кол-во» печатала число без

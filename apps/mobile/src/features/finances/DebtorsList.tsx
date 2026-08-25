@@ -1,6 +1,5 @@
 import { useMemo, type ReactElement } from "react";
 import {
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -23,6 +22,7 @@ import { useThemeColors } from "@/theme/colors";
 import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
 import { humanDay } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
+import { notify } from "@/lib/notify";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -153,7 +153,7 @@ export function DebtorsList({
     // Без catch тап молчал бы на устройстве, где Сообщений нет (iPad):
     // openURL реджектится, и человек не понимает, нажалась ли кнопка.
     Linking.openURL(`sms:${digits}${sep}body=${body}`).catch(() =>
-      Alert.alert(
+      notify(
         "Не удалось открыть Сообщения",
         "На этом устройстве нельзя отправить SMS.",
       ),

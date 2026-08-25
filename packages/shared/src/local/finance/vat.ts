@@ -119,21 +119,101 @@ export function effectiveVatSettings(
   };
 }
 
+// ─── ДЕНЬГИ СЧИТАЮТСЯ В ЦЕЛЫХ ЦЕНТАХ ────────────────────────────────────
+//
+// Сервер считает НДС на `numeric` — это точная десятичная арифметика с
+// округлением ПОЛОВИНЫ ОТ НУЛЯ. Клиент считал те же формулы в double, и на
+// ровной половине цента они расходились: 12,81 € при 20 % «включено» дают
+// ровно 2,135 — сервер пишет 2,14, а `round2((12.81 * 20) / 120)` возвращает
+// 2,13, потому что произведение в double уже 2,1349999999999998. Перебор
+// 1…20000 центов на ставках 19/20/24 давал 493 таких точки в обоих режимах.
+// Каждая из них — упавшее контрольное чтение ПОСЛЕ создания инвойса: документ
+// есть, номер израсходован, человек видит ошибку выставления.
+//
+// Поэтому здесь нет float-арифметики вовсе: сумма переводится в целые центы,
+// ставка — в сотые доли процента, умножение и деление идут на BigInt, а
+// округление стоит РОВНО там же, где round(..., 2) на сервере.
+
+/** Сумма → целые центы. Половина цента уходит ОТ НУЛЯ, как round() в
+ *  Postgres. Допуск берётся ОТ ВЕЛИЧИНЫ, а не постоянный: 0,145 живёт в
+ *  double как 14,499999999999998 цента, а 8,075 — как 807,4999999999999, и
+ *  пыль растёт вместе с числом. Без поправки обе половины уехали бы вниз
+ *  мимо сервера. */
+export function moneyToCents(value: number): bigint {
+  if (!Number.isFinite(value)) return 0n;
+  const scaled = value * 100;
+  const magnitude = Math.abs(scaled);
+  const rounded = Math.round(magnitude + Number.EPSILON * magnitude);
+  return BigInt(scaled < 0 ? -rounded : rounded);
+}
+
+/** Центы → сумма. Обратный ход к `moneyToCents`, единственный. */
+export function centsToMoney(cents: bigint): number {
+  return Number(cents) / 100;
+}
+
+/** Ставка в сотых долях процента: 19 → 1900. Сервер требует не больше двух
+ *  знаков (`round(p_vat_percent, 2) is distinct from p_vat_percent`), так что
+ *  целое здесь — не потеря точности, а то же самое число. */
+function rateToHundredths(rate: number): bigint {
+  if (!Number.isFinite(rate) || rate <= 0) return 0n;
+  return BigInt(Math.round(rate * 100));
+}
+
+/**
+ * Деление целых с округлением ПОЛОВИНЫ ОТ НУЛЯ — правило `round()` в Postgres.
+ * Знак сохраняется: возврат уносит и налог, и сервер округляет −2,135 в −2,14.
+ */
+export function divideRoundHalfAwayFromZero(
+  numerator: bigint,
+  denominator: bigint,
+): bigint {
+  if (denominator <= 0n) return 0n;
+  const negative = numerator < 0n;
+  const magnitude = negative ? -numerator : numerator;
+  const quotient = (magnitude * 2n + denominator) / (denominator * 2n);
+  return negative ? -quotient : quotient;
+}
+
+/** Налог ВНУТРИ валовой суммы, в центах. Зеркало серверного
+ *  `round(amount * rate / (100 + rate), 2)` (триггер `fill_transaction_vat`)
+ *  и равного ему `round(base - base / (1 + rate / 100), 2)` из `issue_invoice`. */
+export function vatCentsFromGross(grossCents: bigint, rate: number): bigint {
+  const rateHundredths = rateToHundredths(rate);
+  if (rateHundredths <= 0n) return 0n;
+  return divideRoundHalfAwayFromZero(
+    grossCents * rateHundredths,
+    10_000n + rateHundredths,
+  );
+}
+
+/** Налог СВЕРХУ цены без налога, в центах. Зеркало серверного
+ *  `round(base_total * vat_rate / 100, 2)`. */
+export function vatCentsOnNet(netCents: bigint, rate: number): bigint {
+  const rateHundredths = rateToHundredths(rate);
+  if (rateHundredths <= 0n) return 0n;
+  return divideRoundHalfAwayFromZero(netCents * rateHundredths, 10_000n);
+}
+
 /** Налог ВНУТРИ валовой суммы: 480 при ставке 20 → 80. */
 export function vatFromGross(gross: number, rate: number): number {
   if (!(rate > 0)) return 0;
-  return round2((gross * rate) / (100 + rate));
+  return centsToMoney(vatCentsFromGross(moneyToCents(gross), rate));
 }
 
-/** Валовая сумма из цены БЕЗ налога: 400 при ставке 20 → 480. */
+/** Валовая сумма из цены БЕЗ налога: 400 при ставке 20 → 480.
+ *  Налог считается отдельным слагаемым, а не множителем (1 + rate/100), —
+ *  тогда «нетто + налог» и напечатанный налог сходятся по построению. */
 export function grossFromNet(net: number, rate: number): number {
   if (!(rate > 0)) return net;
-  return round2(net * (1 + rate / 100));
+  const netCents = moneyToCents(net);
+  return centsToMoney(netCents + vatCentsOnNet(netCents, rate));
 }
 
 /** Сколько из валовой суммы останется компании: 480 при ставке 20 → 400. */
 export function netFromGross(gross: number, rate: number): number {
-  return round2(gross - vatFromGross(gross, rate));
+  const grossCents = moneyToCents(gross);
+  return centsToMoney(grossCents - vatCentsFromGross(grossCents, rate));
 }
 
 /** Валовая цена для прайса: при «плюс НДС» налог добавляется сверху, при

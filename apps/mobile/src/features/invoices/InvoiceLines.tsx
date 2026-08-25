@@ -9,6 +9,7 @@ import { Field, FieldLabel } from "@/components/ui/Field";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { invoiceLineTotal } from "@babun/shared/local/finance/invoice-ledger";
 import { durationLabel } from "@/features/services/format";
 import type { Service } from "@/features/services/queries";
 import { formatInvoiceMoney, parseDecimal, parseMoneyAmount } from "./format";
@@ -126,7 +127,7 @@ export function InvoiceLines({
                     color: t.ink,
                   }}
                 >
-                  {formatInvoiceMoney(qty * price, currency)}
+                  {formatInvoiceMoney(invoiceLineTotal(qty, price), currency)}
                 </Text>
               </Pressable>
             </SwipeRow>
@@ -316,7 +317,7 @@ function LineSheet({
               className="tabular-nums"
               style={{ fontSize: 17, fontWeight: "700", color: t.ink }}
             >
-              {formatInvoiceMoney(qty * price, currency)}
+              {formatInvoiceMoney(invoiceLineTotal(qty, price), currency)}
             </Text>
           </View>
 

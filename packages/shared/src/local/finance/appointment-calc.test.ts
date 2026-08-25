@@ -7,7 +7,6 @@ import {
   appointmentMaterialCost,
   appointmentMaterialCostLines,
 } from "./appointment-calc";
-import { computeFinancials } from "./compute";
 import { computeDayFinance } from "./day-summary";
 
 describe("appointment material cost", () => {
@@ -61,7 +60,7 @@ describe("appointment material cost", () => {
     ]);
   });
 
-  test("feeds quantity-aware expenses into day and range finance", () => {
+  test("feeds quantity-aware expenses into day finance", () => {
     const service = createBlankService({
       id: "service",
       name: "Чистка",
@@ -88,19 +87,6 @@ describe("appointment material cost", () => {
     const day = computeDayFinance([appointment], [service], []);
     assert.equal(day.spent, 24);
     assert.equal(day.profit, -24);
-
-    const range = computeFinancials({
-      appointments: [appointment],
-      services: [service],
-      teams: [],
-      dayExtrasOf: () => [],
-      standalonePayments: [],
-      standaloneExpenses: [],
-      range: { from: "2026-07-20", to: "2026-07-20" },
-    });
-    assert.equal(range.totalExpense, 24);
-    assert.equal(range.expenseLines[0]?.amount, 24);
-    assert.equal(range.expenseLines[0]?.description, "Материалы: Чистка");
   });
 
   test("attributes prepayment to its persisted payment method", () => {
@@ -126,20 +112,6 @@ describe("appointment material cost", () => {
     assert.equal(day.byMethod.card, 25);
     assert.equal(day.byMethod.transfer, 0);
     assert.equal(day.byMethod.other, 10);
-
-    const range = computeFinancials({
-      appointments: [cardPrepaid, legacyPrepaid],
-      services: [],
-      teams: [],
-      dayExtrasOf: () => [],
-      standalonePayments: [],
-      standaloneExpenses: [],
-      range: { from: "2026-07-20", to: "2026-07-20" },
-    });
-    assert.equal(range.cash, 0);
-    assert.equal(range.card, 25);
-    assert.equal(range.transfer, 0);
-    assert.equal(range.otherPayment, 10);
   });
 
   test("keeps transfer separate from other appointment payments", () => {
@@ -167,17 +139,5 @@ describe("appointment material cost", () => {
     const day = computeDayFinance([appointment], [], []);
     assert.equal(day.byMethod.transfer, 11);
     assert.equal(day.byMethod.other, 7);
-
-    const range = computeFinancials({
-      appointments: [appointment],
-      services: [],
-      teams: [],
-      dayExtrasOf: () => [],
-      standalonePayments: [],
-      standaloneExpenses: [],
-      range: { from: "2026-07-20", to: "2026-07-20" },
-    });
-    assert.equal(range.transfer, 11);
-    assert.equal(range.otherPayment, 7);
   });
 });

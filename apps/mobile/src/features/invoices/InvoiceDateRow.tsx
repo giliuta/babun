@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { todayYmd } from "./format";
@@ -12,7 +12,8 @@ import { todayYmd } from "./format";
 // тап → календарь-поповер → готово. Теперь то же самое и в документах —
 // одно движение на весь продукт.
 //
-// ⚠️ ПИКЕР ОБЯЗАН РОЖДАТЬСЯ СО ЗНАЧЕНИЕМ. Компактный `DateTimePicker`,
+// ⚠️ ПИКЕР ОБЯЗАН РОЖДАТЬСЯ СО ЗНАЧЕНИЕМ. Компактный `DateTimeInput` (на
+// нативе это тот же самый компонент пакета, без обёртки),
 // смонтированный до того, как дата известна, НАВСЕГДА запоминает «1 янв.
 // 1970» — Fast Refresh это не чинит. Поэтому пустой необязательный срок
 // рисуется НЕ пикером, а кнопкой «Поставить срок»: пикер появляется уже с
@@ -42,7 +43,7 @@ export function InvoiceDateRow({
       </Text>
       {value ? (
         <View className="flex-row items-center" style={{ gap: 4 }}>
-          <DateTimePicker
+          <DateTimeInput
             value={parseYMD(value)}
             minimumDate={minimum ? parseYMD(minimum) : undefined}
             mode="date"

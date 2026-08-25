@@ -167,3 +167,26 @@ export function globalDiscountAmount(
   const after = applyDiscount(sub, globalDiscount);
   return round2(sub - after);
 }
+
+/** ДОЛГ ЗАПИСИ — В ЦЕЛЫХ ЦЕНТАХ.
+ *
+ *  `total − paid` во float даёт двоичный хвост ВНИЗ (10 − 1.12 =
+ *  8.879999999999999). Шит записи предзаполняет поле оплаты долгом,
+ *  округлённым до копеек (8.88), и тут же сравнивает его с неокруглённым
+ *  долгом: собственная подстановка «вся сумма» оказывалась БОЛЬШЕ долга,
+ *  кнопка «Сохранить» гасла, и принятую оплату нельзя было записать вообще.
+ *  Тот же дефект уже чинили в возвратах (features/finances/refund.ts) — там
+ *  расчёт живёт под тестом, поэтому и здесь он живёт здесь, а не в JSX.
+ *
+ *  «Возвращено» — терминальное состояние старого платёжного цикла: денег к
+ *  зачёту и долга нет, повторное обслуживание начинается новой заявкой.
+ */
+export function appointmentDebtCents(
+  total: number,
+  paid: number,
+  paymentStatus?: string | null,
+): number {
+  if (paymentStatus === "refunded") return 0;
+  if (!Number.isFinite(total) || !Number.isFinite(paid)) return 0;
+  return Math.max(0, Math.round(total * 100) - Math.round(paid * 100));
+}

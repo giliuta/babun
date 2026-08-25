@@ -291,7 +291,6 @@ function useSeedAccounts(
   });
 }
 
-
 /** «Наличные» и «Карта» новой команде. Аргумент мутации — id команды. */
 export function useCreateTeamAccounts() {
   return useSeedAccounts(TEAM_ACCOUNT_SEEDS, "team");

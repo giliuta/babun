@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { Camera, FileText, FileUp, Images, Paperclip, X } from "lucide-react-native";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { useTenantId } from "@/lib/tenant";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   deleteOperationReceipt,
@@ -64,7 +65,7 @@ export function OperationReceiptRow({
       if (from === "camera") {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert(
+          notify(
             "Нет доступа к камере",
             "Разрешите камеру: Настройки → Babun → Камера.",
           );
@@ -117,7 +118,7 @@ export function OperationReceiptRow({
       uploadedHere.current.add(path);
       onPick(path);
     } catch (e) {
-      Alert.alert("Не удалось приложить документ", (e as Error).message);
+      notify("Не удалось приложить документ", (e as Error).message);
     } finally {
       setBusy(false);
     }

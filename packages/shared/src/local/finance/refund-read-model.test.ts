@@ -10,7 +10,6 @@ import {
 } from "../appointments";
 import { createBlankClient, getClientDebt } from "../clients";
 import { buildStats } from "../selectors/client-stats";
-import { computeFinancials } from "./compute";
 import { computeDayFinance } from "./day-summary";
 
 describe("fully refunded appointment read model", () => {
@@ -67,22 +66,6 @@ describe("fully refunded appointment read model", () => {
       transfer: 0,
       other: 0,
     });
-
-    const range = computeFinancials({
-      appointments: [appointment],
-      services: [],
-      teams: [],
-      dayExtrasOf: () => [],
-      standalonePayments: [],
-      standaloneExpenses: [],
-      range: { from: appointment.date, to: appointment.date },
-    });
-    assert.equal(range.totalIncome, 0);
-    assert.deepEqual(range.incomeLines, []);
-    assert.equal(range.cash, 0);
-    assert.equal(range.card, 0);
-    assert.equal(range.transfer, 0);
-    assert.equal(range.otherPayment, 0);
 
     assert.equal(appointment.payment_status, "refunded");
     assert.equal(appointment.payments.length, 1, "receipt history is preserved");

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { Check } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
@@ -241,7 +241,7 @@ export function PeriodWheelsModal({
 
         {/* one wheel edits the active endpoint */}
         <View className="items-center">
-          <DateTimePicker
+          <DateTimeInput
             themeVariant="light"
             value={parseYMD(side === "from" ? from : to)}
             mode="date"

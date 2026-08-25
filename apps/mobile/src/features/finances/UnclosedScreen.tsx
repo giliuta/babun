@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   Pressable,
   Text,
@@ -27,6 +26,8 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
+import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, humanDay } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
@@ -112,7 +113,7 @@ export function UnclosedScreen() {
           haptics.success();
           toast("Оплата отмечена");
         },
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
@@ -124,26 +125,27 @@ export function UnclosedScreen() {
         onSuccess: () => {
           const debt = getDebtAmount(apt);
           if (debt > 0) {
-            Alert.alert(
+            void chooseOption(
               "Закрыто как «Выполнено»",
-              `Клиент оплатил ${formatEUR(debt)}?`,
               [
-                {
-                  text: "Оплачено наличными",
-                  onPress: () => markPaid(apt, debt, "cash"),
-                },
-                {
-                  text: "Оплачено картой",
-                  onPress: () => markPaid(apt, debt, "card"),
-                },
-                { text: "Долг — позже", style: "cancel" },
+                { label: "Оплачено наличными" },
+                { label: "Оплачено картой" },
               ],
-            );
+              {
+                // «Отмена» листа и есть бывшая кнопка «Долг — позже»: она
+                // ничего не записывала, долг просто оставался. Говорим это
+                // словами, раз подпись у отмены теперь общая.
+                message: `Клиент оплатил ${formatEUR(debt)}? Если нет — закройте лист, долг останется.`,
+              },
+            ).then((index) => {
+              if (index === null) return;
+              markPaid(apt, debt, index === 0 ? "cash" : "card");
+            });
           } else {
             toast("Закрыто как «Выполнено»");
           }
         },
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
@@ -157,7 +159,7 @@ export function UnclosedScreen() {
           toast("Визит отменён");
           setCancelTarget(null);
         },
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };

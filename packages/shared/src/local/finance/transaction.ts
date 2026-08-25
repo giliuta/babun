@@ -95,10 +95,6 @@ export function signedAmount(t: FinanceTransaction): number {
   return t.amount;
 }
 
-export function isIncomeLike(t: FinanceTransaction): boolean {
-  return t.type === "income" || t.type === "refund";
-}
-
 export function isExpense(t: FinanceTransaction): boolean {
   return t.type === "expense";
 }

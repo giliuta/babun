@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { ChevronRight } from "lucide-react-native";
 import type {
   FinanceTransaction,
@@ -37,6 +36,8 @@ import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatEURExact as formatEUR,
@@ -409,33 +410,33 @@ export function OperationSheet({
     // Сеть проверяется В МОМЕНТ нажатия, а не только реактивным `online`:
     // между последним кадром и тапом связь могла пропасть.
     if (!isOnline()) {
-      Alert.alert("Нет сети", OFFLINE_OPERATION);
+      notify("Нет сети", OFFLINE_OPERATION);
       return;
     }
     if (txAccountClosed) {
-      Alert.alert("Счёт закрыт", CLOSED_ACCOUNT_REASON);
+      notify("Счёт закрыт", CLOSED_ACCOUNT_REASON);
       return;
     }
     if (amountCents == null) {
-      Alert.alert(
+      notify(
         "Проверьте сумму",
         "Введите сумму больше нуля и не больше двух знаков после запятой.",
       );
       return;
     }
     if (belowRefunded) {
-      Alert.alert(
+      notify(
         "Возвращено больше",
         `По этому доходу уже возвращено ${formatEUR(refundedTotal)}. Сумма не может стать меньше возвращённого — сначала удалите возврат.`,
       );
       return;
     }
     if (!teamId || !accountId) {
-      Alert.alert("Не выбран счёт", "Операции нужны команда и её счёт. Команда выбирается чипом на экране финансов.");
+      notify("Не выбран счёт", "Операции нужны команда и её счёт. Команда выбирается чипом на экране финансов.");
       return;
     }
     if (accountMismatch || !payment) {
-      Alert.alert(
+      notify(
         "Счёт не подходит",
         "Сохранённый счёт относится к другой команде или способу оплаты. Выберите доступный счёт заново.",
       );
@@ -468,7 +469,7 @@ export function OperationSheet({
       toast(isEdit ? "Сохранено" : "Операция добавлена");
       onClose();
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     } finally {
       savingRef.current = false;
     }
@@ -478,25 +479,22 @@ export function OperationSheet({
     if (!transaction) return;
     // Тело — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
     // account-alerts): человек решает по тому, что произойдёт с деньгами.
-    Alert.alert(
+    confirmThen(
       "Удалить операцию?",
-      "Операция исчезнет из ленты, остаток счёта пересчитается.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await del.mutateAsync(transaction.id);
-              haptics.success();
-              onClose();
-            } catch (e) {
-              Alert.alert("Ошибка", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await del.mutateAsync(transaction.id);
+          haptics.success();
+          onClose();
+        } catch (e) {
+          notify("Ошибка", (e as Error).message);
+        }
+      },
     );
   };
 
@@ -652,7 +650,7 @@ export function OperationSheet({
           <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
           <View className="flex-row items-center justify-between px-4 py-2.5">
             <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
-            <DateTimePicker
+            <DateTimeInput
               value={parseYMD(date)}
               maximumDate={parseYMD(businessToday)}
               mode="date"

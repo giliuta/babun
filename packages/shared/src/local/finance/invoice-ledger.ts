@@ -1,9 +1,17 @@
-// DB-backed invoice types (the new server-issued, atomically-numbered
-// invoice flow). Distinct from the existing local/finance/invoice.ts
-// which is the legacy localStorage-era jsPDF generator — these are the
-// authoritative records that live in the public.invoices table.
+// DB-backed invoice types: the server-issued, atomically-numbered
+// invoice flow. These are the authoritative records that live in the
+// public.invoices table.
 
-import { netFromGross, round2, vatFromGross } from "./vat";
+import {
+  centsToMoney,
+  divideRoundHalfAwayFromZero,
+  moneyToCents,
+  netFromGross,
+  round2,
+  vatCentsFromGross,
+  vatCentsOnNet,
+  vatFromGross,
+} from "./vat";
 
 /** `cancelled` — сторнирован кредит-нотой (2026-08-09); `void` остаётся
  *  легаси-статусом «внутренне аннулирован» и не переиспользуется:
@@ -174,36 +182,106 @@ export function splitVatInclusive(
 }
 
 /**
- * Canonical invoice arithmetic. Values stay in decimal euros because the
- * existing database schema is numeric(12,2); every boundary is rounded to
- * cents so UI previews and persisted totals cannot drift by floating-point
- * dust. Invalid/negative inputs are rejected by the repository before this
- * helper is called.
+ * ИТОГ ПОЗИЦИИ — ОДНА ФУНКЦИЯ НА ВЕСЬ ПРОДУКТ.
+ *
+ * Её зовут ВСЕ, кто показывает или пишет сумму строки: карточка позиции,
+ * лист позиции, бумага документа, сборка строк для записи и контрольное
+ * чтение после выставления. Пока их было двое — `calculateInvoiceTotals`
+ * считала одно, а строка печаталась через `qty * price` в double, — человек
+ * видел в позиции 3,01, а в итоге 3,02.
+ *
+ * СЧИТАЕМ ТАК ЖЕ, КАК СЕРВЕР. SQL `issue_invoice` и `update_invoice_draft`
+ * пишут `round(qty * unit_price, 2)` на `numeric`: точное умножение и
+ * округление половины ОТ НУЛЯ. `round2(qty * unit_price)` в double на
+ * 1,5 × 2,01 даёт 3.0149999999999997 → 3,01, а сервер — ровные 3,015 → 3,02.
+ * Инвойс к этому моменту УЖЕ создан и номер израсходован, а контрольное
+ * чтение падает: человек видит ошибку выставления вместо счёта. Дробные
+ * количества стали штатными вместе с единицей измерения («4 м», «2,5 ч»),
+ * так что пар с расхождением сотни: 1,5×2,01; 1,5×2,07; 1,5×2,15; 1,5×2,51…
+ *
+ * Поэтому умножаем ЦЕЛЫМИ на BigInt: количество — до трёх знаков, цена — до
+ * двух (те же пределы, что стережёт сервер), произведение живёт в тысячных
+ * долях цента. Переполнения здесь нет по построению — потому и нет
+ * запасного float-пути, который молча возвращал бы прежний неверный цент.
+ */
+function invoiceLineTotalCents(qty: number, unitPrice: number): bigint {
+  if (!Number.isFinite(qty) || !Number.isFinite(unitPrice)) return 0n;
+  const qtyThousandths = BigInt(invoiceQuantityToThousandths(qty));
+  const priceCents = moneyToCents(unitPrice);
+  return divideRoundHalfAwayFromZero(qtyThousandths * priceCents, 1000n);
+}
+
+/** Количество → тысячные доли, ЕДИНСТВЕННЫЙ перевод на продукт. Сервер
+ *  требует не больше трёх знаков (`round(qty, 3) is distinct from qty`), и
+ *  тем же числом валидатор нормализует количество перед отправкой: считай
+ *  умножение по одному правилу, а отправляй по другому — и они разойдутся. */
+export function invoiceQuantityToThousandths(qty: number): number {
+  if (!Number.isFinite(qty)) return 0;
+  return Math.round(qty * 1000);
+}
+
+export function invoiceLineTotal(qty: number, unitPrice: number): number {
+  return centsToMoney(invoiceLineTotalCents(qty, unitPrice));
+}
+
+/**
+ * Canonical invoice arithmetic — зеркало серверного расчёта из `issue_invoice`
+ * и `update_invoice_draft`, бит в бит:
+ *   base := сумма уже округлённых до цента строк;
+ *   inclusive → vat := round(base − base / (1 + rate/100), 2), net := base − vat;
+ *   exclusive → vat := round(base * rate / 100, 2), total := base + vat.
+ * Всё это считается на целых центах: в double те же формулы расходились с
+ * сервером на ровной половине цента (12,81 € при 20 % «включено»), и
+ * контрольное чтение роняло уже выставленный документ.
  */
 export function calculateInvoiceTotals(
   lines: readonly InvoiceLineDraft[],
   vatMode: InvoiceVatMode,
   vatPercent: number,
 ): InvoiceTotals {
-  const base = round2(
-    lines.reduce((sum, line) => sum + round2(line.qty * line.unit_price), 0),
+  const baseCents = lines.reduce(
+    (sum, line) => sum + invoiceLineTotalCents(line.qty, line.unit_price),
+    0n,
   );
 
   if (vatMode === "off" || vatPercent <= 0) {
+    const base = centsToMoney(baseCents);
     return { subtotal_net: base, vat_amount: 0, total: base };
   }
 
   if (vatMode === "inclusive") {
-    const { net, vat } = splitVatInclusive(base, vatPercent);
-    return { subtotal_net: net, vat_amount: vat, total: base };
+    const vatCents = vatCentsFromGross(baseCents, vatPercent);
+    return {
+      subtotal_net: centsToMoney(baseCents - vatCents),
+      vat_amount: centsToMoney(vatCents),
+      total: centsToMoney(baseCents),
+    };
   }
 
-  const vat = round2(base * (vatPercent / 100));
+  const vatCents = vatCentsOnNet(baseCents, vatPercent);
   return {
-    subtotal_net: base,
-    vat_amount: vat,
-    total: round2(base + vat),
+    subtotal_net: centsToMoney(baseCents),
+    vat_amount: centsToMoney(vatCents),
+    total: centsToMoney(baseCents + vatCents),
   };
+}
+
+/**
+ * ВИДЕН ЛИ ДОКУМЕНТ В СРЕЗЕ КОМАНДЫ. Инвойс знает свою команду сам, а бумага
+ * БЕЗ хозяина — общая: её видно в любом срезе (то же правило, что у чека без
+ * команды).
+ *
+ * Правило живёт одной функцией, потому что витрины уже расходились: список
+ * документов пропускал бесхозный инвойс, а плитка «Документы» отсекала его
+ * строгим `brigade_id !== scope`. Работа при этом вычёркивалась из «Долгов»
+ * как «уже выставленная» — и дебиторка пропадала из ОБЕИХ цифр разом.
+ */
+export function invoiceInTeamScope(
+  invoice: Pick<InvoiceLedger, "brigade_id">,
+  teamId: string | null | undefined,
+): boolean {
+  if (!teamId || !invoice.brigade_id) return true;
+  return invoice.brigade_id === teamId;
 }
 
 /** `overdue` is a view state: the database keeps the legal status `issued`. */

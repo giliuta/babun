@@ -1,5 +1,6 @@
 import { Pressable, Text, TextInput, View } from "react-native";
 import { moneySymbol } from "@babun/shared/common/utils/money";
+import { invoiceLineTotal } from "@babun/shared/local/finance/invoice-ledger";
 import { useThemeColors } from "@/theme/colors";
 import {
   formatInvoiceMoney,
@@ -137,7 +138,7 @@ export function InvoiceLineEditor({
           // Только стилем: `tabular-nums` в className в этом стеке — пустышка.
           style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
         >
-          {formatInvoiceMoney(qty * price, currency)}
+          {formatInvoiceMoney(invoiceLineTotal(qty, price), currency)}
         </Text>
         {canRemove ? (
           <Pressable

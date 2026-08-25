@@ -15,6 +15,7 @@ import type {
 } from "../../local/finance/invoice-ledger";
 import {
   calculateInvoiceTotals,
+  invoiceLineTotal,
   parseInvoiceClientSnapshot,
   parseInvoiceSellerSnapshot,
 } from "../../local/finance/invoice-ledger";
@@ -344,13 +345,24 @@ function assertInvoiceControlRead(
     saved.lines.length === lines.length &&
     saved.lines.every((line, index) => {
       const expectedLine = lines[index];
+      // ОПИСАНИЕ И ЕДИНИЦА СВЕРЯЮТСЯ НАРАВНЕ С ДЕНЬГАМИ. Сторож дописан
+      // после инцидента, в котором сервер молча терял именно эти два поля,
+      // и без них он по построению не мог поймать его повторение: суммы
+      // сходятся, а к клиенту уезжает счёт без текста позиций.
       return line.position === index &&
         line.title === expectedLine.title &&
+        line.description === (expectedLine.description ?? null) &&
+        line.unit === (expectedLine.unit ?? null) &&
         Math.abs(line.qty - expectedLine.qty) < 0.0005 &&
         moneyEqual(line.unit_price, expectedLine.unit_price) &&
+        // СТОРОЖ СЧИТАЕТ ТЕМ ЖЕ СПОСОБОМ, ЧТО И СЕРВЕР. Своё
+        // `qty * unit_price` в double расходилось с `round(qty * unit_price, 2)`
+        // на numeric ровно на цент (1,5 × €2,01 — 3,01 против 3,02), и сторож
+        // ронял ПРАВИЛЬНО записанный документ: инвойс создан, номер
+        // израсходован, а человек видит ошибку выставления.
         moneyEqual(
           line.total,
-          roundInvoiceMoney(expectedLine.qty * expectedLine.unit_price),
+          invoiceLineTotal(expectedLine.qty, expectedLine.unit_price),
         );
     });
 

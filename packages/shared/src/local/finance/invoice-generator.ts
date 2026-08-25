@@ -1,5 +1,6 @@
 import type { Appointment } from "../appointments";
 import { lineTotal, subtotal } from "./appointment-calc";
+import { invoiceLineTotal } from "./invoice-ledger";
 
 // ГЕНЕРАТОР ИНВОЙСА ИЗ ЗАПИСИ.
 //
@@ -139,7 +140,12 @@ function buildLines(
     // и от скидки копятся именно в ней, и документ обязан сойтись с записью.
     const want = last ? round2(total - printed) : round2(lineTotal(service) * factor);
     const unitPrice = round2(want / qty);
-    const actual = round2(qty * unitPrice);
+    // Тем же правилом, что запишет сервер, а не своим умножением в double:
+    // именно по сравнению actual с want решается, выразима ли позиция как
+    // «количество × цена». Разойдись эти два правила — генератор молча решил
+    // бы «выразима», сервер записал бы другой цент, и главный закон
+    // (сумма строк сходится с итогом записи) перестал бы выполняться.
+    const actual = invoiceLineTotal(qty, unitPrice);
     // Цент бывает невыразим в `количество × цена` (100 ÷ 3 = 33,33 даёт 99,99).
     // Тогда позиция сворачивается в одну штуку, а количество уходит в
     // название: сумма остаётся точной, и клиент по-прежнему видит, сколько

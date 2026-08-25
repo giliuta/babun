@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import {
   formatEURExact as formatEUR,
@@ -21,6 +21,8 @@ import { ActionRow, RowGroup } from "@/components/ui/card-rows";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
@@ -229,28 +231,29 @@ export function TransactionPopup({
             message: "Действие нельзя отменить.",
             confirm: "Удалить",
           };
-    Alert.alert(text.title, text.message, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      text.title,
       {
-        text: text.confirm,
-        style: "destructive",
-        onPress: async () => {
-          if (savingRef.current || busy) return;
-          savingRef.current = true;
-          setBusy(true);
-          try {
-            await onDelete(tx);
-            haptics.success();
-            onClose();
-          } catch (e) {
-            Alert.alert("Ошибка", (e as Error).message);
-          } finally {
-            savingRef.current = false;
-            setBusy(false);
-          }
-        },
+        message: text.message,
+        confirmLabel: text.confirm,
+        destructive: true,
       },
-    ]);
+      async () => {
+        if (savingRef.current || busy) return;
+        savingRef.current = true;
+        setBusy(true);
+        try {
+          await onDelete(tx);
+          haptics.success();
+          onClose();
+        } catch (e) {
+          notify("Ошибка", (e as Error).message);
+        } finally {
+          savingRef.current = false;
+          setBusy(false);
+        }
+      },
+    );
   };
 
   const handleRefund = async () => {
@@ -262,7 +265,7 @@ export function TransactionPopup({
       haptics.success();
       onClose();
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     } finally {
       savingRef.current = false;
       setBusy(false);

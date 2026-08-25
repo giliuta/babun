@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
-import type { InvoiceLineDraft } from "../../local/finance/invoice-ledger";
+import {
+  invoiceLineTotal,
+  invoiceQuantityToThousandths,
+  type InvoiceLineDraft,
+} from "../../local/finance/invoice-ledger";
+import { centsToMoney, moneyToCents } from "../../local/finance/vat";
 
 type DbSupabase = SupabaseClient<Database>;
 type LineInsert = Database["public"]["Tables"]["invoice_lines"]["Insert"];
@@ -50,7 +55,7 @@ export function validateInvoiceDraft(draft: {
     const qty = roundInvoiceQuantity(line.qty);
     const unitPrice = roundInvoiceMoney(line.unit_price);
     if (qty <= 0) throw new Error(`Количество слишком маленькое: ${title}`);
-    if (roundInvoiceMoney(qty * unitPrice) > MAX_INVOICE_MONEY) {
+    if (invoiceLineTotal(qty, unitPrice) > MAX_INVOICE_MONEY) {
       throw new Error(`Сумма позиции слишком большая: ${title}`);
     }
     const description = line.description?.trim() || null;
@@ -79,7 +84,10 @@ export function invoiceLineRows(
     qty: line.qty,
     unit: line.unit ?? null,
     unit_price: line.unit_price,
-    total: roundInvoiceMoney(line.qty * line.unit_price),
+    // ТОТ ЖЕ СЧЁТ, ЧТО У ЭКРАНА И У СЕРВЕРА: `qty * unit_price` в double на
+    // дробном количестве промахивается мимо `round(qty * unit_price, 2)` на
+    // numeric ровно на цент (1,5 × 2,01).
+    total: invoiceLineTotal(line.qty, line.unit_price),
   }));
 }
 
@@ -107,12 +115,17 @@ export function assertInvoiceTotal(total: number): void {
   }
 }
 
+/** ОДНО ПРАВИЛО ОКРУГЛЕНИЯ ДЕНЕГ НА ПРОДУКТ: половина уходит ОТ НУЛЯ, как
+ *  `round(..., 2)` на `numeric`. Своя формула здесь роняла ровную половину
+ *  цента вниз и расходилась с тем, что записал сервер. */
 export function roundInvoiceMoney(value: number): number {
-  return Math.round(value * 100) / 100;
+  return centsToMoney(moneyToCents(value));
 }
 
+/** Количество до трёх знаков — ровно так, как его понимает и умножение
+ *  строки, и сервер. */
 function roundInvoiceQuantity(value: number): number {
-  return Math.round(value * 1000) / 1000;
+  return invoiceQuantityToThousandths(value) / 1000;
 }
 
 function assertDate(value: string, field: string): void {

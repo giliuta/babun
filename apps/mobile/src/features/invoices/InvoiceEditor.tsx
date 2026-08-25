@@ -13,6 +13,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { VatSettings } from "@babun/shared/local/finance/vat";
 import {
   calculateInvoiceTotals,
+  invoiceLineTotal,
   type InvoiceLedgerWithLines,
   type InvoiceLineDraft,
   type InvoiceVatMode,
@@ -373,7 +374,12 @@ export function InvoiceEditor({
                   qty: line.qty,
                   unit: line.unit ?? null,
                   unit_price: line.unit_price,
-                  total: Math.round(line.qty * line.unit_price * 100) / 100,
+                  // Через invoiceLineTotal, а не своим умножением: бумага
+                  // выставленного счёта печатает этот total как есть, а строку
+                  // итогов считает calculateInvoiceTotals. Своя формула давала
+                  // на 1,5 × €2,01 позицию 3,01 против подытога 3,02 — два
+                  // разных числа за одну позицию на одном листе.
+                  total: invoiceLineTotal(line.qty, line.unit_price),
                 })),
             },
             tenant,

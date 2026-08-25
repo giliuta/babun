@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { ArrowDown, ChevronDown, ChevronLeft } from "lucide-react-native";
 import {
   formatMoneyForInput,
@@ -374,10 +374,10 @@ export function TransferSheet({
           <StepBack onPress={() => setStep("form")} />
           <View style={{ alignItems: "center" }}>
             {/* ПИКЕР РОЖДАЕТСЯ СО ЗНАЧЕНИЕМ. Смонтированный до того, как дата
-                известна, компактный DateTimePicker навсегда запоминает
+                известна, компактный DateTimeInput навсегда запоминает
                 «1 янв. 1970» — здесь `dateDraft` уже посчитан, а сам шаг
                 существует только когда его открыли. */}
-            <DateTimePicker
+            <DateTimeInput
               value={parseYMD(dateDraft)}
               minimumDate={parseYMD(dateFloor)}
               maximumDate={parseYMD(businessToday)}

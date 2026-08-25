@@ -12,7 +12,10 @@ import {
 } from "@babun/shared/common/utils/plural-ru";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
+import {
+  calculateInvoiceSettlement,
+  invoiceInTeamScope,
+} from "@babun/shared/local/finance/invoice-ledger";
 import { appointmentMaterialCost } from "@babun/shared/local/finance/appointment-calc";
 import {
   getCurrentCyprusTime,
@@ -545,7 +548,12 @@ function FinancesContent() {
       // этого он двоился с «Долгами»: работа возвращается туда (см.
       // invoicedAppointments), а плитка продолжала считать его «ждущим».
       if (invoice.status === "void" || invoice.status === "cancelled") continue;
-      if (scope && invoice.brigade_id !== scope) continue;
+      // Срез команды — тем же правилом, что у списка под плиткой
+      // (collectDocuments): бумага БЕЗ хозяина видна в любом срезе. Строгий
+      // `brigade_id !== scope` прятал бесхозный инвойс из этой цифры, а его
+      // работа уже была вычеркнута из «Долгов» как выставленная, — деньги
+      // пропадали из обеих плиток и оставались только в списке.
+      if (!invoiceInTeamScope(invoice, scope)) continue;
       const settlement = calculateInvoiceSettlement(
         invoice,
         invoicePayments[invoice.id] ?? [],

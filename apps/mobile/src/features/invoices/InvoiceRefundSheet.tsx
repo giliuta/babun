@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { formatMoneyForInput } from "@babun/shared/common/utils/money";
 import { randomUuid } from "@babun/shared/sync";
 import type { InvoicePaymentLedger } from "@babun/shared/local/finance/invoice-ledger";
@@ -237,7 +237,7 @@ export function InvoiceRefundSheet({
               {formatInvoiceDate(occurredOn)}
             </Text>
           </View>
-          <DateTimePicker
+          <DateTimeInput
             value={parseYMD(occurredOn)}
             minimumDate={shown ? parseYMD(shown.occurred_on) : undefined}
             maximumDate={parseYMD(businessToday)}

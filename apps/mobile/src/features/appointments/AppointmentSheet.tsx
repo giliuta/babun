@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -12,9 +11,8 @@ import {
   Text,
   TextInput,
   View,
-  type AlertButton,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import {
   AlertTriangle,
   Check,
@@ -28,8 +26,10 @@ import {
   X,
 } from "lucide-react-native";
 import {
+  appointmentDebtCents,
   appointmentTotal,
   globalDiscountAmount,
+  round2,
   totalDuration,
 } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -56,7 +56,6 @@ import { useRouter, type Href } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { AppointmentDocuments } from "@/features/documents/AppointmentDocuments";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
-import { round2 } from "@babun/shared/local/finance/appointment-calc";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { formatEUR, formatEURExact } from "@babun/shared/common/utils/money";
@@ -99,6 +98,9 @@ import {
 } from "@/features/calendar/mutations";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useAppointments } from "@/features/calendar/queries";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
+import { chooseOption, type Choice } from "@/lib/choose";
 import {
   cancelAppointmentReminders,
   syncEventAppointmentReminders,
@@ -719,22 +721,29 @@ export function AppointmentSheet({
   // Долг = сумма минус уже полученное (аванс + платежи). Питает секцию
   // «Оплата» при статусе «Выполнено» (getPaidAmount — как «Должники»).
   const alreadyPaid = appointment ? getPaidAmount(appointment) : 0;
-  // «Возвращено» — терминальное состояние старого платёжного цикла: деньги
-  // и долг равны нулю; повторное обслуживание начинается новой заявкой.
-  const debt =
-    appointment?.payment_status === "refunded"
-      ? 0
-      : Math.max(0, effectiveTotal - alreadyPaid);
+  // ДОЛГ И ОПЛАТА СРАВНИВАЮТСЯ ТОЛЬКО В ЦЕНТАХ. Раньше долг был разностью
+  // float'ов (10 − 1.12 = 8.879999…), а поле предзаполнялось округлённым
+  // 8,88 — собственная подстановка «вся сумма» оказывалась БОЛЬШЕ долга,
+  // и запись с принятой оплатой было нельзя сохранить.
+  const debtCents = appointmentDebtCents(
+    effectiveTotal,
+    alreadyPaid,
+    appointment?.payment_status,
+  );
+  const debt = debtCents / 100;
   const settlementAmount = parseMoneyInput(paymentAmount);
+  const settlementCents = Math.round(settlementAmount * 100);
+  // Регулярка НАРОЧНО допускает висящий разделитель («12,»): это гейт формы
+  // на промежуточном наборе, а не парсер денег.
   const settlementScaleValid = /^\d+(?:[.,]\d{0,2})?$/.test(
     paymentAmount.trim(),
   );
   const settlementAmountValid =
     payMethod === null ||
     (status === "completed" &&
-      debt > 0 &&
-      settlementAmount > 0 &&
-      settlementAmount <= debt &&
+      debtCents > 0 &&
+      settlementCents > 0 &&
+      settlementCents <= debtCents &&
       settlementScaleValid);
 
   // Selecting a tender means «pay the full debt» by default. If total/debt
@@ -965,7 +974,7 @@ export function AppointmentSheet({
       appointment?.payment_status === "refunded" &&
       next !== appointment.status
     ) {
-      Alert.alert(
+      notify(
         "Оплата уже возвращена",
         "Эта заявка закрыта в финансовой истории. Для новой работы создайте новую заявку.",
       );
@@ -981,7 +990,7 @@ export function AppointmentSheet({
   };
   const openPrepaymentEditor = () => {
     if (dirty) {
-      Alert.alert(
+      notify(
         "Сначала сохраните заявку",
         "Предоплата пишется в финансовую историю. Сохраните изменения суммы и услуг, затем откройте предоплату.",
       );
@@ -992,30 +1001,27 @@ export function AppointmentSheet({
   const resetPayment = () => {
     if (!appointment || resetPaymentMut.isPending) return;
     if (dirty) {
-      Alert.alert(
+      notify(
         "Сначала сохраните заявку",
         "В форме есть несохранённые изменения. Сохраните их перед отменой оплаты.",
       );
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Отменить оплату?",
-      appointment.status === "completed"
-        ? "Все полученные суммы, включая предоплату и доплаты, вернутся на исходные счета. Заявка останется выполненной, долг появится снова, а связанный инвойс автоматически переоткроется."
-        : "Все полученные суммы вернутся на исходные счета. Сама запись останется в календаре без оплаты, а связанный инвойс автоматически переоткроется.",
-      [
-        { text: "Не отменять", style: "cancel" },
-        {
-          text: "Отменить оплату",
-          style: "destructive",
-          onPress: () =>
-            resetPaymentMut.mutate(appointment.id, {
-              onSuccess: () => toast("Оплата отменена, долг восстановлен"),
-              onError: (error) =>
-                Alert.alert("Не удалось отменить оплату", error.message),
-            }),
-        },
-      ],
+      {
+        message: appointment.status === "completed"
+          ? "Все полученные суммы, включая предоплату и доплаты, вернутся на исходные счета. Заявка останется выполненной, долг появится снова, а связанный инвойс автоматически переоткроется."
+          : "Все полученные суммы вернутся на исходные счета. Сама запись останется в календаре без оплаты, а связанный инвойс автоматически переоткроется.",
+        confirmLabel: "Отменить оплату",
+        destructive: true,
+      },
+      () =>
+        resetPaymentMut.mutate(appointment.id, {
+          onSuccess: () => toast("Оплата отменена, долг восстановлен"),
+          onError: (error) =>
+            notify("Не удалось отменить оплату", error.message),
+        }),
     );
   };
 
@@ -1191,7 +1197,7 @@ export function AppointmentSheet({
   const save = async () => {
     // Guard inverted range (belt-and-braces with the end-picker clamp).
     if (timeEnd <= timeStart) {
-      Alert.alert("Ошибка", "Время окончания должно быть позже начала");
+      notify("Ошибка", "Время окончания должно быть позже начала");
       return;
     }
     try {
@@ -1220,7 +1226,7 @@ export function AppointmentSheet({
         debt > 0 &&
         settlementAmountValid;
       let message = paidNow
-        ? `Оплата ${formatEUR(settlementAmount)} получена`
+        ? `Оплата ${formatEURExact(settlementAmount)} получена`
         : isEdit
           ? "Сохранено"
           : kind === "event"
@@ -1260,7 +1266,7 @@ export function AppointmentSheet({
       toast(message, toastType);
       onClose();
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     }
   };
 
@@ -1272,8 +1278,8 @@ export function AppointmentSheet({
     createMut.isPending || updateMut.isPending
       ? "Сохраняем…"
       : payMethod && !settlementAmountValid
-        ? settlementAmount > debt
-          ? `Сумма оплаты не может быть больше ${formatEUR(debt)}`
+        ? settlementCents > debtCents
+          ? `Сумма оплаты не может быть больше ${formatEURExact(debt)}`
           : "Введите сумму оплаты не больше чем с двумя знаками после запятой"
       : kind === "work"
         ? !clientId && serviceIds.length === 0
@@ -1292,26 +1298,26 @@ export function AppointmentSheet({
       onClose();
       return;
     }
-    const buttons: AlertButton[] = [
-      ...(canSave
-        ? [{ text: "Сохранить", onPress: () => void save() }]
-        : []),
-      { text: "Не сохранять", style: "destructive" as const, onPress: onClose },
-      { text: "Отмена", style: "cancel" as const },
+    // «Отмена» рисует сам лист выбора, поэтому в списке только действия.
+    const choices: Choice[] = [
+      ...(canSave ? [{ label: "Сохранить" }] : []),
+      { label: "Не сохранять", destructive: true },
     ];
-    Alert.alert(
-      "Сохранить изменения?",
-      canSave
+    void chooseOption("Сохранить изменения?", choices, {
+      message: canSave
         ? "В форме есть несохранённые изменения."
         : `В форме есть несохранённые изменения. ${missingHint} — или закройте без сохранения.`,
-      buttons,
-    );
+    }).then((index) => {
+      if (index === null) return;
+      if (canSave && index === 0) void save();
+      else onClose();
+    });
   };
 
   const remove = () => {
     if (!appointment) return;
     if (hasRecordedPayment) {
-      Alert.alert(
+      notify(
         "Запись хранится в истории",
         "Запись с оплатой нельзя удалить. Отмените её или оформите возврат, чтобы финансовая история осталась корректной.",
       );
@@ -1319,27 +1325,24 @@ export function AppointmentSheet({
     }
     // Повторяющаяся запись хранится одной seed-строкой — удаление
     // стирает ВСЮ серию, и подтверждение обязано сказать это прямо.
-    Alert.alert(
+    confirmThen(
       isRepeating ? "Удалить серию?" : "Удалить запись?",
-      isRepeating
-        ? "Запись повторяется — удалится вся серия повторов. Действие необратимо."
-        : "Действие необратимо.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: isRepeating ? "Удалить серию" : "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteMut.mutateAsync(appointment.id);
-              void cancelAppointmentReminders(appointment.id);
-              onClose();
-            } catch (e) {
-              Alert.alert("Ошибка", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: isRepeating
+          ? "Запись повторяется — удалится вся серия повторов. Действие необратимо."
+          : "Действие необратимо.",
+        confirmLabel: isRepeating ? "Удалить серию" : "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await deleteMut.mutateAsync(appointment.id);
+          void cancelAppointmentReminders(appointment.id);
+          onClose();
+        } catch (e) {
+          notify("Ошибка", (e as Error).message);
+        }
+      },
     );
   };
 
@@ -1538,7 +1541,7 @@ export function AppointmentSheet({
                     (date === "") он навсегда показывал «1 янв. 1970 г.»,
                     хотя в записи стояло 31 мая. */}
                 {date ? (
-                  <DateTimePicker
+                  <DateTimeInput
                     themeVariant="light"
                     locale="ru-RU"
                     value={parseYMD(date)}
@@ -1554,7 +1557,7 @@ export function AppointmentSheet({
                   <View className="flex-row items-center justify-between px-4 py-2.5">
                     <Text className="text-base" style={{ color: t.ink }}>Время</Text>
                     <View className="flex-row items-center">
-                      <DateTimePicker
+                      <DateTimeInput
                         themeVariant="light"
                         locale="ru-RU"
                         value={parseHM(timeStart)}
@@ -1564,7 +1567,7 @@ export function AppointmentSheet({
                         onChange={(_, d) => d && setTimeStart(formatHM(d))}
                       />
                       <Text className="px-1" style={{ color: t.faint }}>–</Text>
-                      <DateTimePicker
+                      <DateTimeInput
                         themeVariant="light"
                         locale="ru-RU"
                         value={parseHM(timeEnd)}
@@ -2133,7 +2136,7 @@ export function AppointmentSheet({
                     </Text>
                     {repeatUntil ? (
                       <View className="flex-row items-center gap-3">
-                        <DateTimePicker
+                        <DateTimeInput
                           themeVariant="light"
                           value={parseYMD(repeatUntil)}
                           mode="date"
@@ -2186,17 +2189,14 @@ export function AppointmentSheet({
                         isRepeating &&
                         status !== "cancelled"
                       ) {
-                        Alert.alert(
+                        confirmThen(
                           "Отменить серию?",
-                          "Запись повторяется — статус «Отменено» скроет с календаря всю серию повторов.",
-                          [
-                            { text: "Отмена", style: "cancel" },
-                            {
-                              text: "Отменить серию",
-                              style: "destructive",
-                              onPress: () => chooseStatus("cancelled"),
-                            },
-                          ],
+                          {
+                            message: "Запись повторяется — статус «Отменено» скроет с календаря всю серию повторов.",
+                            confirmLabel: "Отменить серию",
+                            destructive: true,
+                          },
+                          () => chooseStatus("cancelled"),
                         );
                         return;
                       }
@@ -2262,7 +2262,7 @@ export function AppointmentSheet({
               </SectionCard>
             ) : kind === "work" && status === "completed" ? (
               debt > 0 ? (
-                <SectionCard title={`Оплата · ${formatEUR(debt)}`}>
+                <SectionCard title={`Оплата · ${formatEURExact(debt)}`}>
                   {/* КУДА ПОЛОЖИЛИ ДЕНЬГИ, А НЕ «КАКИМ СПОСОБОМ».
                       Раньше здесь стояли четыре абстрактных способа, а счёт
                       сервер УГАДЫВАЛ — первый активный счёт нужного вида у
@@ -2365,11 +2365,11 @@ export function AppointmentSheet({
                         style={{ color: settlementAmountValid ? t.success : t.danger }}
                       >
                         {settlementAmountValid
-                          ? settlementAmount < debt
-                            ? `Будет принято ${formatEUR(settlementAmount)} · останется ${formatEUR(debt - settlementAmount)}`
-                            : `Будет полностью оплачено ${formatEUR(debt)}`
-                          : settlementAmount > debt
-                            ? `Не больше ${formatEUR(debt)}`
+                          ? settlementCents < debtCents
+                            ? `Будет принято ${formatEURExact(settlementAmount)} · останется ${formatEURExact((debtCents - settlementCents) / 100)}`
+                            : `Будет полностью оплачено ${formatEURExact(debt)}`
+                          : settlementCents > debtCents
+                            ? `Не больше ${formatEURExact(debt)}`
                             : "Введите корректную сумму"}
                       </Text>
                     </View>
@@ -2606,7 +2606,7 @@ export function AppointmentSheet({
               },
               {
                 onSuccess: () => toast("Напоминание создано"),
-                onError: (e) => Alert.alert("Ошибка", e.message),
+                onError: (e) => notify("Ошибка", e.message),
               },
             )
           }
@@ -2738,7 +2738,7 @@ function PrepaymentEditor({
     try {
       await onSubmit(amountNumber, amountNumber > 0 ? method : null);
     } catch (e) {
-      Alert.alert(
+      notify(
         "Не удалось изменить предоплату",
         (e as Error).message,
       );
@@ -2839,7 +2839,6 @@ function PrepaymentEditor({
     </Modal>
   );
 }
-
 
 function ChipRow({
   items,
@@ -3090,7 +3089,7 @@ function ClientPickerModal({
       const id = await onCreate(name.trim(), phone.trim());
       onPick(id);
     } catch (e) {
-      Alert.alert("Не удалось создать клиента", (e as Error).message);
+      notify("Не удалось создать клиента", (e as Error).message);
     } finally {
       setBusy(false);
     }

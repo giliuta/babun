@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Text, TextInput, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import {
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
@@ -296,7 +296,7 @@ export function InvoicePaymentSheet({
                   {formatInvoiceDate(occurredOn)}
                 </Text>
               </View>
-              <DateTimePicker
+              <DateTimeInput
                 value={parseYMD(occurredOn)}
                 maximumDate={parseYMD(businessToday)}
                 mode="date"
