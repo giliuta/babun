@@ -1,6 +1,7 @@
 // Services data layer — extended fields per Bumpix parity.
 //
-// Persisted in localStorage, migrates to Supabase later.
+// Форма и правила цены/длительности. Каталог живёт в Supabase
+// (db/repositories/services.ts), здесь хранилища нет.
 
 import { generateId } from "./masters";
 
@@ -70,61 +71,6 @@ export interface DurationTier {
    *  as HH:MM. */
   duration_minutes: number;
 }
-
-export interface ServiceCategory {
-  id: string;
-  name: string;
-  color: string;
-}
-
-// Sprint 033 Phase I20 — empty seed. Babun is multi-tenant SaaS,
-// each tenant starts from scratch and defines their own groups.
-// AirFix's real data is already in localStorage so they're
-// unaffected.
-export const DEFAULT_CATEGORIES: ServiceCategory[] = [];
-
-const NOW = new Date().toISOString();
-
-interface SvcOpts {
-  costs?: ServiceMaterialCost[];
-  bulkThreshold?: number;
-  bulkPrice?: number;
-  costPerUnit?: number;
-}
-
-function svc(
-  id: string,
-  name: string,
-  catId: string,
-  duration: number,
-  price: number,
-  color: string,
-  opts: SvcOpts = {}
-): Service {
-  return {
-    id,
-    name,
-    category_id: catId,
-    duration_minutes: duration,
-    price,
-    color,
-    available_weekdays: [],
-    online_enabled: true,
-    material_costs: opts.costs ?? [],
-    is_active: true,
-    created_at: NOW,
-    bulk_threshold: opts.bulkThreshold ?? 0,
-    bulk_price: opts.bulkPrice ?? 0,
-    cost_per_unit: opts.costPerUnit ?? 0,
-    brigade_ids: [], // пусто = все команды
-  };
-}
-
-// Sprint 033 Phase I20 — empty seed. See DEFAULT_CATEGORIES above.
-export const DEFAULT_SERVICES: Service[] = [];
-// Keep svc() helper un-exported but still defined for any legacy
-// call sites — may be removed in a later pass.
-void svc;
 
 // Pricing helper. Sprint 033 Phase I20: honours the new price_tiers
 // ladder first — pick the tier with the highest min_qty ≤ qty.
@@ -256,85 +202,6 @@ export function durationForQuantity(
   return Math.max(0, Math.round(last.minutes + slope * (quantity - last.qty)));
 }
 
-// ─── Storage ───────────────────────────────────────────────────────────
-
-const SERVICES_KEY = "babun-services";
-const CATEGORIES_KEY = "babun-service-categories";
-
-export function loadServices(): Service[] {
-  if (typeof window === "undefined") return DEFAULT_SERVICES;
-  try {
-    const raw = window.localStorage.getItem(SERVICES_KEY);
-    // v662 — DATA-LOSS GUARD: respect explicit `[]`. The user might
-    // have intentionally deleted every service (mid-onboarding, or
-    // wiping the seed catalog). Don't silently revive defaults.
-    if (raw === null) return DEFAULT_SERVICES;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return DEFAULT_SERVICES;
-    if (parsed.length === 0) return [];
-    // MEGA-UPDATE migration: fill in new fields on legacy records.
-    // Phase I20: also migrate the legacy single-step bulk pricing
-    // (bulk_threshold + bulk_price) to the new price_tiers ladder
-    // the first time we see it.
-    return parsed.map((s: Partial<Service>) => {
-      const hasLegacyBulk =
-        !s.price_tiers &&
-        (s.bulk_threshold ?? 0) > 1 &&
-        (s.bulk_price ?? 0) > 0;
-      const migratedTiers: PriceTier[] | undefined = hasLegacyBulk
-        ? [
-            {
-              min_qty: s.bulk_threshold as number,
-              price_per_unit: s.bulk_price as number,
-            },
-          ]
-        : s.price_tiers;
-      return {
-        ...s,
-        bulk_threshold: s.bulk_threshold ?? 0,
-        bulk_price: s.bulk_price ?? 0,
-        cost_per_unit: s.cost_per_unit ?? 0,
-        brigade_ids: s.brigade_ids ?? [],
-        price_tiers: migratedTiers,
-      };
-    }) as Service[];
-  } catch {
-    return DEFAULT_SERVICES;
-  }
-}
-
-export function saveServices(list: Service[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(SERVICES_KEY, JSON.stringify(list));
-  } catch {
-    // ignore
-  }
-}
-
-export function loadCategories(): ServiceCategory[] {
-  if (typeof window === "undefined") return DEFAULT_CATEGORIES;
-  try {
-    const raw = window.localStorage.getItem(CATEGORIES_KEY);
-    // v662 — DATA-LOSS GUARD: same as loadServices — explicit `[]`
-    // is respected as the user's choice.
-    if (raw === null) return DEFAULT_CATEGORIES;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_CATEGORIES;
-  } catch {
-    return DEFAULT_CATEGORIES;
-  }
-}
-
-export function saveCategories(list: ServiceCategory[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(list));
-  } catch {
-    // ignore
-  }
-}
-
 // ─── Helpers ───────────────────────────────────────────────────────────
 
 export function createBlankService(overrides: Partial<Service> = {}): Service {
@@ -388,7 +255,7 @@ export function costPerUnit(
 }
 
 /** Читает `cost_tiers` из базы, отбрасывая мусор — зеркало `parsePriceTiers`. */
-export function parseCostTiers(
+function parseCostTiers(
   raw: unknown,
 ): { min_qty: number; cost_per_unit: number }[] {
   const source = Array.isArray(raw)
@@ -418,7 +285,7 @@ export function parseCostTiers(
 
 /** Cost of materials for one unit. cost_per_unit is the canonical value;
  * named material rows remain a compatibility fallback for older records. */
-export function getServiceMaterialCost(service: ServiceCostSource): number {
+function getServiceMaterialCost(service: ServiceCostSource): number {
   const explicit =
     typeof service.cost_per_unit === "number" &&
     Number.isFinite(service.cost_per_unit) &&
@@ -438,14 +305,6 @@ export function getServiceMaterialCost(service: ServiceCostSource): number {
   return explicit !== null && (explicit > 0 || rowsTotal === 0)
     ? explicit
     : rowsTotal;
-}
-
-export function getServiceCategoryName(
-  service: Service,
-  categories: ServiceCategory[]
-): string {
-  if (!service.category_id) return "";
-  return categories.find((c) => c.id === service.category_id)?.name ?? "";
 }
 
 export const WEEKDAY_LABELS: Record<Weekday, string> = {

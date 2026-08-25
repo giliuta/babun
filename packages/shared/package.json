@@ -5,26 +5,22 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".":              { "types": "./src/index.ts",              "default": "./src/index.ts" },
-    "./common":       { "types": "./src/common/index.ts",       "default": "./src/common/index.ts" },
-    "./common/*":     { "types": "./src/common/*.ts",           "default": "./src/common/*.ts" },
-    "./local":        { "types": "./src/local/index.ts",        "default": "./src/local/index.ts" },
-    "./local/*":      { "types": "./src/local/*.ts",            "default": "./src/local/*.ts" },
-    "./db":           { "types": "./src/db/index.ts",           "default": "./src/db/index.ts" },
-    "./db/*":         { "types": "./src/db/*.ts",               "default": "./src/db/*.ts" },
-    "./db/cache":     { "types": "./src/db/cache/index.ts",     "default": "./src/db/cache/index.ts" },
-    "./db/cache/*":   { "types": "./src/db/cache/*.ts",         "default": "./src/db/cache/*.ts" },
-    "./db/repositories/*": { "types": "./src/db/repositories/*.ts", "default": "./src/db/repositories/*.ts" },
-    "./storage":      { "types": "./src/storage/index.ts",      "default": "./src/storage/index.ts" },
-    "./storage/*":    { "types": "./src/storage/*.ts",          "default": "./src/storage/*.ts" },
-    "./storage/sql":  { "types": "./src/storage/sql/index.ts",  "default": "./src/storage/sql/index.ts" },
-    "./storage/sql/*":{ "types": "./src/storage/sql/*.ts",      "default": "./src/storage/sql/*.ts" },
-    "./sync":         { "types": "./src/sync/index.ts",         "default": "./src/sync/index.ts" },
-    "./sync/*":       { "types": "./src/sync/*.ts",             "default": "./src/sync/*.ts" },
-    "./icons":        { "types": "./src/common/icons/index.ts", "default": "./src/common/icons/index.ts" }
+    ".":               { "types": "./src/index.ts",               "default": "./src/index.ts" },
+    "./common/*":      { "types": "./src/common/*.ts",            "default": "./src/common/*.ts" },
+    "./local/*":       { "types": "./src/local/*.ts",             "default": "./src/local/*.ts" },
+    "./db/*":          { "types": "./src/db/*.ts",                "default": "./src/db/*.ts" },
+    "./db/cache":      { "types": "./src/db/cache/index.ts",      "default": "./src/db/cache/index.ts" },
+    "./storage":       { "types": "./src/storage/index.ts",       "default": "./src/storage/index.ts" },
+    "./storage/*":     { "types": "./src/storage/*.ts",           "default": "./src/storage/*.ts" },
+    "./storage/sql":   { "types": "./src/storage/sql/index.ts",   "default": "./src/storage/sql/index.ts" },
+    "./sync":          { "types": "./src/sync/index.ts",          "default": "./src/sync/index.ts" },
+    "./sync/*":        { "types": "./src/sync/*.ts",              "default": "./src/sync/*.ts" }
   },
   "scripts": {},
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0"
+  },
+  "peerDependencies": {
+    "react": "^19.1.0"
   }
 }

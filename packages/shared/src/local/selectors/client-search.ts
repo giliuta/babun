@@ -39,7 +39,7 @@ function normalizeDigits(input: string): string {
   return input.replace(/\D/g, "");
 }
 
-export function normalizeSearchable(input: string): string {
+function normalizeSearchable(input: string): string {
   // Lower-case + strip everything that isn't a letter or digit; also
   // transliterate Cyrillic/Greek so "Ivan" and "Иван" hit the same
   // normalised form.

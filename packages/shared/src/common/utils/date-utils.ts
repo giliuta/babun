@@ -1,45 +1,9 @@
 // Date utility functions for the calendar
 
-const DAY_NAMES_SHORT = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
-const MONTH_NAMES = [
-  "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
-  "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
-];
-const MONTH_NAMES_GENITIVE = [
-  "Января", "Февраля", "Марта", "Апреля", "Мая", "Июня",
-  "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря",
-];
-// Prepositional case ("в …"). Needed for hero strips like
-// «1 новый в мае» — toLocaleDateString("ru-RU", {month:"long"})
-// returns nominative ("май"), which reads as «1 новый в май».
-const MONTH_NAMES_PREPOSITIONAL = [
-  "январе", "феврале", "марте", "апреле", "мае", "июне",
-  "июле", "августе", "сентябре", "октябре", "ноябре", "декабре",
-];
 const MONTH_NAMES_SHORT = [
   "янв", "фев", "мар", "апр", "май", "июн",
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
-
-export function getMonthNameShort(monthIndex: number): string {
-  return MONTH_NAMES_SHORT[monthIndex];
-}
-
-export function getDayNameShort(date: Date): string {
-  return DAY_NAMES_SHORT[date.getDay()];
-}
-
-export function getMonthName(monthIndex: number): string {
-  return MONTH_NAMES[monthIndex];
-}
-
-export function getMonthNameGenitive(monthIndex: number): string {
-  return MONTH_NAMES_GENITIVE[monthIndex];
-}
-
-export function getMonthNamePrepositional(monthIndex: number): string {
-  return MONTH_NAMES_PREPOSITIONAL[monthIndex];
-}
 
 // Formats "2026-04-12" as "12 апреля 2026 г."
 export function formatDateLongRu(dateKey: string): string {
@@ -62,44 +26,11 @@ export function formatDateShortRu(dateKey: string): string {
   return `${d.getDate()} ${MONTH_NAMES_SHORT[d.getMonth()]}`;
 }
 
-export function getMonday(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-export function getWeekDates(mondayDate: Date): Date[] {
-  const dates: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(mondayDate);
-    d.setDate(mondayDate.getDate() + i);
-    dates.push(d);
-  }
-  return dates;
-}
-
 export function formatDateKey(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-export function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-export function addWeeks(date: Date, weeks: number): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + weeks * 7);
-  return d;
 }
 
 export function addDays(date: Date, days: number): Date {
@@ -111,15 +42,6 @@ export function addDays(date: Date, days: number): Date {
 export function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
-}
-
-export function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-export function getFirstDayOfMonth(year: number, month: number): number {
-  // Returns 0=Sunday ... 6=Saturday
-  return new Date(year, month, 1).getDay();
 }
 
 export function getCurrentCyprusTime(): Date {

@@ -1,13 +1,13 @@
-// ДИАЛЕКТ ТЕСТА — `bun:test`, потому что раннер продукта bun. `vitest` стоит
-// только в `apps/web` и в `packages/shared` не установлен вовсе: этот файл был
-// единственным во всём денежном контуре, который НИ ОДИН раннер репозитория не
-// исполнял. Соседи по папке (`invoices.test.ts`, `invoice-payments.test.ts`)
-// написаны на bun:test, и API совпадает (`describe/it/expect`).
+// ДИАЛЕКТ ТЕСТА — `bun:test`, потому что раннер продукта bun. Файл когда-то был
+// написан на `vitest`, который стоял только в удалённом `apps/web` и в
+// `packages/shared` не был установлен вовсе: во всём денежном контуре это был
+// единственный тест, который НИ ОДИН раннер репозитория не исполнял. Соседи по
+// папке (`invoices.test.ts`, `invoice-payments.test.ts`) на bun:test, и API
+// совпадает (`describe/it/expect`).
 import { describe, expect, it } from "bun:test";
 import {
   createTransfer,
   insertTransaction,
-  listAccountBalanceDeltas,
   listRefundTotals,
   listTransactionsForRange,
   updateTransaction,
@@ -61,7 +61,7 @@ function pagedSupabase(
           orders.push([column, options.ascending]);
           return builder;
         },
-        // Keyset-пагинация (listAccountBalanceDeltas): .gt("id", last) +
+        // Keyset-пагинация (listRefundTotals): .gt("id", last) +
         // терминальный .limit(n). Мок сортирует по id лексикографически —
         // как PostgREST по uuid-строке.
         gt: (_column: string, value: string) => {
@@ -110,21 +110,6 @@ describe("finance transaction repository paging", () => {
       ["created_at", false],
       ["id", false],
     ]);
-  });
-
-  it("sums every balance delta with stable id paging", async () => {
-    const source = Array.from({ length: 1001 }, (_, i) => ledgerRow(i + 1));
-    const ranges: Array<[number, number]> = [];
-    const orders: Array<[string, boolean]> = [];
-
-    const totals = await listAccountBalanceDeltas(
-      pagedSupabase(source, ranges, orders) as never,
-      "tenant-1",
-    );
-
-    expect(totals.get("account-1")).toBe(1001);
-    expect(ranges).toEqual([[0, 999], [1000, 1999]]);
-    expect(orders[0]).toEqual(["id", true]);
   });
 
   it("counts refunds outside the visible period past 1000 rows", async () => {

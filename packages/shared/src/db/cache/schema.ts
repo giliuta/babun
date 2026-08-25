@@ -22,11 +22,11 @@ import type { SqlAdapter } from "../../storage/sql/types";
 
 /** Analogue of the web cache's `DB_VERSION`. Bump + add a migration
  *  branch when the schema changes. */
-export const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 1;
 
 /** DDL for the whole cache. Kept as one string so first-run is a single
  *  `execAsync` (expo-sqlite runs multiple `;`-separated statements). */
-export const CACHE_DDL = `
+const CACHE_DDL = `
 CREATE TABLE IF NOT EXISTS clients (
   id         TEXT PRIMARY KEY NOT NULL,
   tenant_id  TEXT,
@@ -73,17 +73,6 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   updated_at INTEGER NOT NULL
 );
 `;
-
-/** The five cache tables, in the order `cacheClearAll` wipes them.
- *  Exported so the cache module and any future maintenance code share
- *  one list. */
-export const CACHE_TABLES = [
-  "clients",
-  "appointments",
-  "tags",
-  "sync_queue",
-  "sync_meta",
-] as const;
 
 /** Idempotent schema install + migration. Safe to call on every app
  *  start. Runs the DDL (all `CREATE ... IF NOT EXISTS`) then advances

@@ -284,7 +284,7 @@ export async function updateAccount(
  * Replace the team membership of a company account (diff-based: the
  * `account_teams` rows themselves are immutable). Returns the final list.
  */
-export async function setAccountTeams(
+async function setAccountTeams(
   supabase: DbSupabase,
   tenantId: string,
   accountId: string,

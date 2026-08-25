@@ -24,9 +24,15 @@
 // Implementations:
 //   * RN       — ExpoSqliteAdapter (apps/mobile/src/storage/sqlite.ts)
 //   * Tests    — MemorySqlAdapter (./memory.ts)
-//   * Web      — NOT NEEDED. Web keeps its IndexedDB cache
-//                (packages/shared/src/db/cache/index.ts) untouched; only
-//                the mobile app injects a SqlAdapter. See db/cache/sql.ts.
+//   * Web      — NoCacheSqlAdapter (./no-cache), поставляется САМИМ
+//                провайдером по умолчанию (см. ./provider). Веба с
+//                собственным IndexedDB-кэшем больше нет: операторский
+//                Next.js снесён 2026-08-25, и браузер теперь открывает то же
+//                самое приложение. Адаптер он не внедряет, но getSql() зовёт
+//                — общие cached-wrappers работают на всех платформах, — и в
+//                браузере получает «сервер единственное хранилище»: чтение
+//                всегда промахивается, зеркальная запись отбрасывается, а
+//                офлайн-очередь отказывает ГРОМКО.
 
 /** A bound parameter value accepted by the underlying SQLite driver.
  *  Matches expo-sqlite's `SQLiteBindValue`. `Uint8Array` covers BLOBs —
@@ -89,8 +95,12 @@ export interface SqlAdapter {
    *  object). This is what actually guarantees the "enqueueOp + optimistic
    *  cacheUpsert in ONE transaction" invariant AND that a stray concurrent
    *  cacheUpsert/cacheDelete can't ride inside the wipe/atomic pair
-   *  (offline-plan risk #6 + cross-tenant wipe). Not supported on web —
-   *  web never injects a SqlAdapter, so this is native-only in practice. */
+   *  (offline-plan risk #6 + cross-tenant wipe). В браузере транзакции нет
+   *  и быть не может: там стоит NoCacheSqlAdapter, у которого нет своего
+   *  хранилища — он выполняет `task` (чтобы вызывающий не завис на await),
+   *  но откатывать ему нечего, а любая попытка поставить операцию в
+   *  офлайн-очередь внутри падает громко. Настоящая изоляция — только на
+   *  нативе. */
   withExclusiveTransactionAsync(
     task: (txn: SqlAdapter) => Promise<void>,
   ): Promise<void>;

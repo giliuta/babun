@@ -265,60 +265,6 @@ export async function listAccountPeriodTotals(
   }));
 }
 
-/**
- * All-time per-account signed deltas for balance computation. Account
- * balance = opening_balance + Σ delta. This is intentionally NOT
- * date-windowed: a running balance must reflect every movement ever,
- * not just the currently-viewed period. Returns a slim projection
- * (account_id, type, amount) to keep the payload small.
- *
- * @deprecated Тянет весь журнал тенанта в память клиента ради одной суммы и
- * теряет строку «операции без счёта» (`.not("account_id", "is", null)`).
- * Мобильное приложение перешло на серверный `listAccountBalances`; здесь
- * функция жива только ради веба — снести вместе с его переводом (слайс С10).
- */
-export async function listAccountBalanceDeltas(
-  supabase: DbSupabase,
-  tenantId: string,
-): Promise<Map<string, number>> {
-  // Keyset-пагинация (.gt по id), не offset: конкурентная вставка сдвигала
-  // бы окно range и задваивала/пропускала строку в балансе.
-  const rows: Array<Pick<Row, "id" | "account_id" | "type" | "amount">> = [];
-  let lastId: string | null = null;
-  for (;;) {
-    let q = supabase
-      .from("finance_transactions")
-      .select("id, account_id, type, amount")
-      .eq("tenant_id", tenantId)
-      .not("account_id", "is", null);
-    if (lastId) q = q.gt("id", lastId);
-    const { data, error } = await q
-      .order("id", { ascending: true })
-      .limit(LEDGER_PAGE_SIZE);
-    if (error) throw new Error(`listAccountBalanceDeltas: ${error.message}`);
-    const page = (data ?? []) as Array<
-      Pick<Row, "id" | "account_id" | "type" | "amount">
-    >;
-    rows.push(...page);
-    if (page.length < LEDGER_PAGE_SIZE) break;
-    lastId = page[page.length - 1].id;
-  }
-  const map = new Map<string, number>();
-  for (const r of rows) {
-    if (!r.account_id) continue;
-    const amt = Number(r.amount ?? 0);
-    // mirror signedAmount(): expense −amt, refund −|amt|, income/transfer +amt
-    const delta =
-      r.type === "expense"
-        ? -amt
-        : r.type === "refund"
-          ? -Math.abs(amt)
-          : amt;
-    map.set(r.account_id, (map.get(r.account_id) ?? 0) + delta);
-  }
-  return map;
-}
-
 /** Does the account carry ANY ledger rows? Mirrors the server-side
  * `guard_account_financial_history` freeze checks: the settings screen uses
  * this to disable kind/opening/brigade edits instead of surfacing a server

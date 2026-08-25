@@ -1,19 +1,13 @@
-// Master-access preset matrix + group expand-state helpers.
+// Master-access preset matrix.
 //
-// Extracted from apps/web/.../masters/[id]/access/presets.ts into shared so
-// the mobile access hub can reuse the exact same preset definitions and the
-// detectPreset / permissionsEqual round-trip (web parity). The web file now
-// re-exports from here; nothing about the presets should live in two places.
-//
-// The group-open persistence helpers guard `typeof window` and degrade to
-// defaults on React Native (no localStorage), so they are safe to import from
-// either platform even though only the web UI actually persists the state.
+// Один набор пресетов и один round-trip detectPreset / permissionsEqual на
+// весь продукт: пока матрица жила в двух местах, экран доступа и проверка
+// прав расходились в правах «менеджера».
 
 import {
   PERMISSION_GROUPS,
   defaultPermissionsForRole,
   type MasterPermissions,
-  type PermissionGroupKey,
 } from "./masters";
 
 export type PresetId = "manager" | "master" | "dispatcher" | "viewer" | "custom";
@@ -31,9 +25,6 @@ export type PermissionFlag = Exclude<keyof MasterPermissions, "visible_team_ids"
 export const ALL_PERMISSION_FLAGS: PermissionFlag[] = PERMISSION_GROUPS.flatMap(
   (g) => g.permissions,
 ) as PermissionFlag[];
-
-/** localStorage key for the per-user expanded-state of permission groups. */
-export const GROUPS_OPEN_KEY = "babun2:settings:perm-groups-open";
 
 // ─── Preset matrix ────────────────────────────────────────────────────
 // Built off the role baselines so they stay in sync if the defaults
@@ -116,35 +107,6 @@ export function detectPreset(perms: MasterPermissions): PresetId {
     if (permissionsEqual(perms, p.build())) return p.id;
   }
   return "custom";
-}
-
-// ─── Group expand-state persistence ───────────────────────────────────
-
-export type GroupsOpenState = Record<PermissionGroupKey, boolean>;
-
-export function defaultGroupsOpen(): GroupsOpenState {
-  const out = {} as GroupsOpenState;
-  PERMISSION_GROUPS.forEach((g, i) => {
-    out[g.key] = i === 0;
-  });
-  return out;
-}
-
-export function loadGroupsOpen(): GroupsOpenState {
-  if (typeof window === "undefined") return defaultGroupsOpen();
-  try {
-    const raw = window.localStorage.getItem(GROUPS_OPEN_KEY);
-    if (!raw) return defaultGroupsOpen();
-    const parsed = JSON.parse(raw) as Partial<Record<PermissionGroupKey, boolean>>;
-    const fallback = defaultGroupsOpen();
-    const merged = { ...fallback };
-    for (const g of PERMISSION_GROUPS) {
-      if (typeof parsed[g.key] === "boolean") merged[g.key] = parsed[g.key]!;
-    }
-    return merged;
-  } catch {
-    return defaultGroupsOpen();
-  }
 }
 
 export function normalizeLabel(s: string): string {

@@ -111,14 +111,3 @@ export function findBufferClash(
   }
   return null;
 }
-
-export function describeOverlap(
-  other: OverlapExisting & { comment?: string; client_id?: string | null },
-  resolveName: (clientId: string | null | undefined) => string | null,
-): string {
-  const who =
-    (other.client_id ? resolveName(other.client_id) : null) ??
-    other.comment ??
-    "Запись";
-  return `${other.time_start}–${other.time_end} · ${who}`;
-}

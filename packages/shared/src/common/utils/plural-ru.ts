@@ -56,41 +56,9 @@ export function formatCountRu(count: number, forms: PluralFormsRu): string {
 
 export const FORMS_ZAPIS: PluralFormsRu = ["запись", "записи", "записей"];
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];
-export const FORMS_KATEGORIYA: PluralFormsRu = ["категория", "категории", "категорий"];
-export const FORMS_KLIENT: PluralFormsRu = ["клиент", "клиента", "клиентов"];
-export const FORMS_VIZIT: PluralFormsRu = ["визит", "визита", "визитов"];
 export const FORMS_DEN: PluralFormsRu = ["день", "дня", "дней"];
-export const FORMS_MIN: PluralFormsRu = ["минута", "минуты", "минут"];
-export const FORMS_CHAS: PluralFormsRu = ["час", "часа", "часов"];
 export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
-export const FORMS_MASTER: PluralFormsRu = ["мастер", "мастера", "мастеров"];
 export const FORMS_KOMANDA: PluralFormsRu = ["команда", "команды", "команд"];
 export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
-export const FORMS_BRIGADA: PluralFormsRu = ["команда", "команды", "команд"];
 export const FORMS_KASSA: PluralFormsRu = ["касса", "кассы", "касс"];
 export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];
-
-/**
- * Format a growth percentage with a guard for «divided by zero» and
- * «no change vs previous». Used by /insights stat cards which used to
- * render «↗ 999%» whenever the previous period was 0 — meaningless
- * for the user.
- *
- *   formatGrowth(150, 0)       → "—"
- *   formatGrowth(150, 100)     → "↑50%"
- *   formatGrowth(50, 100)      → "−50%"
- *   formatGrowth(100, 100)     → "0%"
- *   formatGrowth(null, 100)    → "—"
- */
-export function formatGrowth(
-  current: number | null | undefined,
-  previous: number | null | undefined,
-): string {
-  if (current == null || previous == null) return "—";
-  if (previous === 0) return "—";
-  const pct = ((current - previous) / previous) * 100;
-  if (!Number.isFinite(pct)) return "—";
-  const rounded = Math.round(pct);
-  if (rounded === 0) return "0%";
-  return `${rounded > 0 ? "↑" : "−"}${Math.abs(rounded)}%`;
-}

@@ -72,7 +72,6 @@ export type CachedClientData = Client & {
 export type CachedAppointmentData = Appointment & {
   tenant_id: string;
 };
-export type CachedTagData = CachedTag;
 
 // Anything the cache can store in `data`. The write/read APIs accept the
 // domain-decorated shapes (slice 5) as well as the raw Row shapes still

@@ -29,7 +29,7 @@ function valid(lat: number, lng: number): boolean {
 // Pulls a lat/lng pair out of arbitrary text. Tries many patterns used
 // across Google / Apple / Waze / generic providers before falling back
 // to a raw "DD.DDDD,DD.DDDD" regex.
-export function extractCoords(
+function extractCoords(
   input: string
 ): { lat: number; lng: number } | null {
   if (!input) return null;
@@ -171,23 +171,4 @@ export function extractAddressFromMapUrl(url: string): string | null {
   }
 
   return null;
-}
-
-// Client-side helper that calls our /api/resolve-map-link endpoint to
-// follow short URLs and extract coordinates server-side.
-export async function resolveMapLink(
-  url: string
-): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const res = await fetch(
-      `/api/resolve-map-link?url=${encodeURIComponent(url)}`
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      coords: { lat: number; lng: number } | null;
-    };
-    return data.coords;
-  } catch {
-    return null;
-  }
 }

@@ -196,38 +196,3 @@ export function formatEUR(amount: number): string {
 export function formatEURExact(amount: number): string {
   return money(amount);
 }
-
-/**
- * Format a cents-integer as euros. Use this at every boundary where the
- * stored value is `amountCents` (FinancePayment, Expense, PayrollLine)
- * — feeding cents into `formatEUR` directly renders €X 100× too big
- * and has shipped silently on /expenses, /payroll, /brigades (#B2 of
- * Sprint 011).
- */
-export function formatEURFromCents(cents: number): string {
-  return formatEUR(Math.round(cents / 100));
-}
-
-export function formatEURSignedFromCents(cents: number): string {
-  return formatEURSigned(Math.round(cents / 100));
-}
-
-/**
- * Same as formatEUR but with an explicit leading sign. Useful for
- * "delta" displays where we want a + shown even for positive values.
- */
-export function formatEURSigned(amount: number): string {
-  return formatSignedMoneyExact(Math.round(amount));
-}
-
-export function formatPercentDelta(pct: number): string {
-  if (Number.isNaN(pct)) return "—";
-  // `percentDelta` returns +Infinity when prev was zero and current > 0 —
-  // i.e. there's no comparable previous period. "нов." is more honest
-  // than "+100 %" (which was the old silent lie).
-  if (pct === Number.POSITIVE_INFINITY) return "нов.";
-  if (pct === Number.NEGATIVE_INFINITY) return "—";
-  const r = Math.round(pct);
-  if (r === 0) return "0%";
-  return r > 0 ? `+${r}%` : `${r}%`;
-}

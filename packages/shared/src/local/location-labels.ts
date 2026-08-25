@@ -22,10 +22,8 @@ function serverSyncKey(tenantId: string): string {
 
 // STORY-078 leak fix — labels Дом / Квартира / Офис / Вилла are
 // HVAC/cleaning-flavoured. Beauty / auto-service tenants don't need
-// them. Default empty; preset kept exposed for the vertical-driven
-// onboarding seed (future story).
-export const SEED_LOCATION_LABELS: LocationLabel[] = [];
-
+// them, so nothing is seeded by default: the preset below is offered
+// explicitly from the object-types screen and never auto-applied.
 export const HOME_SERVICE_LABELS_PRESET: LocationLabel[] = [
   { id: "loclbl-house",    name: "Дом" },
   { id: "loclbl-flat",     name: "Квартира" },

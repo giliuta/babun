@@ -85,15 +85,6 @@ export async function setDayCity(
   if (error) throw new Error(`setDayCity (upsert): ${error.message}`);
 }
 
-export async function clearDayCity(
-  supabase: DbSupabase,
-  tenantId: string,
-  teamId: string,
-  date: string,
-): Promise<void> {
-  await setDayCity(supabase, tenantId, teamId, date, "");
-}
-
 /** Bulk-rename a label across every day assignment of the tenant —
  *  day_cities stores plain names, so a library rename must cascade
  *  here or old assignments silently orphan (grey ghost labels). */

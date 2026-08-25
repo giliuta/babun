@@ -22,6 +22,11 @@ export {
 } from "./provider";
 
 export {
+  NoCacheSqlAdapter,
+  OfflineQueueUnavailableError,
+} from "./no-cache";
+
+export {
   MemorySqlAdapter,
   AlwaysOnlineNetwork,
   type RawSqliteDb,

@@ -73,41 +73,10 @@ const TOKEN_ALIASES: Record<string, string> = {
   СсылкаНаОтмену: "CancelUrl",
 };
 
-const NOW = new Date().toISOString();
-
-// STORY-053a — empty array. Previously defaulted to AirFix-flavoured
-// templates with a literal "AirFix" signature in every body. Leaked
-// into every fresh tenant on first signup. New tenants now start
-// with no templates and use the existing Settings → SMS templates
-// editor (or STORY-047 SMS reminders) to add their own.
-export const DEFAULT_TEMPLATES: SmsTemplate[] = [];
-
-const STORAGE_KEY = "babun-sms-templates";
-
-export function loadTemplates(): SmsTemplate[] {
-  if (typeof window === "undefined") return DEFAULT_TEMPLATES;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    // v662 — DATA-LOSS GUARD: respect explicit `[]`. The user might
-    // have intentionally deleted every template; don't silently
-    // revive defaults.
-    if (raw === null) return DEFAULT_TEMPLATES;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_TEMPLATES;
-  } catch {
-    return DEFAULT_TEMPLATES;
-  }
-}
-
-export function saveTemplates(list: SmsTemplate[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {
-    // ignore
-  }
-}
-
+// Дефолтного текста у шаблонов нет и быть не может: раньше здесь лежал сид
+// с подписью «AirFix» — текст одного клиента, — и он утекал каждому новому
+// тенанту при регистрации. Babun продаётся многим компаниям, поэтому шаблон
+// заводит сам тенант — этой функцией, с пустым телом.
 export function createBlankTemplate(kind: TemplateKind = "new_appointment"): SmsTemplate {
   return {
     id: generateId("tpl"),
@@ -117,8 +86,6 @@ export function createBlankTemplate(kind: TemplateKind = "new_appointment"): Sms
     enabled: true,
   };
 }
-
-void NOW;
 
 // Render a template by substituting tokens. Accepts both English
 // ([Name]) and Russian ([Имя]) forms in the same body — the alias

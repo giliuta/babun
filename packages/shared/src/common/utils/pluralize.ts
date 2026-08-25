@@ -1,4 +1,4 @@
-// Russian pluralization: 1 кондиционер, 2 кондиционера, 5 кондиционеров.
+// Russian pluralization: 1 запись, 2 записи, 5 записей.
 //
 // Само правило живёт в `plural-ru.ts` — здесь только вторая форма вызова
 // (три отдельных слова вместо кортежа). Пока правило было переписано в
@@ -7,10 +7,6 @@ import { pluralRu } from "./plural-ru";
 
 export function pluralize(n: number, one: string, few: string, many: string): string {
   return `${n} ${countWordRu(n, one, few, many)}`;
-}
-
-export function pluralizeAC(n: number): string {
-  return pluralize(n, "кондиционер", "кондиционера", "кондиционеров");
 }
 
 /**
@@ -23,13 +19,3 @@ export function pluralizeAC(n: number): string {
 export function countWordRu(n: number, one: string, few: string, many: string): string {
   return pluralRu(n, [one, few, many]);
 }
-
-// Common app vocabulary so call sites stay typo-free.
-export const pluralRecord = (n: number) =>
-  pluralize(n, "запись", "записи", "записей");
-export const pluralClient = (n: number) =>
-  pluralize(n, "клиент", "клиента", "клиентов");
-export const pluralVisit = (n: number) =>
-  pluralize(n, "визит", "визита", "визитов");
-export const pluralMessage = (n: number) =>
-  pluralize(n, "сообщение", "сообщения", "сообщений");

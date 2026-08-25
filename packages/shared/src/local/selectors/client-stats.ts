@@ -23,7 +23,6 @@
 import type { Appointment } from "../appointments";
 import { getPaidAmount, getDebtAmount } from "../appointments";
 import type { Client } from "../clients";
-import { FORMS_DEN, pluralRu } from "../../common/utils/plural-ru";
 
 export interface ClientStats {
   /** Number of completed visits. */
@@ -413,7 +412,7 @@ function countServiceDue(
 
 /** Медиана промежутков между визитами (дни). Меньше двух визитов — ритма
  *  ещё нет, возвращаем null: по одному приезду судить не о чем. */
-export function medianGap(dates: readonly string[]): number | null {
+function medianGap(dates: readonly string[]): number | null {
   if (dates.length < 2) return null;
   const days = [...dates]
     .sort()
@@ -441,42 +440,6 @@ export function isLongSilence(s: ClientStats, days = 60): boolean {
     (s.lastVisitDays ?? 0) >= days
   );
 }
-export function isNewClient(s: ClientStats, days = 30): boolean {
-  return s.ageDays >= 0 && s.ageDays < days;
-}
 export function isLoyalClient(s: ClientStats, minVisits = 5): boolean {
   return s.visits >= minVisits;
-}
-export function getClientDisplayState(s: ClientStats): {
-  /** Russian "Был N дней назад" / "Ни разу не был" / "Завтра 14:00". */
-  lastLine: string;
-  /** Tone: accent for upcoming, default for past, tertiary for never. */
-  tone: "accent" | "default" | "muted";
-} {
-  if (s.nextApt && s.nextAptDays !== null && s.nextAptDays >= 0 && s.nextAptDays <= 7) {
-    const label =
-      s.nextAptDays === 0
-        ? "Сегодня"
-        : s.nextAptDays === 1
-          ? "Завтра"
-          : formatRuShort(s.nextApt.date);
-    return {
-      lastLine: `📅 ${label} ${s.nextApt.time}`,
-      tone: "accent",
-    };
-  }
-  if (s.visits === 0) return { lastLine: "Ни разу не был", tone: "muted" };
-  const d = s.lastVisitDays ?? 0;
-  if (d === 0) return { lastLine: "Был сегодня", tone: "default" };
-  if (d === 1) return { lastLine: "Был вчера", tone: "default" };
-  return {
-    lastLine: `Был ${d} ${pluralRu(d, FORMS_DEN)} назад`,
-    tone: d > 60 ? "muted" : "default",
-  };
-}
-
-function formatRuShort(key: string): string {
-  const d = parseKey(key);
-  if (!d) return key;
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }

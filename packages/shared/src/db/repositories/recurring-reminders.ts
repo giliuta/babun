@@ -111,19 +111,6 @@ export async function listRecurringReminders(
   return (data ?? []).map(rowToReminder);
 }
 
-export async function getRecurringReminder(
-  supabase: DbSupabase,
-  id: string
-): Promise<RecurringReminder | null> {
-  const { data, error } = await supabase
-    .from("recurring_reminders")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? rowToReminder(data) : null;
-}
-
 export async function createRecurringReminder(
   supabase: DbSupabase,
   tenantId: string,
@@ -169,44 +156,4 @@ export async function deleteRecurringReminder(
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Напоминание не найдено или доступ запрещён.");
-}
-
-/** Atomic localStorage → cloud transfer used by the Settings import
- *  button. Returns the count successfully written. Skips rows whose
- *  shape doesn't parse — surfaces them in `skipped` for the UI. */
-export async function importLocalReminders(
-  supabase: DbSupabase,
-  tenantId: string,
-  rows: RecurringReminder[]
-): Promise<{ inserted: number; skipped: number }> {
-  if (rows.length === 0) return { inserted: 0, skipped: 0 };
-  const inserts: Insert[] = [];
-  let skipped = 0;
-  for (const r of rows) {
-    if (!r.client_name || !r.last_date || !r.next_due_date) {
-      skipped += 1;
-      continue;
-    }
-    inserts.push({
-      tenant_id: tenantId,
-      // Don't carry the local string id — let the server assign uuid.
-      client_id: null,
-      client_name: r.client_name,
-      phone: r.phone ?? "",
-      team_id: r.team_id ?? null,
-      service_ids: r.service_ids ?? [],
-      service_summary: r.service_summary ?? "",
-      last_date: r.last_date,
-      next_due_date: r.next_due_date,
-      interval_months: r.interval_months,
-      status: r.status,
-      note: r.note ?? "",
-    });
-  }
-  if (inserts.length === 0) return { inserted: 0, skipped };
-  const { error } = await supabase
-    .from("recurring_reminders")
-    .insert(inserts);
-  if (error) throw error;
-  return { inserted: inserts.length, skipped };
 }

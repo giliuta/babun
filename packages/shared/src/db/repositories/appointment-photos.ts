@@ -196,26 +196,6 @@ export async function uploadPhoto(
   }
 }
 
-export async function updatePhoto(
-  supabase: DbSupabase,
-  photoId: string,
-  patch: Partial<{
-    caption: string;
-    kind: PhotoKind;
-    location_id: string | null;
-    sort_order: number;
-  }>,
-): Promise<AppointmentPhotoRecord> {
-  const { data, error } = await supabase
-    .from("appointment_photos")
-    .update(patch)
-    .eq("id", photoId)
-    .select("*")
-    .single();
-  if (error) throw new Error(`updatePhoto: ${error.message}`);
-  return rowWithUrl(supabase, data);
-}
-
 /** Delete the row first, then the storage object (REVERSED order
  *  per A3 — orphan blob ok, broken UI bad). Storage failure leaves
  *  an orphan blob; the row is gone, the UI no longer shows it. */
@@ -242,15 +222,4 @@ export async function deletePhoto(
   } catch {
     // ignore — janitor sweeps later
   }
-}
-
-/** Bulk delete used by AppointmentSheet when the user deletes the
- *  whole appointment. Caller passes the captured paths so the FK
- *  CASCADE doesn't race the storage cleanup. */
-export async function removeStorageObjects(
-  supabase: DbSupabase,
-  paths: string[],
-): Promise<void> {
-  if (paths.length === 0) return;
-  await supabase.storage.from(BUCKET).remove(paths);
 }

@@ -21,9 +21,10 @@
 // a steady state (server unchanged) revalidates, finds no diff, and stays
 // silent, so the cycle settles after exactly one refetch.
 //
-// WEB IS UNAFFECTED: apps/web imports neither these wrappers nor this module
-// (it has its own IndexedDB sync + useRealtimeTenantSync). This lives only on
-// the shared/mobile read path.
+// SCOPE: this module is used only by the shared cached-list wrappers and the
+// mobile app that subscribes to them; nothing else in the tree imports it.
+// Web is the same RN codebase (apps/mobile built for web), so it goes through
+// exactly this path too — there is no second, web-only sync route.
 
 import type { CachedTable } from "../db/cache/index";
 

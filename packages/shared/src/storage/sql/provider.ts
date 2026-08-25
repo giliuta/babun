@@ -11,15 +11,19 @@
 //     rather than silently losing data (Babun's #1 invariant: a loud
 //     crash beats invisible data loss).
 //
-//     Web never injects a SqlAdapter — the web app keeps its IndexedDB
-//     cache (db/cache/index.ts) untouched and never imports the SQL
-//     cache (db/cache/sql.ts). getSql() is only ever reached on native.
+//     Web never injects a SqlAdapter, but it DOES reach getSql(): the
+//     shared cached-wrappers (clientsCached / appointmentsCached /
+//     tagsCached) run in the browser too and touch the cache on every
+//     write. So the browser gets a lazy default — NoCacheSqlAdapter,
+//     «сервер единственное хранилище»: reads always miss, mirror writes
+//     are dropped, and the offline queue refuses LOUDLY (see ./no-cache).
 //
 //   * NetworkAdapter — safe default exists. `NavigatorOnlineNetwork`
 //     reads `navigator.onLine`, matching the prior web `network.ts`
 //     behaviour exactly (SSR-optimistic → true when navigator is
 //     undefined). RN overrides it with NetInfo in bootstrap.ts.
 
+import { NoCacheSqlAdapter } from "./no-cache";
 import type { NetworkAdapter, SqlAdapter } from "./types";
 
 let _sql: SqlAdapter | null = null;
@@ -30,6 +34,14 @@ let _network: NetworkAdapter | null = null;
  *  never fabricate a silent no-op SQLite. */
 export function getSql(): SqlAdapter {
   if (_sql) return _sql;
+  // Браузер. Определяем по `document`, а не по Platform.OS: этот пакет
+  // платформенно нейтрален и react-native не импортирует (иначе упадёт
+  // bun test — он не разбирает Flow в исходниках RN). В bun-тестах и на
+  // нативе `document` не существует, поэтому там остаётся громкий отказ.
+  if (typeof document !== "undefined") {
+    _sql = new NoCacheSqlAdapter();
+    return _sql;
+  }
   throw new Error(
     "[@babun/shared/storage/sql] No SqlAdapter configured. Call " +
       "setSql(new ExpoSqliteAdapter()) in the app entry (bootstrap.ts) " +

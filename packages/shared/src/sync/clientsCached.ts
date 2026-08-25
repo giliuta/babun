@@ -39,6 +39,14 @@
 // `mergeCachedRow`). The two never mix: dispatch relays `payload` straight
 // to PostgREST; reads parse `data`.
 //
+// ВЕБ. Эти обёртки работают и в браузере, где SQLite нет. Раньше первый же
+// cacheUpsert падал на «No SqlAdapter configured» ДО обращения к серверу — и
+// ни один клиент из браузера не сохранялся, молча. Теперь getSql() отдаёт там
+// NoCacheSqlAdapter (storage/sql/no-cache.ts): кэш всегда пуст, зеркальные
+// записи уходят в никуда (копию сервера потерять не страшно), а вот ОФЛАЙН-
+// ВЕТКА — та, что ниже зовёт enqueueOp* — отказывает громко. Так и должно
+// быть: реплеер на вебе не смонтирован, «сохраню позже» там не наступит.
+//
 // v1 limitation — `tag_ids` patch is ONLINE-ONLY: the junction write path
 // lives in the repo (online) and the replayer can't diff assignments, so
 // offline + patch carrying tag_ids → strip + toast.

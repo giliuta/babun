@@ -8,12 +8,11 @@
 // X months ago, it's time to offer the next one."
 
 // STORY-050 — recurring reminders moved to Supabase. The localStorage
-// writers (`saveRecurring`, `createRecurring`, `markStatus`,
-// `removeRecurring`) are gone; producers/consumers go through
-// `db/repositories/recurring-reminders.ts`. We keep `loadRecurring`
-// for the Settings → Опасная зона import button, plus the pure
-// helpers (`addMonthsYYYYMMDD`, `dueReminders`, `pendingCount`) that
-// are platform-agnostic.
+// binders are gone entirely (the «импорт из localStorage» button they
+// were kept for was never built); producers/consumers go through
+// `db/repositories/recurring-reminders.ts`. What stays here is the
+// shape plus the pure helpers (`addMonthsYYYYMMDD`, `dueReminders`,
+// `pendingCount`) that are platform-agnostic.
 
 export type RecurringStatus = "pending" | "booked" | "dismissed";
 
@@ -56,20 +55,6 @@ export interface RecurringReminder {
   /** Notification channel for when the due date arrives. */
   notify_channel?: RecurringChannel;
   created_at: string;
-}
-
-const STORAGE_KEY = "babun-recurring";
-
-export function loadRecurring(): RecurringReminder[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
 }
 
 export function addMonthsYYYYMMDD(dateKey: string, months: number): string {

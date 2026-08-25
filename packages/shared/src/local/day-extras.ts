@@ -3,12 +3,9 @@
 // машины") on top of what the appointments already contribute. Used by
 // the DayFinanceModal that opens when the user taps a day footer.
 
-const STORAGE_KEY = "babun-day-extras";
-
 export type DayExtraKind = "income" | "expense";
 
-/** STORY-003: quick-pick категория расхода. Совпадает с ключами
- *  EXPENSE_CATEGORIES в lib/finance/expense-categories.ts. */
+/** STORY-003: quick-pick категория расхода. */
 export type ExpenseCategoryKey = "fuel" | "food" | "supplies" | "other";
 
 /** Способ оплаты ручной транзакции. Зеркалирует
@@ -33,30 +30,6 @@ export type DayExtrasMap = Record<string, DayExtra[]>; // key = "teamId:date"
 
 export function dayExtrasKey(teamId: string, dateKey: string): string {
   return `${teamId}:${dateKey}`;
-}
-
-export function loadDayExtras(): DayExtrasMap {
-  if (typeof window === "undefined") return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as DayExtrasMap;
-    }
-    return {};
-  } catch {
-    return {};
-  }
-}
-
-export function saveDayExtras(map: DayExtrasMap): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
-  } catch {
-    // ignore
-  }
 }
 
 export function getDayExtras(

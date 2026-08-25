@@ -2,7 +2,6 @@
 // Instagram, Telegram, and SMS. Stored in localStorage for now;
 // will migrate to Supabase with real webhook integrations later.
 
-import { generateId } from "./masters";
 import { getStorage } from "../storage/provider";
 
 export type ChatChannel = "whatsapp" | "instagram" | "telegram" | "sms";
@@ -12,13 +11,6 @@ export const CHANNEL_LABELS: Record<ChatChannel, string> = {
   instagram: "Instagram",
   telegram: "Telegram",
   sms: "SMS",
-};
-
-export const CHANNEL_COLORS: Record<ChatChannel, string> = {
-  whatsapp: "#25D366",
-  instagram: "#E1306C",
-  telegram: "#229ED9",
-  sms: "#6b7280",
 };
 
 export type MessageStatus = "sent" | "delivered" | "read";
@@ -38,14 +30,6 @@ export interface ChatMessage {
 }
 
 export type ConversationStatus = "new" | "active" | "waiting" | "closed" | "archived";
-
-export const STATUS_LABELS_CHAT: Record<ConversationStatus, string> = {
-  new: "Новый",
-  active: "Активный",
-  waiting: "Ожидает",
-  closed: "Закрыт",
-  archived: "Архив",
-};
 
 export interface Chat {
   id: string;
@@ -86,25 +70,6 @@ export function saveChats(list: Chat[]): void {
 
 export function getTotalUnread(chats: Chat[]): number {
   return chats.reduce((sum, c) => sum + c.unread_count, 0);
-}
-
-export function createBlankChat(channel: ChatChannel): Chat {
-  const now = new Date().toISOString();
-  return {
-    id: generateId("chat"),
-    channel,
-    contact_name: "",
-    contact_phone: "",
-    contact_handle: "",
-    client_id: null,
-    messages: [],
-    unread_count: 0,
-    last_message_at: now,
-    status: "new",
-    is_pinned: false,
-    draft: "",
-    created_at: now,
-  };
 }
 
 // Seed data so the page isn't empty on first visit

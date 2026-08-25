@@ -4,12 +4,6 @@
 
 export type Lang = "ru" | "en" | "el";
 
-export const LANG_LABELS: Record<Lang, string> = {
-  ru: "RU",
-  en: "EN",
-  el: "EL",
-};
-
 export interface QuickReply {
   id: string;
   emoji: string;

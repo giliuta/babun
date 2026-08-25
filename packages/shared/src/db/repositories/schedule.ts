@@ -58,16 +58,3 @@ export async function upsertScheduleEntry(
     );
   if (error) throw new Error(`upsertScheduleEntry: ${error.message}`);
 }
-
-export async function deleteScheduleEntry(
-  supabase: DbSupabase,
-  tenantId: string,
-  teamId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("team_schedules")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("team_id", teamId);
-  if (error) throw new Error(`deleteScheduleEntry: ${error.message}`);
-}

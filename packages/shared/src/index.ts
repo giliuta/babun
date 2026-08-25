@@ -1,13 +1,13 @@
-// STORY-035 G0 — root barrel for the new @babun/shared/src layout.
+// Package entry for @babun/shared. Intentionally empty — it exists only to
+// give `main`/`types` a target, because nothing imports the package root.
 //
-// Three sibling namespaces live underneath:
-//   * common  — pure utilities, enums, icon shim (universal)
-//   * local   — current localStorage-shape model + storage-binders
-//   * db      — Supabase-shape model (will populate in G5)
+// Consumers reach for the subpath that owns the code, e.g.
+// `@babun/shared/common/utils/money`, `@babun/shared/local/clients`,
+// `@babun/shared/db/repositories/clients`. Re-exporting those here would
+// pull every namespace into one module graph: a screen that wants one
+// money helper would drag the whole Supabase layer in with it.
 //
-// `storage/` exposes the cross-cutting KVStorage abstraction.
-//
-// IMPORTERS should reach for the specific subpath, e.g.
-// `import { ... } from "@babun/shared/common/utils/money"`.  The
-// root export is intentionally light — it keeps tree-shaking honest.
+// Namespaces: common (pure utils), local (UI-shape model + storage binders),
+// db (Supabase-shape model and repositories), storage (KVStorage seam),
+// sync (offline queue, realtime, cached readers).
 export {};
