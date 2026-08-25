@@ -5,7 +5,6 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   isMessagingReady,
-  MESSAGING_BLOCKERS,
   MESSAGING_READINESS,
   MessagingUnavailableError,
   requireMessagingReady,
@@ -16,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 describe("messaging production-readiness gate", () => {
   test("requires the complete server and provider contract", () => {
     assert.equal(isMessagingReady(), false);
-    assert.equal(MESSAGING_BLOCKERS.length, 7);
+    assert.equal(Object.keys(MESSAGING_READINESS).length, 7);
     assert.equal(
       isMessagingReady({
         ...MESSAGING_READINESS,

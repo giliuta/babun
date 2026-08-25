@@ -67,7 +67,7 @@ function stripUnresolvedTokens(text: string): string {
 
 /** Render `body` for one client (fills [Имя]) and return its sms: URL, or
  *  null if the client has no phone. */
-export function smsUrlForClient(body: string, client: Client): string | null {
+function smsUrlForClient(body: string, client: Client): string | null {
   const digits = smsDigits(client);
   if (!digits) return null;
   const rendered = renderTemplate(body, {

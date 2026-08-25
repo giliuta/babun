@@ -25,7 +25,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { ArrowUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
-import { RowGroup } from "@/features/clients/card-rows";
+import { RowGroup } from "@/components/ui/card-rows";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";

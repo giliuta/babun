@@ -13,7 +13,6 @@ function account(
   return {
     scope: "team",
     brigade_id: "t-yura",
-    team_ids: [],
     name: patch.id,
     kind: "cash",
     position: 0,

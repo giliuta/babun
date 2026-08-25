@@ -18,7 +18,7 @@ import {
   FieldRow,
   NavRow,
   RowGroup,
-} from "@/features/clients/card-rows";
+} from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import {
   intervalLabel,

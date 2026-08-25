@@ -482,7 +482,7 @@ export const useDeleteService = () => useRefDelete("services");
 // rows and the UI asks the user to refresh and retry.
 
 /** Split members into lead/helper id arrays using the role taxonomy. */
-export function deriveLeadHelperIds(
+function deriveLeadHelperIds(
   roles: BrigadeRole[],
   members: BrigadeMember[],
 ): { lead_ids: string[]; helper_ids: string[]; lead_id: string | null } {

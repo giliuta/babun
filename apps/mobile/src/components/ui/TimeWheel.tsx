@@ -17,7 +17,7 @@ import { useThemeColors } from "@/theme/colors";
 export const ITEM_H = 40;
 export const VISIBLE_ROWS = 3;
 export const COLUMN_W = 58;
-export const DIGIT_FONT = 26;
+const DIGIT_FONT = 26;
 export const WHEEL_H = ITEM_H * VISIBLE_ROWS;
 export const PAD = (WHEEL_H - ITEM_H) / 2;
 
@@ -32,7 +32,7 @@ export const MINUTES = Array.from({ length: 60 / MINUTE_STEP }, (_, i) =>
   pad2(i * MINUTE_STEP),
 );
 
-export function WheelWithLines({ children }: { children: React.ReactNode }) {
+function WheelWithLines({ children }: { children: React.ReactNode }) {
   return (
     <View style={{ position: "relative" }}>
       {children}

@@ -243,23 +243,23 @@ export const SEGMENT_BLOCK_TITLES: string[] = [
  *  считаться пропавшим (владелец 2026-08-07 выбрал личный ритм вместо
  *  общего порога: «клининг раз в неделю и кондиционеры раз в полгода не
  *  меряются одной цифрой»). */
-export const SILENCE_RHYTHM_FACTOR = 2;
+const SILENCE_RHYTHM_FACTOR = 2;
 /** Границы личного ритма. Медиана по сырым визитам бывает бессмысленной:
  *  два выезда в один день или подряд дают «раз в 1 день», и человек
  *  становился «пропавшим» через двое суток. Снизу — две недели, сверху —
  *  полгода: дольше ждать возврата бессмысленно, это уже не пауза. */
-export const RHYTHM_MIN_DAYS = 14;
-export const RHYTHM_MAX_DAYS = 180;
+const RHYTHM_MIN_DAYS = 14;
+const RHYTHM_MAX_DAYS = 180;
 
 /** Ритм клиента, приведённый к разумным границам (см. константы выше). */
-export function clientRhythmDays(s: ClientStats | undefined): number | null {
+function clientRhythmDays(s: ClientStats | undefined): number | null {
   const raw = s?.medianGapDays ?? null;
   if (raw === null) return null;
   return Math.min(RHYTHM_MAX_DAYS, Math.max(RHYTHM_MIN_DAYS, raw));
 }
 /** Фолбэк для тех, у кого ритма ещё нет (один визит): единственное место,
  *  где остаётся общая цифра. */
-export const SILENCE_DAYS = 60;
+const SILENCE_DAYS = 60;
 export const NEW_DAYS = 30; // «Так и не приехали» — возраст карточки
 export const LOYAL_VISITS = 5; // «Постоянные»
 export const BIRTHDAY_DAYS = 14; // «Скоро день рождения»
@@ -485,7 +485,7 @@ export const FACET_SUBTITLES: Record<string, string> = {
 // ── Источник · Язык · Тип объекта (владелец 2026-07-24) ────────────
 
 /** Канонический порядок источников — порядок попапа и сводки строки. */
-export const SOURCE_ORDER: AcquisitionSource[] = [
+const SOURCE_ORDER: AcquisitionSource[] = [
   "referral",
   "instagram",
   "whatsapp",

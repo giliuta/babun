@@ -14,7 +14,7 @@ import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
 // ДЕЙСТВУЮЩЕЕ значение через getDaySchedule — плоский редактор «Начало /
 // Конец смены» врал бы по построению.
 
-export const JS_DAY: Record<WeekdayKey, number> = {
+const JS_DAY: Record<WeekdayKey, number> = {
   sun: 0,
   mon: 1,
   tue: 2,
@@ -33,10 +33,6 @@ export const WEEKDAY_FULL: Record<WeekdayKey, string> = {
   sat: "Суббота",
   sun: "Воскресенье",
 };
-
-export function isWeekdayKey(v: string): v is WeekdayKey {
-  return (WEEKDAY_KEYS as string[]).includes(v);
-}
 
 /** Действующий график дня недели. */
 export function dayOf(schedule: TeamSchedule, key: WeekdayKey): DaySchedule {
@@ -65,31 +61,6 @@ export function withDay(
   };
 }
 
-/**
- * Раздать часы одного дня всем остальным. Часы уезжают в general, а из
- * override'ов вычищаются — но is_working каждого дня СОХРАНЯЕТСЯ: «те же
- * часы» не значит «работаем и в воскресенье».
- */
-export function withHoursEverywhere(
-  schedule: TeamSchedule,
-  start: string,
-  end: string,
-): TeamSchedule {
-  const overrides: Partial<Record<WeekdayKey, DaySchedule>> = {};
-  for (const key of WEEKDAY_KEYS) {
-    const cur = dayOf(schedule, key);
-    // Ключ оставляем выходным — и рабочим дням со своими ПЕРЕРЫВАМИ: breaks
-    // это самостоятельные данные (обед), getDaySchedule отдаёт их только из
-    // override, и удаление ключа ради «часы теперь из general» стёрло бы обед
-    // вместе с ним. Рабочий день без перерывов ключа не требует — он и так
-    // возьмёт новые общие часы.
-    if (!cur.is_working || cur.breaks.length > 0) {
-      overrides[key] = { ...cur, start, end };
-    }
-  }
-  return { ...schedule, start, end, overrides };
-}
-
 // Сдвиг «HH:MM» на час в пределах суток — минимальная починка пары
 // начало/конец, когда правка одной границы перескочила другую.
 function shiftHourHM(hm: string, delta: number): string {
@@ -104,7 +75,7 @@ export const addHourHM = (hm: string) => shiftHourHM(hm, 1);
 export const subHourHM = (hm: string) => shiftHourHM(hm, -1);
 
 /** Есть ли хоть один день со своими часами (для подписи «Разный по дням»). */
-export function hasMixedHours(schedule: TeamSchedule): boolean {
+function hasMixedHours(schedule: TeamSchedule): boolean {
   const working = allDays(schedule)
     .map(({ day }) => day)
     .filter((d) => d.is_working);
@@ -164,12 +135,3 @@ export function specialDayLabel(dateKey: string): string {
   return year === new Date().getFullYear() ? label : `${label} ${year}`;
 }
 
-/** Особые дни по возрастанию даты — ISO-ключи сортируются строкой. */
-export function listSpecialDays(
-  schedule: TeamSchedule | null | undefined,
-): { dateKey: string; day: DaySchedule }[] {
-  const map = schedule?.date_overrides ?? {};
-  return Object.keys(map)
-    .sort()
-    .map((dateKey) => ({ dateKey, day: map[dateKey] }));
-}

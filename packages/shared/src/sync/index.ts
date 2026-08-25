@@ -9,7 +9,7 @@
 // without collision. Consumers import them by module path instead —
 //   import { createClient } from "@babun/shared/sync/clientsCached"
 // (resolved via the package's `./sync/*` export). This barrel re-exports
-// only the collision-free surface: the replayer, network/queue/format/error
+// only the collision-free surface: the replayer, the network/queue/format
 // helpers, the shared toast setter, and the RN-safe uuid.
 
 export {
@@ -64,12 +64,4 @@ export {
   type RealtimeTenantSyncOptions,
 } from "./realtime";
 
-export { labelForOp, relativeTime, pluralizeOps } from "./format";
-
-export {
-  reportSyncError,
-  clearSyncError,
-  useSyncError,
-  setSyncErrorTelemetry,
-  type SyncErrorState,
-} from "./sync-error-bus";
+export { labelForOp, relativeTime } from "./format";

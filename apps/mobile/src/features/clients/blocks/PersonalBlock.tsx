@@ -33,7 +33,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react-native";
-import { NavRow, RowGroup } from "@/features/clients/card-rows";
+import { NavRow, RowGroup } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";

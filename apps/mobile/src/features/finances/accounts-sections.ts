@@ -29,7 +29,6 @@ import type {
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import {
   FORMS_DEN,
-  FORMS_KOMANDA,
   formatCountRu,
 } from "@babun/shared/common/utils/plural-ru";
 
@@ -38,7 +37,6 @@ export interface SectionAccount {
   id: string;
   scope: AccountScope;
   brigade_id: string | null;
-  team_ids: string[];
   name: string;
   kind: AccountKind;
   position: number;
@@ -81,25 +79,6 @@ export function sortAccountRows<T extends SectionAccount>(
       || a.position - b.position
       || byName.compare(a.name, b.name),
   );
-}
-
-/**
- * Имена команд одной фразой: «Юра, Аня», а от четырёх — «Юра, Аня и ещё 2
- * команды». Пустой список даёт пустую строку: называть нечего.
- *
- * ЖИВА ТОЛЬКО РАДИ НАСЛЕДИЯ. Счёт принадлежит одной команде (владелец
- * 2026-08-15), и у нового счёта перечислять некого: непустой список команд
- * бывает только у счетов старой схемы под чипом «Без команды» — их `team_ids`
- * ещё помнят, кто счётом пользовался (подпись «Пользуются:» ниже).
- */
-export function teamNamesPhrase(names: readonly string[]): string {
-  if (names.length <= 3) return names.join(", ");
-  // Три имени ещё читаются, четвёртое уже не помещается в строку — дальше
-  // счётчик, и он склоняется как все числа продукта.
-  return `${names.slice(0, 2).join(", ")} и ещё ${formatCountRu(
-    names.length - 2,
-    FORMS_KOMANDA,
-  )}`;
 }
 
 /** Псевдо-команда «Без команды»: под ней стоят счета, оставшиеся без владельца
@@ -329,27 +308,7 @@ export function accountDaysOnHand(
 /** Порог «давно»: сверка старше двух недель — уже вопрос, а не рутина.
  *  Одно число на весь продукт: список, карточка счёта и закрытие дня обязаны
  *  считать кассу несверенной в один и тот же день. */
-export const CASH_COUNT_STALE_DAYS = 14;
-
-export interface AccountCaptionInput extends AccountMovementDates {
-  kind: AccountKind;
-  balance: number;
-  /**
-   * Дата последней сверки кассы (`YYYY-MM-DD`).
-   *   • `null`      — сверок не было ни разу;
-   *   • `undefined` — НЕИЗВЕСТНО (окно запроса сверок не покрыло этот счёт
-   *     либо ответ ещё не приехал). Разница принципиальная: «ни разу» — это
-   *     утверждение о деньгах, и выдумывать его нельзя.
-   */
-  lastCountedOn?: string | null;
-  /** Имя ответственного мастера, уже разрезолвленное экраном. */
-  ownerName?: string | null;
-  /** Имена АКТИВНЫХ команд, которые пользуются этим счётом вместе. Наследие:
-   *  у счёта новой модели команда одна, и непустым этот список бывает только
-   *  у счетов «Без команды» (их `team_ids` остались от старой схемы). Одна
-   *  команда — это не «вместе», и подписи такой счёт не получает. */
-  sharedWith?: readonly string[];
-}
+const CASH_COUNT_STALE_DAYS = 14;
 
 // ПОДПИСЬ СТРОКИ СЧЁТА СНЯТА С ПРОДУКТА (владелец 2026-08-17: «касса — на
 // руках 21 день, что это за хуйня… убирайте подсказки, просто счёт»). Ладдер

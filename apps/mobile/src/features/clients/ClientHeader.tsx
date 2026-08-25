@@ -55,7 +55,7 @@ import {
   FieldRow,
   RowActionButton,
   RowGroup,
-} from "@/features/clients/card-rows";
+} from "@/components/ui/card-rows";
 import {
   AddContactSheet,
   type AddContactChoice,

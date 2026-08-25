@@ -629,26 +629,6 @@ export async function softDeleteClient(
   if (data.id !== id) throw new Error("softDeleteClient: клиент не найден");
 }
 
-export async function softDeleteClients(
-  supabase: DbSupabase,
-  ids: string[],
-  tenantId: string,
-  purgeAt: string | null = null,
-): Promise<void> {
-  if (!ids.length) return;
-  const uniqueIds = [...new Set(ids)];
-  const { data, error } = await supabase
-    .from("clients")
-    .update({ deleted_at: new Date().toISOString(), purge_at: purgeAt })
-    .in("id", uniqueIds)
-    .eq("tenant_id", tenantId)
-    .select("id");
-  if (error) throw new Error(`softDeleteClients: ${error.message}`);
-  if ((data ?? []).length !== uniqueIds.length) {
-    throw new Error("softDeleteClients: часть клиентов не найдена");
-  }
-}
-
 export async function restoreClient(
   supabase: DbSupabase,
   id: string,
@@ -663,25 +643,6 @@ export async function restoreClient(
     .single();
   if (error) throw new Error(`restoreClient: ${error.message}`);
   if (data.id !== id) throw new Error("restoreClient: клиент не найден");
-}
-
-export async function restoreClients(
-  supabase: DbSupabase,
-  ids: string[],
-  tenantId: string,
-): Promise<void> {
-  if (!ids.length) return;
-  const uniqueIds = [...new Set(ids)];
-  const { data, error } = await supabase
-    .from("clients")
-    .update({ deleted_at: null, purge_at: null })
-    .in("id", uniqueIds)
-    .eq("tenant_id", tenantId)
-    .select("id");
-  if (error) throw new Error(`restoreClients: ${error.message}`);
-  if ((data ?? []).length !== uniqueIds.length) {
-    throw new Error("restoreClients: часть клиентов не найдена");
-  }
 }
 
 // ─── Duplicate guard (clients-99 F1.5) ─────────────────────────

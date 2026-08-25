@@ -63,7 +63,7 @@ export interface TimeOfDay {
 }
 
 /** «08:30» → {8,30}; «24:00» → {24,0}. Мусор и пустое → null (наследуем). */
-export function parseHm(value: string | null | undefined): TimeOfDay | null {
+function parseHm(value: string | null | undefined): TimeOfDay | null {
   if (!value) return null;
   const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
   if (!m) return null;

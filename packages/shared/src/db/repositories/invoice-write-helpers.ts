@@ -1,4 +1,23 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+// Проверки и сборка строк для выставления/правки счёта. Пишет в базу не этот
+// модуль, а серверные функции `issue_invoice` / `update_invoice_draft`.
+//
+// ОТКАТА ВЫСТАВЛЕННОГО СЧЁТА ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ ПРОПУСК. Здесь
+// лежала `cleanupInvoice(id)` — «удалить счёт, если контрольное чтение в
+// issueInvoice не сошлось». Её не звал никто, и звать её нельзя:
+//   · `issue_invoice` — ОДНА транзакция. Если она вернулась, счёт целиком
+//     записан и посчитан СЕРВЕРОМ; недописанного состояния, которое надо
+//     подчищать, не существует.
+//   · контрольное чтение идёт уже ПОСЛЕ коммита, и его расхождение — это
+//     спор клиентской арифметики с серверной. Стирать по такому спору
+//     денежный документ значит удалять и тот случай, где прав сервер: при
+//     `link_to_tx_id` счёт уже оплачен, связан с проводкой, а на приём денег
+//     сервер сам родил чек.
+//   · номер не сгорает: `next_invoice_number` считает `max(seq) + 1` по живым
+//     строкам, а повтор с тем же `request_id` возвращает ТОТ ЖЕ счёт, а не
+//     заводит второй.
+// Поэтому лишний счёт остаётся видимым в списке с честной ошибкой — его
+// аннулирует человек (`void_invoice`), а не молчаливый DELETE.
+
 import type { Database } from "../database.types";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import {
@@ -8,7 +27,6 @@ import {
 } from "../../local/finance/invoice-ledger";
 import { centsToMoney, moneyToCents } from "../../local/finance/vat";
 
-type DbSupabase = SupabaseClient<Database>;
 type LineInsert = Database["public"]["Tables"]["invoice_lines"]["Insert"];
 
 export function validateInvoiceDraft(draft: {
@@ -89,19 +107,6 @@ export function invoiceLineRows(
     // numeric ровно на цент (1,5 × 2,01).
     total: invoiceLineTotal(line.qty, line.unit_price),
   }));
-}
-
-export async function cleanupInvoice(
-  supabase: DbSupabase,
-  id: string,
-): Promise<string> {
-  const { data, error } = await supabase
-    .from("invoices")
-    .delete()
-    .eq("id", id)
-    .select("id")
-    .maybeSingle();
-  return error || !data ? "; откат инвойса не подтверждён" : "";
 }
 
 export const MAX_INVOICE_MONEY = 9_999_999_999.99;

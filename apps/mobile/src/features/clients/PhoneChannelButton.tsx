@@ -6,7 +6,7 @@ import {
   resolveChannelsForNumber,
   useEnabledChannels,
 } from "@/features/clients/contact-channels";
-import { RowActionButton } from "@/features/clients/card-rows";
+import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { haptics } from "@/lib/haptics";

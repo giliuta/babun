@@ -14,6 +14,9 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "build:web": "expo export --platform web --output-dir dist",
+    "build:ios": "eas build --platform ios --profile production",
+    "build:android": "eas build --platform android --profile production",
+    "submit:ios": "eas submit --platform ios --latest",
     "doctor": "expo-doctor",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit"

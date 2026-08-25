@@ -53,9 +53,6 @@ export type ThemeColors = {
   disabledFill: string;
   haloOpacity: number;
   // auth social chips
-  googleBg: string;
-  googleBorder: string;
-  googleText: string;
   // radii (scheme-invariant — colocated so one import drives a screen)
   radius: { card: number; input: number; pill: number };
 };
@@ -158,9 +155,6 @@ export const light: ThemeColors = {
   // Light enough that a `sub`-colored disabled label reads at ≥4.5:1.
   disabledFill: "#e2e7ee",
   haloOpacity: 0.12,
-  googleBg: "#ffffff",
-  googleBorder: "#d9dee5",
-  googleText: "#1f1f1f",
   radius: RADIUS,
 };
 

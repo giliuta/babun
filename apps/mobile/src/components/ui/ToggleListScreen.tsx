@@ -7,7 +7,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { ReorderList } from "@/components/ui/ReorderList";
-import { RowCaption } from "@/features/clients/card-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 

@@ -11,7 +11,7 @@
 
 import { useMemo } from "react";
 import { useRouter } from "expo-router";
-import { NavRow } from "@/features/clients/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useInvoices } from "@/features/invoices/queries";
 import { useReceipts } from "@/features/documents/receipts-queries";

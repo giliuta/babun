@@ -2,7 +2,7 @@
 // from ClientHeader / ClientNextJob / VisitsBlock / FinanceBlock /
 // ObjectsBlock, which each kept an identical private copy.
 
-export const MONTHS_RU_SHORT = [
+const MONTHS_RU_SHORT = [
   "янв", "фев", "мар", "апр", "мая", "июн",
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];

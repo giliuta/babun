@@ -58,7 +58,6 @@ export const FORMS_ZAPIS: PluralFormsRu = ["запись", "записи", "за
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];
 export const FORMS_DEN: PluralFormsRu = ["день", "дня", "дней"];
 export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
-export const FORMS_KOMANDA: PluralFormsRu = ["команда", "команды", "команд"];
 export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
 export const FORMS_KASSA: PluralFormsRu = ["касса", "кассы", "касс"];
 export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];

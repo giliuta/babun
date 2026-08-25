@@ -182,7 +182,7 @@ export function RowGroupBody({
 }
 
 /** Пояснение ПОД карточкой: тише строк и не кликается. */
-export function RowGroupFooter({ text }: { text: string }) {
+function RowGroupFooter({ text }: { text: string }) {
   const t = useThemeColors();
   return (
     <Text

@@ -23,7 +23,7 @@ Feature code:
 - `apps/mobile/src/features/reference/team-schedule.ts`, `master-profile.ts`
 - `apps/mobile/src/features/settings/team-access.ts`, `role-policy.ts`, `invitations.ts`
 - Shared: `packages/shared/src/local/masters.ts` (`Master`, `Team`, `BrigadeRole`,
-  `BrigadeMember`, `SalaryRule` — teams, brigades AND payroll all live in this one
+  `BrigadeMember` — teams and brigades live in this one
   file), `brigade-permissions.ts` (`BrigadeMemberPermissions`), `schedule.ts`
 
 There is no `src/features/teams` or `src/features/brigades` directory, and no
@@ -34,7 +34,7 @@ was removed. Do not invent them.
 - **Team** — an operational unit shown as a chip strip on the calendar, with its
   own cities, services, equipment and calendar window (`teams.calendar_window_*`,
   NULL = tenant default).
-- **Brigade** (`BrigadeRole` / `BrigadeMember` / `SalaryRule` in
+- **Brigade** (`BrigadeRole` / `BrigadeMember` in
   `packages/shared/src/local/masters.ts`) — the payroll side:
   members with percent rates. A team and a brigade need not map 1:1.
 - Roles exist as a policy layer (`role-policy.ts`), but today everyone sees

@@ -64,232 +64,6 @@ export interface MasterPermissions {
   can_manage_settings?: boolean;
 }
 
-// Sprint 026-cleanup: Master is now the employee record — it carries
-// salary terms, personal contacts, documents, and notes alongside the
-// original team/role/permissions. All new fields are optional so the
-// existing seeded / previously-persisted masters keep working without
-// a migration script.
-//
-// Sprint 027: expanded into a full SaaS employee profile — login
-// credentials, account lifecycle status, work schedule, contract
-// type, richer salary model (period + method + fixed_bonus +
-// deduction), and the ~25-flag permissions matrix above.
-export type SalaryModel =
-  | "percent_of_team" // legacy behaviour: paid via team.payout_percentage
-  | "percent_of_own" // % of revenue from their own visits
-  | "per_visit" // flat fee per completed visit
-  | "monthly" // fixed monthly salary
-  | "hourly" // hourly rate
-  | "hybrid" // base salary + % of own work
-  | "none"; // e.g. owner/admin paid from outside the system
-
-export type SalaryPeriod = "weekly" | "biweekly" | "monthly";
-export type PaymentMethod = "cash" | "card" | "bank_transfer" | "other";
-
-export interface MasterSalary {
-  model: SalaryModel;
-  /** Meaning depends on `model`:
-   *  percent_of_team → 0 (team handles it)
-   *  percent_of_own  → 0–100
-   *  per_visit       → euros per visit
-   *  monthly         → euros per month
-   *  hourly          → euros per hour
-   *  hybrid          → monthly base in euros (hybrid_percent holds the %)
-   *  none            → 0
-   */
-  value: number;
-  /** Only used when model = "hybrid": % of own work on top of base. */
-  hybrid_percent?: number;
-  /** Fixed monthly bonus if KPIs are met (optional, free-form). */
-  fixed_bonus?: number;
-  /** Fixed monthly deduction (advance, materials, etc). */
-  deduction?: number;
-  /** When payout happens. Defaults to `monthly` if not set. */
-  period?: SalaryPeriod;
-  /** How the payout happens. Defaults to `cash` if not set. */
-  method?: PaymentMethod;
-  /** Optional free-text clause shown on payroll review ("авансы по
-   *  средам", "минус наличные"). */
-  note?: string;
-  // ── Sprint 033 Phase I33 — banking details for direct-deposit
-  //    payouts. All optional; empty = pay in cash as per `method`.
-  iban?: string;
-  bank_name?: string;
-  /** Local tax number (TIN / АФМ / ИНН). */
-  tax_number?: string;
-  /** Cyprus-resident flag — used to decide if VAT 19% applies on
-   *  invoices emitted to this master's payroll entries. */
-  tax_resident?: boolean;
-}
-
-// ─── SalaryRule (v306, replaces flat MasterSalary) ────────────────────
-//
-// A SalaryRule describes how one employee is paid for work done inside
-// one specific brigade. A master in N brigades can have up to N rules
-// (one per brigade). Rules are additive — base + percent + per-visit +
-// hourly all stack onto one payout. Legacy MasterSalary is migrated
-// into a single-rule array on load; old readers still compile via the
-// deprecated `Master.salary` field.
-
-/** % of WHAT revenue stream the percent_rate applies to. */
-export type PercentSource = "team" | "own";
-
-/** WHICH figure counts as revenue. Gross = sum of completed
- *  appointment total_amount. Net = gross minus
- *  sum(appointment.expenses[].amount) (materials, fuel, etc). */
-export type RevenueBasis = "gross" | "net";
-
-export interface SalaryRule {
-  id: string;
-  /** Brigade this rule applies to. null = tenant-wide fallback
-   *  (admins / universal roles without brigade attachment). */
-  brigade_id: string | null;
-  /** Fixed base paid every period (€), regardless of workload. */
-  base_amount: number;
-  /** Percent of revenue (0–100). Applied on top of base. */
-  percent_rate: number;
-  /** Whose revenue fuels the percent — team turnover or master's own
-   *  closed appointments. Defaults to "team" when percent_rate > 0. */
-  percent_source: PercentSource;
-  /** Gross revenue or net-of-expenses. Defaults to "gross". */
-  percent_of: RevenueBasis;
-  /** Flat € per completed visit (the master's own visit). */
-  per_visit: number;
-  /** € per hour worked. Not tracked automatically yet — future use. */
-  hourly_rate: number;
-  /** Fixed monthly bonus (KPI / seniority top-up, free-form). */
-  fixed_bonus?: number;
-  /** Fixed monthly deduction (advance, tool rental, etc). */
-  deduction?: number;
-  /** Payout cadence. Default "monthly". */
-  period?: SalaryPeriod;
-  /** Payout channel. Default "cash". */
-  method?: PaymentMethod;
-  /** Free-text note shown on payroll review. */
-  note?: string;
-}
-
-// ─── Incidents (v307 — structured replacement for freeform notes) ───
-//
-// A dated log entry per HR-relevant event: late start, customer
-// complaint, formal warning, kudos. Stored on Master.incidents[] so
-// history survives the person's whole tenure in the company.
-
-export type IncidentCategory =
-  | "late" // опоздание
-  | "complaint" // жалоба клиента
-  | "warning" // предупреждение
-  | "kudos" // благодарность
-  | "other";
-
-export interface MasterIncident {
-  id: string;
-  /** YYYY-MM-DD */
-  date: string;
-  category: IncidentCategory;
-  text: string;
-  /** ISO timestamp when the entry was recorded. Not editable. */
-  created_at: string;
-}
-
-export interface MasterDocument {
-  id: string;
-  /** "Паспорт", "Водительские права", "ИНН" */
-  kind: string;
-  /** Номер / серия / expiry in one free-text line for v1. */
-  value: string;
-  /** Expiry date (YYYY-MM-DD). Used to badge "скоро истекает". */
-  expires_at?: string;
-  /** Scan attachment. Phase 1 stores just filename + size for UX
-   *  completeness; real bytes land in Supabase Storage later. */
-  file_name?: string;
-  file_size?: number;
-  note?: string;
-}
-
-// ─── Skills & certifications (Sprint 033 Phase I33) ──────────────────
-
-/** Canonical certification kinds that SaaS targets across service
- *  businesses. `other` lets the tenant type anything. */
-export type CertificationKind =
-  | "fgas"
-  | "electrical"
-  | "driving"
-  | "medical"
-  | "work_permit"
-  | "language"
-  | "other";
-
-export interface Certification {
-  id: string;
-  kind: CertificationKind;
-  /** Freeform label; used for kind === "other" primarily. */
-  label?: string;
-  number?: string;
-  issued_at?: string; // YYYY-MM-DD
-  expires_at?: string; // YYYY-MM-DD
-  file_name?: string;
-  file_size?: number;
-  note?: string;
-}
-
-// ─── Leaves / отпуск (Sprint 033 Phase I33) ─────────────────────────
-
-export type LeaveKind = "vacation" | "sick" | "personal" | "unpaid";
-
-export interface MasterLeave {
-  id: string;
-  /** Inclusive YYYY-MM-DD. */
-  start: string;
-  end: string;
-  kind: LeaveKind;
-  /** If false, this period is excluded from payroll calculations
-   *  (ЗП не начисляется). UI toggles per-leave. */
-  paid: boolean;
-  /** Optional replacement master id — works in this master's
-   *  brigades while they are out. Any active master can stand in,
-   *  not restricted to the same brigade. */
-  substitute_master_id?: string | null;
-  note?: string;
-}
-
-// ─── Login history & audit (Sprint 033 Phase I33) ───────────────────
-
-export interface LoginEvent {
-  timestamp: string;
-  user_agent?: string;
-  ip?: string;
-}
-
-export type AuditAction =
-  | "created"
-  | "role_changed"
-  | "title_changed"
-  | "salary_changed"
-  | "credentials_issued"
-  | "credentials_reset"
-  | "credentials_revoked"
-  | "archived"
-  | "unarchived"
-  | "team_changed"
-  | "leave_added"
-  | "leave_removed"
-  | "certification_changed"
-  | "other";
-
-export interface AuditEvent {
-  id: string;
-  timestamp: string;
-  action: AuditAction;
-  /** Human-readable one-liner shown in the /info audit log. */
-  summary: string;
-  /** Optional actor id — we don't have auth context yet, so most
-   *  events record just "ты сам это сделал". */
-  actor_id?: string;
-}
-
-export type ContractType = "full_time" | "part_time" | "contractor" | "trial";
-
 export type AccountStatus =
   | "invited" // CEO created creds, user hasn't logged in yet
   | "active" // logged in at least once
@@ -302,27 +76,6 @@ export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, string> = {
   paused: "На паузе",
   terminated: "Уволен",
 };
-
-export interface NotificationPrefs {
-  push_new_appointment: boolean;
-  push_reschedule: boolean;
-  push_cancellation: boolean;
-  push_daily_summary: boolean;
-  push_chat_message: boolean;
-  /** Channel(s) the user prefers for company-wide SMS / email blasts. */
-  channels: Array<"push" | "email" | "sms">;
-}
-
-export interface WorkSchedule {
-  /** Mon–Sun bitmask, 0 = Monday: [true,true,true,true,true,false,false] */
-  days: [boolean, boolean, boolean, boolean, boolean, boolean, boolean];
-  /** HH:MM */
-  start_time: string;
-  /** HH:MM */
-  end_time: string;
-}
-
-export const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"] as const;
 
 export interface Master {
   id: string;
@@ -354,27 +107,14 @@ export interface Master {
   // Employment.
   /** YYYY-MM-DD */
   hire_date?: string;
-  emergency_contact?: string;
-  contract_type?: ContractType;
-  work_schedule?: WorkSchedule;
 
-  // Compensation.
-  /** DEPRECATED — kept for legacy records until the next clean-up
-   *  pass. New code reads `salary_rules`. loadMasters() migrates
-   *  this into a single-rule array on first load. */
-  salary?: MasterSalary;
-  /** v306 — per-brigade payment rules. A master in several brigades
-   *  has one rule per brigade (additive base + percent + per-visit +
-   *  hourly inside each rule). */
-  salary_rules?: SalaryRule[];
-
-  // Banking details (moved from salary to master in v306 — one set
-  // per employee, not per rule).
+  // Реквизиты сотрудника — одни на человека. Нужны бухгалтеру при
+  // выплате, поэтому пережили снос кадрово-зарплатной подсистемы.
   iban?: string;
   bank_name?: string;
   /** Local tax number (TIN / АФМ / ИНН). */
   tax_number?: string;
-  /** Cyprus-resident flag — drives VAT 19% on payroll entries. */
+  /** Cyprus-resident flag — учитывается при расчёте налогов. */
   tax_resident?: boolean;
 
   // ── Sprint 027: Babun account (login credentials) ─────────────
@@ -395,34 +135,9 @@ export interface Master {
   /** YYYY-MM-DD if account_status === 'terminated'. */
   terminated_at?: string;
 
-  // Notification preferences — v1 supports push-only opt-outs.
-  notifications?: NotificationPrefs;
-
-  // Misc.
-  documents?: MasterDocument[];
-  notes?: string;
-  /** v307 — structured incident log (late / complaint / warning /
-   *  kudos / other). Replaces the freeform `notes` field for
-   *  dated HR-relevant events. */
-  incidents?: MasterIncident[];
-
-  // ── Sprint 033 Phase I33 — SaaS-completeness additions ──────────
-  /** Free-text skills / expertise ("Установка", "F-gas", "Чиллеры"). */
-  skills?: string[];
-  /** Certifications with optional expiry and attached scan. */
-  certifications?: Certification[];
   /** Personal cities — overrides the brigade defaults for this
    *  master when computing "кого отправить в этот район". */
   cities?: string[];
-  /** Holiday / sick / personal leave periods with paid flag and
-   *  optional substitute. Not yet integrated into payroll. */
-  leaves?: MasterLeave[];
-  /** Last N login events. Populated by the Supabase Auth hook once
-   *  we wire it; empty in the localStorage build. */
-  login_history?: LoginEvent[];
-  /** Trailing audit trail (capped at 100). Admin reads this to see
-   *  who changed what. */
-  audit?: AuditEvent[];
 
   // ── Sprint 033 Phase I37 — Personal calendar ────────────────────
   /** Display name of the master's personal calendar (shown on the
@@ -497,13 +212,6 @@ export interface Team {
    *  the brigade «Метки» settings. */
   tint_days_by_label?: boolean;
 
-  // ── Sprint 033 Phase I42 — per-brigade AppointmentSheet layout ──
-  /** Which optional blocks show up in the create/edit sheet when the
-   *  user is working in this brigade's calendar. Client + services
-   *  sections are mandatory — their flags aren't here. Undefined =
-   *  inherit from the tenant-wide FormFieldVisibility. */
-  appointment_blocks?: BrigadeAppointmentBlocks;
-
   // ── Sprint 033 Phase I43 — custom roles + explicit membership ──
   /** Tenant-authored role taxonomy for THIS brigade. Each member
    *  below holds one of these. Defaults to [Старший, Помощник]
@@ -557,29 +265,6 @@ export const LEAD_ROLE_NAME = "бригадир";
 
 export function isLeadRole(role: { name: string }): boolean {
   return role.name.trim().toLowerCase() === LEAD_ROLE_NAME;
-}
-
-// ─── Brigade appointment-sheet visibility (Sprint 033 Phase I42) ─
-
-/** Optional blocks the dispatcher can toggle per brigade. Mandatory
- *  blocks (client, services) are hard-coded as always-visible.
- *  Sprint 033 Phase I46 — `order` lets the tenant drag-to-reorder the
- *  optional blocks; when undefined the default declaration order is
- *  used. Entries must be keys of this interface minus the order
- *  field itself. */
-export interface BrigadeAppointmentBlocks {
-  show_address?: boolean;
-  show_address_note?: boolean;
-  show_comment?: boolean;
-  show_photos?: boolean;
-  show_prepaid?: boolean;
-  show_payment?: boolean;
-  show_expenses?: boolean;
-  show_reminder?: boolean;
-  show_source?: boolean;
-  /** Ordered list of optional-block keys. Unknown or missing entries
-   *  fall back to the declaration order. */
-  order?: string[];
 }
 
 // ─── Default permissions per role ──────────────────────────────────────

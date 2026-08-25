@@ -20,7 +20,7 @@ import type { Client } from "@babun/shared/local/clients";
 
 /** Стандартный набор — ровно тот, что назвал владелец 2026-07-27. «Вилла»
  *  убрана им же: «дом и вилла по сути одно и то же». */
-export const STANDARD_OBJECT_TYPES = ["Дом", "Квартира", "Офис"] as const;
+const STANDARD_OBJECT_TYPES = ["Дом", "Квартира", "Офис"] as const;
 
 /** Ключ сравнения: «дом», «Дом» и «ДОМ » — один тип, а не три. */
 export function objectTypeKey(name: string): string {

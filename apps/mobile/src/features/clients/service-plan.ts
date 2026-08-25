@@ -68,7 +68,7 @@ function daysBetween(fromYmd: string, toYmd: string): number {
  *  условия расходились (там только «завершённые», тут «любые кроме
  *  отменённых»), строка объекта говорила «Пора обслужить», а статус в
  *  списке молчал — и наоборот. */
-export function lastVisitToLocation(
+function lastVisitToLocation(
   appts: readonly Appointment[],
   locationId: string,
   todayYmd: string,

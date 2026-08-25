@@ -10,7 +10,7 @@ import {
   FieldRow,
   RowActionButton,
   RowGroup,
-} from "@/features/clients/card-rows";
+} from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   addressOrLinkPatch,

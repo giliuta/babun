@@ -117,9 +117,3 @@ export function iconPreset(value: string | null | undefined): LucideIcon | null 
   if (!value) return null;
   return ICON_PRESETS.find((i) => i.value === value)?.icon ?? null;
 }
-
-/** Русское имя выбранного значка — для строки-значения в настройках. */
-export function iconPresetLabel(value: string | null | undefined): string | null {
-  if (!value) return null;
-  return ICON_PRESETS.find((i) => i.value === value)?.label ?? null;
-}

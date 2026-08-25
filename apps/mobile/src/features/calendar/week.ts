@@ -19,7 +19,7 @@ export function weekdayIndex(jsDay: number, weekStart: WeekStart): number {
 }
 
 /** Обратное к weekdayIndex: JS-день недели (0=Вс) для колонки i. */
-export function jsDayOfColumn(i: number, weekStart: WeekStart): number {
+function jsDayOfColumn(i: number, weekStart: WeekStart): number {
   return weekStart === "sunday" ? i : (i + 1) % 7;
 }
 

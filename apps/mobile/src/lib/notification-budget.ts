@@ -5,7 +5,7 @@
  * small hard limit, but a finite cap still protects storage and startup time.
  */
 export const IOS_BABUN_NOTIFICATION_BUDGET = 60;
-export const ANDROID_BABUN_NOTIFICATION_BUDGET = 256;
+const ANDROID_BABUN_NOTIFICATION_BUDGET = 256;
 // Keep a larger, still finite desired queue so reminders beyond the current
 // native window are promoted on a later launch instead of being forgotten.
 export const PERSISTED_BABUN_NOTIFICATION_BUDGET = 2_048;

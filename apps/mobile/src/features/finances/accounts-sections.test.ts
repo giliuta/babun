@@ -8,7 +8,6 @@ import {
   NO_TEAM,
   sumAccountBalances,
   teamAccounts,
-  teamNamesPhrase,
   type SectionAccount,
   type SectionTeam,
 } from "./accounts-sections";
@@ -22,7 +21,6 @@ function account(patch: Partial<Row> & { id: string; balance: number }): Row {
   return {
     scope: "team",
     brigade_id: "t-yura",
-    team_ids: [],
     name: patch.id,
     kind: "cash",
     position: 0,
@@ -212,22 +210,6 @@ describe("лента команд", () => {
       ["revolut"],
     );
     assert.equal(sumAccountBalances(teamAccounts(rows, NO_TEAM)), 5120);
-  });
-});
-
-describe("имена команд одной фразой", () => {
-  test("до трёх перечисляются, дальше — склонённый счётчик", () => {
-    assert.equal(teamNamesPhrase([]), "");
-    assert.equal(teamNamesPhrase(["Юра"]), "Юра");
-    assert.equal(teamNamesPhrase(["Юра", "Аня", "Дима"]), "Юра, Аня, Дима");
-    assert.equal(
-      teamNamesPhrase(["Юра", "Аня", "Дима", "Коля"]),
-      "Юра, Аня и ещё 2 команды",
-    );
-    assert.equal(
-      teamNamesPhrase(["Юра", "Аня", "Дима", "Коля", "Петя", "Вася", "Гена"]),
-      "Юра, Аня и ещё 5 команд",
-    );
   });
 });
 

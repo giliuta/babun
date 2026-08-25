@@ -22,16 +22,6 @@ export const MESSAGING_READINESS = Object.freeze({
 
 export type MessagingReadiness = typeof MESSAGING_READINESS;
 
-export const MESSAGING_BLOCKERS = Object.freeze([
-  "server-conversation-schema",
-  "tenant-role-rls",
-  "realtime-read-state",
-  "outbound-provider-adapters",
-  "signed-inbound-webhooks",
-  "provider-account-identities",
-  "private-message-media-storage",
-] as const);
-
 export const MESSAGING_UNAVAILABLE_MESSAGE =
   "Каналы сообщений ещё не подключены. Приложение не будет показывать локальные ответы как отправленные.";
 

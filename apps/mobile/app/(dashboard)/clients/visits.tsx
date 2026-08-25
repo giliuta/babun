@@ -8,7 +8,7 @@ import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Spinner } from "@/components/ui/Spinner";
-import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
+import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";

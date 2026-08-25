@@ -28,7 +28,7 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { clientDebt, todayYMD } from "@/features/clients/filter";
 import { lastVisitTarget } from "@/features/clients/repeat-visit";
 import { useServices } from "@/features/services/queries";
-import { NavRow, RowCaption, RowGroup } from "@/features/clients/card-rows";
+import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 
 const EMPTY_NOTES: ClientNote[] = [];

@@ -9,7 +9,7 @@ import { SORT_ORDER, type SortKey } from "./filter";
 
 const KEY = "babun-clients-sort";
 
-export function getClientsSort(): SortKey {
+function getClientsSort(): SortKey {
   try {
     const v = getStorage().get<string>(KEY);
     return SORT_ORDER.includes(v as SortKey) ? (v as SortKey) : "recent";

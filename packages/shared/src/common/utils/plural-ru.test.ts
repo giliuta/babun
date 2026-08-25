@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import { countWordRu } from "./pluralize";
-import { FORMS_KOMANDA, formatCountRu, pluralRu } from "./plural-ru";
+import { formatCountRu, pluralRu } from "./plural-ru";
+
+// Формы для перебора: сами по себе они в продукте не объявлены — набор
+// склонений заводят там, где он нужен человеку.
+const FORMS_KOMANDA = ["команда", "команды", "команд"] as const;
 
 describe("russian plural", () => {
   // Локальные копии этого правила врали каждая по-своему: одна на 11,

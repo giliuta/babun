@@ -57,7 +57,7 @@ const AUTO_MAP_RULES: { field: ImportableField; patterns: string[] }[] = [
 
 /** Best-effort guess for one CSV header. Returns 'skip' when nothing
  *  matches — the user can override in the UI. */
-export function autoMapHeader(header: string): ImportableField {
+function autoMapHeader(header: string): ImportableField {
   const h = header.trim().toLowerCase();
   if (!h) return "skip";
   for (const rule of AUTO_MAP_RULES) {

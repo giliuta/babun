@@ -1,0 +1,19 @@
+#!/bin/sh
+# Автоотправка коммита на GitHub (решение владельца 2026-08-25).
+#
+# Тихо ничего не делаем в состояниях, где push осмысленным не бывает:
+# отсоединённая HEAD, идущий rebase/merge/cherry-pick. Иначе хук будет
+# ругаться на каждый шаг перебазирования.
+branch=$(git symbolic-ref --quiet --short HEAD) || exit 0
+gitdir=$(git rev-parse --git-dir)
+for marker in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG; do
+  [ -e "$gitdir/$marker" ] && exit 0
+done
+
+printf '\033[36m→ отправляю %s на GitHub\033[0m\n' "$branch"
+if git push --quiet origin "$branch" 2>/tmp/babun-push.log; then
+  printf '\033[32m✓ %s на GitHub\033[0m\n' "$branch"
+else
+  printf '\033[31m✗ push не прошёл — коммит остался только локально:\033[0m\n'
+  tail -6 /tmp/babun-push.log
+fi

@@ -4,8 +4,6 @@ import {
   masterAppointmentJsonToAppointment as mapMasterAppointmentJson,
 } from "./master-appointment-mapper";
 
-export { masterAppointmentJsonToAppointment } from "./master-appointment-mapper";
-
 const PAGE_SIZE = 1000;
 
 /** Paged because PostgREST caps each RPC response at 1000 rows. */

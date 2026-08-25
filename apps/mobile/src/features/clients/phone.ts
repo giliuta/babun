@@ -68,7 +68,7 @@ export const COUNTRY_NAMES_RU: Partial<Record<CountryCode, string>> = {
  * Returns the canonical E.164 form of `raw` or `null` if the number
  * couldn't be parsed into something valid. Empty input → `null`.
  */
-export function toE164(
+function toE164(
   raw: string,
   defaultCountry: CountryCode = DEFAULT_COUNTRY,
 ): string | null {
@@ -97,10 +97,6 @@ export function tryToE164(
   if ((trimmed.match(/\d/g) ?? []).length < 3) return null;
   return toE164(trimmed, defaultCountry);
 }
-
-// sanitizePhoneInput поднят в @/lib/phone-input (его используют и
-// ui-примитивы строк); реэкспорт сохраняет существующие импорты фичи.
-export { sanitizePhoneInput } from "@/lib/phone-input";
 
 /** Валидный код страны компании; неизвестное значение → дефолт продукта.
  *  Живёт здесь, а не рядом с хуком: чистая функция без React и без

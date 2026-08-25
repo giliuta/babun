@@ -56,7 +56,7 @@ export interface ChannelDef {
 }
 
 /** Набор по умолчанию; фактический порядок задаёт пользователь. */
-export const CONTACT_CHANNELS: ChannelDef[] = [
+const CONTACT_CHANNELS: ChannelDef[] = [
   {
     id: "call",
     label: "Позвонить",

@@ -9,7 +9,7 @@ import { AttachmentsRow } from "@/features/clients/blocks/AttachmentsBlock";
 import { ClientDocumentsRow } from "@/features/clients/blocks/ClientDocumentsRow";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
-import { RowCaption } from "@/features/clients/card-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 
 const EMPTY_LOCATIONS: Location[] = [];
 

@@ -56,9 +56,10 @@ function removeCache(key: string): void {
   }
 }
 
-/** Positive local stamp «этот tenant уже прошёл онбординг». Exported for the
- *  onboarding screen so completion flips the gate without a refetch. */
-export function stampOnboarded(tenantId: string): void {
+/** Positive local stamp «этот tenant уже прошёл онбординг». Module-private:
+ *  the onboarding screen goes through the gate helpers above, not through the
+ *  stamp itself. */
+function stampOnboarded(tenantId: string): void {
   writeCache(onboardedStampKey(tenantId), "1");
 }
 
@@ -103,7 +104,7 @@ function isMissingSafeTenantRpc(error: {
 // ---------------------------------------------------------------------------
 // Tenant id resolution (JWT → MMKV → tenant_members).
 
-export const tenantMembershipKey = (userId: string | null) =>
+const tenantMembershipKey = (userId: string | null) =>
   ["tenant-membership", userId] as const;
 
 function useTenantResolution() {
@@ -184,7 +185,7 @@ export type OnboardingGate =
   // Transient lookup error (network / timeout / offline-paused) → fail-open.
   | { status: "unknown"; tenantId: string | null };
 
-export const tenantOnboardingKey = (tenantId: string | null) =>
+const tenantOnboardingKey = (tenantId: string | null) =>
   ["tenant-onboarding", tenantId] as const;
 
 export function useOnboardingGate(): OnboardingGate {

@@ -11,7 +11,7 @@ import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Spinner } from "@/components/ui/Spinner";
 import { PickerSheet } from "@/components/ui/PickerSheet";
-import { RowCaption } from "@/features/clients/card-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 import {
   formatBytes,
   getSignedUrl,

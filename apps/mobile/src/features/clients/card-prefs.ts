@@ -11,7 +11,7 @@ export type CardField = "phone" | "exp" | "inc" | "debt" | "last" | "meta";
 
 export type CardFieldPrefs = Record<CardField, boolean>;
 
-export const CARD_FIELDS: CardField[] = [
+const CARD_FIELDS: CardField[] = [
   "phone",
   "exp",
   "inc",
@@ -34,7 +34,7 @@ export const DEFAULT_CARD_FIELDS: CardFieldPrefs = {
 // Тот же ключ, что и web (localStorage) — единая конвенция `babun-…`.
 const KEY = "babun-client-card-fields";
 
-export function getCardFields(): CardFieldPrefs {
+function getCardFields(): CardFieldPrefs {
   try {
     const parsed = getStorage().get<Partial<CardFieldPrefs>>(KEY);
     if (!parsed) return { ...DEFAULT_CARD_FIELDS };
@@ -49,7 +49,7 @@ export function getCardFields(): CardFieldPrefs {
   }
 }
 
-export function setCardFields(prefs: CardFieldPrefs): void {
+function setCardFields(prefs: CardFieldPrefs): void {
   try {
     getStorage().set(KEY, prefs);
   } catch {

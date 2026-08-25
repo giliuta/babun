@@ -18,7 +18,7 @@ import { useRouter } from "expo-router";
 import { useClientAttachments } from "@/features/clients/card-attachments";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useClientVisitPhotos } from "@/features/clients/visit-photos";
-import { NavRow } from "@/features/clients/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 
 /** Склонение: «3 файла». */

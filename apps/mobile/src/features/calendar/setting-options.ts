@@ -1,16 +1,10 @@
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import type { SheetOption } from "@/components/ui/OptionSheet";
 
-// Наборы вариантов для настроек календаря. Один дом на оба экрана (общий
-// /calendar и календарь команды /calendar/[teamId]) — иначе списки часов и
-// буфера разъедутся ровно так же, как разъехались степперы и чипы, которые
-// они заменили.
-
-/** Часы суток для листов «начало/конец рабочего дня». */
-export const HOUR_CHOICES: SheetOption<string>[] = Array.from(
-  { length: 25 },
-  (_, h) => ({ value: String(h), label: hourLabel(h) }),
-);
+// Наборы вариантов и резолверы для настроек календаря. Один дом на оба экрана
+// (общий /calendar и календарь команды /calendar/[teamId]) — иначе подписи
+// часов и список буфера разъедутся ровно так же, как разъехались степперы и
+// чипы, которые они заменили.
 
 export function hourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
@@ -36,7 +30,7 @@ export function effectiveWorkHours(g: CalendarSettings): {
 }
 
 /** Буфер после записи. */
-export const BUFFER_CHOICES: SheetOption<string>[] = [
+const BUFFER_CHOICES: SheetOption<string>[] = [
   { value: "0", label: "Нет" },
   { value: "5", label: "5 мин" },
   { value: "10", label: "10 мин" },
