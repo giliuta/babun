@@ -1,0 +1,546 @@
+<title>Бабуин Тота</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Один световой мир — известняк. Это печатный документ о знаке,
+     вырезанном в камне; показывать его на тёмном грунте значило бы
+     соврать про материал. Все цвета выставлены явно, поэтому
+     страница держится на любом фоне хозяина.
+     Пигменты — настоящие египетские: известняк, сажа, египетская
+     синь, красная и жёлтая охра, малахит.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --limestone: #efe7d9;
+    --papyrus:   #f7f2e8;
+    --sand:      #e2d8c6;
+    --ink:       #1a1714;
+    --ink-70:    rgba(26, 23, 20, 0.7);
+    --ink-52:    rgba(26, 23, 20, 0.52);
+    --ink-16:    rgba(26, 23, 20, 0.16);
+    --ink-08:    rgba(26, 23, 20, 0.08);
+    --blue:      #2e5c97;
+    --red:       #a6402a;
+    --ochre:     #d69a2e;
+    --malachite: #3d7a5a;
+
+    --serif: "Literata", Georgia, "Times New Roman", serif;
+    --sans:  "Golos Text", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono:  "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--limestone);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── type ───────────────────────────────────────────────────── */
+  h1, h2, h3 { font-family: var(--serif); font-weight: 700; margin: 0; text-wrap: balance; }
+  h1 { font-size: clamp(38px, 7vw, 68px); line-height: 1.02; letter-spacing: -0.022em; }
+  h2 { font-size: clamp(26px, 3.6vw, 36px); line-height: 1.14; letter-spacing: -0.014em; }
+  h3 { font-size: 19px; line-height: 1.3; letter-spacing: -0.008em; }
+  p  { margin: 0; }
+  .lead { font-size: 19px; line-height: 1.55; color: var(--ink-70); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-52);
+  }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  em.q { font-style: italic; color: var(--ink-70); }
+  strong { font-weight: 600; }
+
+  /* ── frame ──────────────────────────────────────────────────── */
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px 120px; }
+  section { padding-top: 72px; }
+  .head { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; max-width: 68ch; }
+  .rule { height: 1px; background: var(--ink-16); margin-top: 8px; }
+
+  .card {
+    background: var(--papyrus);
+    border: 1px solid var(--ink-16);
+    padding: 24px;
+  }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+
+  /* ── hero ───────────────────────────────────────────────────── */
+  .hero {
+    padding: 76px 24px 60px;
+    border-bottom: 1px solid var(--ink-16);
+    background:
+      repeating-linear-gradient(90deg, rgba(26,23,20,.035) 0 1px, transparent 1px 46px),
+      var(--limestone);
+  }
+  .hero-in { max-width: 1000px; margin: 0 auto; display: flex; gap: 44px; align-items: center; flex-wrap: wrap; }
+  .hero-mark { flex: none; }
+  .hero-txt { flex: 1 1 340px; display: flex; flex-direction: column; gap: 18px; }
+  .hero-txt p { max-width: 46ch; }
+
+  /* ── the mark ───────────────────────────────────────────────── */
+  .mark { display: block; color: var(--ink); }
+  .plate {
+    display: grid; place-items: center; flex: none;
+    background: var(--papyrus); border: 1px solid var(--ink-16);
+  }
+  .plate.dark { background: var(--ink); border-color: var(--ink); }
+  .plate.dark .mark { color: var(--limestone); }
+  .squircle { border-radius: 22.4%; border: none; }
+
+  .specimens { display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+  .spec { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .spec .cap { font-family: var(--mono); font-size: 10px; color: var(--ink-52); }
+
+  /* ── findings ───────────────────────────────────────────────── */
+  .finding { display: flex; gap: 20px; padding: 22px 0; border-top: 1px solid var(--ink-16); }
+  .finding:last-child { border-bottom: 1px solid var(--ink-16); }
+  .finding .rank {
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    color: var(--ink); width: 34px; flex: none; padding-top: 3px;
+  }
+  .finding .body { display: flex; flex-direction: column; gap: 8px; }
+  .finding h3 { margin-bottom: 2px; }
+  .finding p { max-width: 74ch; color: var(--ink-70); font-size: 15px; }
+
+  /* ── evidence strip: the blind test ─────────────────────────── */
+  .test { display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr)); gap: 8px; }
+  .vote {
+    border: 1px solid var(--ink-16); background: var(--papyrus);
+    padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .vote .said { font-size: 15px; font-weight: 600; }
+  .vote .meta { font-family: var(--mono); font-size: 10px; color: var(--ink-52); }
+  .vote.miss { border-left: 3px solid var(--red); }
+  .verdict-line {
+    margin-top: 18px; padding: 16px 18px; background: var(--ink); color: var(--limestone);
+    font-size: 16px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+  }
+  .verdict-line b { font-family: var(--mono); font-size: 22px; font-weight: 500; color: var(--ochre); }
+
+  /* ── palette ────────────────────────────────────────────────── */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr)); gap: 10px; }
+  .sw { border: 1px solid var(--ink-16); }
+  .sw .chip { height: 88px; }
+  .sw .meta { padding: 10px 12px; background: var(--papyrus); }
+  .sw .nm { font-size: 14px; font-weight: 600; display: block; }
+  .sw .hx { font-family: var(--mono); font-size: 11px; color: var(--ink-52); }
+
+  /* ── tables ─────────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--ink-16); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-52);
+  }
+  td.no { color: var(--red); }
+  td.yes { color: var(--malachite); }
+  .sev { font-family: var(--mono); font-size: 11px; }
+
+  /* ── the risk section inverts: this part is not decoration ──── */
+  .grave {
+    background: var(--ink); color: var(--limestone);
+    margin-top: 72px; padding: 60px 0 64px;
+  }
+  .grave .wrap { padding-bottom: 0; }
+  .grave .eyebrow { color: rgba(239, 231, 217, 0.55); }
+  .grave h2 { color: var(--limestone); }
+  .grave .lead { color: rgba(239, 231, 217, 0.75); }
+  .grave .card { background: rgba(239, 231, 217, 0.05); border-color: rgba(239, 231, 217, 0.18); }
+  .grave table { color: rgba(239, 231, 217, 0.88); }
+  .grave th { color: rgba(239, 231, 217, 0.5); }
+  .grave th, .grave td { border-bottom-color: rgba(239, 231, 217, 0.16); }
+  .grave td.no { color: #e07a5f; }
+  .grave td.yes { color: #7fbf9a; }
+  .grave .rule { background: rgba(239, 231, 217, 0.2); }
+
+  /* ── applications ───────────────────────────────────────────── */
+  .home {
+    background: linear-gradient(168deg, #d9cfbc, #c9bda6);
+    padding: 22px 20px; display: flex; gap: 18px; align-items: flex-start;
+  }
+  .app { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 62px; }
+  .app .ic, .app .gh {
+    width: 62px; height: 62px; border-radius: 22.4%;
+    box-shadow: 0 3px 9px rgba(26, 23, 20, 0.22);
+  }
+  .app .ic { background: var(--limestone); display: grid; place-items: center; }
+  .app .gh { background: rgba(255, 255, 255, 0.5); }
+  .app .nm { font-size: 10.5px; color: var(--ink); }
+
+  .van {
+    background: var(--papyrus); border: 1px solid var(--ink-16);
+    padding: 26px; display: flex; gap: 20px; align-items: center;
+  }
+  .patch {
+    width: 116px; height: 116px; border-radius: 999px; flex: none;
+    background: var(--ink); display: grid; place-items: center;
+  }
+  .patch .mark { color: var(--limestone); }
+
+  .doc { background: var(--papyrus); border: 1px solid var(--ink-16); padding: 20px; }
+  .doc .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+  .doc .line { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; }
+  .doc .tot { display: flex; justify-content: space-between; border-top: 1px solid var(--ink); padding-top: 8px; margin-top: 6px; font-weight: 600; }
+  .doc .foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--ink-16); font-size: 11px; color: var(--ink-52); }
+
+  /* ── do / don't ─────────────────────────────────────────────── */
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(212px, 1fr)); gap: 12px; }
+  .rule-card { border: 1px solid var(--ink-16); background: var(--papyrus); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .rule-card .stage { height: 96px; display: grid; place-items: center; background: var(--sand); }
+  .rule-card .tag { font-size: 13px; font-weight: 600; }
+  .rule-card.bad .tag { color: var(--red); }
+  .rule-card.good .tag { color: var(--malachite); }
+  .rule-card p { font-size: 12.5px; line-height: 1.45; color: var(--ink-52); }
+
+  ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 7px; }
+  ul.plain li { font-size: 15px; color: var(--ink-70); }
+  ul.plain li b { color: var(--ink); font-weight: 600; }
+
+  @media (max-width: 640px) {
+    .hero { padding: 48px 20px 40px; }
+    .wrap { padding: 0 20px 80px; }
+    section { padding-top: 52px; }
+  }
+</style>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="hero-mark">
+      <div class="plate" style="width: 232px; height: 232px;">
+        <svg class="mark" data-mark viewBox="0 0 120 120" width="190" height="190" aria-hidden="true"></svg>
+      </div>
+    </div>
+    <div class="hero-txt">
+      <span class="eyebrow">Babun · айдентика · август 2026</span>
+      <h1>Бабуин Тота</h1>
+      <p class="lead">Хамадрил был священным животным Тота — бога письма, счёта и записи. Не «обезьянка в CRM», а <strong>хранитель записи</strong>. Знак — не персонаж, а монумент.</p>
+      <p style="font-size: 14px; color: var(--ink-52); max-width: 44ch;">Полный цикл: аудит рынка, семантики и коллизий · слепое тестирование · знак · система.</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ── 1 · Findings ────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Аудит</span>
+      <h2>Пять находок, которые изменили решение</h2>
+      <p class="lead">Шесть параллельных разведок: рынок, приматы в бренде, семантика и риск, морфология животного, коллизии имени, техника иконки. Ниже — только то, что реально повернуло карандаш, по убыванию влияния.</p>
+    </div>
+
+    <div class="finding">
+      <span class="rank">01</span>
+      <div class="body">
+        <h3>Кобальт — худший из возможных цветов</h3>
+        <p>Из двадцати двух проверенных конкурентов <strong>десять сидят в том же тоне</strong>: ServiceTitan, Housecall Pro <span class="num">#0055ff</span>, Skedulo <span class="num">#0050f8</span>, Tradify <span class="num">#0080f8</span>, Bitrix24 <span class="num">#1038f8</span>. Отличительный знак в самом занятом пикселе категории — это отличительный знак, обнулённый палитрой. Вдобавок белая выворотка на светлом конце градиента даёт <strong>4.81:1</strong> — знак недоконтрастен ещё до того, как его уменьшили.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="rank">02</span>
+      <div class="body">
+        <h3>Животных в категории нет вообще</h3>
+        <p>Ни одного зверя ни в одном логотипе выездного сервиса — ни в западном наборе, ни в русскоязычном. Территория пустая. И гипотеза «владельцу с двумя бригадами нужен абстрактно-синий-серьёзный» в этой категории <em class="q">эмпирически неверна</em>: ServiceTitan — лидер рынка, продаёт ровно нашему покупателю, и у него нарисованный персонаж. Провальный сценарий — не «бабуин», а «мультяшный бабуин».</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="rank">03</span>
+      <div class="body">
+        <h3>Механизм расистского прочтения известен поимённо — и обходится конструкцией</h3>
+        <p>Каждый канонический провал — H&amp;M, Prada, Gucci, Dove, BAYC — требовал одного из трёх: лица, которое проецируется на человеческое (плоская морда, губы, белки глаз, телесная заливка); человека в кадре рядом; или открытой системы аксессуаров. Убрать все три — и базовая частота нулевая: <strong>ни один B2B-софт никогда не получал скандала за животный знак</strong>. Mailchimp носил шимпанзе двадцать пять лет.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="rank">04</span>
+      <div class="body">
+        <h3>На 16 пикселях запаса нет ровно никакого</h3>
+        <p>Один экранный пиксель — это четыре единицы сетки 64. Бюджет: <strong>не больше трёх различимых форм</strong>, минимальный элемент 6 единиц, минимальный зазор 8. Отсюда система из двух мастеров: гравированный для 48 px и выше, плотный силуэт для 16–32. Строчка «Работает на Babun» в подвале счёта становится <strong>только текстовой</strong> — знака в 12 px не существует.</p>
+      </div>
+    </div>
+
+    <div class="finding">
+      <span class="rank">05</span>
+      <div class="body">
+        <h3>Имя занято, знак — свободен</h3>
+        <p>На GitHub висит <span class="num">babun</span> — мёртвая с <span class="num">11.06.2019</span> оболочка для Windows, <span class="num">8 536</span> звёзд, навсегда занявшая первую страницу выдачи. Логотипа у неё нет вообще: единственный ассет — серый фавикон консоли. При этом бабуина в софте не занял никто: занятый ярус — это милые мультяшные шимпанзе и капуцины, а мандрил Mailchimp свой знак снял. Длинная морда, надбровье и плечевая мантия — ничьи.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 2 · The blind test ──────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Проверка</span>
+      <h2>Слепой тест, который убил первое направление</h2>
+      <p class="lead">Восемь независимых зрителей увидели знак без единой подсказки — им не сказали ни названия, ни животного. Вопрос был один: что это за зверь. Результат приводится не ради красоты, а потому что именно он развернул работу.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-bottom: 10px;">Итерация 1 · голова в профиль</p>
+    <div class="test">
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 5/10</span></div>
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Собака</span><span class="meta">уверенность 5/10</span></div>
+      <div class="vote miss"><span class="said">Медведь</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Медведь</span><span class="meta">уверенность 4/10</span></div>
+    </div>
+    <div class="verdict-line">
+      <b>0 / 8</b>
+      <span>назвали бабуина первым. Повторяющаяся претензия во всех восьми отзывах — <em class="q">«нет ушей, за лицом пустая масса»</em>: в чистом силуэте профиль хамадрила неотличим от псового. Египтяне звали их <em class="q">cynocephalus</em>, песьеглавые, — и были правы.</span>
+    </div>
+
+    <p class="eyebrow" style="margin: 26px 0 10px;">Итерация 2 · сидящий в профиль</p>
+    <div class="test">
+      <div class="vote miss"><span class="said">Муравьед</span><span class="meta">уверенность 5/10</span></div>
+      <div class="vote miss"><span class="said">Муравьед</span><span class="meta">уверенность 4/10</span></div>
+      <div class="vote miss"><span class="said">Ворон</span><span class="meta">уверенность 5/10</span></div>
+      <div class="vote miss"><span class="said">Ворон</span><span class="meta">уверенность 6/10</span></div>
+    </div>
+    <p style="margin-top: 14px; font-size: 15px; color: var(--ink-70); max-width: 72ch;">Профиль провалился дважды. <strong>Фронтальная посадка решает это структурно</strong>: анфас мантия видна как отдельная масса вокруг лица, два глаза под надбровьем и длинная морда вниз читаются приматом мгновенно — и ни одна из этих форм не встречается у псовых.</p>
+  </section>
+
+  <!-- ── 3 · Strategy ────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Стратегия</span>
+      <h2>Монумент, а не маскот</h2>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="margin-bottom: 10px;">Что мы говорим</h3>
+        <p style="color: var(--ink-70); font-size: 15px;">Хамадрил — животное Тота, писца богов, изобретателя письма и меры. CRM — это и есть запись: кто приехал, что сделал, сколько взял. Плюс правда о самом животном: клан расходится на день и сходится к ночи на одной скале, маршруты помнятся годами, и груминг — <strong>взаимная чистка</strong> — держит группу вместе. Бригады, маршруты, чистка. Это не натяжка, это биология вида.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom: 10px;">Чего мы не говорим</h3>
+        <p style="color: var(--ink-70); font-size: 15px;">Ни «обезьянки», ни «мартышкиного труда», ни озорства, ни джунглей. Регистр — <strong>сухой, компетентный, слегка древний</strong>. Среда обитания в иллюстрациях — сухая скала, акация, пыль, солнце: и для хамадрила верно, и для Кипра верно. Постамент под фигурой — не украшение: статуя на плинтусе не может стать персонажем в комбинезоне.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4 · The mark ────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Знак</span>
+      <h2>Два мастера одной геометрии</h2>
+      <p class="lead">Гравированный мастер несёт структуру — направление шерсти в мантии, надбровный козырёк, рёбра морды. Плотный мастер — то, что от него остаётся, когда пикселей меньше, чем линий.</p>
+    </div>
+    <div class="card">
+      <div class="specimens">
+        <div class="spec"><div class="plate" style="width: 300px; height: 300px;"><svg class="mark" data-mark viewBox="0 0 120 120" width="252" height="252"></svg></div><span class="cap">гравированный · 300</span></div>
+        <div class="spec"><div class="plate" style="width: 120px; height: 120px;"><svg class="mark" data-mark viewBox="0 0 120 120" width="100" height="100"></svg></div><span class="cap">120</span></div>
+        <div class="spec"><div class="plate" style="width: 64px; height: 64px;"><svg class="mark" data-mark viewBox="0 0 120 120" width="54" height="54"></svg></div><span class="cap">64</span></div>
+        <div class="spec"><div class="plate dark squircle" style="width: 132px; height: 132px;"><svg class="mark" data-mark viewBox="0 0 120 120" width="94" height="94"></svg></div><span class="cap">выворотка</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5 · Palette ─────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Цвет</span>
+      <h2>Пигменты, а не бренд-синий</h2>
+      <p class="lead">Палитра собрана из красок, которыми писали в Египте. Египетская синь — первый синтетический пигмент в истории, около 2500 до н.э.; она же уводит нас из тона, в котором сидит половина категории.</p>
+    </div>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background: #efe7d9;"></div><div class="meta"><span class="nm">Известняк</span><span class="hx">#EFE7D9 · грунт</span></div></div>
+      <div class="sw"><div class="chip" style="background: #1a1714;"></div><div class="meta"><span class="nm">Сажа</span><span class="hx">#1A1714 · сам знак</span></div></div>
+      <div class="sw"><div class="chip" style="background: #2e5c97;"></div><div class="meta"><span class="nm">Египетская синь</span><span class="hx">#2E5C97</span></div></div>
+      <div class="sw"><div class="chip" style="background: #a6402a;"></div><div class="meta"><span class="nm">Красная охра</span><span class="hx">#A6402A</span></div></div>
+      <div class="sw"><div class="chip" style="background: #d69a2e;"></div><div class="meta"><span class="nm">Жёлтая охра</span><span class="hx">#D69A2E</span></div></div>
+      <div class="sw"><div class="chip" style="background: #3d7a5a;"></div><div class="meta"><span class="nm">Малахит</span><span class="hx">#3D7A5A</span></div></div>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+      <ul class="plain">
+        <li><b>Знак всегда в одну краску.</b> Сажа на известняке или известняк на саже. Никаких градиентов, никакой двухцветной морды — это одновременно и графическая дисциплина, и требование риск-аудита.</li>
+        <li><b>Пигменты живут вне знака</b> — в иллюстрациях, разделах, маркетинге, упаковке. Четыре цвета дают систему, не размывая логотип.</li>
+        <li><b>Кобальт остаётся внутри приложения.</b> <span class="num">#2c5be0</span> — рабочий акцент интерфейса: кнопка, активная вкладка, фокус. Это функция, а не идентичность, и трогать его не нужно.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── 6 · Type ────────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Шрифт</span>
+      <h2>Резаный и рабочий</h2>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <span class="eyebrow">Заголовки</span>
+        <p style="font-family: var(--serif); font-size: 40px; line-height: 1.06; margin: 10px 0 8px;">Хранитель записи</p>
+        <p style="font-size: 14px; color: var(--ink-52);"><strong>Literata</strong> — плотная антиква с крепкими засечками и полной кириллицей. Слегка архаичная, но не декоративная: тот самый «древний, но компетентный» регистр.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Текст и интерфейс</span>
+        <p style="font-size: 26px; line-height: 1.3; margin: 10px 0 8px;">Бригада 1 · 14 выездов · €2 480</p>
+        <p style="font-size: 14px; color: var(--ink-52);"><strong>Golos Text</strong> — гротеск, спроектированный под кириллицу, а не адаптированный к ней. Сухой и рабочий. Внутри приложения остаётся системный SF: там правит платформа.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 7 · Applications ────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Применение</span>
+      <h2>Где знак живёт</h2>
+    </div>
+    <div class="grid3">
+      <div>
+        <span class="eyebrow">Домашний экран</span>
+        <div class="home" style="margin-top: 10px;">
+          <div class="app">
+            <div class="ic"><svg class="mark" data-mark viewBox="0 0 120 120" width="46" height="46"></svg></div>
+            <span class="nm">Babun</span>
+          </div>
+          <div class="app"><div class="gh"></div><span class="nm">Почта</span></div>
+          <div class="app"><div class="gh"></div><span class="nm">Карты</span></div>
+        </div>
+        <p style="font-size: 13px; color: var(--ink-52); margin-top: 10px;">Известняковая плитка в решётке синих — сама по себе отличие. <span class="num">1024×1024</span>, без альфы.</p>
+      </div>
+
+      <div>
+        <span class="eyebrow">Шеврон бригады</span>
+        <div class="van" style="margin-top: 10px;">
+          <div class="patch"><svg class="mark" data-mark viewBox="0 0 120 120" width="82" height="82"></svg></div>
+          <p style="font-size: 13px; color: var(--ink-52);">Круглая нашивка на форму и борт машины. Знак без слова — на технике он должен работать с двадцати метров.</p>
+        </div>
+      </div>
+
+      <div>
+        <span class="eyebrow">Счёт клиенту</span>
+        <div class="doc" style="margin-top: 10px;">
+          <div class="top">
+            <div>
+              <strong style="font-size: 16px;">AirFix</strong>
+              <div style="font-size: 12px; color: var(--ink-52);">Лимассол, Кипр</div>
+            </div>
+            <div class="num" style="font-size: 12px; color: var(--ink-52);">№ 1042 · 25.08.2026</div>
+          </div>
+          <div class="line"><span>Чистка кондиционера · 2 блока</span><span class="num">€90</span></div>
+          <div class="line"><span>Выезд мастера</span><span class="num">€20</span></div>
+          <div class="tot"><span>Итого</span><span class="num">€110</span></div>
+          <div class="foot">Работает на Babun</div>
+        </div>
+        <p style="font-size: 13px; color: var(--ink-52); margin-top: 10px;">Шапка — бренд арендатора. Внизу только строка текстом: знака в <span class="num">12 px</span> не существует.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 8 · Collisions ──────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Коллизии</span>
+      <h2>С чем нас можно спутать</h2>
+      <p class="lead">Проверка дизайнера, не юридический поиск. Перед запуском нужен реальный поверенный по классам 9 и 42 — EUIPO и Кипр.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Кто</th><th>Отрасль</th><th>Знак</th><th>Опасность</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><b>babun</b> · github</td><td>Оболочка для Windows, мертва с 2019</td><td>Логотипа нет — только серый фавикон консоли</td><td class="sev">Средняя · имя, не знак</td></tr>
+          <tr><td><b>Baboon Software</b></td><td>Диджитал-агентство, Клуж, Румыния</td><td>Зелёная голова обезьяны в круглых очках</td><td class="sev">Средняя · ближайшее совпадение</td></tr>
+          <tr><td><b>Babuin</b> · MonkeyFlux</td><td>SaaS для закупки рекламы, Мадрид</td><td>Без примата в знаке</td><td class="sev">Ниже средней</td></tr>
+          <tr><td><b>Baboon To The Moon</b></td><td>Сумки, США</td><td>Словесный знак, животного нет</td><td class="sev">Низкая · класс 18</td></tr>
+          <tr><td><b>Mandrill</b> · Mailchimp</td><td>Транзакционная почта</td><td>Морда мандрила снята, теперь шимпанзе</td><td class="sev">Низкая</td></tr>
+          <tr><td><b>SurveyMonkey</b>, <b>Mailchimp</b></td><td>SaaS</td><td>Мультяшные шимпанзе анфас, зелёный и жёлтый</td><td class="sev">Низкая · только теснота</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top: 14px; font-size: 15px; color: var(--ink-70); max-width: 72ch;">Вывод: обезьян в софте много, но все они — <strong>круглоголовые улыбающиеся шимпанзе анфас</strong>. Хамадрил с длинной мордой, надбровьем и плечевой мантией не занят никем. Именно поэтому знак обязан быть анатомически бабуином, а не милой обезьянкой.</p>
+  </section>
+
+</main>
+
+<!-- ── 9 · Risk. This section inverts because it is the one that costs money ── -->
+<div class="grave">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Риск</span>
+      <h2>Правила анатомии, которые не обсуждаются</h2>
+      <p class="lead">Это не вкусовщина. Каждая строка выведена из разобранного провала — H&amp;M 2018, Prada 2018, Gucci 2019, Dove 2017, BAYC. Таблица идёт в <span class="num">docs/BRAND.md</span> дословно, до первого эскиза.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Признак</th><th>Обязательно</th><th>Запрещено</th></tr></thead>
+        <tbody>
+          <tr><td><b>Морда</b></td><td class="yes">Длинная, тупая, не меньше 0.45 длины головы</td><td class="no">Любое уплощение или укорочение</td></tr>
+          <tr><td><b>Губы</b></td><td class="yes">Их нет</td><td class="no">Любая прорисовка губ, особенно светлее заливки</td></tr>
+          <tr><td><b>Рот</b></td><td class="yes">Закрыт или отсутствует</td><td class="no">Открытый рот, оскал, клыки, язык</td></tr>
+          <tr><td><b>Глаза</b></td><td class="yes">Мелкие сплошные точки близко к оси, под козырьком</td><td class="no">Белки, круглые зрачки, брови, любая мимика</td></tr>
+          <tr><td><b>Заливка</b></td><td class="yes">Одна плоская краска на весь знак</td><td class="no">Телесный тон, тёмная заливка лица, двухцветность</td></tr>
+          <tr><td><b>Поза</b></td><td class="yes">Сидя, фронтально, неподвижно, на плинтусе</td><td class="no">На двух ногах, жест, взмах, «палец вверх»</td></tr>
+          <tr><td><b>Одежда</b></td><td class="yes">Никакой. Никогда.</td><td class="no">Каска, кепка, спецовка, жилет, инструмент, тряпка, телефон</td></tr>
+          <tr><td><b>Варианты</b></td><td class="yes">Знак закрыт и неизменен</td><td class="no">Костюмы, сезонные версии, стикер-паки, эмодзи</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="rule" style="margin: 26px 0 22px;"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3 style="color: var(--limestone); margin-bottom: 10px;">Территория, куда нельзя</h3>
+        <ul class="plain" style="color: rgba(239,231,217,.75);">
+          <li style="color: rgba(239,231,217,.75);"><b style="color: var(--limestone);">Никакого «было / стало».</b> Ни грязное-чистое, ни осветление, ни человек в кадре. Dove 2017 взорвалась вообще без примата — на одном сочетании «уборка + раса + превращение». Бизнес первого клиента — чистка, и этот сюжет будут предлагать постоянно. Технику до и после — можно. Человека — никогда.</li>
+          <li style="color: rgba(239,231,217,.75);"><b style="color: var(--limestone);">Ни бананов, ни джунглей, ни лиан.</b> Среда — сухая скала, акация, пыль. У H&amp;M ключевым словом было буквально «джунгли».</li>
+          <li style="color: rgba(239,231,217,.75);"><b style="color: var(--limestone);">Зверь обозначает систему, а не человека.</b> «Babun держит бригаду в строю» — можно. «Не будь обезьяной» — конец компании.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--limestone); margin-bottom: 10px;">Язык</h3>
+        <p style="color: rgba(239,231,217,.75); font-size: 15px;">По-русски — никогда «бабуин», «обезьяна», «мартышка», и никогда «труд» рядом с названием: «мартышкин труд» — это ловушка, в которую копирайтер попадёт сам.</p>
+        <p style="color: rgba(239,231,217,.75); font-size: 15px; margin-top: 10px;">По-гречески — никогда <span style="font-family: var(--serif);">μαϊμού</span>. На Кипре это слово означает <strong style="color: var(--limestone);">подделку</strong>: «μαϊμού προϊόντα» — контрафакт. Название остаётся латиницей и непереведённым во всех греческих материалах. Не написали слово — не дали повода для каламбура.</p>
+      </div>
+    </div>
+    <div class="verdict-line" style="background: rgba(239,231,217,.08); color: var(--limestone); margin-top: 22px;">
+      <b style="color: var(--ochre);">СРЕДНИЙ → НИЗКИЙ</b>
+      <span>Риск живёт не в животном. Он живёт в антропоморфизме, в сюжете про чистку и в греческом слове. Все три под нашим контролем — при условии, что правила записаны до эскиза, а не после.</span>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <!-- ── 10 · Next ───────────────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">Дальше</span>
+      <h2>Что уйдёт в репозиторий</h2>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Файл</th><th>Что это</th></tr></thead>
+        <tbody>
+          <tr><td class="num">assets/brand/mark-engraved.svg</td><td>Гравированный мастер, 120-сетка, currentColor</td></tr>
+          <tr><td class="num">assets/brand/mark-solid.svg</td><td>Плотный мастер для 16–32 px</td></tr>
+          <tr><td class="num">assets/brand/lockup.svg</td><td>Локап со словом</td></tr>
+          <tr><td class="num">assets/icon.png</td><td>1024², известняк, без альфы — вместо заглушки Expo</td></tr>
+          <tr><td class="num">assets/adaptive-icon.png</td><td>1024² foreground, знак 50 %, зона 66 dp</td></tr>
+          <tr><td class="num">assets/favicon.png</td><td>32 и 16, плотный мастер</td></tr>
+          <tr><td class="num">src/components/brand/BrandMark.tsx</td><td>react-native-svg: size, variant. Текстовая «b» уходит из AuthCard</td></tr>
+          <tr><td class="num">docs/BRAND.md</td><td>Эта страница как канон рядом с DESIGN-SYSTEM.md</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Один источник геометрии на всю страницу.
+  const MARK = `__MARK__`;
+  document.querySelectorAll("[data-mark]").forEach((el) => { el.innerHTML = MARK; });
+</script>

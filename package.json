@@ -16,7 +16,6 @@
     "lint": "bun run --cwd apps/mobile lint"
   },
   "devDependencies": {
-    "turbo": "^2.0.0",
     "typescript": "^5.5.0"
   },
   "overrides": {
