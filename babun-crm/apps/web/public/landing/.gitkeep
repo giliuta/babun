@@ -1,7 +1,0 @@
-# Drop landing-page screenshots here:
-# - hero-iphone.png      (Hero mockup, 4:3 or 5:4)
-# - step1-clients.png    (HowItWorks step 1)
-# - step2-calendar.png   (HowItWorks step 2)
-# - step3-team.png       (HowItWorks step 3)
-#
-# Until then LandingImage.tsx falls back to a dashed placeholder.

@@ -7,7 +7,7 @@
 Babun — multi-tenant CRM для выездного сервиса. Монорепозиторий содержит два
 рабочих клиента поверх одного Supabase backend:
 
-- `apps/web` — Next.js 16 App Router, PWA и server/API routes;
+- `apps/mobile` — Expo SDK 54 / React Native: iOS, Android и Web из одного кода;
 - `apps/mobile` — Expo SDK 54 / React Native 0.81, iOS-first интерфейс;
 - `packages/shared` — типы БД, domain helpers, offline cache и sync queue.
 
@@ -26,7 +26,7 @@ database: web использует его только для отдельных
 ## Структура
 
 ```text
-babun-crm/
+
 ├── apps/
 │   ├── web/
 │   │   ├── src/app/                 # pages, layouts, API routes
@@ -57,7 +57,7 @@ babun-crm/
 - Native self-service deletion передаёт Supabase access token в
   `Authorization: Bearer …` на `/api/account/delete`; web-вызов сохраняет
   same-origin CSRF check.
-- Миграции находятся в `apps/web/supabase/migrations`; production schema
+- Миграции находятся в `supabase/migrations`; production schema
   всегда проверяется перед записью или применением миграции.
 
 ## Mobile runtime
@@ -93,7 +93,6 @@ session, API routes выполняют доверенные операции. PW
 только `bun.lock`; npm lockfile удалён.
 
 ```bash
-cd babun-crm
 /Users/artem/.bun/bin/bun install --frozen-lockfile
 
 cd apps/mobile

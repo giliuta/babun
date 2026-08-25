@@ -1,7 +1,7 @@
 # Babun CRM
 
 > ⭐ **МОБИЛЬНАЯ РАЗРАБОТКА (2026-07): читай `docs/HANDOFF-2026-07-03.md` ПЕРВЫМ.**
-> Активная работа — на ветке `feat/mobile-app-port` в `babun-crm/apps/mobile`. Сейчас идёт
+> Активная работа — на ветке `feat/mobile-app-port` в `apps/mobile`. Сейчас идёт
 > живой цикл на физическом iPhone владельца по фото. Правила: команды через `bun`/`bunx`, runtime CI — Node 24;
 > `bunx tsc --noEmit` = 0 перед любым «готово»; LOCKED-дизайны и стандарт «Добавить»
 > (во всём mobile UI запрещены floating FAB и голый «+»: действия создания всегда подписаны текстом; `+` допустим только как часть телефонного кода; календарная запись создаётся тапом по свободному времени);
@@ -12,15 +12,14 @@
 CRM + скоро SaaS для сервисных бизнесов. Первый клиент — **AirFix** (кондиционеры, Кипр, 2 бригады, 903+ клиентов). В будущем продаём как платформу другим сервисам.
 
 ## Stack (LOCKED — не менять без явного запроса)
-- **Framework:** Next.js **16** App Router + Turbopack (breaking changes vs 14 — см. `babun-crm/apps/web/AGENTS.md`)
-- **Monorepo:** Turborepo (`babun-crm/apps/web`, `babun-crm/apps/mobile`, `babun-crm/packages/shared`)
+- **Framework:** Expo SDK 54 / React Native — один код на iOS, Android и Web
+- **Web:** React Native Web через `expo export --platform web` (Next.js снесён 2026-08-25)
+- **Monorepo:** bun workspaces + Turborepo (`apps/mobile`, `packages/shared`)
 - **Language:** TypeScript strict mode
-- **Styling:** Tailwind CSS **v4** (не v3)
-- **UI:** shadcn-style custom components (не устанавливаем npm-пакет)
-- **DB:** Supabase (PostgreSQL + RLS + Auth + Realtime); SQLite/MMKV — mobile offline cache/queue
-- **Deploy:** Vercel (branch `master` → auto-deploy)
+- **Styling:** NativeWind (Tailwind v4 синтаксис поверх RN StyleSheet)
+- **DB:** Supabase (PostgreSQL + RLS + Auth + Realtime); SQLite/MMKV — offline-кэш и очередь
+- **Deploy:** Vercel — сборка `bun run build:web` из `apps/mobile`
 - **Repo:** github.com/giliuta/babun2 — branch **`master`** (не `main`)
-- **PWA:** service worker `babun-v{N}`, auto-update через `ServiceWorkerRegister`
 
 ## Operating Mode — AUTONOMOUS-WITH-VERIFY (MUST читать первым, нарушение = откат всей сессии)
 
@@ -58,10 +57,10 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    медленнее, но в 10× реже ломает.
 
 ## Golden Rules (MUST — нарушение = откат)
-1. **НИКОГДА** не удаляй и не перемещай `babun-crm/apps/web/src/app/`
+1. **НИКОГДА** не удаляй и не перемещай `apps/mobile/app/` — там маршруты expo-router
 2. **ВСЕГДА** `bunx tsc --noEmit` после серии правок в одной фиче (не обязательно после каждого файла — наш tsc медленный)
-3. **ВСЕГДА** bump `BUILD_TAG` в `app/dashboard/page.tsx` и `CACHE_VERSION` в `public/sw.js` при изменении UI — чтобы пользователь видел, что новая версия активна
-4. **НИКОГДА** не трогай `ServiceWorkerRegister.tsx` без явного запроса — там тонкий dev/prod разрыв
+3. **ВСЕГДА** проверяй визуальную правку в симуляторе рядом с соседними состояниями и присылай скриншот — «скомпилировалось» не доказательство
+4. **НИКОГДА** не заводи вторую дорогу создания сущности — короткая форма это нижний лист, сущность-владелец это страница
 5. **НИКОГДА** не пушь, не создавай PR и не деплой без явного разрешения владельца
 6. **НИКОГДА** не используй `any` — если TypeScript ругается, разбирайся с типами, а не обходи
 7. **Максимум 400 строк** на компонент — если больше, разбивай на sub-components
@@ -69,39 +68,32 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 9. **Один логический коммит = одно сообщение.** Не меняй 10 несвязанных файлов в один commit
 10. **НИКОГДА** не ставь хуки в `.Codex/settings.json` которые запускают `tsc` на каждую правку — это всё убьёт
 11. **НИКОГДА** не «улучшайзь» существующий UI без явного запроса. Refactor — да (если не виден пользователю). Redesign — нет.
-12. **НИКОГДА** не говори «готово» / «деплой прошёл» / «работает» если не открыл production в Chrome MCP и не прошёл flow руками после деплоя.
+12. **НИКОГДА** не говори «готово» / «работает», если не открыл экран в симуляторе и не прошёл сценарий руками
 
 ## Architecture
 
 ```
-Babun2/
-├── AGENTS.md                    # Этот файл (главные правила)
-├── .Codex/
-│   ├── commands/                # /plan, /implement, /test, /review, /status, /debug, /setup
-│   ├── agents/                  # architect, developer, tester, reviewer
-│   └── settings.json            # Permissions (без тяжёлых hooks!)
-├── docs/
-│   ├── architecture.md          # Как устроен Babun2 сейчас
-│   ├── coding-patterns.md       # Паттерны кода
-│   ├── roadmap.md               # Что делаем дальше
-│   ├── adr/                     # Architecture Decision Records
-│   └── stories/                 # User stories (STORY-NNN.md)
-├── babun-crm/                   # ← ЗДЕСЬ КОД
-│   ├── apps/
-│   │   ├── web/                 # Next.js 16 app
-│   │   │   ├── src/app/         # App Router pages + API routes
-│   │   │   ├── src/components/  # React components
-│   │   │   ├── src/lib/         # appointments.ts, clients.ts, schedule.ts ...
-│   │   │   ├── public/sw.js     # Service worker
-│   │   │   └── AGENTS.md        # ⚠ Next 16 breaking-changes warning
-│   │   └── mobile/              # Expo SDK 54 / React Native, active iOS client
-│   └── packages/
-│       └── shared/              # DB types, domain helpers, offline cache/sync
-├── babun-crm/apps/web/supabase/ # migrations, RLS, triggers, RPC
-└── .reference/                  # Код-шпаргалки (gitignored)
-    ├── nextcrm/                 # Reference CRM паттерны
-    ├── calcom/                  # Availability engine
-    └── monica/                  # Contact data model
+Babun/
+├── AGENTS.md / CLAUDE.md        # Этот файл (главные правила)
+├── package.json                 # Корень workspace: ios / android / web / test
+├── vitest.config.ts             # Юнит-тесты apps/** и packages/**
+├── apps/
+│   └── mobile/                  # Expo SDK 54 / React Native — ЕДИНСТВЕННОЕ приложение
+│       ├── app/                 # expo-router: экраны и маршруты
+│       ├── src/components/      # UI-примитивы (BottomSheet, PickerSheet, SwipeRow …)
+│       ├── src/features/        # calendar, clients, finances, services, invoices …
+│       ├── docs/DESIGN-SYSTEM.md# Дизайн-канон «Halo Cobalt»
+│       ├── ios/  android/       # Генерируются `expo prebuild` — в git НЕ лежат
+│       └── vercel.json          # Сборка веба на Vercel
+├── packages/
+│   └── shared/                  # Типы БД, доменные хелперы, offline cache/sync
+├── supabase/
+│   ├── migrations/              # 117 SQL-миграций — единственный источник схемы
+│   ├── functions/               # Edge-функции (7 шт)
+│   └── config.toml
+├── docs/                        # architecture, stories, adr, audit, plans
+├── mockups/                     # HTML-прототипы экранов
+└── .github/workflows/ci.yml     # typecheck · vitest · expo export web · eslint
 ```
 
 ## Workflow — Plan-then-Code
@@ -153,27 +145,27 @@ Babun2/
 - **reviewer** (opus) — code review через git diff
 
 ## Dev Workflow Tools
-- `bun run dev` (из apps/web) → localhost:3001
-- `bun run dev:lan` → http://192.168.X.X:3001 (проверь LAN IP через ipconfig на ноуте)
-- Stagewise toolbar активен в dev — кликай по элементам чтобы получить контекст
-- Chrome DevTools MCP добавлен — используй mcp__chrome-devtools__* tools когда нужно проинспектировать рантайм
+- `bun run web` → React Native Web на localhost, тот же код что и на телефоне
+- Симулятор iPhone — основной способ проверки (см. навык `babun-sim`)
+- Живой цикл на физическом iPhone владельца: Metro на :8081, `expo-dev-client` в сборке
 
 ## Quick Reference
 ```bash
-# Dev
-cd babun-crm/apps/web && bun run dev       # localhost:3001 (3000 часто занят)
+# Разработка
+bun run ios          # запустить на iOS (expo prebuild + run)
+bun run android      # запустить на Android
+bun run web          # React Native Web в браузере
+bun run start        # Metro, выбор платформы вручную
 
-# Typecheck (из babun-crm/apps/web)
-bunx tsc --noEmit
+# Гейты перед «готово»
+bun run typecheck    # tsc --noEmit, должен быть 0
+bun run test         # vitest
+bun run lint
 
-# Lint
-bunx eslint src
+# Сборка веба ровно так же, как это делает Vercel
+bun run build:web
 
 # Git: push/PR/deploy только по явной просьбе владельца
-
-# Bump versions при UI changes
-# 1. apps/web/public/sw.js → CACHE_VERSION = "babun-v{N+1}"
-# 2. apps/web/src/app/dashboard/page.tsx → BUILD_TAG = "v{N+1}-{feature}"
 ```
 
 ## Working with Codex-bridge MCP

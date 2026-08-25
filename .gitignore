@@ -1,6 +1,7 @@
 node_modules/
-.next/
 dist/
+.expo/
+.turbo/
 out/
 bun.lock
 bun.lockb
@@ -42,4 +43,3 @@ bumpix-*.png
 .agents/
 .codex/
 .claude-flow/
-.playwright-mcp/

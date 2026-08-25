@@ -80,7 +80,7 @@ Open https://supabase.com/dashboard/project/rdtokosbqvgemicqeqwz/settings/api an
 
 ### 3. Create `.env.local`
 
-From `babun-crm/apps/web/`:
+From the repo root:
 
 ```bash
 cp .env.local.example .env.local
@@ -99,14 +99,12 @@ The repo ships a hand-validated `database.types.ts` matching the applied migrati
 # https://supabase.com/dashboard/account/tokens, then:
 export SUPABASE_ACCESS_TOKEN=sbp_…
 
-cd babun-crm/apps/web
 npm run db:types
 ```
 
 ### 5. Run dev
 
 ```bash
-cd babun-crm/apps/web
 npm run dev          # localhost:3001 by default; falls back to 3000
 ```
 
@@ -114,10 +112,9 @@ Open http://localhost:3001/dashboard/clients — you should see the empty list (
 
 ## Migrations
 
-Always run the Supabase CLI from `babun-crm/apps/web/` so it scopes to that workspace's `supabase/migrations/` folder.
+Run the Supabase CLI from the repo root — `supabase/migrations/` lives there since the Next.js app was removed (2026-08-25).
 
 ```bash
-cd babun-crm/apps/web
 
 # Link the CLI to the project once
 npx supabase link --project-ref rdtokosbqvgemicqeqwz
@@ -129,7 +126,7 @@ npx supabase db push
 **Manual fallback** (if the CLI fails — e.g. no PAT available):
 
 1. Open the Supabase SQL Editor: https://supabase.com/dashboard/project/rdtokosbqvgemicqeqwz/sql/new
-2. Paste the SQL of any new file under `apps/web/supabase/migrations/`
+2. Paste the SQL of any new file under `supabase/migrations/`
 3. Click Run
 4. Verify with `select count(*) from public.tenants;`
 
@@ -153,18 +150,18 @@ The deployed app at https://babun2.vercel.app needs the same env vars set in Ver
 ## Common errors
 
 - **`Supabase env missing`** at runtime — `.env.local` not present or one of the publishable/URL vars is empty.
-- **`new row violates row-level security policy`** — RLS is on but no permissive policy. Run `apps/web/supabase/migrations/20260427_002_disable_rls.sql` (Dashboard SQL Editor fallback works) until STORY-038 ships proper policies.
+- **`new row violates row-level security policy`** — RLS is on but no permissive policy. Run `supabase/migrations/20260427_002_disable_rls.sql` (Dashboard SQL Editor fallback works) until STORY-038 ships proper policies.
 - **`invalid input syntax for type uuid`** — id field passed to Supabase isn't UUID-formatted. New clients should use `crypto.randomUUID()` (handled by `createBlankClient`); legacy `cli-…` ids will fail.
 
 ## Common dev tasks
 
 ```bash
 # Type check
-cd babun-crm/apps/web && npx tsc --noEmit
+bun run typecheck
 
 # Lint
-cd babun-crm/apps/web && npx eslint src
+bun run lint
 
 # LAN dev (test from phone on same Wi-Fi)
-cd babun-crm/apps/web && npm run dev:lan
+bun run web
 ```
