@@ -1,50 +1,46 @@
 # Babun Architecture — current state
 
-> Фактическое состояние на 2026-07-20. Обновлять вместе с архитектурными изменениями.
+> Фактическое состояние на 2026-08-25. Обновлять вместе с архитектурными изменениями.
 
 ## Обзор
 
-Babun — multi-tenant CRM для выездного сервиса. Монорепозиторий содержит два
-рабочих клиента поверх одного Supabase backend:
+Babun — multi-tenant CRM для выездного сервиса. Монорепозиторий содержит один
+клиент поверх Supabase backend:
 
-- `apps/mobile` — Expo SDK 54 / React Native: iOS, Android и Web из одного кода;
-- `apps/mobile` — Expo SDK 54 / React Native 0.81, iOS-first интерфейс;
+- `apps/mobile` — Expo SDK 54 / React Native 0.81: iOS, Android и Web из одного
+  кода (веб — React Native Web через `expo export --platform web`);
 - `packages/shared` — типы БД, domain helpers, offline cache и sync queue.
 
 ```text
-Web (Next.js) ───────┐
-                    ├── Supabase Auth + PostgreSQL/RLS + Realtime + Storage
-Mobile (Expo/RN) ───┘
+Mobile / Web (Expo RN + RN Web) ── Supabase Auth + PostgreSQL/RLS + Realtime + Storage
        │
        └── SQLite/MMKV cache + offline mutation queue
 ```
 
-Supabase — источник истины. Локальное хранилище больше не является primary
-database: web использует его только для отдельных UI-настроек, mobile — для
-кэша, очереди синхронизации и device preferences.
+Supabase — источник истины. Локальное хранилище не является primary database:
+это кэш последнего снимка, очередь синхронизации и device preferences.
 
 ## Структура
 
 ```text
 
 ├── apps/
-│   ├── web/
-│   │   ├── src/app/                 # pages, layouts, API routes
-│   │   ├── src/components/          # calendar, clients, finance, settings
-│   │   ├── src/lib/supabase/        # browser/server/admin clients
-│   │   └── supabase/migrations/     # schema, RLS, triggers, RPC
 │   └── mobile/
 │       ├── app/                     # Expo Router routes
 │       ├── src/features/            # calendar, appointments, clients, cabinet
 │       ├── src/components/ui/       # canonical mobile primitives
 │       ├── src/theme/               # light-only semantic tokens
-│       └── docs/DESIGN-SYSTEM.md     # visual canon
+│       └── docs/DESIGN-SYSTEM.md    # visual canon
 ├── packages/shared/src/
 │   ├── db/                          # generated Database types + repositories
-│   ├── local/                       # SQLite cache, queue, settings
+│   ├── local/                       # синхронные KV-хранилища справочников и настроек
+│   ├── storage/                     # KVStorage seam (MMKV на нативе, localStorage на вебе) + SQLite
 │   └── sync/                        # realtime and replay machinery
-├── bun.lock                         # единственный lockfile
-└── .node-version                    # Node 24 for CI/tooling compatibility
+├── supabase/
+│   ├── migrations/                  # схема, RLS, триггеры, RPC (счёт: ls supabase/migrations/*.sql | wc -l)
+│   └── functions/                   # edge-функции (счёт: ls supabase/functions | wc -l)
+├── vercel.json                      # bun run build:web → apps/mobile/dist
+└── bun.lock                         # единственный lockfile
 ```
 
 ## Данные и изоляция tenant
@@ -52,11 +48,11 @@ database: web использует его только для отдельных
 - Каждая бизнес-сущность принадлежит `tenant_id`.
 - Доступ ограничивают PostgreSQL RLS policies и membership пользователя.
 - `tenant_members` связывает auth user, tenant и роль.
-- Web server routes используют cookie session; privileged administrative
-  операции используют service role только на сервере.
-- Native self-service deletion передаёт Supabase access token в
-  `Authorization: Bearer …` на `/api/account/delete`; web-вызов сохраняет
-  same-origin CSRF check.
+- Серверных роутов у приложения нет: клиент ходит в Supabase напрямую, сессия
+  живёт в supabase-js (Keychain/Keystore на нативе, `localStorage` на вебе).
+- Привилегированные операции вынесены в edge-функции на service-ключе. Удаление
+  аккаунта — функция `account-delete`, авторизация Supabase access token'ом в
+  `Authorization: Bearer …` (см. `docs/EDGE-FUNCTIONS-CUTOVER.md`).
 - Миграции находятся в `supabase/migrations`; production schema
   всегда проверяется перед записью или применением миграции.
 
@@ -68,58 +64,60 @@ Expo Router делит приложение на auth и dashboard route groups.
 последний snapshot offline, а mutation queue повторяет изменения после
 восстановления сети. Realtime invalidation синхронизирует tenant tables.
 
-Мобильное приложение намеренно работает только в светлой теме
+Приложение намеренно работает только в светлой теме
 (`userInterfaceStyle: light`) и игнорирует системное переключение темы.
 Светлая палитра определена semantic tokens в `src/theme/colors.ts`.
 UI должен соответствовать `apps/mobile/docs/DESIGN-SYSTEM.md`, HIG и правилам
 44 pt minimum target / VoiceOver labels.
 
-React намеренно разделён: Expo SDK 54 работает на React 19.1, web — на React
-19.2. Metro resolver закрепляет mobile imports за локальной React 19.1. Поэтому
-Expo Doctor сообщает один известный duplicate-dependency warning; объединять
-версии до поддержки Expo нельзя.
-
-## Web runtime
-
-Next.js App Router разделяет server и client components. Browser Supabase
-client обслуживает интерактивные запросы/realtime, server client читает cookie
-session, API routes выполняют доверенные операции. PWA service worker работает
-только в production; в development регистрации и кэши очищаются защитным
-механизмом `ServiceWorkerRegister`.
+Веб-таргет — тот же код: `expo export --platform web` собирает статический
+бандл в `apps/mobile/dist`, Vercel отдаёт его с SPA-rewrite на `/index.html`.
+Отдельного веб-приложения, server components и API routes в проекте нет —
+Next.js снесён 2026-08-25.
 
 ## Toolchain и quality gates
 
-Канонический package manager — Bun 1.3.14, runtime CI — Node 24. Используется
-только `bun.lock`; npm lockfile удалён.
+Канонический package manager — Bun. Используется только `bun.lock`;
+npm lockfile удалён.
 
 ```bash
-/Users/artem/.bun/bin/bun install --frozen-lockfile
+bun install --frozen-lockfile
 
-cd apps/mobile
-bun run typecheck
+# гейты — из корня репозитория
+bun run typecheck    # tsc --noEmit в apps/mobile, должен быть 0
+bun test             # bun:test — файлы *.test.ts в apps/mobile и packages/shared
+                     # (сколько их — печатает сам раннер: «Ran N tests across M files»)
 bun run lint
-bun test src/features/appointments/booking-prefill.test.ts
-bunx expo-doctor
+bun run build:web    # ровно то, что запускает Vercel
 
-cd ../web
-bunx tsc --noEmit
-bun test
-bun run build
+# точечный прогон одного теста
+bun test apps/mobile/src/features/appointments/booking-prefill.test.ts
 
-cd ../../packages/shared
-bun test
+# состояние Expo-зависимостей
+bun run --cwd apps/mobile doctor
 ```
 
-CI повторяет эти проверки на Node 24/Bun. Web ESLint имеет исторический debt и
-пока является информационным gate; новые изменения не должны добавлять ошибок.
+Целевой `.github/workflows/ci.yml` повторяет ровно этот список: один job на
+`ubuntu-latest`, `oven-sh/setup-bun` → `bun install --frozen-lockfile` →
+`typecheck` → `test` → `lint` → `build:web`. Ни npm, ни vitest, ни `next build`
+в нём быть не должно: lockfile один (`bun.lock`), раннер один (`bun:test`),
+сборка веба одна (`expo export --platform web`).
+
+**Состояние временное:** пока владелец не запушил переписанный workflow, в дереве
+лежит версия Next.js-эпохи (`babun-crm/apps/web`, `npm ci`, `vitest`,
+`next build`) — она в текущем дереве неработоспособна. Проверять состояние
+файлом, а не этим абзацем; независимо от цвета CI гейты прогоняются локально
+перед словом «готово».
 
 ## Известные ограничения
 
 - Production deployment и migrations выполняются только через обычный
   review/deploy flow; локальная готовность не означает, что код уже на prod.
-- Expo Doctor: 17/18 из-за намеренного React 19.1/19.2 split.
 - Supply-chain audit может содержать транзитивные advisories, для которых ещё
   нет совместимого upstream patch; адресные overrides допустимы только после
   полного typecheck/tests/build.
-- Старые крупные web/mobile компоненты постепенно декомпозируются; новое UI не
+- Часть справочников в `packages/shared/src/local/*` до сих пор ходит в
+  `window.localStorage` напрямую вместо seam'а `getStorage()` — на нативе такие
+  функции молча ничего не сохраняют. Переводить при касании файла.
+- Старые крупные mobile-компоненты постепенно декомпозируются; новое UI не
   должно увеличивать этот долг.

@@ -8,7 +8,7 @@ Walk through "$ARGUMENTS" as a real user would. No implementation, no code chang
 
 **Step 1 — pick the persona and context**
 
-Babun2 primary persona is a **dispatcher / crew lead on a scooter in Cyprus, mid-summer, one hand on the phone, one on the bike handle, LTE flaky, AirPods in one ear**. Not a desktop user. Not a casual visitor.
+Babun's primary persona is a **dispatcher / crew lead on a scooter in Cyprus, mid-summer, one hand on the phone, one on the bike handle, LTE flaky, AirPods in one ear**. Not a desktop user. Not a casual visitor.
 
 State explicitly:
 - **Who** is walking through (dispatcher / lead / client-facing crew / admin)
@@ -33,19 +33,33 @@ For each tap, long-press, swipe, scroll:
 For every step, score 1-5 on these axes. Mark anything below 4 as `⚠` with a one-line fix.
 
 - **Clarity** — is the next action obvious without reading? (Nielsen's "recognition over recall")
-- **Thumb zone** — is the primary tap target in the easy reach of a right-handed thumb on a 6.1" phone? (Fitt's law — bigger and closer = faster, 44×44 px minimum)
+- **Thumb zone** — is the primary tap target in the easy reach of a right-handed thumb on a 6.1" phone? (Fitt's law — bigger and closer = faster, 44×44 pt minimum — or a `hitSlop` that gets there)
 - **Cognitive load** — how many decisions per screen? (Hick's law — fewer options = faster choice; Miller's 7±2 — working memory limit)
-- **Typography** — is the body text ≥13 px? Is hierarchy clear? Is contrast enough for sun / low vision?
+- **Typography** — is the body text ≥13 pt? Is hierarchy clear? Is contrast enough for sun / low vision? (units here are pt/dp — there are no CSS pixels in RN)
 - **Feedback** — does every tap produce visible change within 100 ms? Loading indicators where things take longer?
 - **Error recovery** — if the user screws up, is the escape cheap? (back / undo / confirm-before-destroy)
 - **Emotional tone** — does the screen feel calm / panicked / empty / cluttered? Is the user in control or being rushed?
 
 **Step 5 — compare against the real-world constraints**
 
-- iOS Safari quirks (pinch zoom, rubber-band scroll, safe-area-inset)
+This is a native Expo/RN app, not a web page — walk it in the iPhone simulator
+(skill `babun-sim`). RN-Web is a second target, never the reference.
+
+- Safe area — every bottom bar pays `useSafeAreaInsets().bottom`, every fixed
+  header pays `.top`. Nothing may sit on the home-indicator strip: a money button
+  there gives the system swipe instead of the transfer.
+- Keyboard — an input focused inside a `BottomSheet` must not hide the sheet's
+  footer button (`avoidKeyboard`; the footer pays the bottom inset only while the
+  keyboard is DOWN).
+- Gestures — RN gesture-handler compositions, not browser scroll: a pan fighting a
+  scroll, a swipe eating a tap, a long-press racing a context menu
+  (`Gesture.Exclusive` / `Gesture.Race` / `Gesture.Native`). Note that an RN `Switch` needs a long
+  press (~160 ms) in the simulator — repeat the gesture before calling it a bug.
+- The tab bar never hides, and a second tap on the active tab unwinds its stack.
 - One-handed use — is the primary action in the bottom third of the screen?
 - Slow connection — does the screen degrade gracefully or hang blank?
-- Dark sun / bright street — does the contrast still read?
+- Dark sun / bright street — does the contrast still read? (the app is light-only —
+  there is no dark palette to check)
 - AirPods half-in — is there anything sound-dependent (there shouldn't be)?
 
 **Step 6 — output a prioritized fix list**

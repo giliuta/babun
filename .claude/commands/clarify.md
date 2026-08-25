@@ -12,7 +12,7 @@ In one sentence, play back what you understood from "$ARGUMENTS". Flag any ambig
 
 **Step 2 — ask 5 to 12 yes/no or A-B-C questions**
 
-Pick only the questions that actually matter. Skip what is already obvious from Babun2 context (stack is Next 16, data in localStorage now, phone-first design, etc — that's in `CLAUDE.md`).
+Pick only the questions that actually matter. Skip what is already obvious from Babun context (Expo/RN на iOS, Android и Web из одного кода, данные в Supabase, phone-first — это в `AGENTS.md`).
 
 Prioritize in this order:
 1. **Scope boundaries** — what is definitely IN and OUT of this feature

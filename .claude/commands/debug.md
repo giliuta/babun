@@ -10,7 +10,7 @@ Diagnose the issue: "$ARGUMENTS"
 1. **Never patch symptoms.** Find why the thing broke. If the cause isn't clear after 5 minutes, say so and ask for more info.
 2. **Reproduce first.** Before proposing a fix, confirm you understand what exact input causes the failure.
 3. **One fix per commit.** Do not bundle unrelated changes.
-4. **Add a regression test** once test infrastructure is in place (after STORY-001).
+4. **Add a regression test** — `bun:test`, file next to the code it covers. The runner is already in place.
 
 **Workflow:**
 1. Ask the user for:
@@ -18,15 +18,17 @@ Diagnose the issue: "$ARGUMENTS"
    - Stack trace (if any)
    - Steps to reproduce
    - Expected vs actual behavior
-   - Browser / device (if UI bug)
+   - Устройство / симулятор и экран (if UI bug)
 2. Read the relevant code. Don't guess based on file names.
 3. Check recent `git log --oneline -10` for related commits.
-4. Check `docs/architecture.md` "Critical Known Issues" — maybe you're about to reintroduce one.
+4. Check the "Critical Known Issues" section of `AGENTS.md` (calendar pinch-zoom,
+   the period pager) — maybe you're about to reintroduce one. `docs/architecture.md`
+   has no such section.
 5. Propose a fix. **Explain the root cause in 2-3 sentences before writing code.**
 6. Implement fix.
-7. `npx tsc --noEmit` + `/test`
+7. `/test` (typecheck + `bun test` + lint)
 8. Commit: `fix: {what} (root cause: {why})`
-9. Push to master.
+9. Push only when the owner asks.
 
 **Common anti-patterns to reject:**
 - "Add a try/catch" — catches a symptom, not a cause

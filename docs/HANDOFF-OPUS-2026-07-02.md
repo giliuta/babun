@@ -1,5 +1,10 @@
 # HANDOFF → Opus: довести мобильный Babun до идеала (2026-07-02)
 
+> 🕓 **ЗАПИСЬ О СЕССИИ 2026-07-02. НЕ ТЕКУЩЕЕ СОСТОЯНИЕ.** Пути вида
+> `babun-crm/apps/web` и `babun-crm/apps/mobile` относятся к дереву до сноса
+> Next.js (2026-08-25); сегодня приложение живёт в `apps/mobile`. Действующие
+> правила — `AGENTS.md`.
+
 Этот документ самодостаточен: выполняй его без другого контекста. Работа идёт в монорепе `/Users/artem/Documents/babun2`, ветка **`feat/mobile-app-port`**, мобильное приложение `babun-crm/apps/mobile` (Expo + RN + expo-router + NativeWind v5 + TanStack Query + Supabase + MMKV). Веб-приложение `babun-crm/apps/web` — источник истины для паритета. Shared-пакет `babun-crm/packages/shared` — менять МОЖНО только там, где явно сказано ниже (задача C1), в остальном read-only.
 
 ---
@@ -115,4 +120,4 @@
 - Дизайн-система: `apps/mobile/docs/DESIGN-SYSTEM.md`; паритет: `apps/mobile/docs/WEB-PARITY-AUDIT.md`, `PORT-SPECS.md`
 - Макеты LOCKED: `mockups/client-app.html` (карта-диспетчер, создание=карточка), `mockups/fin-header-gallery.html`, `ov4-gallery.html`/`v4-overview-*.html`, `period-picker-gallery.html`
 - План миграции: `docs/EXPO-RN-MIGRATION-PLAN.md`; финмодель: `docs/finance-model.md`
-- Скилы проекта (для Claude Code): `/Users/artem/Documents/Project Claude/Babun/.claude/skills/` — babun-sim (симулятор), halo-cobalt-check (дизайн-чек), web-parity-port (портирование)
+- Скилы проекта (для Claude Code): `.claude/skills/` в корне репозитория — babun-sim (симулятор), halo-cobalt-check (дизайн-чек). Скил web-parity-port (портирование) удалён вместе с `apps/web`.

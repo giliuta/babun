@@ -14,31 +14,33 @@ Implement STORY-$ARGUMENTS.
 5. If the story has `Dependencies:` that are not `done` — stop and warn.
 
 **Implementation order (strict):**
-1. **Database migrations** (if any) → `supabase/migrations/`
-2. **Types** → `src/lib/*.ts` interfaces, `packages/shared/types/`
-3. **Data layer** → `src/lib/*.ts` load/save functions
-4. **API routes** (if any) → `src/app/api/*/route.ts`
-5. **Context providers** → update `src/app/dashboard/layout.tsx`
-6. **Components** → `src/components/*`
-7. **Pages** → `src/app/*/page.tsx`
-8. **Tests** (when test runner is set up)
+1. **Database migrations** (if any) → `supabase/migrations/` (write the file; applying to prod is the owner's call)
+2. **Types** → `packages/shared/src/db/database.types.ts` and the feature's own types
+3. **Domain / data layer** → `packages/shared/src/local/*`, repositories in `packages/shared/src/db/repositories/*`
+4. **Server-side logic** (if any) → Supabase RPC in a migration, or `supabase/functions/<name>/`
+5. **Providers / query wiring** → `apps/mobile/src/providers/*`, feature `queries.ts` / `mutations.ts`
+6. **Feature components** → `apps/mobile/src/features/<feature>/*`, shared primitives in `apps/mobile/src/components/ui/*`
+7. **Routes** → `apps/mobile/app/**` (expo-router; the route file stays thin)
+8. **Tests** → `bun:test`, file next to the code it covers (`*.test.ts`)
 
 **Per-file checklist:**
 - Does it follow `docs/coding-patterns.md`?
 - Is the file < 400 lines?
-- Named exports, not default (except pages)?
+- Named exports, not default (except expo-router route files)?
 - No `any` types?
 - Error handling at boundaries?
 
 **After a batch of related files:**
-- Run `cd babun-crm/apps/web && npx tsc --noEmit` — must be green
-- Run `cd babun-crm/apps/web && npx eslint src` — no new errors
-- If UI changed: bump `BUILD_TAG` in `src/app/dashboard/page.tsx` and `CACHE_VERSION` in `public/sw.js`
+- Run `bun run typecheck` — must be green
+- Run `bun test` — must be green
+- Run `bun run lint` — no new errors
+- If UI changed: look at it in the simulator next to its neighbouring states and
+  attach the screenshot. "It compiles" is not evidence.
 
 **Committing:**
 - One logical change = one commit
 - Message format: `feat(STORY-$ARGUMENTS): {what}` or `refactor(STORY-$ARGUMENTS): {what}`
-- Push to `master`: `git push origin master`
+- Commit locally. Pushing and opening a PR happen only when the owner asks.
 
 **When done:**
 1. Update `Status: done` in the story file

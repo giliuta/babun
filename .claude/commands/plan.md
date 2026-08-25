@@ -4,10 +4,10 @@ description: Plan a new feature — creates docs/stories/STORY-NNN.md. ALWAYS ru
 argument-hint: [feature-name]
 ---
 
-Plan a new feature called "$ARGUMENTS" for Babun2.
+Plan a new feature called "$ARGUMENTS" for Babun.
 
 **Required reading first:**
-1. `CLAUDE.md` — golden rules
+1. `AGENTS.md` — golden rules (`CLAUDE.md` is only a pointer to it)
 2. `docs/architecture.md` — current architecture
 3. `docs/coding-patterns.md` — how to write code
 4. `docs/roadmap.md` — where this fits in priorities

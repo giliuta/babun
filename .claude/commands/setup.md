@@ -1,37 +1,36 @@
 ---
 name: setup
-description: Verify dev environment is ready for Babun2 work
+description: Verify dev environment is ready for Babun work
 ---
 
-Verify the dev environment is configured correctly for Babun2.
+Verify the dev environment is configured correctly for Babun.
 
 **Checks (in parallel where possible):**
 
-1. Working directory is `c:\Users\Dmitry\Desktop\Babun2` — if not, stop.
+1. Working directory is the repository root — `git rev-parse --show-toplevel`
+   must succeed and contain `apps/mobile`. If not, stop.
 2. `git remote -v` — must include `origin  https://github.com/giliuta/babun2.git`
 3. `git branch --show-current` — must be `master`
-4. `ls babun-crm/apps/web/package.json` — the web app exists
-5. `cd babun-crm/apps/web && node -v` — Node version (expect ≥ 20)
-6. `cd babun-crm/apps/web && ls node_modules/next/package.json` — dependencies installed
-7. `cd babun-crm/apps/web && cat node_modules/next/package.json | grep version` — Next 16.x
-8. `cd babun-crm/apps/web && npx tsc --noEmit` — typecheck baseline (0 errors expected)
+4. `ls apps/mobile/package.json packages/shared/package.json` — both workspaces exist
+5. `bun --version` — bun is the package manager and the test runner; there is no npm lockfile
+6. `ls apps/mobile/node_modules/expo/package.json` — dependencies installed
+7. `bun run typecheck` — typecheck baseline (0 errors expected)
+8. `bun test` — test baseline (0 failures expected)
 9. Check `docs/` exists with `architecture.md`, `coding-patterns.md`, `roadmap.md`
 10. Check `.claude/commands/` has plan/implement/test/review/status/debug/setup
-11. Check `.reference/` exists (nextcrm, calcom, monica) — optional but helpful
 
 **Output format:**
 ```
 🔧 Setup Check
 ━━━━━━━━━━━━━━━━━━━━━━━
-Working dir:     ✅ Babun2
+Working dir:     ✅ repo root
 Git:             ✅ master @ origin
-Node:            ✅ vXX.X.X
+bun:             ✅ vX.Y.Z
 Dependencies:    ✅ installed
-Next.js:         ✅ 16.X.X
 TypeScript:      ✅ clean
+Tests:           ✅ N pass
 Docs:            ✅ present
 Commands:        ✅ all 7 present
-Reference repos: ✅ 3 cloned
 ━━━━━━━━━━━━━━━━━━━━━━━
 Status: READY
 ```

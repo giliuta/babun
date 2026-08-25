@@ -12,15 +12,15 @@ description: Полный конвейер задачи через всех аг
 3. **strategist** — review правок от architect, финализируй план
 
 ## Phase 2: Дизайн (только если задача касается UI)
-4. **designer** (think hard) — через chrome-devtools MCP проанализируй текущий UI затронутых страниц. Дай рекомендации с CSS/JSX
+4. **designer** (think hard) — сними затронутые экраны на симуляторе и проанализируй их. Дай рекомендации сниппетами RN/NativeWind
 
 ## Phase 3: Реализация
-5. **developer** — реализуй по плану от strategist + рекомендациям от designer. Один коммит = одна причина. Push в master.
+5. **developer** — реализуй по плану от strategist + рекомендациям от designer. Один коммит = одна причина. Коммит локально; пуш только по просьбе владельца.
 
 ## Phase 4: Проверка качества (параллельно через Agent Teams)
 6. **security-auditor** (ultrathink) — обязательная проверка multi-tenant. Если FAIL → возврат к developer, повтор макс 2 раза
 
-7. **ux-tester** (think hard) — реальный прогон через chrome-devtools MCP. Если CRITICAL баги → возврат к developer, повтор макс 2 раза
+7. **ux-tester** (think hard) — реальный прогон на симуляторе iPhone. Если CRITICAL баги → возврат к developer, повтор макс 2 раза
 
 ## Phase 5: Финальный review
 8. **reviewer** (think hard) — финальный code review. APPROVE / REQUEST CHANGES

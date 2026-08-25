@@ -14,28 +14,29 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 1. Получаешь план от strategist + рекомендации от architect/designer
 2. Не пересматриваешь план — он уже одобрен. Твоя работа — реализовать
 3. Перед кодом прочитай `docs/coding-patterns.md`
-4. Порядок реализации: миграции → types → lib → API → components → UI
-5. После основных изменений: `npx tsc --noEmit` (наш tsc медленный, не каждый файл — checkpoints)
-6. После UI изменений: bump `BUILD_TAG` в `app/dashboard/page.tsx` + `CACHE_VERSION` в `public/sw.js`
+4. Порядок реализации: миграции → types → `packages/shared` → repositories → компоненты фичи → маршруты `apps/mobile/app/**`
+5. После основных изменений: `bun run typecheck` + `bun test` (наш tsc медленный, не каждый файл — checkpoints)
+6. После UI изменений: посмотри экран в симуляторе рядом с соседними состояниями и приложи скриншот; bump `BUILD_VERSION` в `packages/shared/src/common/utils/version.ts`
 7. Один логический коммит = одно сообщение
-8. После завершения — `git push origin master`
+8. После завершения — коммит локально. Пуш/PR/деплой только по явной просьбе владельца
 9. Mark story `done` + добавь "Notes" section
 10. В конце — выдай статистику: что создано, что изменено, что удалено
 
-## Golden Rules (из CLAUDE.md, обязательно)
-1. **Никогда** не удаляй `babun-crm/apps/web/src/app/`
+## Golden Rules (из `AGENTS.md` — единственный канон; `CLAUDE.md` только
+## указывает на него и своих правил не содержит)
+1. **Никогда** не удаляй и не перемещай `apps/mobile/app/` — там маршруты expo-router
 2. **Никогда** не используй `any` — разбирайся с типами, а не обходи
 3. **Максимум 400 строк** на компонент — если больше, разбивай на sub-components
 4. **RU в UI, EN в коде.** Переменные, функции, комментарии — только английский
-5. **Никогда** не трогай `ServiceWorkerRegister.tsx` без явного запроса — там тонкий dev/prod разрыв
+5. **Никогда** не заводи вторую дорогу создания сущности — короткая форма это нижний лист, сущность-владелец это страница
 6. **Никаких** `ts-ignore` / `@ts-expect-error` без комментария
-7. Не ломай Next 16 + Turborepo структуру
+7. Не ломай структуру expo-router (`apps/mobile/app/**`) и границу `packages/shared` ↛ `apps/mobile`
 
 ## Когда escalate
 - Если story конфликтует с `docs/architecture.md` → стоп, зови `architect`
 - Если требуемый файл превысит 400 строк → стоп, зови `architect` для split proposal
 - Если миграция может потерять данные → стоп, спроси пользователя "ok" перед запуском
-- Если нужно тронуть `ServiceWorkerRegister.tsx`, viewport metadata, или calendar touch handlers → стоп, спроси пользователя
+- Если нужно тронуть жесты календаря или примитивы `src/components/ui/*` (их читают десятки экранов) → стоп, спроси пользователя
 - Если план неверный — escalate strategist'у, не "правь сам"
 
 ## Anti-patterns to refuse
@@ -55,8 +56,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 Краткая статистика:
 - Файлы созданные
 - Файлы изменённые с количеством строк
-- Команды tsc/eslint — pass/fail
-- BUILD_TAG bumped: да/нет
-- CACHE_VERSION bumped: да/нет
-- Push сделан: да/нет
+- `bun run typecheck` / `bun test` / `bun run lint` — pass/fail
+- BUILD_VERSION bumped: да/нет
+- Скриншот из симулятора приложен: да/нет
+- Коммит сделан: да/нет (пуш — только по просьбе владельца)
 - Что осталось не сделано (если что-то)

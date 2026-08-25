@@ -1,7 +1,16 @@
 # Finance & Payroll Model — Babun CRM
 
-> Phase 1 (localStorage prototype). Supabase migration is out of scope until phase 3.
-> All monetary values are stored as **euro-cents integers** (e.g. €50.00 → `5000`).
+> ⛔ **АРХИВ. НЕ КАНОН.** Это модель прототипа на localStorage: ключи
+> `babun2:finance:*` и «миграции» `0001_seed_brigades` … `0004_service_categories`.
+> Ни одного такого ключа в дереве нет — финансы давно живут в Supabase
+> (`supabase/migrations/*`: счета, транзакции, НДС, зарплаты; чтение — через
+> репозитории `packages/shared/src/db/repositories/*`).
+>
+> Актуальное состояние домена — `docs/audit/FINANCES-AUDIT-2026-08-16.md` и сами
+> миграции. Здесь ценны только формулы и словарь сущностей; любую структуру
+> данных перед использованием сверяй со схемой, а не с этим файлом.
+>
+> Одно правило пережило переезд: все суммы — **целые евроценты** (€50.00 → `5000`).
 
 ---
 

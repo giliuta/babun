@@ -1,25 +1,24 @@
 ---
 name: status
-description: Snapshot of project state — stories, git, build, deploy
+description: Snapshot of project state — stories, git, version
 ---
 
-Report a concise dashboard of where Babun2 stands right now.
+Report a concise dashboard of where Babun stands right now.
 
 Collect in parallel:
 1. `ls docs/stories/` → count stories by status (grep `Status: done/in-progress/todo`)
 2. `git log --oneline -5` → last 5 commits
 3. `git status --short` → uncommitted changes count
 4. `git rev-list --count origin/master..HEAD` → commits ahead of origin
-5. Read `babun-crm/apps/web/public/sw.js` for current `CACHE_VERSION`
-6. Read `babun-crm/apps/web/src/app/dashboard/page.tsx` for current `BUILD_TAG`
+5. Read `packages/shared/src/common/utils/version.ts` for current `BUILD_VERSION`
+   (the user-facing `DISPLAY_VERSION` is derived from it, not stored separately)
 
 Output format:
 ```
-📊 Babun2 Status
+📊 Babun Status
 ━━━━━━━━━━━━━━━━━━━━━━━
 Stories:      N done  |  M in-progress  |  K todo
-SW version:   babun-vN
-Build tag:    vN-{feature}
+Version:      vN-{feature}
 Git:          clean  |  N uncommitted  |  N ahead of origin
 Branch:       master
 Last commit:  {sha} {message}

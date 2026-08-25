@@ -1,144 +1,140 @@
-# Coding Patterns — Babun2
+# Coding Patterns — Babun
+
+Стек: Expo SDK 54 / React Native, expo-router, NativeWind, Supabase.
+Веб — тот же код через React Native Web (Next.js снесён 2026-08-25).
 
 ## TypeScript
 - **Strict mode ON.** `any` is forbidden. If a type is hard, write an interface.
-- **Named exports** for components, default exports only for pages (`app/**/page.tsx`) where Next requires them.
+- **Named exports** everywhere. The one exception: files under
+  `apps/mobile/app/**` are expo-router routes and must default-export the screen
+  component.
 - **Type imports** with `import type {...}` where possible — helps tree-shaking.
 - **No `ts-ignore`**, no `@ts-expect-error` without a comment explaining why.
 
 ```ts
-// ✅ Good
-import type { Appointment } from "@/lib/appointments";
+// ✅ Good — тип импортирован через `import type`, экспорт именованный
+import type { Appointment } from "@babun/shared/local/appointments";
+
 export function formatStart(apt: Appointment): string { ... }
 
-// ❌ Bad
+// ❌ Bad — default-экспорт вне `apps/mobile/app/**` и `any` вместо типа
 export default function formatStart(apt: any): any { ... }
 ```
 
-## State persistence (localStorage phase)
+## Данные
 
-Every `lib/*.ts` data file exposes the same shape:
+- **Серверные данные — TanStack Query поверх Supabase repositories**
+  (`packages/shared/src/db/repositories/*`). Не ходить в `supabase.from(...)`
+  из компонента напрямую — репозиторий один на сущность.
+- **Offline** — снимок в SQLite-кэше (`packages/shared/src/storage/sql`) плюс
+  очередь мутаций в `packages/shared/src/sync`. Реалтайм инвалидирует запросы.
+- **Локальные справочники и настройки** — синхронные стораджи в
+  `packages/shared/src/local/*`.
+
+## Storage seam
+
+Синхронное key-value хранение идёт ТОЛЬКО через seam — он платформенный:
+MMKV на нативе, `localStorage` на вебе. Биндится один раз в
+`apps/mobile/src/bootstrap.ts` (первый импорт в `app/_layout.tsx`); до этого
+`getStorage()` бросает, чтобы данные не терялись молча.
+
+`get`/`set` сами делают JSON; `getRaw`/`setRaw` — для легаси-ключей с голыми
+строками, которые уже лежат на устройствах пользователей, и для случая, когда
+надо отличить «ключа никогда не было» от «сохранён пустой список»: `getRaw`
+возвращает `null` только при отсутствии ключа, а сохранённый `[]` приходит
+строкой `"[]"`.
+
+Живой образец — `packages/shared/src/local/personal-event-types.ts`:
 
 ```ts
-const STORAGE_KEY = "babun-{entity}";
+import { getStorage } from "../storage/provider";
 
-export function load{Entity}(): Entity[] {
-  if (typeof window === "undefined") return DEFAULT_{ENTITY};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_{ENTITY};
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_{ENTITY};
-  } catch {
-    return DEFAULT_{ENTITY};
-  }
+const STORAGE_KEY = "babun2:settings:personal-event-types";
+
+export function loadPersonalEventTypes(): PersonalEventType[] {
+  // Первый запуск (ключа нет) → сеем дефолты. Пользователь удалил всё
+  // (лежит "[]") → уважаем пустой список, иначе типы воскресают сами.
+  const raw = getStorage().getRaw(STORAGE_KEY);
+  if (raw === null) return SEED_PERSONAL_EVENT_TYPES;
+
+  const parsed = getStorage().get<PersonalEventType[]>(STORAGE_KEY);
+  if (!Array.isArray(parsed)) return SEED_PERSONAL_EVENT_TYPES;
+  return parsed;
 }
 
-export function save{Entity}(list: Entity[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-  } catch {
-    // ignore quota errors
-  }
+export function savePersonalEventTypes(types: PersonalEventType[]): void {
+  getStorage().set(STORAGE_KEY, types);
 }
 ```
 
-**Why:** uniform API makes future Supabase swap trivial — just replace bodies, keep signatures.
+**LEGACY:** часть файлов в `packages/shared/src/local/*` до сих пор дёргает
+`window.localStorage` напрямую с охраной `typeof window === "undefined"`. На
+нативе такие функции молча ничего не сохраняют. Образцом для нового кода они не
+являются — при касании такого файла переводи его на `getStorage()`.
 
-## Context providers
+## Провайдеры
 
-`src/app/dashboard/layout.tsx` is the ONE place that wires all contexts. When you add a new entity:
-
-1. Add `load`/`save` helpers in a `lib/{entity}.ts`
-2. Create a `{Entity}Context` in `layout.tsx` with `{entities}, set{Entities}, upsert{Entity}, delete{Entity}` shape
-3. Wire the provider in the nested JSX (they're deeply nested — append inside existing stack)
-4. Export a `use{Entity}()` hook
-
-Do NOT create per-page contexts. One shared provider tree = one shared view.
+Дерево провайдеров одно и живёт в `apps/mobile/src/providers/AppProviders.tsx`
+(SafeArea → QueryClient → Session → …), подключается из `app/_layout.tsx`. Не
+заводи провайдер на экран: один общий стек = одна общая картина данных.
 
 ## Components
 
 ```tsx
-// ✅ Named export, typed props interface, Tailwind only
+// ✅ Named export, typed props interface, NativeWind className
 interface AppointmentBlockProps {
   appointment: Appointment;
   hourHeight?: number;  // optional with default
-  onClick: (apt: Appointment) => void;
+  onPress: (apt: Appointment) => void;
 }
 
-export default function AppointmentBlock({
+export function AppointmentBlock({
   appointment,
-  hourHeight = 60,
-  onClick,
+  hourHeight = 64,
+  onPress,
 }: AppointmentBlockProps) {
   return (
-    <button
-      onClick={() => onClick(appointment)}
-      className="absolute left-0.5 right-0.5 rounded-sm hover:brightness-110"
+    <Pressable
+      onPress={() => onPress(appointment)}
+      className="absolute left-0.5 right-0.5 rounded-[10px] active:opacity-80"
     >
-      {appointment.time_start}
-    </button>
+      <Text>{appointment.time_start}</Text>
+    </Pressable>
   );
 }
 ```
 
 **Rules:**
-- Max 400 lines per file. Split sub-components into private functions in the same file or move to `components/{area}/`.
+- Max 400 lines per file. Split sub-components into private functions in the same file or move to `src/components/{area}/`.
 - Props interface is typed, optional props have defaults.
 - Event handlers use `handle{Event}` naming.
+- `Pressable` + состояние нажатия вместо hover — hover в RN не существует.
 - No inline objects in JSX unless trivial — memo via `useMemo` if it matters.
 
 ## Styling
 
-- **Tailwind v4** only. No CSS modules, no styled-components, no `.css` files (except `globals.css`).
-- Use `lg:` breakpoint for desktop, everything else mobile-first.
-- `bg-indigo-700` for primary brand color, `emerald-500` for success, `red-500` for danger, `amber-400` for incomplete.
-- Safe-area on fixed/sticky elements: `style={{ bottom: "calc(env(safe-area-inset-bottom) + 0.25rem)" }}`
+- **NativeWind (Tailwind v4 синтаксис)** — `className` на RN-компонентах.
+  Единственный CSS-файл — `apps/mobile/global.css` с токенами.
+- Цвета берутся из токенов и `src/theme/colors.ts`; бренд — `--color-brand: #2c5be0`.
+  Канон — `apps/mobile/docs/DESIGN-SYSTEM.md`, свои оттенки не заводить.
+- Радиус — только `rounded-[10px]`, `rounded-t-[10px]`, `rounded-full`.
+- Safe-area — через `react-native-safe-area-context`, а не через `env(safe-area-inset-*)`.
+- Тема строго светлая: dark-палитры и системного переключения нет.
 
-## Next.js 16 gotchas (read `babun-crm/apps/web/AGENTS.md`)
+## Supabase RLS
 
-- `useSearchParams()` is sync in 14, async-capable in 16 — check the docs inside `node_modules/next/dist/docs/` before assuming.
-- `cookies()`, `headers()` are now async — `await cookies()`
-- App Router is default, no `pages/` directory
-- Metadata API stays the same
-
-## API Routes (when we add them with Supabase)
-
-```ts
-// app/api/clients/route.ts
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-
-export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { data, error } = await supabase.from("clients").select("*");
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json(data);
-}
-```
-
-**Never pass `tenant_id` from the client.** RLS + JWT claim handles isolation.
-
-## Supabase RLS (when we migrate — STORY-001)
+Каждая tenant-таблица несёт `tenant_id` и включённый RLS; политики лежат в
+`supabase/migrations/`.
 
 ```sql
--- Every table MUST have tenant_id + RLS
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Tenant isolation" ON clients
-  FOR ALL USING (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+  FOR ALL USING (tenant_id = public.current_tenant_id());
 ```
+
+**Never pass `tenant_id` from the client.** RLS + JWT claim handles isolation.
+Привилегированные операции (service-ключ) — только в `supabase/functions/*`.
 
 ## Error handling
 
@@ -167,19 +163,22 @@ try { doThing(); } catch (e) { /* nothing */ }
 | Components | PascalCase | `ClientCard.tsx` |
 | Utilities, hooks | camelCase | `formatCurrency.ts`, `useAppointments.ts` |
 | Types, interfaces | PascalCase | `type ClientWithAppointments` |
-| DB columns (future) | snake_case | `first_contact_date` |
-| Route folders | kebab-case | `app/dashboard/sms-templates/` |
-| localStorage keys | kebab-case with `babun-` prefix | `babun-appointments` |
-| Context names | `{Entity}Context` + `use{Entity}` hook | `ClientsContext`, `useClients()` |
+| DB columns | snake_case | `first_contact_date` |
+| Route files | kebab-case под `apps/mobile/app/` | `app/(dashboard)/clients/object-types.tsx` |
+| Storage keys | новый ключ — `babun2:<область>:<имя>`, двоеточия как разделитель | `babun2:settings:personal-event-types` |
+| Query keys | массив от общего к частному | `["clients", tenantId, filter]` |
+
+В дереве живут и более старые формы ключей — `babun-clients-sort`,
+`babun:auth:last-user-id`. Они лежат на устройствах пользователей, поэтому
+переименованию не подлежат: правило `babun2:` — только для НОВЫХ ключей.
 
 ## Commits
 
 ```
 feat: add client acquisition source field
-fix: iOS pinch-zoom didn't forward to JS
-refactor: replace HTML5 drag with dnd-kit
-docs: add architecture.md
-chore: bump SW cache to v14
+fix: reset password link opened the wrong screen on web
+refactor: split ClientsFilterSheet into facets
+docs: bring architecture.md back in line with the RN-only tree
 ```
 
 - Imperative mood, lowercase type prefix
@@ -188,6 +187,5 @@ chore: bump SW cache to v14
 
 ## When in doubt
 - Read the existing file in the same folder — match its style
-- Check `.reference/nextcrm/` for Next 16 + shadcn patterns
-- Check `.reference/calcom/packages/lib/availability.ts` for scheduling logic
+- Правила проекта — `AGENTS.md`; дизайн — `apps/mobile/docs/DESIGN-SYSTEM.md`
 - Don't invent new patterns when an established one exists

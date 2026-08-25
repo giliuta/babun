@@ -22,19 +22,25 @@ Identify:
 
 **Step 2 — pick the right reviewer persona**
 
-Based on what changed, spawn an Agent with the best-fit subagent_type:
+Based on what changed, spawn an Agent with the best-fit `subagent_type`. Only the
+agents that actually exist in `.claude/agents/` can be spawned — the full index is
+`docs/agents.md`:
 
-- **Code quality / refactors** → `code-analyzer` or `reviewer`
-- **Security-sensitive** (auth, CORS, SQL, XSS, secrets, RLS) → `security-auditor`
-- **Performance-sensitive** (hot paths, big renders, queries) → `perf-analyzer`
-- **Architectural changes** (new modules, cross-boundary) → `system-architect`
-- **Data model / schema / migrations** → `ddd-domain-expert` or `adr-architect`
+- **Code quality / refactors** → `reviewer`
+- **Security-sensitive** (auth, SQL, secrets, RLS, multi-tenant leaks) → `security-auditor`
+- **Architectural changes** (new modules, cross-boundary) → `architect`
+- **Data model / schema / migrations** → `architect`, plus `babun-data-loss-guardian`
+  when a delete or a cascade is involved
+- **UI change** → `babun-design-system-keeper` and `babun-mobile-ux-auditor`
+- **A single screen area** → the matching `babun-*-expert` (calendar, clients,
+  finance, brigades, settings, appointment form)
 - **Mixed / general** → `reviewer`
 
 **Step 3 — brief the agent like a cold colleague**
 
 The agent hasn't seen our conversation. Give it:
-- Exact command to run (usually `git diff` or `git diff master...HEAD`)
+- Exact command to run (usually `git diff` or `git diff origin/master...HEAD` —
+  the default branch here is `master`, not `main`)
 - 2-3 sentences of business context: what this is for, what we're trying to avoid
 - Specific question to answer: "Is this safe to push?" / "Does this break X?" / "Any regressions I missed?"
 - Cap the response: "Report in under 250 words — bullets, not prose."

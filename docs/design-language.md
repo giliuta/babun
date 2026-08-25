@@ -1,6 +1,18 @@
 # Babun CRM — Design Language (iOS + Telegram)
 
-Canonical spec for every UI surface in the app. If a screen doesn't match this doc, fix the screen, not the doc. Current revision: **Sprint 029 Phase 0** (2026-04-21).
+> ⛔ **АРХИВ. НЕ КАНОН.** Это дизайн-язык Next.js-веба, снесённого 2026-08-25:
+> фиолетовый акцент, `SheetShell` вместо нижних листов, токены из
+> `apps/web/src/app/globals.css`. Ни одного из этих файлов в дереве нет, и
+> половина правил ниже прямо противоречит действующим.
+>
+> **Действующий канон — [`apps/mobile/docs/DESIGN-SYSTEM.md`](../apps/mobile/docs/DESIGN-SYSTEM.md)**
+> («Halo Cobalt»: бренд `#2c5be0`, радиус только 10 px / полный круг, тема строго
+> светлая, короткая форма = нижний лист). Файл оставлен как запись о прошлом —
+> сверяться с ним нельзя, ссылаться в новых документах тоже.
+
+Спека веб-интерфейса на момент **Sprint 029 Phase 0** (2026-04-21). Тогда она
+была канонической: «не совпадает экран — правь экран, не документ». Сегодня —
+описание того, чего больше нет.
 
 > **Mental model**: iOS Settings app layout and typography, with Babun's violet accent wherever iOS uses system-blue. Telegram-style warmth in dense views (chat list, client list). Nothing is decorative for its own sake.
 
@@ -8,7 +20,7 @@ Canonical spec for every UI surface in the app. If a screen doesn't match this d
 
 ## 1. Tokens
 
-Everything lives as a CSS variable in [src/app/globals.css](../babun-crm/apps/web/src/app/globals.css) and is mirrored in [src/lib/design-tokens.ts](../babun-crm/apps/web/src/lib/design-tokens.ts) as typed exports. Tailwind v4 surfaces them as utility classes via `@theme inline`.
+Всё лежало CSS-переменными в `apps/web/src/app/globals.css` и дублировалось типами в `apps/web/src/lib/design-tokens.ts` (оба файла удалены вместе с вебом). Tailwind v4 surfaces them as utility classes via `@theme inline`.
 
 ### 1.1 Surfaces
 
@@ -141,7 +153,7 @@ iOS buttons are fills + radius, never `border-2`.
 
 ## 6. Primitive kit
 
-Located in [src/components/ui/](../babun-crm/apps/web/src/components/ui). Import from the barrel:
+Жили в `apps/web/src/components/ui/` (удалено). Импортировались из barrel:
 
 ```tsx
 import {
@@ -277,7 +289,7 @@ Retains its custom grid, but uses the same tokens (separators, label colours, ac
 
 ## 9. Rollout schedule
 
-See [docs/sprints/SPRINT-028-visual.md](sprints/SPRINT-028-visual.md) (will be added when we kick off Phase 1). Seven phases planned; each ships a clean incremental push with a version bump.
+Планировался спринт SPRINT-028-visual — он так и не был заведён, а сам rollout отменён вместе с веб-приложением.
 
 - [x] Phase 0 — Foundation tokens + kit
 - [ ] Phase 1 — Chrome (Header, Sidebar, BottomTabBar, PageHeader, global modals)

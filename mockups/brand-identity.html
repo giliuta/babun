@@ -1,0 +1,757 @@
+<title>Айдентика Babun</title>
+
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Babun brand book. Single light world on purpose: the product's
+     theme policy is LOCKED light-only, so showing these surfaces on
+     a dark ground would misreport every colour. Every value below is
+     painted explicitly, so the page holds on any host background.
+     Tokens mirror apps/mobile/src/theme/colors.ts — they do not
+     invent a second palette.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --canvas: #f4f6f9;
+    --surface: #ffffff;
+    --ink: #0b1220;
+    --body: rgba(11, 18, 32, 0.86);
+    --sub: rgba(11, 18, 32, 0.74);
+    --caption: rgba(11, 18, 32, 0.62);
+    --faint: rgba(11, 18, 32, 0.4);
+    --cobalt: #2c5be0;
+    --accent-from: #2f6fd6;
+    --accent-to: #1f4fcc;
+    --success: #087a52;
+    --danger: #c9372c;
+    --warning: #955f00;
+    --fill: #eef1f5;
+    --separator: rgba(11, 18, 32, 0.14);
+    --separator-strong: rgba(11, 18, 32, 0.2);
+    --radius: 10px;
+    --shadow-card: 0 1px 2px rgba(11, 18, 32, 0.04), 0 8px 24px rgba(11, 18, 32, 0.06);
+    --shadow-brand: 0 8px 28px rgba(44, 91, 224, 0.28);
+
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+      "Inter", "Segoe UI", Roboto, system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--canvas);
+    color: var(--body);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Type scale — Babun's own tokens, 1:1 ───────────────────── */
+  .t-display { font-size: 34px; line-height: 40px; font-weight: 800; letter-spacing: -0.6px; color: var(--ink); }
+  .t-title   { font-size: 26px; line-height: 32px; font-weight: 700; letter-spacing: -0.4px; color: var(--ink); }
+  .t-headline{ font-size: 17px; line-height: 22px; font-weight: 600; letter-spacing: -0.2px; color: var(--ink); }
+  .t-body    { font-size: 15px; line-height: 20px; font-weight: 400; color: var(--body); }
+  .t-sub     { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--caption); }
+  .eyebrow {
+    font-size: 11px; line-height: 14px; font-weight: 700;
+    letter-spacing: 0.6px; text-transform: uppercase; color: var(--caption);
+  }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  code { background: var(--fill); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+  /* ── Page frame ─────────────────────────────────────────────── */
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 20px 96px; }
+  section { margin-top: 56px; }
+  section:first-of-type { margin-top: 40px; }
+  .plate {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
+    padding: 24px;
+  }
+  .plate + .plate { margin-top: 12px; }
+  .sec-head { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+  .sec-head p { margin: 0; max-width: 62ch; }
+  h2, h3 { margin: 0; }
+
+  /* ── Hero ───────────────────────────────────────────────────── */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    padding: 84px 20px 56px;
+    text-align: center;
+    background:
+      radial-gradient(120% 82% at 50% 0%, rgba(47, 111, 214, 0.14) 0%, rgba(47, 111, 214, 0) 68%),
+      var(--canvas);
+  }
+  .hero-inner { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 22px; }
+  .hero h1 { margin: 0; }
+  .hero p { margin: 0; max-width: 46ch; color: var(--sub); }
+
+  /* ── The mark ───────────────────────────────────────────────── */
+  .mark { display: block; color: currentColor; }
+  .mark [data-ring] { stroke-width: 9; }
+  .mark[data-tight] [data-ring] { stroke-width: 11; }
+
+  /* Cobalt tile — the ONE gradient, plus the halo sheen it is named for */
+  .tile {
+    position: relative;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    background: linear-gradient(180deg, var(--accent-from) 0%, var(--accent-to) 100%);
+    overflow: hidden;
+    flex: none;
+  }
+  .tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(88% 62% at 50% -6%, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 62%);
+    pointer-events: none;
+  }
+  .tile .mark { position: relative; z-index: 1; }
+  .squircle { border-radius: 22.4%; }
+
+  /* ── Concept switcher ───────────────────────────────────────── */
+  .concepts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .concept {
+    appearance: none;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: var(--surface);
+    border: 1px solid var(--separator);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transition: border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease;
+  }
+  .concept:hover { border-color: rgba(44, 91, 224, 0.4); }
+  .concept:active { transform: scale(0.985); }
+  .concept:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 3px; }
+  .concept[aria-pressed="true"] {
+    border-color: var(--cobalt);
+    box-shadow: inset 0 0 0 1px var(--cobalt), var(--shadow-card);
+  }
+  .concept .tile { width: 88px; height: 88px; box-shadow: var(--shadow-brand); }
+  .concept-name { display: flex; align-items: baseline; gap: 8px; }
+  .concept-name .badge {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    color: var(--cobalt); background: rgba(44, 91, 224, 0.1);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .concept p { margin: 0; font-size: 13px; line-height: 18px; color: var(--caption); }
+  .rec {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    color: var(--success);
+  }
+  .rec::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--success); }
+
+  /* ── Construction diagram ───────────────────────────────────── */
+  .construction { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  .grid-frame {
+    position: relative;
+    width: 260px; height: 260px;
+    flex: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(11, 18, 32, 0.07) 0 1px, transparent 1px 32.5px),
+      repeating-linear-gradient(90deg, rgba(11, 18, 32, 0.07) 0 1px, transparent 1px 32.5px),
+      var(--fill);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .grid-frame .mark { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--cobalt); }
+  .grid-frame .safe {
+    position: absolute; inset: 14.06% 18.75%;
+    border: 1px dashed rgba(44, 91, 224, 0.45);
+    border-radius: 4px;
+  }
+  .specs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 260px; flex: 1; }
+  .specs li { display: flex; gap: 12px; align-items: baseline; }
+  .specs dt, .specs .k { color: var(--caption); font-size: 13px; min-width: 132px; flex: none; }
+  .specs .v { color: var(--ink); font-family: var(--mono); font-size: 12.5px; }
+
+  /* ── Lockups ────────────────────────────────────────────────── */
+  .lockups { display: flex; flex-wrap: wrap; gap: 32px; align-items: center; }
+  .lockup-h { display: flex; align-items: center; gap: 12px; }
+  .lockup-v { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .wordmark {
+    font-size: 34px; line-height: 1; font-weight: 800; letter-spacing: -1px;
+    color: var(--ink);
+  }
+  .wordmark.sm { font-size: 22px; letter-spacing: -0.7px; }
+  .clearspace { position: relative; padding: 20px; }
+  .clearspace::before {
+    content: ""; position: absolute; inset: 0;
+    border: 1px dashed rgba(44, 91, 224, 0.45); border-radius: 4px;
+  }
+
+  /* ── Size ladder ────────────────────────────────────────────── */
+  .ladder { display: flex; align-items: flex-end; gap: 28px; flex-wrap: wrap; }
+  .rung { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .rung .tile { border-radius: 22.4%; }
+  .rung .cap { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; color: var(--caption); font-family: var(--mono); }
+  .rung.bad .cap { color: var(--danger); }
+
+  /* ── Colour swatches ────────────────────────────────────────── */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .sw { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--separator); }
+  .sw .chip { height: 64px; }
+  .sw .meta { padding: 10px 12px; background: var(--surface); display: grid; gap: 2px; }
+  .sw .name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .sw .hex { font-family: var(--mono); font-size: 11.5px; color: var(--caption); }
+
+  /* ── Applications ───────────────────────────────────────────── */
+  .apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .app-cell { display: flex; flex-direction: column; gap: 10px; }
+  .app-cell .label { font-size: 11px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--caption); }
+
+  /* iOS home-screen mock */
+  .homescreen {
+    background: linear-gradient(165deg, #dbe3ef 0%, #c8d3e4 55%, #d7dfeb 100%);
+    border-radius: var(--radius);
+    padding: 22px 18px;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .home-app { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 60px; }
+  .home-app .tile, .home-app .ghost {
+    width: 60px; height: 60px; border-radius: 22.4%;
+    box-shadow: 0 4px 10px rgba(11, 18, 32, 0.18);
+  }
+  .home-app .ghost { background: rgba(255, 255, 255, 0.55); }
+  .home-app .name {
+    font-size: 10.5px; font-weight: 500; color: #0b1220;
+    text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+  }
+
+  /* Splash */
+  .splash {
+    height: 280px;
+    border-radius: var(--radius);
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(120% 78% at 50% 4%, rgba(47, 111, 214, 0.13) 0%, rgba(47, 111, 214, 0) 66%),
+      var(--canvas);
+    border: 1px solid var(--separator);
+  }
+  .splash .tile { width: 76px; height: 76px; border-radius: 22.4%; box-shadow: var(--shadow-brand); }
+
+  /* Browser tab */
+  .tabbar {
+    background: var(--fill); border-radius: var(--radius); padding: 8px;
+    border: 1px solid var(--separator);
+  }
+  .tab {
+    background: var(--surface); border-radius: 6px; padding: 7px 10px;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: var(--body); box-shadow: 0 1px 2px rgba(11, 18, 32, 0.06);
+  }
+  .tab .tile { width: 16px; height: 16px; border-radius: 3.5px; }
+
+  /* Login hero mock */
+  .login {
+    border-radius: var(--radius);
+    border: 1px solid var(--separator);
+    padding: 28px 22px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(47, 111, 214, 0.12) 0%, rgba(47, 111, 214, 0) 68%),
+      var(--canvas);
+  }
+  .login .tile { width: 64px; height: 64px; border-radius: 22.4%; box-shadow: var(--shadow-brand); }
+  .login .field {
+    width: 100%; background: var(--surface); border-radius: var(--radius);
+    box-shadow: var(--shadow-card); overflow: hidden;
+  }
+  .login .row { padding: 15px 16px; font-size: 15px; color: var(--caption); }
+  .login .row + .row { border-top: 1px solid var(--separator); }
+  .login .cta {
+    width: 100%; height: 52px; border-radius: 999px; display: grid; place-items: center;
+    color: #fff; font-size: 17px; font-weight: 600;
+    background: linear-gradient(180deg, var(--accent-from), var(--accent-to));
+    box-shadow: var(--shadow-brand);
+  }
+
+  /* Empty state + avatar */
+  .empty {
+    border: 1px solid var(--separator); border-radius: var(--radius);
+    padding: 32px 20px; text-align: center; background: var(--surface);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .empty .mark { width: 56px; height: 56px; color: rgba(11, 18, 32, 0.1); }
+
+  /* Invoice letterhead */
+  .invoice {
+    background: var(--surface); border: 1px solid var(--separator);
+    border-radius: var(--radius); padding: 18px; display: grid; gap: 14px;
+  }
+  .invoice .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .invoice .tenant { display: flex; align-items: center; gap: 10px; }
+  .invoice .tenant .logo {
+    width: 34px; height: 34px; border-radius: var(--radius);
+    background: var(--fill); display: grid; place-items: center;
+    font-size: 12px; font-weight: 700; color: var(--sub);
+  }
+  .invoice .lines { display: grid; gap: 8px; font-size: 12.5px; }
+  .invoice .line { display: flex; justify-content: space-between; gap: 10px; color: var(--body); }
+  .invoice .line .amt { font-family: var(--mono); color: var(--ink); }
+  .invoice .total {
+    display: flex; justify-content: space-between;
+    border-top: 1px solid var(--separator-strong); padding-top: 8px;
+    font-weight: 600; color: var(--ink);
+  }
+  .invoice .foot {
+    display: flex; align-items: center; gap: 6px;
+    border-top: 1px solid var(--separator); padding-top: 10px;
+    font-size: 11px; color: var(--faint);
+  }
+  .invoice .foot .mark { width: 12px; height: 12px; color: var(--faint); }
+
+  /* ── Do / Don't ─────────────────────────────────────────────── */
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .rule {
+    border: 1px solid var(--separator); border-radius: var(--radius);
+    padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--surface);
+  }
+  .rule .stage { height: 84px; display: grid; place-items: center; border-radius: 6px; background: var(--fill); }
+  .rule .verdict { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; }
+  .rule .verdict::before {
+    content: ""; width: 16px; height: 16px; border-radius: 999px; flex: none;
+    background: var(--danger);
+    mask: linear-gradient(#000 0 0) center / 8px 1.6px no-repeat;
+    -webkit-mask: linear-gradient(#000 0 0) center / 8px 1.6px no-repeat;
+  }
+  .rule.ok .verdict::before { background: var(--success); }
+  .rule .verdict { color: var(--danger); }
+  .rule.ok .verdict { color: var(--success); }
+  .rule p { margin: 0; font-size: 12.5px; line-height: 17px; color: var(--caption); }
+
+  /* Deliverables table */
+  .files { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .files th, .files td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--separator); vertical-align: top; }
+  .files th { font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase; color: var(--caption); font-weight: 700; }
+  .files td:first-child { font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: nowrap; }
+  .scroll-x { overflow-x: auto; }
+
+  @media (max-width: 720px) {
+    .concepts { grid-template-columns: 1fr; }
+    .hero { padding: 56px 18px 48px; }
+    .t-display { font-size: 28px; line-height: 34px; }
+  }
+</style>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="tile squircle" style="width: 104px; height: 104px; box-shadow: var(--shadow-brand);">
+      <svg class="mark" data-mark width="60" height="60" viewBox="0 0 64 64" aria-hidden="true"></svg>
+    </div>
+    <h1 class="t-display">Айдентика Babun</h1>
+    <p class="t-body">Знак, локап и вся визуалка для CRM выездного сервиса — на токенах «Halo&nbsp;Cobalt», без второй палитры и второго радиуса.</p>
+    <p class="eyebrow">Три концепта · выберите знак — страница перекрасится целиком</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ── 1. Concepts ─────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 1 · Выбор знака</span>
+      <h2 class="t-title">Три концепта монограммы</h2>
+      <p class="t-body">Все три — строчная «b» на кобальтовой плитке, все три держатся на одной сетке 64×64 и одном габарите, поэтому решение можно менять без переверстки. Различие — характер: спокойная геометрия, типографский вес, инженерная квадратность.</p>
+    </div>
+
+    <div class="concepts" role="group" aria-label="Концепты знака">
+      <button class="concept" type="button" data-concept="halo" aria-pressed="true">
+        <div class="tile squircle">
+          <svg class="mark" data-mark width="52" height="52" viewBox="0 0 64 64" aria-hidden="true"></svg>
+        </div>
+        <div class="concept-name">
+          <span class="t-headline">Гало</span>
+          <span class="badge">A</span>
+        </div>
+        <span class="rec">Рекомендую</span>
+        <p>Круг и штрих, одна толщина стенки. Читается как «b», как циферблат дня и как метка на карте — три смысла продукта в одной форме. Имя дизайн-системы наконец получает знак.</p>
+      </button>
+
+      <button class="concept" type="button" data-concept="stamp" aria-pressed="false">
+        <div class="tile squircle">
+          <svg class="mark" data-mark width="52" height="52" viewBox="0 0 64 64" aria-hidden="true"></svg>
+        </div>
+        <div class="concept-name">
+          <span class="t-headline">Оттиск</span>
+          <span class="badge">B</span>
+        </div>
+        <p>Плотный диск, внутренний просвет сдвинут вправо-вверх — стенка тоньше сверху, толще снизу, как у настоящего наборного шрифта. Самый весомый вариант: печать на наряде, а не иконка.</p>
+      </button>
+
+      <button class="concept" type="button" data-concept="frame" aria-pressed="false">
+        <div class="tile squircle">
+          <svg class="mark" data-mark width="52" height="52" viewBox="0 0 64 64" aria-hidden="true"></svg>
+        </div>
+        <div class="concept-name">
+          <span class="t-headline">Каркас</span>
+          <span class="badge">C</span>
+        </div>
+        <p>Чаша — сквиркл того же характера, что и радиус 10 во всём продукте. Инструмент, а не украшение; знак прямо цитирует решение «любое скругление одинаковое».</p>
+      </button>
+    </div>
+  </section>
+
+  <!-- ── 2. Construction ─────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 2 · Конструкция</span>
+      <h2 class="t-title">Построение на сетке 64</h2>
+      <p class="t-body">Знак живёт в квадрате 64×64. Габарит — 40×46, поля 12 слева и справа, 9 сверху и снизу: знак оптически центрирован без ручных сдвигов, поэтому один и тот же SVG годится и в плитку, и в фавикон.</p>
+    </div>
+    <div class="plate">
+      <div class="construction">
+        <div class="grid-frame">
+          <svg class="mark" data-mark viewBox="0 0 64 64" aria-hidden="true"></svg>
+          <div class="safe"></div>
+        </div>
+        <ul class="specs">
+          <li><span class="k">Поле знака</span><span class="v">64 × 64</span></li>
+          <li><span class="k">Габарит</span><span class="v">40 × 46 (x 12…52, y 9…55)</span></li>
+          <li><span class="k">Стенка</span><span class="v">9 (плотный вариант — 11)</span></li>
+          <li><span class="k">Штрих</span><span class="v">rect 12, 9 · 9 × 46 · r 4.5</span></li>
+          <li><span class="k">Чаша</span><span class="v">ø 40 внешн. · ø 22 просвет</span></li>
+          <li><span class="k">Оптический центр</span><span class="v">совпадает с геометрическим</span></li>
+          <li><span class="k">Формат исходника</span><span class="v">SVG, path-only, без текста</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 3. Lockup ───────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 3 · Локап</span>
+      <h2 class="t-title">Знак и слово</h2>
+      <p class="t-body">Слово набирается системным SF Pro Display 800 с трекингом −0.03em — тем же токеном Display, которым набраны заголовки табов. Отдельного шрифта у бренда нет и не надо: продукт и логотип говорят одной гарнитурой.</p>
+    </div>
+    <div class="plate">
+      <div class="lockups">
+        <div>
+          <div class="clearspace">
+            <div class="lockup-h">
+              <div class="tile squircle" style="width: 44px; height: 44px;">
+                <svg class="mark" data-mark width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"></svg>
+              </div>
+              <span class="wordmark">Babun</span>
+            </div>
+          </div>
+          <p class="t-sub" style="margin: 10px 0 0;">Горизонтальный · зазор = 27% высоты плитки · охранное поле = ½ плитки</p>
+        </div>
+
+        <div>
+          <div class="clearspace">
+            <div class="lockup-v">
+              <div class="tile squircle" style="width: 56px; height: 56px;">
+                <svg class="mark" data-mark width="33" height="33" viewBox="0 0 64 64" aria-hidden="true"></svg>
+              </div>
+              <span class="wordmark sm">Babun</span>
+            </div>
+          </div>
+          <p class="t-sub" style="margin: 10px 0 0;">Вертикальный · экран входа, сплеш, шапка письма</p>
+        </div>
+
+        <div>
+          <div class="clearspace" style="background: var(--ink); border-radius: 6px;">
+            <div class="lockup-h">
+              <svg class="mark" data-mark width="34" height="34" viewBox="0 0 64 64" aria-hidden="true" style="color: #fff;"></svg>
+              <span class="wordmark sm" style="color: #fff;">Babun</span>
+            </div>
+          </div>
+          <p class="t-sub" style="margin: 10px 0 0;">Однотонный · печать, гравировка, тёмный фон</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 4. Sizes ────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 4 · Масштаб</span>
+      <h2 class="t-title">Как знак ведёт себя мелким</h2>
+      <p class="t-body">До 24 px включительно берётся плотный вариант — стенка 11 вместо 9, иначе просвет чаши затягивается и знак читается кляксой. Ниже 16 px знак не ставится вообще: в такой роли работает только буква или ничего.</p>
+    </div>
+    <div class="plate">
+      <div class="ladder">
+        <div class="rung"><div class="tile" style="width: 120px; height: 120px;"><svg class="mark" data-mark width="70" height="70" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">120</span></div>
+        <div class="rung"><div class="tile" style="width: 64px; height: 64px;"><svg class="mark" data-mark width="38" height="38" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">64</span></div>
+        <div class="rung"><div class="tile" style="width: 40px; height: 40px;"><svg class="mark" data-mark width="24" height="24" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">40</span></div>
+        <div class="rung"><div class="tile" style="width: 24px; height: 24px;"><svg class="mark" data-mark data-tight width="15" height="15" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">24 плотн.</span></div>
+        <div class="rung"><div class="tile" style="width: 16px; height: 16px;"><svg class="mark" data-mark data-tight width="11" height="11" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">16 плотн.</span></div>
+        <div class="rung bad"><div class="tile" style="width: 12px; height: 12px;"><svg class="mark" data-mark width="8" height="8" viewBox="0 0 64 64" aria-hidden="true"></svg></div><span class="cap">12 нельзя</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 5. Colour ───────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 5 · Цвет</span>
+      <h2 class="t-title">Палитра уже есть — знак её не расширяет</h2>
+      <p class="t-body">Ни одного нового цвета. Кобальт и его градиент — единственная краска бренда; зелёный и красный остаются смыслом («пришло» / «ушло») и в знаке не встречаются никогда.</p>
+    </div>
+    <div class="plate">
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background: linear-gradient(180deg, #2f6fd6, #1f4fcc);"></div><div class="meta"><span class="name">Бренд-градиент</span><span class="hex">#2f6fd6 → #1f4fcc</span></div></div>
+        <div class="sw"><div class="chip" style="background: #2c5be0;"></div><div class="meta"><span class="name">Кобальт</span><span class="hex">#2c5be0 · accent</span></div></div>
+        <div class="sw"><div class="chip" style="background: #0b1220;"></div><div class="meta"><span class="name">Чернила</span><span class="hex">#0b1220 · ink</span></div></div>
+        <div class="sw"><div class="chip" style="background: #f4f6f9;"></div><div class="meta"><span class="name">Холст</span><span class="hex">#f4f6f9 · canvas</span></div></div>
+        <div class="sw"><div class="chip" style="background: #ffffff; box-shadow: inset 0 0 0 1px var(--separator);"></div><div class="meta"><span class="name">Поверхность</span><span class="hex">#ffffff · surface</span></div></div>
+        <div class="sw"><div class="chip" style="background: #087a52;"></div><div class="meta"><span class="name">Приход</span><span class="hex">#087a52 · только смысл</span></div></div>
+        <div class="sw"><div class="chip" style="background: #c9372c;"></div><div class="meta"><span class="name">Расход</span><span class="hex">#c9372c · только смысл</span></div></div>
+        <div class="sw"><div class="chip" style="background: #eef1f5;"></div><div class="meta"><span class="name">Заливка</span><span class="hex">#eef1f5 · fill</span></div></div>
+      </div>
+      <ul class="specs" style="margin-top: 20px;">
+        <li><span class="k">Градиент разрешён</span><span class="v">знак · главная CTA · активное состояние — и всё</span></li>
+        <li><span class="k">Тень знака</span><span class="v">0 8px 28px rgba(44,91,224,.28)</span></li>
+        <li><span class="k">Гало</span><span class="v">радиальный кобальт 12% от верха — вход и сплеш</span></li>
+        <li><span class="k">Монохром</span><span class="v">ink 100% или белый 100%, без серых промежутков</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── 6. Icons ────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 6 · Иконки и запуск</span>
+      <h2 class="t-title">Иконка приложения, сплеш, фавикон</h2>
+      <p class="t-body">Сейчас в <code>assets/icon.png</code> лежит дефолтная заглушка Expo — серые круги на сером. Ниже то, что её заменит. Знак занимает 58% плитки, фон — полноцветный градиент без прозрачности: маску-сквиркл рисует сама iOS.</p>
+    </div>
+    <div class="plate">
+      <div class="apps">
+        <div class="app-cell">
+          <span class="label">iOS · домашний экран</span>
+          <div class="homescreen">
+            <div class="home-app">
+              <div class="tile"><svg class="mark" data-mark width="35" height="35" viewBox="0 0 64 64" aria-hidden="true"></svg></div>
+              <span class="name">Babun</span>
+            </div>
+            <div class="home-app"><div class="ghost"></div><span class="name">Почта</span></div>
+            <div class="home-app"><div class="ghost"></div><span class="name">Карты</span></div>
+          </div>
+          <p class="t-sub">1024×1024, без альфа-канала, без собственного скругления.</p>
+        </div>
+
+        <div class="app-cell">
+          <span class="label">Сплеш</span>
+          <div class="splash">
+            <div class="tile"><svg class="mark" data-mark width="45" height="45" viewBox="0 0 64 64" aria-hidden="true"></svg></div>
+          </div>
+          <p class="t-sub">Фон — <code>canvas</code>, не белый: сплеш и экран входа сходятся в один кадр без вспышки.</p>
+        </div>
+
+        <div class="app-cell">
+          <span class="label">Веб · вкладка</span>
+          <div class="tabbar">
+            <span class="tab">
+              <span class="tile"><svg class="mark" data-mark data-tight width="11" height="11" viewBox="0 0 64 64" aria-hidden="true"></svg></span>
+              Babun — Календарь
+            </span>
+          </div>
+          <p class="t-sub">Фавикон 32 и 16, плотный вариант; текущий 48×48 в градациях серого уходит.</p>
+        </div>
+
+        <div class="app-cell">
+          <span class="label">Android · adaptive</span>
+          <div style="display: flex; gap: 14px; align-items: center;">
+            <div class="tile" style="width: 60px; height: 60px; border-radius: 999px;"><svg class="mark" data-mark width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"></svg></div>
+            <div class="tile" style="width: 60px; height: 60px; border-radius: 14px;"><svg class="mark" data-mark width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"></svg></div>
+          </div>
+          <p class="t-sub">Знак — 50% поля 1024: маска Android режет углы агрессивнее iOS.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 7. In product ───────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 7 · В продукте</span>
+      <h2 class="t-title">Где знак появляется, а где его нет</h2>
+      <p class="t-body">Знак — не украшение экранов. Он живёт на входе, на сплеше, в пустом состоянии и в подвале документа. Внутри рабочих экранов логотипа нет: там работает шапка с названием раздела, а кобальт занят действиями.</p>
+    </div>
+    <div class="plate">
+      <div class="apps">
+        <div class="app-cell">
+          <span class="label">Вход</span>
+          <div class="login">
+            <div class="tile"><svg class="mark" data-mark width="38" height="38" viewBox="0 0 64 64" aria-hidden="true"></svg></div>
+            <span class="wordmark sm">Babun</span>
+            <div class="field">
+              <div class="row">Email</div>
+              <div class="row">Пароль</div>
+            </div>
+            <div class="cta">Войти</div>
+          </div>
+          <p class="t-sub">Знак заменяет текстовую «b» в <code>BrandMark</code> — сегодня там просто буква системным шрифтом.</p>
+        </div>
+
+        <div class="app-cell">
+          <span class="label">Пустое состояние</span>
+          <div class="empty">
+            <svg class="mark" data-mark viewBox="0 0 64 64" aria-hidden="true"></svg>
+            <span class="t-headline">Записей на этот день нет</span>
+            <p class="t-sub" style="margin: 0;">Нажмите на свободное время в календаре</p>
+          </div>
+          <p class="t-sub">Знак в <code>ink 10%</code> — водяной, без градиента и без тени.</p>
+        </div>
+
+        <div class="app-cell">
+          <span class="label">Счёт клиенту</span>
+          <div class="invoice">
+            <div class="head">
+              <div class="tenant">
+                <span class="logo">AF</span>
+                <span>
+                  <span class="t-headline" style="display: block;">AirFix</span>
+                  <span class="t-sub">Лимассол, Кипр</span>
+                </span>
+              </div>
+              <span class="t-sub">№ 1042 · 25.08.2026</span>
+            </div>
+            <div class="lines">
+              <div class="line"><span>Чистка кондиционера · 2 блока</span><span class="amt">€90</span></div>
+              <div class="line"><span>Выезд мастера</span><span class="amt">€20</span></div>
+            </div>
+            <div class="total"><span>Итого</span><span class="mono">€110</span></div>
+            <div class="foot">
+              <svg class="mark" data-mark data-tight viewBox="0 0 64 64" aria-hidden="true"></svg>
+              Собрано в Babun
+            </div>
+          </div>
+          <p class="t-sub">Шапка документа — логотип арендатора. Знак Babun только в подвале, <code>ink 40%</code>, 12 px: платформа не отбирает бренд у клиента.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 8. Rules ────────────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 8 · Границы</span>
+      <h2 class="t-title">Что со знаком делать нельзя</h2>
+    </div>
+    <div class="rules">
+      <div class="rule ok">
+        <div class="stage" style="background: linear-gradient(180deg, #2f6fd6, #1f4fcc);">
+          <svg class="mark" data-mark width="46" height="46" viewBox="0 0 64 64" aria-hidden="true" style="color: #fff;"></svg>
+        </div>
+        <span class="verdict">Белый на кобальте</span>
+        <p>Основное состояние. Плитка, сквиркл-маска, кобальтовая тень.</p>
+      </div>
+      <div class="rule ok">
+        <div class="stage" style="background: #fff; box-shadow: inset 0 0 0 1px var(--separator);">
+          <svg class="mark" data-mark width="46" height="46" viewBox="0 0 64 64" aria-hidden="true" style="color: #2c5be0;"></svg>
+        </div>
+        <span class="verdict">Кобальт на белом</span>
+        <p>Плоский знак без плитки — документы, письма, favicon-исходник.</p>
+      </div>
+      <div class="rule">
+        <div class="stage" style="background: #087a52;">
+          <svg class="mark" data-mark width="46" height="46" viewBox="0 0 64 64" aria-hidden="true" style="color: #fff;"></svg>
+        </div>
+        <span class="verdict">Не перекрашивать</span>
+        <p>Зелёный и красный означают деньги. Знак в них читается как статус операции.</p>
+      </div>
+      <div class="rule">
+        <div class="stage">
+          <svg class="mark" data-mark width="46" height="46" viewBox="0 0 64 64" aria-hidden="true" style="color: rgba(44,91,224,.35); transform: rotate(-12deg) skewX(-10deg);"></svg>
+        </div>
+        <span class="verdict">Не крутить и не тянуть</span>
+        <p>Ни поворота, ни наклона, ни неравного масштаба, ни обводки поверх.</p>
+      </div>
+      <div class="rule">
+        <div class="stage" style="background: linear-gradient(135deg, #7c3aed, #2c5be0);">
+          <svg class="mark" data-mark width="46" height="46" viewBox="0 0 64 64" aria-hidden="true" style="color: #fff;"></svg>
+        </div>
+        <span class="verdict">Никакого второго градиента</span>
+        <p>Градиент один — вертикальный кобальтовый. Фиолетовый ушёл вместе с вебом 2026-08-25.</p>
+      </div>
+      <div class="rule">
+        <div class="stage" style="background: #fff; box-shadow: inset 0 0 0 1px var(--separator);">
+          <span style="font: 800 34px/1 var(--sans); color: #2c5be0;">b</span>
+        </div>
+        <span class="verdict">Не набирать буквой</span>
+        <p>Сегодняшняя «b» текстом зависит от шрифта устройства и метрик — знак всегда path.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 9. Deliverables ─────────────────────────────────────── -->
+  <section>
+    <div class="sec-head">
+      <span class="eyebrow">Шаг 9 · После утверждения</span>
+      <h2 class="t-title">Что заведу в репозиторий</h2>
+      <p class="t-body">Всё ниже — на выбранном концепте, одним коммитом на причину. Отдельно проверю экран входа в симуляторе, как требует правило 12.</p>
+    </div>
+    <div class="plate scroll-x">
+      <table class="files">
+        <thead>
+          <tr><th>Файл</th><th>Что это</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>assets/brand/mark.svg</td><td>Знак, path-only, currentColor — исходник всего остального</td></tr>
+          <tr><td>assets/brand/mark-tight.svg</td><td>Плотный вариант для 16–24 px</td></tr>
+          <tr><td>assets/brand/lockup-h.svg</td><td>Горизонтальный локап со словом</td></tr>
+          <tr><td>assets/icon.png</td><td>1024×1024, градиент во весь квадрат, без альфы — заменяет заглушку Expo</td></tr>
+          <tr><td>assets/adaptive-icon.png</td><td>1024×1024 foreground, знак 50%, <code>backgroundColor</code> → кобальт</td></tr>
+          <tr><td>assets/splash-icon.png</td><td>Плитка на прозрачном; в <code>app.json</code> фон меняется на <code>#f4f6f9</code></td></tr>
+          <tr><td>assets/favicon.png</td><td>32×32 и 16×16, плотный вариант</td></tr>
+          <tr><td>src/components/brand/BrandMark.tsx</td><td>react-native-svg: <code>size</code>, <code>variant="tile" | "flat" | "ghost"</code>. Буква-текст уходит из <code>AuthCard</code></td></tr>
+          <tr><td>docs/BRAND.md</td><td>Эта страница как канон рядом с DESIGN-SYSTEM.md</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  // One geometry per concept, same 64×64 frame and same 40×46 bbox, so the
+  // switch never reflows the page. `data-ring` marks the stroked element the
+  // tight variant thickens; fills and strokes ride on currentColor.
+  const CONCEPTS = {
+    halo: `
+      <rect x="12" y="9" width="9" height="46" rx="4.5" fill="currentColor"/>
+      <circle data-ring cx="32" cy="35" r="15.5" fill="none" stroke="currentColor"/>`,
+    stamp: `
+      <rect x="12" y="9" width="9" height="46" rx="4.5" fill="currentColor"/>
+      <path fill="currentColor" fill-rule="evenodd" d="M12 35a20 20 0 1 1 40 0 20 20 0 0 1-40 0Zm13-3a10 10 0 1 0 20 0 10 10 0 0 0-20 0Z"/>`,
+    frame: `
+      <rect x="12" y="9" width="9" height="46" rx="3" fill="currentColor"/>
+      <rect data-ring x="16.5" y="19.5" width="31" height="31" rx="9.5" fill="none" stroke="currentColor"/>`,
+  };
+
+  const buttons = Array.from(document.querySelectorAll(".concept"));
+
+  function paint(name) {
+    const geometry = CONCEPTS[name];
+    document.querySelectorAll("[data-mark]").forEach((svg) => {
+      svg.innerHTML = geometry;
+    });
+    buttons.forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.concept === name));
+      // A pressed concept card shows its own geometry, not the global one.
+      const own = b.querySelector("[data-mark]");
+      if (own) own.innerHTML = CONCEPTS[b.dataset.concept];
+    });
+  }
+
+  buttons.forEach((b) => b.addEventListener("click", () => paint(b.dataset.concept)));
+  paint("halo");
+</script>

@@ -15,38 +15,34 @@ Review all changes relative to `origin/master`:
 - [ ] No `any`, no `ts-ignore`, no unsafe casts
 - [ ] Interfaces for all component props
 - [ ] Type imports use `import type`
-- [ ] `npx tsc --noEmit` passes
+- [ ] `bun run typecheck` passes
 
 ### Architecture
-- [ ] No business logic in components — lives in `lib/`
-- [ ] Context used correctly (no per-page contexts)
-- [ ] No new localStorage keys without matching `load*`/`save*` helpers
-- [ ] When Supabase added: tenant_id enforced at DB level, never trusted from client
+- [ ] No business logic in components — lives in `packages/shared/src/local/*` or the feature's own `*.ts`
+- [ ] Route files in `apps/mobile/app/**` stay thin — screens live in `src/features/*`
+- [ ] No new persisted key without matching load/save helpers (MMKV / expo-sqlite / Supabase)
+- [ ] tenant_id enforced at DB level via RLS / `current_tenant_id()`, never trusted from the client
 - [ ] No credentials / secret keys hardcoded
 - [ ] No `console.log` in production code paths (ok in dev utilities / catch blocks where commented)
 
 ### UI
-- [ ] Mobile-first — default styles work, `lg:` used only to enhance
-- [ ] Safe-area respected on fixed/sticky elements touching screen edges
-- [ ] No hardcoded colors outside Tailwind palette / design tokens
-- [ ] Touch targets ≥ 44px
+- [ ] Radius only `rounded-[10px]` / `rounded-t-[10px]` / `rounded-full` — no `rounded-xl/2xl/3xl`, no stray numbers
+- [ ] Rising panels go through the canonical `BottomSheet`, never a hand-rolled `Modal animationType="slide"`
+- [ ] Настройка = страница, действие = лист (`ToggleListScreen` / `PickerSheet`), no bespoke list layout
+- [ ] Time is always the two looped wheels (`TimeWheelPair`), on every surface
+- [ ] Safe areas via `useSafeAreaInsets()` on anything touching a screen edge
+- [ ] Colors from `useThemeColors()` — no hex literals outside `src/theme/`
+- [ ] Touch targets ≥ 44pt (or `hitSlop` making them so)
 - [ ] Russian text in UI, English in code
 
-### PWA
-- [ ] If visible UI changed → `BUILD_TAG` bumped
-- [ ] If cacheable routes changed → `CACHE_VERSION` bumped
-- [ ] No new routes forgotten in `sw.js` PRECACHE_URLS
+### Tests
+- [ ] `bun test` passes
+- [ ] A bug fix carries a regression test
 
 ### Commits
 - [ ] Each commit is one logical change
 - [ ] Commit messages follow format `type: description` or `type(scope): description`
 - [ ] No `--no-verify`, no force push, no amend of public commits
-
-### Known gotchas (never regress)
-- [ ] `userScalable: false` in viewport metadata (don't bring back page pinch-zoom)
-- [ ] `touchAction: "pan-y"` on outer calendar scroller
-- [ ] SwipeableCalendar still aborts on 2+ touches mid-swipe
-- [ ] Dev SW auto-unregister in `ServiceWorkerRegister.tsx` intact
 
 **Output:**
 ```

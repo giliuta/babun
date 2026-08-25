@@ -2,15 +2,17 @@
 
 ## Security posture
 
-Multi-tenant with RLS at the DB layer. The publishable key in the
-browser bundle is safe to expose — even crafted REST queries from
-DevTools can only see the caller's own tenant. SUPABASE_SECRET_KEY is
-server-side only.
+Multi-tenant with RLS at the DB layer. The publishable key in the app
+bundle is safe to expose — even crafted REST queries from DevTools can
+only see the caller's own tenant. The secret key never ships to a client;
+it lives in the Supabase environment where edge functions read it.
 
-What RLS does **not** cover: CSRF (handled by httpOnly cookies +
-future CSRF tokens on custom POSTs), brute-force on login (Supabase
-Auth rate-limit), session hijacking (httpOnly + Secure + SameSite
-cookies — Supabase defaults).
+What RLS does **not** cover: session theft on web (React Native Web keeps
+the supabase-js session in `localStorage` and there is no CSP header yet —
+open TODO in `vercel.json`), brute-force on login (Supabase Auth
+rate-limit). On native the session is encrypted at rest via
+`LargeSecureStore` (`apps/mobile/src/lib/secure-store.ts`). There are no
+cookie-authenticated endpoints, so CSRF does not apply.
 
 ## Supabase Dashboard config (one-time, per project)
 
@@ -29,22 +31,25 @@ following in the Supabase Dashboard:
 
 This is the page that decides what domain ends up in password-reset
 emails, magic-link emails and email-confirmation links. A wrong value
-here means users click the email link and land on `http://localhost:3000`
-which doesn't exist for them — broken UX, no recovery.
+here means users click the email link and land on a host that doesn't
+exist for them — broken UX, no recovery.
 
 | Field | Value | Why |
 |---|---|---|
 | **Site URL** | `https://babun2.vercel.app` | Default redirect domain. Must be the production URL, NOT localhost — even during dev. |
-| **Redirect URLs** | `https://babun2.vercel.app/**` | Production allowlist. Wildcard `**` covers /auth/callback, /reset-password, etc. |
-| **Redirect URLs** | `http://localhost:3000/**` | Local-dev allowlist. Lets `npm run dev` test reset flows against the real Supabase project. |
+| **Redirect URLs** | `https://babun2.vercel.app/**` | Production allowlist (web build). |
+| **Redirect URLs** | `http://localhost:8081/**` | Local Expo Web allowlist — `bun run web` serves on 8081. |
+| **Redirect URLs** | `babun://**` and `babundev://**` | Native deep links. `app.json` sets scheme `babun`; the dev variant uses `babundev` (`app.config.js`). |
 
-**Code-side note:** the app's `requestPasswordReset()` helper passes
-`redirectTo: ${window.location.origin}/auth/callback?next=/reset-password`,
-so on `npm run dev` the redirect points at localhost (matched by the
-local-dev allowlist), and on production it points at babun2.vercel.app.
-The Supabase Site URL is only used as the *default* when no `redirectTo`
-is supplied — but Supabase email templates also use it to render the
-button URL. Both halves must agree, hence both entries above.
+**Code-side note:** password reset lives in
+`apps/mobile/app/(auth)/forgot-password.tsx` and calls
+`supabase.auth.resetPasswordForEmail(email, { redirectTo: Linking.createURL("/reset-password") })`.
+`Linking.createURL` resolves to the app scheme on native and to the dev-server
+origin on Expo Web, which is why both kinds of entry must be in the allowlist.
+There is no `/auth/callback` route — the link lands directly on
+`apps/mobile/app/(auth)/reset-password.tsx`. The Supabase Site URL is only used
+as the *default* when no `redirectTo` is supplied — but Supabase email templates
+also render the button URL from it, so both halves must agree.
 
 **If you change the production domain (custom domain, etc.):**
 1. Update Site URL to the new domain.
@@ -56,8 +61,8 @@ button URL. Both halves must agree, hence both entries above.
 
 ## Prerequisites
 
-- Node 20+
-- npm 11+
+- **Bun** — the canonical package manager and script runner (`bun.lock` at the root)
+- **Xcode + an iOS Simulator runtime** — needed for `bun run ios`
 - Access to the Supabase project `rdtokosbqvgemicqeqwz` (eu-west-1, free tier)
 
 ## Local setup
@@ -67,7 +72,7 @@ button URL. Both halves must agree, hence both entries above.
 ```bash
 git clone https://github.com/giliuta/babun2.git
 cd babun2
-npm install              # from repo root — Turborepo workspaces install everything
+bun install              # from repo root — workspaces: apps/*, packages/*
 ```
 
 ### 2. Get Supabase keys
@@ -75,40 +80,59 @@ npm install              # from repo root — Turborepo workspaces install every
 Open https://supabase.com/dashboard/project/rdtokosbqvgemicqeqwz/settings/api and copy:
 
 - **Project URL** — `https://rdtokosbqvgemicqeqwz.supabase.co`
-- **Publishable key** — starts with `sb_publishable_…`. Safe to expose; sent to the browser.
-- **Secret key** — starts with `sb_secret_…`. Server-side only; never commit.
+- **Publishable key** — starts with `sb_publishable_…`. Safe to expose; ships in the bundle.
+- **Secret key** — starts with `sb_secret_…`. Server-side only; never commit, never put in a client env file.
 
-### 3. Create `.env.local`
+### 3. Create `apps/mobile/.env.local`
 
-From the repo root:
+The env file lives **inside the app**, not at the repo root — Expo reads dotenv
+from the project directory.
 
 ```bash
-cp .env.local.example .env.local
+cp apps/mobile/.env.example apps/mobile/.env.local
 ```
 
-Edit `.env.local` — fill in the publishable + secret keys. Leave `NEXT_PUBLIC_DEV_TENANT_ID` as the seeded UUID.
+Fill in:
 
-`.env.local` is in `.gitignore`. **Never commit it.** If you accidentally push it, immediately revoke + reissue the keys in the Supabase Dashboard.
+| Name | Value |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://rdtokosbqvgemicqeqwz.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` |
+| `EXPO_PUBLIC_SENTRY_DSN` | optional — leave empty to disable Sentry in dev |
+
+`EXPO_PUBLIC_*` vars are inlined into the client bundle, so only publishable
+values belong here. `.env.local` is in `.gitignore`. **Never commit it.** If you
+accidentally push it, immediately revoke + reissue the keys in the Supabase
+Dashboard.
 
 ### 4. Generate Supabase types (optional)
 
-The repo ships a hand-validated `database.types.ts` matching the applied migration. To regenerate from the live project:
+The repo ships a hand-validated `database.types.ts` matching the applied
+migrations. It is imported as `@babun/shared/db/database.types`, so regenerate
+straight into that file:
 
 ```bash
 # One-time: get a Supabase Personal Access Token at
 # https://supabase.com/dashboard/account/tokens, then:
 export SUPABASE_ACCESS_TOKEN=sbp_…
 
-npm run db:types
+npx supabase gen types typescript --project-id rdtokosbqvgemicqeqwz \
+  > packages/shared/src/db/database.types.ts
 ```
 
 ### 5. Run dev
 
 ```bash
-npm run dev          # localhost:3001 by default; falls back to 3000
+bun run ios          # iOS simulator (expo prebuild + run)
+bun run android      # Android emulator
+bun run web          # Expo Web (React Native Web) on http://localhost:8081
+bun run start        # Metro only — pick the platform yourself / scan the QR
 ```
 
-Open http://localhost:3001/dashboard/clients — you should see the empty list (or seeded clients if any).
+The app opens on the login screen (`apps/mobile/app/(auth)/login.tsx`). After
+signing in you land on the dashboard tabs — calendar, clients, finances, cabinet.
+`(dashboard)` is an expo-router group, so it does **not** appear in the URL: the
+clients list is `/clients`.
 
 ## Migrations
 
@@ -132,36 +156,53 @@ npx supabase db push
 
 ## Vercel Production Setup
 
-The deployed app at https://babun2.vercel.app needs the same env vars set in Vercel. **Do this BEFORE pushing changes that depend on the variables**, otherwise the build will deploy a broken bundle.
+The deployed app at https://babun2.vercel.app is the Expo Web export: Vercel runs
+`bun run build:web` and serves `apps/mobile/dist` (see `vercel.json`). The env
+vars are baked into the bundle at build time, so **set them BEFORE triggering a
+build that depends on them**, otherwise the build ships a broken bundle.
 
 1. Go to **Vercel Dashboard → Project `babun2` → Settings → Environment Variables**.
-2. Add each of the four variables. For each, enable **Production**, **Preview**, **Development**.
+2. Add each variable. For each, enable **Production**, **Preview**, **Development**.
 
    | Name | Value | Sensitive? |
    |---|---|---|
-   | `NEXT_PUBLIC_SUPABASE_URL` | `https://rdtokosbqvgemicqeqwz.supabase.co` | no |
-   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` | no |
-   | `SUPABASE_SECRET_KEY` | `sb_secret_…` | **yes** — toggle the *Sensitive* checkbox |
-   | `NEXT_PUBLIC_DEV_TENANT_ID` | `00000000-0000-0000-0000-00000000babb` | no |
+   | `EXPO_PUBLIC_SUPABASE_URL` | `https://rdtokosbqvgemicqeqwz.supabase.co` | no |
+   | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` | no |
+   | `EXPO_PUBLIC_SENTRY_DSN` | optional | no |
 
+   The secret key does **not** belong here — edge functions read their service
+   credentials from the Supabase environment, not from Vercel.
 3. Save → either trigger a redeploy from the Deployments tab or push a new commit.
-4. Verify by opening https://babun2.vercel.app/dashboard/clients — list should load from Supabase.
+4. Verify by opening https://babun2.vercel.app — the login screen should render
+   and sign-in should reach Supabase.
 
 ## Common errors
 
-- **`Supabase env missing`** at runtime — `.env.local` not present or one of the publishable/URL vars is empty.
-- **`new row violates row-level security policy`** — RLS is on but no permissive policy. Run `supabase/migrations/20260427_002_disable_rls.sql` (Dashboard SQL Editor fallback works) until STORY-038 ships proper policies.
+- **`[supabase] Missing EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`**
+  at startup — `apps/mobile/.env.local` is missing or one of the two vars is
+  empty. Metro caches env: restart it after editing.
+- **`new row violates row-level security policy`** — RLS is working, but
+  `public.current_tenant_id()` returned NULL: the JWT carries no
+  `app_metadata.tenant_id` (fresh session before `handle_new_user` fired), or the
+  request runs as `anon`. Check with `select public.current_tenant_id();` under
+  your own session. **Do NOT disable RLS** — the old
+  `supabase/migrations/20260427_002_disable_rls.sql` is a historical file
+  superseded by `20260429_001_rls_policies.sql`; running it strips tenant
+  isolation from `clients` while granting `all` to `anon`.
 - **`invalid input syntax for type uuid`** — id field passed to Supabase isn't UUID-formatted. New clients should use `crypto.randomUUID()` (handled by `createBlankClient`); legacy `cli-…` ids will fail.
 
 ## Common dev tasks
 
 ```bash
-# Type check
+# Type check (must be 0)
 bun run typecheck
+
+# Tests (bun:test)
+bun test
 
 # Lint
 bun run lint
 
-# LAN dev (test from phone on same Wi-Fi)
-bun run web
+# Web build exactly the way Vercel does it
+bun run build:web
 ```
