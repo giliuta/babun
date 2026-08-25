@@ -163,6 +163,58 @@
   .grave td.yes { color: #7fbf9a; }
   .grave .rule { background: rgba(239, 231, 217, 0.2); }
 
+
+  /* ── phones ─────────────────────────────────────────────────── */
+  .phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); gap: 20px; }
+  .ph-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .ph-cap { font-family: var(--mono); font-size: 10px; color: var(--ink-52); }
+  .phone {
+    width: 228px; aspect-ratio: 9 / 19.5; border-radius: 30px; padding: 7px;
+    background: var(--ink); box-shadow: 0 10px 28px rgba(26,23,20,.18);
+  }
+  .scr {
+    width: 100%; height: 100%; border-radius: 24px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .splash-scr { background: var(--limestone); align-items: center; justify-content: center; }
+  .login-scr {
+    background: var(--limestone); align-items: center; justify-content: center;
+    gap: 12px; padding: 0 22px;
+  }
+  .brandword { font-family: var(--serif); font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .field { width: 100%; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(26,23,20,.06); }
+  .fr { padding: 11px 13px; font-size: 12px; color: var(--ink-52); }
+  .fr + .fr { border-top: 1px solid rgba(26,23,20,.1); }
+  .cta {
+    width: 100%; height: 40px; border-radius: 999px; display: grid; place-items: center;
+    background: #2c5be0; color: #fff; font-size: 13px; font-weight: 600;
+  }
+  .ghostlink { font-size: 11px; color: #2c5be0; }
+
+  .work-scr { background: #f4f6f9; }
+  .nav { padding: 30px 14px 8px; display: flex; align-items: baseline; justify-content: space-between; }
+  .navtitle { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: #0b1220; }
+  .navdot { width: 15px; height: 15px; border-radius: 999px; background: rgba(11,18,32,.16); }
+  .srch { margin: 0 14px 10px; background: #eef1f5; border-radius: 10px; padding: 7px 10px; font-size: 11px; color: rgba(11,18,32,.5); }
+  .listrow {
+    margin: 0 14px 6px; background: #fff; border-radius: 10px; padding: 9px 10px;
+    display: flex; align-items: center; gap: 9px; font-size: 11px;
+  }
+  .listrow b { display: block; font-size: 12px; color: #0b1220; font-weight: 600; }
+  .listrow span { font-size: 10px; color: rgba(11,18,32,.6); }
+  .listrow > div:nth-child(2) { flex: 1; }
+  .av {
+    width: 26px; height: 26px; border-radius: 999px; background: #eef1f5; flex: none;
+    display: grid; place-items: center; font-size: 9px; font-weight: 700; color: rgba(11,18,32,.6);
+  }
+  .due { font-size: 9px; font-weight: 700; color: #955f00; background: rgba(149,95,0,.1); padding: 2px 5px; border-radius: 999px; }
+  .debt { font-family: var(--mono); font-size: 11px; color: #c9372c; }
+  .emptyzone { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+  .emptyzone span { font-size: 10px; color: rgba(11,18,32,.5); }
+  .tabs { display: flex; border-top: 1px solid rgba(11,18,32,.1); background: rgba(255,255,255,.86); }
+  .tab { flex: 1; text-align: center; padding: 9px 0 16px; font-size: 8.5px; color: rgba(11,18,32,.45); }
+  .tab.on { color: #2c5be0; font-weight: 600; }
+
   /* ── applications ───────────────────────────────────────────── */
   .home {
     background: linear-gradient(168deg, #d9cfbc, #c9bda6);
@@ -311,6 +363,34 @@
       <div class="vote miss"><span class="said">Ворон</span><span class="meta">уверенность 5/10</span></div>
       <div class="vote miss"><span class="said">Ворон</span><span class="meta">уверенность 6/10</span></div>
     </div>
+    
+    <p class="eyebrow" style="margin: 26px 0 10px;">Итерация 3 · фронтальный сидящий, три финалиста, девять зрителей</p>
+    <div class="test">
+      <div class="vote miss"><span class="said">Лев</span><span class="meta">линия · 4/10</span></div>
+      <div class="vote miss"><span class="said">Сфинкс</span><span class="meta">линия · 5/10</span></div>
+      <div class="vote miss"><span class="said">Каменный лев</span><span class="meta">линия · 5/10</span></div>
+      <div class="vote miss"><span class="said">Египетская маска</span><span class="meta">камень · 2/10</span></div>
+      <div class="vote miss"><span class="said">Племенная маска</span><span class="meta">камень · 4/10</span></div>
+      <div class="vote miss"><span class="said">Бюст фараона</span><span class="meta">камень · 4/10</span></div>
+      <div class="vote miss"><span class="said">Афганская борзая</span><span class="meta">оттиск · 4/10</span></div>
+      <div class="vote miss"><span class="said">Собака в капюшоне</span><span class="meta">оттиск · 4/10</span></div>
+      <div class="vote"><span class="said">Мандрил</span><span class="meta">оттиск · 6/10 · попал</span></div>
+    </div>
+    <div class="verdict-line">
+      <b>1 / 9</b>
+      <span>назвали примата первым. И второй провал дороже первого — <strong>тон</strong>: «племенная маска, фолк-тотем, точно не институциональный знак», «банк или профессиональный инструмент такое бы не надел», «штамп музейного экспоната».</span>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+      <h3 style="margin-bottom: 10px;">Причина опознана поимённо</h3>
+      <ul class="plain">
+        <li><b>Параллельные полосы в мантии.</b> Именно так рисуют немес фараона и геральдическую львиную гриву. Отсюда «лев» и «сфинкс» в каждом втором ответе. Мех так не рисуется.</li>
+        <li><b>Плинтус.</b> Он честно решал риск антропоморфизма — статуя не наденет спецовку, — но превращал знак в музейный экспонат. Цена оказалась выше выгоды.</li>
+        <li><b>Полная сидящая фигура с руками и коленями.</b> Слишком много повествования для знака в 48 px.</li>
+      </ul>
+      <p style="margin-top: 12px; font-size: 15px; color: var(--ink-70);">Египетская рамка была верна стратегически и неверна графически: на выходе получался артефакт вместо софта. Осталось: фронтальный бюст, мантия мехом, длинная морда, один цвет. Ушло: плинтус, полосы, фигура целиком.</p>
+    </div>
+    <p style="margin-top: 16px; font-size: 14px; color: var(--ink-52); max-width: 72ch;">Оговорка о методе: тестировали ИИ-зрители, не люди. Это надёжный детектор грубых промахов — «лев» и «музейный экспонат» мимо него не проходят, — но живых людей он не заменяет. Перед запуском знак показывается пяти реальным владельцам сервисных компаний.</p>
+
     <p style="margin-top: 14px; font-size: 15px; color: var(--ink-70); max-width: 72ch;">Профиль провалился дважды. <strong>Фронтальная посадка решает это структурно</strong>: анфас мантия видна как отдельная масса вокруг лица, два глаза под надбровьем и длинная морда вниз читаются приматом мгновенно — и ни одна из этих форм не встречается у псовых.</p>
   </section>
 
@@ -337,6 +417,7 @@
     <div class="head">
       <span class="eyebrow">Знак</span>
       <h2>Два мастера одной геометрии</h2>
+      <p class="lead" style="border-left:3px solid var(--ochre);padding-left:14px;"><strong>Знак на этой странице — четвёртая редакция, не финал.</strong> После третьего слепого теста убраны плинтус, полосы мантии и фигура целиком: остался фронтальный бюст, мягкая масса плаща, надбровный брус, близкие глаза и длинная морда. Форма ждёт четвёртого теста и генерации эталона. Всё остальное на странице — решённое.</p>
       <p class="lead">Гравированный мастер несёт структуру — направление шерсти в мантии, надбровный козырёк, рёбра морды. Плотный мастер — то, что от него остаётся, когда пикселей меньше, чем линий.</p>
     </div>
     <div class="card">
@@ -441,6 +522,64 @@
     </div>
   </section>
 
+
+  <!-- ── 7b · В приложении ───────────────────────────────────── -->
+  <section>
+    <div class="head">
+      <span class="eyebrow">В приложении</span>
+      <h2>Как это выглядит на экране</h2>
+      <p class="lead">Знак не украшает рабочие экраны. Он появляется ровно трижды: на сплеше, на входе и в пустом состоянии. Дальше работает интерфейс, а кобальт занят действиями.</p>
+    </div>
+    <div class="phones">
+      <div class="ph-wrap">
+        <div class="phone">
+          <div class="scr splash-scr">
+            <svg class="mark" data-mark viewBox="0 0 120 120" width="86" height="86"></svg>
+          </div>
+        </div>
+        <span class="ph-cap">Сплеш · известняк</span>
+      </div>
+
+      <div class="ph-wrap">
+        <div class="phone">
+          <div class="scr login-scr">
+            <svg class="mark" data-mark viewBox="0 0 120 120" width="64" height="64"></svg>
+            <span class="brandword">Babun</span>
+            <div class="field"><div class="fr">Email</div><div class="fr">Пароль</div></div>
+            <div class="cta">Войти</div>
+            <span class="ghostlink">Забыли пароль?</span>
+          </div>
+        </div>
+        <span class="ph-cap">Вход</span>
+      </div>
+
+      <div class="ph-wrap">
+        <div class="phone">
+          <div class="scr work-scr">
+            <div class="nav"><span class="navtitle">Клиенты</span><span class="navdot"></span></div>
+            <div class="srch">Поиск</div>
+            <div class="listrow"><div class="av">АК</div><div><b>Андреас К.</b><span>Лимассол · 3 объекта</span></div><span class="due">пора</span></div>
+            <div class="listrow"><div class="av">МП</div><div><b>Мария П.</b><span>Пафос · 1 объект</span></div></div>
+            <div class="listrow"><div class="av">ГС</div><div><b>Георгиос С.</b><span>Ларнака · 2 объекта</span></div><span class="debt">€120</span></div>
+            <div class="emptyzone">
+              <svg class="mark" data-mark viewBox="0 0 120 120" width="46" height="46" style="opacity:.12"></svg>
+              <span>Больше клиентов нет</span>
+            </div>
+            <div class="tabs"><span class="tab on">Календарь</span><span class="tab">Клиенты</span><span class="tab">Финансы</span><span class="tab">Кабинет</span></div>
+          </div>
+        </div>
+        <span class="ph-cap">Рабочий экран · знака нет</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top: 16px;">
+      <ul class="plain">
+        <li><b>Сплеш переезжает с белого на известняк.</b> Сплеш и вход сходятся в один кадр без вспышки — сейчас между ними белая полка.</li>
+        <li><b>Кобальт остаётся кнопкой.</b> Внутри рабочих экранов идентичность не нужна: там нужен контраст действия. Знак и кобальт не спорят, потому что не встречаются.</li>
+        <li><b>Пустое состояние — единственное место, где знак внутри продукта.</b> В <span class="num">ink 12 %</span>, без плинтуса, без обводки: водяной знак, а не картинка.</li>
+      </ul>
+    </div>
+  </section>
+
   <!-- ── 8 · Collisions ──────────────────────────────────────── -->
   <section>
     <div class="head">
@@ -541,6 +680,6 @@
 
 <script>
   // Один источник геометрии на всю страницу.
-  const MARK = `__MARK__`;
+  const MARK = `<path fill="currentColor" fill-rule="evenodd" d=" M 60 11 C 48 11, 38 16, 31 25 C 24 32, 19 43, 17 55 C 14 66, 14 79, 17 90 C 19 98, 22 103, 26 105 L 94 105 C 98 103, 101 98, 103 90 C 106 79, 106 66, 103 55 C 101 43, 96 32, 89 25 C 82 16, 72 11, 60 11 Z M 60 28 C 49 28, 41 35, 41 45 C 41 53, 45 59, 51 62 C 51 73, 53 84, 57 90 C 58 92, 62 92, 63 90 C 67 84, 69 73, 69 62 C 75 59, 79 53, 79 45 C 79 35, 71 28, 60 28 Z"/> <rect x="46" y="34" width="28" height="5" rx="2.5" fill="currentColor"/> <circle cx="52.5" cy="47" r="3.7" fill="currentColor"/> <circle cx="67.5" cy="47" r="3.7" fill="currentColor"/> <ellipse cx="60" cy="84" rx="4.8" ry="3.1" fill="currentColor"/>`;
   document.querySelectorAll("[data-mark]").forEach((el) => { el.innerHTML = MARK; });
 </script>

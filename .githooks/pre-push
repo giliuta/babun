@@ -9,18 +9,60 @@ set -e
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# ─── 1. Что вообще пушат ────────────────────────────────────────────────
+#
+# Git отдаёт хуку на stdin по строке на каждую ссылку:
+#   <локальная ссылка> <локальный sha> <удалённая ссылка> <удалённый sha>
+# У УДАЛЕНИЯ ветки локальный sha состоит из нулей — кода в такой отправке нет
+# вовсе, и гонять на ней типы с тестами бессмысленно. Первая версия хука этого
+# не различала и молча заваливала `git push origin --delete`: чистка веток
+# «проходила», не удалив ни одной.
+#
+# Теги пропускаем по той же причине: тег не несёт нового кода.
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+has_code=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "$local_ref" ] && continue
+  [ "$local_sha" = "$zero" ] && continue          # удаление ссылки
+  case "$remote_ref" in refs/tags/*) continue ;; esac
+  has_code=1
+done
+
+if [ "$has_code" -eq 0 ]; then
+  exit 0
+fi
+
+# ─── 2. Найти bun ───────────────────────────────────────────────────────
+#
+# Хук запускается НЕ из интерактивной оболочки, поэтому PATH у него куцый:
+# то, что дописывает ~/.zshrc, сюда не доезжает. Отсюда и было
+# `bun: command not found` при живом bun. Ищем его там, где он бывает.
+PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+
+if ! command -v bun >/dev/null 2>&1; then
+  printf '\033[31m✗ bun не найден — проверить код нечем, push отменён\033[0m\n'
+  printf '  Установить: \033[36mcurl -fsSL https://bun.sh/install | bash\033[0m\n'
+  printf '  Отправить без проверки: \033[36mgit push --no-verify\033[0m\n'
+  exit 1
+fi
+
+# ─── 3. Гейты ───────────────────────────────────────────────────────────
+log=$(mktemp -t babun-prepush)
+
 printf '\033[36m→ проверка типов\033[0m\n'
-if ! bun run typecheck >/tmp/babun-prepush.log 2>&1; then
+if ! bun run typecheck >"$log" 2>&1; then
   printf '\033[31m✗ tsc нашёл ошибки — push отменён\033[0m\n'
-  tail -20 /tmp/babun-prepush.log
+  tail -20 "$log"
   exit 1
 fi
 
 printf '\033[36m→ тесты\033[0m\n'
-if ! bun test >/tmp/babun-prepush.log 2>&1; then
+if ! bun test >"$log" 2>&1; then
   printf '\033[31m✗ тесты красные — push отменён\033[0m\n'
-  tail -25 /tmp/babun-prepush.log
+  tail -25 "$log"
   exit 1
 fi
 
+rm -f "$log"
 printf '\033[32m✓ tsc 0, тесты зелёные\033[0m\n'
