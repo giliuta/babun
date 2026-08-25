@@ -12,14 +12,12 @@
     "start": "bun run --cwd apps/mobile start",
     "build:web": "bun run --cwd apps/mobile build:web",
     "typecheck": "bun run --cwd apps/mobile typecheck",
-    "test": "vitest run",
+    "test": "bun test",
     "lint": "bun run --cwd apps/mobile lint"
   },
   "devDependencies": {
-    "jsdom": "^25.0.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.5.0"
   },
   "overrides": {
     "lightningcss": "1.30.1"

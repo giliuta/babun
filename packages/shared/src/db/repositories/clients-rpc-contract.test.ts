@@ -17,9 +17,12 @@ import { fileURLToPath } from "node:url";
 import type { Client } from "../../local/clients";
 import { createClient, updateClient } from "./clients";
 
+// Репозиторий переехал в одну папку 2026-08-25: `apps/web` больше нет,
+// миграции лежат в корне. Путь чинится, а не отключается: этот тест — сторож
+// контракта RPC клиентов, и молчащий сторож хуже отсутствующего.
 const MIGRATIONS_DIR = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../../../../../apps/web/supabase/migrations",
+  "../../../../../supabase/migrations",
 );
 
 // В кавычках — так это ищет именно `raise exception`, а не комментарий,

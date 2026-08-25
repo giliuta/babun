@@ -2,34 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "babun-mobile-web",
-      "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["/private/tmp/babun-mobile-web-dev.sh"],
-      "port": 8082
-    },
-    {
       "name": "babun-web",
-      "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["/tmp/babun-web-dev.sh"],
-      "port": 3100
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "--cwd", "apps/mobile", "web", "--port", "4400"],
+      "port": 4400
     },
     {
       "name": "mockups",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["/private/tmp/babun2-mockups/serve.py"],
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["x", "--bun", "serve", "mockups", "-l", "4321"],
       "port": 4321
-    },
-    {
-      "name": "mockups-finances",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["/private/tmp/babun2-mockups/serve-finances.py"],
-      "port": 4322
-    },
-    {
-      "name": "card-mockup",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["/private/tmp/babun2-mockups/serve-card.py"],
-      "port": 4323
     }
   ]
 }

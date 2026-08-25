@@ -20,8 +20,14 @@ export default function AuthLayout() {
   const segments = useSegments();
   // The password-recovery deep link creates a real session but must STAY on
   // reset-password so the user can set a new password (see reset-password.tsx).
-  const onResetPassword = segments[1] === "reset-password";
-  const onOnboarding = segments[1] === "onboarding";
+  // ПЕРЕЕЗД РЕПОЗИТОРИЯ СУЗИЛ ТИП МАРШРУТОВ. `useSegments()` теперь выводит
+  // кортеж длиной 1 — маршрутов в новой раскладке типизировано меньше, — и
+  // обращение к `segments[1]` перестало компилироваться. Читаем как обычный
+  // массив строк: проверка та же, а тип больше не спорит с реальностью, где
+  // сегментов два («(auth)», «reset-password»).
+  const path = segments as readonly string[];
+  const onResetPassword = path[1] === "reset-password";
+  const onOnboarding = path[1] === "onboarding";
 
   // A signed-in user doesn't belong in the auth stack: send configured users to
   // the app and unconfigured ones to the wizard. "unknown" fails open to the
