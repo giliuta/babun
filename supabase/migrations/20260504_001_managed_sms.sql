@@ -163,6 +163,10 @@ create policy sms_topups_service_role
   using (true) with check (true);
 
 -- Logs: any tenant member can see (dispatchers debug delivery).
+-- ⚠️ ОТМЕНЕНО 2026-08-26 миграцией 20260826091000_sms_history_owner_only.sql:
+-- в логах лежат телефоны клиентов, а мастер по политике их видеть не должен.
+-- Политика ниже пересоздана как sms_logs_select_owner. Не восстанавливать —
+-- если диспетчеру нужна отладка доставки, расширять tenant_sms_summary().
 -- service_role for Edge Function inserts + status webhook updates.
 create policy sms_logs_select_member
   on public.sms_logs for select to authenticated

@@ -250,6 +250,10 @@ alter table public.sms_messages enable row level security;
 -- Any user in the tenant can SELECT the history (Settings UI list).
 -- Owner-only for the config row, but viewing what already went out
 -- is fine for any role — it's analogous to a chat log.
+-- ⚠️ ОТМЕНЕНО 2026-08-26 миграцией 20260826091000_sms_history_owner_only.sql:
+-- «аналогично чату» — неверно, здесь лежат телефоны и тексты ВСЕХ клиентов,
+-- то есть выгружаемая одним запросом телефонная книга. Политика ниже
+-- пересоздана как sms_messages_select_owner. Не восстанавливать.
 create policy sms_messages_tenant_select
   on public.sms_messages
   for select

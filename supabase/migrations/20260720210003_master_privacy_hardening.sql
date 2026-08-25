@@ -459,22 +459,16 @@ create policy appointment_photos_delete_operator
   );
 
 -- ── Client attachments ───────────────────────────────────────────────
--- The production schema already has this table, but it was missing from the
--- checked-in migration chain. CREATE IF NOT EXISTS makes a clean database and
--- the production database converge without touching existing rows.
-create table if not exists public.client_attachments (
-  id uuid primary key default gen_random_uuid(),
-  tenant_id uuid not null references public.tenants(id) on delete cascade,
-  client_id uuid not null references public.clients(id) on delete cascade,
-  storage_path text not null unique,
-  filename text not null default '',
-  mime_type text not null default 'application/octet-stream',
-  size_bytes bigint not null default 0 check (size_bytes >= 0),
-  created_by uuid references auth.users(id) on delete set null
-    default auth.uid(),
-  created_at timestamptz not null default now()
-);
-
+-- The claim that used to stand here ("missing from the checked-in migration
+-- chain") was wrong: the table is created by 20260517_008_client_attachments.sql,
+-- which sorts earlier and therefore always wins. The CREATE TABLE IF NOT EXISTS
+-- that followed was dead on every database — and worse, it silently described a
+-- schema nobody has (unique storage_path, mime_type default
+-- 'application/octet-stream', size_bytes check, created_by FK + default
+-- auth.uid()), so reading this file taught the wrong shape. The block is gone;
+-- the constraints it promised are actually created by
+-- 20260826090000_client_attachments_schema_drift.sql. Only the parts below,
+-- which really do something, stay.
 create index if not exists idx_client_attachments_tenant_client
   on public.client_attachments(tenant_id, client_id, created_at desc);
 
