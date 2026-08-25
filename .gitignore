@@ -3,7 +3,6 @@ dist/
 .expo/
 .turbo/
 out/
-bun.lock
 bun.lockb
 .env
 .env.local
@@ -43,3 +42,8 @@ bumpix-*.png
 .agents/
 .codex/
 .claude-flow/
+
+# Personal Claude Code settings: per-machine permission allow-lists and
+# hooks. Auto-approvals are a local trust decision — they must never be
+# shared through the repo.
+.claude/settings.local.json
