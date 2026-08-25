@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Users } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { useAppointments } from "@/features/calendar/queries";
@@ -13,6 +13,7 @@ import { mergeClientPatch, phoneKey } from "@/features/clients/merge-clients";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
 import { useThemeColors } from "@/theme/colors";
 
 // «ПОХОЖЕ, ЭТО ОДИН ЧЕЛОВЕК».
@@ -109,13 +110,13 @@ export function DuplicateNotice({ client }: { client: Client }) {
 
   const ask = () => {
     haptics.tap();
-    Alert.alert(
+    confirmThen(
       "Объединить карточки?",
-      `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в архив.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Объединить", onPress: () => void merge() },
-      ],
+      {
+        message: `Данные и визиты «${dup.full_name || dup.phone}» переедут сюда, а сама карточка уйдёт в архив.`,
+        confirmLabel: "Объединить",
+      },
+      () => void merge(),
     );
   };
 

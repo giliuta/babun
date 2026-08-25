@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
+// Относительный путь обязателен: платформенный двойник (.web.tsx) Metro
+// подхватывает только так — алиас «@/» платформенными расширениями не растёт.
+import { DateTimeInput } from "./DateTimeInput";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 
@@ -68,7 +70,7 @@ export function DateWheelSheet({
         </Text>
 
         <View style={{ alignItems: "center" }}>
-          <DateTimePicker
+          <DateTimeInput
             themeVariant="light"
             value={parseYMD(draft)}
             mode="date"

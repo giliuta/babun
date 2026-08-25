@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+
 import { Archive, RotateCcw, Trash2 } from "lucide-react-native";
 import {
   useArchiveClients,
@@ -13,6 +13,7 @@ import {
 } from "@/features/clients/HiddenClientsScreen";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { confirmAction } from "@/lib/confirm";
 
 // «НЕДАВНО УДАЛЁННЫЕ» — как в Фото на iPhone.
 //
@@ -78,23 +79,15 @@ export default function ClientTrashScreen() {
           label: "Стереть навсегда",
           icon: Trash2,
           danger: true,
-          run: () =>
-            new Promise<void>((resolve, reject) => {
-              Alert.alert(
-                "Стереть навсегда?",
-                `${client.full_name || "Клиент"} исчезнет без возможности вернуть.`,
-                [
-                  { text: "Отмена", style: "cancel", onPress: () => resolve() },
-                  {
-                    text: "Стереть",
-                    style: "destructive",
-                    onPress: () => {
-                      erase.mutateAsync(client.id).then(() => resolve(), reject);
-                    },
-                  },
-                ],
-              );
-            }),
+          run: async () => {
+            const ok = await confirmAction("Стереть навсегда?", {
+              message: `${client.full_name || "Клиент"} исчезнет без возможности вернуть.`,
+              confirmLabel: "Стереть",
+              destructive: true,
+            });
+            if (!ok) return;
+            await erase.mutateAsync(client.id);
+          },
         }]
           : []),
       ]}

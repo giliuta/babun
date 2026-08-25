@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type React from "react";
-import { Alert, FlatList, RefreshControl, Text, View } from "react-native";
+import { FlatList, RefreshControl, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { Client } from "@babun/shared/local/clients";
@@ -14,6 +14,7 @@ import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import ClientRow from "@/features/clients/ClientRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useLastNonNull } from "@/lib/use-last-non-null";
+import { notify } from "@/lib/notify";
 import type { LucideIcon } from "lucide-react-native";
 import { useCardFields, DEFAULT_CARD_FIELDS } from "@/features/clients/card-prefs";
 import { useClientTags } from "@/features/clients/queries";
@@ -87,7 +88,7 @@ export function HiddenClientsScreen({
     try {
       await action();
     } catch (error) {
-      Alert.alert(
+      notify(
         `Не удалось: ${label.toLowerCase()}`,
         (error as Error).message || "Проверьте соединение и повторите.",
       );

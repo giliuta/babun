@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
-  Alert,
   InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
@@ -15,7 +14,7 @@ import {
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -79,6 +78,8 @@ import { AddRow } from "@/components/ui/AddRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
 import { RouteSheet } from "@/features/clients/RouteSheet";
 import { useEnabledMapServices } from "@/lib/map-services";
@@ -231,7 +232,6 @@ const absoluteMinutes = (value: string): number | null => {
 
 const first = (v: string | string[] | undefined) =>
   Array.isArray(v) ? v[0] : v;
-
 
 /** СЛОТ = БУФЕРЫ + РАБОТА. Буферы берутся МАКСИМАЛЬНЫЕ по выбранным услугам,
  *  а не суммируются: дорога до адреса одна, и две работы в одном визите не
@@ -1194,7 +1194,7 @@ export default function BookScreen() {
       leaveBook();
     } catch (e) {
       haptics.error();
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     }
   };
 
@@ -1226,10 +1226,15 @@ export default function BookScreen() {
         dateTouchedRef.current ||
         durationTouched);
   const confirmDiscard = (onDiscard: () => void) => {
-    Alert.alert("Закрыть без сохранения?", "Введённое не сохранится.", [
-      { text: "Продолжить", style: "cancel" },
-      { text: "Закрыть", style: "destructive", onPress: onDiscard },
-    ]);
+    confirmThen(
+      "Закрыть без сохранения?",
+      {
+        message: "Введённое не сохранится.",
+        confirmLabel: "Закрыть",
+        destructive: true,
+      },
+      onDiscard,
+    );
   };
   const requestClose = () => {
     if (!dirty) {
@@ -2364,7 +2369,7 @@ export default function BookScreen() {
                         </Text>
                       </Pressable>
                     ) : null}
-                    <DateTimePicker
+                    <DateTimeInput
                       themeVariant="light"
                       value={parseYMD(repeatUntil ?? date)}
                       minimumDate={parseYMD(date)}

@@ -86,9 +86,6 @@ export function useLocationWriter(
     [apply],
   );
 
-
-
-
   return {
     patchLocation,
     addLocation,

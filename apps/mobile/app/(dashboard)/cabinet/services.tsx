@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Archive, Copy, Trash2, X } from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
@@ -56,6 +56,8 @@ import {
 import { ColorDot, NameColorField } from "@/components/ui/picker-fields";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { durationLabel } from "@/features/services/format";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   ServiceBlocks,
   SETTINGS_PANEL,
@@ -226,9 +228,8 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     [allServices, activeTeamId],
   );
 
-
   const alertError = (e: unknown) =>
-    Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+    notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
   const handleSave = async (
     draft: ServiceInput,
@@ -279,31 +280,28 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     // ОДИН ГЛАГОЛ РАЗРУШЕНИЯ НА ВЕСЬ ЭКРАН — «Убрать»: блок убирают, фразу
     // убирают, услугу убирают из прайса. Удаление и так мягкое (`is_active`),
     // а слово «Удалить» обещало необратимость, которой нет.
-    Alert.alert(
+    confirmThen(
       "Убрать услугу из прайса?",
-      // ЧЕСТНЫЙ ТЕКСТ (аудит 2026-08-21). Здесь стояло «Записи, где она уже
-      // стоит, не изменятся» — прямая неправда: все читатели имени услуги
-      // ходят через `useServices()` с фильтром `is_active = true`, и убранная
-      // услуга теряет ИМЯ везде — в записи, в наряде команды, в ленте клиента,
-      // в счёте, — печатаясь заглушкой «Услуга». Деньги и правда не меняются,
-      // и обещать надо ровно это.
-      `«${svc.name}» исчезнет из выбора при записи. Уже сделанные записи и счета не изменятся — имя работы в них останется.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Убрать",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await del.mutateAsync(svc.id);
-              setEditing(null);
-              toast("Услуга убрана из прайса");
-            } catch (e) {
-              alertError(e);
-            }
-          },
-        },
-      ],
+      {
+        // ЧЕСТНЫЙ ТЕКСТ (аудит 2026-08-21). Здесь стояло «Записи, где она уже
+        // стоит, не изменятся» — прямая неправда: все читатели имени услуги
+        // ходят через `useServices()` с фильтром `is_active = true`, и убранная
+        // услуга теряет ИМЯ везде — в записи, в наряде команды, в ленте клиента,
+        // в счёте, — печатаясь заглушкой «Услуга». Деньги и правда не меняются,
+        // и обещать надо ровно это.
+        message: `«${svc.name}» исчезнет из выбора при записи. Уже сделанные записи и счета не изменятся — имя работы в них останется.`,
+        confirmLabel: "Убрать",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await del.mutateAsync(svc.id);
+          setEditing(null);
+          toast("Услуга убрана из прайса");
+        } catch (e) {
+          alertError(e);
+        }
+      },
     );
   };
 

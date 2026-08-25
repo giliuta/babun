@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -26,6 +25,8 @@ import {
   wipeTenantScopedData,
 } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 function Row({ label, value }: { label: string; value: string }) {
   const t = useThemeColors();
@@ -137,7 +138,7 @@ function PasswordSection({ email }: { email: string | null }) {
       setConfirm("");
       toast("Пароль обновлён");
     } catch (e) {
-      Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сменить пароль");
+      notify("Ошибка", e instanceof Error ? e.message : "Не удалось сменить пароль");
     } finally {
       setSaving(false);
     }
@@ -202,9 +203,9 @@ function DevicesSection() {
     try {
       const { error } = await supabase.auth.signOut({ scope: "others" });
       if (error) throw new Error(error.message);
-      Alert.alert("Готово", "Сессии на других устройствах завершены.");
+      notify("Готово", "Сессии на других устройствах завершены.");
     } catch (e) {
-      Alert.alert(
+      notify(
         "Не удалось выйти",
         e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
       );
@@ -214,35 +215,32 @@ function DevicesSection() {
   };
 
   const signOutEverywhere = () => {
-    Alert.alert(
+    confirmThen(
       "Выйти со всех устройств?",
-      "Все сессии, включая это устройство, будут завершены.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Выйти везде",
-          style: "destructive",
-          onPress: async () => {
-            setBusy(true);
-            try {
-              // scope: "global" отзывает refresh-токены всех устройств;
-              // локальная сессия тоже гаснет → SessionProvider уводит на
-              // логин. Wipe — только ПОСЛЕ успешного signOut (офлайн-
-              // ошибка не должна уничтожать локальные данные).
-              // SessionProvider waits for this helper's wipe barrier before
-              // it exposes the signed-out/login tree.
-              await signOutScopeAndWipe("global");
-            } catch (e) {
-              Alert.alert(
-                "Не удалось выйти",
-                e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
-              );
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
+      {
+        message: "Все сессии, включая это устройство, будут завершены.",
+        confirmLabel: "Выйти везде",
+        destructive: true,
+      },
+      async () => {
+        setBusy(true);
+        try {
+          // scope: "global" отзывает refresh-токены всех устройств;
+          // локальная сессия тоже гаснет → SessionProvider уводит на
+          // логин. Wipe — только ПОСЛЕ успешного signOut (офлайн-
+          // ошибка не должна уничтожать локальные данные).
+          // SessionProvider waits for this helper's wipe barrier before
+          // it exposes the signed-out/login tree.
+          await signOutScopeAndWipe("global");
+        } catch (e) {
+          notify(
+            "Не удалось выйти",
+            e instanceof Error ? e.message : "Проверьте соединение и попробуйте ещё раз.",
+          );
+        } finally {
+          setBusy(false);
+        }
+      },
     );
   };
 

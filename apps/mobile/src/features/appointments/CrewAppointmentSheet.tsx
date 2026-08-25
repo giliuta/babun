@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Alert,
   Linking,
   Modal,
   Pressable,
@@ -32,6 +31,7 @@ import { useAllServices } from "@/features/services/queries";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { humanDay } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
 
 const CREW_STATUSES: readonly {
   value: Exclude<AppointmentStatus, "cancelled">;
@@ -128,7 +128,7 @@ export function CrewAppointmentSheet({
       if (next.comment !== undefined) setSavedComment(next.comment);
       toast(success, "success");
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось сохранить",
         error instanceof Error ? error.message : "Попробуйте ещё раз",
       );

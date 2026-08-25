@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -26,6 +25,8 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { useToast } from "@/components/ui/Toast";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import {
   useClients,
   useClientTags,
@@ -271,23 +272,20 @@ export default function ClientsListScreen() {
   };
 
   const confirmArchiveOne = (c: Client) => {
-    Alert.alert(
+    confirmThen(
       "Архивировать клиента?",
-      `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Архивировать",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await archiveWithUndo([c]);
-            } catch (e) {
-              Alert.alert("Не удалось архивировать", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: `${c.full_name || "Клиент"} исчезнет из рабочего списка. Вся история сохранится; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».`,
+        confirmLabel: "Архивировать",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await archiveWithUndo([c]);
+        } catch (e) {
+          notify("Не удалось архивировать", (e as Error).message);
+        }
+      },
     );
   };
 
@@ -306,33 +304,30 @@ export default function ClientsListScreen() {
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
     if (hasHistory) {
-      Alert.alert(
+      confirmThen(
         "Этого клиента нельзя удалить",
-        "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-        [
-          { text: "Отмена", style: "cancel" },
-          { text: "В архив", onPress: () => confirmArchiveOne(c) },
-        ],
+        {
+          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
+          confirmLabel: "В архив",
+        },
+        () => confirmArchiveOne(c),
       );
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Удалить клиента?",
-      `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await archiveWithUndo([c], true);
-            } catch (e) {
-              Alert.alert("Не удалось удалить", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — в шестерёнке.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await archiveWithUndo([c], true);
+        } catch (e) {
+          notify("Не удалось удалить", (e as Error).message);
+        }
+      },
     );
   };
 
@@ -387,7 +382,7 @@ export default function ClientsListScreen() {
         exitSelection();
       }
     } catch (e) {
-      Alert.alert("Не удалось выгрузить", (e as Error).message);
+      notify("Не удалось выгрузить", (e as Error).message);
     }
   };
 
@@ -395,34 +390,31 @@ export default function ClientsListScreen() {
     const n = selectedClients.length;
     if (n === 0) return;
     const word = countWordRu(n, "клиента", "клиента", "клиентов");
-    Alert.alert(
+    confirmThen(
       `Архивировать ${n} ${word}?`,
-      "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Архивировать",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Итог (в т.ч. частичный) и кнопка отмены — в одном тосте;
-              // здесь остаётся только случай «не уехал никто».
-              const { archived, failed } =
-                await archiveWithUndo(selectedClients);
-              if (archived === 0) {
-                Alert.alert(
-                  "Не удалось архивировать",
-                  `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
-                );
-                return;
-              }
-              exitSelection();
-            } catch (e) {
-              Alert.alert("Не удалось архивировать", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: "Клиенты исчезнут из рабочего списка. Заявки, инвойсы и финансовая история сохранятся; вернуть можно сразу кнопкой «Отменить», а позже — в шестерёнке, «Архив клиентов».",
+        confirmLabel: "Архивировать",
+        destructive: true,
+      },
+      async () => {
+        try {
+          // Итог (в т.ч. частичный) и кнопка отмены — в одном тосте;
+          // здесь остаётся только случай «не уехал никто».
+          const { archived, failed } =
+            await archiveWithUndo(selectedClients);
+          if (archived === 0) {
+            notify(
+              "Не удалось архивировать",
+              `Ни один из ${failed} клиентов не архивирован. Проверьте соединение и попробуйте ещё раз.`,
+            );
+            return;
+          }
+          exitSelection();
+        } catch (e) {
+          notify("Не удалось архивировать", (e as Error).message);
+        }
+      },
     );
   };
 

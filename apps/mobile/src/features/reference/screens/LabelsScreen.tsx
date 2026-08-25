@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { MapPin, Star, Trash2 } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { ColorField } from "@/components/ui/picker-fields";
@@ -18,6 +18,8 @@ import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { useDayCities } from "@/features/calendar/day-cities";
 import { useRenameLabelCascade } from "@/features/reference/label-cascade";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   teamCities,
   useCities,
@@ -126,7 +128,7 @@ export function LabelsScreen() {
   }, [teams, dayCities]);
 
   const alertError = (e: unknown) =>
-    Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+    notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
   const setDefault = (city: City) => {
     const next = defaultName === city.name ? null : city.name;
@@ -188,7 +190,7 @@ export function LabelsScreen() {
       if (renamed) {
         const failures = await cascade.run(city.name, target);
         if (failures.length > 0) {
-          Alert.alert(
+          notify(
             "Метка переименована частично",
             `Не удалось обновить: ${failures.join(", ")}. Проверьте сеть и повторите переименование.`,
           );
@@ -204,27 +206,24 @@ export function LabelsScreen() {
   const remove = (city: City) => {
     const u = usage.get(city.name);
     const used = u && (u.teams > 0 || u.days > 0);
-    Alert.alert(
+    confirmThen(
       "Удалить метку?",
-      used
-        ? `«${city.name}» исчезнет из выбора. Команды и дни, где она уже назначена, останутся с серой меткой.`
-        : `«${city.name}» будет скрыта из библиотеки.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteCity.mutateAsync(city.id);
-              setEditing(null);
-              toast("Метка удалена");
-            } catch (e) {
-              alertError(e);
-            }
-          },
-        },
-      ],
+      {
+        message: used
+          ? `«${city.name}» исчезнет из выбора. Команды и дни, где она уже назначена, останутся с серой меткой.`
+          : `«${city.name}» будет скрыта из библиотеки.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await deleteCity.mutateAsync(city.id);
+          setEditing(null);
+          toast("Метка удалена");
+        } catch (e) {
+          alertError(e);
+        }
+      },
     );
   };
 

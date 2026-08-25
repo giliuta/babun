@@ -1,4 +1,4 @@
-import { Alert, AppState, Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import {
   MutationCache,
@@ -6,6 +6,7 @@ import {
   focusManager,
   onlineManager,
 } from "@tanstack/react-query";
+import { notify } from "./notify";
 
 // Client-side data layer (replaces Next.js RSC server loads). Sits on top of
 // the @babun/shared repositories; Phase 2 wires offline cache + sync under it.
@@ -41,7 +42,9 @@ export const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (_error, _variables, _context, mutation) => {
       if (mutation.options.onError || mutation.meta?.errorHandled) return;
-      Alert.alert(
+      // Через notify, а не Alert.alert: на вебе последний — пустая
+      // функция, и эта сетка ловила бы ошибки в полной тишине.
+      notify(
         "Не удалось сохранить",
         "Проверьте соединение и попробуйте ещё раз.",
       );

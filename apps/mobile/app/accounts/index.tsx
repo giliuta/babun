@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   AccessibilityInfo,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -53,6 +52,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { RowCaption, RowGroup, RowGroupBody } from "@/components/ui/card-rows";
 import { GUTTER, ICON } from "@/components/ui/tokens";
 import { chooseOption } from "@/lib/choose";
+import { confirmThen } from "@/lib/confirm";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -204,10 +204,14 @@ export default function AccountsScreen() {
   const openTransfer = (account: AccountWithBalance | null) => {
     if (accounts.length < 2) {
       const text = TRANSFER_NEEDS_SECOND_ACCOUNT;
-      Alert.alert(text.title, text.message, [
-        { text: "Отмена", style: "cancel" },
-        { text: text.confirm, onPress: openCreate },
-      ]);
+      confirmThen(
+        text.title,
+        {
+          message: text.message,
+          confirmLabel: text.confirm,
+        },
+        openCreate,
+      );
       return;
     }
     setTransferFromId(account?.id ?? null);

@@ -76,7 +76,6 @@ export function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-
 function toHex(rgb: RGB): string {
   return `#${rgb
     .map((channel) => channel.toString(16).padStart(2, "0"))

@@ -1,6 +1,5 @@
 import { useState, type ReactElement } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -19,6 +18,8 @@ import { ColorField } from "@/components/ui/picker-fields";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 export interface RefField {
   key: string;
@@ -108,7 +109,7 @@ export function RefListScreen<T extends { id: string }>({
       setValues({});
     } catch (e) {
       // Keep the sheet open so nothing typed is lost — user can retry.
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -116,24 +117,25 @@ export function RefListScreen<T extends { id: string }>({
 
   const remove = () => {
     if (!editing || !onDelete) return;
-    Alert.alert("Удалить?", "Запись будет скрыта из списка.", [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await onDelete(editing.id);
-            close();
-          } catch (e) {
-            Alert.alert("Ошибка", (e as Error).message);
-          } finally {
-            setBusy(false);
-          }
-        },
+        message: "Запись будет скрыта из списка.",
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      async () => {
+        setBusy(true);
+        try {
+          await onDelete(editing.id);
+          close();
+        } catch (e) {
+          notify("Ошибка", (e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      },
+    );
   };
 
   return (

@@ -1,6 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -26,6 +25,8 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useClientTags,
   useCreateClientTag,
@@ -97,7 +98,7 @@ export default function ClientTagsScreen() {
       setEditing(null);
       setName("");
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось сохранить тег",
         (error as Error).message ||
           "Проверьте соединение и попробуйте ещё раз.",
@@ -108,30 +109,27 @@ export default function ClientTagsScreen() {
   const confirmDelete = () => {
     if (!editing || busy) return;
     const tag = editing;
-    Alert.alert(
+    confirmThen(
       "Удалить тег?",
-      `«${tag.name}» исчезнет из карточек всех клиентов. Отменить это действие нельзя.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteTag.mutateAsync(tag.id);
-              setOpen(false);
-              setEditing(null);
-              toast("Тег удалён", "success");
-            } catch (error) {
-              Alert.alert(
-                "Не удалось удалить тег",
-                (error as Error).message ||
-                  "Проверьте соединение и попробуйте ещё раз.",
-              );
-            }
-          },
-        },
-      ],
+      {
+        message: `«${tag.name}» исчезнет из карточек всех клиентов. Отменить это действие нельзя.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await deleteTag.mutateAsync(tag.id);
+          setOpen(false);
+          setEditing(null);
+          toast("Тег удалён", "success");
+        } catch (error) {
+          notify(
+            "Не удалось удалить тег",
+            (error as Error).message ||
+              "Проверьте соединение и попробуйте ещё раз.",
+          );
+        }
+      },
     );
   };
 

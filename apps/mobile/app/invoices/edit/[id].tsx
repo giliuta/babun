@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert } from "react-native";
+
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -21,6 +21,7 @@ import {
 import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { confirmThen } from "@/lib/confirm";
 import {
   effectiveVatSettings,
   useTeamVatOverrides,
@@ -107,10 +108,15 @@ export default function EditInvoiceScreen() {
       leave();
       return;
     }
-    Alert.alert("Правка не сохранена", "Выйти и потерять изменения?", [
-      { text: "Остаться", style: "cancel" },
-      { text: "Выйти", style: "destructive", onPress: leave },
-    ]);
+    confirmThen(
+      "Правка не сохранена",
+      {
+        message: "Выйти и потерять изменения?",
+        confirmLabel: "Выйти",
+        destructive: true,
+      },
+      leave,
+    );
   };
 
   return (

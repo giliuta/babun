@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { DEFAULT_CALENDAR_SETTINGS } from "@babun/shared/local/calendar-settings";
 import {
   timeToMinutes,
@@ -22,6 +22,8 @@ import {
 import { GUTTER } from "@/components/ui/tokens";
 import { Trash2 } from "lucide-react-native";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import {
@@ -39,7 +41,6 @@ import {
   hourLabel,
 } from "@/features/calendar/setting-options";
 import { formatHm } from "@/features/calendar/window";
-
 
 // ─── ГРАФИК КОМАНДЫ — ОДИН ЛИСТ СНИЗУ ────────────────────────────────
 //
@@ -167,7 +168,7 @@ export function TeamScheduleSheet({
     if (!teamId) return;
     upsert.mutate(
       { teamId, schedule: next },
-      { onError: (e) => Alert.alert("Ошибка", (e as Error).message) },
+      { onError: (e) => notify("Ошибка", (e as Error).message) },
     );
   };
 
@@ -275,14 +276,14 @@ export function TeamScheduleSheet({
    * в отличие от свайпа, нет промежуточной кнопки, которую видно перед тапом.
    */
   const confirmRemove = (index: number, b: { start: string; end: string }) => {
-    Alert.alert(`Перерыв ${b.start}–${b.end}`, undefined, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      `Перерыв ${b.start}–${b.end}`,
       {
-        text: "Убрать",
-        style: "destructive",
-        onPress: () => removeBreakAt(index),
+        confirmLabel: "Убрать",
+        destructive: true,
       },
-    ]);
+      () => removeBreakAt(index),
+    );
   };
 
   /**

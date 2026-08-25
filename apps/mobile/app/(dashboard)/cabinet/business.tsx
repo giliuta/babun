@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,6 +22,7 @@ import {
   SUPPORTED_COUNTRIES,
 } from "@/features/clients/phone";
 import { chooseValue } from "@/lib/choose";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCurrentRole,
@@ -132,9 +132,9 @@ export default function BusinessScreen() {
         invoice_prefix: form.invoice_prefix.trim(),
       });
       setDirty(false);
-      Alert.alert("Сохранено", "Профиль обновлён.");
+      notify("Сохранено", "Профиль обновлён.");
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     }
   };
 
@@ -257,7 +257,7 @@ export default function BusinessScreen() {
                 update.mutate(
                   { logo_url: url },
                   {
-                    onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+                    onError: (e) => notify("Ошибка", (e as Error).message),
                   },
                 )
               }

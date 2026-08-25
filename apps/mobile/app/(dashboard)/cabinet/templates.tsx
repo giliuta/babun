@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -38,6 +37,8 @@ import { useThemeColors } from "@/theme/colors";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useDeleteTemplate,
   useFinanceTemplates,
@@ -168,21 +169,21 @@ export default function TemplatesScreen() {
 
   const submit = async () => {
     if (amountCents == null) {
-      Alert.alert(
+      notify(
         "Проверьте сумму",
         "Введите сумму больше нуля и не больше двух знаков после запятой.",
       );
       return;
     }
     if (!brigadeId || !accountId) {
-      Alert.alert(
+      notify(
         "Не заполнена оплата",
         "Выберите команду и счёт, на который проходит операция.",
       );
       return;
     }
     if (accountMismatch || !selectedAccount) {
-      Alert.alert(
+      notify(
         "Счёт не подходит",
         "Сохранённый счёт больше не обслуживает эту команду. Выберите доступный счёт заново.",
       );
@@ -207,20 +208,21 @@ export default function TemplatesScreen() {
       setEditing(null);
     } catch (e) {
       // Sheet stays open — nothing entered is lost.
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     }
   };
 
   const confirmDelete = (id: string, label: string) =>
-    Alert.alert("Удалить шаблон?", label, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить шаблон?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () =>
-          del.mutate(id, { onError: (e) => Alert.alert("Ошибка", e.message) }),
+        message: label,
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () =>
+        del.mutate(id, { onError: (e) => notify("Ошибка", e.message) }),
+    );
 
   return (
     <Screen edges={["top"]}>

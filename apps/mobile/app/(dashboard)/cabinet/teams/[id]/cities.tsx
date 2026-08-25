@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -26,6 +25,8 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   teamCities,
   useCities,
@@ -102,7 +103,7 @@ export default function TeamCitiesScreen() {
   }, [cities, teams, id, brigadeCityNames]);
 
   const alertError = (e: unknown) =>
-    Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+    notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
   // default_city остаётся, только если ещё в списке; иначе сбрасываем в ""
   // (web parity: нет принудительного отката на первый элемент).
@@ -188,24 +189,25 @@ export default function TeamCitiesScreen() {
   };
 
   const removeCity = (name: string) => {
-    Alert.alert("Убрать метку?", `«${name}» останется в библиотеке городов.`, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Убрать метку?",
       {
-        text: "Убрать",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await persistCities(
-              brigadeCityNames.filter((n) => n !== name),
-              defaultCity === name ? "" : defaultCity,
-            );
-            setEditing(null);
-          } catch (e) {
-            alertError(e);
-          }
-        },
+        message: `«${name}» останется в библиотеке городов.`,
+        confirmLabel: "Убрать",
+        destructive: true,
       },
-    ]);
+      async () => {
+        try {
+          await persistCities(
+            brigadeCityNames.filter((n) => n !== name),
+            defaultCity === name ? "" : defaultCity,
+          );
+          setEditing(null);
+        } catch (e) {
+          alertError(e);
+        }
+      },
+    );
   };
 
   const setBase = (name: string) => {

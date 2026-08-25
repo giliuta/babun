@@ -32,7 +32,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -75,6 +74,8 @@ import { useClientDraft } from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 export default function ClientDetailScreen() {
   const t = useThemeColors();
@@ -270,7 +271,7 @@ export default function ClientDetailScreen() {
           try {
             await restoreClient.mutateAsync(c);
           } catch (error) {
-            Alert.alert(
+            notify(
               "Не удалось восстановить",
               (error as Error).message || "Проверьте соединение и повторите.",
             );
@@ -320,38 +321,36 @@ export default function ClientDetailScreen() {
       router.back();
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Удалить черновик?",
-      "Введённые данные клиента ещё не сохранены.",
-      [
-        { text: "Продолжить заполнение", style: "cancel" },
-        { text: "Удалить черновик", style: "destructive", onPress: () => router.back() },
-      ],
+      {
+        message: "Введённые данные клиента ещё не сохранены.",
+        confirmLabel: "Удалить черновик",
+        destructive: true,
+      },
+      () => router.back(),
     );
   };
 
   const onArchive = () => {
     setMenuOpen(false);
-    Alert.alert(
+    confirmThen(
       "Архивировать клиента?",
-      "Клиент исчезнет из рабочего списка, но заявки, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Архивировать",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Экран закрывается, поэтому «Отменить» живёт в тосте: он
-              // глобальный и переживает уход с карточки.
-              const res = await archiveWithUndo([c]);
-              if (res.archived > 0) router.back();
-            } catch (e) {
-              Alert.alert("Не удалось архивировать", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: "Клиент исчезнет из рабочего списка, но заявки, инвойсы и финансовая история сохранятся. Вернуть его можно сразу — кнопкой «Отменить», а позже в Клиенты › шестерёнка › «Архив клиентов».",
+        confirmLabel: "Архивировать",
+        destructive: true,
+      },
+      async () => {
+        try {
+          // Экран закрывается, поэтому «Отменить» живёт в тосте: он
+          // глобальный и переживает уход с карточки.
+          const res = await archiveWithUndo([c]);
+          if (res.archived > 0) router.back();
+        } catch (e) {
+          notify("Не удалось архивировать", (e as Error).message);
+        }
+      },
     );
   };
 
@@ -373,34 +372,31 @@ export default function ClientDetailScreen() {
       (stats?.unclosedVisits ?? 0) > 0 ||
       stats?.nextApt != null;
     if (hasHistory) {
-      Alert.alert(
+      confirmThen(
         "Этого клиента нельзя удалить",
-        "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
-        [
-          { text: "Отмена", style: "cancel" },
-          { text: "В архив", onPress: onArchive },
-        ],
+        {
+          message: "За этим клиентом есть визиты и деньги — они останутся в отчётах и должны быть к кому-то привязаны. Такого клиента убирают в архив: из списка он исчезнет, история сохранится.",
+          confirmLabel: "В архив",
+        },
+        onArchive,
       );
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Удалить клиента?",
-      `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const res = await archiveWithUndo([c], true);
-              if (res.archived > 0) router.back();
-            } catch (e) {
-              Alert.alert("Не удалось удалить", (e as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: `${c.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть — там же, в шестерёнке.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          const res = await archiveWithUndo([c], true);
+          if (res.archived > 0) router.back();
+        } catch (e) {
+          notify("Не удалось удалить", (e as Error).message);
+        }
+      },
     );
   };
 

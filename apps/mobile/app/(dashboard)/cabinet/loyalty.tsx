@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -29,6 +28,7 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useLoyalty, useSaveLoyalty } from "@/features/settings/local-settings";
+import { notify } from "@/lib/notify";
 
 export default function LoyaltyScreen() {
   const th = useThemeColors();
@@ -76,15 +76,15 @@ export default function LoyaltyScreen() {
     const thresholdValue = Number(threshold.replace(",", "."));
     const percentValue = Number(percent.replace(",", "."));
     if (!Number.isInteger(thresholdValue) || thresholdValue < 1) {
-      Alert.alert("Проверьте уровень", "Количество визитов должно быть целым числом от 1.");
+      notify("Проверьте уровень", "Количество визитов должно быть целым числом от 1.");
       return;
     }
     if (!Number.isFinite(percentValue) || percentValue <= 0 || percentValue > 100) {
-      Alert.alert("Проверьте скидку", "Скидка должна быть больше 0 и не превышать 100 процентов.");
+      notify("Проверьте скидку", "Скидка должна быть больше 0 и не превышать 100 процентов.");
       return;
     }
     if (s.tiers.some((tier) => tier.id !== editingId && tier.threshold === thresholdValue)) {
-      Alert.alert("Такой порог уже есть", "Для одного количества визитов можно задать только один уровень.");
+      notify("Такой порог уже есть", "Для одного количества визитов можно задать только один уровень.");
       return;
     }
     const t: LoyaltyTier = {
@@ -236,7 +236,7 @@ export default function LoyaltyScreen() {
             onPress={() =>
               save.mutate(s, {
                 onSuccess: () => setDirty(false),
-                onError: (e) => Alert.alert("Ошибка", e.message),
+                onError: (e) => notify("Ошибка", e.message),
               })
             }
             disabled={!dirty || save.isPending}

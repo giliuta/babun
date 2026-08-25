@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -23,6 +22,7 @@ import { Screen } from "@/components/ui/Screen";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import { useCreateClient } from "@/features/clients/queries";
 import { friendlyCreateError } from "@/features/clients/client-create-errors";
@@ -43,7 +43,6 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   );
 }
 
-
 function TextInput({
   maxFontSizeMultiplier = 1.3,
   ...props
@@ -55,7 +54,6 @@ function TextInput({
     />
   );
 }
-
 
 /** «Не делаем по вторникам» — родительный падеж множественного числа: слово
  *  стоит в предложении, а не подписью в таблице. */
@@ -146,7 +144,7 @@ export function ClientPicker({
     } catch (e) {
       // Сырой текст Postgres человеку показывать нельзя: быстрое создание
       // говорит на том же языке, что и полная карточка клиента.
-      Alert.alert("Не получилось", friendlyCreateError(e));
+      notify("Не получилось", friendlyCreateError(e));
     }
   };
 

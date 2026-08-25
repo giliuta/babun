@@ -106,7 +106,6 @@ export default function AccountsArchiveScreen() {
       ? (teamById.get(account.brigade_id)?.name ?? "Команда удалена")
       : "Без команды";
 
-
   // ВЕТВЛЕНИЕ ПО «ДАННЫХ НЕТ», А НЕ ПО isPending (§8): без сети запрос стоит
   // в paused и остаётся pending навсегда — экран крутил бы спиннер вечно.
   const hasData =

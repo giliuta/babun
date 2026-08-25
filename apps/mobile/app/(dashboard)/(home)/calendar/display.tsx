@@ -1,4 +1,4 @@
-import { Alert, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
 import {
   DEFAULT_CALENDAR_SETTINGS,
   type CalendarSettings,
@@ -9,6 +9,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { notify } from "@/lib/notify";
 import {
   useCalendarSettings,
   useSaveCalendarSettings,
@@ -40,7 +41,7 @@ export default function CalendarDisplayScreen() {
   const patch = (p: Partial<CalendarSettings>) => {
     if (!settings) return;
     save.mutate(p, {
-      onError: (e) => Alert.alert("Ошибка", e.message),
+      onError: (e) => notify("Ошибка", e.message),
     });
   };
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { AlertTriangle } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -179,7 +179,7 @@ export function RescheduleSheet({
 
         {/* новая дата — inline-календарь */}
         <View className="px-3">
-          <DateTimePicker
+          <DateTimeInput
             themeVariant="light"
             value={date ? parseYMD(date) : new Date()}
             mode="date"
@@ -204,7 +204,7 @@ export function RescheduleSheet({
                 (30 мин), и запись, созданную на 11:35, физически нельзя было
                 перенести обратно на 11:35: две двери в одно время разной
                 ширины. */}
-            <DateTimePicker
+            <DateTimeInput
               themeVariant="light"
               value={timeStart ? parseHM(timeStart) : new Date()}
               mode="time"

@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Alert, Keyboard, Pressable, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
 import { FieldLabel } from "@/components/ui/Field";
@@ -8,6 +8,7 @@ import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { durationLabel, tierSentence } from "./format";
+import { confirmThen } from "@/lib/confirm";
 import {
   displayValue,
   draftValue,
@@ -179,20 +180,17 @@ export function ServiceBlocks({
     if (!tier) return;
     // СИСТЕМНЫЙ алерт, а не нижний лист: мы внутри `BottomSheet` (RN Modal), и
     // канонический лист выбора уйдёт ЗА модалку.
-    Alert.alert(
+    confirmThen(
       "Убрать «от " + (tier.minQuantity.trim() || "…") + "»?",
-      tierSentence(tier),
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Убрать",
-          style: "destructive",
-          onPress: () => {
-            onOpenRow(null);
-            onChange({ ...value, tiers: tiers.filter((x) => x.id !== id) });
-          },
-        },
-      ],
+      {
+        message: tierSentence(tier),
+        confirmLabel: "Убрать",
+        destructive: true,
+      },
+      () => {
+        onOpenRow(null);
+        onChange({ ...value, tiers: tiers.filter((x) => x.id !== id) });
+      },
     );
   };
 

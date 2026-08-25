@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -35,6 +34,8 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useSaveSmsTemplates,
   useSmsTemplates,
@@ -125,7 +126,7 @@ export default function SmsTemplatesScreen() {
     : false;
 
   const alertError = (e: unknown) =>
-    Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+    notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
   const upsert = async (tpl: SmsTemplate) => {
     const next = templates.some((x) => x.id === tpl.id)
@@ -145,21 +146,21 @@ export default function SmsTemplatesScreen() {
   };
 
   const handleDelete = (id: string) => {
-    Alert.alert("Удалить шаблон?", undefined, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить шаблон?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await save.mutateAsync(templates.filter((x) => x.id !== id));
-            setEditing(null);
-          } catch (e) {
-            alertError(e);
-          }
-        },
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      async () => {
+        try {
+          await save.mutateAsync(templates.filter((x) => x.id !== id));
+          setEditing(null);
+        } catch (e) {
+          alertError(e);
+        }
+      },
+    );
   };
 
   const toggleEnabled = (tpl: SmsTemplate) => {

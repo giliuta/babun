@@ -28,9 +28,10 @@ export type { SmsTemplate, TemplateKind } from "@babun/shared/local/sms-template
 // блоб: узкие RPC отдают/пишут только smsTemplates и атомарно сохраняют все
 // соседние legacy-ключи. MMKV остаётся офлайн-кэшем.
 //
-// NB: shared/local/sms-templates.ts loadTemplates/saveTemplates ходят в
-// window.localStorage напрямую (не через storage seam) — на нативе это
-// no-op, поэтому кэш реализован здесь через getStorage() (MMKV).
+// Кэш живёт здесь, а не в shared/local/sms-templates.ts: тот модуль намеренно
+// чистый — типы, KIND_LABELS, renderTemplate — и хранилища не касается вовсе.
+// Поэтому чтение/запись идут через getStorage(): на нативе это MMKV, в вебе
+// localStorage, и ни одна из платформ не зашита в общий код.
 
 const cacheKey = (tenantId: string) => `babun-sms-templates:${tenantId}`;
 

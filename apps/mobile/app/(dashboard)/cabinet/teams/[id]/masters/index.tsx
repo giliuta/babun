@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -31,6 +30,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { AddRow } from "@/components/ui/AddRow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   teamMembers,
   teamRoles,
@@ -97,7 +98,7 @@ export default function BrigadeMastersScreen() {
         roles: nextRoles,
         members: nextMembers,
       },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -156,7 +157,7 @@ export default function BrigadeMastersScreen() {
       {
         onError: (e) => {
           migratedFor.current = null; // разрешить повтор при следующем рендере
-          Alert.alert("Ошибка", e.message);
+          notify("Ошибка", e.message);
         },
       },
     );
@@ -214,27 +215,24 @@ export default function BrigadeMastersScreen() {
 
   const deleteRole = (role: BrigadeRole) => {
     const count = members.filter((m) => m.role_id === role.id).length;
-    Alert.alert(
+    confirmThen(
       `Удалить роль «${role.name}»?`,
-      count > 0
-        ? `${count} ${count === 1 ? "мастер перейдёт" : "мастера перейдут"} в «Без роли». Из команды они не выйдут.`
-        : "Роль пустая — можно удалить.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: () => {
-            persist(
-              roles.filter((r) => r.id !== role.id),
-              members.map((m) =>
-                m.role_id === role.id ? { ...m, role_id: null } : m,
-              ),
-            );
-            setEditingRole(null);
-          },
-        },
-      ],
+      {
+        message: count > 0
+          ? `${count} ${count === 1 ? "мастер перейдёт" : "мастера перейдут"} в «Без роли». Из команды они не выйдут.`
+          : "Роль пустая — можно удалить.",
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () => {
+        persist(
+          roles.filter((r) => r.id !== role.id),
+          members.map((m) =>
+            m.role_id === role.id ? { ...m, role_id: null } : m,
+          ),
+        );
+        setEditingRole(null);
+      },
     );
   };
 
@@ -329,7 +327,7 @@ export default function BrigadeMastersScreen() {
             label="Добавить мастера"
             onPress={() => {
               if (availableMasters.length === 0) {
-                Alert.alert(
+                notify(
                   "Все мастера уже в команде",
                   "Заведите нового мастера в разделе «Мастера», затем вернитесь сюда.",
                 );

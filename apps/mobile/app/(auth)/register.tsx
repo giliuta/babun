@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Linking, Pressable, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   AuthCard,
@@ -16,6 +16,7 @@ import {
 import { mapAuthError } from "@/components/auth/authErrors";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
 import { getPendingInvitationToken } from "@/features/settings/pending-invitation";
 
 // «Создать аккаунт» — name/email/password inline (chained return key).
@@ -110,7 +111,7 @@ export default function RegisterScreen() {
 
   const openMail = () =>
     Linking.openURL("message://").catch(() => {
-      Alert.alert(
+      notify(
         "Почта недоступна",
         "Откройте приложение почты вручную и найдите письмо от Babun.",
       );
@@ -118,7 +119,7 @@ export default function RegisterScreen() {
 
   const openLegal = (url: string) =>
     Linking.openURL(url).catch(() => {
-      Alert.alert(
+      notify(
         "Не удалось открыть ссылку",
         "Проверьте интернет и повторите.",
       );

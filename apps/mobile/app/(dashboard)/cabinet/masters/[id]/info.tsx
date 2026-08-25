@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -22,6 +21,7 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMaster, useUpdateMaster } from "@/features/reference/queries";
+import { notify } from "@/lib/notify";
 import {
   getMasterProfile,
   getMasterRole,
@@ -287,7 +287,7 @@ export default function MasterInfoScreen() {
 }
 
 function alertErr(e: unknown) {
-  Alert.alert("Ошибка", (e as Error).message);
+  notify("Ошибка", (e as Error).message);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

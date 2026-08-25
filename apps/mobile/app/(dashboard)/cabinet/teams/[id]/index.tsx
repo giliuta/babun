@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -38,6 +37,8 @@ import { useServices } from "@/features/services/queries";
 import { FORMS_USLUGA, formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 // ─── Brigade hub ─────────────────────────────────────────────────────
 // Хаб про ЛЮДЕЙ: имя и цвет, мастера, услуги, оборудование, метки, «активна»
@@ -169,7 +170,7 @@ export default function TeamHubScreen() {
   const patch = (p: Record<string, unknown>) => {
     update.mutate(
       { id: team.id, patch: p },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -196,7 +197,7 @@ export default function TeamHubScreen() {
     const next = Number(payout.trim().replace(",", "."));
     if (!Number.isFinite(next) || next < 0 || next > 100) {
       setPayout(null);
-      Alert.alert("Некорректная доля", "Введите число от 0 до 100 процентов.");
+      notify("Некорректная доля", "Введите число от 0 до 100 процентов.");
       return;
     }
     const rounded = Math.round(next * 100) / 100;
@@ -367,16 +368,13 @@ export default function TeamHubScreen() {
                   patch({ is_active: true });
                   return;
                 }
-                Alert.alert(
+                confirmThen(
                   `Архивировать «${team.name}»?`,
-                  "Команда исчезнет из рабочих списков, но вся история заявок и финансов сохранится.",
-                  [
-                    { text: "Отмена", style: "cancel" },
-                    {
-                      text: "Архивировать",
-                      onPress: () => patch({ is_active: false }),
-                    },
-                  ],
+                  {
+                    message: "Команда исчезнет из рабочих списков, но вся история заявок и финансов сохранится.",
+                    confirmLabel: "Архивировать",
+                  },
+                  () => patch({ is_active: false }),
                 );
               }}
             />

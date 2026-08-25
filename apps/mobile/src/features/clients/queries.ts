@@ -1,4 +1,4 @@
-import { Alert, Linking } from "react-native";
+import { Linking } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // STORY-062 slice 5 — clients + tags READS now go through the shared
 // offline-aware SWR wrappers (listClients / listClientTags). The two slice-4
@@ -42,6 +42,8 @@ import {
 } from "@babun/shared/local/clients";
 import { isOnline, randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { preflightQuotaForCreate } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
@@ -56,34 +58,31 @@ import {
 function surfaceClientReminderResult(result: ClientReminderResult): void {
   if (result === "scheduled" || result === "cleared") return;
   if (result === "denied") {
-    Alert.alert(
+    confirmThen(
       "Дата сохранена",
-      "Уведомление не запланировано, потому что оно выключено для Babun в настройках iPhone.",
-      [
-        { text: "Позже", style: "cancel" },
-        {
-          text: "Открыть настройки",
-          onPress: () => void Linking.openSettings(),
-        },
-      ],
+      {
+        message: "Уведомление не запланировано, потому что оно выключено для Babun в настройках iPhone.",
+        confirmLabel: "Открыть настройки",
+      },
+      () => void Linking.openSettings(),
     );
     return;
   }
   if (result === "deferred") {
-    Alert.alert(
+    notify(
       "Дата сохранена",
       "Напоминание сохранено в очереди и установится, когда на iPhone освободится место.",
     );
     return;
   }
   if (result === "capacity") {
-    Alert.alert(
+    notify(
       "Дата сохранена",
       "Очередь напоминаний переполнена. Удалите ненужные напоминания и сохраните дату ещё раз.",
     );
     return;
   }
-  Alert.alert(
+  notify(
     "Дата сохранена",
     result === "past"
       ? "Эта дата уже прошла, поэтому системное уведомление не создавалось."
@@ -204,7 +203,7 @@ export function useUpdateClient(id: string) {
     onError: (e) => {
       // The blocks keep edits in local drafts and never read isError —
       // without this a failed save is silently lost until remount.
-      Alert.alert(
+      notify(
         "Не удалось сохранить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
       );
@@ -232,7 +231,7 @@ export function useUpdateClientById() {
       }
     },
     onError: (e) => {
-      Alert.alert(
+      notify(
         "Не удалось сохранить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
       );

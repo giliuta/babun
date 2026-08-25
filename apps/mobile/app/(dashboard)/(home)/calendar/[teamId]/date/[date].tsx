@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { ScrollView, Text, View } from "react-native";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DEFAULT_CALENDAR_SETTINGS } from "@babun/shared/local/calendar-settings";
 import {
@@ -36,6 +36,7 @@ import {
 } from "@/features/calendar/setting-options";
 import { BreaksSection } from "@/features/calendar/BreaksSection";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
+import { notify } from "@/lib/notify";
 
 // Редактор ОСОБОГО ДНЯ — графика одной конкретной даты: смена короче,
 // другие часы или выходной. Зеркало редактора дня недели ([weekday].tsx):
@@ -109,7 +110,7 @@ export default function SpecialDayEditorScreen() {
       { teamId, schedule: next },
       {
         onSuccess: () => setSavedTick(Date.now()),
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
@@ -166,7 +167,7 @@ export default function SpecialDayEditorScreen() {
             }}
           >
             <Text style={{ fontSize: 16, color: t.ink }}>Дата</Text>
-            <DateTimePicker
+            <DateTimeInput
               value={parseYMD(date)}
               mode="date"
               display="compact"

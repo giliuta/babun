@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -29,6 +28,8 @@ import { useToast } from "@/components/ui/Toast";
 import { useTeams } from "@/features/reference/queries";
 import { useEquipment, useSaveEquipment } from "@/features/inventory/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 // Экран склада переиспользуется в двух местах (не дублируем CRUD):
 //  · глобальный /cabinet/inventory (весь склад, InventoryScreen ниже),
@@ -137,7 +138,7 @@ export function InventoryList({
           setOpen(false);
           toast(editing ? "Сохранено" : "Добавлено");
         },
-        onError: (e) => Alert.alert("Ошибка", e.message),
+        onError: (e) => notify("Ошибка", e.message),
       },
     );
   };
@@ -147,32 +148,33 @@ export function InventoryList({
   // не теряет несохранённые правки полей.
   const remove = (id: string, onConfirm?: () => void) => {
     if (!owner) return;
-    Alert.alert("Удалить позицию?", "", [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить позицию?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () => {
-          // removeIds carries the explicit deletion — the server must never
-          // derive it from a (possibly stale) full snapshot. list=allItems
-          // (без удаляемой) сохраняет остальной склад в кэше и позициях.
-          save.mutate(
-            {
-              list: allItems.filter((i) => i.id !== id),
-              removeIds: [id],
-              upsertIds: [],
-            },
-            {
-              // Keep the editor and its context visible when the canonical
-              // delete fails. Closing before this callback discarded the
-              // sheet even though the row still existed on the server.
-              onSuccess: () => onConfirm?.(),
-              onError: (e) => Alert.alert("Ошибка", e.message),
-            },
-          );
-        },
+        message: "",
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () => {
+        // removeIds carries the explicit deletion — the server must never
+        // derive it from a (possibly stale) full snapshot. list=allItems
+        // (без удаляемой) сохраняет остальной склад в кэше и позициях.
+        save.mutate(
+          {
+            list: allItems.filter((i) => i.id !== id),
+            removeIds: [id],
+            upsertIds: [],
+          },
+          {
+            // Keep the editor and its context visible when the canonical
+            // delete fails. Closing before this callback discarded the
+            // sheet even though the row still existed on the server.
+            onSuccess: () => onConfirm?.(),
+            onError: (e) => notify("Ошибка", e.message),
+          },
+        );
+      },
+    );
   };
 
   return (

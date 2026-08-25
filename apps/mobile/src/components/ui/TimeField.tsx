@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "./DateTimeInput";
 import { useThemeColors } from "@/theme/colors";
 
 // Строка с нативным выбором времени — тот же рецепт, что уже стоит в форме
@@ -46,7 +46,7 @@ export function TimeField({
       }}
     >
       <Text style={{ fontSize: 16, color: t.ink }}>{label}</Text>
-      <DateTimePicker
+      <DateTimeInput
         themeVariant="light"
         value={parseHM(value)}
         mode="time"

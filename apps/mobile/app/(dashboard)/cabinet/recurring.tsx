@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -11,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { useBookingNav } from "@/features/clients/card-booking";
 import { Check, Phone, Search, StickyNote, X } from "lucide-react-native";
 import {
@@ -33,6 +32,8 @@ import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
 import { useClients } from "@/features/clients/queries";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useCreateReminder,
   useDeleteReminder,
@@ -115,17 +116,18 @@ export default function RecurringScreen() {
 
   // Web parity (recurring/page.tsx): hard delete goes through a confirm.
   const confirmDelete = (item: RecurringReminder) =>
-    Alert.alert("Удалить напоминание?", item.client_name, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить напоминание?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () =>
-          del.mutate(item.id, {
-            onError: (e) => Alert.alert("Ошибка", e.message),
-          }),
+        message: item.client_name,
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () =>
+        del.mutate(item.id, {
+          onError: (e) => notify("Ошибка", e.message),
+        }),
+    );
 
   // «Записать» — в календарь с предзаполненным клиентом/командой (веб шлёт
   // ?new=1&client_id=…; мобильный обработчик в (dashboard)/index.tsx читает
@@ -196,7 +198,7 @@ export default function RecurringScreen() {
                 { id: item.id, status: "booked" },
                 {
                   onSuccess: () => toast("Отмечено записанным"),
-                  onError: (e) => Alert.alert("Ошибка", e.message),
+                  onError: (e) => notify("Ошибка", e.message),
                 },
               )
             }
@@ -320,7 +322,7 @@ export default function RecurringScreen() {
             return true;
           } catch (e) {
             // Шит остаётся открытым — ввод не теряется.
-            Alert.alert("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+            notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
             return false;
           }
         }}
@@ -497,7 +499,7 @@ function NewReminderSheet({
                 <Text className="text-xs font-medium" style={{ color: t.sub }}>
                   Последнее ТО
                 </Text>
-                <DateTimePicker
+                <DateTimeInput
                   themeVariant="light"
                   value={parseYMD(lastDate)}
                   mode="date"

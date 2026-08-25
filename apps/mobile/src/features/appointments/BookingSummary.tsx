@@ -24,7 +24,6 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   );
 }
 
-
 function TextInput({
   maxFontSizeMultiplier = 1.3,
   ...props
@@ -36,7 +35,6 @@ function TextInput({
     />
   );
 }
-
 
 export function Stepper({
   qty,

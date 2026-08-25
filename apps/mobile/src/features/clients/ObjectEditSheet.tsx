@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -38,6 +37,7 @@ import { useClients } from "@/features/clients/queries";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
+import { confirmAction } from "@/lib/confirm";
 import { useThemeColors } from "@/theme/colors";
 
 // ПРАВКА ОБЪЕКТА — ЛИСТ, А НЕ СТРАНИЦА (владелец 2026-08-06: «отдельная
@@ -148,32 +148,22 @@ export function ObjectEditSheet({
   };
 
   const confirmDelete = () => {
-    Alert.alert(
-      "Удалить объект?",
-      objectTarget(loc) || loc.label || "Объект",
-      [
-        {
-          text: "Отмена",
-          style: "cancel",
-          // Без этого «Отмена» оставляла лист открытым (askDelete рисует
-          // null — экран выглядел обычным), а `asked` — взведённым: красная
-          // кнопка «Удалить» на ВСЕХ объектах после одного отказа молчала.
-          onPress: () => {
-            asked.current = false;
-            onClose();
-          },
-        },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: () => {
-            haptics.warning();
-            void writer.removeLocation(loc.id);
-            onClose();
-          },
-        },
-      ],
-    );
+    void confirmAction("Удалить объект?", {
+      message: objectTarget(loc) || loc.label || "Объект",
+      confirmLabel: "Удалить",
+      destructive: true,
+    }).then((ok) => {
+      if (ok) {
+        haptics.warning();
+        void writer.removeLocation(loc.id);
+      } else {
+        // Без этого отказ оставлял лист открытым (askDelete рисует null —
+        // экран выглядел обычным), а `asked` — взведённым: красная кнопка
+        // «Удалить» на ВСЕХ объектах после одного отказа молчала.
+        asked.current = false;
+      }
+      onClose();
+    });
   };
   confirmDeleteRef.current = confirmDelete;
 

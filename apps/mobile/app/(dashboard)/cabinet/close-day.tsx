@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Check, ChevronRight } from "lucide-react-native";
 import {
@@ -25,6 +25,8 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { todayYmd } from "@/features/invoices/format";
@@ -271,7 +273,7 @@ export default function CloseDayScreen() {
           toast("Оплата отмечена");
           void closureQuery.refetch();
         },
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
@@ -285,7 +287,7 @@ export default function CloseDayScreen() {
       { id: apt.id, patch: { date: formatYMD(next) } },
       {
         onSuccess: () => toast("Перенесено на завтра"),
-        onError: (e) => Alert.alert("Ошибка", (e as Error).message),
+        onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
@@ -298,7 +300,7 @@ export default function CloseDayScreen() {
     } catch (error) {
       // Связь могла пропасть МЕЖДУ нажатием и ответом: тогда причина — не
       // сырое «Network request failed», а закрытая дверь.
-      Alert.alert(
+      notify(
         "Не удалось закрыть день",
         !isOnline()
           ? OFFLINE_DAY_CLOSE
@@ -324,48 +326,45 @@ export default function CloseDayScreen() {
     if (leftovers.length > 0) {
       // Хвост называет последствие ИМЕННО оставшегося хвоста: предупреждение
       // о кассах при полностью сверенных кассах — враньё экрана.
-      Alert.alert(
+      confirmThen(
         "Закрыть день?",
-        `${leftovers.join(" · ")}. ${
-          pendingRegisters > 0
-            ? "Несверенные кассы в итог дня не войдут."
-            : "Невыполненные записи останутся в «Не закрыто»."
-        }`,
-        [
-          { text: "Отмена", style: "cancel" },
-          { text: "Закрыть день", onPress: () => void doCloseDay() },
-        ],
+        {
+          message: `${leftovers.join(" · ")}. ${
+            pendingRegisters > 0
+              ? "Несверенные кассы в итог дня не войдут."
+              : "Невыполненные записи останутся в «Не закрыто»."
+          }`,
+          confirmLabel: "Закрыть день",
+        },
+        () => void doCloseDay(),
       );
       return;
     }
     void doCloseDay();
   };
   const reopen = () => {
-    Alert.alert(
+    confirmThen(
       "Открыть день обратно?",
-      "После открытия финансовые операции за этот день снова можно будет менять.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Открыть",
-          onPress: async () => {
-            try {
-              await reopenMutation.mutateAsync();
-              haptics.success();
-              toast("День открыт");
-            } catch (error) {
-              Alert.alert(
-                "Не удалось открыть день",
-                !isOnline()
-                  ? "Без сети день не открывается — он открывается на сервере."
-                  : error instanceof Error
-                    ? error.message
-                    : "Повторите попытку.",
-              );
-            }
-          },
-        },
-      ],
+      {
+        message: "После открытия финансовые операции за этот день снова можно будет менять.",
+        confirmLabel: "Открыть",
+      },
+      async () => {
+        try {
+          await reopenMutation.mutateAsync();
+          haptics.success();
+          toast("День открыт");
+        } catch (error) {
+          notify(
+            "Не удалось открыть день",
+            !isOnline()
+              ? "Без сети день не открывается — он открывается на сервере."
+              : error instanceof Error
+                ? error.message
+                : "Повторите попытку.",
+          );
+        }
+      },
     );
   };
 

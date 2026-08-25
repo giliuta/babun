@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert } from "react-native";
+
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { randomUuid } from "@babun/shared/sync";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -21,6 +21,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { todayYmd } from "@/features/invoices/format";
+import { confirmThen } from "@/lib/confirm";
 import {
   effectiveVatSettings,
   useTeamVatOverrides,
@@ -111,10 +112,15 @@ export default function NewInvoiceScreen() {
       leave();
       return;
     }
-    Alert.alert("Черновик не сохранён", "Выйти и потерять заполненное?", [
-      { text: "Остаться", style: "cancel" },
-      { text: "Выйти", style: "destructive", onPress: leave },
-    ]);
+    confirmThen(
+      "Черновик не сохранён",
+      {
+        message: "Выйти и потерять заполненное?",
+        confirmLabel: "Выйти",
+        destructive: true,
+      },
+      leave,
+    );
   };
 
   return (

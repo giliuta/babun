@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -54,18 +54,34 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
   const insets = useSafeAreaInsets();
   const [request, setRequest] = useState<Request | null>(null);
   const [visible, setVisible] = useState(false);
+  /** Когда закончится анимация ухода предыдущего листа. */
+  const reopenAt = useRef(0);
+  const reopenTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     present = (next) => {
-      // Один лист за раз: предыдущий обещал ответ — закрываем его отменой.
-      setRequest((cur) => {
-        cur?.resolve(null);
-        return next;
-      });
-      setVisible(true);
+      const show = () => {
+        // Один лист за раз: предыдущий обещал ответ — закрываем его отменой.
+        setRequest((cur) => {
+          cur?.resolve(null);
+          return next;
+        });
+        setVisible(true);
+      };
+      // ВТОРОЙ ВОПРОС ПОДРЯД ЖДЁТ, ПОКА УЕДЕТ ПЕРВЫЙ.
+      //
+      // Цепочка «нельзя удалить → в архив?» отвечает на первый лист и тут же
+      // просит второй. Открытый в ту же миллисекунду, он попадает в чужую
+      // анимацию ухода и не появляется вовсе (закон BottomSheet:
+      // SHEET_EXIT_MS). Человек при этом уверен, что нажал — и ничего.
+      const wait = reopenAt.current - Date.now();
+      if (reopenTimer.current) clearTimeout(reopenTimer.current);
+      if (wait > 0) reopenTimer.current = setTimeout(show, wait);
+      else show();
     };
     return () => {
       present = null;
+      if (reopenTimer.current) clearTimeout(reopenTimer.current);
     };
   }, []);
 
@@ -73,6 +89,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
     // Отвечаем РОВНО один раз: закрытие свайпом и тап по скриму могут прийти
     // подряд, а обещание уже отдано.
     const pending = request;
+    reopenAt.current = Date.now() + SHEET_EXIT_MS;
     setRequest(null);
     setVisible(false);
     pending?.resolve(index);

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -22,6 +21,7 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
+import { notify } from "@/lib/notify";
 import {
   useCreateMaster,
   useMasters,
@@ -103,7 +103,7 @@ export default function MastersScreen() {
       // Цепочка «дозаполнить»: сразу открываем хаб нового мастера.
       router.push(`/cabinet/masters/${m.id}`);
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     } finally {
       setBusy(false);
     }

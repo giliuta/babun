@@ -223,7 +223,6 @@ export const SEGMENT_BLOCK_TITLES: string[] = [
   "Какой это клиент",
 ];
 
-
 /** Порядок (деньги/действие вперёд) + RU-подписи.
  *
  *  ЗАКОН ПОДПИСИ (владелец 2026-07-25): подпись описывает РОВНО тот
@@ -308,7 +307,6 @@ export function todayYMD(): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-
 
 /** УЛИКА: почему ЭТОТ человек попал в выбранный статус.
  *

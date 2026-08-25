@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   Pressable,
   Text,
@@ -36,6 +35,8 @@ import {
 import { useUploadAttachments } from "@/features/clients/card-attachments";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 
 const KIND_OPTIONS: readonly { value: PhotoKind; label: string }[] = [
   { value: "before", label: "До работы" },
@@ -126,7 +127,7 @@ export function AppointmentPhotos({
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
+        notify(
           "Нет доступа к фото",
           "Разрешите доступ: Настройки → Babun → Фото.",
         );
@@ -145,7 +146,7 @@ export function AppointmentPhotos({
       });
       if (!result.canceled) uploadAssets(result.assets);
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось открыть галерею",
         error instanceof Error ? error.message : "Попробуйте ещё раз.",
       );
@@ -156,7 +157,7 @@ export function AppointmentPhotos({
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
+        notify(
           "Нет доступа к камере",
           "Разрешите камеру: Настройки → Babun → Камера.",
         );
@@ -168,7 +169,7 @@ export function AppointmentPhotos({
       });
       if (!result.canceled) uploadAssets(result.assets);
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось открыть камеру",
         error instanceof Error ? error.message : "Попробуйте ещё раз.",
       );
@@ -176,17 +177,18 @@ export function AppointmentPhotos({
   };
 
   const confirmDelete = (photo: AppointmentPhotoRecord) => {
-    Alert.alert("Удалить фото?", "Оно исчезнет из заявки без возможности восстановления.", [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить фото?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () =>
-          remove.mutate(photo, {
-            onSuccess: () => toast("Фото удалено", "success"),
-          }),
+        message: "Оно исчезнет из заявки без возможности восстановления.",
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () =>
+        remove.mutate(photo, {
+          onSuccess: () => toast("Фото удалено", "success"),
+        }),
+    );
   };
 
   const mutationError = upload.error ?? remove.error;
@@ -212,7 +214,7 @@ export function AppointmentPhotos({
         { onSuccess: () => toast("Файл приложен к записи", "success") },
       );
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось выбрать файл",
         error instanceof Error ? error.message : "Попробуйте ещё раз.",
       );

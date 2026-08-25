@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -32,6 +31,8 @@ import {
   type TenantMember,
 } from "@/features/settings/team-access";
 import { useTenant } from "@/features/settings/tenant";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   invitationErrorMessage,
   invitationPath,
@@ -138,11 +139,11 @@ export default function TeamAccessScreen() {
 
   const createAndShare = async () => {
     if (!isInvitationEmail(inviteEmail)) {
-      Alert.alert("Проверьте email", "Введите полный адрес сотрудника.");
+      notify("Проверьте email", "Введите полный адрес сотрудника.");
       return;
     }
     if (inviteRole === "master" && !inviteMasterId) {
-      Alert.alert(
+      notify(
         "Выберите карточку сотрудника",
         "Для доступа мастера нужна свободная карточка бригадира или мастера.",
       );
@@ -158,13 +159,13 @@ export default function TeamAccessScreen() {
       try {
         await shareInvitation(invitation);
       } catch {
-        Alert.alert(
+        notify(
           "Приглашение создано",
           "Его можно отправить позже из списка «Ожидают входа».",
         );
       }
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось создать приглашение",
         invitationErrorMessage((error as Error).message),
       );
@@ -174,7 +175,7 @@ export default function TeamAccessScreen() {
   const save = async () => {
     if (!editing) return;
     if (role === "master" && !masterId) {
-      Alert.alert(
+      notify(
         "Выберите карточку сотрудника",
         "Мастеру нужна карточка, по которой CRM определит его заявки и команду.",
       );
@@ -188,30 +189,27 @@ export default function TeamAccessScreen() {
       });
       setEditing(null);
     } catch (error) {
-      Alert.alert("Не удалось сохранить", (error as Error).message);
+      notify("Не удалось сохранить", (error as Error).message);
     }
   };
 
   const removeMember = () => {
     if (!editing) return;
-    Alert.alert(
+    confirmThen(
       "Закрыть доступ?",
-      "Сотрудник выйдет из компании и больше не увидит её данные.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Закрыть доступ",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await remove.mutateAsync(editing.user_id);
-              setEditing(null);
-            } catch (error) {
-              Alert.alert("Не удалось закрыть доступ", (error as Error).message);
-            }
-          },
-        },
-      ],
+      {
+        message: "Сотрудник выйдет из компании и больше не увидит её данные.",
+        confirmLabel: "Закрыть доступ",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await remove.mutateAsync(editing.user_id);
+          setEditing(null);
+        } catch (error) {
+          notify("Не удалось закрыть доступ", (error as Error).message);
+        }
+      },
     );
   };
 
@@ -526,7 +524,7 @@ export default function TeamAccessScreen() {
                       <Pressable
                         onPress={() =>
                           void shareInvitation(invitation).catch(() =>
-                            Alert.alert(
+                            notify(
                               "Не удалось открыть отправку",
                               "Попробуйте ещё раз.",
                             ),
@@ -548,18 +546,19 @@ export default function TeamAccessScreen() {
                       </Pressable>
                       <Pressable
                         onPress={() =>
-                          Alert.alert("Отозвать приглашение?", invitation.email, [
-                            { text: "Отмена", style: "cancel" },
+                          confirmThen(
+                            "Отозвать приглашение?",
                             {
-                              text: "Отозвать",
-                              style: "destructive",
-                              onPress: () =>
-                                revoke.mutate(invitation.id, {
-                                  onError: (error) =>
-                                    Alert.alert("Ошибка", error.message),
-                                }),
+                              message: invitation.email,
+                              confirmLabel: "Отозвать",
+                              destructive: true,
                             },
-                          ])
+                            () =>
+                              revoke.mutate(invitation.id, {
+                                onError: (error) =>
+                                  notify("Ошибка", error.message),
+                              }),
+                          )
                         }
                         accessibilityRole="button"
                         accessibilityLabel={`Отозвать приглашение ${invitation.email}`}

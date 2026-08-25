@@ -1,6 +1,5 @@
 import { useState, type ComponentType } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -49,6 +48,8 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   usePersonalEventTypes,
   useSavePersonalEventTypes,
@@ -124,7 +125,7 @@ export default function EventTypesScreen() {
           setAllDay(false);
           setOpen(false);
         },
-        onError: (e) => Alert.alert("Ошибка", e.message),
+        onError: (e) => notify("Ошибка", e.message),
       },
     );
   };
@@ -134,15 +135,20 @@ export default function EventTypesScreen() {
     // derive it from a (possibly stale) full snapshot.
     save.mutate(
       { types: types.filter((t) => t.id !== id), removeIds: [id] },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
   // Web parity: confirm before deleting an event type (was an instant tap).
   const confirmRemove = (id: string, itemLabel: string) =>
-    Alert.alert("Удалить тип события?", itemLabel, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => remove(id) },
-    ]);
+    confirmThen(
+      "Удалить тип события?",
+      {
+        message: itemLabel,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () => remove(id),
+    );
 
   return (
     <Screen edges={["top"]}>

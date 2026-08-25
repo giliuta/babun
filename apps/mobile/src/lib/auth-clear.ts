@@ -1,24 +1,25 @@
-import { Alert } from "react-native";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getStorage } from "@babun/shared/storage";
 import { cacheClearAll } from "@babun/shared/db/cache/sql";
 import { queryClient } from "@/lib/query-client";
+import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
 import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
 
-// Mobile port of apps/web/src/lib/sync/auth-clear.ts — wipe device-local data
-// when this device must no longer see the previous account's data.
+// Wipe device-local data when this device must no longer see the previous
+// account's data. Originally ported from the Next.js web app's
+// src/lib/sync/auth-clear.ts; that app is gone, so this file is now the only
+// implementation and the canon — there is nothing left to keep in sync with.
 //
 // The shared local stores persist under GLOBAL (non-tenant-scoped) MMKV keys
 // («babun-chats», «babun-appointments», «babun:closed-day:*», …), so without
 // a wipe Tenant B logging in on the same phone inherits Tenant A's chats,
-// finances and reference books — the cross-tenant leak STORY-053a tracked on
-// web.
+// finances and reference books — the cross-tenant leak first tracked on web.
 //
-// Web-parity semantics (v504 + STORY-072/078):
+// Wipe semantics (inherited from web v504 + STORY-072/078, now the canon):
 //   * intentional logout        → wipe after a SUCCESSFUL signOut
 //     (signOutAndWipe below — a failed signOut must not destroy data);
 //   * SIGNED_IN, different user → wipe (covers «register a new account
@@ -34,7 +35,7 @@ import {
 const TENANT_PREFIXES = ["babun-", "babun2:", "babun:", "calendar."];
 
 // Identity stamp — must SURVIVE the wipe so the next sign-in can detect a
-// different account (mirrors LAST_USER_KEY / KEEP_KEYS on web).
+// different account (the LAST_USER_KEY / KEEP_KEYS pair carried over from web).
 const LAST_USER_KEY = "babun:auth:last-user-id";
 const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
 
@@ -99,7 +100,7 @@ export async function signOutAndWipe(): Promise<void> {
   try {
     await signOutScopeAndWipe("global");
   } catch {
-    Alert.alert(
+    notify(
       "Не удалось выйти",
       "Проверьте соединение и попробуйте ещё раз.",
     );

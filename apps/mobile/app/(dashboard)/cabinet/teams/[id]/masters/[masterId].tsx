@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -34,6 +33,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   teamMembers,
   teamRoles,
@@ -131,7 +132,7 @@ export default function BrigadeMemberAccessScreen() {
         roles,
         members: nextMembers,
       },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -147,7 +148,7 @@ export default function BrigadeMemberAccessScreen() {
         roles,
         members: nextMembers,
       },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -165,34 +166,31 @@ export default function BrigadeMemberAccessScreen() {
   };
 
   const handleRemove = () => {
-    Alert.alert(
+    confirmThen(
       `Убрать ${master.full_name} из команды?`,
-      "Мастер останется в разделе «Мастера», но больше не будет в этой команде.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Убрать",
-          style: "destructive",
-          onPress: () => {
-            const nextMembers = members.filter((mm) => mm.master_id !== masterId);
-            save.mutate(
-              {
-                teamId: tm.id,
-                expectedUpdatedAt: tm.updated_at,
-                roles,
-                members: nextMembers,
-              },
-              {
-                onError: (e) => Alert.alert("Ошибка", e.message),
-                onSuccess: () =>
-                  router.canGoBack()
-                    ? router.back()
-                    : router.replace(`/cabinet/teams/${tm.id}/masters`),
-              },
-            );
+      {
+        message: "Мастер останется в разделе «Мастера», но больше не будет в этой команде.",
+        confirmLabel: "Убрать",
+        destructive: true,
+      },
+      () => {
+        const nextMembers = members.filter((mm) => mm.master_id !== masterId);
+        save.mutate(
+          {
+            teamId: tm.id,
+            expectedUpdatedAt: tm.updated_at,
+            roles,
+            members: nextMembers,
           },
-        },
-      ],
+          {
+            onError: (e) => notify("Ошибка", e.message),
+            onSuccess: () =>
+              router.canGoBack()
+                ? router.back()
+                : router.replace(`/cabinet/teams/${tm.id}/masters`),
+          },
+        );
+      },
     );
   };
 

@@ -14,10 +14,11 @@
 // календаря (напоминания, тап по слоту) — там календарь и есть контекст.
 
 import { useRef } from "react";
-import { Alert } from "react-native";
+
 import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
 
 export interface BookingTarget {
   clientId: string;
@@ -112,10 +113,14 @@ export function useGuardedBookingNav(): (
     haptics.tap();
     const go = () => book({ ...target, clientId: client.id });
     if (client.blacklisted) {
-      Alert.alert("Клиент в чёрном списке", "Всё равно записать?", [
-        { text: "Отмена", style: "cancel" },
-        { text: "Записать", onPress: go },
-      ]);
+      confirmThen(
+        "Клиент в чёрном списке",
+        {
+          message: "Всё равно записать?",
+          confirmLabel: "Записать",
+        },
+        go,
+      );
       return;
     }
     go();

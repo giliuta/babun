@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,6 +30,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
@@ -68,7 +69,7 @@ export default function SyncStatusScreen() {
 
   const retry = async (op?: QueuedOp) => {
     if (!online) {
-      Alert.alert("Нет соединения", "Повторная отправка начнётся после подключения к интернету.");
+      notify("Нет соединения", "Повторная отправка начнётся после подключения к интернету.");
       return;
     }
     setBusyId(op?.id ?? "all");
@@ -89,7 +90,7 @@ export default function SyncStatusScreen() {
       await kickReplayer({ supabase });
       await refresh();
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось синхронизировать",
         (error as Error).message || "Проверьте соединение и повторите.",
       );
@@ -102,48 +103,45 @@ export default function SyncStatusScreen() {
     const related = operations.filter(
       (item) => item.table === op.table && item.row_id === op.row_id,
     );
-    Alert.alert(
+    confirmThen(
       related.length > 1
-        ? "Удалить несохранённые изменения?"
-        : "Удалить локальное изменение?",
-      `${
-        related.length > 1
-          ? `Будут удалены ${related.length} связанные операции. `
-          : ""
-      }Серверная версия вернётся после обновления данных.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: () =>
-            void (async () => {
-              setBusyId(op.id);
-              try {
-                await Promise.all(
-                  related.map((item) => removeOpAndEmit(item.id)),
-                );
-                // Drop an optimistic snapshot as well. For a queued delete it
-                // is already absent; for insert/update this prevents a rejected
-                // local value from continuing to look canonical.
-                await cacheDelete(op.table, op.row_id).catch(() => {});
-                await Promise.all([
-                  queryClient.invalidateQueries({ queryKey: ["appointments"] }),
-                  queryClient.invalidateQueries({ queryKey: ["clients"] }),
-                  queryClient.invalidateQueries({ queryKey: ["client-tags"] }),
-                ]);
-                await refresh();
-              } catch (error) {
-                Alert.alert(
-                  "Не удалось удалить изменение",
-                  (error as Error).message || "Повторите попытку.",
-                );
-              } finally {
-                setBusyId(null);
-              }
-            })(),
-        },
-      ],
+      ? "Удалить несохранённые изменения?"
+      : "Удалить локальное изменение?",
+      {
+        message: `${
+          related.length > 1
+            ? `Будут удалены ${related.length} связанные операции. `
+            : ""
+        }Серверная версия вернётся после обновления данных.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () =>
+        void (async () => {
+          setBusyId(op.id);
+          try {
+            await Promise.all(
+              related.map((item) => removeOpAndEmit(item.id)),
+            );
+            // Drop an optimistic snapshot as well. For a queued delete it
+            // is already absent; for insert/update this prevents a rejected
+            // local value from continuing to look canonical.
+            await cacheDelete(op.table, op.row_id).catch(() => {});
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["appointments"] }),
+              queryClient.invalidateQueries({ queryKey: ["clients"] }),
+              queryClient.invalidateQueries({ queryKey: ["client-tags"] }),
+            ]);
+            await refresh();
+          } catch (error) {
+            notify(
+              "Не удалось удалить изменение",
+              (error as Error).message || "Повторите попытку.",
+            );
+          } finally {
+            setBusyId(null);
+          }
+        })(),
     );
   };
 

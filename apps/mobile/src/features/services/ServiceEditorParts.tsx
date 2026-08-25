@@ -1,11 +1,13 @@
 import { useState, type ReactNode } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react-native";
 
 import { FieldLabel } from "@/components/ui/Field";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { durationLabel } from "./format";
 
@@ -38,15 +40,16 @@ export function ServiceTypeToggle({
       onChange(next);
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Сменить тип услуги?",
-      next === "variant"
-        ? "Пороги количества будут удалены — у вариантов нет математики."
-        : "Варианты будут удалены — у количества своя лестница цен.",
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Сменить", style: "destructive", onPress: () => onChange(next) },
-      ],
+      {
+        message: next === "variant"
+          ? "Пороги количества будут удалены — у вариантов нет математики."
+          : "Варианты будут удалены — у количества своя лестница цен.",
+        confirmLabel: "Сменить",
+        destructive: true,
+      },
+      () => onChange(next),
     );
   };
   return (
@@ -139,7 +142,7 @@ export function VariantRows({
 
   const remove = (variant: VariantDraft) => {
     if (variants.length <= 1) {
-      Alert.alert(
+      notify(
         "Нужен хотя бы один вариант",
         "Услуга с вариантами без единого варианта не продаётся.",
       );

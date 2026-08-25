@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Clipboard,
   FlatList,
   Image,
@@ -53,6 +52,8 @@ import { useClients, useCreateClient } from "@/features/clients/queries";
 import { tryToE164 } from "@/features/clients/phone";
 import { useSmsTemplates } from "@/features/settings/sms-templates";
 import { useTenant } from "@/features/settings/tenant";
+import { notify } from "@/lib/notify";
+import { chooseOption } from "@/lib/choose";
 import {
   useChat,
   useDeleteMessage,
@@ -408,27 +409,18 @@ export default function ChatThreadScreen() {
       ? clients.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === e164)
       : undefined;
     if (existing) {
-      Alert.alert(
+      void chooseOption(
         "Клиент уже существует",
-        `${existing.full_name || existing.phone}${existing.phone ? ` · ${existing.phone}` : ""}`,
-        [
-          { text: "Отмена", style: "cancel" },
-          {
-            text: "Привязать",
-            onPress: () => {
-              linkClient.mutate({ chatId: chat.id, clientId: existing.id });
-              toast("Клиент привязан");
-            },
-          },
-          {
-            text: "Привязать и записать",
-            onPress: () => {
-              linkClient.mutate({ chatId: chat.id, clientId: existing.id });
-              bookClient(existing.id);
-            },
-          },
-        ],
-      );
+        [{ label: "Привязать" }, { label: "Привязать и записать" }],
+        {
+          message: `${existing.full_name || existing.phone}${existing.phone ? ` · ${existing.phone}` : ""}`,
+        },
+      ).then((index) => {
+        if (index === null) return;
+        linkClient.mutate({ chatId: chat.id, clientId: existing.id });
+        if (index === 0) toast("Клиент привязан");
+        else bookClient(existing.id);
+      });
       return;
     }
 
@@ -444,21 +436,19 @@ export default function ChatThreadScreen() {
         else router.push(`/clients/${created.id}`);
       } catch (e) {
         // useCreateClient is meta.errorHandled — alerting is on us.
-        Alert.alert(
+        notify(
           "Не удалось создать клиента",
           (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
         );
       }
     };
-    Alert.alert(
+    void chooseOption(
       "Создать клиента",
-      [name, phone].filter(Boolean).join(" · "),
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Создать", onPress: () => void doCreate(false) },
-        { text: "Создать и записать", onPress: () => void doCreate(true) },
-      ],
-    );
+      [{ label: "Создать" }, { label: "Создать и записать" }],
+      { message: [name, phone].filter(Boolean).join(" · ") },
+    ).then((index) => {
+      if (index !== null) void doCreate(index === 1);
+    });
   };
 
   // ⋮ menu — web header menu semantics (chats/page.tsx:649–674).

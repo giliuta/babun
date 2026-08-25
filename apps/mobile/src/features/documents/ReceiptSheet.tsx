@@ -1,4 +1,4 @@
-import { Alert, Share, Text, View } from "react-native";
+import { Share, Text, View } from "react-native";
 import { money } from "@babun/shared/common/utils/money";
 import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
 import { receiptClientName, type Receipt } from "@babun/shared/local/finance/receipt";
@@ -9,6 +9,7 @@ import { NavRow, RowGroupBody } from "@/components/ui/card-rows";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { buildReceiptShareText } from "./receipt-text";
+import { notify } from "@/lib/notify";
 
 // ЧЕК ОТКРЫВАЕТСЯ ЛИСТОМ, А НЕ ЭКРАНОМ (владелец 2026-08-12: «если я нажимаю
 // на чек — там полностью вся информация, запись, клиент… напрямую на клиента
@@ -58,7 +59,7 @@ export function ReceiptSheet({
       void Share.share({
         message: buildReceiptShareText({ receipt: r, clientName }),
       }).catch((error: unknown) =>
-        Alert.alert("Не удалось выслать чек", (error as Error).message),
+        notify("Не удалось выслать чек", (error as Error).message),
       );
     }, SHEET_EXIT_MS);
   };

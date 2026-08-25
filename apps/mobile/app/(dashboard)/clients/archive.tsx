@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+
 import { Archive, RotateCcw, Trash2 } from "lucide-react-native";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import {
@@ -11,6 +11,7 @@ import {
   HiddenClientsScreen,
 } from "@/features/clients/HiddenClientsScreen";
 import { useThemeColors } from "@/theme/colors";
+import { confirmAction } from "@/lib/confirm";
 
 // АРХИВ КЛИЕНТОВ — «больше не работаем, но история нужна».
 //
@@ -49,36 +50,26 @@ export default function ClientArchiveScreen() {
           label: "Удалить",
           icon: Trash2,
           danger: true,
-          run: () =>
-            new Promise((resolve, reject) => {
-              Alert.alert(
-                "Удалить клиента?",
-                `${client.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть.`,
-                [
-                  { text: "Отмена", style: "cancel", onPress: () => resolve() },
-                  {
-                    text: "Удалить",
-                    style: "destructive",
-                    onPress: () => {
-                      archive
-                        .mutateAsync({ ids: [client.id], trash: true })
-                        .then((res) => {
-                          if (res.archived === 0) {
-                            reject(
-                              new Error(
-                                "Клиент остался в архиве. Проверьте соединение и повторите.",
-                              ),
-                            );
-                            return;
-                          }
-                          resolve();
-                        })
-                        .catch(reject);
-                    },
-                  },
-                ],
+          // Подтверждение — тот же нижний лист, что и везде; обёртка из
+          // new Promise ушла вместе с колбэками Alert: confirmAction сам
+          // асинхронный, и «run» снова читается сверху вниз.
+          run: async () => {
+            const ok = await confirmAction("Удалить клиента?", {
+              message: `${client.full_name || "Клиент"} переедет в «Недавно удалённые» и будет стёрт через ${TRASH_DAYS} дней. До этого его можно вернуть.`,
+              confirmLabel: "Удалить",
+              destructive: true,
+            });
+            if (!ok) return;
+            const res = await archive.mutateAsync({
+              ids: [client.id],
+              trash: true,
+            });
+            if (res.archived === 0) {
+              throw new Error(
+                "Клиент остался в архиве. Проверьте соединение и повторите.",
               );
-            }),
+            }
+          },
         },
       ]}
     />

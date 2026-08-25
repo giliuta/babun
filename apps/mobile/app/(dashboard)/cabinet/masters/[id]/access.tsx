@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Pressable,
   ScrollView,
   Switch,
@@ -32,6 +31,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMaster, useTeams } from "@/features/reference/queries";
+import { notify } from "@/lib/notify";
 import {
   getMasterPermissions,
   getMasterRole,
@@ -138,7 +138,7 @@ export default function MasterAccessScreen() {
       { id: m.id, patch: { permissions: next } },
       {
         onError: (error) =>
-          Alert.alert(
+          notify(
             "Не удалось сохранить доступы",
             error.message || "Проверьте соединение и повторите попытку.",
           ),

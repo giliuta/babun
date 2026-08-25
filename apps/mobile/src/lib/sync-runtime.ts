@@ -18,7 +18,6 @@
 //     which already tracks NetInfo (query-client.ts), plus one kick at start
 //     to flush any queue left over from a previous offline session.
 
-import { Alert } from "react-native";
 import { onlineManager } from "@tanstack/react-query";
 import {
   kickReplayer,
@@ -27,6 +26,7 @@ import {
   type QuotaGate,
 } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { notify } from "./notify";
 import { queryClient } from "@/lib/query-client";
 import { quotaGate } from "@/lib/quota-gate";
 
@@ -41,10 +41,10 @@ function buildReplayerOptions(
     tenantId,
     quota,
     onConflict: (msg: string) => {
-      Alert.alert("Конфликт синхронизации", msg);
+      notify("Конфликт синхронизации", msg);
     },
     onPermanentFailure: (op) => {
-      Alert.alert(
+      notify(
         "Изменение не синхронизировано",
         op.last_error ||
           "Сервер окончательно отклонил offline-изменение. Обновите данные и повторите действие.",
@@ -84,7 +84,7 @@ export function startSyncRuntime(tenantId: string): () => void {
   // The clients wrapper intentionally refuses junction-table tag edits while
   // offline. Its warning adapter used to remain the default no-op on mobile,
   // making the Save action look successful. Make the limitation explicit.
-  setSyncToast((message) => Alert.alert("Изменение не сохранено", message));
+  setSyncToast((message) => notify("Изменение не сохранено", message));
 
   // Drain whenever connectivity flips to online. onlineManager is already
   // bound to NetInfo in query-client.ts, so this covers airplane-mode

@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -50,6 +49,9 @@ import {
   getMasterProfile,
 } from "@/features/reference/master-profile";
 import { useAppointments } from "@/features/calendar/queries";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
+import { chooseOption } from "@/lib/choose";
 
 // Хаб мастера (nav-хаб, порт web masters/[id]/page.tsx). Собирает вокруг
 // одного мастера: шапку с аватаром/kebab, профиль-карточку, плашки команд,
@@ -223,34 +225,38 @@ export default function MasterHubScreen() {
   const wa = whatsappUrl(profile.whatsapp || contacts.phone);
 
   const onContact = () => {
-    const options: { text: string; onPress?: () => void; style?: "cancel" }[] = [];
-    if (tel) options.push({ text: "Позвонить", onPress: () => Linking.openURL(tel) });
-    if (wa) options.push({ text: "WhatsApp", onPress: () => Linking.openURL(wa) });
-    if (options.length === 0) {
-      Alert.alert("Нет контактов", "У мастера не указан телефон.");
+    // «Отмена» рисует сам лист выбора — в список её больше не кладём.
+    const ways: { label: string; open: () => void }[] = [];
+    if (tel) ways.push({ label: "Позвонить", open: () => void Linking.openURL(tel) });
+    if (wa) ways.push({ label: "WhatsApp", open: () => void Linking.openURL(wa) });
+    if (ways.length === 0) {
+      notify("Нет контактов", "У мастера не указан телефон.");
       return;
     }
-    options.push({ text: "Отмена", style: "cancel" });
-    Alert.alert(master.full_name || "Мастер", contacts.phone || undefined, options);
+    void chooseOption(
+      master.full_name || "Мастер",
+      ways.map((w) => ({ label: w.label })),
+      { message: contacts.phone || undefined },
+    ).then((index) => {
+      if (index !== null) ways[index].open();
+    });
   };
 
   const onMenu = () => {
-    Alert.alert(master.full_name || "Мастер", undefined, [
-      {
-        text: master.is_active ? "Архивировать" : "Вернуть из архива",
-        onPress: () =>
-          update.mutate(
-            { id: master.id, patch: { is_active: !master.is_active } },
-            { onError: (e) => Alert.alert("Ошибка", (e as Error).message) },
-          ),
-      },
-      {
-        text: "Удалить",
-        style: "destructive",
-        onPress: onDelete,
-      },
-      { text: "Отмена", style: "cancel" },
-    ]);
+    const archiveLabel = master.is_active ? "Архивировать" : "Вернуть из архива";
+    void chooseOption(master.full_name || "Мастер", [
+      { label: archiveLabel },
+      { label: "Удалить", destructive: true },
+    ]).then((index) => {
+      if (index === 0) {
+        update.mutate(
+          { id: master.id, patch: { is_active: !master.is_active } },
+          { onError: (e) => notify("Ошибка", (e as Error).message) },
+        );
+      } else if (index === 1) {
+        onDelete();
+      }
+    });
   };
 
   const onDelete = () => {
@@ -258,33 +264,30 @@ export default function MasterHubScreen() {
       assignedTeams.length > 0
         ? `Состоит в ${assignedTeams.length} ${pluralTeams(assignedTeams.length)}. `
         : "";
-    Alert.alert(
+    confirmThen(
       `Удалить «${master.full_name}»?`,
-      `${teamPart}Отменить нельзя.`,
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Удалить",
-          style: "destructive",
-          onPress: () =>
-            del.mutate(master.id, {
-              // web parity: после soft-delete вычистить master.id из
-              // members / lead_ids / helper_ids всех команд (включая
-              // архивные — allTeams), чтобы веб-финансы/расписание не
-              // ссылались на удалённого мастера.
-              onSuccess: () =>
-                removeFromTeams.mutate(
-                  { masterId: master.id, teams: allTeams },
-                  {
-                    onError: (e) =>
-                      Alert.alert("Ошибка", (e as Error).message),
-                    onSettled: () => router.replace("/cabinet/masters"),
-                  },
-                ),
-              onError: (e) => Alert.alert("Ошибка", (e as Error).message),
-            }),
-        },
-      ],
+      {
+        message: `${teamPart}Отменить нельзя.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () =>
+        del.mutate(master.id, {
+          // web parity: после soft-delete вычистить master.id из
+          // members / lead_ids / helper_ids всех команд (включая
+          // архивные — allTeams), чтобы веб-финансы/расписание не
+          // ссылались на удалённого мастера.
+          onSuccess: () =>
+            removeFromTeams.mutate(
+              { masterId: master.id, teams: allTeams },
+              {
+                onError: (e) =>
+                  notify("Ошибка", (e as Error).message),
+                onSettled: () => router.replace("/cabinet/masters"),
+              },
+            ),
+          onError: (e) => notify("Ошибка", (e as Error).message),
+        }),
     );
   };
 
@@ -464,7 +467,7 @@ export default function MasterHubScreen() {
                 onValueChange={(next) =>
                   update.mutate(
                     { id: master.id, patch: { is_active: next } },
-                    { onError: (e) => Alert.alert("Ошибка", (e as Error).message) },
+                    { onError: (e) => notify("Ошибка", (e as Error).message) },
                   )
                 }
                 trackColor={{ true: t.accent, false: t.disabledFill }}

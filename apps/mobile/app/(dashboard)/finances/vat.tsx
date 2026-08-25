@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { type Href, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -23,6 +23,7 @@ import {
 } from "@/features/finances/vat-queries";
 import { useTeams } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
 
 // НДС — ОДНА СТРАНИЦА, ГДЕ ВИДНО ПОСЛЕДСТВИЕ ВЫБОРА.
 //
@@ -80,7 +81,7 @@ export default function VatSettingsScreen() {
     // НДС во всех операциях (OperationSheet требует rate > 0), и настройка
     // выглядит сломанной. «Не считать налог» — это выключатель выше.
     if (!(rate > 0) || rate >= 100) {
-      Alert.alert(
+      notify(
         "Ставка вне диапазона",
         "Введите значение больше 0 и меньше 100. Если с НДС не работаете — выключите его тумблером выше.",
       );
@@ -91,7 +92,7 @@ export default function VatSettingsScreen() {
     save.mutate(
       { rate },
       {
-        onError: (e) => Alert.alert("Не удалось сохранить", (e as Error).message),
+        onError: (e) => notify("Не удалось сохранить", (e as Error).message),
       },
     );
   };
@@ -117,7 +118,7 @@ export default function VatSettingsScreen() {
                 {
                   onSuccess: () => toast("Сохранено", "success"),
                   onError: (e) =>
-                    Alert.alert("Не удалось сохранить", (e as Error).message),
+                    notify("Не удалось сохранить", (e as Error).message),
                 },
               )
             }
@@ -142,7 +143,7 @@ export default function VatSettingsScreen() {
                         {
                           onSuccess: () => toast("Сохранено", "success"),
                           onError: (e) =>
-                            Alert.alert(
+                            notify(
                               "Не удалось сохранить",
                               (e as Error).message,
                             ),

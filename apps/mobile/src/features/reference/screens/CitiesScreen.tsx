@@ -1,7 +1,8 @@
-import { Alert, Switch, Text, View } from "react-native";
+import { Switch, Text, View } from "react-native";
 import { RefListScreen } from "@/features/reference/RefListScreen";
 import { useRenameLabelCascade } from "@/features/reference/label-cascade";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
 import {
   useCities,
   useCreateCity,
@@ -29,7 +30,7 @@ export function CitiesScreen() {
   const toggleActive = (c: City, next: boolean) => {
     update.mutate(
       { id: c.id, patch: { is_active: next } },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -58,7 +59,7 @@ export function CitiesScreen() {
         if (prev && prev.name !== v.name) {
           const failures = await cascade.run(prev.name, v.name);
           if (failures.length > 0) {
-            Alert.alert(
+            notify(
               "Город переименован частично",
               `Не удалось обновить: ${failures.join(", ")}. Проверьте сеть и повторите переименование.`,
             );

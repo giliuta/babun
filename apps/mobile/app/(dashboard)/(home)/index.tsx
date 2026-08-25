@@ -7,8 +7,6 @@ import {
   useState,
 } from "react";
 import {
-  ActionSheetIOS,
-  Alert,
   Linking,
   Pressable,
   Text,
@@ -24,6 +22,9 @@ import {
   type Href,
 } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { chooseOption } from "@/lib/choose";
+import { confirmAction } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
   duplicateAppointment,
@@ -1081,8 +1082,10 @@ export default function CalendarTab() {
 
   // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
   // Web parity ActionMenuModal (dashboard/page.tsx:1752): «только действия,
-  // которыми реально пользуются». Нативный ActionSheetIOS — HIG-вид без
-  // кастомного UI. Необратимое удаление подтверждается отдельно.
+  // которыми реально пользуются». Рисует канонический нижний лист через
+  // chooseOption: ActionSheetIOS существует ТОЛЬКО на iOS, в браузере его
+  // вызов падал с TypeError и уносил всё меню записи. Необратимое удаление
+  // подтверждается отдельно.
   const createAppt = useCreateAppointment();
   const deleteAppt = useDeleteAppointment();
 
@@ -1168,34 +1171,32 @@ export default function CalendarTab() {
         apt.payments.length > 0 ||
         apt.payment != null);
     if (hasRecordedPayment) {
-      Alert.alert(
+      notify(
         "Запись хранится в истории",
         "Запись с оплатой нельзя удалить. Отмените её или оформите возврат, чтобы история расчётов сохранилась.",
       );
       return;
     }
-    Alert.alert(
+    void confirmAction(
       repeating ? "Удалить всю серию?" : isCalendarEvent(apt) ? "Удалить событие?" : "Удалить запись?",
-      repeating
-        ? "Удалится исходное событие и все его повторы. Действие необратимо."
-        : "Действие необратимо; связанные фото также исчезнут из заявки.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: repeating ? "Удалить серию" : "Удалить",
-          style: "destructive",
-          onPress: () =>
-            deleteAppt.mutate(apt.id, {
-              onSuccess: () => {
-                void cancelAppointmentReminders(apt.id);
-                haptics.warning();
-                toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
-              },
-              onError: () => toast("Не удалось удалить", "error"),
-            }),
+      {
+        message: repeating
+          ? "Удалится исходное событие и все его повторы. Действие необратимо."
+          : "Действие необратимо; связанные фото также исчезнут из заявки.",
+        confirmLabel: repeating ? "Удалить серию" : "Удалить",
+        destructive: true,
+      },
+    ).then((ok) => {
+      if (!ok) return;
+      deleteAppt.mutate(apt.id, {
+        onSuccess: () => {
+          void cancelAppointmentReminders(apt.id);
+          haptics.warning();
+          toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
         },
-      ],
-    );
+        onError: () => toast("Не удалось удалить", "error"),
+      });
+    });
   };
 
   // Быстрая оплата ОСТАТКА из контекстного меню — тот же полный платёжный
@@ -1207,46 +1208,43 @@ export default function CalendarTab() {
   const openPaymentMenu = (apt: Appointment) => {
     const debt = getDebtAmount(apt);
     const methods = PAYMENT_METHODS;
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: `Оплата ${formatEUR(debt)}`,
-        options: [...methods.map((m) => PAYMENT_METHOD_LABEL[m]), "Отмена"],
-        cancelButtonIndex: methods.length,
-      },
-      (i) => {
-        const method = methods[i];
-        if (!method) return;
-        updateAppt.mutate(
-          {
-            id: apt.id,
-            patch: {
-              ...buildDebtPaidPatch(apt, { method, amount: debt }),
-              status: "completed",
-            },
+    void chooseOption(
+      `Оплата ${formatEUR(debt)}`,
+      methods.map((m) => ({ label: PAYMENT_METHOD_LABEL[m] })),
+      { haptic: false },
+    ).then((i) => {
+      const method = i === null ? undefined : methods[i];
+      if (!method) return;
+      updateAppt.mutate(
+        {
+          id: apt.id,
+          patch: {
+            ...buildDebtPaidPatch(apt, { method, amount: debt }),
+            status: "completed",
           },
-          {
-            onSuccess: () => {
-              haptics.success();
-              toast(`Оплата ${formatEUR(debt)} принята`, "success", {
-                label: "Отменить",
-                onPress: () =>
-                  undoPayment.mutate(apt.id, {
-                    onSuccess: () => toast("Оплата отменена", "success"),
-                    onError: (error) =>
-                      toast(error.message || "Не удалось отменить оплату", "error"),
-                  }),
-              });
-            },
-            onError: (error) =>
-              toast(
-                error.message.replace(/^updateAppointment:\s*/, "") ||
-                  "Не удалось отметить оплату",
-                "error",
-              ),
+        },
+        {
+          onSuccess: () => {
+            haptics.success();
+            toast(`Оплата ${formatEUR(debt)} принята`, "success", {
+              label: "Отменить",
+              onPress: () =>
+                undoPayment.mutate(apt.id, {
+                  onSuccess: () => toast("Оплата отменена", "success"),
+                  onError: (error) =>
+                    toast(error.message || "Не удалось отменить оплату", "error"),
+                }),
+            });
           },
-        );
-      },
-    );
+          onError: (error) =>
+            toast(
+              error.message.replace(/^updateAppointment:\s*/, "") ||
+                "Не удалось отметить оплату",
+              "error",
+            ),
+        },
+      );
+    });
   };
 
   const copyAppointment = (apt: Appointment) => {
@@ -1261,8 +1259,8 @@ export default function CalendarTab() {
     });
   };
 
-  // «Напомнить…» — локальное уведомление о записи, пресеты вторым
-  // ActionSheetIOS. Appointment date/time are business wall-clock fields:
+  // «Напомнить…» — локальное уведомление о записи, пресеты вторым листом.
+  // Appointment date/time are business wall-clock fields:
   // resolve them in the assigned brigade timezone (global business timezone
   // as fallback), never in the timezone of the dispatcher's current device.
   const openReminderMenu = (apt: Appointment) => {
@@ -1281,56 +1279,53 @@ export default function CalendarTab() {
       { label: "Накануне в 20:00", timing: "previous-day-20" },
       { label: "Утром в 8:00", timing: "same-day-08" },
     ];
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: `${isCalendarEvent(apt) ? "Напомнить о событии" : "Напомнить о записи"} ${apt.time_start}`,
-        options: [...presets.map((p) => p.label), "Отмена"],
-        cancelButtonIndex: presets.length,
-      },
-      (i) => {
-        const preset = presets[i];
-        if (!preset) return;
-        let when: Date;
-        try {
-          when = appointmentReminderInstant(
-            apt,
-            preset.timing,
-            appointmentTimeZone,
-          );
-        } catch {
-          toast("Не удалось определить время напоминания", "error");
-          return;
-        }
-        void scheduleAppointmentReminder(
+    void chooseOption(
+      `${isCalendarEvent(apt) ? "Напомнить о событии" : "Напомнить о записи"} ${apt.time_start}`,
+      presets.map((p) => ({ label: p.label })),
+      { haptic: false },
+    ).then((i) => {
+      const preset = i === null ? undefined : presets[i];
+      if (!preset) return;
+      let when: Date;
+      try {
+        when = appointmentReminderInstant(
           apt,
-          when,
-          preset.label,
-          clientName(apt) || undefined,
-        ).then((res) => {
-          if (res === "scheduled") {
-            // «За 30 минут» → «Напомню за 30 минут».
-            const l = preset.label;
-            toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
-          } else if (res === "deferred") {
-            toast(
-              "Напоминание сохранено в очереди и установится, когда на iPhone освободится место",
-              "info",
-            );
-          } else if (res === "capacity") {
-            toast(
-              "Очередь напоминаний переполнена — удалите ненужные напоминания",
-              "error",
-            );
-          } else if (res === "denied") {
-            toast("Разрешите уведомления в Настройках", "error");
-          } else if (res === "past") {
-            toast("Это время уже прошло", "info");
-          } else {
-            toast("Появится после обновления приложения", "info");
-          }
-        });
-      },
-    );
+          preset.timing,
+          appointmentTimeZone,
+        );
+      } catch {
+        toast("Не удалось определить время напоминания", "error");
+        return;
+      }
+      void scheduleAppointmentReminder(
+        apt,
+        when,
+        preset.label,
+        clientName(apt) || undefined,
+      ).then((res) => {
+        if (res === "scheduled") {
+          // «За 30 минут» → «Напомню за 30 минут».
+          const l = preset.label;
+          toast(`Напомню ${l.charAt(0).toLowerCase()}${l.slice(1)}`);
+        } else if (res === "deferred") {
+          toast(
+            "Напоминание сохранено в очереди и установится, когда на iPhone освободится место",
+            "info",
+          );
+        } else if (res === "capacity") {
+          toast(
+            "Очередь напоминаний переполнена — удалите ненужные напоминания",
+            "error",
+          );
+        } else if (res === "denied") {
+          toast("Разрешите уведомления в Настройках", "error");
+        } else if (res === "past") {
+          toast("Это время уже прошло", "info");
+        } else {
+          toast("Появится после обновления приложения", "info");
+        }
+      });
+    });
   };
 
   const openActionMenu = (apt: Appointment) => {
@@ -1436,18 +1431,20 @@ export default function CalendarTab() {
       }
     }
 
-    const destructiveIdx = items.findIndex((i) => i.destructive);
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: `${apt.time_start}–${apt.time_end} · ${
-          clientName(apt) || apt.comment || "Запись"
-        }`,
-        options: [...items.map((i) => i.label), "Отмена"],
-        cancelButtonIndex: items.length,
-        destructiveButtonIndex: destructiveIdx >= 0 ? destructiveIdx : undefined,
-      },
-      (i) => items[i]?.run(),
-    );
+    void chooseOption(
+      `${apt.time_start}–${apt.time_end} · ${
+        clientName(apt) || apt.comment || "Запись"
+      }`,
+      items.map((i) => ({ label: i.label, destructive: i.destructive })),
+      // Хаптик уже был на долгом нажатии — второй подряд читается как сбой.
+      { haptic: false },
+    ).then((i) => {
+      if (i === null) return;
+      // Меню — тоже нижний лист: почти каждый пункт открывает СВОЁ окно
+      // (второй лист, подтверждение, карточка записи), а оно не появится, пока
+      // этот не уедет.
+      setTimeout(() => items[i]?.run(), SHEET_EXIT_MS);
+    });
   };
 
   const headerTitle = (

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { useCreateService } from "@/features/services/queries";
+import { notify } from "@/lib/notify";
 
 // ПУСТОЙ КАТАЛОГ — НЕ ТУПИК. Первая запись у новой компании и любая команда с
 // пустым прайсом упирались в белый лист: выбрать нечего, а завести услугу
@@ -41,7 +42,7 @@ export function InlineServiceCreate({
       });
       onCreated(svc.id);
     } catch (e) {
-      Alert.alert("Не удалось создать услугу", (e as Error).message);
+      notify("Не удалось создать услугу", (e as Error).message);
     }
   };
 

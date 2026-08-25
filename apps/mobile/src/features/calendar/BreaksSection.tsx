@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import {
   timeToMinutes,
   minutesToTime,
@@ -88,7 +88,7 @@ export function BreaksSection({
               <Text style={{ flex: 1, fontSize: 16, color: t.ink }}>
                 Перерыв
               </Text>
-              <DateTimePicker
+              <DateTimeInput
                 themeVariant="light"
                 value={parseHM(b.start)}
                 mode="time"
@@ -100,7 +100,7 @@ export function BreaksSection({
               <Text style={{ fontSize: 16, color: t.faint, marginHorizontal: 2 }}>
                 –
               </Text>
-              <DateTimePicker
+              <DateTimeInput
                 themeVariant="light"
                 value={parseHM(b.end)}
                 mode="time"

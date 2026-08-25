@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Settings } from "lucide-react-native";
 import { useIsFetching } from "@tanstack/react-query";
@@ -23,6 +23,8 @@ import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, ICON } from "@/components/ui/tokens";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { shareCsvFile } from "@/lib/share-csv";
 import { useThemeColors } from "@/theme/colors";
 import { useIsOnline } from "@babun/shared/sync";
@@ -290,25 +292,26 @@ function AccountDetailContent() {
 
   const confirmDeleteTransfer = (tx: FinanceTransaction) => {
     const text = deleteTransferAlert();
-    Alert.alert(text.title, text.message, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      text.title,
       {
-        text: text.confirm,
-        style: "destructive",
-        onPress: async () => {
-          try {
-            if (!tx.transfer_group_id) {
-              throw new Error(
-                "У перевода повреждена связь между счетами. Операция не изменена.",
-              );
-            }
-            await delTransfer.mutateAsync(tx.transfer_group_id);
-          } catch (e) {
-            Alert.alert("Не удалось удалить перевод", (e as Error).message);
-          }
-        },
+        message: text.message,
+        confirmLabel: text.confirm,
+        destructive: true,
       },
-    ]);
+      async () => {
+        try {
+          if (!tx.transfer_group_id) {
+            throw new Error(
+              "У перевода повреждена связь между счетами. Операция не изменена.",
+            );
+          }
+          await delTransfer.mutateAsync(tx.transfer_group_id);
+        } catch (e) {
+          notify("Не удалось удалить перевод", (e as Error).message);
+        }
+      },
+    );
   };
 
   // Возврат собирает общий `buildRefundDraft` — тот же, что на «Финансах»:
@@ -495,7 +498,7 @@ function AccountDetailContent() {
       });
       toast(`Выписка готова · ${report.count}`, "success");
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось выгрузить выписку",
         error instanceof Error ? error.message : "Попробуйте ещё раз.",
       );

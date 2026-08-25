@@ -16,7 +16,6 @@
 
 import { useMemo, useState } from "react";
 import {
-  Alert,
   Linking,
   Modal,
   Pressable,
@@ -33,6 +32,7 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useSmsTemplates } from "@/features/settings/sms-templates";
+import { notify } from "@/lib/notify";
 import {
   bodyHasNameToken,
   buildBlastSms,
@@ -94,7 +94,7 @@ export function BulkSmsSheet({
       onSent();
       close();
     } catch {
-      Alert.alert("Не удалось открыть SMS", "Приложение «Сообщения» недоступно.");
+      notify("Не удалось открыть SMS", "Приложение «Сообщения» недоступно.");
     }
   };
 
@@ -112,7 +112,7 @@ export function BulkSmsSheet({
     try {
       await Linking.openURL(step.url);
     } catch {
-      Alert.alert("Не удалось открыть SMS", "Приложение «Сообщения» недоступно.");
+      notify("Не удалось открыть SMS", "Приложение «Сообщения» недоступно.");
     }
   };
   const advanceSeq = async () => {

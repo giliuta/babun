@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +22,8 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useLocationLabels,
   useSaveLocationLabels,
@@ -54,7 +55,7 @@ export function ObjectTypesScreen() {
     try {
       await save.mutateAsync(HOME_SERVICE_LABELS_PRESET);
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось добавить стандартные типы",
         error instanceof Error ? error.message : "Повторите попытку.",
       );
@@ -71,7 +72,7 @@ export function ObjectTypesScreen() {
         (label) => label.name.toLowerCase() === normalizedName.toLowerCase(),
       )
     ) {
-      Alert.alert("Такой тип уже есть", "Введите другое название.");
+      notify("Такой тип уже есть", "Введите другое название.");
       return;
     }
     try {
@@ -82,7 +83,7 @@ export function ObjectTypesScreen() {
       setName("");
       setOpen(false);
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось сохранить тип",
         error instanceof Error ? error.message : "Повторите попытку.",
       );
@@ -92,7 +93,7 @@ export function ObjectTypesScreen() {
     try {
       await save.mutateAsync(labels.filter((label) => label.id !== id));
     } catch (error) {
-      Alert.alert(
+      notify(
         "Не удалось удалить тип",
         error instanceof Error ? error.message : "Повторите попытку.",
       );
@@ -101,14 +102,15 @@ export function ObjectTypesScreen() {
   // Web parity: confirm before deleting a reference type (was an instant,
   // unrecoverable tap).
   const confirmRemove = (id: string, itemName: string) =>
-    Alert.alert("Удалить тип объекта?", itemName, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      "Удалить тип объекта?",
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () => void remove(id),
+        message: itemName,
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () => void remove(id),
+    );
 
   return (
     <Screen edges={["top"]}>

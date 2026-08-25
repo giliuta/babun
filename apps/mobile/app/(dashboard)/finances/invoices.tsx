@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -13,6 +13,7 @@ import { useThemeColors } from "@/theme/colors";
 import { useTenant, useUpdateTenant } from "@/features/settings/tenant";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
+import { notify } from "@/lib/notify";
 
 // СЧЕТА КЛИЕНТАМ — ОДНА СТРАНИЦА НА ВЕСЬ ДОКУМЕНТ.
 //
@@ -78,7 +79,7 @@ export default function InvoiceSettingsScreen() {
   const save = (patch: Parameters<typeof update.mutate>[0]) =>
     update.mutate(patch, {
       onSuccess: () => toast("Сохранено", "success"),
-      onError: (e) => Alert.alert("Не удалось сохранить", (e as Error).message),
+      onError: (e) => notify("Не удалось сохранить", (e as Error).message),
     });
 
   const paddingValue = Math.min(8, Math.max(1, Number(padding) || 3));
@@ -137,7 +138,7 @@ export default function InvoiceSettingsScreen() {
             onCommit={() => {
               const value = Number(dueDays);
               if (!Number.isInteger(value) || value < 0 || value > 365) {
-                Alert.alert("Срок не подходит", "Введите целое число от 0 до 365.");
+                notify("Срок не подходит", "Введите целое число от 0 до 365.");
                 setDueDays(String(data.invoice_due_days ?? 7));
                 return;
               }
@@ -264,7 +265,7 @@ export default function InvoiceSettingsScreen() {
                 return;
               }
               if (!Number.isInteger(value) || value < 1 || value > 1000000000) {
-                Alert.alert(
+                notify(
                   "Номер не подходит",
                   "Введите целое число от 1 до 1 000 000 000.",
                 );

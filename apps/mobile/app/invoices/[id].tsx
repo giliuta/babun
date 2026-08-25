@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Pressable, ScrollView, Share, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { Share2 } from "lucide-react-native";
 import {
@@ -49,6 +49,8 @@ import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 
 export default function InvoiceDetailScreen() {
@@ -137,14 +139,14 @@ export default function InvoiceDetailScreen() {
         }),
       });
     } catch (error) {
-      Alert.alert("Не удалось поделиться", (error as Error).message);
+      notify("Не удалось поделиться", (error as Error).message);
     }
   };
 
   const sharePdf = async () => {
     if (!invoice.data || !settlement) return;
     if (!tenant && !invoice.data.seller_snapshot) {
-      Alert.alert(
+      notify(
         "PDF пока недоступен",
         "Реквизиты компании ещё загружаются. Попробуйте через несколько секунд.",
       );
@@ -162,27 +164,24 @@ export default function InvoiceDetailScreen() {
         businessToday,
       });
     } catch (error) {
-      Alert.alert("Не удалось поделиться PDF", (error as Error).message);
+      notify("Не удалось поделиться PDF", (error as Error).message);
     } finally {
       setPdfBusy(false);
     }
   };
 
   const voidInvoice = () =>
-    Alert.alert(
+    confirmThen(
       "Аннулировать инвойс?",
-      "Документ останется в истории, но перестанет учитываться как ожидающий оплату.",
-      [
-        { text: "Отмена", style: "cancel" },
-        {
-          text: "Аннулировать",
-          style: "destructive",
-          onPress: () =>
-            setStatus.mutate("void", {
-              onError: (error) => Alert.alert("Ошибка", error.message),
-            }),
-        },
-      ],
+      {
+        message: "Документ останется в истории, но перестанет учитываться как ожидающий оплату.",
+        confirmLabel: "Аннулировать",
+        destructive: true,
+      },
+      () =>
+        setStatus.mutate("void", {
+          onError: (error) => notify("Ошибка", error.message),
+        }),
     );
 
   // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09): сервер выпускает встречную кредит-ноту,
@@ -190,25 +189,22 @@ export default function InvoiceDetailScreen() {
   // Оплаченный инвойс сервер не отменит и попросит сначала оформить возврат —
   // его формулировка показывается человеку как есть.
   const cancelInvoice = () =>
-    Alert.alert(
+    confirmThen(
       "Отменить инвойс?",
-      "Будет выпущена кредит-нота — встречный документ на ту же сумму. Инвойс получит статус «Отменён».",
-      [
-        { text: "Не отменять", style: "cancel" },
-        {
-          text: "Отменить инвойс",
-          style: "destructive",
-          onPress: () =>
-            cancel.mutate(undefined, {
-              onSuccess: (note) => {
-                haptics.success();
-                // Показываем рождённую кредит-ноту — она и есть результат.
-                router.push(`/invoices/${note.id}` as Href);
-              },
-              onError: (error) => Alert.alert("Инвойс не отменён", error.message),
-            }),
-        },
-      ],
+      {
+        message: "Будет выпущена кредит-нота — встречный документ на ту же сумму. Инвойс получит статус «Отменён».",
+        confirmLabel: "Отменить инвойс",
+        destructive: true,
+      },
+      () =>
+        cancel.mutate(undefined, {
+          onSuccess: (note) => {
+            haptics.success();
+            // Показываем рождённую кредит-ноту — она и есть результат.
+            router.push(`/invoices/${note.id}` as Href);
+          },
+          onError: (error) => notify("Инвойс не отменён", error.message),
+        }),
     );
 
   const loading =
@@ -299,15 +295,15 @@ export default function InvoiceDetailScreen() {
       setPaymentOpen(true);
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Нет активного финансового счёта",
-      row.brigade_id
-        ? "Заведите счёт этой команде или подключите её к уже существующему счёту, затем отметьте инвойс оплаченным."
-        : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Открыть счета", onPress: () => router.push("/accounts") },
-      ],
+      {
+        message: row.brigade_id
+          ? "Заведите счёт этой команде или подключите её к уже существующему счёту, затем отметьте инвойс оплаченным."
+          : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
+        confirmLabel: "Открыть счета",
+      },
+      () => router.push("/accounts"),
     );
   };
 

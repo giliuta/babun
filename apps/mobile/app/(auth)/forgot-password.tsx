@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Text } from "react-native";
+import { Text } from "react-native";
 import { useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/components/auth/AuthCard";
 import { useAuthTheme } from "@/components/auth/theme";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
 
 // Mirrors the web ForgotPasswordForm: enter email → reset link emailed (with a
 // deep link to the in-app set-new-password screen) → actionable «sent» hub.
@@ -53,7 +54,7 @@ export default function ForgotPasswordScreen() {
 
   const openMail = () =>
     Linking.openURL("message://").catch(() => {
-      Alert.alert(
+      notify(
         "Почта недоступна",
         "Откройте приложение почты вручную и найдите письмо от Babun.",
       );

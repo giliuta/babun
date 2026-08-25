@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -23,6 +22,8 @@ import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { notify } from "@/lib/notify";
+import { confirmThen } from "@/lib/confirm";
 import {
   useDeleteCategory,
   useFinanceCategories,
@@ -71,7 +72,7 @@ export default function CategoriesScreen() {
   const toggleHidden = (c: FinanceCategory) => {
     setHidden.mutate(
       { id: c.id, hidden: !c.hidden },
-      { onError: (e) => Alert.alert("Ошибка", e.message) },
+      { onError: (e) => notify("Ошибка", e.message) },
     );
   };
 
@@ -98,27 +99,25 @@ export default function CategoriesScreen() {
       setEditing(null);
     } catch (e) {
       // Sheet stays open — nothing entered is lost.
-      Alert.alert("Ошибка", (e as Error).message);
+      notify("Ошибка", (e as Error).message);
     }
   };
 
   const confirmDelete = (c: FinanceCategory) => {
     if (!c.tenant_id) {
-      Alert.alert("Системная категория", "Стандартную категорию нельзя удалить.");
+      notify("Системная категория", "Стандартную категорию нельзя удалить.");
       return;
     }
-    Alert.alert(
+    confirmThen(
       "Удалить категорию?",
-      `«${c.name}» — прошлые операции останутся, но потеряют категорию в аналитике. Переименование безопаснее удаления.`,
-      [
-      { text: "Отмена", style: "cancel" },
       {
-        text: "Удалить",
-        style: "destructive",
-        onPress: () =>
-          del.mutate(c.id, { onError: (e) => Alert.alert("Ошибка", e.message) }),
+        message: `«${c.name}» — прошлые операции останутся, но потеряют категорию в аналитике. Переименование безопаснее удаления.`,
+        confirmLabel: "Удалить",
+        destructive: true,
       },
-    ]);
+      () =>
+        del.mutate(c.id, { onError: (e) => notify("Ошибка", e.message) }),
+    );
   };
 
   return (

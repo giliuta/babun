@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Alert, Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { ImagePlus, X } from "lucide-react-native";
 import { randomUuid } from "@babun/shared/sync";
 import { Spinner } from "@/components/ui/Spinner";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 
@@ -65,7 +66,7 @@ export function LogoRow({
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
       onChange(data.publicUrl);
     } catch (e) {
-      Alert.alert("Не удалось загрузить логотип", (e as Error).message);
+      notify("Не удалось загрузить логотип", (e as Error).message);
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -30,6 +30,8 @@ import {
 } from "@/features/clients/visit-photos";
 import { formatShortDateRu } from "@/features/clients/format";
 import { haptics } from "@/lib/haptics";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 
 // ДОКУМЕНТАЦИЯ КЛИЕНТА — ПОЛНОЦЕННАЯ СТРАНИЦА (владелец 2026-08-03: «вложения
@@ -97,7 +99,7 @@ export default function ClientAttachmentsScreen() {
     );
 
   const showSelectionError = (error: unknown) =>
-    Alert.alert(
+    notify(
       "Не удалось выбрать файл",
       error instanceof Error ? error.message : "Попробуйте ещё раз.",
     );
@@ -153,7 +155,7 @@ export default function ClientAttachmentsScreen() {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert(
+        notify(
           "Нет доступа к камере",
           "Разрешите камеру: Настройки → Babun → Камера.",
         );
@@ -171,10 +173,15 @@ export default function ClientAttachmentsScreen() {
   };
 
   const confirmDelete = (a: ClientAttachment) =>
-    Alert.alert("Удалить файл?", a.filename, [
-      { text: "Отмена", style: "cancel" },
-      { text: "Удалить", style: "destructive", onPress: () => remove.mutate(a) },
-    ]);
+    confirmThen(
+      "Удалить файл?",
+      {
+        message: a.filename,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () => remove.mutate(a),
+    );
 
   const open = async (a: ClientAttachment) => {
     setOpening(a.id);
@@ -182,7 +189,7 @@ export default function ClientAttachmentsScreen() {
       const url = await getSignedUrl(a);
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Не удалось открыть файл");
+      notify("Не удалось открыть файл");
     } finally {
       setOpening(null);
     }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Alert, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Users } from "lucide-react-native";
 import {
@@ -26,6 +26,8 @@ import { IconPicker } from "@/components/ui/IconPicker";
 import { ColorDot, IconGlyph } from "@/components/ui/picker-fields";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { chooseValue } from "@/lib/choose";
+import { confirmThen } from "@/lib/confirm";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { useTeams } from "@/features/reference/queries";
@@ -173,7 +175,7 @@ function AccountSettingsContent() {
   // офлайн падают сразу — сырое «Network request failed» не отвечает на
   // единственный вопрос: сохранилось или нет.
   const alertError = (title: string) => (e: unknown) =>
-    Alert.alert(
+    notify(
       title,
       isOnline() ? (e as Error).message : OFFLINE_ACCOUNT_EDIT,
     );
@@ -249,55 +251,57 @@ function AccountSettingsContent() {
   const closeOrDelete = () => {
     if (!hasHistory) {
       const text = deleteAccountAlert(account.name, account.balance);
-      Alert.alert(text.title, text.message, [
-        { text: "Отмена", style: "cancel" },
+      confirmThen(
+        text.title,
         {
-          text: text.confirm,
-          style: "destructive",
-          onPress: () =>
-            deleteAcc.mutate(account.id, {
-              // dismissTo схлопывает стек до списка: replace оставлял бы
-              // деталь удалённого счёта в истории («назад» → «не найден»).
-              onSuccess: () => router.dismissTo("/accounts"),
-              onError: alertError("Не удалось удалить счёт"),
-            }),
+          message: text.message,
+          confirmLabel: text.confirm,
+          destructive: true,
         },
-      ]);
+        () =>
+          deleteAcc.mutate(account.id, {
+            // dismissTo схлопывает стек до списка: replace оставлял бы
+            // деталь удалённого счёта в истории («назад» → «не найден»).
+            onSuccess: () => router.dismissTo("/accounts"),
+            onError: alertError("Не удалось удалить счёт"),
+          }),
+      );
       return;
     }
     if (hasBalance) {
-      const text = accountNotEmptyAlert(
-        account.name,
-        account.balance,
-        account.balance > 0 && hasTransferTarget,
+      const canTransfer = account.balance > 0 && hasTransferTarget;
+      const text = accountNotEmptyAlert(account.name, account.balance, canTransfer);
+      if (!canTransfer || !text.confirm) {
+        // Увести остаток некуда (минус или единственный счёт) — тогда это не
+        // вопрос, а объяснение, почему счёт не закрывается. У такого текста
+        // и подписи кнопки нет: `confirm` заполняется только вместе с ней.
+        notify(text.title, text.message);
+        return;
+      }
+      confirmThen(
+        text.title,
+        { message: text.message, confirmLabel: text.confirm },
+        () => {
+          setTransferAmount(account.balance);
+          setTransferOpen(true);
+        },
       );
-      Alert.alert(text.title, text.message, [
-        { text: "Отмена", style: "cancel" },
-        ...(account.balance > 0 && hasTransferTarget
-          ? [{
-              text: text.confirm,
-              onPress: () => {
-                setTransferAmount(account.balance);
-                setTransferOpen(true);
-              },
-            }]
-          : []),
-      ]);
       return;
     }
     const text = closeAccountAlert(account.name);
-    Alert.alert(text.title, text.message, [
-      { text: "Отмена", style: "cancel" },
+    confirmThen(
+      text.title,
       {
-        text: text.confirm,
-        style: "destructive",
-        onPress: () =>
-          closeAcc.mutate(account.id, {
-            onSuccess: () => router.back(),
-            onError: alertError("Не удалось закрыть счёт"),
-          }),
+        message: text.message,
+        confirmLabel: text.confirm,
+        destructive: true,
       },
-    ]);
+      () =>
+        closeAcc.mutate(account.id, {
+          onSuccess: () => router.back(),
+          onError: alertError("Не удалось закрыть счёт"),
+        }),
+    );
   };
 
   // ─── НДС ─────────────────────────────────────────────────────────────────
@@ -477,7 +481,7 @@ function AccountSettingsContent() {
                   allowZero: true,
                 });
                 if (cents == null) {
-                  Alert.alert(
+                  notify(
                     "Проверьте сумму",
                     "Остаток на начало — число, максимум два знака после "
                     + "запятой. Например: 1250,50",

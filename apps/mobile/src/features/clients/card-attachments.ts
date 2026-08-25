@@ -16,10 +16,10 @@
 // query invalidation; mutation errors are alerted locally
 // (meta.errorHandled — same pattern as queries.ts).
 
-import { Alert } from "react-native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { notify } from "@/lib/notify";
 import { useTenantId } from "@/lib/tenant";
 
 const BUCKET = "client-attachments";
@@ -291,7 +291,7 @@ export function useUploadAttachments(
         queryKey: ["client-attachments", tenantId, clientId],
       }),
     onError: (e) => {
-      Alert.alert(
+      notify(
         "Не удалось загрузить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
       );
@@ -313,7 +313,7 @@ export function useDeleteAttachment(clientId: string) {
         queryKey: ["client-attachments", tenantId, clientId],
       }),
     onError: (e) => {
-      Alert.alert(
+      notify(
         "Не удалось удалить",
         (e as Error).message || "Проверьте соединение и попробуйте ещё раз.",
       );

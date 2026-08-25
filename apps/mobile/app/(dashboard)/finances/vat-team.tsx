@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -22,6 +22,7 @@ import {
 } from "@/features/finances/vat-queries";
 import { useTeams } from "@/features/reference/queries";
 import { haptics } from "@/lib/haptics";
+import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 
 // НДС ОДНОЙ КОМАНДЫ — СТРАНИЦА, А НЕ ЛИСТ (закон «настройка — страницей»).
@@ -98,7 +99,7 @@ export default function TeamVatSettingsScreen() {
       },
       {
         onSuccess: () => toast("Сохранено", "success"),
-        onError: (e) => Alert.alert("Не удалось сохранить", (e as Error).message),
+        onError: (e) => notify("Не удалось сохранить", (e as Error).message),
       },
     );
   };
@@ -109,7 +110,7 @@ export default function TeamVatSettingsScreen() {
     // операциях команды при включённом тумблере компании. «Не считать налог» —
     // это режим «Без НДС», а не нулевая ставка.
     if (!(next > 0) || next >= 100) {
-      Alert.alert(
+      notify(
         "Ставка вне диапазона",
         "Введите значение больше 0 и меньше 100.",
       );

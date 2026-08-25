@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, ScrollView, Text } from "react-native";
+import { ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   CalendarClock,
@@ -37,6 +37,7 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
+import { notify } from "@/lib/notify";
 import {
   effectiveCalendarWindow,
   formatHm,
@@ -145,7 +146,7 @@ export default function CalendarSettingsScreen() {
     if (!settings) return;
     save.mutate(p, {
       onSuccess: () => setSavedTick(Date.now()),
-      onError: (e) => Alert.alert("Ошибка", e.message),
+      onError: (e) => notify("Ошибка", e.message),
     });
   };
   const patchTeam = (p: Record<string, unknown>) => {
@@ -154,7 +155,7 @@ export default function CalendarSettingsScreen() {
       { id: team.id, patch: p },
       {
         onSuccess: () => setSavedTick(Date.now()),
-        onError: (e) => Alert.alert("Ошибка", e.message),
+        onError: (e) => notify("Ошибка", e.message),
       },
     );
   };
@@ -203,7 +204,6 @@ export default function CalendarSettingsScreen() {
       breaks: [],
     },
   );
-
 
   if (teamsLoading || settingsQuery.isLoading) {
     return (
