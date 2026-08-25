@@ -7,6 +7,7 @@ import {
   durationForQuantity,
   pricePerUnit,
 } from "@babun/shared/local/services";
+import { round2 } from "@babun/shared/local/finance/appointment-calc";
 import type { Service } from "@/features/services/queries";
 import {
   parseDurationTiers,
@@ -110,6 +111,32 @@ export function paymentMirrorFromLedger(
 export interface ServiceOverride {
   qty?: number;
   price?: number;
+  /**
+   * ЗАМОК СОХРАНЁННОЙ СТРОКИ (2026-08-24). Пока он здесь, строка отдаёт ровно
+   * те числа, которые записали в день записи, — цену, длительность и цену
+   * каталога того дня. Без него открытие майской записи пересобирало её из
+   * СЕГОДНЯШНЕГО каталога: поднял цену «Чистки» с €50 до €60 — и любой, кто
+   * просто заглянул в запись, переписал её деньги, долг клиента на карточке
+   * и упёрся в сторож оплаченной записи ради правки комментария.
+   *
+   * Замок снимает ровно одно действие — правка КОЛИЧЕСТВА: объём работ
+   * изменился осознанно, новую сумму человек видит на том же экране, и
+   * лестница обязана посчитать её по действующему прайсу.
+   */
+  locked?: LockedLine;
+  /** Выбранный вариант услуги типа «варианты». Цена и длительность берутся у
+   *  него, количество в расчёте не участвует: трёхкомнатная — это не «три
+   *  раза комната». */
+  variantId?: string | null;
+}
+
+/** Что держит замок: три числа и два слова снимка. */
+export interface LockedLine {
+  pricePerUnit: number;
+  originalPrice: number;
+  duration: number;
+  serviceName?: string;
+  unit?: string | null;
 }
 
 // Unit price of a catalog row at the given quantity — bulk ladder via
@@ -135,36 +162,74 @@ export function buildServices(
   serviceIds: string[],
   catalog: Map<string, Service>,
   overrides?: Record<string, ServiceOverride>,
+  /** Варианты по услуге — нужны только для услуг типа «варианты». */
+  variants?: Map<string, { id: string; name: string; price: number; durationMin: number }[]>,
 ): AppointmentService[] {
   return serviceIds.map((id) => {
     const c = catalog.get(id);
     const catalogPrice = c ? Number(c.price) : 0;
     const baseDuration = c ? c.duration_minutes : 60;
     const ov = overrides?.[id];
-    const countable = c?.is_countable !== false;
-    const requestedQuantity =
+    const lock = ov?.locked;
+    // УСЛУГА С ВАРИАНТАМИ СЧИТАЕТСЯ ПО ВЫБРАННОМУ ВАРИАНТУ, а не по лестнице:
+    // между вариантами нет математики, количество к цене отношения не имеет.
+    const variant =
+      c?.service_type === "variant"
+        ? (variants?.get(id) ?? []).find((v) => v.id === ov?.variantId) ?? null
+        : null;
+    // КОЛИЧЕСТВО ЕСТЬ У КАЖДОЙ УСЛУГИ (2026-08-21). Флага «продаём целиком»
+    // (`is_countable`) больше нет: он спрашивал в справочнике про поведение
+    // ДРУГОГО экрана — степпера в записи, — и владелец справедливо не понял
+    // вопроса. Правило только расширилось: ни одно уже записанное количество
+    // не уменьшается, ни один байт снимка не меняется.
+    const qty =
       ov?.qty != null && Number.isFinite(ov.qty) && ov.qty > 0
-        ? Math.floor(ov.qty)
+        ? Math.max(1, Math.floor(ov.qty))
         : 1;
-    const qty = countable ? Math.max(1, requestedQuantity) : 1;
-    const price = ov?.price != null ? ov.price : c ? unitPriceFor(c, qty) : 0;
+    // Ручная цена оператора выигрывает у замка: он держит записанное, а не
+    // запрещает править. Замок выигрывает у каталога.
+    const price =
+      ov?.price != null
+        ? ov.price
+        : lock
+          ? lock.pricePerUnit
+          : variant
+            ? variant.price
+            : c
+              ? unitPriceFor(c, qty)
+              : 0;
     const durationTiers = c ? parseDurationTiers(c.duration_tiers) : [];
-    const duration = c
-      ? durationForQuantity(
-          {
-            duration_minutes: baseDuration,
-            duration_tiers: durationTiers.length > 0 ? durationTiers : undefined,
-          },
-          qty,
-        )
-      : baseDuration * qty;
+    const duration = lock
+      ? lock.duration
+      : variant
+        ? variant.durationMin
+        : c
+        ? durationForQuantity(
+            {
+              duration_minutes: baseDuration,
+              duration_tiers: durationTiers.length > 0 ? durationTiers : undefined,
+            },
+            qty,
+          )
+        : baseDuration * qty;
     return {
       serviceId: id,
       quantity: qty,
       pricePerUnit: price,
-      originalPrice: catalogPrice,
-      totalPrice: price * qty,
+      // Цена каталога ТОГО ДНЯ, а не сегодняшняя: иначе простое открытие и
+      // сохранение записи меняло бы байт снимка и будило сторож оплаченной.
+      originalPrice: lock ? lock.originalPrice : catalogPrice,
+      // Копейки, а не float-хвост: 50,01 × 3 в двоичной арифметике даёт
+      // 150.03000000000003, и это число уезжало в базу и в счёт.
+      totalPrice: round2(price * qty),
       duration,
+      // ИМЯ И ЕДИНИЦА УЕЗЖАЮТ В СНИМОК. Услугу переименуют — прошлая запись
+      // останется с тем словом, которым работу назвали тогда; услугу сотрут
+      // насовсем — имя всё равно при ней. Замок держит и их: у сохранённой
+      // строки берём записанное, у новой — сегодняшнее из каталога.
+      serviceName: lock?.serviceName ?? c?.name ?? undefined,
+      unit: lock ? lock.unit ?? null : c?.unit ?? null,
+      variantId: ov?.variantId ?? null,
     };
   });
 }

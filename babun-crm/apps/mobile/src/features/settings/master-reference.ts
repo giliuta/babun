@@ -22,6 +22,11 @@ function requiredString(row: JsonRecord, key: string): string {
   return value;
 }
 
+/** Число из проекции или дефолт: старый сервер мог не прислать колонку. */
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 function nullableString(row: JsonRecord, key: string): string | null {
   const value = row[key];
   if (value == null) return null;
@@ -112,11 +117,36 @@ export function masterServiceJsonToService(value: Json): Service {
   return {
     id: requiredString(row, "id"),
     tenant_id: requiredString(row, "tenant_id"),
+    // Описание мастеру НЕ отдаётся: оно печатается в счёте, а бумаг мастер не
+    // выставляет — проекция его и не возвращает.
+    description: null,
+    // Команда-владелец нужна мастеру не ради прав, а ради каталога: услуга
+    // принадлежит ровно одной команде (2026-08-17).
+    team_id: requiredString(row, "team_id"),
     name: requiredString(row, "name"),
     color: requiredString(row, "color"),
     category_id: null,
     duration_minutes: 0,
     price: 0,
+    // ЕДИНИЦА — ЕДИНСТВЕННОЕ ЧИСЛО-ПОДПИСЬ, КОТОРОЕ МАСТЕР ВИДИТ. Количество
+    // в наряде без неё читается как «4 чего?». В расчётах она не участвует
+    // нигде, поэтому экономикой не является и проекцию не открывает.
+    unit: nullableString(row, "unit"),
+    // Режим показа чисел — вопрос владельца к самому себе; мастеру числа не
+    // показывают вовсе, значит и режим ему не нужен.
+    price_entry: "total",
+    // ПЛАНИРОВАНИЕ МАСТЕРУ НЕ ОТДАЁМ. Буферы, состав бригады и пороги — это
+    // то, как владелец считает деньги и загрузку; мастеру достаётся имя,
+    // цвет и единица, чтобы прочесть наряд.
+    service_type: "quantity",
+    buffer_before_min: 0,
+    buffer_after_min: 0,
+    required_staff: 1,
+    min_qty: 1,
+    max_qty: null,
+    overflow_price: null,
+    overflow_duration_min: null,
+    copied_from_service_id: null,
     available_weekdays: [],
     online_enabled: false,
     material_costs: [],
@@ -127,7 +157,8 @@ export function masterServiceJsonToService(value: Json): Service {
     bulk_threshold: 0,
     bulk_price: 0,
     cost_per_unit: 0,
-    is_countable: false,
+    // Себестоимость — дело владельца: ни проекция, ни маппер её не несут.
+    cost_tiers: [],
     brigade_ids: [],
     price_tiers: null,
     duration_tiers: null,
@@ -139,18 +170,19 @@ export function masterServiceJsonToService(value: Json): Service {
  * even if a future server projection accidentally adds them. */
 export function dispatcherServiceJsonToService(value: Json): Service {
   const row = record(value);
-  const brigadeIds = row.brigade_ids;
   const priceTiers = row.price_tiers;
   const durationTiers = row.duration_tiers;
   return {
     id: requiredString(row, "id"),
     tenant_id: requiredString(row, "tenant_id"),
-    category_id: nullableString(row, "category_id"),
+    team_id: requiredString(row, "team_id"),
+    // Диспетчер собирает счёт — описание ему нужно.
+    description: nullableString(row, "description"),
+    category_id: null,
     name: requiredString(row, "name"),
     price: requiredNumber(row, "price"),
     duration_minutes: requiredNumber(row, "duration_minutes"),
     color: requiredString(row, "color"),
-    is_countable: requiredBoolean(row, "is_countable"),
     price_tiers:
       priceTiers == null || Array.isArray(priceTiers) ? priceTiers ?? null : null,
     duration_tiers:
@@ -159,17 +191,37 @@ export function dispatcherServiceJsonToService(value: Json): Service {
         : null,
     bulk_threshold: requiredNumber(row, "bulk_threshold"),
     bulk_price: requiredNumber(row, "bulk_price"),
-    brigade_ids: Array.isArray(brigadeIds)
-      ? brigadeIds.filter((item): item is string => typeof item === "string")
-      : [],
+    brigade_ids: [],
     is_active: requiredBoolean(row, "is_active"),
     position: requiredNumber(row, "position"),
     created_at: requiredString(row, "created_at"),
     updated_at: requiredString(row, "updated_at"),
-    available_weekdays: [],
+    // Диспетчер выбирает услугу в записи и собирает счёт — он обязан видеть
+    // единицу, режим показа чисел и дни, по которым услугу делают. Скрыта от
+    // него по-прежнему только себестоимость.
+    unit: nullableString(row, "unit"),
+    price_entry: row.price_entry === "unit" ? "unit" : "total",
+    // Диспетчер продаёт и записывает: ему нужны буферы (из них складывается
+    // слот в календаре), пороги и правило «свыше». Себестоимость — нет.
+    service_type: row.service_type === "variant" ? "variant" : "quantity",
+    buffer_before_min: numberOr(row.buffer_before_min, 0),
+    buffer_after_min: numberOr(row.buffer_after_min, 0),
+    required_staff: numberOr(row.required_staff, 1),
+    min_qty: numberOr(row.min_qty, 1),
+    max_qty: row.max_qty == null ? null : numberOr(row.max_qty, 0),
+    overflow_price: row.overflow_price == null ? null : numberOr(row.overflow_price, 0),
+    overflow_duration_min:
+      row.overflow_duration_min == null ? null : numberOr(row.overflow_duration_min, 0),
+    copied_from_service_id: null,
+
+    available_weekdays: Array.isArray(row.available_weekdays)
+      ? row.available_weekdays
+      : [],
     online_enabled: false,
     material_costs: [],
     cost_per_unit: 0,
+    // Себестоимость — дело владельца: ни проекция, ни маппер её не несут.
+    cost_tiers: [],
   };
 }
 

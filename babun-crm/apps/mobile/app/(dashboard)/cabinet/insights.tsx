@@ -15,7 +15,7 @@ import { Chip } from "@/components/ui/Chip";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
 import { useTeams } from "@/features/reference/queries";
 
 // «Сводка» — mobile port of apps/web/src/app/dashboard/insights/page.tsx.
@@ -213,7 +213,9 @@ export default function InsightsScreen() {
   } = useAppointments();
   const { data: clients = [] } = useClients();
   const { data: teams = [] } = useTeams();
-  const { data: services = [] } = useServices();
+  // Аналитика считает ПРОШЛОЕ: убранная услуга остаётся в топе со
+  // своим именем, а не выпадает в голый id.
+  const { data: services = [] } = useAllServices();
 
   const clientName = useMemo(() => new Map(clients.map((c) => [c.id, c.full_name])), [clients]);
   const teamName = useMemo(() => new Map(teams.map((tm) => [tm.id, tm.name])), [teams]);

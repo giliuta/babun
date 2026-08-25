@@ -83,7 +83,7 @@ export function WeekView({
   canReschedule?: (a: Appointment) => boolean;
   /** Долгий тап по шапке даты — открыть её Днём. */
   onPickDay: (d: Date) => void;
-  /** Тап по шапке даты — попап метки этой даты (undefined, когда у бригады
+  /** Тап по шапке даты — попап метки этой даты (undefined, когда у команды
    *  нет меток: тогда и обычный тап открывает День). */
   onPickLabelDay?: (dateYmd: string) => void;
   /** Палец долистал страницу: родитель сдвигает неделю на ±7 дней. */
@@ -147,6 +147,7 @@ export function WeekView({
               today={today}
               apptsFor={apptsFor}
               labelFor={labelFor}
+              workBandFor={workBandFor}
               onPickDay={onPickDay}
               onPickLabelDay={onPickLabelDay}
             />
@@ -223,6 +224,7 @@ function WeekHeaderRow({
   today,
   apptsFor,
   labelFor,
+  workBandFor,
   onPickDay,
   onPickLabelDay,
 }: {
@@ -230,6 +232,7 @@ function WeekHeaderRow({
   today: Date;
   apptsFor: (dateYmd: string) => Appointment[];
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  workBandFor?: (dateYmd: string) => WorkBand | null | undefined;
   onPickDay: (d: Date) => void;
   onPickLabelDay?: (dateYmd: string) => void;
 }) {
@@ -265,6 +268,9 @@ function WeekHeaderRow({
               isPast={ymd < todayYmd}
               count={count}
               label={label}
+              // `null` — график сказал «выходной»; `undefined` — графика ещё
+              // не знаем, и молчать честнее, чем обещать выходной.
+              dayOff={workBandFor?.(ymd) === null}
             />
           </Pressable>
         );

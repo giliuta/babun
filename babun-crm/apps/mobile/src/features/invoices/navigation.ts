@@ -4,8 +4,6 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 export function useInvoiceNavigation() {
   const router = useRouter();
 
-  const openInvoices = () => router.push("/invoices" as Href);
-
   const openTransactionInvoice = (transaction: FinanceTransaction) => {
     if (transaction.invoice_id) {
       router.push(`/invoices/${transaction.invoice_id}` as Href);
@@ -25,5 +23,5 @@ export function useInvoiceNavigation() {
     } as unknown as Href);
   };
 
-  return { openInvoices, openTransactionInvoice };
+  return { openTransactionInvoice };
 }

@@ -28,7 +28,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
 import { humanDay } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
@@ -89,7 +89,9 @@ export function CrewAppointmentSheet({
   const update = useUpdateAppointment();
   const { data: clients = [] } = useClients();
   const { data: teams = [] } = useTeams();
-  const { data: services = [] } = useServices();
+  // Наряд только ЧИТАЕТ услуги — значит читает все, включая убранные:
+  // команда не должна видеть в сегодняшнем наряде безымянную «Услуга».
+  const { data: services = [] } = useAllServices();
   const [comment, setComment] = useState("");
   const [savedComment, setSavedComment] = useState("");
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
@@ -109,7 +111,7 @@ export function CrewAppointmentSheet({
   const serviceNames = useMemo(() => {
     if (!appointment) return [];
     const byId = new Map(services.map((item) => [item.id, item.name]));
-    return appointment.service_ids.map((id) => byId.get(id) ?? "Услуга");
+    return appointment.service_ids.map((id) => byId.get(id) ?? "Услуга удалена");
   }, [appointment, services]);
 
   if (!appointment) return null;
@@ -252,7 +254,7 @@ export function CrewAppointmentSheet({
           <SectionCard title="Выезд">
             <InfoRow label="Когда" value={`${humanDay(appointment.date)}, ${appointment.time_start}–${appointment.time_end}`} />
             <Divider inset={16} />
-            <InfoRow label="Бригада" value={team?.name ?? "Не указана"} />
+            <InfoRow label="Команда" value={team?.name ?? "Не указана"} />
             {address ? (
               <>
                 <Divider inset={16} />
@@ -315,7 +317,7 @@ export function CrewAppointmentSheet({
             canDelete={false}
           />
 
-          <SectionCard title="Заметка бригады" padded>
+          <SectionCard title="Заметка команды" padded>
             <TextInput
               keyboardAppearance="light"
               accessibilityLabel="Комментарий к заявке"
@@ -326,7 +328,7 @@ export function CrewAppointmentSheet({
               placeholderTextColor={t.placeholder}
               style={{
                 minHeight: 88,
-                borderRadius: 14,
+                borderRadius: t.radius.card,
                 borderWidth: 1,
                 borderColor: t.separator,
                 padding: 12,

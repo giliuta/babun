@@ -251,7 +251,7 @@ export default function LoyaltyScreen() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             {editingId ? "Редактирование уровня" : "Новый уровень"}
           </Text>

@@ -82,6 +82,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
     <>
       {children}
       <BottomSheet
+      padded={false}
         visible={visible}
         onClose={() => answer(null)}
         maxHeightRatio={0.8}

@@ -18,11 +18,15 @@ export function buildInvoicePdfHtml(
   return renderInvoiceHtml(buildInvoiceDocument(input));
 }
 
-export function renderInvoiceHtml(doc: InvoiceDocument): string {
+function renderInvoiceHtml(doc: InvoiceDocument): string {
   const lineRows = doc.lines.map((line, index) => `
     <tr>
       <td class="line-number">${index + 1}</td>
-      <td class="line-title">${escapeHtml(line.title)}</td>
+      <td class="line-title">${escapeHtml(line.title)}${
+        line.description
+          ? `<div class="muted small">${escapeHtml(line.description)}</div>`
+          : ""
+      }</td>
       <td class="number">${escapeHtml(line.qty)}</td>
       <td class="number">${escapeHtml(line.unitPrice)}</td>
       <td class="number total-cell">${escapeHtml(line.total)}</td>
@@ -108,7 +112,7 @@ export function renderInvoiceHtml(doc: InvoiceDocument): string {
         ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
       <div class="doc">
-        <div class="eyebrow">Инвойс</div>
+        <div class="eyebrow">${escapeHtml(doc.dict.invoiceEyebrow)}</div>
         <h1>${escapeHtml(doc.number)}</h1>
         <span class="status">${escapeHtml(doc.statusLabel)}</span>
       </div>
@@ -116,12 +120,12 @@ export function renderInvoiceHtml(doc: InvoiceDocument): string {
 
     <section class="party-grid">
       <div class="party">
-        <div class="party-title">Продавец</div>
+        <div class="party-title">${escapeHtml(doc.dict.seller)}</div>
         <div class="party-name">${escapeHtml(doc.seller.name)}</div>
         ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
       <div class="party">
-        <div class="party-title">Получатель</div>
+        <div class="party-title">${escapeHtml(doc.dict.recipient)}</div>
         <div class="party-name">${escapeHtml(doc.client.name)}</div>
         ${doc.client.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>
@@ -129,18 +133,18 @@ export function renderInvoiceHtml(doc: InvoiceDocument): string {
 
     <section class="party-grid">
       <div class="party" style="min-height:0">
-        <div class="party-title">Дата выставления</div>
+        <div class="party-title">${escapeHtml(doc.dict.issuedOn)}</div>
         <div class="party-name">${escapeHtml(doc.issuedOn)}</div>
       </div>
       <div class="party" style="min-height:0">
-        <div class="party-title">Оплатить до</div>
+        <div class="party-title">${escapeHtml(doc.dict.dueOn)}</div>
         <div class="party-name">${escapeHtml(doc.dueOn)}</div>
       </div>
     </section>
 
-    <table aria-label="Позиции инвойса">
+    <table aria-label="${escapeHtml(doc.dict.linesTableLabel)}">
       <thead>
-        <tr><th></th><th>Позиция</th><th class="number">Кол-во</th><th class="number">Цена</th><th class="number">Сумма</th></tr>
+        <tr><th></th><th>${escapeHtml(doc.dict.lineTitle)}</th><th class="number">${escapeHtml(doc.dict.qty)}</th><th class="number">${escapeHtml(doc.dict.price)}</th><th class="number">${escapeHtml(doc.dict.amount)}</th></tr>
       </thead>
       <tbody>${lineRows}</tbody>
     </table>
@@ -151,7 +155,7 @@ export function renderInvoiceHtml(doc: InvoiceDocument): string {
 
     ${doc.payTo.length > 0 ? `
       <section class="section">
-        <h2>Реквизиты для оплаты</h2>
+        <h2>${escapeHtml(doc.dict.payTo)}</h2>
         ${doc.payTo.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
         <div class="muted small">В назначении платежа укажите ${escapeHtml(doc.number)}.</div>
       </section>
@@ -159,23 +163,23 @@ export function renderInvoiceHtml(doc: InvoiceDocument): string {
 
     ${doc.settlement.length > 0 ? `
       <section class="section">
-        <h2>Оплата</h2>
+        <h2>${escapeHtml(doc.dict.payment)}</h2>
         <div class="settlement">
-          <div class="metric"><div class="metric-label">Статус</div><div class="metric-value">${escapeHtml(doc.statusLabel)}</div></div>
+          <div class="metric"><div class="metric-label">${escapeHtml(doc.dict.status)}</div><div class="metric-value">${escapeHtml(doc.statusLabel)}</div></div>
           ${doc.settlement.map((metric) => `
             <div class="metric"><div class="metric-label">${escapeHtml(metric.label)}</div><div class="metric-value">${escapeHtml(metric.value)}</div></div>
           `).join("")}
         </div>
         ${paymentRows ? `
-          <table aria-label="История платежей">
-            <thead><tr><th>Дата</th><th>Операция</th><th class="number">Сумма</th></tr></thead>
+          <table aria-label="${escapeHtml(doc.dict.paymentsTableLabel)}">
+            <thead><tr><th>${escapeHtml(doc.dict.paymentsDate)}</th><th>${escapeHtml(doc.dict.paymentsOperation)}</th><th class="number">${escapeHtml(doc.dict.amount)}</th></tr></thead>
             <tbody>${paymentRows}</tbody>
           </table>
-        ` : `<div class="muted">Подтверждённых операций оплаты пока нет.</div>`}
+        ` : `<div class="muted">${escapeHtml(doc.dict.paymentsEmpty)}</div>`}
       </section>
     ` : ""}
 
-    ${doc.notes ? `<section class="section"><h2>Комментарий</h2><div class="notes">${escapeHtml(doc.notes)}</div></section>` : ""}
+    ${doc.notes ? `<section class="section"><h2>${escapeHtml(doc.dict.notes)}</h2><div class="notes">${escapeHtml(doc.notes)}</div></section>` : ""}
 
     <footer class="footer">${escapeHtml(doc.footer)}</footer>
   </main>

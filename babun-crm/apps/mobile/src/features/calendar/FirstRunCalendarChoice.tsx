@@ -35,7 +35,7 @@ export function FirstRunCalendarChoice({
           style={{
             height: 64,
             width: 64,
-            borderRadius: 18,
+            borderRadius: t.radius.card,
             overflow: "hidden",
             alignItems: "center",
             justifyContent: "center",

@@ -7,18 +7,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  AccessibilityInfo,
-  Animated,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { AccessibilityInfo, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useThemeColors } from "@/theme/colors";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import { NoticeBar, type NoticeTone } from "./NoticeBar";
 
-type ToastType = "success" | "error" | "info";
+/** Тона — общие с `NoticeBar`: одна плашка на весь продукт, разные места. */
+type ToastType = NoticeTone;
 /** Кнопка-действие в тосте (Undo-паттерн): тост живёт дольше (5 с) и
  *  ловит тапы только по кнопке — остальной экран остаётся рабочим. */
 type ToastAction = { label: string; onPress: () => void };
@@ -41,7 +36,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const translateY = useRef(new Animated.Value(-12)).current;
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
-  const t = useThemeColors();
   const reducedMotion = useReduceMotion();
 
   const hide = useCallback(() => {
@@ -92,11 +86,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  // info = inverse surface from the fixed light palette: classic iOS ink toast.
-  const info = toast?.type === "info";
-  const toastBg = toast?.type === "error" ? t.danger : info ? t.ink : t.success;
-  const toastText = info ? t.canvas : "#ffffff";
-
   return (
     <ToastCtx.Provider value={show}>
       {children}
@@ -112,45 +101,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             transform: [{ translateY }],
           }}
         >
-          <View
-            className="flex-row items-center gap-3 rounded-2xl px-4 py-3 shadow-lg"
-            style={{ backgroundColor: toastBg }}
-          >
-            <Text
-              className="flex-1 text-sm font-semibold"
-              style={{
-                color: toastText,
-                textAlign: toast.action ? "left" : "center",
-              }}
-            >
-              {toast.message}
-            </Text>
-            {toast.action ? (
-              <Pressable
-                onPress={() => {
-                  const run = toast.action?.onPress;
-                  hide();
-                  run?.();
-                }}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={toast.action.label}
-                className="rounded-full px-3 active:opacity-70"
-                style={{
-                  minHeight: 44,
-                  justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.22)",
-                }}
-              >
-                <Text
-                  className="text-sm font-bold"
-                  style={{ color: toastText }}
-                >
-                  {toast.action.label}
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
+          <NoticeBar
+            tone={toast.type}
+            message={toast.message}
+            action={
+              toast.action
+                ? {
+                    label: toast.action.label,
+                    onPress: () => {
+                      const run = toast.action?.onPress;
+                      hide();
+                      run?.();
+                    },
+                  }
+                : undefined
+            }
+          />
         </Animated.View>
       ) : null}
     </ToastCtx.Provider>

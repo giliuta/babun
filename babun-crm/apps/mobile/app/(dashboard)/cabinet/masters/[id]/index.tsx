@@ -27,6 +27,7 @@ import {
 } from "@babun/shared/local/masters";
 import { getRecognizedRevenue } from "@babun/shared/local/appointments";
 import { telUrl, whatsappUrl } from "@babun/shared/common/utils/messenger-links";
+import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -79,7 +80,7 @@ export default function MasterHubScreen() {
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   // Полный список (включая архивные) — только для delete-свипа: web parity,
   // handleDelete чистит master.id из ВСЕХ команд, иначе мастер-призрак
-  // воскресает в составе при повторной активации архивной бригады.
+  // воскресает в составе при повторной активации архивной команды.
   const allTeamsQuery = useTeams({ includeInactive: true });
   const appointmentsQuery = useAppointments();
   const allTeams = allTeamsQuery.data ?? [];
@@ -91,7 +92,7 @@ export default function MasterHubScreen() {
   const del = useDeleteMaster();
   const removeFromTeams = useRemoveMasterFromTeams();
 
-  // Команды мастера — объединение основной team_id и всех бригад, где он в
+  // Команды мастера — объединение основной team_id и всех команд, где он в
   // lead_ids/helper_ids. Первая — источник тинта аватара (web parity).
   const assignedTeams = useMemo<Team[]>(() => {
     if (!master) return [];
@@ -438,7 +439,7 @@ export default function MasterHubScreen() {
               title="Статистика"
               value={
                 perf.completed > 0
-                  ? `${perf.completed} закрыто · ${Math.round(perf.revenue)} €`
+                  ? `${perf.completed} закрыто · ${formatEUR(perf.revenue)}`
                   : "пока без данных"
               }
               onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
@@ -500,7 +501,7 @@ export default function MasterHubScreen() {
                   <View className="flex-row gap-2">
                     <PerfTile label="Визитов" value={String(perf.total)} />
                     <PerfTile label="Закрыто" value={String(perf.completed)} />
-                    <PerfTile label="Выручка" value={`${Math.round(perf.revenue)} €`} />
+                    <PerfTile label="Выручка" value={formatEUR(perf.revenue)} />
                   </View>
                   {perf.cancelled > 0 ? (
                     <Text style={{ fontSize: 11, color: t.faint, marginTop: 8 }}>
@@ -540,7 +541,7 @@ function infoPreview(
 function PerfTile({ label, value }: { label: string; value: string }) {
   const t = useThemeColors();
   return (
-    <View className="flex-1 rounded-xl px-2 py-2" style={{ backgroundColor: t.fill }}>
+    <View className="flex-1 rounded-[10px] px-2 py-2" style={{ backgroundColor: t.fill }}>
       <Text style={{ fontSize: 18, fontWeight: "700", color: t.ink }}>{value}</Text>
       <Text
         style={{
@@ -580,7 +581,7 @@ function NavRow({
       style={{ minHeight: 56 }}
     >
       <View
-        className="h-8 w-8 items-center justify-center rounded-lg"
+        className="h-8 w-8 items-center justify-center rounded-[10px]"
         style={{ backgroundColor: tone }}
       >
         {icon}

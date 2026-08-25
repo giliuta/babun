@@ -22,7 +22,7 @@ import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -66,7 +66,7 @@ export function InventoryList({
     ? teams.find((t) => t.id === lockedTeamId)
     : undefined;
 
-  // Per-team контекст: только позиции этой бригады (web parity —
+  // Per-team контекст: только позиции этой команды (web parity —
   // assigned_team_id === id). Глобальный экран показывает всё.
   const items = useMemo(
     () =>
@@ -93,7 +93,7 @@ export function InventoryList({
     setName("");
     setCategory("");
     setSerial("");
-    // На создании из хаба команды — заранее привязываем бригаду.
+    // На создании из хаба команды — заранее привязываем команду.
     setTeamId(lockedTeamId ?? null);
     setColor("");
     setNotes("");
@@ -207,7 +207,7 @@ export function InventoryList({
             const content = (
               <>
                 <View
-                  className="mr-3 h-9 w-9 items-center justify-center rounded-xl"
+                  className="mr-3 h-9 w-9 items-center justify-center rounded-[10px]"
                   style={{ backgroundColor: (item.color ?? th.accent) + "1f" }}
                 >
                   <Package color={item.color ?? th.accent} size={ICON.sm} />
@@ -271,7 +271,7 @@ export function InventoryList({
           ListHeaderComponent={
             !owner ? (
               <View
-                className="mx-4 mb-2 rounded-xl px-3 py-2"
+                className="mx-4 mb-2 rounded-[10px] px-3 py-2"
                 style={{ backgroundColor: th.fill }}
               >
                 <Text style={{ fontSize: 13, lineHeight: 18, color: th.sub }}>
@@ -330,7 +330,7 @@ export function InventoryList({
             accessible={false}
           />
           <View
-            className="rounded-t-3xl p-5 pb-8"
+            className="rounded-t-[10px] p-5 pb-8"
             style={{ backgroundColor: th.surface }}
           >
             <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
@@ -367,7 +367,7 @@ export function InventoryList({
                   className="mb-2 text-xs font-medium"
                   style={{ color: th.sub }}
                 >
-                  Бригада
+                  Команда
                 </Text>
                 <View className="mb-3 flex-row flex-wrap gap-2">
                   {[
@@ -385,7 +385,7 @@ export function InventoryList({
                 </View>
               </>
             ) : null}
-            <ColorPicker value={color || null} onChange={setColor} />
+            <ColorField value={color || null} onChange={setColor} />
             <Field
               label="Заметки"
               value={notes}

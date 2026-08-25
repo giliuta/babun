@@ -51,7 +51,7 @@ export function DateWheelSheet({
   }, [visible, value, seed]);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose}>
       <View style={{ paddingHorizontal: 20, paddingBottom: 28, paddingTop: 4 }}>
         <Text
           accessibilityRole="header"

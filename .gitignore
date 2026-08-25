@@ -37,3 +37,9 @@ bumpix-*.png
 # business being in this repo. Ignore so they stop landing on master.
 .emergent/
 .gitconfig
+
+# tooling junk
+.agents/
+.codex/
+.claude-flow/
+.playwright-mcp/

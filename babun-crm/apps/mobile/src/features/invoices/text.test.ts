@@ -19,6 +19,7 @@ const invoice = {
   vat_amount: 19,
   total: 119,
   currency: "EUR",
+  language: "ru",
   status: "issued",
   pdf_url: null,
   notes: null,
@@ -61,7 +62,9 @@ const invoice = {
     invoice_id: "invoice-1",
     position: 0,
     title: "Service",
+    description: null,
     qty: 1,
+    unit: null,
     unit_price: 100,
     total: 100,
   }],
@@ -107,5 +110,22 @@ describe("invoice text sharing", () => {
     assert.match(text, /Клиент: не указан/);
     assert.doesNotMatch(text, /Later Seller/);
     assert.doesNotMatch(text, /Later Client/);
+  });
+
+  // U57: «Babun CRM» — бренд платформы, а не бизнеса. Без снимка продавцом
+  // становится имя тенанта; нет и его — строка честно опускается.
+  it("falls back to the tenant name, never the platform brand", () => {
+    const withTenant = buildInvoiceShareText({
+      invoice: { ...invoice, seller_snapshot: null },
+      companyName: "AirFix Ltd",
+    });
+    assert.match(withTenant, /^AirFix Ltd\n/);
+    assert.doesNotMatch(withTenant, /Babun/);
+
+    const anonymous = buildInvoiceShareText({
+      invoice: { ...invoice, seller_snapshot: null },
+    });
+    assert.doesNotMatch(anonymous, /Babun/);
+    assert.match(anonymous, /^Инвойс INV-2026-007\n/);
   });
 });

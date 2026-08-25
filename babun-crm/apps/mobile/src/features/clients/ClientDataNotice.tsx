@@ -21,11 +21,11 @@ export function ClientDataNotice({
   const t = useThemeColors();
   return (
     <View
-      className={`${fullScreen ? "flex-1 justify-center px-6" : "mx-3 mt-3"}`}
+      className={`${fullScreen ? "flex-1 justify-center px-6" : "mx-4 mt-3"}`}
       accessibilityRole="alert"
     >
       <View
-        className="rounded-[14px] px-4 py-4"
+        className="rounded-[10px] px-4 py-4"
         style={{ backgroundColor: t.surface, borderColor: t.separator, borderWidth: 1 }}
       >
         <View className="flex-row items-start gap-3">
@@ -45,7 +45,7 @@ export function ClientDataNotice({
           accessibilityRole="button"
           accessibilityLabel="Повторить загрузку"
           accessibilityState={{ disabled: retrying }}
-          className="mt-3 min-h-11 flex-row items-center justify-center gap-2 rounded-[14px] active:opacity-70"
+          className="mt-3 min-h-11 flex-row items-center justify-center gap-2 rounded-[10px] active:opacity-70"
           style={{ backgroundColor: t.fill }}
         >
           {retrying ? (

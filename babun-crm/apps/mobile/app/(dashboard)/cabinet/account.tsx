@@ -255,7 +255,7 @@ function DevicesSection() {
             width: 32,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 8,
+            borderRadius: t.radius.card,
             backgroundColor: "rgba(44,91,224,0.10)",
           }}
         >

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { rpcArgs } from "../rpc-args";
 import type { InvoicePaymentLedger } from "../../local/finance/invoice-ledger";
 import { roundInvoiceMoney } from "./invoice-write-helpers";
 
@@ -31,29 +32,70 @@ export interface RefundInvoicePaymentDraft {
 }
 
 const PAGE_SIZE = 1000;
-const REFUND_CHUNK_SIZE = 100;
+
+/** Ровно те колонки, что нужны InvoicePaymentLedger: остальная строка журнала
+ *  (снимок НДС, заметки триггеров, receipt_url…) в оплатах инвойса не
+ *  используется и раньше гоняла `select *` по всей истории тенанта. */
+const PAYMENT_COLUMNS =
+  "id, invoice_id, type, amount, account_id, payment_method, occurred_on, " +
+  "refund_of_id, notes, created_at, source, appointment_payment_kind";
+
+type PaymentRow = Pick<
+  TransactionRow,
+  | "id"
+  | "invoice_id"
+  | "type"
+  | "amount"
+  | "account_id"
+  | "payment_method"
+  | "occurred_on"
+  | "refund_of_id"
+  | "notes"
+  | "created_at"
+  | "source"
+  | "appointment_payment_kind"
+>;
+
+/** Keyset-страница (.gt по id): набор растёт, и offset-окно range при
+ *  конкурентной вставке задваивало бы или пропускало строку. Сортировка для
+ *  экрана здесь не нужна — итоговый список каждого инвойса сортируется ниже. */
+async function pagePayments(
+  supabase: DbSupabase,
+  tenantId: string,
+  scope: "invoice-linked" | "orphan-refunds",
+): Promise<PaymentRow[]> {
+  const rows: PaymentRow[] = [];
+  let lastId: string | null = null;
+  for (;;) {
+    const base = supabase
+      .from("finance_transactions")
+      .select(PAYMENT_COLUMNS)
+      .eq("tenant_id", tenantId);
+    let q =
+      scope === "invoice-linked"
+        ? base.not("invoice_id", "is", null).in("type", ["income", "refund"])
+        : base
+            .eq("type", "refund")
+            .is("invoice_id", null)
+            .not("refund_of_id", "is", null);
+    if (lastId) q = q.gt("id", lastId);
+    const { data, error } = await q
+      .order("id", { ascending: true })
+      .limit(PAGE_SIZE);
+    if (error) throw new Error(`listInvoicePayments: ${error.message}`);
+    const page = (data ?? []) as unknown as PaymentRow[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+    lastId = page[page.length - 1].id;
+  }
+  return rows;
+}
 
 export async function listInvoicePayments(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<InvoicePaymentsById> {
-  const direct: TransactionRow[] = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
-    const { data, error } = await supabase
-      .from("finance_transactions")
-      .select("*")
-      .eq("tenant_id", tenantId)
-      .not("invoice_id", "is", null)
-      .in("type", ["income", "refund"])
-      .order("occurred_on", { ascending: false })
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-    if (error) throw new Error(`listInvoicePayments: ${error.message}`);
-    const page = (data ?? []) as TransactionRow[];
-    direct.push(...page);
-    if (page.length < PAGE_SIZE) break;
-  }
+  const direct = await pagePayments(supabase, tenantId, "invoice-linked");
 
   const incomeInvoice = new Map<string, string>();
   for (const row of direct) {
@@ -62,38 +104,24 @@ export async function listInvoicePayments(
     }
   }
 
-  // Legacy refunds may only have refund_of_id. Fetch them in bounded chunks
-  // and attribute them to the original income's invoice.
-  const externalRefunds: Array<{ row: TransactionRow; invoiceId: string }> = [];
-  const incomeIds = [...incomeInvoice.keys()];
-  for (let start = 0; start < incomeIds.length; start += REFUND_CHUNK_SIZE) {
-    const ids = incomeIds.slice(start, start + REFUND_CHUNK_SIZE);
-    for (let offset = 0; ; offset += PAGE_SIZE) {
-      const { data, error } = await supabase
-        .from("finance_transactions")
-        .select("*")
-        .eq("tenant_id", tenantId)
-        .eq("type", "refund")
-        .is("invoice_id", null)
-        .in("refund_of_id", ids)
-        .order("occurred_on", { ascending: false })
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(offset, offset + PAGE_SIZE - 1);
-      if (error) throw new Error(`listInvoicePayments (refunds): ${error.message}`);
-      const page = (data ?? []) as TransactionRow[];
-      for (const row of page) {
-        const invoiceId = row.refund_of_id
-          ? incomeInvoice.get(row.refund_of_id)
-          : undefined;
-        if (invoiceId) externalRefunds.push({ row, invoiceId });
-      }
-      if (page.length < PAGE_SIZE) break;
+  // Легаси-возвраты несут только refund_of_id. Раньше они догружались
+  // чанками `.in()` по 100 income-id — при 500 оплаченных инвойсах это 5+
+  // последовательных запросов. Один keyset-скан всех «сиротских» возвратов
+  // дешевле: набор ограничен эпохой до простановки invoice_id и не растёт,
+  // а чужие возвраты отсеивает та же карта income → invoice.
+  const externalRefunds: Array<{ row: PaymentRow; invoiceId: string }> = [];
+  if (incomeInvoice.size > 0) {
+    const orphans = await pagePayments(supabase, tenantId, "orphan-refunds");
+    for (const row of orphans) {
+      const invoiceId = row.refund_of_id
+        ? incomeInvoice.get(row.refund_of_id)
+        : undefined;
+      if (invoiceId) externalRefunds.push({ row, invoiceId });
     }
   }
 
   const result: InvoicePaymentsById = {};
-  const add = (row: TransactionRow, invoiceId: string) => {
+  const add = (row: PaymentRow, invoiceId: string) => {
     if (row.type !== "income" && row.type !== "refund") return;
     const payment = rowToPayment(row, invoiceId);
     (result[invoiceId] ??= []).push(payment);
@@ -125,15 +153,18 @@ export async function recordInvoicePayment(
     throw new Error("Укажите не больше двух знаков после запятой");
   }
   assertOccurredOn(draft.occurred_on, draft.business_today, "платежа");
-  const { data, error } = await supabase.rpc("record_invoice_payment", {
-    p_invoice_id: invoiceId,
-    p_request_id: draft.request_id,
-    p_amount: amount,
-    p_account_id: draft.account_id,
-    p_payment_method: draft.payment_method,
-    p_occurred_on: draft.occurred_on,
-    p_notes: draft.notes?.trim() || null,
-  });
+  const { data, error } = await supabase.rpc(
+    "record_invoice_payment",
+    rpcArgs<"record_invoice_payment">({
+      p_invoice_id: invoiceId,
+      p_request_id: draft.request_id,
+      p_amount: amount,
+      p_account_id: draft.account_id,
+      p_payment_method: draft.payment_method,
+      p_occurred_on: draft.occurred_on,
+      p_notes: draft.notes?.trim() || null,
+    }),
+  );
   if (error) throw new Error(`recordInvoicePayment: ${error.message}`);
   if (
     !data
@@ -174,13 +205,16 @@ export async function refundInvoicePayment(
   if (draft.occurred_on < draft.original_occurred_on) {
     throw new Error("Возврат не может быть раньше исходного платежа");
   }
-  const { data, error } = await supabase.rpc("refund_invoice_payment", {
-    p_payment_id: paymentId,
-    p_request_id: draft.request_id,
-    p_amount: amount,
-    p_occurred_on: draft.occurred_on,
-    p_notes: draft.notes?.trim() || null,
-  });
+  const { data, error } = await supabase.rpc(
+    "refund_invoice_payment",
+    rpcArgs<"refund_invoice_payment">({
+      p_payment_id: paymentId,
+      p_request_id: draft.request_id,
+      p_amount: amount,
+      p_occurred_on: draft.occurred_on,
+      p_notes: draft.notes?.trim() || null,
+    }),
+  );
   if (error) throw new Error(`refundInvoicePayment: ${error.message}`);
   if (
     !data ||
@@ -198,7 +232,7 @@ export async function refundInvoicePayment(
 }
 
 function rowToPayment(
-  row: TransactionRow,
+  row: PaymentRow,
   invoiceId: string,
 ): InvoicePaymentLedger {
   return {

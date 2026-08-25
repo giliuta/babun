@@ -19,9 +19,13 @@ export function buildInvoiceShareText({
   const client = invoice.client_snapshot;
   // A present snapshot is authoritative as a whole. A blank snapshotted field
   // must not be filled later from a mutable company/client profile.
+  //
+  // Без снимка продавец — имя ТЕНАНТА (companyName), а не «Babun CRM»:
+  // Babun — бренд платформы, у клиента бизнеса ему делать нечего. Нет и
+  // имени тенанта — строка честно опускается, выдуманного продавца не будет.
   const sellerName = seller
     ? seller.legal_name || seller.name || seller.display_name || "Продавец не указан"
-    : companyName || "Babun CRM";
+    : companyName || null;
   const recipientName = client
     ? client.full_name || "не указан"
     : clientName || "не указан";

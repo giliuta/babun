@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { MapPin, Star } from "lucide-react-native";
-import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
+import { ColorField } from "@/components/ui/picker-fields";
 import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -38,7 +38,7 @@ import {
 } from "@/features/reference/queries";
 
 // Метки команды — web parity teams/[id]/cities (BrigadeCitiesPage).
-// Список меток бригады = team.cities[] (имена). Цвет каждой метки берём
+// Список меток команды = team.cities[] (имена). Цвет каждой метки берём
 // из глобального справочника `cities` по имени (метка и город — одна
 // сущность). Основная метка = team.default_city (★ красит день на
 // календаре). Тумблер «Подсвечивать день» = team.tint_days_by_label.
@@ -83,7 +83,7 @@ export default function TeamCitiesScreen() {
     [brigadeCityNames, cities],
   );
 
-  // Метки других бригад, ещё не добавленные сюда — быстрые подсказки в шите.
+  // Метки других команд, ещё не добавленные сюда — быстрые подсказки в шите.
   const suggestions = useMemo<City[]>(() => {
     const inUse = new Set<string>();
     for (const tm of teams) {
@@ -125,7 +125,7 @@ export default function TeamCitiesScreen() {
     try {
       // Совпадение по имени — переиспользуем запись библиотеки; иначе
       // создаём новую с выбранным цветом (цвет метки консистентен между
-      // бригадами).
+      // командами).
       const existing = cities.find(
         (c) => c.name.toLowerCase() === trimmed.toLowerCase(),
       );
@@ -156,7 +156,7 @@ export default function TeamCitiesScreen() {
           : undefined;
       if (collision) {
         // Переименование в уже существующую метку — цвет уходит в целевую
-        // запись (старую библиотечную не трогаем: другие бригады могут ещё
+        // запись (старую библиотечную не трогаем: другие команды могут ещё
         // на неё ссылаться; здесь важен только рефренс по имени).
         await updateCity.mutateAsync({ id: collision.id, patch: { color } });
       } else if (current) {
@@ -385,7 +385,7 @@ function LabelSheet({
     // Новый показ шита — засеять поля (паттерн «render-time reset»).
     setSeeded(editing);
     setName(isEdit ? editing.name : "");
-    setColor(isEdit ? editing.color : PRESET_COLORS[0].value);
+    setColor(isEdit ? editing.color : PRESET_COLOR_CYCLE[0].value);
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
@@ -408,7 +408,7 @@ function LabelSheet({
           accessible={false}
         />
         <View
-          className="rounded-t-3xl p-5 pb-8"
+          className="rounded-t-[10px] p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
@@ -423,7 +423,7 @@ function LabelSheet({
             autoFocus
           />
 
-          <ColorPicker value={color} onChange={setColor} />
+          <ColorField value={color} onChange={setColor} />
 
           {!isEdit && suggestions.length > 0 ? (
             <>

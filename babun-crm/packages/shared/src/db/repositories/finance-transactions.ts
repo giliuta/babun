@@ -7,6 +7,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { rpcArgs } from "../rpc-args";
 import { randomUuid } from "../../sync/uuid";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type {
@@ -148,12 +149,133 @@ export async function listTransactionsForRange(
   return rows.map(rowToTx);
 }
 
+/** Строка серверного агрегата `account_balances` — одна на счёт тенанта плюс
+ *  одна «ничья». */
+export interface AccountBalanceRow {
+  /** NULL — операции без счёта: деньги, не привязанные ни к одной кассе.
+   *  Их нельзя выкидывать: без этой строки «Счета» и «Финансы» расходятся
+   *  молча (в проде такая строка есть). */
+  account_id: string | null;
+  /** Сумма движений БЕЗ opening_balance: balance = opening_balance + delta.
+   *  Стартовый остаток клиент и так знает из listAccounts. */
+  delta: number;
+  /** Была ли по счёту хоть одна операция. */
+  has_history: boolean;
+  is_active: boolean;
+  /** Последний вывод денег со счёта (исходящее плечо перевода), YYYY-MM-DD. */
+  last_outflow_on: string | null;
+  last_tx_on: string | null;
+  first_tx_on: string | null;
+}
+
+/**
+ * Остатки всех счетов одним запросом. Сумма считается на сервере: клиент
+ * больше не тянет весь журнал ради одного числа.
+ *
+ * Функция owner-only и на чужой роли БРОСАЕТ исключение, а не отдаёт пусто —
+ * пустой ответ экран напечатал бы как «€0», то есть соврал бы про деньги.
+ * Поэтому ошибку здесь нельзя глотать: она обязана дойти до экрана.
+ */
+export async function listAccountBalances(
+  supabase: DbSupabase,
+  tenantId: string,
+): Promise<AccountBalanceRow[]> {
+  const { data, error } = await supabase.rpc("account_balances", {
+    p_tenant: tenantId,
+  });
+  if (error) throw new Error(error.message || "Не удалось посчитать остатки");
+  // Генератор типов Supabase не размечает NULL в колонках setof-функции, а
+  // они здесь настоящие: строка «без счёта» и счёт без единой операции.
+  const rows: Array<{
+    account_id: string | null;
+    delta: number | null;
+    has_history: boolean | null;
+    is_active: boolean | null;
+    last_outflow_on: string | null;
+    last_tx_on: string | null;
+    first_tx_on: string | null;
+  }> = data ?? [];
+  return rows.map((r) => ({
+    account_id: r.account_id,
+    delta: Number(r.delta ?? 0),
+    has_history: r.has_history ?? false,
+    is_active: r.is_active ?? true,
+    last_outflow_on: r.last_outflow_on,
+    last_tx_on: r.last_tx_on,
+    first_tx_on: r.first_tx_on,
+  }));
+}
+
+/**
+ * Итоги счёта за период из серверного `account_period_totals`.
+ *
+ * ВСЕ ДЕНЕЖНЫЕ КОЛОНКИ ПРИХОДЯТ УЖЕ СО ЗНАКОМ: income ≥ 0, expense ≤ 0,
+ * refund ≤ 0, transfer_in ≥ 0, transfer_out ≤ 0. Клиент их только
+ * СКЛАДЫВАЕТ. Написать «− expense» или «− refund» значит вычесть дважды;
+ * контракт закреплён тестом apps/mobile/src/features/finances/account-period.
+ */
+export interface AccountPeriodTotals {
+  /** NULL — та же строка «операции без счёта», что и в account_balances. */
+  account_id: string | null;
+  /** Полный остаток на начало периода (opening_balance + всё до p_from). */
+  opening_before: number;
+  income: number;
+  expense: number;
+  refund: number;
+  transfer_in: number;
+  transfer_out: number;
+  /** Подписанная сумма всего, КРОМЕ переводов, — единственная цифра героя. */
+  net: number;
+}
+
+/**
+ * Период включает обе границы; даты — строки YYYY-MM-DD по `occurred_on`.
+ * Owner-only, как и account_balances: ошибка роли обязана дойти до экрана.
+ */
+export async function listAccountPeriodTotals(
+  supabase: DbSupabase,
+  tenantId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<AccountPeriodTotals[]> {
+  const { data, error } = await supabase.rpc("account_period_totals", {
+    p_tenant: tenantId,
+    p_from: fromDate,
+    p_to: toDate,
+  });
+  if (error) throw new Error(error.message || "Не удалось посчитать период");
+  // Тот же пробел генератора, что и в account_balances: все колонки, кроме
+  // account_id, — числа, и пустыми они приходить не должны, но защита от
+  // NULL здесь дешевле, чем NaN в остатке.
+  const rows: Array<
+    { account_id: string | null } & Record<
+      Exclude<keyof AccountPeriodTotals, "account_id">,
+      number | null
+    >
+  > = data ?? [];
+  return rows.map((r) => ({
+    account_id: r.account_id,
+    opening_before: Number(r.opening_before ?? 0),
+    income: Number(r.income ?? 0),
+    expense: Number(r.expense ?? 0),
+    refund: Number(r.refund ?? 0),
+    transfer_in: Number(r.transfer_in ?? 0),
+    transfer_out: Number(r.transfer_out ?? 0),
+    net: Number(r.net ?? 0),
+  }));
+}
+
 /**
  * All-time per-account signed deltas for balance computation. Account
  * balance = opening_balance + Σ delta. This is intentionally NOT
  * date-windowed: a running balance must reflect every movement ever,
  * not just the currently-viewed period. Returns a slim projection
  * (account_id, type, amount) to keep the payload small.
+ *
+ * @deprecated Тянет весь журнал тенанта в память клиента ради одной суммы и
+ * теряет строку «операции без счёта» (`.not("account_id", "is", null)`).
+ * Мобильное приложение перешло на серверный `listAccountBalances`; здесь
+ * функция жива только ради веба — снести вместе с его переводом (слайс С10).
  */
 export async function listAccountBalanceDeltas(
   supabase: DbSupabase,
@@ -215,21 +337,28 @@ export async function accountHasLedgerHistory(
 }
 
 /** All-time refunds grouped by original income. Refunds may fall outside the
- * currently viewed period, so this read is deliberately global and paged. */
+ * currently viewed period, so this read is deliberately global.
+ *
+ * Keyset-пагинация (.gt по id), не offset: набор растёт, и конкурентная
+ * вставка возврата между страницами сдвигала бы окно range — сумма «уже
+ * возвращено» исказилась бы, а по ней режется кап повторного возврата. */
 export async function listRefundTotals(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<Map<string, number>> {
   const totals = new Map<string, number>();
-  for (let offset = 0; ; offset += LEDGER_PAGE_SIZE) {
-    const { data, error } = await supabase
+  let lastId: string | null = null;
+  for (;;) {
+    let q = supabase
       .from("finance_transactions")
       .select("id, refund_of_id, amount")
       .eq("tenant_id", tenantId)
       .eq("type", "refund")
-      .not("refund_of_id", "is", null)
+      .not("refund_of_id", "is", null);
+    if (lastId) q = q.gt("id", lastId);
+    const { data, error } = await q
       .order("id", { ascending: true })
-      .range(offset, offset + LEDGER_PAGE_SIZE - 1);
+      .limit(LEDGER_PAGE_SIZE);
     if (error) throw new Error(`listRefundTotals: ${error.message}`);
     const page = (data ?? []) as Array<
       Pick<Row, "id" | "refund_of_id" | "amount">
@@ -242,6 +371,7 @@ export async function listRefundTotals(
       );
     }
     if (page.length < LEDGER_PAGE_SIZE) break;
+    lastId = page[page.length - 1].id;
   }
   return totals;
 }
@@ -428,11 +558,14 @@ export async function setAppointmentPrepayment(
   amount: number,
   paymentMethod: PaymentMethod | null,
 ): Promise<void> {
-  const { error } = await supabase.rpc("set_appointment_prepayment", {
-    p_appointment_id: appointmentId,
-    p_amount: amount,
-    p_payment_method: paymentMethod,
-  });
+  const { error } = await supabase.rpc(
+    "set_appointment_prepayment",
+    rpcArgs<"set_appointment_prepayment">({
+      p_appointment_id: appointmentId,
+      p_amount: amount,
+      p_payment_method: paymentMethod,
+    }),
+  );
   if (error) {
     throw new Error(error.message || "Не удалось изменить предоплату");
   }
@@ -446,7 +579,9 @@ export interface TransferDraft {
   amount: number; // positive
   occurred_on?: string;
   notes?: string | null;
-  brigade_id?: string | null;
+  // Команды здесь нет: обе ноги перевода привязаны к СЧЕТАМ, а команду
+  // сервер выводит из них сам. Поле принимало значение от веба и никуда не
+  // доезжало — вторая, ничего не решающая правда о принадлежности денег.
 }
 
 /**
@@ -465,14 +600,17 @@ export async function createTransfer(
   void tenantId;
   assertPositiveMoneyAmount(t.amount);
   if (t.occurred_on) rejectFutureLedgerDate(t.occurred_on);
-  const { data, error } = await supabase.rpc("record_account_transfer", {
-    p_request_id: t.request_id ?? randomUuid(),
-    p_from_account_id: t.from_account_id,
-    p_to_account_id: t.to_account_id,
-    p_amount: t.amount,
-    p_notes: t.notes ?? null,
-    ...(t.occurred_on ? { p_occurred_on: t.occurred_on } : {}),
-  });
+  const { data, error } = await supabase.rpc(
+    "record_account_transfer",
+    rpcArgs<"record_account_transfer">({
+      p_request_id: t.request_id ?? randomUuid(),
+      p_from_account_id: t.from_account_id,
+      p_to_account_id: t.to_account_id,
+      p_amount: t.amount,
+      p_notes: t.notes ?? null,
+      ...(t.occurred_on ? { p_occurred_on: t.occurred_on } : {}),
+    }),
+  );
   if (error || !data || data.length !== 2) {
     throw new Error(error?.message ?? "Перевод не был записан полностью");
   }

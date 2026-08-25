@@ -63,7 +63,7 @@ import { useArchiveWithUndo } from "@/features/clients/archive-undo";
 import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { useClientAppointments } from "@/features/clients/appointments";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
 import ClientHeader from "@/features/clients/ClientHeader";
 import { ClientDataNotice } from "@/features/clients/ClientDataNotice";
 import { ClientDetailChrome } from "@/features/clients/ClientDetailChrome";
@@ -112,7 +112,9 @@ export default function ClientDetailScreen() {
     refetch: retryTags,
   } = tagsQuery;
   // Web parity: VisitsBlock resolves service NAMES from the catalog.
-  const servicesQuery = useServices();
+  // Лента истории и блок объектов зовут услугу по имени — читаем весь
+  // справочник, включая убранное: карточка показывает прошлое.
+  const servicesQuery = useAllServices();
   const {
     data: services = [],
     isError: servicesFailed,
@@ -222,7 +224,7 @@ export default function ClientDetailScreen() {
           onPress={() => router.back()}
           accessibilityRole="button"
           accessibilityLabel="Назад к списку клиентов"
-          className="min-h-11 justify-center rounded-[14px] px-4 py-2 active:opacity-80"
+          className="min-h-11 justify-center rounded-[10px] px-4 py-2 active:opacity-80"
           style={{ backgroundColor: t.accent }}
         >
           <Text className="font-semibold" style={{ color: t.onAccent }}>
@@ -242,7 +244,7 @@ export default function ClientDetailScreen() {
         onBack={() => router.back()}
         onOpenAppointment={(appointment) =>
           router.push({
-            pathname: "/(dashboard)",
+            pathname: "/",
             params: {
               appointmentId: appointment.id,
               date: appointment.date,
@@ -589,7 +591,7 @@ function ArchivedClientView({
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-5 pb-5 pt-5">
           <View
-            className="h-14 w-14 items-center justify-center rounded-[14px]"
+            className="h-14 w-14 items-center justify-center rounded-[10px]"
             style={{ backgroundColor: t.fill }}
           >
             <Archive color={t.sub} size={26} />
@@ -664,7 +666,7 @@ function ArchivedClientView({
             accessibilityRole="button"
             accessibilityLabel="Восстановить клиента"
             accessibilityState={{ disabled: restoring }}
-            className="min-h-12 flex-row items-center justify-center gap-2 rounded-[14px] active:opacity-70"
+            className="min-h-12 flex-row items-center justify-center gap-2 rounded-[10px] active:opacity-70"
             style={{ backgroundColor: t.accent, opacity: restoring ? 0.6 : 1 }}
           >
             {restoring ? (

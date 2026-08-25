@@ -49,6 +49,26 @@ function polar(cx: number, cy: number, r: number, angle: number) {
   return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
 }
 
+/** Целые проценты долей методом наибольших остатков: независимый
+ *  Math.round по слайсам давал легенду на 99% (33+33+33) или 101%
+ *  (34+34+33), а лист «из чего состоит целое» обязан сходиться в 100. */
+function percentShares(values: number[]): number[] {
+  const total = values.reduce((s, v) => s + v, 0);
+  if (total <= 0) return values.map(() => 0);
+  const exact = values.map((v) => (v / total) * 100);
+  const floors = exact.map(Math.floor);
+  let rest = 100 - floors.reduce((s, v) => s + v, 0);
+  // Недостающие единицы — самым большим дробным остаткам.
+  const order = exact
+    .map((v, i) => ({ i, frac: v - floors[i] }))
+    .sort((a, b) => b.frac - a.frac);
+  const out = [...floors];
+  for (let k = 0; k < order.length && rest > 0; k += 1, rest -= 1) {
+    out[order[k].i] += 1;
+  }
+  return out;
+}
+
 /** Annulus wedge path: outer arc clockwise, inner arc back. */
 function wedgePath(
   cx: number,
@@ -114,6 +134,8 @@ export function IncomeShareDonut({
   const total = slices.reduce((s, r) => s + r.value, 0);
   if (slices.length === 0 || total === 0) return null;
 
+  const percents = percentShares(slices.map((s) => s.value));
+
   const cx = SIZE / 2;
   const cy = SIZE / 2;
   const rOuter = SIZE / 2;
@@ -152,8 +174,8 @@ export function IncomeShareDonut({
         {/* Total in the hole — tabular so it doesn't jitter between periods. */}
         <View className="absolute inset-0 items-center justify-center">
           <Text
-            className="text-[15px] font-semibold tabular-nums"
-            style={{ color: th.ink }}
+            className="text-[15px] font-semibold"
+            style={{ color: th.ink, fontVariant: ["tabular-nums"] }}
             numberOfLines={1}
           >
             {formatEUR(total)}
@@ -162,7 +184,7 @@ export function IncomeShareDonut({
       </View>
 
       <View className="ml-3 flex-1">
-        {slices.map((s) => (
+        {slices.map((s, i) => (
           <View key={s.id} className="flex-row items-center py-[3px]">
             <View
               className="h-2.5 w-2.5 rounded-full"
@@ -176,10 +198,10 @@ export function IncomeShareDonut({
               {s.name}
             </Text>
             <Text
-              className="ml-auto pl-2 text-[13px] tabular-nums"
-              style={{ color: th.sub }}
+              className="ml-auto pl-2 text-[13px]"
+              style={{ color: th.sub, fontVariant: ["tabular-nums"] }}
             >
-              {Math.round((s.value / total) * 100)}%
+              {percents[i]}%
             </Text>
           </View>
         ))}

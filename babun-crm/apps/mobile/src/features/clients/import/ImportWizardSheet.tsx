@@ -454,7 +454,7 @@ function UploadStep({
         onPress={onPick}
         accessibilityRole="button"
         accessibilityLabel="Выбрать CSV-файл"
-        className="items-center justify-center gap-2 rounded-[14px] border border-dashed py-8 active:opacity-60"
+        className="items-center justify-center gap-2 rounded-[10px] border border-dashed py-8 active:opacity-60"
         style={{ borderColor: t.separator, backgroundColor: t.surface }}
       >
         <FileUp color={t.accent} size={32} />
@@ -526,7 +526,7 @@ function MappingStep({
 
       {resume ? (
         <View
-          className="gap-2 rounded-[14px] p-4"
+          className="gap-2 rounded-[10px] p-4"
           style={{ backgroundColor: "rgba(245,166,35,0.10)" }}
         >
           <Text className="text-[13px] font-semibold" style={{ color: t.warning }}>
@@ -700,7 +700,7 @@ function FieldPicker({
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`Поле: ${FIELD_LABEL[value]}`}
-        className="min-h-11 flex-row items-center gap-1 rounded-[14px] px-3 py-2 active:opacity-70"
+        className="min-h-11 flex-row items-center gap-1 rounded-[10px] px-3 py-2 active:opacity-70"
         style={{ backgroundColor: t.fill }}
       >
         <Text
@@ -730,7 +730,7 @@ function FieldPicker({
             importantForAccessibility="no-hide-descendants"
           />
           <View
-            className="w-full overflow-hidden rounded-[14px]"
+            className="w-full overflow-hidden rounded-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             {FIELD_OPTIONS.map((f, i) => {
@@ -914,7 +914,7 @@ function PreviewStep({
                 {row.reasons.map((r) => (
                   <View
                     key={r}
-                    className="rounded-[14px] px-1.5 py-0.5"
+                    className="rounded-[10px] px-1.5 py-0.5"
                     style={{ backgroundColor: t.fill }}
                   >
                     <Text
@@ -1141,7 +1141,7 @@ function ErrorNote({
   const bg = tone === "danger" ? "rgba(240,71,60,0.10)" : "rgba(245,166,35,0.10)";
   return (
     <View
-      className="flex-row items-start gap-2 rounded-[14px] px-3 py-2.5"
+      className="flex-row items-start gap-2 rounded-[10px] px-3 py-2.5"
       style={{ backgroundColor: bg }}
     >
       <AlertTriangle color={color} size={16} strokeWidth={2.2} />

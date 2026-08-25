@@ -16,6 +16,7 @@ import {
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
+import { durationLabel } from "@/features/services/format";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -36,22 +37,18 @@ function TextInput({
   );
 }
 
-const durationLabel = (minutes: number) => {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return hours > 0
-    ? rest > 0
-      ? `${hours} ч ${rest} мин`
-      : `${hours} ч`
-    : `${rest} мин`;
-};
 
 export function Stepper({
   qty,
+  unit,
   onDec,
   onInc,
 }: {
   qty: number;
+  /** Единица услуги: «4 м» вместо голой четвёрки. `null` — просто число.
+   *  Ради этого единицу и вернули: бригадир, набивая количество, обязан
+   *  видеть, метры это или блоки. */
+  unit?: string | null;
   onDec: () => void;
   onInc: () => void;
 }) {
@@ -77,13 +74,24 @@ export function Stepper({
   );
   return (
     <View
-      className="mr-3 flex-row items-center rounded-[12px]"
+      className="mr-3 flex-row items-center rounded-[10px]"
       style={{ backgroundColor: t.fill }}
-      accessibilityLabel={`Количество: ${qty}`}
+      accessibilityLabel={`Количество: ${qty}${unit ? ` ${unit}` : ""}`}
     >
       {btn("down", onDec)}
-      <Text style={{ width: 24, textAlign: "center", fontSize: 14, fontWeight: "600", color: t.ink }}>
-        {qty}
+      <Text
+        numberOfLines={1}
+        style={{
+          minWidth: 24,
+          paddingHorizontal: 2,
+          textAlign: "center",
+          fontSize: 14,
+          fontWeight: "600",
+          color: t.ink,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {unit ? `${qty} ${unit}` : qty}
       </Text>
       {btn("up", onInc)}
     </View>
@@ -193,9 +201,9 @@ export function TotalEditor({
   );
 }
 
-// «Докет» — одна спокойная строка «Бригада · Когда», заменившая отдельную
-// пилюлю бригады и карточку «Когда» с мини-таймлайном. Слева бригада (тап →
-// выбор бригады/мастера), справа дата·время (тап → колесо). Тонкий цветной
+// «Докет» — одна спокойная строка «Команда · Когда», заменившая отдельную
+// пилюлю команды и карточку «Когда» с мини-таймлайном. Слева команда (тап →
+// выбор команды/мастера), справа дата·время (тап → колесо). Тонкий цветной
 // корешок слева несёт identity записи; под строкой — ОДНА янтарная строка,
 // когда есть предупреждение (пересечение ИЛИ вне графика/перерыв/буфер).
 export function DocketRow({
@@ -225,7 +233,7 @@ export function DocketRow({
 }) {
   const t = useThemeColors();
   return (
-    <View className="mx-3 mt-2">
+    <View className="mx-4 mt-2">
       <View
         style={{
           flexDirection: "row",
@@ -236,10 +244,10 @@ export function DocketRow({
           overflow: "hidden",
         }}
       >
-        {/* цветной корешок = identity записи (цвет бригады / выбранный цвет) */}
+        {/* цветной корешок = identity записи (цвет команды / выбранный цвет) */}
         <View style={{ width: 3, backgroundColor: accent }} />
 
-        {/* бригада — тап открывает выбор бригады и мастера */}
+        {/* команда — тап открывает выбор команды и мастера */}
         <Pressable
           onPress={onEditTeam}
           className="flex-row items-center gap-2 py-3 pl-3.5 pr-2"
@@ -248,8 +256,8 @@ export function DocketRow({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Бригада: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
-          accessibilityHint="Открывает выбор бригады и мастера"
+          accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
+          accessibilityHint="Открывает выбор команды и мастера"
         >
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: teamColor }} />
           <View style={{ flexShrink: 1 }}>
@@ -262,7 +270,7 @@ export function DocketRow({
               </Text>
             ) : null}
           </View>
-          {/* шеврон = «тап, чтобы сменить бригаду/мастера» */}
+          {/* шеврон = «тап, чтобы сменить команду/мастера» */}
           <ChevronRight color={t.chevron} size={ICON.xs} />
         </Pressable>
 
@@ -290,7 +298,7 @@ export function DocketRow({
 
       {warning ? (
         <View
-          className="mt-2 flex-row items-center gap-2 rounded-[13px] px-3 py-2.5"
+          className="mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
           style={{ backgroundColor: `${t.warning}14`, borderWidth: 1, borderColor: `${t.warning}33` }}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"

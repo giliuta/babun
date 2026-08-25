@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { StackActions } from "@react-navigation/native";
 import {
   Calendar,
   LayoutGrid,
@@ -34,6 +35,30 @@ export default function DashboardLayout() {
     <DashboardGate>
       <RoleCapabilityBoundary capability="view-cabinet" title="Babun">
         <Tabs
+          // ПОВТОРНЫЙ ТАП ПО СВОЕЙ ЖЕ ВКЛАДКЕ ВОЗВРАЩАЕТ К ЕЁ НАЧАЛУ.
+          // Владелец 2026-08-20: «тапаю на финансы — перехожу в финансы, тапаю
+          // обратно на календарь — возвращаюсь на ту же страницу, где был; а
+          // если я уже на календаре и тапну ещё раз — тогда выхожу в сам
+          // календарь». Переключение вкладок память стека НЕ трогает (это
+          // поведение табов из коробки) — здесь дописан только второй тап:
+          // он разматывает стек вкладки до корня. Иначе из настроек можно
+          // выйти лишь стрелкой «назад» столько раз, сколько провалился.
+          screenListeners={({ navigation, route }) => ({
+            tabPress: () => {
+              if (!navigation.isFocused()) return;
+              const tab = navigation
+                .getState()
+                .routes.find((r) => r.key === route.key);
+              // Ключ вложенного стека появляется, только когда вкладку хоть раз
+              // открывали; на нетронутой разматывать нечего.
+              if (!tab?.state?.key) return;
+              if ((tab.state.index ?? 0) === 0) return;
+              navigation.dispatch({
+                ...StackActions.popToTop(),
+                target: tab.state.key,
+              });
+            },
+          })}
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: t.accent,
@@ -50,7 +75,7 @@ export default function DashboardLayout() {
         {/* Активная вкладка выделяется весом штриха (2.4 vs 2), не второй
             заливкой — у lucide нет filled-вариантов, а цвета уже хватает. */}
         <Tabs.Screen
-          name="index"
+          name="(home)"
           options={{
             title: "Календарь",
             tabBarIcon: ({ color, size, focused }) => (

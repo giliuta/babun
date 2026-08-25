@@ -33,7 +33,6 @@ export interface Service {
   cost_per_unit: number;
   /** true = можно делать N штук одной услугой (чистка × 3); false
    *  = количество всегда 1 (диагностика, ремонт). */
-  is_countable: boolean;
   /** Команды, которые делают эту услугу. Пусто = все команды. */
   brigade_ids: string[];
   /** Sprint 033 Phase I18 — explicit sort order inside the parent
@@ -91,7 +90,6 @@ interface SvcOpts {
   bulkThreshold?: number;
   bulkPrice?: number;
   costPerUnit?: number;
-  isCountable?: boolean;
 }
 
 function svc(
@@ -118,7 +116,6 @@ function svc(
     bulk_threshold: opts.bulkThreshold ?? 0,
     bulk_price: opts.bulkPrice ?? 0,
     cost_per_unit: opts.costPerUnit ?? 0,
-    is_countable: opts.isCountable ?? true,
     brigade_ids: [], // пусто = все команды
   };
 }
@@ -183,9 +180,28 @@ export type ServiceDuration = Pick<
   "duration_minutes" | "duration_tiers"
 >;
 
-/** Total visit duration for a selected quantity. A duration tier stores the
- * total minutes for the whole line; without a matching tier, base minutes are
- * multiplied by quantity. Runtime checks keep legacy or malformed data safe. */
+/**
+ * ВРЕМЯ ОТ КОЛИЧЕСТВА — ЯКОРЯ И ПРЯМАЯ МЕЖДУ НИМИ (2026-08-18).
+ *
+ * Ступень длительности хранит ИТОГ на всю строку: «три комнаты — 2 ч 40 мин».
+ * Раньше это читалось буквально и порождало две неправды сразу:
+ *   · между порогами время скакало по формуле «база × количество» (две комнаты
+ *     — 2 ч, три — вдруг 2 ч 40);
+ *   · после последнего порога время ЗАМИРАЛО навсегда: и пять комнат, и десять
+ *     занимали те же 2 ч 40, а команда опаздывала на вечерний адрес.
+ * Чтобы описать клининговую лестницу (2 ч → 3 ч → 4 ч → 4:45 → 5:30), человеку
+ * приходилось заводить ступень на каждое число.
+ *
+ * Теперь точки (1, база) и каждый порог — это ЯКОРЯ, а между ними и за
+ * последним из них время идёт по прямой:
+ *   · количество ≤ 1 — база;
+ *   · между двумя якорями — линейно между ними;
+ *   · дальше последнего якоря — тем же наклоном, что и последний отрезок.
+ * Та же лестница описывается двумя ступенями, а «время не растёт» выражается
+ * якорем с тем же значением (наклон 0 — две собаки гуляют за тот же час).
+ *
+ * Хранение не изменилось: пороги целые ≥ 2, значение — минуты на всю строку.
+ */
 export function durationForQuantity(
   service: ServiceDuration,
   qty: number,
@@ -207,11 +223,37 @@ export function durationForQuantity(
           tier.duration_minutes >= 0,
       )
     : [];
-  let total = baseDuration * quantity;
-  for (const tier of [...tiers].sort((a, b) => a.min_qty - b.min_qty)) {
-    if (quantity >= tier.min_qty) total = tier.duration_minutes;
+  if (tiers.length === 0) return baseDuration * quantity;
+
+  // Якоря по возрастанию количества; первый — сама услуга при одной штуке.
+  const anchors: { qty: number; minutes: number }[] = [
+    { qty: 1, minutes: baseDuration },
+    ...[...tiers]
+      .sort((a, b) => a.min_qty - b.min_qty)
+      .map((tier) => ({ qty: tier.min_qty, minutes: tier.duration_minutes })),
+  ];
+  if (quantity <= 1) return Math.max(0, Math.round(anchors[0].minutes));
+
+  for (let i = 1; i < anchors.length; i += 1) {
+    const prev = anchors[i - 1];
+    const next = anchors[i];
+    if (quantity <= next.qty) {
+      const span = next.qty - prev.qty;
+      if (span <= 0) return Math.max(0, Math.round(next.minutes));
+      const slope = (next.minutes - prev.minutes) / span;
+      return Math.max(
+        0,
+        Math.round(prev.minutes + slope * (quantity - prev.qty)),
+      );
+    }
   }
-  return total;
+
+  // Дальше последнего якоря — продолжаем последним наклоном.
+  const last = anchors[anchors.length - 1];
+  const prev = anchors[anchors.length - 2];
+  const span = last.qty - prev.qty;
+  const slope = span > 0 ? (last.minutes - prev.minutes) / span : 0;
+  return Math.max(0, Math.round(last.minutes + slope * (quantity - last.qty)));
 }
 
 // ─── Storage ───────────────────────────────────────────────────────────
@@ -252,7 +294,6 @@ export function loadServices(): Service[] {
         bulk_threshold: s.bulk_threshold ?? 0,
         bulk_price: s.bulk_price ?? 0,
         cost_per_unit: s.cost_per_unit ?? 0,
-        is_countable: s.is_countable ?? true,
         brigade_ids: s.brigade_ids ?? [],
         price_tiers: migratedTiers,
       };
@@ -312,7 +353,6 @@ export function createBlankService(overrides: Partial<Service> = {}): Service {
     bulk_threshold: 0,
     bulk_price: 0,
     cost_per_unit: 0,
-    is_countable: true,
     brigade_ids: [],
     ...overrides,
   };
@@ -320,7 +360,60 @@ export function createBlankService(overrides: Partial<Service> = {}): Service {
 
 export interface ServiceCostSource {
   cost_per_unit?: unknown;
+  cost_tiers?: unknown;
   material_costs?: unknown;
+}
+
+/** РАСХОД ЗА ОДНУ ПРИ ДАННОМ КОЛИЧЕСТВЕ — ступенька, как цена, а НЕ прямая,
+ *  как время (2026-08-21). Действует расход последней строки с `min_qty <= qty`.
+ *  Интерполяции у расхода нет намеренно: наклон между строками сочинял бы
+ *  цифру, которую человек не вводил. Умножает КОЛИЧЕСТВО, а не сама величина
+ *  себя: справочник хранит расход одной штуки, запись умножает.
+ */
+export function costPerUnit(
+  service: {
+    cost_per_unit?: unknown;
+    cost_tiers?: unknown;
+    material_costs?: unknown;
+  },
+  qty: number,
+): number {
+  const base = getServiceMaterialCost(service);
+  const tiers = parseCostTiers(service.cost_tiers);
+  let value = base;
+  for (const tier of tiers) {
+    if (qty >= tier.min_qty) value = tier.cost_per_unit;
+  }
+  return value;
+}
+
+/** Читает `cost_tiers` из базы, отбрасывая мусор — зеркало `parsePriceTiers`. */
+export function parseCostTiers(
+  raw: unknown,
+): { min_qty: number; cost_per_unit: number }[] {
+  const source = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? (() => {
+          try {
+            const parsed: unknown = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })()
+      : [];
+  const byMinimum = new Map<number, { min_qty: number; cost_per_unit: number }>();
+  for (const item of source) {
+    if (item === null || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    const minimum = Number(record.min_qty);
+    const cost = Number(record.cost_per_unit);
+    if (!Number.isSafeInteger(minimum) || minimum < 2) continue;
+    if (!Number.isFinite(cost) || cost < 0) continue;
+    byMinimum.set(minimum, { min_qty: minimum, cost_per_unit: cost });
+  }
+  return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
 }
 
 /** Cost of materials for one unit. cost_per_unit is the canonical value;
@@ -364,3 +457,34 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
   6: "Сб",
   7: "Вс",
 };
+
+/** ДНИ, ПО КОТОРЫМ УСЛУГУ ДЕЛАЮТ (владелец 2026-08-24: «в понедельник мы
+ *  выполняем эту услугу, а во вторник эта услуга невозможна»).
+ *
+ *  Пустой список — «делаем в любой день», и это НЕ «не заполнил»: у пяти услуг
+ *  из шести на проде так и есть, и заставлять человека зажигать семь плиток
+ *  ради «как обычно» было бы работой ради колонки.
+ *
+ *  ЧИТАТЕЛЬ РОВНО ОДИН — каталог выбора услуги в записи. Услуга, которую в
+ *  этот день не делают, НЕ ПРЯЧЕТСЯ: она уезжает вниз списка приглушённой и
+ *  выбирается тапом. Спрятать нельзя — человек, не нашедший услугу, решит,
+ *  что она исчезла из прайса; запретить нельзя тем более: продукт не
+ *  отказывает в деньгах. */
+export function servedOnWeekday(
+  service: { available_weekdays?: unknown },
+  isoWeekday: number,
+): boolean {
+  const raw = service.available_weekdays;
+  if (!Array.isArray(raw) || raw.length === 0) return true;
+  return raw.some(
+    (day) => typeof day === "number" && Math.floor(day) === isoWeekday,
+  );
+}
+
+/** ISO-день недели (1 = понедельник) из строки «YYYY-MM-DD». */
+export function isoWeekdayOf(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return 1;
+  const js = new Date(y, m - 1, d).getDay();
+  return js === 0 ? 7 : js;
+}

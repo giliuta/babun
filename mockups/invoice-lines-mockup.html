@@ -1,0 +1,575 @@
+<title>Позиции счёта</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Токены — палитра самого продукта (Halo Cobalt): кобальт, холодный
+     канвас, один радиус 10 на всё. Мокап обязан выглядеть как приложение,
+     иначе по нему нельзя судить о механике. */
+  :root {
+    --ground: #f4f6f9;
+    --surface: #ffffff;
+    --fill: #eef1f5;
+    --ink: #0b1220;
+    --sub: rgba(11, 18, 32, 0.62);
+    --faint: rgba(11, 18, 32, 0.40);
+    --line: rgba(11, 18, 32, 0.14);
+    --accent: #2c5be0;
+    --on-accent: #ffffff;
+    --danger: #c9372c;
+    --success: #087a52;
+    --scrim: rgba(11, 18, 32, 0.32);
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0d1220;
+      --surface: #161d2e;
+      --fill: #1e2637;
+      --ink: #eef2f8;
+      --sub: rgba(238, 242, 248, 0.66);
+      --faint: rgba(238, 242, 248, 0.44);
+      --line: rgba(238, 242, 248, 0.16);
+      --accent: #6f95ff;
+      --on-accent: #0b1220;
+      --danger: #ff8177;
+      --success: #4cc79a;
+      --scrim: rgba(0, 0, 0, 0.55);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0d1220;
+    --surface: #161d2e;
+    --fill: #1e2637;
+    --ink: #eef2f8;
+    --sub: rgba(238, 242, 248, 0.66);
+    --faint: rgba(238, 242, 248, 0.44);
+    --line: rgba(238, 242, 248, 0.16);
+    --accent: #6f95ff;
+    --on-accent: #0b1220;
+    --danger: #ff8177;
+    --success: #4cc79a;
+    --scrim: rgba(0, 0, 0, 0.55);
+  }
+
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+      system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .card { background: var(--surface); border-radius: var(--r); }
+  .tap:active { opacity: .55; }
+  input, textarea, button { font: inherit; color: inherit; }
+  input:focus-visible, button:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  /* Свайп: карточка едет по X, под ней проступает красная подложка. */
+  .row-wrap { position: relative; overflow: hidden; border-radius: var(--r); }
+  .row-bg {
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: flex-end; padding-right: 20px;
+    background: var(--danger); color: #fff; font-weight: 700; font-size: 14px;
+  }
+  .row-card { position: relative; touch-action: pan-y; will-change: transform; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--surface);
+    border-radius: 10px 10px 0 0;
+    transform: translateY(100%);
+    transition: transform .26s cubic-bezier(.32,.72,0,1);
+    max-height: 88vh; display: flex; flex-direction: column;
+  }
+  .sheet.open { transform: translateY(0); }
+  .scrim {
+    position: fixed; inset: 0; z-index: 40; background: var(--scrim);
+    opacity: 0; pointer-events: none; transition: opacity .26s ease;
+  }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .grabber {
+    width: 36px; height: 5px; border-radius: 999px;
+    background: var(--line); margin: 8px auto 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sheet, .scrim, .row-card { transition: none !important; }
+  }
+</style>
+
+<div id="app" class="mx-auto flex min-h-full max-w-[430px] flex-col">
+  <!-- Шапка: что за экран и на чём он стоит -->
+  <header class="sticky top-0 z-20 px-4 pb-2 pt-3"
+          style="background: var(--ground); border-bottom: 1px solid var(--line)">
+    <div class="flex items-baseline justify-between">
+      <div>
+        <div class="text-[11px] font-bold uppercase tracking-[0.09em]"
+             style="color: var(--faint)">Мокап · данные ненастоящие</div>
+        <h1 class="text-[19px] font-bold leading-tight">Позиции счёта</h1>
+      </div>
+      <div class="text-right">
+        <div class="text-[11px]" style="color: var(--sub)">Клиент</div>
+        <div class="text-[13px] font-semibold">Илья · Лимассол</div>
+      </div>
+    </div>
+  </header>
+
+  <main id="list" class="flex flex-1 flex-col gap-2 px-3 py-3"></main>
+
+  <!-- Липкий итог: поднимается над клавиатурой через visualViewport -->
+  <footer id="footer" class="sticky bottom-0 z-20 px-3 pb-3 pt-2"
+          style="background: var(--ground); border-top: 1px solid var(--line)">
+    <div class="card px-4 py-3" style="box-shadow: 0 6px 20px rgba(11,18,32,.10)">
+      <div id="totals" class="flex flex-col gap-1.5"></div>
+      <button id="add"
+        class="tap mt-3 w-full rounded-[10px] py-3 text-[16px] font-bold"
+        style="background: var(--accent); color: var(--on-accent)">
+        Добавить услугу
+      </button>
+    </div>
+  </footer>
+</div>
+
+<div id="scrim" class="scrim"></div>
+
+<!-- Лист позиции -->
+<section id="lineSheet" class="sheet" aria-hidden="true" role="dialog" aria-label="Позиция счёта">
+  <div class="grabber"></div>
+  <div class="overflow-y-auto px-4 pb-6 pt-1" id="lineSheetBody"></div>
+</section>
+
+<!-- Лист каталога -->
+<section id="catalogSheet" class="sheet" aria-hidden="true" role="dialog" aria-label="Каталог услуг">
+  <div class="grabber"></div>
+  <div class="px-4 pt-1">
+    <input id="search" type="search" inputmode="search" enterkeyhint="search"
+      placeholder="Найти услугу"
+      class="w-full rounded-[10px] px-3 py-2.5 text-[16px]"
+      style="background: var(--fill); border: none" />
+  </div>
+  <div id="catalogList" class="overflow-y-auto px-3 py-3"></div>
+</section>
+
+<!-- Тост отмены -->
+<div id="toast"
+  class="pointer-events-none fixed inset-x-3 bottom-4 z-[60] flex items-center gap-3 rounded-[10px] px-4 py-3 opacity-0 transition-opacity"
+  style="background: var(--ink); color: var(--ground)">
+  <span id="toastText" class="flex-1 text-[14px] font-semibold"></span>
+  <button id="undo" class="rounded-full px-3 py-1.5 text-[14px] font-bold"
+    style="background: rgba(255,255,255,.22); color: inherit">Отменить</button>
+</div>
+
+<script>
+/* ─────────────────────────── ДЕНЬГИ — ЦЕЛЫЕ ЦЕНТЫ ─────────────────────────
+   Внутри состояния денег в виде дробей не существует: 33,33 — это 3333.
+   Строка из поля разбирается ровно один раз, на blur, и обратно печатается
+   тоже только там. Пока палец в поле, значение — сырой текст, и никто его
+   не переписывает: именно переписывание на каждый символ и роняет курсор
+   в конец строки.                                                          */
+const toCents = (raw) => {
+  const s = String(raw).trim().replace(/\s/g, "").replace(",", ".");
+  if (!s) return null;
+  if (!/^\d*(\.\d{0,2})?$/.test(s)) return null;
+  return Math.round(Number(s) * 100);
+};
+const money = (cents) =>
+  (cents / 100).toLocaleString("ru-RU", {
+    minimumFractionDigits: cents % 100 ? 2 : 0,
+    maximumFractionDigits: 2,
+  }) + " €";
+const moneyInput = (cents) =>
+  cents % 100 ? (cents / 100).toFixed(2).replace(".", ",") : String(cents / 100);
+
+/* ───────────────────────────── КАТАЛОГ УСЛУГ ─────────────────────────────
+   Фиксированный прайс: позиция заводится ВЫБОРОМ, а не пустым полем —
+   пустая строка заставляет вспоминать и название, и цену.                 */
+const CATALOG = [
+  { id: "clean-split",  name: "Чистка сплит-системы",        price: 5000, minutes: 60 },
+  { id: "clean-multi",  name: "Чистка мульти-сплит, 2 блока", price: 9000, minutes: 120 },
+  { id: "clean-deep",   name: "Глубокая чистка с разбором",   price: 12000, minutes: 180 },
+  { id: "refill-r32",   name: "Дозаправка фреоном R32",       price: 4500, minutes: 45 },
+  { id: "diagnostics",  name: "Диагностика",                  price: 3000, minutes: 30 },
+  { id: "install",      name: "Установка сплит-системы",      price: 25000, minutes: 240 },
+  { id: "dismount",     name: "Демонтаж блока",               price: 6000, minutes: 60 },
+  { id: "sanitize",     name: "Антибактериальная обработка",  price: 3500, minutes: 30 },
+];
+
+/* ────────────────────────────── СОСТОЯНИЕ ───────────────────────────────
+   Один объект и reducer. Итогов здесь нет намеренно: хранимый итог рано
+   или поздно разойдётся со строками, и документ начнёт врать о деньгах.  */
+const VAT_RATE = 19;
+let seq = 0;
+const newId = () => `line-${++seq}`;
+
+function makeLine(service) {
+  return {
+    id: newId(),
+    title: service.name,
+    qty: 1,
+    price: service.price,   // цена за одну, в центах
+    vat: "exclusive",       // off | inclusive | exclusive
+    note: "",
+  };
+}
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "ADD_LINE":
+      return { ...state, lines: [...state.lines, makeLine(action.service)] };
+    case "UPDATE_LINE":
+      return {
+        ...state,
+        lines: state.lines.map((l) =>
+          l.id === action.id ? { ...l, ...action.patch } : l),
+      };
+    case "REMOVE_LINE":
+      return { ...state, lines: state.lines.filter((l) => l.id !== action.id) };
+    case "REORDER": {
+      const lines = [...state.lines];
+      const from = lines.findIndex((l) => l.id === action.id);
+      const to = from + action.delta;
+      if (from < 0 || to < 0 || to >= lines.length) return state;
+      [lines[from], lines[to]] = [lines[to], lines[from]];
+      return { ...state, lines };
+    }
+    default:
+      return state;
+  }
+}
+
+/* Итоги — чистая функция от состояния. Единственный источник чисел внизу. */
+function totals(state) {
+  let net = 0, vat = 0;
+  for (const l of state.lines) {
+    const gross = l.qty * l.price;
+    if (l.vat === "off") { net += gross; continue; }
+    if (l.vat === "inclusive") {
+      const base = Math.round(gross / (1 + VAT_RATE / 100));
+      net += base; vat += gross - base;
+    } else {
+      net += gross; vat += Math.round(gross * VAT_RATE / 100);
+    }
+  }
+  return { net, vat, total: net + vat };
+}
+
+let state = {
+  lines: [
+    { id: newId(), title: "Чистка сплит-системы", qty: 3, price: 5000, vat: "exclusive", note: "Промывка теплообменника, дренаж" },
+    { id: newId(), title: "Дозаправка фреоном R32", qty: 1, price: 4500, vat: "exclusive", note: "" },
+  ],
+};
+
+/* Стек снимков — им живёт «Отменить»: удаление кладёт прошлое состояние,
+   тост его достаёт. Ничего умнее для undo в редакторе строк не нужно.    */
+const history = [];
+let toastTimer = null;
+
+function dispatch(action, opts = {}) {
+  if (opts.undoable) history.push(state);
+  state = reducer(state, action);
+  render();
+}
+
+/* ──────────────────────────────── РЕНДЕР ──────────────────────────────── */
+const listEl = document.getElementById("list");
+const totalsEl = document.getElementById("totals");
+
+function render() {
+  listEl.innerHTML = "";
+  if (state.lines.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "px-1 py-10 text-center text-[15px]";
+    empty.style.color = "var(--faint)";
+    empty.textContent = "Ни одной позиции";
+    listEl.append(empty);
+  }
+  state.lines.forEach((line, index) => listEl.append(renderRow(line, index)));
+
+  const t = totals(state);
+  const row = (label, value, strong) => `
+    <div class="flex items-baseline justify-between ${strong ? "pt-1.5" : ""}"
+         ${strong ? 'style="border-top: 1px solid var(--line)"' : ""}>
+      <span class="text-[${strong ? 15 : 13}px] ${strong ? "font-bold" : ""}"
+            style="color: var(--${strong ? "ink" : "sub"})">${label}</span>
+      <span class="num text-[${strong ? 19 : 14}px] font-${strong ? "bold" : "semibold"}">${value}</span>
+    </div>`;
+  totalsEl.innerHTML =
+    row("Без НДС", money(t.net)) +
+    (t.vat ? row(`НДС · ${VAT_RATE}%`, money(t.vat)) : "") +
+    row("К оплате", money(t.total), true);
+}
+
+function renderRow(line, index) {
+  const wrap = document.createElement("div");
+  wrap.className = "row-wrap";
+  wrap.innerHTML = `
+    <div class="row-bg">Убрать</div>
+    <div class="row-card card flex items-center gap-3 px-3 py-3">
+      <div class="min-w-0 flex-1">
+        <div class="truncate text-[15px] font-semibold">${escapeHtml(line.title)}</div>
+        <div class="mt-0.5 truncate text-[13px]" style="color: var(--sub)">
+          ${money(line.price)} за одну${line.note ? " · " + escapeHtml(line.note) : ""}
+        </div>
+      </div>
+      <div class="flex items-center rounded-[10px]" style="background: var(--fill)">
+        <button class="tap h-11 w-10 text-[18px] font-bold" data-dec aria-label="Меньше"
+                style="color: var(--accent)">−</button>
+        <span class="num w-6 text-center text-[15px] font-bold">${line.qty}</span>
+        <button class="tap h-11 w-10 text-[18px] font-bold" data-inc aria-label="Больше"
+                style="color: var(--accent)">+</button>
+      </div>
+      <div class="num w-[74px] text-right text-[15px] font-bold">${money(line.qty * line.price)}</div>
+    </div>`;
+
+  const card = wrap.querySelector(".row-card");
+  card.addEventListener("click", (e) => {
+    if (e.target.closest("[data-dec],[data-inc]")) return;
+    openLineSheet(line.id);
+  });
+  wrap.querySelector("[data-dec]").addEventListener("click", () => {
+    if (line.qty <= 1) removeWithUndo(line);
+    else dispatch({ type: "UPDATE_LINE", id: line.id, patch: { qty: line.qty - 1 } });
+  });
+  wrap.querySelector("[data-inc]").addEventListener("click", () =>
+    dispatch({ type: "UPDATE_LINE", id: line.id, patch: { qty: line.qty + 1 } }));
+
+  attachSwipe(card, line);
+  return wrap;
+}
+
+const escapeHtml = (s) =>
+  s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ─────────────────────────── СВАЙП ВЛЕВО = УБРАТЬ ────────────────────────
+   Порог 96px: случайная горизонталь при прокрутке списка не должна стоить
+   позиции. Вертикальный жест отдаётся странице целиком.                   */
+function attachSwipe(card, line) {
+  let x0 = 0, y0 = 0, dx = 0, locked = null;
+  card.addEventListener("touchstart", (e) => {
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; locked = null;
+    card.style.transition = "none";
+  }, { passive: true });
+  card.addEventListener("touchmove", (e) => {
+    const x = e.touches[0].clientX, y = e.touches[0].clientY;
+    if (locked === null) {
+      locked = Math.abs(x - x0) > Math.abs(y - y0) + 4 ? "x" : "y";
+    }
+    if (locked !== "x") return;
+    dx = Math.min(0, x - x0);
+    card.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+  card.addEventListener("touchend", () => {
+    card.style.transition = "transform .2s ease";
+    if (dx < -96) {
+      card.style.transform = "translateX(-100%)";
+      setTimeout(() => removeWithUndo(line), 160);
+    } else {
+      card.style.transform = "translateX(0)";
+    }
+  });
+}
+
+function removeWithUndo(line) {
+  dispatch({ type: "REMOVE_LINE", id: line.id }, { undoable: true });
+  showToast(`«${line.title}» убрана`);
+}
+
+/* ─────────────────────────────── ТОСТ ────────────────────────────────── */
+const toastEl = document.getElementById("toast");
+document.getElementById("undo").addEventListener("click", () => {
+  const prev = history.pop();
+  if (!prev) return;
+  state = prev;
+  render();
+  hideToast();
+});
+function showToast(text) {
+  document.getElementById("toastText").textContent = text;
+  toastEl.style.opacity = "1";
+  toastEl.style.pointerEvents = "auto";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 5000);
+}
+function hideToast() {
+  toastEl.style.opacity = "0";
+  toastEl.style.pointerEvents = "none";
+}
+
+/* ───────────────────────── ЛИСТЫ (позиция и каталог) ────────────────────── */
+const scrim = document.getElementById("scrim");
+const lineSheet = document.getElementById("lineSheet");
+const catalogSheet = document.getElementById("catalogSheet");
+
+function openSheet(el) {
+  el.classList.add("open");
+  el.setAttribute("aria-hidden", "false");
+  scrim.classList.add("open");
+}
+function closeSheets() {
+  [lineSheet, catalogSheet].forEach((el) => {
+    el.classList.remove("open");
+    el.setAttribute("aria-hidden", "true");
+  });
+  scrim.classList.remove("open");
+}
+scrim.addEventListener("click", closeSheets);
+
+/* Лист позиции рисуется ОДИН РАЗ на открытие и во время ввода не
+   перерисовывается — поэтому каретка стоит там, где её оставили.          */
+function openLineSheet(id) {
+  const line = state.lines.find((l) => l.id === id);
+  if (!line) return;
+  const index = state.lines.indexOf(line);
+  const body = document.getElementById("lineSheetBody");
+  body.innerHTML = `
+    <h2 class="pb-3 text-center text-[17px] font-bold">${escapeHtml(line.title)}</h2>
+
+    <label class="mb-1 block text-[13px] font-medium" style="color: var(--sub)">Название</label>
+    <input id="f-title" type="text" enterkeyhint="next" value="${escapeHtml(line.title)}"
+      class="mb-4 w-full rounded-[10px] px-3 py-2.5 text-[16px]"
+      style="background: var(--fill); border: none" />
+
+    <div class="mb-4 flex gap-3">
+      <div class="flex-1">
+        <label class="mb-1 block text-[13px] font-medium" style="color: var(--sub)">Цена за одну, €</label>
+        <input id="f-price" type="text" inputmode="decimal" enterkeyhint="next"
+          value="${moneyInput(line.price)}"
+          class="num w-full rounded-[10px] px-3 py-2.5 text-[16px]"
+          style="background: var(--fill); border: none" />
+      </div>
+      <div class="flex-1">
+        <label class="mb-1 block text-[13px] font-medium" style="color: var(--sub)">Количество</label>
+        <input id="f-qty" type="text" inputmode="numeric" enterkeyhint="done" value="${line.qty}"
+          class="num w-full rounded-[10px] px-3 py-2.5 text-[16px]"
+          style="background: var(--fill); border: none" />
+      </div>
+    </div>
+
+    <label class="mb-1 block text-[13px] font-medium" style="color: var(--sub)">НДС</label>
+    <div class="mb-4 flex gap-2" id="f-vat">
+      ${[["off", "Без НДС"], ["inclusive", "Включён"], ["exclusive", "Плюс 19%"]]
+        .map(([v, label]) => `
+        <button data-vat="${v}" class="tap flex-1 rounded-[10px] py-2.5 text-[14px] font-semibold"
+          style="background: ${line.vat === v ? "var(--accent)" : "var(--fill)"};
+                 color: ${line.vat === v ? "var(--on-accent)" : "var(--ink)"}">${label}</button>`).join("")}
+    </div>
+
+    <label class="mb-1 block text-[13px] font-medium" style="color: var(--sub)">Что входит</label>
+    <textarea id="f-note" rows="2" enterkeyhint="done"
+      class="mb-4 w-full rounded-[10px] px-3 py-2.5 text-[16px]"
+      style="background: var(--fill); border: none">${escapeHtml(line.note)}</textarea>
+
+    <div class="mb-4 flex items-center gap-2">
+      <span class="flex-1 text-[13px] font-medium" style="color: var(--sub)">Переместить</span>
+      <button id="f-up" class="tap rounded-[10px] px-4 py-2 text-[15px] font-bold"
+        style="background: var(--fill); opacity: ${index === 0 ? ".4" : "1"}">↑</button>
+      <button id="f-down" class="tap rounded-[10px] px-4 py-2 text-[15px] font-bold"
+        style="background: var(--fill); opacity: ${index === state.lines.length - 1 ? ".4" : "1"}">↓</button>
+    </div>
+
+    <button id="f-remove" class="tap w-full rounded-[10px] py-3 text-[15px] font-bold"
+      style="background: var(--fill); color: var(--danger)">Убрать позицию</button>`;
+
+  const commit = (patch) => dispatch({ type: "UPDATE_LINE", id, patch });
+
+  body.querySelector("#f-title").addEventListener("blur", (e) => {
+    const v = e.target.value.trim();
+    if (v) commit({ title: v });
+    else e.target.value = state.lines.find((l) => l.id === id).title;
+  });
+  // Цена: разбор и формат ТОЛЬКО здесь. Мусор возвращается прежним числом.
+  body.querySelector("#f-price").addEventListener("blur", (e) => {
+    const cents = toCents(e.target.value);
+    const line2 = state.lines.find((l) => l.id === id);
+    if (cents === null) { e.target.value = moneyInput(line2.price); return; }
+    commit({ price: cents });
+    e.target.value = moneyInput(cents);
+  });
+  body.querySelector("#f-qty").addEventListener("blur", (e) => {
+    const n = parseInt(e.target.value, 10);
+    const line2 = state.lines.find((l) => l.id === id);
+    if (!Number.isFinite(n) || n < 1) { e.target.value = line2.qty; return; }
+    commit({ qty: n });
+    e.target.value = n;
+  });
+  body.querySelectorAll("[data-vat]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      commit({ vat: btn.dataset.vat });
+      openLineSheet(id);
+    }));
+  body.querySelector("#f-note").addEventListener("blur", (e) =>
+    commit({ note: e.target.value.trim() }));
+  body.querySelector("#f-up").addEventListener("click", () => {
+    dispatch({ type: "REORDER", id, delta: -1 });
+    openLineSheet(id);
+  });
+  body.querySelector("#f-down").addEventListener("click", () => {
+    dispatch({ type: "REORDER", id, delta: 1 });
+    openLineSheet(id);
+  });
+  body.querySelector("#f-remove").addEventListener("click", () => {
+    closeSheets();
+    removeWithUndo(line);
+  });
+
+  openSheet(lineSheet);
+}
+
+/* Каталог: выбор из прайса, а не пустая строка. */
+const searchEl = document.getElementById("search");
+const catalogListEl = document.getElementById("catalogList");
+
+function renderCatalog() {
+  const q = searchEl.value.trim().toLowerCase();
+  const found = q ? CATALOG.filter((s) => s.name.toLowerCase().includes(q)) : CATALOG;
+  catalogListEl.innerHTML = found.length
+    ? found.map((s) => `
+      <button data-service="${s.id}"
+        class="tap mb-2 flex w-full items-center gap-3 rounded-[10px] px-3 py-3 text-left"
+        style="background: var(--fill)">
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-[15px] font-semibold">${escapeHtml(s.name)}</span>
+          <span class="block text-[13px]" style="color: var(--sub)">${s.minutes} мин</span>
+        </span>
+        <span class="num text-[15px] font-bold">${money(s.price)}</span>
+      </button>`).join("")
+    : `<p class="px-1 py-8 text-center text-[15px]" style="color: var(--faint)">Ничего не нашлось</p>`;
+
+  catalogListEl.querySelectorAll("[data-service]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const service = CATALOG.find((s) => s.id === btn.dataset.service);
+      dispatch({ type: "ADD_LINE", service });
+      closeSheets();
+      searchEl.value = "";
+    }));
+}
+searchEl.addEventListener("input", renderCatalog);
+
+document.getElementById("add").addEventListener("click", () => {
+  searchEl.value = "";
+  renderCatalog();
+  openSheet(catalogSheet);
+});
+
+/* ──────────────── КЛАВИАТУРА НЕ ПЕРЕКРЫВАЕТ ИТОГ ────────────────────────
+   Софт-клавиатура на iOS не сжимает layout viewport — она накрывает его.
+   Поэтому итог поднимается на высоту, которую сообщает visualViewport.   */
+const footer = document.getElementById("footer");
+if (window.visualViewport) {
+  const lift = () => {
+    const vv = window.visualViewport;
+    const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    footer.style.transform = overlap ? `translateY(-${overlap}px)` : "";
+    lineSheet.style.transform = lineSheet.classList.contains("open")
+      ? `translateY(-${overlap}px)` : "";
+  };
+  window.visualViewport.addEventListener("resize", lift);
+  window.visualViewport.addEventListener("scroll", lift);
+}
+
+render();
+</script>

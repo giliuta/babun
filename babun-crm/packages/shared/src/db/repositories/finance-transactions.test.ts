@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+// ДИАЛЕКТ ТЕСТА — `bun:test`, потому что раннер продукта bun. `vitest` стоит
+// только в `apps/web` и в `packages/shared` не установлен вовсе: этот файл был
+// единственным во всём денежном контуре, который НИ ОДИН раннер репозитория не
+// исполнял. Соседи по папке (`invoices.test.ts`, `invoice-payments.test.ts`)
+// написаны на bun:test, и API совпадает (`describe/it/expect`).
+import { describe, expect, it } from "bun:test";
 import {
   createTransfer,
   insertTransaction,

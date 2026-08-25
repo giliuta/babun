@@ -22,12 +22,6 @@ const account = (
   ...overrides,
 });
 
-const company = (
-  id: string,
-  overrides: Partial<TransferAccountSnapshot> = {},
-): TransferAccountSnapshot =>
-  account(id, { scope: "company", brigade_id: null, ...overrides });
-
 describe("transferValidationError", () => {
   it("accepts the exact available balance", () => {
     expect(transferValidationError(account("from"), account("to"), 100)).toBeNull();
@@ -45,18 +39,21 @@ describe("transferValidationError", () => {
     );
   });
 
-  it("rejects same-account and team-to-team transfers", () => {
+  it("rejects only a transfer into the same account", () => {
     const from = account("same");
     expect(transferValidationError(from, account("same"), 1)).toBe("Выберите разные счета");
-    expect(
-      transferValidationError(from, account("to", { brigade_id: "team-b" }), 1),
-    ).toBe("Перевод между командами идёт через счёт компании");
   });
 
-  it("allows team↔company and company↔company transfers", () => {
-    expect(transferValidationError(account("from"), company("shared"), 1)).toBeNull();
-    expect(transferValidationError(company("shared"), account("to"), 1)).toBeNull();
-    expect(transferValidationError(company("a"), company("b"), 1)).toBeNull();
+  // ЗАПРЕТ «МЕЖДУ БРИГАДАМИ ТОЛЬКО ЧЕРЕЗ ОБЩИЙ СЧЁТ» СНЯТ (владелец
+  // 2026-08-15): он существовал ради общего счёта, а того в продукте нет.
+  it("allows a direct transfer between two brigades", () => {
+    expect(
+      transferValidationError(
+        account("from"),
+        account("to", { brigade_id: "team-b" }),
+        1,
+      ),
+    ).toBeNull();
   });
 
   it("rejects inactive and missing accounts", () => {
@@ -97,28 +94,14 @@ describe("payment account routing", () => {
 
 describe("accountServesTeam", () => {
   it("team account serves only its own brigade", () => {
-    const own = { scope: "team" as const, brigade_id: "team-a", team_ids: [] };
+    const own = { brigade_id: "team-a" };
     expect(accountServesTeam(own, "team-a")).toBe(true);
     expect(accountServesTeam(own, "team-b")).toBe(false);
   });
 
-  it("company account serves exactly its attached teams", () => {
-    const shared = {
-      scope: "company" as const,
-      brigade_id: null,
-      team_ids: ["team-a", "team-b"],
-    };
-    expect(accountServesTeam(shared, "team-a")).toBe(true);
-    expect(accountServesTeam(shared, "team-b")).toBe(true);
-    expect(accountServesTeam(shared, "team-c")).toBe(false);
-  });
-
-  it("detached company account serves nobody", () => {
-    expect(
-      accountServesTeam(
-        { scope: "company", brigade_id: null, team_ids: [] },
-        "team-a",
-      ),
-    ).toBe(false);
+  // Счёт без команды — наследие общего счёта. Ничьим он и остаётся: приписать
+  // его команде значило бы отдать ей чужие деньги.
+  it("an account without a brigade serves nobody", () => {
+    expect(accountServesTeam({ brigade_id: null }, "team-a")).toBe(false);
   });
 });

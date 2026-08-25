@@ -6,6 +6,7 @@ import type {
   Appointment,
   AppointmentStatus,
 } from "@babun/shared/local/appointments";
+import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -153,10 +154,10 @@ export default function MasterVisitsScreen() {
   };
 
   const openInCalendar = (a: Appointment) => {
-    // teamId — календарь переключается на бригаду записи, иначе визит
-    // чужой бригады открывал бы пустой день активной команды.
+    // teamId — календарь переключается на команду записи, иначе визит
+    // чужой команды открывал бы пустой день активной команды.
     router.push(
-      `/(dashboard)?date=${encodeURIComponent(a.date)}${
+      `/?date=${encodeURIComponent(a.date)}${
         a.team_id ? `&teamId=${encodeURIComponent(a.team_id)}` : ""
       }`,
     );
@@ -290,7 +291,7 @@ export default function MasterVisitsScreen() {
                             paddingTop: 2,
                           }}
                         >
-                          {Math.round(a.total_amount)} €
+                          {formatEUR(a.total_amount)}
                         </Text>
                       ) : null}
                     </Pressable>

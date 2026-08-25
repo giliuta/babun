@@ -8,15 +8,19 @@ import {
 import { AddRow } from "@/components/ui/AddRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
-import { SectionFooter } from "@/components/ui/SectionFooter";
 import { Divider } from "@/components/ui/Divider";
 import { useThemeColors } from "@/theme/colors";
 import { formatHM, parseHM } from "@/features/appointments/helpers";
 
-// Перерывы дня (обед и т.п.) — общая секция обоих редакторов дня: дня НЕДЕЛИ
-// и особого ДНЯ. Оба правят один DaySchedule.breaks, поэтому и редактор один;
-// компонент не знает, куда лягут данные — родитель отдаёт breaks и забирает
-// следующий список через onChange (instant-commit, как весь экран).
+// Перерывы дня (обед и т.п.) — секция редактора ОСОБОГО ДНЯ (страница с датой).
+// Родитель отдаёт breaks и забирает следующий список через onChange
+// (instant-commit, как весь экран).
+//
+// НЕДЕЛЬНЫЙ ГРАФИК ЭТУ СЕКЦИЮ БОЛЬШЕ НЕ ЗОВЁТ: с 2026-08-17 он лист, и перерыв
+// там — чип со своими часами над общим барабаном (`TeamScheduleSheet`), потому
+// что двух разных контролов времени в одном листе быть не должно (DS §5). Здесь
+// остались компактные нативные пикеры прямо в строке: на СТРАНИЦЕ особого дня
+// они не конкурируют с барабаном — барабана там нет.
 //
 // Строка перерыва — пара компактных нативных пикеров прямо в строке (рецепт
 // TimeField) и тихое «Убрать»: перерыв — не сущность со страницей, а два
@@ -132,9 +136,6 @@ export function BreaksSection({
           onPress={() => commit([...breaks, defaultBreak(dayStart, dayEnd)])}
         />
       </SectionCard>
-      <SectionFooter>
-        Обед или пауза между выездами: на сетке — серая полоса, свободные слоты её обходят.
-      </SectionFooter>
     </>
   );
 }

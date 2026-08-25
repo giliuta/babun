@@ -4,12 +4,23 @@ import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { NEVER_PAUSE } from "@/features/finances/accounts";
 import { shouldImportLegacyDayClosure } from "./day-closure-rollout";
 
-export {
-  cashCentsToInput,
-  parseCashInputToCents,
-} from "./day-closure-money";
+// ЗАКРЫТИЕ ДНЯ ЧИТАЕТ СВЕРКИ КАСС (ТЗ счетов 2026-08-10 §5.5).
+//
+// Фактическую сумму кассы клиент больше НЕ НАБИРАЕТ и НЕ ПРИСЫЛАЕТ: её
+// складывает сервер из `account_cash_counts`. Второе число, набранное пальцем
+// на экране закрытия дня, — это второй ответ на вопрос «сколько было в
+// кассе», и через неделю два ответа разъезжаются.
+//
+// ПЕРЕХОД. Миграция 20260811110000 накатывается отдельно от выката сборки,
+// поэтому запись идёт в две попытки: сперва канонической сигнатурой
+// `close_business_day(p_business_date)`, а если сервер её ещё не знает —
+// старой, двухаргументной, с суммой сегодняшних сверок в качестве факта. Не
+// «по-старому пальцем», а «по-старому доставленным числом»: экран поля не
+// имеет ни до, ни после миграции. Легаси-ветку удалять целиком, как только
+// миграция применена в проде.
 
 type DayClosureRow = Database["public"]["Tables"]["day_closures"]["Row"];
 type DayClosureReadRow = Database["public"]["Functions"]["read_day_closure"]["Returns"][number];
@@ -132,18 +143,22 @@ function eurosToCents(value: number): number {
   return Math.round(value * 100);
 }
 
+/** У самой старой локальной записи закрытия («1») учётной суммы нет вовсе.
+ *  Ноль здесь — не деньги, а «неизвестно»: сервер перезапишет состояние при
+ *  первом же ответе, а до него экран печатает только факт закрытия. */
+const LEGACY_EXPECTED_UNKNOWN = 0;
+
 function parseLegacyRecord(
   raw: string,
   tenantId: string,
   businessDate: string,
-  fallbackExpectedCashCents: number,
 ): DayClosureState | null {
   if (raw === "1") {
     return {
       tenantId,
       businessDate,
       isClosed: true,
-      expectedCashCents: fallbackExpectedCashCents,
+      expectedCashCents: LEGACY_EXPECTED_UNKNOWN,
       actualCashCents: null,
       deltaCashCents: null,
       closedAt: null,
@@ -156,7 +171,9 @@ function parseLegacyRecord(
     const parsed = JSON.parse(raw) as LegacyClosedRecord;
     const expected =
       finiteInteger(parsed.expectedCashCents) ??
-      eurosToCents(parsed.expectedCash ?? fallbackExpectedCashCents / 100);
+      (parsed.expectedCash === undefined
+        ? LEGACY_EXPECTED_UNKNOWN
+        : eurosToCents(parsed.expectedCash));
     const explicitActualCents = finiteInteger(parsed.actualCashCents);
     const actual =
       parsed.actualCashCents === null
@@ -190,18 +207,12 @@ function parseLegacyRecord(
 function readLegacyState(
   tenantId: string,
   businessDate: string,
-  fallbackExpectedCashCents: number,
 ): DayClosureState {
   try {
     const storage = getStorage();
     const scoped = storage.getRaw(scopedKey(tenantId, businessDate));
     if (scoped) {
-      const parsed = parseLegacyRecord(
-        scoped,
-        tenantId,
-        businessDate,
-        fallbackExpectedCashCents,
-      );
+      const parsed = parseLegacyRecord(scoped, tenantId, businessDate);
       if (parsed) return parsed;
     }
 
@@ -209,12 +220,7 @@ function readLegacyState(
     const owner = storage.getRaw(LEGACY_OWNER_KEY);
     if (oldUnscoped && (!owner || owner === tenantId)) {
       if (!owner) storage.setRaw(LEGACY_OWNER_KEY, tenantId);
-      const parsed = parseLegacyRecord(
-        oldUnscoped,
-        tenantId,
-        businessDate,
-        fallbackExpectedCashCents,
-      );
+      const parsed = parseLegacyRecord(oldUnscoped, tenantId, businessDate);
       if (parsed) {
         writeLegacyState(parsed);
         return parsed;
@@ -228,7 +234,7 @@ function readLegacyState(
     tenantId,
     businessDate,
     isClosed: false,
-    expectedCashCents: fallbackExpectedCashCents,
+    expectedCashCents: LEGACY_EXPECTED_UNKNOWN,
     actualCashCents: null,
     deltaCashCents: null,
     closedAt: null,
@@ -256,10 +262,44 @@ function writeLegacyState(state: DayClosureState): void {
   }
 }
 
-export function useDayClosure(
+/**
+ * Запись закрытия дня. Каноническая дверь — `close_business_day(p_business_date)`:
+ * факт складывает сервер из сверок касс.
+ *
+ * `legacyActualCashCents` уходит ТОЛЬКО в старую сигнатуру и только пока
+ * миграция 20260811110000 не применена — это сумма сегодняшних сверок, а не
+ * набранное пальцем число. Вся эта ветка удаляется вместе со старой
+ * сигнатурой на сервере.
+ */
+async function closeDayOnServer(
   businessDate: string,
-  fallbackExpectedCashCents: number,
-) {
+  legacyActualCashCents: number,
+): Promise<DayClosureWireRow> {
+  const modern = await supabase.rpc("close_business_day", {
+    p_business_date: businessDate,
+  });
+  if (!modern.error) return firstClosureRow(modern.data);
+  if (!isMissingDayClosureContract(modern.error)) {
+    throw new Error(modern.error.message);
+  }
+
+  const legacy = await supabase.rpc("close_business_day", {
+    p_business_date: businessDate,
+    p_actual_cash_cents: legacyActualCashCents,
+  });
+  if (legacy.error) {
+    // Обе сигнатуры отсутствуют — закрытия дня на сервере нет вовсе.
+    if (isMissingDayClosureContract(legacy.error)) {
+      throw new Error(
+        "День не закрыт: серверная схема финансов ещё не обновлена.",
+      );
+    }
+    throw new Error(legacy.error.message);
+  }
+  return firstClosureRow(legacy.data);
+}
+
+export function useDayClosure(businessDate: string) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
@@ -268,11 +308,7 @@ export function useDayClosure(
     enabled: !!tenantId && roleQuery.isSuccess && role === "owner",
     queryFn: async (): Promise<DayClosureState> => {
       const activeTenantId = tenantId as string;
-      const legacy = readLegacyState(
-        activeTenantId,
-        businessDate,
-        fallbackExpectedCashCents,
-      );
+      const legacy = readLegacyState(activeTenantId, businessDate);
       const { data, error } = await supabase.rpc("read_day_closure", {
         p_business_date: businessDate,
       });
@@ -292,15 +328,15 @@ export function useDayClosure(
           hasServerSync(activeTenantId, businessDate),
         )
       ) {
-        const { data: imported, error: importError } = await supabase.rpc(
-          "close_business_day",
-          {
-            p_business_date: businessDate,
-            p_actual_cash_cents: legacy.actualCashCents as number,
-          },
+        // Локальная запись доезжает на сервер ФАКТОМ ЗАКРЫТИЯ. Её касса на
+        // новом сервере не переносится: сверок за тот день не было, а
+        // придумывать их задним числом — то же самое второе число.
+        state = rowToState(
+          await closeDayOnServer(
+            businessDate,
+            legacy.actualCashCents as number,
+          ),
         );
-        if (importError) throw new Error(importError.message);
-        state = rowToState(firstClosureRow(imported));
       }
       markServerSynced(activeTenantId, businessDate);
       writeLegacyState(state);
@@ -309,33 +345,26 @@ export function useDayClosure(
   });
 }
 
-export function useCloseDay(
-  businessDate: string,
-  _fallbackExpectedCashCents: number,
-) {
+export function useCloseDay(businessDate: string) {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (actualCashCents: number): Promise<DayClosureState> => {
+    // Закрытие дня — денежная запись, и без сети она обязана честно упасть, а
+    // не встать в paused: `mutateAsync` тогда не резолвится, кнопка навсегда
+    // остаётся «Закрываем…», а свёрнутое приложение уносит намерение молча.
+    ...NEVER_PAUSE,
+    /** Аргумент — сумма СЕГОДНЯШНИХ СВЕРОК касс. Новый сервер её игнорирует и
+     *  складывает сам; старому она нужна как факт дня. */
+    mutationFn: async (countedCashCents: number): Promise<DayClosureState> => {
       if (!tenantId) throw new Error("Нет активной компании");
       if (role !== "owner") throw new Error("Закрыть день может только владелец.");
-      if (!Number.isSafeInteger(actualCashCents) || actualCashCents < 0) {
-        throw new Error("Введите корректную фактическую сумму кассы.");
+      if (!Number.isSafeInteger(countedCashCents) || countedCashCents < 0) {
+        throw new Error("Не удалось сложить сверки касс. Обновите экран.");
       }
-      const { data, error } = await supabase.rpc("close_business_day", {
-        p_business_date: businessDate,
-        p_actual_cash_cents: actualCashCents,
-      });
-      if (error) {
-        if (isMissingDayClosureContract(error)) {
-          throw new Error(
-            "День не закрыт: серверная схема финансов ещё не обновлена.",
-          );
-        }
-        throw new Error(error.message);
-      }
-      const state = rowToState(firstClosureRow(data));
+      const state = rowToState(
+        await closeDayOnServer(businessDate, countedCashCents),
+      );
       markServerSynced(tenantId, businessDate);
       writeLegacyState(state);
       return state;
@@ -346,14 +375,14 @@ export function useCloseDay(
   });
 }
 
-export function useReopenDay(
-  businessDate: string,
-  _fallbackExpectedCashCents: number,
-) {
+export function useReopenDay(businessDate: string) {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const queryClient = useQueryClient();
   return useMutation({
+    // См. `useCloseDay`: открытие дня — такая же запись и так же не имеет
+    // права зависнуть без сети.
+    ...NEVER_PAUSE,
     mutationFn: async (): Promise<DayClosureState> => {
       if (!tenantId) throw new Error("Нет активной компании");
       if (role !== "owner") throw new Error("Открыть день может только владелец.");

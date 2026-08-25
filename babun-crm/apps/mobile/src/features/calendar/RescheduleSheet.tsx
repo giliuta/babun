@@ -32,7 +32,7 @@ import {
 // календарём + время начала, длительность сохраняется автоматически
 // (конец = старт + прежняя длительность, кламп к 23:59 через addMinutesHM —
 // визит через полночь бронируется двумя записями, как и в шите записи).
-// Пересечение с другой записью бригады предупреждает, но НЕ блокирует
+// Пересечение с другой записью команды предупреждает, но НЕ блокирует
 // (web parity: диспетчер иногда ставит внахлёст сознательно).
 export function RescheduleSheet({
   appointment,
@@ -157,7 +157,7 @@ export function RescheduleSheet({
   };
 
   return (
-    <BottomSheet visible={appointment != null} onClose={onClose}>
+    <BottomSheet padded={false} visible={appointment != null} onClose={onClose}>
       {/* Тело скроллится, CTA прибит снизу: при AX-шрифтах inline-календарь
           + строки не выталкивают «Перенести» за край листа. */}
       <ScrollView bounces={false} style={{ flexShrink: 1 }}>
@@ -225,7 +225,7 @@ export function RescheduleSheet({
         {/* пересечение — предупреждаем, не блокируем (web parity) */}
         {warning ? (
           <View
-            className="mx-4 mb-1 mt-1 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
+            className="mx-4 mb-1 mt-1 flex-row items-start gap-2 rounded-[10px] border px-3 py-2.5"
             style={{
               backgroundColor: `${t.warning}14`,
               borderColor: `${t.warning}33`,

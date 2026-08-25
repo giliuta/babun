@@ -6,16 +6,55 @@
 // Account.team_ids). Soft close via `is_active=false` keeps the history.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, Json } from "../database.types";
+import type { Database } from "../database.types";
 import { exactMoneyAmountToCents } from "../../common/utils/money";
 import type {
   Account,
   AccountKind,
   AccountScope,
 } from "../../local/finance/account";
+import {
+  accountWriteErrorMessage,
+  duplicateAccountNameMessage,
+  type DatabaseErrorLike,
+} from "../../local/finance/integrity";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["accounts"]["Row"];
+
+/**
+ * Разбор ответа на запись по счёту.
+ *
+ * PostgREST на отказ RLS не ругается: невидимая политике строка просто не
+ * находится, и `update`/`delete` отчитывается успехом с пустым телом. Отсюда
+ * требование `.select("id")` у каждой записи — без него «удалили» и «не имеем
+ * права» выглядят одинаково, экран схлопывается, а счёт остаётся.
+ */
+function assertAccountWritten(
+  result: { data: { id: string } | null; error: DatabaseErrorLike | null },
+  texts: { fallback: string; duplicate?: string },
+): void {
+  if (result.error) {
+    throw new Error(accountWriteErrorMessage(result.error, texts));
+  }
+  if (!result.data) {
+    throw new Error("Счёт не найден или недоступен — обновите список счетов");
+  }
+}
+
+// Порядок строк задаёт только `position`, а до 2026-08-10 он писался нулём
+// всем счетам: при равных значениях Postgres волен вернуть любой порядок, и
+// список перетасовывался между рефетчами и устройствами. Имя сравниваем
+// по-русски и без учёта регистра, id — последняя добивка ради детерминизма.
+const accountOrder = new Intl.Collator("ru", { sensitivity: "base" });
+
+function compareAccounts(a: Account, b: Account): number {
+  return (
+    a.position - b.position
+    || accountOrder.compare(a.name, b.name)
+    || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+}
 
 function rowToAccount(r: Row, teamIds: string[] = []): Account {
   const scope = (r.scope as AccountScope) ?? "team";
@@ -33,7 +72,8 @@ function rowToAccount(r: Row, teamIds: string[] = []): Account {
     color: r.color,
     position: r.position,
     vat_mode: (r.vat_mode as Account["vat_mode"]) ?? null,
-    balance_hidden: r.balance_hidden,
+    is_primary: r.is_primary,
+    show_in_payments: r.show_in_payments,
     is_active: r.is_active,
     created_at: r.created_at,
     updated_at: r.updated_at,
@@ -67,9 +107,9 @@ export async function listAccounts(
     if (list) list.push(m.team_id);
     else teamsByAccount.set(m.account_id, [m.team_id]);
   }
-  return ((data ?? []) as Row[]).map((r) =>
-    rowToAccount(r, teamsByAccount.get(r.id) ?? []),
-  );
+  return ((data ?? []) as Row[])
+    .map((r) => rowToAccount(r, teamsByAccount.get(r.id) ?? []))
+    .sort(compareAccounts);
 }
 
 export interface AccountDraft {
@@ -85,7 +125,13 @@ export interface AccountDraft {
   icon?: string | null;
   color?: string | null;
   position?: number;
-  balance_hidden?: boolean;
+  /** Основной счёт группы. Ставить `true` СМЕНОЙ основного нельзя — уникальный
+   *  частичный индекс отвергнет второй флаг в группе; для смены есть
+   *  {@link setPrimaryAccount}, который сперва снимает старый. */
+  is_primary?: boolean;
+  /** Показывать ли счёт при оплате заявок. Новый счёт заводится принимающим:
+   *  форма создания об этом не спрашивает, выключают потом в настройках. */
+  show_in_payments?: boolean;
   /** Режим НДС этого счёта. null — как у команды/компании. */
   vat_mode?: "off" | "inclusive" | "exclusive" | null;
 }
@@ -112,8 +158,38 @@ function assertScopeConsistency(
     throw new Error("Выберите команду счёта");
   }
   if (scope === "company" && brigadeId) {
-    throw new Error("У общего счёта компании не бывает команды-владельца");
+    throw new Error("У счёта нескольких команд не бывает команды-владельца");
   }
+}
+
+/**
+ * Следующая позиция в пределах (тенант, команда) — счёт встаёт в конец своего
+ * списка. У каждой команды нумерация своя, у счетов компании (brigade_id NULL)
+ * — отдельная: список сгруппирован по командам, и сквозной счёт по тенанту
+ * перемешивал бы соседние секции.
+ *
+ * Два устройства, создающие счёт одновременно, получат одну позицию — их
+ * разведёт вторичный ключ сортировки, см. {@link compareAccounts}.
+ */
+async function nextAccountPosition(
+  supabase: DbSupabase,
+  tenantId: string,
+  brigadeId: string | null,
+): Promise<number> {
+  const scoped = supabase
+    .from("accounts")
+    .select("position")
+    .eq("tenant_id", tenantId)
+    .order("position", { ascending: false })
+    .limit(1);
+  const { data, error } = await (
+    brigadeId === null
+      ? scoped.is("brigade_id", null)
+      : scoped.eq("brigade_id", brigadeId)
+  ).maybeSingle();
+  if (error) throw new Error(`nextAccountPosition: ${error.message}`);
+  // Закрытые счета из нумерации не выпадают: их можно открыть обратно.
+  return (data?.position ?? -1) + 1;
 }
 
 export async function insertAccount(
@@ -123,6 +199,8 @@ export async function insertAccount(
 ): Promise<Account> {
   assertOpeningBalance(draft.opening_balance);
   assertScopeConsistency(draft.scope, draft.brigade_id);
+  const position = draft.position
+    ?? (await nextAccountPosition(supabase, tenantId, draft.brigade_id));
   const { data, error } = await supabase
     .from("accounts")
     .insert({
@@ -135,15 +213,21 @@ export async function insertAccount(
       opening_balance: draft.opening_balance ?? 0,
       icon: draft.icon ?? null,
       color: draft.color ?? null,
-      position: draft.position ?? 0,
-      balance_hidden: draft.balance_hidden ?? false,
+      position,
+      is_primary: draft.is_primary ?? false,
+      show_in_payments: draft.show_in_payments ?? true,
       vat_mode: draft.vat_mode ?? null,
       is_active: true,
     })
     .select("*")
     .single();
   if (error || !data) {
-    throw new Error(error?.message ?? "Не удалось создать финансовый счёт");
+    throw new Error(
+      accountWriteErrorMessage(error, {
+        fallback: "Не удалось создать счёт",
+        duplicate: duplicateAccountNameMessage(draft.name),
+      }),
+    );
   }
   const account = rowToAccount(data as Row);
   const teamIds = draft.scope === "company" ? (draft.team_ids ?? []) : [];
@@ -177,7 +261,10 @@ export async function updateAccount(
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
   if (patch.position !== undefined) update.position = patch.position;
-  if (patch.balance_hidden !== undefined) update.balance_hidden = patch.balance_hidden;
+  if (patch.is_primary !== undefined) update.is_primary = patch.is_primary;
+  if (patch.show_in_payments !== undefined) {
+    update.show_in_payments = patch.show_in_payments;
+  }
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
   const { data, error } = await supabase
     .from("accounts")
@@ -185,9 +272,12 @@ export async function updateAccount(
     .eq("id", id)
     .select("id")
     .maybeSingle();
-  if (error || !data) {
-    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
-  }
+  assertAccountWritten({ data, error }, {
+    fallback: "Не удалось изменить счёт",
+    duplicate: patch.name
+      ? duplicateAccountNameMessage(patch.name)
+      : undefined,
+  });
 }
 
 /**
@@ -205,7 +295,13 @@ export async function setAccountTeams(
     .from("account_teams")
     .select("team_id")
     .eq("account_id", accountId);
-  if (error) throw new Error(`setAccountTeams: ${error.message}`);
+  if (error) {
+    throw new Error(
+      accountWriteErrorMessage(error, {
+        fallback: "Не удалось прочитать команды счёта",
+      }),
+    );
+  }
   const current = new Set((data ?? []).map((r) => r.team_id));
   const toAdd = target.filter((teamId) => !current.has(teamId));
   const toRemove = [...current].filter((teamId) => !target.includes(teamId));
@@ -217,7 +313,13 @@ export async function setAccountTeams(
         team_id: teamId,
       })),
     );
-    if (addError) throw new Error(`setAccountTeams: ${addError.message}`);
+    if (addError) {
+      throw new Error(
+        accountWriteErrorMessage(addError, {
+          fallback: "Не удалось подключить команду к счёту",
+        }),
+      );
+    }
   }
   if (toRemove.length > 0) {
     const { error: removeError } = await supabase
@@ -225,25 +327,79 @@ export async function setAccountTeams(
       .delete()
       .eq("account_id", accountId)
       .in("team_id", toRemove);
-    if (removeError) throw new Error(`setAccountTeams: ${removeError.message}`);
+    if (removeError) {
+      throw new Error(
+        accountWriteErrorMessage(removeError, {
+          fallback: "Не удалось отключить команду от счёта",
+        }),
+      );
+    }
   }
   return target;
 }
 
-/** Soft close — history kept, account hidden from active lists. */
+/**
+ * Назначить счёт основным для его группы (команды или счетов компании).
+ *
+ * ДВА ЗАПРОСА, А НЕ ОДИН. Уникальный частичный индекс
+ * `ux_accounts_primary_per_brigade` проверяется построчно, поэтому пометить
+ * новый счёт, не сняв флаг со старого, физически нельзя — снимаем первым.
+ * Обрыв между шагами оставляет группу без основного счёта: резолверы при этом
+ * возвращаются к порядку строк (поведение до 2026-08-10), деньги никуда не
+ * уезжают, а экран показывает ошибку.
+ */
+export async function setPrimaryAccount(
+  supabase: DbSupabase,
+  tenantId: string,
+  account: Pick<Account, "id" | "brigade_id">,
+): Promise<void> {
+  const group = supabase
+    .from("accounts")
+    .update({ is_primary: false })
+    .eq("tenant_id", tenantId)
+    .eq("is_primary", true);
+  const { error: clearError } = await (
+    account.brigade_id === null
+      ? group.is("brigade_id", null)
+      : group.eq("brigade_id", account.brigade_id)
+  );
+  if (clearError) {
+    throw new Error(
+      accountWriteErrorMessage(clearError, {
+        fallback: "Не удалось сменить основной счёт",
+      }),
+    );
+  }
+  const { data, error } = await supabase
+    .from("accounts")
+    .update({ is_primary: true })
+    .eq("id", account.id)
+    .select("id")
+    .maybeSingle();
+  assertAccountWritten({ data, error }, {
+    fallback: "Не удалось сделать счёт основным",
+  });
+}
+
+/**
+ * Soft close — history kept, account hidden from active lists.
+ *
+ * Флаг «основной» снимается ТОЙ ЖЕ записью: иначе закрытый счёт продолжает
+ * занимать единственное место в уникальном индексе, и назначить основным
+ * другой счёт команды становится нельзя — вместо понятного отказа человек
+ * получает нарушение уникальности.
+ */
 export async function softCloseAccount(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
   const { data, error } = await supabase
     .from("accounts")
-    .update({ is_active: false })
+    .update({ is_active: false, is_primary: false })
     .eq("id", id)
     .select("id")
     .maybeSingle();
-  if (error || !data) {
-    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
-  }
+  assertAccountWritten({ data, error }, { fallback: "Не удалось закрыть счёт" });
 }
 
 /** Reopen a soft-closed account (the reverse of {@link softCloseAccount}). */
@@ -257,9 +413,7 @@ export async function reopenAccount(
     .eq("id", id)
     .select("id")
     .maybeSingle();
-  if (error || !data) {
-    throw new Error(error?.message ?? "Финансовый счёт не найден или недоступен");
-  }
+  assertAccountWritten({ data, error }, { fallback: "Не удалось открыть счёт" });
 }
 
 /**
@@ -275,44 +429,16 @@ export async function deleteAccount(
   supabase: DbSupabase,
   id: string,
 ): Promise<void> {
-  const { error } = await supabase.from("accounts").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  const { data, error } = await supabase
+    .from("accounts")
+    .delete()
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
+  assertAccountWritten({ data, error }, { fallback: "Не удалось удалить счёт" });
 }
 
-/** Slim account projection for payment surfaces — no balances by design. */
-export interface PaymentAccount {
-  id: string;
-  name: string;
-  kind: AccountKind;
-  scope: AccountScope;
-  icon: string | null;
-  color: string | null;
-  position: number;
-}
-
-/**
- * Accounts that can receive a payment for the given team: the team's own
- * accounts plus attached company accounts. SECURITY DEFINER on the server;
- * masters get names only — never balances.
- */
-export async function listPaymentAccountsSafe(
-  supabase: DbSupabase,
-  teamId: string,
-): Promise<PaymentAccount[]> {
-  const { data, error } = await supabase.rpc("list_payment_accounts_safe", {
-    p_team_id: teamId,
-  });
-  if (error) throw new Error(`listPaymentAccountsSafe: ${error.message}`);
-  return ((data ?? []) as Json[]).map((raw) => {
-    const r = raw as Record<string, Json>;
-    return {
-      id: String(r.id),
-      name: String(r.name),
-      kind: r.kind as AccountKind,
-      scope: r.scope as AccountScope,
-      icon: (r.icon as string | null) ?? null,
-      color: (r.color as string | null) ?? null,
-      position: Number(r.position ?? 0),
-    };
-  });
-}
+// Пикер «куда принять деньги» здесь НЕ живёт: у него свой RPC
+// `list_payment_accounts_safe`, и единственный его потребитель — мобильный
+// хук `features/appointments/payment-accounts.ts`. Второй, неиспользуемый
+// разбор того же ответа лежал в этом файле и молча разъезжался с первым.

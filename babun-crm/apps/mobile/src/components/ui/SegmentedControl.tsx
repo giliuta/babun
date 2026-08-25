@@ -32,7 +32,7 @@ export function SegmentedControl<V extends string>({
       style={[
         {
           flexDirection: "row",
-          borderRadius: 12,
+          borderRadius: t.radius.card,
           padding: 4,
           backgroundColor: t.fill,
         },
@@ -53,7 +53,7 @@ export function SegmentedControl<V extends string>({
               flex: 1,
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: 10,
+              borderRadius: t.radius.card,
               paddingVertical: 8,
               minHeight: 44,
               backgroundColor: active ? t.surface : "transparent",

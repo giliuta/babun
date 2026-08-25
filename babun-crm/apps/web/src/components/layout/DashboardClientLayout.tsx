@@ -1514,15 +1514,21 @@ export default function DashboardClientLayout({
         entityId: team.id,
       });
       if (isNew) {
-        // Fire-and-forget: seed a default «Наличка» account for the
-        // new brigade so /finances has somewhere to land transactions
+        // Fire-and-forget: seed a default cash account for the new
+        // brigade so /finances has somewhere to land transactions
         // immediately. The (tenant_id, brigade_id, name) unique on
         // the table makes this idempotent in case the team was re-
         // created or the user lands here after a reload.
+        //
+        // ИМЯ — «Наличные», как в глоссарии продукта (ТЗ счетов 2026-08-10
+        // §7) и в мобильном автосоздании. Здесь заводилась «Наличка», и у
+        // одного тенанта уживались два имени одной сущности: бригада,
+        // созданная в вебе, получала «Наличку», созданная в приложении —
+        // «Наличные», и в пикере приёма оплаты это две разные пилюли.
         void insertAccount(getSupabaseBrowser(), tenantId, {
           scope: "team",
           brigade_id: team.id,
-          name: "Наличка",
+          name: "Наличные",
           kind: "cash",
           opening_balance: 0,
           icon: "💵",
@@ -1531,7 +1537,7 @@ export default function DashboardClientLayout({
           // else for visibility but don't block the UI.
           if (!String(e).toLowerCase().includes("unique")) {
             // eslint-disable-next-line no-console
-            console.warn("auto-seed Наличка failed", e);
+            console.warn("auto-seed cash account failed", e);
           }
         });
       }

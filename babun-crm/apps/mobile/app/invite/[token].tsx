@@ -118,7 +118,7 @@ export default function InvitationScreen() {
           <>
             <View className="items-center px-6 pb-5">
               <View
-                className="h-16 w-16 items-center justify-center rounded-[22px]"
+                className="h-16 w-16 items-center justify-center rounded-[10px]"
                 style={{ backgroundColor: t.fill }}
               >
                 <Building2 color={t.accent} size={30} />
@@ -196,7 +196,7 @@ export default function InvitationScreen() {
 
                 {actionError ? (
                   <View
-                    className="mb-3 rounded-2xl px-4 py-3"
+                    className="mb-3 rounded-[10px] px-4 py-3"
                     style={{
                       backgroundColor: t.surface,
                       borderWidth: 1,

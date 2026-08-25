@@ -69,14 +69,12 @@ export default function TransferSheet({
     if (!canSave || submitting) return;
     setSubmitting(true);
     try {
-      const fromAccount = accounts.find((a) => a.id === fromId);
       await onSubmit({
         from_account_id: fromId,
         to_account_id: toId,
         amount: numericAmount,
         occurred_on: date,
         notes: notes.trim() || null,
-        brigade_id: fromAccount?.brigade_id ?? null,
       });
       onClose();
     } catch (err) {

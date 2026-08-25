@@ -15,7 +15,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
 
@@ -210,7 +210,9 @@ export function useSetDayExtras() {
 // shape with material_costs as jsonb; guard it in case of bad rows. Shared
 // by the day-finance footer and the month money mini-list.
 export function useFinanceServices(): Service[] {
-  const { data: services = [] } = useServices();
+  // Полный справочник: расход материалов уже состоявшейся записи не должен
+  // обнуляться от того, что услугу убрали из прайса.
+  const { data: services = [] } = useAllServices();
   return useMemo(
     () =>
       services.map((s) => ({

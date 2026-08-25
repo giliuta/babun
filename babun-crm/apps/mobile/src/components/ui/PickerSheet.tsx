@@ -44,7 +44,7 @@ export function PickerSheet({
 }) {
   const t = useThemeColors();
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose}>
       <View
         style={{
           flexDirection: "row",

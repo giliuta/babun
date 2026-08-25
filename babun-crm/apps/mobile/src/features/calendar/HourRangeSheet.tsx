@@ -1,150 +1,127 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
+import { View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { SwitchRow } from "@/components/ui/SwitchRow";
-import { ICON } from "@/components/ui/tokens";
+import { TimeRangePicker } from "@/components/ui/TimeWheel";
 import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
-import { hourLabel } from "@/features/calendar/setting-options";
-import { isAutoWindow } from "@/features/calendar/window";
 
-// Пара часов «С … До …» одним нижним листом — диалект «Своего периода»
+// Пара границ «С … До …» одним нижним листом — диалект «Своего периода»
 // финансов (PeriodWheelsModal): сегмент С|До выбирает границу, ниже она
-// правится, «Применить» коммитит. Владелец 2026-08-16: «часы календаря —
+// крутится, «Применить» коммитит. Владелец 2026-08-16: «часы календаря —
 // снизу, как время в финансах: с такого-то до такого-то».
 //
-// Вместо колеса — родной список строк с галкой (OptionSheet-диалект):
-// нативный спиннер не умеет «только часы», а колесо с минутами пришлось бы
-// тихо округлять — список из 24 строк честнее и тапается быстрее. Выбор «С»
-// сам перекидывает сегмент на «До»: вся пара ставится в два тапа.
+// ГРАНИЦА СТАВИТСЯ ДВУМЯ БАРАБАНАМИ, А НЕ СПИСКОМ (владелец 2026-08-17: «не по
+// списку, а именно тумблер: отдельно кручу часы, отдельно минуты, минуты в
+// пятиминутку; дохожу до 24 — крутит дальше»). Список из 24 строк отвечал
+// только на «который час» и не умел сказать «в половину девятого»: минуты в нём
+// не существовали вовсе. Барабаны — `TimeWheelPair`, канонический контрол
+// времени продукта; правки вида и поведения кольца — там, а не здесь.
 //
-// autoOption добавляет тумблер «Автоматически» (Часы календаря: окно
-// выводится из рабочих часов и записей; пара 0–24 — его кодовое значение).
+// «АВТОМАТИЧЕСКИ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-08-17: «непонятно
+// автоматическое — мы убираем полностью»). Тумблер прятал пару часов за словом,
+// которое не отвечало на вопрос «а с какого же часа видно сетку»: человек
+// открывал лист, чтобы НАЗВАТЬ часы, и первым делом видел переключатель,
+// который эти часы скрывал. Пара 00:00–24:00 больше не сентинел — это ровно то,
+// что написано: сутки целиком.
+
+export interface HourRangeValue {
+  start: number;
+  end: number;
+  startMinute?: number;
+  endMinute?: number;
+}
+
+/** Минуты суток — в них удобно сравнивать границы, и только в них. */
+function toMin(h: number, m: number): number {
+  return h * 60 + m;
+}
 
 export function HourRangeSheet({
   visible,
   title,
   value,
-  autoOption,
   onClose,
   onApply,
 }: {
   visible: boolean;
   title: string;
-  /** Текущая пара; при autoOption пара 0–24 читается как «Автоматически». */
-  value: { start: number; end: number };
-  /** Тумблер «Автоматически» и его пояснение (только у «Часов календаря»). */
-  autoOption?: { hint: string };
+  /** Текущая пара — читается буквально, включая минуты. */
+  value: HourRangeValue;
   onClose: () => void;
-  onApply: (v: { start: number; end: number } | "auto") => void;
+  onApply: (v: {
+    start: number;
+    end: number;
+    startMinute: number;
+    endMinute: number;
+  }) => void;
 }) {
-  const t = useThemeColors();
-  const [auto, setAuto] = useState(false);
-  const [start, setStart] = useState(8);
-  const [end, setEnd] = useState(20);
-  const [side, setSide] = useState<"start" | "end">("start");
-  const listRef = useRef<ScrollView>(null);
+  const [start, setStart] = useState({ hour: 8, minute: 0 });
+  const [end, setEnd] = useState({ hour: 20, minute: 0 });
 
   // Ресинк черновика — по фронту открытия (приём PeriodWheelsModal): рефетч
-  // настроек не должен перескакивать пару, которую человек сейчас ставит.
+  // настроек не должен перескакивать границу, которую человек сейчас крутит.
   const wasVisible = useRef(false);
   useEffect(() => {
     if (visible && !wasVisible.current) {
-      const isAuto = !!autoOption && isAutoWindow(value);
-      setAuto(isAuto);
-      // Авто хранится парой 0–24 — черновику она не годится: выключив
-      // тумблер, человек должен увидеть осмысленную пару, а не 00–24.
-      setStart(isAuto ? 8 : value.start);
-      setEnd(isAuto ? 20 : value.end);
-      setSide("start");
+      setStart({ hour: value.start, minute: value.startMinute ?? 0 });
+      setEnd({ hour: value.end, minute: value.endMinute ?? 0 });
     }
     wasVisible.current = visible;
-  }, [visible, value, autoOption]);
-
-  // Список прокручивается к активному значению своей стороны: 24 строки не
-  // влезают, и без этого выбранный час каждый раз пришлось бы искать.
-  const ROW = 44;
-  const active = side === "start" ? start : end;
-  useEffect(() => {
-    if (!visible || auto) return;
-    // Через кадр: на фронте открытия ScrollView ещё не разложен (лист
-    // выезжает), и немедленный scrollTo уходит в пустоту.
-    const raf = requestAnimationFrame(() => {
-      listRef.current?.scrollTo({
-        y: Math.max(0, active * ROW - 88),
-        animated: false,
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-    // Прокрутка — при смене стороны/открытии; сам выбор строку не двигает.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, auto, side]);
-
-  const pick = (h: number) => {
-    haptics.tap();
-    if (side === "start") {
-      setStart(h);
-      // Конец обязан быть позже начала — двигаем его минимально, как везде.
-      if (end <= h) setEnd(h + 1);
-      setSide("end");
-    } else {
-      setEnd(h);
-    }
-  };
+  }, [visible, value]);
 
   const apply = () => {
     haptics.tap();
-    onApply(auto ? "auto" : { start, end });
+    onApply({
+      start: start.hour,
+      end: end.hour,
+      startMinute: start.minute,
+      endMinute: end.minute,
+    });
     onClose();
   };
 
-  const segment = (key: "start" | "end", label: string, v: number) => {
-    const activeSeg = side === key;
-    return (
-      <Pressable
-        key={key}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: activeSeg }}
-        accessibilityLabel={`${label}: ${hourLabel(v)}`}
-        onPress={() => {
-          haptics.tap();
-          setSide(key);
-        }}
-        className="flex-1 items-center justify-center"
-        style={{
-          minHeight: 48,
-          paddingVertical: 4,
-          borderRadius: t.radius.card - 4,
-          backgroundColor: activeSeg ? t.surface : "transparent",
-        }}
-      >
-        <Text
-          className="text-[11px] font-semibold uppercase tracking-wider"
-          style={{ color: activeSeg ? t.accent : t.faint }}
-        >
-          {label}
-        </Text>
-        <Text
-          className="text-[15px] font-semibold"
-          style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-        >
-          {hourLabel(v)}
-        </Text>
-      </Pressable>
-    );
+  // КОНЕЦ ОБЯЗАН БЫТЬ ПОЗЖЕ НАЧАЛА, и правит это лист, а не отказ сервера
+  // (в базе то же правило стоит проверкой `calendar_settings_window_order_check`).
+  // Двигаем МИНИМАЛЬНО — на один шаг барабана, а не «на час вперёд»: человек
+  // крутил начало, а не конец, и переписывать ему конец сильнее необходимого
+  // значит отобрать уже сделанный выбор.
+  //
+  // Половины пишутся ФУНКЦИОНАЛЬНО и порознь (`TimeWheelPair` для этого и
+  // разделяет коллбэки): два коммита в одном батче React иначе теряют соседнее
+  // значение.
+  const changeStart = (patch: { hour?: number; minute?: number }) => {
+    setStart((prev) => {
+      const next = { ...prev, ...patch };
+      setEnd((prevEnd) => {
+        if (toMin(next.hour, next.minute) < toMin(prevEnd.hour, prevEnd.minute)) {
+          return prevEnd;
+        }
+        const bumped = Math.min(24 * 60, toMin(next.hour, next.minute) + 5);
+        return bumped >= 24 * 60
+          ? { hour: 24, minute: 0 }
+          : { hour: Math.floor(bumped / 60), minute: bumped % 60 };
+      });
+      return next;
+    });
   };
 
-  // Начало — до 23:00 (часу нужен конец после него); конец — строго позже
-  // выбранного начала, вплоть до 24:00.
-  const hours =
-    side === "start"
-      ? Array.from({ length: 24 }, (_, h) => h)
-      : Array.from({ length: 24 - start }, (_, i) => start + 1 + i);
+  const changeEnd = (patch: { hour?: number; minute?: number }) => {
+    setEnd((prev) => {
+      const next = { ...prev, ...patch };
+      setStart((prevStart) => {
+        if (toMin(next.hour, next.minute) > toMin(prevStart.hour, prevStart.minute)) {
+          return prevStart;
+        }
+        const bumped = Math.max(0, toMin(next.hour, next.minute) - 5);
+        return { hour: Math.floor(bumped / 60), minute: bumped % 60 };
+      });
+      return next;
+    });
+  };
 
   return (
     <BottomSheet
+      padded={false}
       visible={visible}
       onClose={onClose}
       title={title}
@@ -154,93 +131,13 @@ export function HourRangeSheet({
         </View>
       }
     >
-      <View className="px-5 pb-2">
-        {autoOption ? (
-          <View
-            className="mb-3 overflow-hidden"
-            style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-          >
-            <SwitchRow
-              label="Автоматически"
-              hint={autoOption.hint}
-              value={auto}
-              onChange={(v) => {
-                haptics.tap();
-                setAuto(v);
-              }}
-            />
-          </View>
-        ) : null}
-
-        {!auto ? (
-          <>
-            <View
-              className="mb-3 flex-row p-1"
-              style={{
-                backgroundColor: t.fill,
-                gap: 4,
-                borderRadius: t.radius.card,
-              }}
-            >
-              {segment("start", "С", start)}
-              {segment("end", "До", end)}
-            </View>
-
-            <View
-              className="overflow-hidden"
-              style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-            >
-              <ScrollView ref={listRef} style={{ maxHeight: 264 }}>
-                {hours.map((h, i) => {
-                  const selected = h === active;
-                  return (
-                    <View key={h}>
-                      {i > 0 ? (
-                        <View
-                          style={{
-                            height: 1,
-                            marginLeft: 16,
-                            backgroundColor: t.separator,
-                          }}
-                        />
-                      ) : null}
-                      <Pressable
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={hourLabel(h)}
-                        onPress={() => pick(h)}
-                        style={({ pressed }) => ({
-                          minHeight: ROW,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          paddingHorizontal: 16,
-                          backgroundColor: pressed
-                            ? t.rowFillPressed
-                            : "transparent",
-                        })}
-                      >
-                        <Text
-                          className="text-[15px]"
-                          style={{
-                            flex: 1,
-                            color: selected ? t.accent : t.ink,
-                            fontWeight: selected ? "600" : "400",
-                            fontVariant: ["tabular-nums"],
-                          }}
-                        >
-                          {hourLabel(h)}
-                        </Text>
-                        {selected ? (
-                          <Check color={t.accent} size={ICON.sm} strokeWidth={3} />
-                        ) : null}
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </>
-        ) : null}
+      <View className="px-5 pb-4">
+        <TimeRangePicker
+          start={start}
+          end={end}
+          onChangeStart={changeStart}
+          onChangeEnd={changeEnd}
+        />
       </View>
     </BottomSheet>
   );

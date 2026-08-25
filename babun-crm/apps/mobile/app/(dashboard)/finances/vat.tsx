@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { type Href, useRouter } from "expo-router";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -12,7 +13,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { Percent } from "lucide-react-native";
 import type { VatMode } from "@babun/shared/local/finance/vat";
-import { grossFromNet } from "@babun/shared/local/finance/vat";
+import { grossFromNet, netFromGross } from "@babun/shared/local/finance/vat";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   useSaveVatSettings,
@@ -29,7 +30,7 @@ import { useThemeColors } from "@/theme/colors";
 // же цене 400 клиент платит 400 или 480. Поэтому под переключателем стоит
 // живой пример с текущей ставкой: выбор виден в евро, а не в словах.
 //
-// Ставка на КОМАНДУ, а не на бизнес: у владельца бригады работают в разных
+// Ставка на КОМАНДУ, а не на бизнес: у владельца команды работают в разных
 // странах (Кипр 19, Греция 24). Компанейское значение — дефолт, команда
 // может его переопределить (паттерн настроек календаря).
 
@@ -42,6 +43,7 @@ const EXAMPLE_PRICE = 400;
 
 export default function VatSettingsScreen() {
   const t = useThemeColors();
+  const router = useRouter();
   const toast = useToast();
   const settings = useVatSettings();
   const save = useSaveVatSettings();
@@ -74,8 +76,14 @@ export default function VatSettingsScreen() {
   );
 
   const commitRate = () => {
-    if (rate < 0 || rate >= 100) {
-      Alert.alert("Ставка вне диапазона", "Введите значение от 0 до 99.");
+    // Ноль не принимаем: при включённом тумблере ставка 0 молча гасит клавиши
+    // НДС во всех операциях (OperationSheet требует rate > 0), и настройка
+    // выглядит сломанной. «Не считать налог» — это выключатель выше.
+    if (!(rate > 0) || rate >= 100) {
+      Alert.alert(
+        "Ставка вне диапазона",
+        "Введите значение больше 0 и меньше 100. Если с НДС не работаете — выключите его тумблером выше.",
+      );
       setRateDraft(String(v.rate));
       return;
     }
@@ -90,7 +98,7 @@ export default function VatSettingsScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="НДС и страна" />
+      <ScreenHeader title="НДС" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard>
           <SwitchRow
@@ -117,33 +125,35 @@ export default function VatSettingsScreen() {
         </SectionCard>
 
         {v.mode === "off" ? null : (
-        <>
-        <SectionEyebrow>Как назначается цена</SectionEyebrow>
-        <SectionCard>
-          <View className="flex-row flex-wrap gap-2 p-3">
-            {PRICING_MODES.map((mode) => (
-              <Chip
-                key={mode}
-                label={VAT_MODE_LABELS[mode]}
-                radio
-                selected={v.mode === mode}
-                onPress={() => {
-                  if (v.mode === mode) return;
-                  save.mutate(
-                    { mode },
-                    {
-                      onSuccess: () => toast("Сохранено", "success"),
-                      onError: (e) =>
-                        Alert.alert("Не удалось сохранить", (e as Error).message),
-                    },
-                  );
-                }}
-              />
-            ))}
-          </View>
-          {/* ПОСЛЕДСТВИЕ В ЕВРО. Термины «inclusive/exclusive» ничего не
-              говорят на бегу; сумма, которую заплатит клиент, — говорит. */}
           <>
+            <SectionEyebrow>Как назначается цена</SectionEyebrow>
+            <SectionCard>
+              <View className="flex-row flex-wrap gap-2 p-3">
+                {PRICING_MODES.map((mode) => (
+                  <Chip
+                    key={mode}
+                    label={VAT_MODE_LABELS[mode]}
+                    radio
+                    selected={v.mode === mode}
+                    onPress={() => {
+                      if (v.mode === mode) return;
+                      save.mutate(
+                        { mode },
+                        {
+                          onSuccess: () => toast("Сохранено", "success"),
+                          onError: (e) =>
+                            Alert.alert(
+                              "Не удалось сохранить",
+                              (e as Error).message,
+                            ),
+                        },
+                      );
+                    }}
+                  />
+                ))}
+              </View>
+              {/* ПОСЛЕДСТВИЕ В ЕВРО. Термины «inclusive/exclusive» ничего не
+                  говорят на бегу; сумма, которую заплатит клиент, — говорит. */}
               <Divider inset={16} />
               <View className="px-4 py-3">
                 <Text className="text-[13px]" style={{ color: t.sub }}>
@@ -151,17 +161,15 @@ export default function VatSettingsScreen() {
                 </Text>
                 <Text
                   className="mt-1 text-[15px] font-semibold"
-                  style={{ color: t.ink }}
+                  style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
                 >
                   {v.mode === "exclusive"
                     ? `Клиент заплатит ${formatEUR(grossFromNet(EXAMPLE_PRICE, rate))} · вам останется ${formatEUR(EXAMPLE_PRICE)}`
-                    : `Клиент заплатит ${formatEUR(EXAMPLE_PRICE)} · вам останется ${formatEUR(EXAMPLE_PRICE - (EXAMPLE_PRICE * rate) / (100 + rate))}`}
+                    : `Клиент заплатит ${formatEUR(EXAMPLE_PRICE)} · вам останется ${formatEUR(netFromGross(EXAMPLE_PRICE, rate))}`}
                 </Text>
               </View>
-            </>
-        </SectionCard>
+            </SectionCard>
 
-        <>
             <SectionEyebrow>Ставка компании</SectionEyebrow>
             <SectionCard>
               <View className="flex-row items-center px-4 py-3" style={{ gap: 12 }}>
@@ -176,21 +184,38 @@ export default function VatSettingsScreen() {
                   keyboardType="decimal-pad"
                   keyboardAppearance="light"
                   accessibilityLabel="Ставка НДС в процентах"
-                  className="min-w-16 rounded-xl px-3 py-2 text-[15px] font-semibold"
+                  className="min-w-16 px-3 py-2 text-[15px] font-semibold"
                   // textAlign через style: NativeWind не доносит класс
                   // выравнивания до TextInput (контрактный тест на это есть).
-                  style={{ backgroundColor: t.fill, color: t.ink, textAlign: "right" }}
+                  style={{
+                    backgroundColor: t.fill,
+                    color: t.ink,
+                    textAlign: "right",
+                    borderRadius: t.radius.input,
+                  }}
                 />
                 <Text className="text-[15px]" style={{ color: t.sub }}>
                   %
                 </Text>
               </View>
             </SectionCard>
-            <Text className="mx-4 mt-1.5 text-xs" style={{ color: t.sub }}>
-              Кипр — 19%, Греция — 24%. Ставка запоминается в каждой операции:
-              если поднимете её завтра, прошлые отчёты не изменятся. У каждой
-              операции остаётся свой выбор — «Без НДС», «включён» или «плюсом».
-            </Text>
+            {v.rate > 0 ? null : (
+              // Нулевая ставка могла приехать из старых данных: ввод её больше
+              // не принимает, но пока она в базе — клавиш НДС в операциях нет,
+              // и без объяснения включённый тумблер выглядит сломанным.
+              <Text
+                style={{
+                  paddingHorizontal: 20,
+                  paddingTop: 6,
+                  fontSize: 13,
+                  lineHeight: 17,
+                  color: t.warning,
+                }}
+              >
+                Ставка 0% — клавиши НДС в операциях не появляются. Укажите
+                ставку или выключите НДС тумблером выше.
+              </Text>
+            )}
 
             <SectionEyebrow>Своя ставка у команды</SectionEyebrow>
             <SectionCard>
@@ -215,9 +240,8 @@ export default function VatSettingsScreen() {
                             : `Как у компании · ${v.rate}%`
                         }
                         onPress={() =>
-                          Alert.alert(
-                            team.name,
-                            "Отдельная ставка команды настраивается на её странице — она появится вместе с остальными настройками команды.",
+                          router.push(
+                            `/finances/vat-team?teamId=${team.id}` as Href,
                           )
                         }
                       />
@@ -227,7 +251,6 @@ export default function VatSettingsScreen() {
               )}
             </SectionCard>
           </>
-        </>
         )}
       </ScrollView>
     </Screen>

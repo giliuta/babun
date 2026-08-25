@@ -16,14 +16,181 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Шестерёнка ведёт на страницу списка: рука уже здесь, в момент, когда нужной
 // строки не нашлось. Это единственный вход в настройку изнутри выбора.
+//
+// САМ СПИСОК — ОТДЕЛЬНЫЙ ЭКСПОРТ (`ValueOptionList`). Выбор бывает не только
+// собственным листом: внутри денежного листа он приезжает ВТОРЫМ ШАГОМ того же
+// листа (лист поверх листа стоил бы закрытия первого и потери набранного).
+// Обе роли обязаны выглядеть одинаково, поэтому вёрстка строки живёт в одном
+// месте, а лист — это она же плюс шапка.
 
 export interface ValueOption {
   id: string;
   label: string;
   /** Вторая строка — чем этот вариант отличается. */
   hint?: string;
+  /** Число СПРАВА — то, ради чего вариант и выбирают (остаток счёта).
+   *  Моноширинное: суммы стоят колонкой и не гуляют между рендерами. */
+  value?: string;
+  /** Вариант ГАСНЕТ, но остаётся на месте: исчезнувшая строка читается как
+   *  «счёт пропал», а погашенная — как «сюда нельзя, и вот почему»
+   *  (объяснение живёт в `footer`). */
+  disabled?: boolean;
   /** Точка-метка слева: цвет категории/счёта. Без цвета точки нет. */
   color?: string | null;
+}
+
+/** Список вариантов одной карточкой. Правило под ней объясняет погашенное. */
+export function ValueOptionList({
+  options,
+  selectedId,
+  emptyLabel = "Список пуст",
+  footer,
+  clearable = true,
+  onPick,
+}: {
+  options: readonly ValueOption[];
+  selectedId?: string | null;
+  emptyLabel?: string;
+  /** Правило под списком — объясняет погашенные варианты. */
+  footer?: string;
+  /** Повторный тап по выбранному СНИМАЕТ выбор. Выключается там, где «ничего
+   *  не выбрано» — не значение, а тупик: человек открывает список, чтобы
+   *  убедиться в выборе, тапает по нему же и остаётся ни с чем. */
+  clearable?: boolean;
+  onPick: (id: string | null) => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <View>
+      <View
+        style={{
+          borderRadius: t.radius.card,
+          overflow: "hidden",
+          backgroundColor: t.surface,
+        }}
+      >
+        {options.length === 0 ? (
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{
+              paddingHorizontal: 16,
+              paddingVertical: 18,
+              fontSize: 15,
+              color: t.faint,
+              textAlign: "center",
+            }}
+          >
+            {emptyLabel}
+          </Text>
+        ) : (
+          options.map((o, i) => {
+            const active = o.id === selectedId;
+            return (
+              <View key={o.id}>
+                {i > 0 ? (
+                  <View
+                    style={{
+                      height: 1,
+                      marginLeft: 16,
+                      backgroundColor: t.separator,
+                    }}
+                  />
+                ) : null}
+                <Pressable
+                  onPress={() => {
+                    haptics.tap();
+                    onPick(active && clearable ? null : o.id);
+                  }}
+                  disabled={o.disabled}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    selected: active,
+                    disabled: !!o.disabled,
+                  }}
+                  accessibilityLabel={[o.label, o.hint, o.value]
+                    .filter(Boolean)
+                    .join(", ")}
+                  style={({ pressed }) => ({
+                    minHeight: 48,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 10,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    opacity: o.disabled ? 0.4 : 1,
+                    backgroundColor: pressed ? t.pressed : "transparent",
+                  })}
+                >
+                  {o.color ? (
+                    <View
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: 999,
+                        backgroundColor: o.color,
+                      }}
+                    />
+                  ) : null}
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      style={{ fontSize: 16, color: t.ink }}
+                    >
+                      {o.label}
+                    </Text>
+                    {o.hint ? (
+                      <Text
+                        maxFontSizeMultiplier={1.3}
+                        numberOfLines={1}
+                        style={{ fontSize: 13, color: t.faint, marginTop: 1 }}
+                      >
+                        {o.hint}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {o.value ? (
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      numberOfLines={1}
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 15,
+                        fontWeight: "600",
+                        color: t.ink,
+                        // ТОЛЬКО СТИЛЕМ: `tabular-nums` в className в этом
+                        // стеке — пустышка (src/lib/nativewind-traps.test.ts).
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {o.value}
+                    </Text>
+                  ) : null}
+                  {active ? (
+                    <Check color={t.accent} size={18} strokeWidth={2.5} />
+                  ) : null}
+                </Pressable>
+              </View>
+            );
+          })
+        )}
+      </View>
+      {footer ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={{
+            marginTop: 8,
+            marginHorizontal: 4,
+            fontSize: 13,
+            lineHeight: 18,
+            color: t.faint,
+          }}
+        >
+          {footer}
+        </Text>
+      ) : null}
+    </View>
+  );
 }
 
 export function ValuePickerSheet({
@@ -31,7 +198,8 @@ export function ValuePickerSheet({
   title,
   options,
   selectedId,
-  emptyLabel = "Список пуст",
+  emptyLabel,
+  footer,
   onPick,
   onSettings,
   settingsLabel = "Настроить список",
@@ -42,6 +210,7 @@ export function ValuePickerSheet({
   options: readonly ValueOption[];
   selectedId?: string | null;
   emptyLabel?: string;
+  footer?: string;
   onPick: (id: string | null) => void;
   onSettings?: () => void;
   settingsLabel?: string;
@@ -50,7 +219,7 @@ export function ValuePickerSheet({
   const t = useThemeColors();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.8}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.8}>
       <View
         style={{
           flexDirection: "row",
@@ -105,98 +274,16 @@ export function ValuePickerSheet({
         style={{ flexShrink: 1 }}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 28 }}
       >
-        <View
-          style={{
-            borderRadius: t.radius.card,
-            overflow: "hidden",
-            backgroundColor: t.surface,
+        <ValueOptionList
+          options={options}
+          selectedId={selectedId}
+          emptyLabel={emptyLabel}
+          footer={footer}
+          onPick={(id) => {
+            onPick(id);
+            onClose();
           }}
-        >
-          {options.length === 0 ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              style={{
-                paddingHorizontal: 16,
-                paddingVertical: 18,
-                fontSize: 15,
-                color: t.faint,
-                textAlign: "center",
-              }}
-            >
-              {emptyLabel}
-            </Text>
-          ) : (
-            options.map((o, i) => {
-              const active = o.id === selectedId;
-              return (
-                <View key={o.id}>
-                  {i > 0 ? (
-                    <View
-                      style={{
-                        height: 1,
-                        marginLeft: 16,
-                        backgroundColor: t.separator,
-                      }}
-                    />
-                  ) : null}
-                  <Pressable
-                    onPress={() => {
-                      haptics.tap();
-                      // Повторный тап по выбранному снимает выбор: иначе
-                      // «без категории» становится недостижимым состоянием.
-                      onPick(active ? null : o.id);
-                      onClose();
-                    }}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    accessibilityLabel={o.hint ? `${o.label}, ${o.hint}` : o.label}
-                    style={({ pressed }) => ({
-                      minHeight: 48,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 10,
-                      paddingHorizontal: 16,
-                      paddingVertical: 10,
-                      backgroundColor: pressed ? t.pressed : "transparent",
-                    })}
-                  >
-                    {o.color ? (
-                      <View
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: 999,
-                          backgroundColor: o.color,
-                        }}
-                      />
-                    ) : null}
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        maxFontSizeMultiplier={1.3}
-                        numberOfLines={1}
-                        style={{ fontSize: 16, color: t.ink }}
-                      >
-                        {o.label}
-                      </Text>
-                      {o.hint ? (
-                        <Text
-                          maxFontSizeMultiplier={1.3}
-                          numberOfLines={1}
-                          style={{ fontSize: 13, color: t.faint, marginTop: 1 }}
-                        >
-                          {o.hint}
-                        </Text>
-                      ) : null}
-                    </View>
-                    {active ? (
-                      <Check color={t.accent} size={18} strokeWidth={2.5} />
-                    ) : null}
-                  </Pressable>
-                </View>
-              );
-            })
-          )}
-        </View>
+        />
       </ScrollView>
     </BottomSheet>
   );

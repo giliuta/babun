@@ -54,7 +54,11 @@ import {
 } from "@babun/shared/common/utils/appointment-overlap";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { tierForVisits } from "@babun/shared/local/loyalty";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEUR, formatEURExact } from "@babun/shared/common/utils/money";
+import {
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_METHODS,
+} from "@babun/shared/local/finance/transaction";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -84,11 +88,12 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
-  serviceBrigadeIds,
   useServices,
   type Service,
 } from "@/features/services/queries";
+import { useServiceVariants } from "@/features/services/variant-queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
+import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
@@ -102,7 +107,6 @@ import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts
 import {
   buildDebtPaidPatch,
   paymentMethodForAccountKind,
-  PAY_METHOD_LABELS,
   type PayMethod,
 } from "@/features/appointments/payment";
 import { UnifiedTimePopup } from "@/features/appointments/UnifiedTimePopup";
@@ -141,6 +145,7 @@ import {
   isMasterAllowedForTeam,
   reconcileBookingSelection,
 } from "@/features/appointments/booking-selection";
+import { durationLabel } from "@/features/services/format";
 
 // Booking is information-dense. Dynamic Type stays enabled, but a bounded
 // multiplier prevents headers, totals and calendar controls from colliding at
@@ -202,12 +207,6 @@ const SOURCE_OPTIONS: readonly {
   })),
 ];
 
-const durLabel = (min: number) => {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return h > 0 ? (m > 0 ? `${h} ч ${m} мин` : `${h} ч`) : `${m} мин`;
-};
-
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
 const KBD_ACCESSORY_ID = "bookKbdDone";
@@ -233,6 +232,28 @@ const absoluteMinutes = (value: string): number | null => {
 const first = (v: string | string[] | undefined) =>
   Array.isArray(v) ? v[0] : v;
 
+
+/** СЛОТ = БУФЕРЫ + РАБОТА. Буферы берутся МАКСИМАЛЬНЫЕ по выбранным услугам,
+ *  а не суммируются: дорога до адреса одна, и две работы в одном визите не
+ *  удваивают её. Без этого календарь показывал свободное время, которого нет,
+ *  — бригада в нём едет. */
+function serviceBuffersMinutes(
+  ids: readonly string[],
+  catalog: Map<string, Service>,
+): number {
+  const before = Math.max(
+    0,
+    ...ids.map((id) => catalog.get(id)?.buffer_before_min ?? 0),
+    0,
+  );
+  const after = Math.max(
+    0,
+    ...ids.map((id) => catalog.get(id)?.buffer_after_min ?? 0),
+    0,
+  );
+  return before + after;
+}
+
 export default function BookScreen() {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -257,6 +278,27 @@ export default function BookScreen() {
   const teamsQuery = useTeams();
   const mastersQuery = useMasters();
   const servicesQuery = useServices();
+  // Услуга типа «варианты» продаётся выбором объёма работ, а не количеством:
+  // трёхкомнатная квартира — это не «три раза комната».
+  const { data: serviceVariants = [] } = useServiceVariants();
+  const variantsByService = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; name: string; price: number; durationMin: number }[]
+    >();
+    for (const variant of serviceVariants) {
+      map.set(variant.service_id, [
+        ...(map.get(variant.service_id) ?? []),
+        {
+          id: variant.id,
+          name: variant.name,
+          price: Number(variant.price),
+          durationMin: variant.duration_min,
+        },
+      ]);
+    }
+    return map;
+  }, [serviceVariants]);
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
   const loyaltyQuery = useLoyalty();
@@ -347,7 +389,7 @@ export default function BookScreen() {
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [source, setSource] = useState<AppointmentSource | null>(null);
   const [comment, setComment] = useState("");
-  // Название события — отдельное состояние от заметки бригаде: раньше общий
+  // Название события — отдельное состояние от заметки команде: раньше общий
   // `comment` перетекал между режимами Клиент/Событие.
   const [eventTitle, setEventTitle] = useState("");
   const [eventColor, setEventColor] = useState<string | null>(null);
@@ -422,13 +464,11 @@ export default function BookScreen() {
       .map(([id]) => catalog.get(id) as Service);
   }, [allAppts, catalog]);
 
-  // Услуги, доступные выбранной бригаде (brigade_ids пуст = все команды).
+  // Прайс ВЫБРАННОЙ команды: услуга принадлежит ровно одной команде
+  // (2026-08-17). Пока команда не выбрана, каталог пуст — см.
+  // `isServiceAllowedForTeam`.
   const teamServices = useMemo(
-    () =>
-      services.filter((s) => {
-        const bids = serviceBrigadeIds(s);
-        return bids.length === 0 || (teamId != null && bids.includes(teamId));
-      }),
+    () => services.filter((s) => teamId != null && s.team_id === teamId),
     [services, teamId],
   );
   const allowedServiceIds = useMemo(
@@ -586,16 +626,18 @@ export default function BookScreen() {
 
   // ── производные суммы ──
   const selectedServices = useMemo(
-    () => buildServices(serviceIds, catalog, overrides),
-    [serviceIds, catalog, overrides],
+    () => buildServices(serviceIds, catalog, overrides, variantsByService),
+    [serviceIds, catalog, overrides, variantsByService],
   );
   const computedTotal = useMemo(
     () => selectedServices.reduce((s, x) => s + x.totalPrice, 0),
     [selectedServices],
   );
   const computedDuration = useMemo(
-    () => selectedServices.reduce((s, x) => s + x.duration, 0),
-    [selectedServices],
+    () =>
+      selectedServices.reduce((s, x) => s + x.duration, 0) +
+      serviceBuffersMinutes(serviceIds, catalog),
+    [selectedServices, serviceIds, catalog],
   );
 
   const globalDiscount: Discount | null = useMemo(() => {
@@ -619,7 +661,13 @@ export default function BookScreen() {
   // are adjusted; «По услугам» reconnects it to the automatic calculation.
   useEffect(() => {
     if (customTotal) return;
-    setTotalDraft(String(Number(automaticTotal.toFixed(2))));
+    // Копейки не отбрасываем: «49.5» в поле рядом с «€49,50» в строке
+    // услуги читались как две разные суммы за одну работу.
+    setTotalDraft(
+      Number.isInteger(automaticTotal)
+        ? String(automaticTotal)
+        : automaticTotal.toFixed(2),
+    );
   }, [automaticTotal, customTotal]);
 
   // ── авто-конец = старт + Σ длительности (растёт, не трогали руками) ──
@@ -653,7 +701,7 @@ export default function BookScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, loyalty, kind]);
 
-  // ── пересечение по бригаде на выбранный день (warn, not block) ──
+  // ── пересечение по команде на выбранный день (warn, not block) ──
   const dayTeamAppts = useMemo(
     () =>
       allAppts.filter((a) => a.date === date && a.team_id === teamId),
@@ -681,7 +729,7 @@ export default function BookScreen() {
 
     if (schedule) {
       const daySchedule = getDayScheduleForDate(schedule, parseYMD(date));
-      if (!daySchedule.is_working) return "У бригады нерабочий день";
+      if (!daySchedule.is_working) return "У команды нерабочий день";
       const scheduleStart = absoluteMinutes(daySchedule.start);
       const scheduleEnd = absoluteMinutes(daySchedule.end);
       if (
@@ -689,7 +737,7 @@ export default function BookScreen() {
         scheduleEnd != null &&
         (startMinutes < scheduleStart || endMinutes > scheduleEnd)
       ) {
-        return `Вне графика бригады ${daySchedule.start}–${daySchedule.end}`;
+        return `Вне графика команды ${daySchedule.start}–${daySchedule.end}`;
       }
       if (
         daySchedule.breaks.some((pause) => {
@@ -703,7 +751,7 @@ export default function BookScreen() {
           );
         })
       ) {
-        return "Время попадает на перерыв бригады";
+        return "Время попадает на перерыв команды";
       }
     } else {
       const scheduleStart = Math.round(
@@ -719,7 +767,13 @@ export default function BookScreen() {
       }
     }
 
-    const bufferMinutes = calendarSettings?.bufferMinutes ?? 0;
+    // Буфер команды сильнее компанейского (тот же резолвер, что у сетки):
+    // предупреждение «между записями меньше N мин» обязано считать по той
+    // команде, на которую записывают.
+    const bufferMinutes = effectiveBuffer(
+      teams.find((x) => x.id === teamId),
+      calendarSettings,
+    );
     const tight = findBufferClash(
       {
         id: "book-draft",
@@ -737,6 +791,7 @@ export default function BookScreen() {
       : null;
   }, [
     calendarSettings,
+    teams,
     date,
     dayTeamAppts,
     kind,
@@ -752,8 +807,8 @@ export default function BookScreen() {
     // авто-скидку прошлого клиента за ручную (discountType && !ref → return) и
     // перенести её на нового. Эффект сам пересчитает лояльность по clientId.
     const prefill = resolveBookingClientPrefill(c);
-    // Continuity: бригада по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
-    // Иначе любимый мастер клиента отсеивается как «не из той бригады».
+    // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
+    // Иначе любимый мастер клиента отсеивается как «не из той команды».
     const lastTeamForClient =
       [...allAppts]
         .filter(
@@ -993,14 +1048,14 @@ export default function BookScreen() {
   const referenceQueries =
     kind === "event"
       ? ([
-          // Винительный падеж: «Не удалось загрузить бригады/календарь…».
-          { label: "бригады", query: teamsQuery },
+          // Винительный падеж: «Не удалось загрузить команды/календарь…».
+          { label: "команды", query: teamsQuery },
           { label: "календарь", query: appointmentsQuery },
           { label: "настройки календаря", query: calendarSettingsQuery },
           { label: "типы событий", query: eventTypesQuery },
         ] as const)
       : ([
-          { label: "бригады", query: teamsQuery },
+          { label: "команды", query: teamsQuery },
           { label: "сотрудников", query: mastersQuery },
           { label: "услуги", query: servicesQuery },
           { label: "клиентов", query: clientsQuery },
@@ -1008,19 +1063,19 @@ export default function BookScreen() {
           { label: "программу лояльности", query: loyaltyQuery },
           { label: "настройки календаря", query: calendarSettingsQuery },
           ...(teamId
-            ? [{ label: "график бригады", query: teamScheduleQuery }]
+            ? [{ label: "график команды", query: teamScheduleQuery }]
             : []),
         ] as const);
   // Только БАЗОВЫЕ справочники гейтят экран: без них нельзя собрать валидную
-  // запись (бригады; для работы ещё клиенты). Всё остальное (услуги/лояльность/
+  // запись (команды; для работы ещё клиенты). Всё остальное (услуги/лояльность/
   // график/настройки/типы/календарь) — необязательное: его сбой не блокирует
   // создание простой записи, а лишь даёт деградацию (пустой список/без
   // лояльности/без предупреждения о наложении).
   const essentialQueries =
     kind === "event"
-      ? ([{ label: "бригады", query: teamsQuery }] as const)
+      ? ([{ label: "команды", query: teamsQuery }] as const)
       : ([
-          { label: "бригады", query: teamsQuery },
+          { label: "команды", query: teamsQuery },
           { label: "клиентов", query: clientsQuery },
           // Если услуги пришли параметром (deep-link), а каталог не грузится —
           // гейтим экраном-ретраем, иначе фантомный service_id навсегда держит
@@ -1062,28 +1117,47 @@ export default function BookScreen() {
         ? "Введите название события"
         : "Выберите доступный календарь"
       : // Порядок = естественный порядок заполнения: сначала называем самое
-        // раннее незаполненное (клиент → бригада → услуги), и только потом
+        // раннее незаполненное (клиент → команда → услуги), и только потом
         // ошибки оплаты — иначе предоплата-ошибка маскирует «Выберите клиента».
         clientId == null
         ? "Выберите клиента"
       : !hasValidTeam
-        ? "Выберите бригаду"
+        ? "Выберите команду"
       : !workSelectionValid
-        ? "Проверьте услуги и мастера для этой бригады"
+        ? "Проверьте услуги и мастера для этой команды"
       : prepayExceedsTotal
         ? "Предоплата больше итоговой суммы"
       : prepay > 0 && payMethod == null
         ? "Выберите способ предоплаты"
-        : "Проверьте услуги и мастера для этой бригады";
+        : "Проверьте услуги и мастера для этой команды";
 
   // accessibilityLiveRegion — Android-only. На iOS-приложении причина под CTA,
   // предупреждение докета и ошибки оплаты озвучиваем сами, иначе весь
   // динамический фид-бек нем для VoiceOver. Объявляем при СМЕНЕ текста.
+  // ОДНО ПРЕДУПРЕЖДЕНИЕ НА ОДНУ ДОРОГУ (владелец 2026-08-24: «тут плашки не
+  // должно быть, не надо триггерить несколько раз»). Про нерабочее время уже
+  // сказала плашка над календарём — там же человек и ответил на неё кнопкой
+  // «Записать». Повторять это в форме значит спорить с его собственным
+  // решением, принятым десять секунд назад.
+  //
+  // Но молчать совсем нельзя: время правят и ЗДЕСЬ. Поэтому график команды
+  // подаёт голос ровно тогда, когда дату или время сдвинули внутри формы, —
+  // это уже НОВЫЙ выбор, о котором никто не предупреждал. Пересечение с
+  // другой записью не гасится никогда: о нём в календаре не говорили вовсе.
+  const openedAtRef = useRef<{ date: string; time: string } | null>(null);
+  if (openedAtRef.current === null && date && timeStart) {
+    openedAtRef.current = { date, time: timeStart };
+  }
+  const timeMovedHere =
+    openedAtRef.current != null &&
+    (openedAtRef.current.date !== date || openedAtRef.current.time !== timeStart);
   const workWarning =
     kind === "work"
       ? overlap != null
-        ? "Пересекается с записью этой бригады"
-        : timeWarning
+        ? "Пересекается с записью этой команды"
+        : timeMovedHere
+          ? timeWarning
+          : null
       : null;
   useEffect(() => {
     if (!canSave && !bookingBusy && !referencesPending) {
@@ -1186,7 +1260,7 @@ export default function BookScreen() {
   const picked = kind === "event" ? eventColor : colorOverride;
   const hasColor = picked != null;
   const accentC = picked ?? t.accent;
-  // Докет всегда несёт реальный смысл: выбранный цвет → цвет бригады → кобальт.
+  // Докет всегда несёт реальный смысл: выбранный цвет → цвет команды → кобальт.
   const identityC = picked ?? team?.color ?? t.accent;
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
   const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
@@ -1274,7 +1348,7 @@ export default function BookScreen() {
                 minHeight: 48,
                 justifyContent: "center",
                 paddingHorizontal: 22,
-                borderRadius: 14,
+                borderRadius: t.radius.card,
                 backgroundColor: t.accent,
                 marginTop: 18,
               }}
@@ -1326,7 +1400,7 @@ export default function BookScreen() {
                 haptics.tap();
               }}
               hitSlop={8}
-              className="items-center justify-center rounded-xl px-1.5"
+              className="items-center justify-center rounded-[10px] px-1.5"
               style={{ minHeight: 44 }}
               accessibilityRole="button"
               accessibilityLabel={`${
@@ -1339,7 +1413,7 @@ export default function BookScreen() {
                   style={{
                     width: 22,
                     height: 22,
-                    borderRadius: 11,
+                    borderRadius: t.radius.card,
                     backgroundColor: accentC,
                     borderWidth: 2,
                     borderColor: t.surface,
@@ -1405,7 +1479,7 @@ export default function BookScreen() {
               предупреждаем, что часть подсказок недоступна. */}
           {failedOptional ? (
             <View
-              className="mx-3 mt-2 flex-row items-center gap-2 rounded-[13px] px-3 py-2.5"
+              className="mx-3 mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
               style={{ backgroundColor: `${t.warning}14`, borderWidth: 1, borderColor: `${t.warning}33` }}
             >
               <AlertTriangle color={t.warning} size={ICON.sm} />
@@ -1417,10 +1491,10 @@ export default function BookScreen() {
 
           {kind === "work" ? (
             <>
-              {/* Докет «Бригада · Когда» — одна спокойная строка вместо пилюли
-                  бригады и карточки времени с мини-таймлайном */}
+              {/* Докет «Команда · Когда» — одна спокойная строка вместо пилюли
+                  команды и карточки времени с мини-таймлайном */}
               <DocketRow
-                teamName={team?.name ?? "Бригада"}
+                teamName={team?.name ?? "Команда"}
                 teamColor={team?.color ?? t.accent}
                 masterName={
                   masterId
@@ -1638,46 +1712,33 @@ export default function BookScreen() {
                     {selectedServices.map((line) => {
                       const svc = catalog.get(line.serviceId);
                       if (!svc) return null;
+                      const rowVariants =
+                        variantsByService.get(line.serviceId) ?? [];
                       return (
                         <View
                           key={line.serviceId}
-                          className="flex-row items-center px-4 py-2.5"
                           style={{ borderTopWidth: 1, borderTopColor: t.separator }}
                         >
+                        <View className="flex-row items-center px-4 py-2.5">
                           <View className="flex-1 pr-2">
                             <Text style={{ fontSize: 15, color: t.ink }}>{svc.name}</Text>
                             <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
-                              {durLabel(line.duration)}
+                              {durationLabel(line.duration)}
                             </Text>
                           </View>
-                          {svc.is_countable !== false ? (
+                          {/* СТЕППЕР У КАЖДОЙ УСЛУГИ (2026-08-21). Второго,
+                              конкурирующего вида строки — с кнопкой «Убрать»
+                              вместо количества — больше нет: флаг «продаём
+                              целиком» снят, а убрать услугу по-прежнему можно
+                              тем же степпером до нуля. */}
+                          {rowVariants.length === 0 ? (
                             <Stepper
                               qty={line.quantity}
+                              unit={svc.unit}
                               onDec={() => setQty(line.serviceId, line.quantity - 1)}
                               onInc={() => setQty(line.serviceId, line.quantity + 1)}
                             />
-                          ) : (
-                            <Pressable
-                              onPress={() => setQty(line.serviceId, 0)}
-                              accessibilityRole="button"
-                              accessibilityLabel={`Убрать услугу ${svc.name}`}
-                              style={{
-                                minHeight: 44,
-                                justifyContent: "center",
-                                paddingHorizontal: 10,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 13,
-                                  fontWeight: "600",
-                                  color: t.accent,
-                                }}
-                              >
-                                Убрать
-                              </Text>
-                            </Pressable>
-                          )}
+                          ) : null}
                           <Text
                             style={{
                               fontSize: 15,
@@ -1688,8 +1749,60 @@ export default function BookScreen() {
                               fontVariant: ["tabular-nums"],
                             }}
                           >
-                            {formatEUR(line.totalPrice)}
+                            {formatEURExact(line.totalPrice)}
                           </Text>
+                        </View>
+
+                        {/* ВАРИАНТЫ ЧИПАМИ. У такой услуги количество ничего
+                            не решает — выбирают объём работ, и цена приходит
+                            вместе с ним. */}
+                        {rowVariants.length > 0 ? (
+                          <View className="flex-row flex-wrap gap-2 px-4 pb-3">
+                            {rowVariants.map((variant) => {
+                              const active =
+                                overrides[line.serviceId]?.variantId === variant.id;
+                              return (
+                                <Pressable
+                                  key={variant.id}
+                                  onPress={() =>
+                                    setOverrides((p) => ({
+                                      ...p,
+                                      [line.serviceId]: {
+                                        ...p[line.serviceId],
+                                        variantId: variant.id,
+                                      },
+                                    }))
+                                  }
+                                  accessibilityRole="button"
+                                  accessibilityState={{ selected: active }}
+                                  accessibilityLabel={`${variant.name}, ${formatEURExact(
+                                    variant.price,
+                                  )}`}
+                                  style={({ pressed }) => ({
+                                    minHeight: 36,
+                                    justifyContent: "center",
+                                    paddingHorizontal: 12,
+                                    borderRadius: t.radius.card,
+                                    borderCurve: "continuous",
+                                    backgroundColor: active ? t.accent : t.fill,
+                                    opacity: pressed ? 0.6 : 1,
+                                  })}
+                                >
+                                  <Text
+                                    maxFontSizeMultiplier={1.2}
+                                    style={{
+                                      fontSize: 14,
+                                      fontWeight: active ? "700" : "500",
+                                      color: active ? t.onAccent : t.ink,
+                                    }}
+                                  >
+                                    {`${variant.name} · ${formatEURExact(variant.price)}`}
+                                  </Text>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        ) : null}
                         </View>
                       );
                     })}
@@ -1718,7 +1831,7 @@ export default function BookScreen() {
                     {discountAmount > 0 ? (
                       <MoneyRow
                         label={`Скидка${discountReason ? ` · ${discountReason}` : ""}`}
-                        value={`−${formatEUR(discountAmount)}`}
+                        value={`−${formatEURExact(discountAmount)}`}
                         color={t.success}
                         top
                       />
@@ -1748,8 +1861,8 @@ export default function BookScreen() {
                         prepay <= 0
                           ? "Без предоплаты"
                           : debtAfter === 0 && effectiveTotal > 0
-                            ? `Оплачено · ${formatEUR(prepay)}`
-                            : `${formatEUR(prepay)} · долг ${formatEUR(debtAfter)}`
+                            ? `Оплачено · ${formatEURExact(prepay)}`
+                            : `${formatEURExact(prepay)} · долг ${formatEURExact(debtAfter)}`
                       }
                       muted={prepay === 0}
                       onPress={() => {
@@ -1769,7 +1882,7 @@ export default function BookScreen() {
                           backgroundColor: pressed ? t.pressed : "transparent",
                         })}
                         accessibilityRole="button"
-                        accessibilityLabel={`Закрыть на месте, оплачено ${formatEUR(effectiveTotal)}`}
+                        accessibilityLabel={`Закрыть на месте, оплачено ${formatEURExact(effectiveTotal)}`}
                       >
                         <View
                           className="items-center justify-center rounded-full"
@@ -1781,7 +1894,7 @@ export default function BookScreen() {
                           Закрыть на месте
                         </Text>
                         <Text style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}>
-                          {formatEUR(effectiveTotal)}
+                          {formatEURExact(effectiveTotal)}
                         </Text>
                       </Pressable>
                     ) : null}
@@ -1822,7 +1935,7 @@ export default function BookScreen() {
                       <Text style={{ fontSize: 20, color: t.sub }}>€</Text>
                     </View>
                     {/* КАССА, А НЕ СПОСОБ. Тот же выбор, что в карточке
-                        записи: счета этой бригады плюс подключённые общие.
+                        записи: счета этой команды плюс подключённые общие.
                         Счетов нет вовсе — откат на четыре способа, приём
                         денег не блокируем никогда. */}
                     <View className="mt-3 flex-row flex-wrap gap-2">
@@ -1844,11 +1957,11 @@ export default function BookScreen() {
                               }}
                             />
                           ))
-                        : (["cash", "card", "transfer", "other"] as const).map(
+                        : PAYMENT_METHODS.map(
                             (method) => (
                               <Chip
                                 key={method}
-                                label={PAY_METHOD_LABELS[method]}
+                                label={PAYMENT_METHOD_LABEL[method]}
                                 variant="tint"
                                 radio
                                 selected={payMethod === method}
@@ -1864,7 +1977,7 @@ export default function BookScreen() {
                       <Text style={{ fontSize: 13, color: t.sub, marginTop: 10 }}>
                         Останется долг{" "}
                         <Text style={{ color: t.danger, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
-                          {formatEUR(debtAfter)}
+                          {formatEURExact(debtAfter)}
                         </Text>
                       </Text>
                     ) : null}
@@ -1888,15 +2001,15 @@ export default function BookScreen() {
                 )}
               </SectionCard>
 
-              {/* Заметка бригаде — после денег, перед «Дополнительно» */}
+              {/* Заметка команде — после денег, перед «Дополнительно» */}
               <SectionCard>
                 <View className="px-4 py-3">
                   <TextInput
                     keyboardAppearance="light"
-                    accessibilityLabel="Заметка бригаде"
+                    accessibilityLabel="Заметка команде"
                     value={comment}
                     onChangeText={setComment}
-                    placeholder="Заметка бригаде — что сделать, взять с собой…"
+                    placeholder="Заметка команде — что сделать, взять с собой…"
                     placeholderTextColor={t.placeholder}
                     multiline
                     style={{ fontSize: 15, color: t.ink, minHeight: 44 }}
@@ -2316,13 +2429,9 @@ export default function BookScreen() {
         timeEnd={timeEnd}
         allDay={allDay}
         allowAllDay={kind === "event"}
-        // ВСЕГДА 5 МИНУТ. Здесь стояла «Длительность записи» тенанта, и
-        // настройка «30 минут» превращала колонку минут в «00 / 30»: запись
-        // на 10:15 создать было нельзя, а время 09:35 из листа слота
-        // отображалось как 09:30 и молча дописывалось при первом касании.
-        // Длительность задаёт КОНЕЦ записи, а не сетку выбора времени —
-        // так же, как в карточке записи и в «Перенести».
-        stepMinutes={5}
+        // Шаг минут здесь больше не передают: пятиминутка — закон продукта
+        // (`MINUTE_STEP`, DS §5), и попап знает его сам. Почему это НЕ
+        // «Длительность записи» тенанта — записано в шапке попапа.
         onCommit={(next) => {
           dateTouchedRef.current = true;
           setDate(next.date);
@@ -2369,6 +2478,10 @@ export default function BookScreen() {
         services={teamServices}
         frequent={frequentTeamServices}
         selectedIds={serviceIds}
+        teamId={teamId}
+        // Каталог знает день записи: услуга, которую по вторникам не делают,
+        // уезжает вниз списка под свою подпись.
+        date={date}
         onToggle={toggleService}
       />
       <TeamMasterSheet

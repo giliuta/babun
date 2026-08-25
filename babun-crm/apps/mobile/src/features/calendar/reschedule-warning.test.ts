@@ -48,7 +48,7 @@ describe("rescheduleWarning", () => {
         band,
         30,
       ),
-      "Попадает на перерыв бригады",
+      "Попадает на перерыв команды",
     );
     assert.equal(
       rescheduleWarning(
@@ -58,7 +58,7 @@ describe("rescheduleWarning", () => {
         band,
         30,
       ),
-      "Вне рабочих часов бригады",
+      "Вне рабочих часов команды",
     );
     assert.equal(
       rescheduleWarning(

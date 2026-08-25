@@ -53,7 +53,17 @@ export function validateInvoiceDraft(draft: {
     if (roundInvoiceMoney(qty * unitPrice) > MAX_INVOICE_MONEY) {
       throw new Error(`Сумма позиции слишком большая: ${title}`);
     }
-    return { title, qty, unit_price: unitPrice };
+    const description = line.description?.trim() || null;
+    if (description && description.length > 2000) {
+      throw new Error(`Описание позиции слишком длинное: ${title}`);
+    }
+    // ЕДИНИЦА — СЛОВО, А НЕ ЧИСЛО, поэтому у неё своя проверка: короткая
+    // подпись из библиотеки, а не место для второго названия позиции.
+    const unit = line.unit?.trim() || null;
+    if (unit && unit.length > 16) {
+      throw new Error(`Единица измерения слишком длинная: ${title}`);
+    }
+    return { title, qty, unit_price: unitPrice, description, unit };
   });
 }
 
@@ -65,7 +75,9 @@ export function invoiceLineRows(
     invoice_id: invoiceId,
     position,
     title: line.title,
+    description: line.description ?? null,
     qty: line.qty,
+    unit: line.unit ?? null,
     unit_price: line.unit_price,
     total: roundInvoiceMoney(line.qty * line.unit_price),
   }));

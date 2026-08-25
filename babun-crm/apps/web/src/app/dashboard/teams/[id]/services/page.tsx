@@ -895,7 +895,6 @@ function ServiceFormModal({
       bulk_price: 0,
       material_costs: cleanMaterials,
       cost_per_unit: sumCostPerUnit,
-      is_countable: true,
       available_weekdays: days,
       online_enabled: online,
       is_active: active,

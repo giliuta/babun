@@ -85,7 +85,7 @@ export function RepeatReminderSheet({
             // Останавливает закрытие по тапу внутри карточки.
             onPress={() => {}}
             accessible={false}
-            className="w-full max-w-[360px] overflow-hidden rounded-3xl"
+            className="w-full max-w-[360px] overflow-hidden rounded-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             <View className="border-b px-5 pb-3 pt-4" style={{ borderColor: t.separator }}>
@@ -119,7 +119,7 @@ export function RepeatReminderSheet({
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={p.label}
-                    className="flex-row items-center justify-between rounded-2xl border px-3 py-3"
+                    className="flex-row items-center justify-between rounded-[10px] border px-3 py-3"
                     style={{
                       minHeight: 48,
                       borderColor: active ? t.accent : t.separator,
@@ -158,7 +158,7 @@ export function RepeatReminderSheet({
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
                 keyboardAppearance="light"
-                className="rounded-xl px-3.5 py-2.5 text-base"
+                className="rounded-[10px] px-3.5 py-2.5 text-base"
                 style={{
                   color: t.ink,
                   backgroundColor: t.fill,
@@ -179,7 +179,7 @@ export function RepeatReminderSheet({
                 onPress={onClose}
                 accessibilityRole="button"
                 accessibilityLabel="Отмена"
-                className="h-11 flex-1 items-center justify-center rounded-xl active:opacity-70"
+                className="h-11 flex-1 items-center justify-center rounded-[10px] active:opacity-70"
                 style={{ backgroundColor: t.fill }}
               >
                 <Text className="text-base font-medium" style={{ color: t.ink }}>

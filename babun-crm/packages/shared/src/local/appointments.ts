@@ -57,6 +57,16 @@ export interface AppointmentService {
   totalPrice: number;      // qty × pricePerUnit − discount
   duration: number;        // qty × baseDuration
   discount?: Discount;
+  /** ИМЯ И ЕДИНИЦА НА ДЕНЬ ЗАПИСИ (2026-08-25). Услугу могли переименовать —
+   *  «Чистка» стала «Чисткой сплит-системы», — и прошлая запись обязана
+   *  называть работу так, как её назвали тогда. Ещё важнее: услугу могли
+   *  стереть насовсем, и тогда имя не восстановить ниоткуда (в базе прода уже
+   *  лежат четыре такие). Необязательные: у записей, сделанных до этого дня,
+   *  их нет, и читатель падает обратно на справочник. */
+  serviceName?: string;
+  unit?: string | null;
+  /** Выбранный вариант услуги, если она типа «варианты». */
+  variantId?: string | null;
 }
 
 export type AppointmentKind = "work" | "event" | "personal"; // event = встреча/обед/перерыв
@@ -249,18 +259,6 @@ export interface Appointment {
   created_at: string;
   updated_at: string;
 }
-
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Другое",
-  // Brief 1 #15: «Сплит» reads as the HVAC equipment type (used
-  // elsewhere as ACType.split = «Сплит»). For the payment-method
-  // surface use the plain RU word.
-  split: "Раздельно",
-  invoice: "Счёт",
-};
 
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   scheduled: "Запланирована",

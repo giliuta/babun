@@ -14,6 +14,10 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
+import {
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_METHODS,
+} from "@babun/shared/local/finance/transaction";
 import type { DayExtra, DayExtraKind } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { generateId } from "@babun/shared/local/masters";
@@ -117,12 +121,10 @@ export function DayFinanceModal({
       })()
     : "";
 
-  const methods: { label: string; v: number }[] = [
-    { label: "Наличные", v: totals.byMethod.cash },
-    { label: "Карта", v: totals.byMethod.card },
-    { label: "Перевод", v: totals.byMethod.transfer },
-    { label: "Другое", v: totals.byMethod.other },
-  ].filter((m) => m.v > 0);
+  const methods = PAYMENT_METHODS.map((value) => ({
+    label: PAYMENT_METHOD_LABEL[value],
+    v: totals.byMethod[value],
+  })).filter((m) => m.v > 0);
 
   const segments: { key: Segment; label: string; color: string }[] = [
     { key: "income", label: "Доход", color: t.success },
@@ -153,7 +155,7 @@ export function DayFinanceModal({
           style={{
             width: "100%",
             maxWidth: 340,
-            borderRadius: 20,
+            borderRadius: t.radius.card,
             overflow: "hidden",
             paddingBottom: 12,
             backgroundColor: t.canvas,
@@ -191,7 +193,7 @@ export function DayFinanceModal({
             keyboardShouldPersistTaps="handled"
           >
             <View
-              className="mx-3 mt-3 overflow-hidden rounded-[14px]"
+              className="mx-3 mt-3 overflow-hidden rounded-[10px]"
               style={{ backgroundColor: t.surface }}
             >
               <Row label="Запланировано" v={totals.planned} color={t.sub} t={t} />
@@ -213,7 +215,7 @@ export function DayFinanceModal({
               <>
                 <SectionTitle t={t}>По способам оплаты</SectionTitle>
                 <View
-                  className="mx-3 overflow-hidden rounded-[14px]"
+                  className="mx-3 overflow-hidden rounded-[10px]"
                   style={{ backgroundColor: t.surface }}
                 >
                   {methods.map((m, i) => (
@@ -229,7 +231,7 @@ export function DayFinanceModal({
             {/* Ручные операции + долги дня (веб-паритет: сегменты
                 Доход/Расход/Ожид. в DayFinanceModal веба). */}
             <View
-              className="mx-3 mt-3 flex-row rounded-[12px] p-1"
+              className="mx-3 mt-3 flex-row rounded-[10px] p-1"
               style={{ backgroundColor: t.fill }}
             >
               {segments.map((s) => {
@@ -244,7 +246,7 @@ export function DayFinanceModal({
                     accessibilityRole="button"
                     accessibilityLabel={`Показать: ${s.label}`}
                     accessibilityState={{ selected: active }}
-                    className="min-h-11 flex-1 items-center justify-center rounded-[9px]"
+                    className="min-h-11 flex-1 items-center justify-center rounded-[10px]"
                     style={active ? { backgroundColor: t.surface } : undefined}
                   >
                     <Text
@@ -277,7 +279,7 @@ export function DayFinanceModal({
               />
             ) : (
               <View
-                className="mx-3 mt-2 overflow-hidden rounded-[14px]"
+                className="mx-3 mt-2 overflow-hidden rounded-[10px]"
                 style={{ backgroundColor: t.surface }}
               >
                 {pendingAppts.length === 0 ? (
@@ -369,7 +371,7 @@ function ExtrasSection({
   return (
     <>
       <View
-        className="mx-3 mt-2 overflow-hidden rounded-[14px]"
+        className="mx-3 mt-2 overflow-hidden rounded-[10px]"
         style={{ backgroundColor: t.surface }}
       >
         {items.length === 0 && !adding ? (
@@ -430,7 +432,7 @@ function ExtrasSection({
             onPress={onStartAdd}
             accessibilityRole="button"
             accessibilityLabel={isIncome ? "Добавить доход" : "Добавить расход"}
-            className="mx-3 mt-2 min-h-11 items-center justify-center rounded-[14px]"
+            className="mx-3 mt-2 min-h-11 items-center justify-center rounded-[10px]"
             style={({ pressed }) => ({
               backgroundColor: pressed ? t.pressed : t.surface,
             })}
@@ -487,7 +489,7 @@ function AddExtraForm({
 
   return (
     <View
-      className="mx-3 mt-2 rounded-[14px] p-3"
+      className="mx-3 mt-2 rounded-[10px] p-3"
       style={{ backgroundColor: t.surface }}
     >
       <View className="flex-row" style={{ gap: 8 }}>
@@ -519,7 +521,7 @@ function AddExtraForm({
           onPress={onCancel}
           accessibilityRole="button"
           accessibilityLabel="Отменить добавление операции"
-          className="min-h-11 flex-1 items-center justify-center rounded-[12px]"
+          className="min-h-11 flex-1 items-center justify-center rounded-[10px]"
         >
           <Text style={{ fontSize: 14, fontWeight: "500", color: t.sub }}>
             Отмена
@@ -531,7 +533,7 @@ function AddExtraForm({
           accessibilityRole="button"
           accessibilityLabel="Сохранить операцию"
           accessibilityState={{ disabled: !canSave }}
-          className="min-h-11 flex-1 items-center justify-center rounded-[12px]"
+          className="min-h-11 flex-1 items-center justify-center rounded-[10px]"
           style={{
             backgroundColor: canSave
               ? isIncome

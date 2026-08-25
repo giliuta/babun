@@ -16,7 +16,7 @@ function source(relative: string): string {
 describe("recurring reminder → booking contract", () => {
   test("forwards reminder identity through calendar into the full booking page", () => {
     const recurring = source("app/(dashboard)/cabinet/recurring.tsx");
-    const calendar = source("app/(dashboard)/index.tsx");
+    const calendar = source("app/(dashboard)/(home)/index.tsx");
     assert.match(recurring, /reminderId:\s*item\.id/);
     assert.match(
       calendar,

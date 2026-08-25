@@ -24,7 +24,7 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { Chip } from "@/components/ui/Chip";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -523,7 +523,7 @@ function RoleSheet({
             accessible={false}
           />
           <View
-            className="max-h-[88%] rounded-t-3xl"
+            className="max-h-[88%] rounded-t-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             <ScrollView
@@ -558,7 +558,7 @@ function RoleSheet({
                   marginBottom: 16,
                 }}
               />
-              <ColorPicker value={color} onChange={setColor} label="Цвет роли" />
+              <ColorField value={color} onChange={setColor} label="Цвет роли" />
               <Button
                 label={existing ? "Сохранить" : "Создать"}
                 onPress={() => draft && onSave(draft, name, color)}
@@ -634,7 +634,7 @@ function AddMemberPicker({
             accessible={false}
           />
           <View
-            className="max-h-[88%] rounded-t-3xl"
+            className="max-h-[88%] rounded-t-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             <View className="px-5 pb-2 pt-5">
@@ -666,7 +666,7 @@ function AddMemberPicker({
               ) : null}
               {/* Поиск */}
               <View
-                className="flex-row items-center rounded-2xl px-3"
+                className="flex-row items-center rounded-[10px] px-3"
                 style={{ backgroundColor: t.fill }}
               >
                 <Search color={t.faint} size={ICON.sm} />

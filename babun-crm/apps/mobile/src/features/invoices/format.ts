@@ -3,27 +3,48 @@ import type {
   InvoiceVatMode,
 } from "@babun/shared/local/finance/invoice-ledger";
 import { getCurrentTimeInZone } from "@babun/shared/common/utils/date-utils";
-import { formatEURExact } from "@babun/shared/common/utils/money";
+import {
+  money,
+  moneySymbol,
+  parseMoneyInputToCents,
+} from "@babun/shared/common/utils/money";
 
-export function formatInvoiceMoney(value: number, currency = "EUR"): string {
-  // Finance, client balances and invoices use one visual money grammar:
-  // sign + symbol + amount. Intl ru-RU puts EUR after the number (`0 €`),
-  // which made the same dashboard show both `€940` and `0 €` side by side.
-  if (currency.toUpperCase() === "EUR") return formatEURExact(value);
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency,
-    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+/**
+ * ДЕНЬГИ ДОКУМЕНТА ГОВОРЯТ НА ЯЗЫКЕ ДОКУМЕНТА (2026-08-25).
+ *
+ * Русский счёт печатает «€1 234,50», английский — «€1,234.50»: это не
+ * украшение, а то, как число читают. Внутри приложения денежная грамматика
+ * по-прежнему одна на весь продукт (`money`), и русская ветка буквально она —
+ * иначе рядом появилась бы вторая правда о том, как выглядит евро.
+ */
+export function formatInvoiceMoney(
+  value: number,
+  currency: string = "EUR",
+  locale = "ru-RU",
+): string {
+  if (locale === "ru-RU") return money(value, currency);
+  if (!Number.isFinite(value)) return "—";
+  const symbol = moneySymbol(currency);
+  const prefix = symbol.length > 1 ? `${symbol}\u00a0` : symbol;
+  const cents = Math.round(value * 100);
+  const abs = Math.abs(cents);
+  const body = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: abs % 100 ? 2 : 0,
     maximumFractionDigits: 2,
-  }).format(value);
+  }).format(abs / 100);
+  return `${cents < 0 ? "−" : ""}${prefix}${body}`;
 }
 
-export function formatInvoiceDate(value: string | null): string {
-  if (!value) return "Не указан";
+export function formatInvoiceDate(
+  value: string | null,
+  locale = "ru-RU",
+  fallback = "Не указан",
+): string {
+  if (!value) return fallback;
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("ru-RU", {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -37,11 +58,18 @@ export function parseDecimal(value: string): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Денежный ввод инвойсного контура — тонкая обёртка над общим
+ * `parseMoneyInputToCents`: один парсер на весь продукт, иначе сумма, которую
+ * лист операции честно отклоняет (за пределами numeric(12,2)), в оплате
+ * инвойса проходила бы клиентскую проверку и падала уже на сервере.
+ * Инвойсы считают в евро-числах, поэтому центы возвращаются делением.
+ * Ноль разрешён: бесплатная строка позиции — легальна, её режет валидация
+ * итога, а не парсер.
+ */
 export function parseMoneyAmount(value: string): number | null {
-  const normalized = value.replace(/\s/g, "").replace(",", ".");
-  if (!normalized || !/^\d+(?:\.\d{0,2})?$/.test(normalized)) return null;
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : null;
+  const cents = parseMoneyInputToCents(value, { allowZero: true });
+  return cents == null ? null : cents / 100;
 }
 
 export function invoiceVatMode(invoice: InvoiceLedgerWithLines): InvoiceVatMode {

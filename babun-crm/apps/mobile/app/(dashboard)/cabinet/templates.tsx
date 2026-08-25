@@ -15,8 +15,15 @@ import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
-import { isPaymentAccountCompatible } from "@babun/shared/local/finance/integrity";
-import type { PaymentMethod } from "@babun/shared/local/finance/transaction";
+import { accountDisplayName } from "@babun/shared/local/finance/account";
+import {
+  accountsForTeam,
+  paymentMethodForAccountKind,
+} from "@babun/shared/local/finance/integrity";
+import {
+  PAYMENT_METHOD_LABEL,
+  type PaymentMethod,
+} from "@babun/shared/local/finance/transaction";
 import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -41,19 +48,13 @@ import {
 
 // Шаблоны операций — чип-строка над формой «+ Доход/Расход». Экран задаёт
 // ВСЕ поля, которые чип реально применяет (OperationSheet.tsx: сумма,
-// категория, способ оплаты, бригада, счёт) — раньше здесь были только
-// name/kind/amount/category, а полноценный шаблон можно было получить лишь
-// инлайн-захватом из формы операции; редактирования не было вовсе
-// (аудит P1-7).
+// категория, команда, счёт; способ оплаты выводится из вида счёта) — раньше
+// здесь были только name/kind/amount/category, а полноценный шаблон можно
+// было получить лишь инлайн-захватом из формы операции; редактирования не
+// было вовсе (аудит P1-7).
 
-const METHODS: { value: PaymentMethod; label: string }[] = [
-  { value: "cash", label: "Наличные" },
-  { value: "card", label: "Карта" },
-  { value: "transfer", label: "Перевод" },
-  { value: "other", label: "Другое" },
-];
 const methodLabel = (m: PaymentMethod | null) =>
-  METHODS.find((x) => x.value === m)?.label ?? null;
+  m ? PAYMENT_METHOD_LABEL[m] : null;
 
 export default function TemplatesScreen() {
   const templatesQuery = useFinanceTemplates();
@@ -84,7 +85,6 @@ export default function TemplatesScreen() {
   const [kind, setKind] = useState<"income" | "expense">("expense");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [method, setMethod] = useState<PaymentMethod | null>("cash");
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
 
@@ -92,28 +92,20 @@ export default function TemplatesScreen() {
     () => categories.filter((c) => c.type === kind),
     [categories, kind],
   );
-  // Счета строго per-brigade (финансы v5): чипы счёта появляются после
-  // выбора бригады и только её счета.
+  // Чипы счёта появляются после выбора команды: её собственные счета плюс
+  // счета компании, к которым команда подключена.
   const brigadeAccounts = useMemo(
-    () =>
-      brigadeId && method
-        ? accounts.filter(
-            (a) =>
-              a.brigade_id === brigadeId &&
-              isPaymentAccountCompatible(method, a.kind),
-          )
-        : [],
-    [accounts, brigadeId, method],
+    () => (brigadeId ? accountsForTeam(accounts, brigadeId) : []),
+    [accounts, brigadeId],
   );
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
     [accounts, accountId],
   );
+  // Счёт из сохранённого шаблона мог закрыться или отвязаться от команды —
+  // тогда шаблон нечем оплачивать, и сказать об этом надо до сохранения.
   const accountMismatch =
-    !!accountId &&
-    (!selectedAccount ||
-      selectedAccount.brigade_id !== brigadeId ||
-      !isPaymentAccountCompatible(method, selectedAccount.kind));
+    !!accountId && !brigadeAccounts.some((a) => a.id === accountId);
   const teamName = useMemo(
     () => new Map(teams.map((tm) => [tm.id, tm.name])),
     [teams],
@@ -126,7 +118,6 @@ export default function TemplatesScreen() {
   const canSave =
     !!name.trim() &&
     amountCents != null &&
-    !!method &&
     !!brigadeId &&
     !!accountId &&
     !accountMismatch &&
@@ -160,7 +151,6 @@ export default function TemplatesScreen() {
     setKind("expense");
     setAmount("");
     setCategoryId(null);
-    setMethod("cash");
     setBrigadeId(null);
     setAccountId(null);
     setOpen(true);
@@ -171,7 +161,6 @@ export default function TemplatesScreen() {
     setKind(tpl.kind);
     setAmount(String(tpl.amount));
     setCategoryId(tpl.category_id);
-    setMethod(tpl.payment_method);
     setBrigadeId(tpl.brigade_id);
     setAccountId(tpl.account_id);
     setOpen(true);
@@ -185,17 +174,17 @@ export default function TemplatesScreen() {
       );
       return;
     }
-    if (!method || !brigadeId || !accountId) {
+    if (!brigadeId || !accountId) {
       Alert.alert(
         "Не заполнена оплата",
-        "Выберите способ оплаты, команду и подходящий финансовый счёт.",
+        "Выберите команду и счёт, на который проходит операция.",
       );
       return;
     }
-    if (accountMismatch) {
+    if (accountMismatch || !selectedAccount) {
       Alert.alert(
         "Счёт не подходит",
-        "Сохранённый счёт относится к другой команде или способу оплаты. Выберите доступный счёт заново.",
+        "Сохранённый счёт больше не обслуживает эту команду. Выберите доступный счёт заново.",
       );
       return;
     }
@@ -204,10 +193,12 @@ export default function TemplatesScreen() {
       kind,
       amount: amountCents / 100,
       category_id: categoryId,
-      payment_method: method,
+      // Способ оплаты выводится из вида счёта: касса — «Наличные», карта —
+      // «Карта». Спрашивать его отдельно значило дать собрать шаблон с
+      // противоречием («Перевод» на кассу).
+      payment_method: paymentMethodForAccountKind(selectedAccount.kind),
       brigade_id: brigadeId,
-      // Счёт живёт только вместе со своей бригадой.
-      account_id: brigadeId ? accountId : null,
+      account_id: accountId,
     };
     try {
       if (editing) await update.mutateAsync({ id: editing.id, patch: draft });
@@ -250,7 +241,7 @@ export default function TemplatesScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => {
-            // Подзаголовок повторяет веб-строку: вид · способ · бригада.
+            // Подзаголовок повторяет веб-строку: вид · способ · команда.
             const bits = [
               item.kind === "expense" ? "Расход" : "Доход",
               methodLabel(item.payment_method),
@@ -307,7 +298,6 @@ export default function TemplatesScreen() {
             <EmptyState
               fill
               title="Нет шаблонов"
-              subtitle="Частые операции (Аренда, Бензин…) — заведите шаблон и добавляйте их в один тап"
               action={{ label: "Добавить шаблон", onPress: openCreate }}
             />
           }
@@ -326,7 +316,7 @@ export default function TemplatesScreen() {
           accessible={false}
         />
         <View
-          className="max-h-[80%] rounded-t-3xl"
+          className="max-h-[80%] rounded-t-[10px]"
           style={{ backgroundColor: t.surface }}
         >
         <ScrollView
@@ -378,30 +368,9 @@ export default function TemplatesScreen() {
               </View>
             </>
           ) : null}
-          <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Способ оплаты</Text>
-          <View className="mb-3 flex-row flex-wrap gap-2">
-            {METHODS.map((m) => (
-              <Chip
-                key={m.value}
-                label={m.label}
-                radio
-                selected={method === m.value}
-                onPress={() => {
-                  const nextMethod = method === m.value ? null : m.value;
-                  setMethod(nextMethod);
-                  if (
-                    !selectedAccount ||
-                    !isPaymentAccountCompatible(nextMethod, selectedAccount.kind)
-                  ) {
-                    setAccountId(null);
-                  }
-                }}
-              />
-            ))}
-          </View>
           {teams.length > 0 ? (
             <>
-              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Бригада</Text>
+              <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>Команда</Text>
               <View className="mb-3 flex-row flex-wrap gap-2">
                 {teams.map((tm) => (
                   <Chip
@@ -426,7 +395,7 @@ export default function TemplatesScreen() {
                 {brigadeAccounts.map((a) => (
                   <Chip
                     key={a.id}
-                    label={a.name}
+                    label={accountDisplayName(a)}
                     radio
                     selected={accountId === a.id}
                     onPress={() => setAccountId(accountId === a.id ? null : a.id)}
@@ -439,13 +408,13 @@ export default function TemplatesScreen() {
             <Text className="mb-3 text-sm" style={{ color: t.danger }}>
               Сохранённый счёт больше не подходит. Выберите доступный счёт заново.
             </Text>
-          ) : brigadeId && method && brigadeAccounts.length === 0 ? (
+          ) : brigadeId && brigadeAccounts.length === 0 ? (
             <Text className="mb-3 text-sm" style={{ color: t.danger }}>
-              Для этого способа оплаты у команды нет активного счёта.
+              У этой команды нет активного счёта.
             </Text>
-          ) : !method || !brigadeId || !accountId ? (
+          ) : !brigadeId || !accountId ? (
             <Text className="mb-3 text-sm" style={{ color: t.sub }}>
-              Для рабочего шаблона нужны способ оплаты, команда и счёт.
+              Для рабочего шаблона нужны команда и счёт.
             </Text>
           ) : null}
           <Button

@@ -1,15 +1,28 @@
 import { useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
-import { Check, Search, X } from "lucide-react-native";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { ScrollView, TextInput, View } from "react-native";
+import { Search } from "lucide-react-native";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ICON } from "@/components/ui/tokens";
+import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
 import { useThemeColors } from "@/theme/colors";
+
+// ВЫБОР КЛИЕНТА / ЗАЯВКИ / КОМАНДЫ В РЕДАКТОРЕ ИНВОЙСА.
+//
+// Тот же жанр, что ValuePickerSheet («один из длинного списка»), плюс поле
+// поиска: клиентов бывают сотни, и без поиска лист превращается в прокрутку
+// вслепую. Строки — общий ValueOptionList: закон «один дизайн на все списки»
+// запрещает собственную вёрстку строки, а лист — только канонический
+// BottomSheet (раньше здесь был полноэкранный Modal slide со своей шапкой).
 
 export interface EntityOption {
   id: string;
   title: string;
   subtitle?: string;
 }
+
+/** «Не выбрано» — легальное значение (инвойс без заявки), поэтому оно живёт
+ *  строкой списка, а не повторным тапом по выбранному. */
+const NONE_ID = "__none__";
 
 export function EntityPickerSheet({
   visible,
@@ -38,111 +51,76 @@ export function EntityPickerSheet({
     );
   }, [options, query]);
 
+  const rows = useMemo(
+    () => [
+      // «Не выбрано» не фильтруется поиском: дорога «отвязать» доступна всегда.
+      ...(allowEmpty ? [{ id: NONE_ID, label: "Не выбрано" }] : []),
+      ...filtered.map((option) => ({
+        id: option.id,
+        label: option.title,
+        hint: option.subtitle,
+      })),
+    ],
+    [allowEmpty, filtered],
+  );
+
   const close = () => {
     setQuery("");
     onClose();
   };
   const pick = (id: string | null) => {
-    onPick(id);
+    onPick(id === NONE_ID ? null : id);
     close();
   };
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={close}>
-      <View className="flex-1" style={{ backgroundColor: t.canvas }}>
-        <View
-          className="flex-row items-center px-2 py-1"
-          style={{ backgroundColor: t.surface, borderBottomWidth: 1, borderBottomColor: t.separator }}
-        >
-          <Pressable
-            onPress={close}
-            accessibilityRole="button"
-            accessibilityLabel="Закрыть"
-            className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-          >
-            <X color={t.body} size={ICON.md} />
-          </Pressable>
-          <Text className="flex-1 text-center text-[17px] font-semibold" style={{ color: t.ink }}>
-            {title}
-          </Text>
-          <View className="h-11 w-11" />
-        </View>
-
-        <View
-          className="mx-3 my-3 flex-row items-center rounded-xl px-3"
-          style={{ minHeight: 44, backgroundColor: t.fill }}
-        >
-          <Search color={t.faint} size={ICON.sm} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Поиск"
-            placeholderTextColor={t.placeholder}
-            selectionColor={t.accent}
-            keyboardAppearance="light"
-            autoCorrect={false}
-            accessibilityLabel={`Поиск: ${title}`}
-            className="ml-2 flex-1 text-base"
-            style={{ color: t.ink }}
-          />
-        </View>
-
-        <FlatList
-          data={filtered}
-          keyExtractor={(option) => option.id}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: 24 }}
-          ListHeaderComponent={
-            allowEmpty ? (
-              <PickerRow
-                title="Не выбрано"
-                selected={selectedId === null}
-                onPress={() => pick(null)}
-              />
-            ) : null
-          }
-          ListEmptyComponent={<EmptyState title="Ничего не найдено" />}
-          renderItem={({ item }) => (
-            <PickerRow
-              title={item.title}
-              subtitle={item.subtitle}
-              selected={selectedId === item.id}
-              onPress={() => pick(item.id)}
-            />
-          )}
+    <BottomSheet
+      visible={visible}
+      onClose={close}
+      title={title}
+      maxHeightRatio={0.9}
+      avoidKeyboard
+    >
+      <View
+        style={{
+          marginHorizontal: 12,
+          marginBottom: 10,
+          minHeight: 44,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 12,
+          borderRadius: t.radius.input,
+          backgroundColor: t.fill,
+        }}
+      >
+        <Search color={t.faint} size={ICON.sm} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Поиск"
+          placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
+          keyboardAppearance="light"
+          autoCorrect={false}
+          accessibilityLabel={`Поиск: ${title}`}
+          style={{ marginLeft: 8, flex: 1, fontSize: 16, color: t.ink }}
         />
       </View>
-    </Modal>
-  );
-}
-
-function PickerRow({
-  title,
-  subtitle,
-  selected,
-  onPress,
-}: Omit<EntityOption, "id"> & { selected: boolean; onPress: () => void }) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
-      accessibilityState={{ selected }}
-      className="flex-row items-center px-4 py-2.5 active:opacity-60"
-      style={{ minHeight: 52, backgroundColor: t.surface, borderBottomWidth: 1, borderBottomColor: t.separator }}
-    >
-      <View className="flex-1 pr-3">
-        <Text className="text-base" style={{ color: t.ink }} numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }} numberOfLines={1}>
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
-      {selected ? <Check color={t.accent} size={ICON.sm} strokeWidth={2.7} /> : null}
-    </Pressable>
+      <ScrollView
+        style={{ flexShrink: 1 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 28 }}
+      >
+        <ValueOptionList
+          options={rows}
+          selectedId={selectedId ?? (allowEmpty ? NONE_ID : null)}
+          emptyLabel="Ничего не найдено"
+          // Повторный тап по выбранному не «снимает» его: за пустоту отвечает
+          // строка «Не выбрано», а не побочный эффект.
+          clearable={false}
+          onPick={pick}
+        />
+      </ScrollView>
+    </BottomSheet>
   );
 }

@@ -50,6 +50,9 @@ function invalidateKeys() {
     ["clients"],
     ["accounts"],
     ["invoices"],
+    // Чек рождается сервером на приём денег (issue_receipt_for_income):
+    // оплата записи выдаёт чек, и список чеков обязан его довезти.
+    ["receipts"],
   ];
 }
 
@@ -206,6 +209,9 @@ export function useUpdateAppointment() {
           ["clients"],
           ["accounts"],
           ["invoices"],
+          // Оплата в патче рождает чек на сервере — тот же закон, что у
+          // invalidateKeys выше.
+          ["receipts"],
         ]) {
           qc.invalidateQueries({ queryKey: key });
         }

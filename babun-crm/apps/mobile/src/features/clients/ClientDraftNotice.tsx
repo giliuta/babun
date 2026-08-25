@@ -46,7 +46,7 @@ export function ClientDraftNotice({
               onPress={() => onOpenDuplicate(duplicate.id)}
               accessibilityRole="button"
               accessibilityLabel="Открыть существующего клиента"
-              className="min-h-11 justify-center rounded-[14px] px-3.5 active:opacity-80"
+              className="min-h-11 justify-center rounded-[10px] px-3.5 active:opacity-80"
               style={{ backgroundColor: t.accent }}
             >
               <Text className="text-sm font-semibold" style={{ color: t.onAccent }}>

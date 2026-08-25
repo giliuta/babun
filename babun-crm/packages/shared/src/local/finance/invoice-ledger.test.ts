@@ -3,12 +3,13 @@ import {
   calculateInvoicePaymentRefundable,
   calculateInvoiceTotals,
   calculateInvoiceSettlement,
-  formatInvoiceNumber,
   invoiceDisplayStatus,
   invoicePaymentRefundDestination,
   parseInvoiceClientSnapshot,
   parseInvoiceSellerSnapshot,
+  splitVatInclusive,
 } from "./invoice-ledger";
+import { applyTxVat } from "./vat";
 
 describe("calculateInvoiceTotals", () => {
   const lines = [
@@ -52,6 +53,39 @@ describe("calculateInvoiceTotals", () => {
         0,
       ).total,
     ).toBe(0.99);
+  });
+});
+
+// РАЗЛОЖЕНИЕ НДС — ОДНО НА ПРОДУКТ. Своя формула здесь без EPSILON давала на
+// ровной половине цента превью 0,04/0,23 против серверных 0,05/0,22 — и
+// контрольное чтение после создания инвойса падало для уже существующего
+// документа. Теперь считает vat.ts, и этот паритет закреплён.
+describe("паритет разложения НДС с vat.ts и сервером", () => {
+  it("ровная половина цента: 0,27 € при 20% — налог 0,05, нетто 0,22", () => {
+    // Зеркало SQL issue_invoice: round(0.27 − 0.27/1.2, 2) = 0.05 (half-up).
+    expect(
+      calculateInvoiceTotals([{ title: "Работа", qty: 1, unit_price: 0.27 }], "inclusive", 20),
+    ).toEqual({ subtotal_net: 0.22, vat_amount: 0.05, total: 0.27 });
+  });
+
+  it("инвойс «включено» совпадает с applyTxVat на сетке сумм и ставок", () => {
+    for (let cents = 1; cents <= 500; cents++) {
+      const gross = cents / 100;
+      for (const rate of [19, 20, 24]) {
+        const canon = applyTxVat(gross, "inclusive", rate);
+        const { net, vat } = splitVatInclusive(gross, rate);
+        expect(vat).toBe(canon.vat);
+        expect(net).toBe(canon.net);
+        const totals = calculateInvoiceTotals(
+          [{ title: "Работа", qty: 1, unit_price: gross }],
+          "inclusive",
+          rate,
+        );
+        expect(totals.vat_amount).toBe(canon.vat);
+        expect(totals.subtotal_net).toBe(canon.net);
+        expect(totals.total).toBe(canon.gross);
+      }
+    }
   });
 });
 
@@ -222,8 +256,4 @@ describe("invoice party snapshot parsing", () => {
     expect(parseInvoiceSellerSnapshot([])).toBeNull();
     expect(parseInvoiceClientSnapshot("client")).toBeNull();
   });
-});
-
-it("normalizes a configured invoice prefix", () => {
-  expect(formatInvoiceNumber(" INV- ", 2026, 7)).toBe("INV-2026-007");
 });

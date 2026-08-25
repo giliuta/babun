@@ -32,13 +32,6 @@ export type PayMethod = Exclude<
   "split" | "invoice"
 >;
 
-export const PAY_METHOD_LABELS: Record<PayMethod, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Другое",
-};
-
 /** Платёжный срез записи, который нужен buildDebtPaidPatch (create-режим
  *  шита передаёт undefined — записи ещё нет). */
 export type PaidStateSnapshot = Pick<

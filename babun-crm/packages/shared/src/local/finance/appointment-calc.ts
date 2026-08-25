@@ -6,7 +6,7 @@
 
 import type { AppointmentService, Discount } from "../appointments";
 import {
-  getServiceMaterialCost,
+  costPerUnit,
   type ServiceCostSource,
 } from "../services";
 
@@ -81,7 +81,10 @@ export function appointmentMaterialCostLines(
   for (const [serviceId, quantity] of quantityByService) {
     const service = serviceById.get(serviceId);
     if (!service) continue;
-    const unitCost = getServiceMaterialCost(service);
+    // РАСХОД БЕРЁТСЯ ПО КОЛИЧЕСТВУ (2026-08-21): у услуги может быть своя
+    // лестница расхода — та же химия дешевле оптом. Без количества здесь
+    // работала бы только первая строка.
+    const unitCost = costPerUnit(service, quantity);
     const totalCost = unitCost * quantity;
     if (totalCost <= 0) continue;
     lines.push({
@@ -105,6 +108,20 @@ export function appointmentMaterialCost(
   );
 }
 
+/** ДЕНЬГИ ОКРУГЛЯЮТСЯ ДО КОПЕЕК, А НЕ ДО ЕВРО (2026-08-18).
+ *
+ *  Здесь стоял `Math.round`, то есть до целого евро: услуга за 50,01 €
+ *  превращалась в 50 в тот момент, когда запись открывали или пересчитывали,
+ *  и «Итого» расходилось с прайсом на глазах. Целыми евро деньги в продукте не
+ *  считает больше никто: остатки счетов, операции и инвойсы живут в центах.
+ *
+ *  Копейка — предел точности, дальше округлять нечего: цена за штуку у
+ *  ступеней уже задаётся с двумя знаками, а float-хвосты («10 − 1.12 =
+ *  8.879999…») эта же функция и снимает. */
+export function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 /** Apply a discount to a number; clamped to [0, base]. */
 export function applyDiscount(base: number, discount?: Discount | null): number {
   if (!discount) return base;
@@ -118,12 +135,12 @@ export function applyDiscount(base: number, discount?: Discount | null): number 
 /** Per-line total: qty × pricePerUnit − line discount. */
 export function lineTotal(line: AppointmentService): number {
   const base = line.quantity * line.pricePerUnit;
-  return Math.round(applyDiscount(base, line.discount));
+  return round2(applyDiscount(base, line.discount));
 }
 
 /** Sum of line totals. */
 export function subtotal(services: AppointmentService[]): number {
-  return services.reduce((acc, l) => acc + lineTotal(l), 0);
+  return round2(services.reduce((acc, l) => acc + lineTotal(l), 0));
 }
 
 /** Total = subtotal − globalDiscount. */
@@ -132,7 +149,7 @@ export function appointmentTotal(
   globalDiscount?: Discount | null
 ): number {
   const sub = subtotal(services);
-  return Math.round(applyDiscount(sub, globalDiscount));
+  return round2(applyDiscount(sub, globalDiscount));
 }
 
 /** Sum of line durations — кешируется в appointment.total_duration. */
@@ -148,5 +165,5 @@ export function globalDiscountAmount(
   if (!globalDiscount) return 0;
   const sub = subtotal(services);
   const after = applyDiscount(sub, globalDiscount);
-  return Math.round(sub - after);
+  return round2(sub - after);
 }

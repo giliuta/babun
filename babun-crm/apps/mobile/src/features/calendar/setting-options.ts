@@ -45,6 +45,27 @@ export const BUFFER_CHOICES: SheetOption<string>[] = [
   { value: "60", label: "1 час" },
 ];
 
+/**
+ * БУФЕР ПОСЛЕ ЗАПИСИ — СВОЙ У КАЖДОЙ БРИГАДЫ (владелец 2026-08-17: «давай в
+ * график команды добавим этот буфер — по сути это тот же перерыв, только после
+ * записи»).
+ *
+ * До этого буфер читался ТОЛЬКО из настроек компании, а колонка
+ * `teams.buffer_minutes` лежала мёртвой — комментарий в календаре объяснял это
+ * тем, что дорога «свойство бизнеса, а не команды». Но команды ездят по-разному:
+ * одной нужно полчаса между адресами, другая работает в одном здании. Теперь
+ * значение команды сильнее, `null` — «как у компании».
+ *
+ * Резолвер ОДИН на все поверхности (сетка, форма записи, перенос): три
+ * собственных `?? 0` уже однажды разъехались на рабочих часах.
+ */
+export function effectiveBuffer(
+  team: { buffer_minutes?: number | null } | null | undefined,
+  company: { bufferMinutes?: number } | null | undefined,
+): number {
+  return team?.buffer_minutes ?? company?.bufferMinutes ?? 0;
+}
+
 export function bufferLabel(min: number): string {
   return BUFFER_CHOICES.find((o) => o.value === String(min))?.label ?? `${min} мин`;
 }

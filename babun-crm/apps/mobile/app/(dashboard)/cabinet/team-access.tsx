@@ -176,7 +176,7 @@ export default function TeamAccessScreen() {
     if (role === "master" && !masterId) {
       Alert.alert(
         "Выберите карточку сотрудника",
-        "Мастеру нужна карточка, по которой CRM определит его заявки и бригаду.",
+        "Мастеру нужна карточка, по которой CRM определит его заявки и команду.",
       );
       return;
     }
@@ -308,7 +308,7 @@ export default function TeamAccessScreen() {
             accessibilityLabel="Email сотрудника"
             style={{
               minHeight: 50,
-              borderRadius: 14,
+              borderRadius: t.radius.card,
               paddingHorizontal: 14,
               fontSize: 16,
               color: t.ink,
@@ -662,7 +662,7 @@ function MemberEditor({
         onPress={onClose}
         accessible={false}
       />
-      <View style={{ maxHeight: "78%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: t.surface }}>
+      <View style={{ maxHeight: "78%", borderTopLeftRadius: t.radius.card, borderTopRightRadius: t.radius.card, backgroundColor: t.surface }}>
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
           <Text style={{ fontSize: 20, fontWeight: "700", color: t.ink }}>Роль и доступ</Text>
           <Text style={{ marginTop: 4, fontSize: 12, color: t.sub }} selectable>

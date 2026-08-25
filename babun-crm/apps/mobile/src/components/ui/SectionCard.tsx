@@ -1,11 +1,15 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Card } from "./Card";
+import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
 
-// Grouped-iOS card. Reuses the light Card surface (radius 20, frosted edge).
+// Grouped-iOS card. Reuses the light Card surface (radius 14, frosted edge).
 // No inner padding by default (lists sit flush); pass
 // `padded` for form/content cards.
+// Отступ от краёв — общий `GUTTER` (16): вторая карточная примитива продукта
+// (`RowGroupBody`) отступает так же, и на экране, где встречаются обе, их
+// края обязаны стоять на одной линии.
 export function SectionCard({
   title,
   action,
@@ -25,7 +29,7 @@ export function SectionCard({
 }) {
   const t = useThemeColors();
   return (
-    <View className={`mx-3 mt-2 ${className}`}>
+    <View className={`mt-2 ${className}`} style={{ marginHorizontal: GUTTER }}>
       <Card>
         {title ? (
           <View className="flex-row items-center justify-between px-4 pb-1 pt-3">

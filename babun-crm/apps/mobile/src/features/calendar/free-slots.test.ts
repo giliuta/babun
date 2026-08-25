@@ -38,11 +38,11 @@ describe("free slots", () => {
     );
   });
 
-  test("выходной бригады не предлагает ничего", () => {
+  test("выходной команды не предлагает ничего", () => {
     assert.deepEqual(freeSlotsForDay({ ...base, band: null, appts: [] }), []);
   });
 
-  test("без графика бригады берутся общие часы", () => {
+  test("без графика команды берутся общие часы", () => {
     const slots = freeSlotsForDay({
       ...base,
       band: undefined,
@@ -81,7 +81,7 @@ describe("free slots", () => {
     assert.equal(slots.length, 6);
   });
 
-  test("перерыв бригады вырезается", () => {
+  test("перерыв команды вырезается", () => {
     const slots = freeSlotsForDay({
       ...base,
       band: { ...BAND, breaks: [{ startMin: 10 * 60, endMin: 11 * 60 }] },

@@ -6,6 +6,7 @@ import {
   type LucideIcon,
 } from "lucide-react-native";
 import { Chip } from "@/components/ui/Chip";
+import { GUTTER } from "@/components/ui/tokens";
 import { sanitizePhoneInput } from "@/lib/phone-input";
 import { useThemeColors } from "@/theme/colors";
 
@@ -19,47 +20,213 @@ import { useThemeColors } from "@/theme/colors";
 // перевёрнуто (заголовок «Имя», а курсор в номере). Строка с ярлыком
 // снимает вопрос «что это за поле» в обоих режимах сразу.
 
-export function RowGroup({
+/** Отступ карточки от краёв экрана — один на все группы и на весь продукт
+ *  (`GUTTER`, DS §3). Был 12 при документе, обещающем 16. */
+const GROUP_INSET = GUTTER;
+
+/** Шапка группы: риска · капс-заголовок · подытог справа.
+ *
+ *  Живёт отдельным экспортом, потому что в `SectionList` заголовок, строки и
+ *  футер приезжают ТРЕМЯ разными слотами, а выглядеть обязаны одной карточкой.
+ *  Второй вёрстки заголовка в продукте быть не должно — «один дизайн на все
+ *  списки». */
+export function RowGroupHeader({
   title,
-  children,
+  accent,
+  value,
+  action,
 }: {
-  /** Капс-надпись над группой; без неё группа безымянная. */
   title?: string;
-  children: ReactNode;
+  accent?: string | null;
+  value?: string;
+  /** Команда СПРАВА ОТ ЭЙБРАУ, на одной с ним строке (владелец 2026-08-24:
+   *  «кнопка добавить будет как название с правой стороны плюс описание»).
+   *  Место для «＋», который дописывает в группу ещё один блок: контрол в
+   *  конце длинного списка требует прокрутки до конца, чтобы сделать то, что
+   *  видно сверху. */
+  action?: ReactNode;
 }) {
   const t = useThemeColors();
   return (
-    <View style={{ marginHorizontal: 12, marginTop: 12 }}>
+    <View
+      // С подытогом заголовок читается ОДНОЙ остановкой VoiceOver:
+      // «Команда Юра, 1050 евро». Двумя он звучал как обрывок фразы и
+      // сумма повисала без хозяина.
+      accessible={!!value}
+      accessibilityRole={value ? "header" : undefined}
+      accessibilityLabel={
+        value ? [title, value].filter(Boolean).join(", ") : undefined
+      }
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginBottom: 6,
+        marginHorizontal: GROUP_INSET + 4,
+      }}
+    >
+      {accent ? (
+        <View
+          // Декорация: цвет уже назван словом в заголовке рядом.
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            width: 2,
+            height: 16,
+            borderRadius: 1,
+            backgroundColor: accent,
+          }}
+        />
+      ) : null}
       {title ? (
         <Text
           // Заголовок раздела: VoiceOver умеет прыгать по заголовкам, а без
           // роли группы карточки читались одним нерасчленимым потоком.
-          // Цвет — ПОЛНЫЙ ЧЁРНЫЙ: капс-ярлык это главное слово блока, а не
-          // подпись (владелец 2026-07-27: «серым не помечай главные слова»).
+          //
+          // ЦВЕТ — ОПИСЫВАЮЩИЙ, А НЕ ПОЛНЫЙ ЧЁРНЫЙ (2026-08-12). Капс-ярлык
+          // группы НАЗЫВАЕТ раздел, но именем и числом не является: набранный
+          // полным ink, он весил больше строк, которые подписывает, — на
+          // экране счетов подпись героя несла в 1.6 раза больше чернил, чем
+          // сумма под ней. Уточнение правила 2026-07-27 («серым не помечай
+          // главные слова»): серого пигмента здесь и нет — те же чернила
+          // тише, а полный чёрный остаётся у ИМЁН и ЧИСЕЛ. Разрядка 1.4 → 0.8:
+          // на 11pt широкий трекинг рассыпает слово на буквы и добавляет
+          // ширины, которую глаз считает за вес. Второй капс-примитив продукта
+          // (`SectionCard`) печатает эйбрау так же тихо — теперь они сходятся.
           accessibilityRole="header"
           maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
           style={{
-            marginBottom: 6,
-            marginLeft: 4,
+            flex: 1,
             fontSize: 11,
+            lineHeight: 14,
             fontWeight: "700",
-            letterSpacing: 1.4,
+            letterSpacing: 0.8,
             textTransform: "uppercase",
-            color: t.ink,
+            color: t.caption,
           }}
         >
           {title}
         </Text>
       ) : null}
-      <View
-        style={{
-          borderRadius: t.radius.card,
-          overflow: "hidden",
-          backgroundColor: t.surface,
-        }}
-      >
-        {children}
-      </View>
+      {action ?? null}
+      {value ? (
+        <Text
+          maxFontSizeMultiplier={1.3}
+          numberOfLines={1}
+          style={{
+            fontSize: 13,
+            fontWeight: "600",
+            color: t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {value}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Белое тело карточки. `first`/`last` — какие края скругляет ЭТОТ кусок:
+ *  собранная из строк списка карточка приходит по частям, но округляется
+ *  ровно один раз сверху и один раз снизу.
+ *
+ *  МАТЕРИАЛ ТОТ ЖЕ, ЧТО У `Card` (2026-08-12). Две одинаковые на вид белые
+ *  поверхности продукта были из РАЗНОЙ материи: у `Card` тень и стеклянная
+ *  кромка, у этой — ничего. Поэтому карточка счёта не имела края и читалась
+ *  как серый прямоугольник загрузки — «скелетон», а не вещь. */
+export function RowGroupBody({
+  first = true,
+  last = true,
+  children,
+}: {
+  first?: boolean;
+  last?: boolean;
+  children: ReactNode;
+}) {
+  const t = useThemeColors();
+  const r = t.radius.card;
+  return (
+    <View
+      style={{
+        marginHorizontal: GROUP_INSET,
+        overflow: "hidden",
+        backgroundColor: t.surface,
+        boxShadow: t.cardShadow,
+        borderCurve: "continuous",
+        borderTopLeftRadius: first ? r : 0,
+        borderTopRightRadius: first ? r : 0,
+        borderBottomLeftRadius: last ? r : 0,
+        borderBottomRightRadius: last ? r : 0,
+      }}
+    >
+      {/* Волосяная светлая кромка = толщина стекла. Только у ВЕРХНЕГО куска:
+          в середине склеенной карточки она стала бы лишним швом. */}
+      {first ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 1,
+            backgroundColor: t.highlight,
+          }}
+        />
+      ) : null}
+      {children}
+    </View>
+  );
+}
+
+/** Пояснение ПОД карточкой: тише строк и не кликается. */
+export function RowGroupFooter({ text }: { text: string }) {
+  const t = useThemeColors();
+  return (
+    <Text
+      maxFontSizeMultiplier={1.3}
+      style={{
+        marginTop: 6,
+        marginHorizontal: GROUP_INSET + 4,
+        fontSize: 13,
+        lineHeight: 18,
+        color: t.faint,
+      }}
+    >
+      {text}
+    </Text>
+  );
+}
+
+export function RowGroup({
+  title,
+  accent,
+  value,
+  footer,
+  children,
+}: {
+  /** Капс-надпись над группой; без неё группа безымянная. */
+  title?: string;
+  /** Риска 2×16 слева от заголовка цветом сущности (цвет команды). Связывает
+   *  секцию с выбранным наверху чипом быстрее, чем прочитанное слово. */
+  accent?: string | null;
+  /** Подытог СПРАВА в заголовке — сумма строк, которые лежат под ним
+   *  («БРИГАДА ЮРА … €1 050»). Цифры моноширинные: подытоги секций стоят
+   *  друг под другом и при рефетче не должны гулять по ширине. */
+  value?: string;
+  /** Пояснение ПОД группой: «Наличными €640 · На картах €410». */
+  footer?: string;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ marginTop: 12 }}>
+      {title || value ? (
+        <RowGroupHeader title={title} accent={accent} value={value} />
+      ) : null}
+      <RowGroupBody>{children}</RowGroupBody>
+      {footer ? <RowGroupFooter text={footer} /> : null}
     </View>
   );
 }
@@ -94,7 +261,16 @@ export function FieldRow({
   value: string;
   placeholder: string;
   separated?: boolean;
-  keyboardType?: "phone-pad" | "email-address" | "url" | "default";
+  /** `decimal-pad` — деньги; `numbers-and-punctuation` — деньги, которые
+   *  бывают отрицательными (остаток счёта в долге): минуса на цифровой
+   *  клавиатуре нет ни в одной раскладке. */
+  keyboardType?:
+    | "phone-pad"
+    | "email-address"
+    | "url"
+    | "default"
+    | "decimal-pad"
+    | "numbers-and-punctuation";
   /** «none» для @username и почты: клавиатура иначе пишет «@Artem_test» с
    *  заглавной, и в данных остаётся искажённый логин. */
   autoCapitalize?: "none" | "sentences" | "words";
@@ -132,6 +308,21 @@ export function FieldRow({
   onType?: (v: string) => void;
   onSave: (v: string) => void;
 }) {
+  // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
+  // «140135» (проверено в симуляторе 2026-08-22 на цене услуги). У цифровой
+  // клавиатуры нет ни стрелок, ни удобного способа встать в конец: курсор
+  // падает туда, куда попал палец, и набранное приписывается к старому.
+  // Текстовым полям выделение НЕ нужно: там дописывают, а не заменяют.
+  const numericKeyboard =
+    keyboardType === "decimal-pad" ||
+    keyboardType === "numbers-and-punctuation" ||
+    keyboardType === "phone-pad";
+  // НОМЕР — ИСКЛЮЧЕНИЕ. Строка номера открывается с уже подставленным кодом
+  // страны («+357»), и выделение целиком стирало его первой же цифрой: в
+  // базу уезжало «99 123456» без кода, а звонок, SMS и WhatsApp собирались
+  // из такого номера по-разному. Код — начало ввода, его продолжают.
+  const selectOnFocus = numericKeyboard && keyboardType !== "phone-pad";
+
   const t = useThemeColors();
   // autoFocus означает «начинай с ввода»: без этого строка рисовалась
   // текстом-заглушкой, TextInput не монтировался вовсе, и по «+ Добавить
@@ -293,8 +484,15 @@ export function FieldRow({
               selectionColor={t.accent}
               keyboardAppearance="light"
               keyboardType={keyboardType}
+              selectTextOnFocus={selectOnFocus}
               autoCapitalize={autoCapitalize}
-              autoCorrect={autoCapitalize === "none" ? false : undefined}
+              // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
+              // проза. iOS-автозамена молча переписывала введённое: «Zztest»
+              // превращался в «Z test», и клиент сохранялся под чужим именем.
+              // Многострочные поля (комментарий, заметка) — проза, там
+              // подсказки уместны.
+              autoCorrect={multiline ? undefined : false}
+              spellCheck={multiline ? undefined : false}
               multiline={multiline}
               accessibilityLabel={label}
               maxFontSizeMultiplier={1.2}
@@ -389,8 +587,15 @@ export function FieldRow({
             selectionColor={t.accent}
             keyboardAppearance="light"
             keyboardType={keyboardType}
+            selectTextOnFocus={selectOnFocus}
             autoCapitalize={autoCapitalize}
-            autoCorrect={autoCapitalize === "none" ? false : undefined}
+            // Строка карточки — это ДАННЫЕ (имя, телефон, адрес, ник), а не
+            // проза. iOS-автозамена молча переписывала введённое: «Zztest»
+            // превращался в «Z test», и клиент сохранялся под чужим именем.
+            // Многострочные поля (комментарий, заметка) — проза, там
+            // подсказки уместны.
+            autoCorrect={multiline ? undefined : false}
+            spellCheck={multiline ? undefined : false}
             multiline={multiline}
             accessibilityLabel={label}
             maxFontSizeMultiplier={1.2}
@@ -441,6 +646,7 @@ export function FieldRow({
 export function NavRow({
   label,
   value,
+  accessory,
   placeholder,
   valueColor,
   separated,
@@ -450,6 +656,11 @@ export function NavRow({
 }: {
   label: string;
   value?: string | null;
+  /** Ответ, который показывает СЕБЯ, а не своё имя: точка цвета, глиф значка.
+   *  Владелец 2026-08-17: «зачем опознавать… бред называть цвет ещё
+   *  „Голубой“». Стоит вместо текста значения; подпись строки при этом
+   *  остаётся единственным словом, и её же читает VoiceOver. */
+  accessory?: ReactNode;
   placeholder?: string;
   valueColor?: string;
   separated?: boolean;
@@ -500,7 +711,7 @@ export function NavRow({
         {label}
       </Text>
       <View style={{ flex: 1, alignItems: "flex-end" }}>
-        {shown ? (
+        {accessory ?? (shown ? (
           <Text
             maxFontSizeMultiplier={1.2}
             numberOfLines={1}
@@ -516,7 +727,7 @@ export function NavRow({
           >
             {shown}
           </Text>
-        ) : null}
+        ) : null)}
       </View>
       {onPress ? (
         <ChevronRight
@@ -641,7 +852,10 @@ export function ChoiceRow({
   onSettings,
   onSelect,
 }: {
-  label: string;
+  /** Без ярлыка строка — просто ряд пилюль. Ярлык не нужен, когда строка в
+   *  группе одна и её уже назвал капс-заголовок группы: два капса на 20pt
+   *  друг от друга читаются как раздел, вложенный сам в себя. */
+  label?: string;
   options: readonly string[];
   value: string;
   separated?: boolean;
@@ -665,33 +879,37 @@ export function ChoiceRow({
         borderTopColor: t.separator,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{
-            flex: 1,
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
-            color: t.ink,
-          }}
-        >
-          {label}
-        </Text>
-        {onSettings ? (
-          <Pressable
-            onPress={onSettings}
-            accessibilityRole="button"
-            accessibilityLabel={`Настроить: ${label.toLowerCase()}`}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+      {label || onSettings ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+              color: t.ink,
+            }}
           >
-            <Settings2 color={t.ink} size={17} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-      </View>
+            {label}
+          </Text>
+          {onSettings ? (
+            <Pressable
+              onPress={onSettings}
+              accessibilityRole="button"
+              accessibilityLabel={
+                label ? `Настроить: ${label.toLowerCase()}` : "Настроить"
+              }
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            >
+              <Settings2 color={t.ink} size={17} strokeWidth={2} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* rowGap 14, а не общий gap 6: у чипа вертикальный hitSlop 6, поэтому
           при переносе на вторую строку зоны касания СМЫКАЛИСЬ и тап по нижней

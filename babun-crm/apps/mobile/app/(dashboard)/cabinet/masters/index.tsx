@@ -138,7 +138,7 @@ export default function MastersScreen() {
           ListHeaderComponent={
             allMasters.length > 0 ? (
               <View
-                className="mx-3 mb-2 mt-2 h-11 flex-row items-center rounded-xl px-3"
+                className="mx-3 mb-2 mt-2 h-11 flex-row items-center rounded-[10px] px-3"
                 style={{ backgroundColor: t.fill }}
               >
                 <Search color={t.faint} size={17} />
@@ -198,7 +198,7 @@ export default function MastersScreen() {
             onPress={() => setOpen(false)}
             accessible={false}
           />
-          <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+          <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: t.surface }}>
             <Text style={{ marginBottom: 12, fontSize: 18, fontWeight: "700", color: t.ink }}>
               Новый мастер
             </Text>

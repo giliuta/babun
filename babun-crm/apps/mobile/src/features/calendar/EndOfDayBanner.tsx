@@ -55,7 +55,7 @@ export function EndOfDayBanner({
       <View
         className="flex-row items-center gap-2 px-3 py-2.5"
         style={{
-          borderRadius: 14,
+          borderRadius: t.radius.card,
           backgroundColor: t.surface,
           boxShadow: t.cardShadow,
         }}
@@ -65,7 +65,7 @@ export function EndOfDayBanner({
           style={{
             width: 32,
             height: 32,
-            borderRadius: 8,
+            borderRadius: t.radius.card,
             backgroundColor: t.warning,
           }}
         >

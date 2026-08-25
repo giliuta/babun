@@ -22,7 +22,7 @@ function statusColor(t: ThemeColors, status: Appointment["status"]): string {
 
 // «Нет адреса» — валидационный сигнал веба (shared getAppointmentColorKind →
 // "no_address" + AlertTriangle в AppointmentBlock): запланированная работа,
-// а бригада не знает, куда ехать. Порог trim < 3 — как в shared.
+// а команда не знает, куда ехать. Порог trim < 3 — как в shared.
 export function missingAddress(apt: Appointment): boolean {
   return (
     apt.kind === "work" &&

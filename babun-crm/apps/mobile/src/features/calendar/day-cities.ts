@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 
-// Метки дней («город бригады на дату») — web parity STORY-044 day_cities.
+// Метки дней («город команды на дату») — web parity STORY-044 day_cities.
 // Shape: Record<"teamId:YYYY-MM-DD", cityName> (shared dayCityKey).
 
 export { dayCityKey };

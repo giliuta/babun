@@ -5,6 +5,7 @@ import {
   getRecognizedRevenue,
   type Appointment,
 } from "@babun/shared/local/appointments";
+import { formatEUR } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -75,7 +76,7 @@ export default function MasterStatsScreen() {
   });
   const [customTo, setCustomTo] = useState(() => todayKey());
 
-  // Команды мастера — team_id + все бригады, где он lead/helper (web parity).
+  // Команды мастера — team_id + все команды, где он lead/helper (web parity).
   const assignedTeams = useMemo<Team[]>(() => {
     if (!master) return [];
     const seen = new Map<string, Team>();
@@ -272,12 +273,12 @@ export default function MasterStatsScreen() {
                   marginTop: 4,
                 }}
               >
-                {Math.round(stats.revenue).toLocaleString("ru-RU")} €
+                {formatEUR(stats.revenue)}
               </Text>
               <Text style={{ fontSize: 12, color: t.sub, marginTop: 8 }}>
                 средний чек ·{" "}
                 <Text style={{ fontWeight: "700", color: t.ink }}>
-                  {stats.avgCheck.toLocaleString("ru-RU")} €
+                  {formatEUR(stats.avgCheck)}
                 </Text>
               </Text>
             </View>
@@ -308,7 +309,7 @@ export default function MasterStatsScreen() {
                 />
                 <ComparisonRow
                   label="Медиана коллег"
-                  value={`${Math.round(teamBenchmark.median).toLocaleString("ru-RU")} €`}
+                  value={formatEUR(teamBenchmark.median)}
                 />
                 {teamBenchmark.vsMedianPct !== null ? (
                   <ComparisonRow
@@ -352,7 +353,7 @@ export default function MasterStatsScreen() {
                     <Text
                       style={{ fontSize: 13, fontWeight: "700", color: t.ink }}
                     >
-                      {Math.round(c.total).toLocaleString("ru-RU")} €
+                      {formatEUR(c.total)}
                     </Text>
                   </View>
                 </View>

@@ -61,7 +61,7 @@ export function ClientDetailChrome({
         <Pressable
           onPress={withCommit(onBack)}
           disabled={saving}
-          className="h-11 w-11 items-center justify-center rounded-[14px] active:opacity-60"
+          className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-60"
           accessibilityRole="button"
           accessibilityLabel="Назад"
           accessibilityState={{ disabled: saving, busy: saving }}
@@ -79,7 +79,7 @@ export function ClientDetailChrome({
             accessibilityRole="button"
             accessibilityLabel="Готово — сохранить клиента"
             accessibilityState={{ disabled: !canSave || saving, busy: saving }}
-            className="h-11 items-center justify-center rounded-[14px] px-3 active:opacity-60"
+            className="h-11 items-center justify-center rounded-[10px] px-3 active:opacity-60"
           >
             <Text
               className="text-[15px] font-semibold"
@@ -92,7 +92,7 @@ export function ClientDetailChrome({
           <Pressable
             onPress={onToggleMenu}
             disabled={saving}
-            className="h-11 w-11 items-center justify-center rounded-[14px] active:opacity-60"
+            className="h-11 w-11 items-center justify-center rounded-[10px] active:opacity-60"
             accessibilityRole="button"
             accessibilityLabel="Действия с клиентом"
             accessibilityState={{ expanded: menuOpen, disabled: saving, busy: saving }}

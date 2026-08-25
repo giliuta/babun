@@ -103,6 +103,7 @@ export function GradientButton({
             minHeight: 50,
             paddingVertical: 13,
             borderRadius: t.radius.pill,
+            borderCurve: "continuous",
             overflow: "hidden",
             alignItems: "center",
             justifyContent: "center",

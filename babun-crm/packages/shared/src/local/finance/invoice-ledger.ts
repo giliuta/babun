@@ -3,6 +3,8 @@
 // which is the legacy localStorage-era jsPDF generator — these are the
 // authoritative records that live in the public.invoices table.
 
+import { netFromGross, round2, vatFromGross } from "./vat";
+
 /** `cancelled` — сторнирован кредит-нотой (2026-08-09); `void` остаётся
  *  легаси-статусом «внутренне аннулирован» и не переиспользуется:
  *  «удалили по ошибке» и «сторнировали документом» — разные события. */
@@ -14,6 +16,13 @@ export interface InvoiceLineDraft {
   title: string;
   qty: number;
   unit_price: number;
+  /** Что входит в работу — печатается второй строкой под названием позиции.
+   *  Приезжает из описания услуги и дальше живёт СВОЕЙ жизнью: правка в счёте
+   *  прайс не трогает, а документ помнит свою формулировку. */
+  description?: string | null;
+  /** Единица количества на бумаге: «4 м». Приезжает из услуги и дальше живёт
+   *  СВОЕЙ жизнью — как и описание: правка в счёте прайс не трогает. */
+  unit?: string | null;
 }
 
 export interface InvoiceTotals {
@@ -103,6 +112,10 @@ export interface InvoiceLedger {
   vat_amount: number;
   total: number;
   currency: string;
+  /** Язык БУМАГИ этого счёта: «ru» | «en». Живёт у документа, а не у
+   *  компании: один клиент получает счёт по-английски, следующий по-русски,
+   *  и вчерашняя бумага не переписывается от сегодняшней настройки. */
+  language: string;
   status: InvoiceStatus;
   pdf_url: string | null;
   notes: string | null;
@@ -119,7 +132,12 @@ export interface InvoiceLineLedger {
   invoice_id: string;
   position: number;
   title: string;
+  description: string | null;
   qty: number;
+  /** Единица количества НА БУМАГЕ: «4 м» вместо «4». Хранится у строки, а не
+   *  берётся из прайса, — выставленный документ заморожен, и смена единицы у
+   *  услуги не переписывает уже отправленный клиенту счёт. */
+  unit: string | null;
   unit_price: number;
   total: number;
 }
@@ -128,27 +146,31 @@ export interface InvoiceLedgerWithLines extends InvoiceLedger {
   lines: InvoiceLineLedger[];
 }
 
-export function formatInvoiceNumber(
-  prefix: string,
-  year: number,
-  seq: number,
-): string {
-  const normalized = prefix.trim().replace(/[\s-]+$/g, "") || "INV";
-  return `${normalized}-${year}-${String(seq).padStart(3, "0")}`;
-}
+// `formatInvoiceNumber` здесь БОЛЬШЕ НЕ ЖИВЁТ (U49): жёсткие «3 знака,
+// всегда год» спорили с настраиваемой нумерацией тенанта. Номер собирает
+// единственная живая формула — apps/mobile/src/features/invoices/numbering.ts
+// (prefix/padding/yearlyReset из настроек), а выпущенному документу номер
+// выдаёт сервер (next_invoice_number / issue_invoice).
 
 /**
  * Split a gross total into net + VAT. Cyprus standard is 19%. We treat
  * the input as the customer-facing total (VAT-inclusive) — the most
  * common case at the till.
+ *
+ * ДЕЛЕГИРУЕТ в vat.ts — единственную реализацию разложения НДС (канон:
+ * «вся математика в applyTxVat» и его помощниках). Порядок совпадает с SQL
+ * issue_invoice: налог первым, half-up. Считать здесь по-своему нельзя —
+ * своя формула без EPSILON давала на ровной половине цента (0,27 € при 20%)
+ * превью 0,04/0,23 против серверных 0,05/0,22.
  */
 export function splitVatInclusive(
   total: number,
   vatPercent: number,
 ): { net: number; vat: number } {
-  const factor = 1 + vatPercent / 100;
-  const net = total / factor;
-  return { net: round2(net), vat: round2(total - net) };
+  return {
+    net: netFromGross(total, vatPercent),
+    vat: vatFromGross(total, vatPercent),
+  };
 }
 
 /**
@@ -361,7 +383,3 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceDisplayStatus, string> = {
   // кредит-нота, поэтому слово другое — «отменён», а не «аннулирован».
   cancelled: "Отменён",
 };
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}

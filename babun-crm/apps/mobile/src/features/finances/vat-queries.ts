@@ -9,11 +9,13 @@ import { useTenantId } from "@/lib/tenant";
 // Команды работают в разных странах (Кипр 19, Греция 24 одновременно),
 // поэтому ставка живёт не «на бизнесе», а на команде — с наследованием от
 // компании. Действующее значение считает одна серверная функция, чтобы
-// «какая ставка у этой бригады» не получило три разных ответа.
-
-export interface TenantVatSettings extends VatSettings {
-  documentLanguage: string;
-}
+// «какая ставка у этой команды» не получило три разных ответа.
+//
+// На уровне КОМПАНИИ vat_exemption_note и document_language из клиентского
+// контура убраны (аудит 2026-08-16, U39/U103): ни ввода, ни печати у них не
+// было — колонки в БД остаются, вернуть поля можно вместе с их UI. На уровне
+// команды exemptionNote остаётся: экран НДС команды сознательно проносит его
+// через свой upsert, не затирая чужое значение.
 
 export interface TeamVatOverride {
   teamId: string;
@@ -27,18 +29,16 @@ export function useVatSettings() {
   return useQuery({
     queryKey: ["vat-settings", tenantId],
     enabled: !!tenantId,
-    queryFn: async (): Promise<TenantVatSettings> => {
+    queryFn: async (): Promise<VatSettings> => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("vat_mode, vat_rate, vat_exemption_note, document_language")
+        .select("vat_mode, vat_rate")
         .eq("id", tenantId as string)
         .single();
       if (error) throw new Error(error.message);
       return {
         mode: (data.vat_mode ?? "off") as VatMode,
         rate: Number(data.vat_rate ?? 0),
-        exemptionNote: data.vat_exemption_note ?? null,
-        documentLanguage: data.document_language ?? "en",
       };
     },
   });
@@ -48,19 +48,13 @@ export function useSaveVatSettings() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (patch: Partial<TenantVatSettings>) => {
+    mutationFn: async (patch: Partial<Pick<VatSettings, "mode" | "rate">>) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       const { error } = await supabase
         .from("tenants")
         .update({
           ...(patch.mode !== undefined ? { vat_mode: patch.mode } : {}),
           ...(patch.rate !== undefined ? { vat_rate: patch.rate } : {}),
-          ...(patch.exemptionNote !== undefined
-            ? { vat_exemption_note: patch.exemptionNote }
-            : {}),
-          ...(patch.documentLanguage !== undefined
-            ? { document_language: patch.documentLanguage }
-            : {}),
         })
         .eq("id", tenantId);
       if (error) throw new Error(error.message);
@@ -131,26 +125,10 @@ export function useSaveTeamVat() {
   });
 }
 
-/**
- * Действующий НДС для конкретной операции: счёт → команда → компания.
- *
- * Счёт побеждает команду не по прихоти: «счёт с НДС» — это про то, КУДА
- * приходят деньги. На расчётный падает выручка с налогом, а в кассу от
- * частника — без, и обе операции живут в одной команде.
- */
-export function effectiveVatSettings(
-  tenant: TenantVatSettings | undefined,
-  teamOverride: TeamVatOverride | undefined,
-  accountMode: VatMode | null | undefined,
-): VatSettings {
-  const base: VatSettings = tenant
-    ? { mode: tenant.mode, rate: tenant.rate, exemptionNote: tenant.exemptionNote }
-    : { mode: "off", rate: 0, exemptionNote: null };
-  const mode = accountMode ?? teamOverride?.mode ?? base.mode;
-  const rate = teamOverride?.rate ?? base.rate;
-  const exemptionNote = teamOverride?.exemptionNote ?? base.exemptionNote;
-  return { mode, rate, exemptionNote };
-}
+// Резолвер действующего НДС живёт в shared рядом с остальной математикой
+// налога — там он тестируется как чистая функция (зеркало серверного
+// fill_transaction_vat). Здесь только реэкспорт для экранов.
+export { effectiveVatSettings } from "@babun/shared/local/finance/vat";
 
 export const VAT_MODE_LABELS: Record<VatMode, string> = {
   off: "Без НДС",
@@ -160,7 +138,7 @@ export const VAT_MODE_LABELS: Record<VatMode, string> = {
 
 /** Подпись под строкой настройки: показывает действующее значение, чтобы не
  *  проваливаться внутрь ради проверки. */
-export function vatSummaryLine(v: TenantVatSettings | undefined): string {
+export function vatSummaryLine(v: VatSettings | undefined): string {
   if (!v) return "Загрузка…";
   if (v.mode === "off") return "Выключен";
   return `${VAT_MODE_LABELS[v.mode]} · ${v.rate}%`;

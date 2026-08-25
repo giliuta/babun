@@ -143,7 +143,7 @@ export function ObjectSheet({
   const type = draft.label.trim() || defaultObjectType(client, typeOptions);
 
   // Объект существует, когда есть адрес ИЛИ ссылка: метка одна ничего не
-  // значит, а по адресу или пину бригада доедет.
+  // значит, а по адресу или пину команда доедет.
   const ready = draft.target.trim().length > 0;
 
   const add = async (): Promise<boolean> => {
@@ -223,6 +223,7 @@ export function ObjectSheet({
 
   return (
     <BottomSheet
+      padded={false}
       visible={visible}
       onClose={close}
       maxHeightRatio={0.92}

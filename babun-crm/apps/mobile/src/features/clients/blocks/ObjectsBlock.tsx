@@ -4,7 +4,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
 import { AddRow } from "@/components/ui/AddRow";
-import { SwipeToDelete } from "@/components/ui/SwipeToDelete";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { objectTarget } from "@/features/clients/object-address";
 import { servicePlan, type ServicePlan } from "@/features/clients/service-plan";
@@ -51,6 +51,7 @@ export default function ObjectsBlock({
    *  черновик, поэтому пригашать строку больше не нужно. */
   onAdd: () => void;
 }) {
+  const t = useThemeColors();
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
   const ordered = useMemo(
@@ -64,9 +65,11 @@ export default function ObjectsBlock({
   return (
     <RowGroup title="Объекты">
       {ordered.map((loc, i) => (
-        <SwipeToDelete
+        <SwipeRow
           key={loc.id}
-          onDelete={() => onDelete(loc)}
+          label="Удалить"
+          color={t.danger}
+          onAction={() => onDelete(loc)}
           accessibilityLabel={`Удалить объект ${loc.label || ""}`.trim()}
         >
           <ObjectRow
@@ -75,7 +78,7 @@ export default function ObjectsBlock({
             separated={i > 0}
             onPress={() => onOpen(loc.id)}
           />
-        </SwipeToDelete>
+        </SwipeRow>
       ))}
       {/* Пустого состояния нет: при нуле объектов группа — одна эта строка.
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не

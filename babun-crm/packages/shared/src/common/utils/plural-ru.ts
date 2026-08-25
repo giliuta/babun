@@ -64,6 +64,11 @@ export const FORMS_MIN: PluralFormsRu = ["минута", "минуты", "мин
 export const FORMS_CHAS: PluralFormsRu = ["час", "часа", "часов"];
 export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
 export const FORMS_MASTER: PluralFormsRu = ["мастер", "мастера", "мастеров"];
+export const FORMS_KOMANDA: PluralFormsRu = ["команда", "команды", "команд"];
+export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
+export const FORMS_BRIGADA: PluralFormsRu = ["команда", "команды", "команд"];
+export const FORMS_KASSA: PluralFormsRu = ["касса", "кассы", "касс"];
+export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];
 
 /**
  * Format a growth percentage with a guard for «divided by zero» and

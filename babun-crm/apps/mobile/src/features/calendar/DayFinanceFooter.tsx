@@ -81,10 +81,12 @@ export function DayFinanceFooter({
     [days, byDate, sharedServices, extrasMap, teamId, todayYmd],
   );
 
-  // A completely empty week used to reserve two noisy rows of seven €0
-  // values. Preserve the per-day operational view when money exists, but let
-  // an empty calendar use the grid space for actual work.
-  if (rows.every((row) => row.income === 0 && row.spent === 0)) return null;
+  // САМА ПОЛОСА БОЛЬШЕ НЕ РЕШАЕТ, ПОКАЗЫВАТЬСЯ ЛИ ЕЙ. Здесь стояло «пустая
+  // неделя — вернуть null», чтобы не занимать две строки семью нулями. Со
+  // стороны это выглядело пропажей функции: владелец открыл пустую неделю новой
+  // команды и не нашёл денег вовсе (2026-08-17). Ответ теперь даёт человек —
+  // тумблер «Доход и расход под сеткой» в «Что показывать», и решает его
+  // РОДИТЕЛЬ: полоса, которую попросили, обязана стоять на месте даже с нулями.
 
   return (
     <View

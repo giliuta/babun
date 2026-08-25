@@ -12,10 +12,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeColors } from "@/theme/colors";
 import {
-  DIGIT_FONT,
-  HOURS,
-  WheelColumn,
-  WheelWithLines,
+  MINUTE_STEP,
+  TimeWheelPair,
 } from "@/components/ui/TimeWheel";
 
 // Портирован 1:1 из веба (apps/web UnifiedTimePopup + TimeWheels +
@@ -23,7 +21,17 @@ import {
 // Полоса недель свайпается (снап по неделе), два колеса «Начало»/«Конец»,
 // переключатель «Весь день». Правки живут в локальном черновике и
 // применяются только по «Готово»; «Отмена» отбрасывает.
-// Само колесо вынесено в @/components/ui/TimeWheel (общее с BookSlotSheet).
+// Барабаны — канонический `TimeWheelPair` из @/components/ui/TimeWheel
+// (закольцованные часы и пятиминутки, DS §5; общий с BookSlotSheet и часами
+// календаря).
+//
+// ШАГ МИНУТ ВСЕГДА ПЯТЬ, и настройкой он больше не бывает. Здесь жил проп
+// `stepMinutes` с набором 5/10/15/20/30/60, но единственный вызывающий
+// (app/book) передавал ровно 5 и объяснял почему: когда сюда приезжала
+// «Длительность записи» тенанта, «30 минут» превращали колонку минут в
+// «00 / 30» — запись на 10:15 создать было нельзя, а время 09:35 из листа
+// слота показывалось как 09:30 и молча дописывалось при первом касании.
+// Длительность задаёт КОНЕЦ записи, а не сетку выбора времени.
 
 const WEEKDAYS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"]; // понедельник-first
 const MONTHS_GEN = [
@@ -37,7 +45,6 @@ const MONTHS_NOM = [
 const WEEKS_BACK = 26;
 const WEEKS_FWD = 26;
 const ALL_DAY_RANGE = { start: "00:00", end: "23:59" };
-const VALID_STEPS = new Set([5, 10, 15, 20, 30, 60]);
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -100,7 +107,6 @@ export function UnifiedTimePopup({
   timeEnd,
   allDay,
   allowAllDay = true,
-  stepMinutes,
   onCommit,
 }: {
   open: boolean;
@@ -110,7 +116,6 @@ export function UnifiedTimePopup({
   timeEnd: string;
   allDay: boolean;
   allowAllDay?: boolean;
-  stepMinutes?: number;
   onCommit: (next: Draft) => void;
 }) {
   const t = useThemeColors();
@@ -136,12 +141,6 @@ export function UnifiedTimePopup({
     setPageIndex(WEEKS_BACK);
     preAllDayRef.current = effectiveAllDay ? null : { start: timeStart, end: timeEnd };
   }, [open, date, timeStart, timeEnd, allDay, allowAllDay]);
-
-  const step = stepMinutes && VALID_STEPS.has(stepMinutes) ? stepMinutes : 5;
-  const MINUTES = useMemo(
-    () => Array.from({ length: 60 / step }, (_, i) => pad2(i * step)),
-    [step],
-  );
 
   const today = useMemo(() => {
     const d = new Date();
@@ -171,9 +170,9 @@ export function UnifiedTimePopup({
   const [sh, sm] = parseTime(draft.timeStart);
   const [eh, em] = parseTime(draft.timeEnd);
   const startHourIdx = Math.max(0, Math.min(23, sh));
-  const startMinIdx = Math.floor(sm / step);
+  const startMinIdx = Math.floor(sm / MINUTE_STEP);
   const endHourIdx = Math.max(0, Math.min(23, eh));
-  const endMinIdx = Math.floor(em / step);
+  const endMinIdx = Math.floor(em / MINUTE_STEP);
   const startTotal = sh * 60 + sm;
 
   const commitStart = (hour: number, min: number) => {
@@ -231,7 +230,7 @@ export function UnifiedTimePopup({
             width: "100%",
             maxWidth: 440,
             backgroundColor: t.surface,
-            borderRadius: 20,
+            borderRadius: t.radius.card,
             overflow: "hidden",
             boxShadow: t.cardShadow,
           }}
@@ -293,7 +292,7 @@ export function UnifiedTimePopup({
                                 accessibilityState={{ selected: active }}
                                 style={({ pressed }) => ({
                                   height: 58,
-                                  borderRadius: 14,
+                                  borderRadius: t.radius.card,
                                   alignItems: "center",
                                   justifyContent: "center",
                                   gap: 2,
@@ -357,19 +356,17 @@ export function UnifiedTimePopup({
               <View className="flex-row items-start justify-center pt-1" style={{ gap: 40 }}>
                 <WheelSide
                   label="НАЧАЛО"
-                  minutes={MINUTES}
-                  hourIdx={startHourIdx}
-                  minIdx={startMinIdx}
-                  onHour={(h) => commitStart(h, startMinIdx * step)}
-                  onMin={(m) => commitStart(startHourIdx, m * step)}
+                  hour={startHourIdx}
+                  minute={startMinIdx * MINUTE_STEP}
+                  onHour={(h) => commitStart(h, startMinIdx * MINUTE_STEP)}
+                  onMin={(m) => commitStart(startHourIdx, m)}
                 />
                 <WheelSide
                   label="КОНЕЦ"
-                  minutes={MINUTES}
-                  hourIdx={endHourIdx}
-                  minIdx={endMinIdx}
-                  onHour={(h) => commitEnd(h, endMinIdx * step)}
-                  onMin={(m) => commitEnd(endHourIdx, m * step)}
+                  hour={endHourIdx}
+                  minute={endMinIdx * MINUTE_STEP}
+                  onHour={(h) => commitEnd(h, endMinIdx * MINUTE_STEP)}
+                  onMin={(m) => commitEnd(endHourIdx, m)}
                 />
               </View>
             ) : null}
@@ -387,7 +384,7 @@ export function UnifiedTimePopup({
               style={{
                 flex: 1,
                 height: 44,
-                borderRadius: 12,
+                borderRadius: t.radius.card,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: t.fill,
@@ -405,7 +402,7 @@ export function UnifiedTimePopup({
               style={{
                 flex: 1,
                 height: 44,
-                borderRadius: 12,
+                borderRadius: t.radius.card,
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: t.accent,
@@ -422,18 +419,16 @@ export function UnifiedTimePopup({
 
 function WheelSide({
   label,
-  minutes,
-  hourIdx,
-  minIdx,
+  hour,
+  minute,
   onHour,
   onMin,
 }: {
   label: string;
-  minutes: string[];
-  hourIdx: number;
-  minIdx: number;
-  onHour: (idx: number) => void;
-  onMin: (idx: number) => void;
+  hour: number;
+  minute: number;
+  onHour: (hour: number) => void;
+  onMin: (minute: number) => void;
 }) {
   const t = useThemeColors();
   return (
@@ -441,32 +436,13 @@ function WheelSide({
       <Text style={{ fontSize: 11, fontWeight: "700", color: t.sub, letterSpacing: 0.4 }}>
         {label}
       </Text>
-      <View className="flex-row items-center">
-        <WheelWithLines>
-          <WheelColumn
-            items={HOURS}
-            selectedIndex={hourIdx}
-            onChange={onHour}
-            accessibilityLabel={`${label.toLowerCase()}, часы`}
-          />
-        </WheelWithLines>
-        <Text
-          accessible={false}
-          importantForAccessibility="no"
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: DIGIT_FONT, fontWeight: "300", color: t.chevron, paddingHorizontal: 2 }}
-        >
-          :
-        </Text>
-        <WheelWithLines>
-          <WheelColumn
-            items={minutes}
-            selectedIndex={minIdx}
-            onChange={onMin}
-            accessibilityLabel={`${label.toLowerCase()}, минуты`}
-          />
-        </WheelWithLines>
-      </View>
+      <TimeWheelPair
+        hour={hour}
+        minute={minute}
+        onChangeHour={onHour}
+        onChangeMinute={onMin}
+        labelPrefix={label.toLowerCase()}
+      />
     </View>
   );
 }

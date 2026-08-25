@@ -192,6 +192,7 @@ export function ContactsImportSheet({
 
   return (
     <BottomSheet
+      padded={false}
       visible={visible}
       onClose={() => {
         cancelled.current = true;

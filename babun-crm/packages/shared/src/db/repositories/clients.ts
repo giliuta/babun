@@ -22,6 +22,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../database.types";
+import { rpcArgs } from "../rpc-args";
 import type {
   ACUnit,
   AcquisitionSource,
@@ -351,6 +352,11 @@ function atomicClientTagsUnavailable(operation: "create" | "update"): Error {
   return error;
 }
 
+/** Ключи, которые атомарные RPC не принимают: идентичность строки, сторожок
+ *  LWW и СРОК КОРЗИНЫ. `purge_at` — поле жизненного цикла удаления, его ставит
+ *  только «Удалить»/«Восстановить» прямым UPDATE (см. ниже soft-delete), и
+ *  белый список функций его не знает. Пока он уезжал в payload, СОЗДАНИЕ
+ *  КЛИЕНТА падало на «client payload contains a protected or unknown field». */
 function toClientWritePayload(
   value: ClientInsert | ClientUpdate,
 ): Json {
@@ -358,11 +364,13 @@ function toClientWritePayload(
     id: _id,
     tenant_id: _tenantId,
     updated_at: _updatedAt,
+    purge_at: _purgeAt,
     ...payload
   } = value;
   void _id;
   void _tenantId;
   void _updatedAt;
+  void _purgeAt;
   return payload as Json;
 }
 
@@ -446,12 +454,12 @@ export async function createClient(
   const desiredTagIds = [...new Set(input.tag_ids ?? [])];
   const { data: atomic, error: atomicError } = await supabase.rpc(
     "create_client_with_tags",
-    {
+    rpcArgs<"create_client_with_tags">({
       p_tenant_id: tenantId,
       p_client_id: input.id || null,
       p_client: toClientWritePayload(insert),
       p_tag_ids: desiredTagIds,
-    },
+    }),
   );
   if (!atomicError) {
     return atomicWriteResultToClient(atomic, "createClient");

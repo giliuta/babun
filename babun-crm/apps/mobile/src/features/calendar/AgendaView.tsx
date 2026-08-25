@@ -209,7 +209,7 @@ function DaySection({
       <View
         style={{
           backgroundColor: t.surface,
-          borderRadius: 16,
+          borderRadius: t.radius.card,
           overflow: "hidden",
           boxShadow: t.cardShadow,
         }}

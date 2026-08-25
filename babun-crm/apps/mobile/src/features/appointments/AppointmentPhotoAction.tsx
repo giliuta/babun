@@ -22,7 +22,7 @@ export function AppointmentPhotoAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled }}
-      className="min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-xl px-3 active:opacity-70"
+      className="min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-[10px] px-3 active:opacity-70"
       style={{ backgroundColor: disabled ? t.disabledFill : `${t.accent}14` }}
     >
       {icon}

@@ -9,7 +9,7 @@ import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBounda
 // как две шторки); теперь он push-ит сюда — реальная страница с адресом в
 // стеке, «назад» возвращает на календарь. Живёт над таб-баром, поэтому не
 // переключает вкладку под пальцем и не двоит «назад» (тот же приём, что у
-// настроек календаря — см. app/calendar/_layout.tsx).
+// настроек календаря живут внутри вкладки «Календарь»).
 export default function BookLayout() {
   const t = useThemeColors();
   return (

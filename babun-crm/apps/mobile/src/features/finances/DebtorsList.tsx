@@ -1,13 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, type ReactElement } from "react";
 import {
+  Alert,
   Linking,
   Platform,
   Pressable,
   ScrollView,
   Text,
   View,
+  type RefreshControlProps,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import {
   getDebtAmount,
@@ -15,9 +17,12 @@ import {
 } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { renderDebtSms, useSmsTemplates } from "@/features/settings/sms-templates";
 import { humanDay } from "@/features/appointments/helpers";
+import { PanelHeader } from "./PanelHeader";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -29,7 +34,9 @@ import { humanDay } from "@/features/appointments/helpers";
 //
 // Цепочка «должник → напомнить»: у строки есть labeled-кнопка «Напомнить»
 // (SMS с суммой; дата визита — только в зашитом фолбэке, кастомный
-// debt-шаблон её не подставляет), тап по строке открывает карточку клиента.
+// debt-шаблон её не подставляет). Тап по строке открывает САМУ ЗАПИСЬ —
+// долг по канону владельца закрывается в ней, а не в карточке клиента;
+// карточка осталась второй дверью на long-press.
 export function DebtorsList({
   appointments,
   clients,
@@ -37,6 +44,9 @@ export function DebtorsList({
   fromDate,
   toDate,
   todayYmd,
+  invoicedAppointmentIds,
+  onOpenDocuments,
+  refreshControl,
 }: {
   appointments: Appointment[];
   clients: Client[];
@@ -45,6 +55,16 @@ export function DebtorsList({
   toDate: string;
   /** Сегодня по времени бизнеса — граница «уже прошло». */
   todayYmd: string;
+  /** Работы, на которые уже выставлен живой счёт. Их деньги ждут в
+   *  «Документах», и здесь их считать нельзя — иначе одна и та же сотня евро
+   *  сидит в двух местах сразу. Набор приходит СВЕРХУ, тот же самый, каким
+   *  считает плитка: своя копия правила разъехалась бы на первой же правке. */
+  invoicedAppointmentIds: ReadonlySet<string>;
+  /** Открыть «Документы» — единственная дорога к деньгам, которые ушли отсюда
+   *  под счёт. Без неё пустой экран прячет их молча. */
+  onOpenDocuments: () => void;
+  /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -55,14 +75,16 @@ export function DebtorsList({
         .filter(
           (a) =>
             // ТОТ ЖЕ НАБОР, ЧТО В ПЛИТКЕ «ДОЛГИ»: завершённые визиты без
-            // оплаты плюс прошедшие записи, по которым бригада не
-            // отчиталась. Иначе список под цифрой не сходится с самой
-            // цифрой — и владелец перестаёт верить обеим.
+            // оплаты плюс прошедшие записи, по которым команда не
+            // отчиталась, МИНУС те, на которые выставлен счёт. Иначе список
+            // под цифрой не сходится с самой цифрой — и владелец перестаёт
+            // верить обеим.
             a.status !== "cancelled" &&
             (a.status === "completed" || a.date < todayYmd) &&
             a.date >= fromDate &&
             a.date <= toDate &&
-            (!teamId || a.team_id === teamId),
+            (!teamId || a.team_id === teamId) &&
+            !invoicedAppointmentIds.has(a.id),
         )
         .map((a) => {
           const client = a.client_id
@@ -70,6 +92,7 @@ export function DebtorsList({
             : undefined;
           return {
             id: a.id,
+            teamId: a.team_id,
             clientId: client?.id ?? null,
             phone: client?.phone?.trim() || null,
             name:
@@ -83,7 +106,31 @@ export function DebtorsList({
         })
         .filter((r) => r.owed > 0)
         .sort((a, b) => (a.date < b.date ? 1 : -1)),
-    [appointments, clients, teamId, fromDate, toDate, todayYmd],
+    [
+      appointments,
+      clients,
+      teamId,
+      fromDate,
+      toDate,
+      todayYmd,
+      invoicedAppointmentIds,
+    ],
+  );
+
+  // Деньги не пропали — они переехали в «Документы». Говорим об этом ТОЛЬКО
+  // когда действительно что-то унесли счётом: иначе подсказка про инвойсы
+  // висела бы у каждого, кто просто никому ничего не должен.
+  const movedToInvoices = useMemo(
+    () =>
+      invoicedAppointmentIds.size > 0 &&
+      appointments.some(
+        (a) =>
+          invoicedAppointmentIds.has(a.id) &&
+          a.date >= fromDate &&
+          a.date <= toDate &&
+          (!teamId || a.team_id === teamId),
+      ),
+    [appointments, fromDate, invoicedAppointmentIds, teamId, toDate],
   );
 
   // SMS-напоминание: сумма подставляется всегда; дата визита — только в
@@ -103,21 +150,57 @@ export function DebtorsList({
       }),
     );
     const sep = Platform.OS === "ios" ? "&" : "?";
-    Linking.openURL(`sms:${digits}${sep}body=${body}`);
+    // Без catch тап молчал бы на устройстве, где Сообщений нет (iPad):
+    // openURL реджектится, и человек не понимает, нажалась ли кнопка.
+    Linking.openURL(`sms:${digits}${sep}body=${body}`).catch(() =>
+      Alert.alert(
+        "Не удалось открыть Сообщения",
+        "На этом устройстве нельзя отправить SMS.",
+      ),
+    );
+  };
+
+  // Долг закрывается В САМОЙ ЗАПИСИ (канон владельца) — тап ведёт туда тем же
+  // адресом с «дорогой назад», каким ленту операций водит openAppointment:
+  // календарь встаёт на день и команду записи, закрытие возвращает в финансы.
+  const openAppointment = (r: (typeof rows)[number]) => {
+    router.push(
+      (`/(dashboard)?appointmentId=${r.id}&date=${r.date}` +
+        (r.teamId ? `&teamId=${r.teamId}` : "") +
+        "&from=finances") as Href,
+    );
   };
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
-      <Card style={{ marginHorizontal: 12, marginTop: 8 }}>
-        {rows.length === 0 ? (
-          <Text
-            className="px-4 py-6 text-center text-xs"
-            style={{ color: t.faint }}
-          >
-            Нет должников за период
-          </Text>
-        ) : (
-          rows.map((r, i) => (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 96 }}
+      refreshControl={refreshControl}
+    >
+      {/* Эйбрау — тот же, что у ленты операций: панель обязана называть себя,
+          иначе список должников читается как продолжение сводки. Тело
+          начинается сразу под ним — воздух между именем панели и её строками
+          один на все шесть. */}
+      <PanelHeader title={`Долги · ${rows.length}`} />
+      {rows.length === 0 ? (
+        // Пустое состояние — общее на все панели экрана: своя тихая строчка
+        // внутри карточки выглядела как «карточка сломалась».
+        <EmptyState
+          title="Нет должников за период"
+          subtitle={
+            movedToInvoices
+              ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
+              : undefined
+          }
+          action={
+            movedToInvoices
+              ? { label: "Открыть документы", onPress: onOpenDocuments }
+              : undefined
+          }
+        />
+      ) : (
+        <Card style={{ marginHorizontal: GUTTER }}>
+          {rows.map((r, i) => (
             <View
               key={r.id}
               className="min-h-11 flex-row items-stretch"
@@ -128,13 +211,17 @@ export function DebtorsList({
               }
             >
               <Pressable
-                onPress={r.clientId ? () => router.push(`/clients/${r.clientId}`) : undefined}
-                disabled={!r.clientId}
-                accessible={!!r.clientId}
-                accessibilityRole={r.clientId ? "button" : undefined}
-                accessibilityLabel={
+                onPress={() => openAppointment(r)}
+                onLongPress={
                   r.clientId
-                    ? `${r.name}, долг ${formatEUR(r.owed)}, открыть карточку клиента`
+                    ? () => router.push(`/clients/${r.clientId}`)
+                    : undefined
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`${r.name}, долг ${formatEUR(r.owed)}, открыть запись`}
+                accessibilityHint={
+                  r.clientId
+                    ? "Долгое нажатие открывает карточку клиента"
                     : undefined
                 }
                 className="min-h-11 min-w-0 flex-1 flex-row items-center gap-3 py-2 pl-4 active:opacity-70"
@@ -152,8 +239,8 @@ export function DebtorsList({
                   </Text>
                 </View>
                 <Text
-                  className="text-[15px] font-bold tabular-nums"
-                  style={{ color: t.warning }}
+                  className="text-[15px] font-bold"
+                  style={{ color: t.warning, fontVariant: ["tabular-nums"] }}
                 >
                   {formatEUR(r.owed)}
                 </Text>
@@ -165,7 +252,9 @@ export function DebtorsList({
                   accessibilityLabel={`Напомнить ${r.name} об оплате по SMS`}
                   className="min-h-11 justify-center rounded-full px-3 active:opacity-60"
                   style={{
-                    backgroundColor: "rgba(44,91,224,0.10)",
+                    // `1a` — тот же 10-% тинт акцента, что у выбранных чипов:
+                    // литерал rgba отвязал бы кнопку от бренда при смене accent.
+                    backgroundColor: t.accent + "1a",
                     marginHorizontal: 8,
                   }}
                 >
@@ -178,9 +267,9 @@ export function DebtorsList({
                 </Pressable>
               ) : null}
             </View>
-          ))
-        )}
-      </Card>
+          ))}
+        </Card>
+      )}
     </ScrollView>
   );
 }

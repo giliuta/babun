@@ -33,13 +33,15 @@ export function ClientDocumentsRow({
   separated?: boolean;
 }) {
   const router = useRouter();
-  const invoices = useInvoices();
+  // Оба среза — по клиенту: строка ради одного числа поднимала ВСЮ историю
+  // счетов компании, хотя запрос умеет спросить только этого клиента.
+  const invoices = useInvoices({ clientId });
   const receipts = useReceipts({ clientId });
 
-  const count = useMemo(() => {
-    const own = (invoices.data ?? []).filter((i) => i.client_id === clientId);
-    return own.length + (receipts.data?.length ?? 0);
-  }, [invoices.data, receipts.data, clientId]);
+  const count = useMemo(
+    () => (invoices.data?.length ?? 0) + (receipts.data?.length ?? 0),
+    [invoices.data, receipts.data],
+  );
 
   const loading = invoices.data === undefined || receipts.data === undefined;
 

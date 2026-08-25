@@ -10,12 +10,16 @@ import {
   invoicePaymentRefundDestination,
   type InvoicePaymentLedger,
 } from "@babun/shared/local/finance/invoice-ledger";
+import { accountsForTeam } from "@babun/shared/local/finance/integrity";
+import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { Spinner } from "@/components/ui/Spinner";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
 import { useAppointments } from "@/features/calendar/queries";
@@ -32,8 +36,11 @@ import { shareInvoicePdf } from "@/features/invoices/share-pdf";
 import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import {
+  useCancelInvoice,
+  useCreditNoteLinks,
   useInvoice,
   useInvoicePayments,
+  useInvoices,
   useRecordInvoicePayment,
   useRefundInvoicePayment,
   useSetInvoiceStatus,
@@ -41,6 +48,7 @@ import {
 import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 export default function InvoiceDetailScreen() {
@@ -67,9 +75,19 @@ export default function InvoiceDetailScreen() {
   const calendarSettingsQuery = useCalendarSettings();
   const calendarSettings = calendarSettingsQuery.data;
   const paymentRows = useInvoicePayments();
+  // Связи кредит-нот: без них сторно выглядело бы «Инвойс CN-… · Оплачен».
+  const creditLinks = useCreditNoteLinks();
+  // Список инвойсов — только чтобы назвать связанный документ его номером;
+  // страницу он не гейтит (обычно уже в кэше после списка).
+  const invoicesQuery = useInvoices();
+  const numberById = useMemo(
+    () => new Map((invoicesQuery.data ?? []).map((item) => [item.id, item.number])),
+    [invoicesQuery.data],
+  );
   const setStatus = useSetInvoiceStatus(id);
   const pay = useRecordInvoicePayment(id);
   const refund = useRefundInvoicePayment(id);
+  const cancel = useCancelInvoice(id);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -95,14 +113,11 @@ export default function InvoiceDetailScreen() {
       : 0,
     [payments, refundTarget],
   );
+  // Счёт компании обслуживает подключённые к нему команды — сервер такую
+  // оплату принимает, а экран её запрещал: инвойс команды нельзя было
+  // оплатить на общий Revolut, хотя деньги приходят именно туда.
   const paymentAccounts = useMemo(
-    () => invoice.data?.brigade_id
-      ? accounts.filter(
-          (account) =>
-            account.is_active &&
-            account.brigade_id === invoice.data?.brigade_id,
-        )
-      : accounts.filter((account) => account.is_active),
+    () => accountsForTeam(accounts, invoice.data?.brigade_id ?? null),
     [accounts, invoice.data?.brigade_id],
   );
   const accountById = useMemo(
@@ -170,9 +185,36 @@ export default function InvoiceDetailScreen() {
       ],
     );
 
+  // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09): сервер выпускает встречную кредит-ноту,
+  // инвойс получает статус «Отменён» — у клиента остаются оба документа.
+  // Оплаченный инвойс сервер не отменит и попросит сначала оформить возврат —
+  // его формулировка показывается человеку как есть.
+  const cancelInvoice = () =>
+    Alert.alert(
+      "Отменить инвойс?",
+      "Будет выпущена кредит-нота — встречный документ на ту же сумму. Инвойс получит статус «Отменён».",
+      [
+        { text: "Не отменять", style: "cancel" },
+        {
+          text: "Отменить инвойс",
+          style: "destructive",
+          onPress: () =>
+            cancel.mutate(undefined, {
+              onSuccess: (note) => {
+                haptics.success();
+                // Показываем рождённую кредит-ноту — она и есть результат.
+                router.push(`/invoices/${note.id}` as Href);
+              },
+              onError: (error) => Alert.alert("Инвойс не отменён", error.message),
+            }),
+        },
+      ],
+    );
+
   const loading =
     invoice.isLoading ||
     paymentRows.isLoading ||
+    creditLinks.isLoading ||
     clientsQuery.isLoading ||
     appointmentsQuery.isLoading ||
     teamsQuery.isLoading ||
@@ -190,6 +232,7 @@ export default function InvoiceDetailScreen() {
   const loadError =
     (invoice.data === undefined ? invoice.error : null) ||
     (paymentRows.data === undefined ? paymentRows.error : null) ||
+    (creditLinks.data === undefined ? creditLinks.error : null) ||
     (clientsQuery.data === undefined ? clientsQuery.error : null) ||
     (appointmentsQuery.data === undefined ? appointmentsQuery.error : null) ||
     (teamsQuery.data === undefined ? teamsQuery.error : null) ||
@@ -212,6 +255,7 @@ export default function InvoiceDetailScreen() {
             onPress: () => void Promise.all([
               invoice.refetch(),
               paymentRows.refetch(),
+              creditLinks.refetch(),
               clientsQuery.refetch(),
               appointmentsQuery.refetch(),
               teamsQuery.refetch(),
@@ -226,6 +270,11 @@ export default function InvoiceDetailScreen() {
   }
 
   const row = invoice.data;
+  // Кредит-нота — не инвойс: не оплачивается, не редактируется и не
+  // отменяется, а честно называет себя и ссылается на сторнированный документ.
+  const stornoOfId = creditLinks.data?.originalByNoteId.get(row.id) ?? null;
+  const isCreditNote = stornoOfId != null;
+  const creditNoteId = creditLinks.data?.noteByInvoiceId.get(row.id) ?? null;
   const recipientName = row.client_snapshot
     ? row.client_snapshot.full_name
     : client?.full_name;
@@ -234,9 +283,14 @@ export default function InvoiceDetailScreen() {
     : row.client_snapshot?.archived === true
       || (clientsQuery.isSuccess && !!row.client_id);
   const status = invoiceDisplayStatus(row, businessToday, settlement);
-  const isOverdue =
+  // Отменённый (сторнированный) инвойс и кредит-нота денег не ждут.
+  const awaitsPayment =
     row.status !== "void" &&
-    settlement.remaining > 0 &&
+    row.status !== "cancelled" &&
+    !isCreditNote &&
+    settlement.remaining > 0;
+  const isOverdue =
+    awaitsPayment &&
     !!row.due_on &&
     row.due_on < businessToday;
 
@@ -248,7 +302,7 @@ export default function InvoiceDetailScreen() {
     Alert.alert(
       "Нет активного финансового счёта",
       row.brigade_id
-        ? "Создайте или активируйте счёт для этой команды, затем отметьте инвойс оплаченным."
+        ? "Заведите счёт этой команде или подключите её к уже существующему счёту, затем отметьте инвойс оплаченным."
         : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
       [
         { text: "Отмена", style: "cancel" },
@@ -265,6 +319,10 @@ export default function InvoiceDetailScreen() {
         appointmentId: appointment.id,
         date: appointment.date,
         teamId: appointment.team_id ?? undefined,
+        // Вкладки таб-бара — НЕ стек: без from= закрытие записи бросало бы
+        // человека в календарь. Дорогу назад по этому ключу открывает словарь
+        // from= календаря (app/(dashboard)/index.tsx).
+        from: `invoice:${row.id}`,
       },
     } as unknown as Href);
   };
@@ -282,33 +340,79 @@ export default function InvoiceDetailScreen() {
             accessibilityLabel="Поделиться PDF"
             className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
           >
-            <Share2 color={t.body} size={ICON.sm} />
+            {/* Сборка PDF занимает секунды: немая иконка под пальцем читается
+                как поломка — на время работы в слоте крутится спиннер. */}
+            {pdfBusy ? (
+              <Spinner size={18} label="Готовим PDF" />
+            ) : (
+              <Share2 color={t.body} size={ICON.sm} />
+            )}
           </Pressable>
         }
       />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <View className="items-center px-4 pb-4 pt-5">
-          <InvoiceStatusBadge invoice={row} settlement={settlement} today={businessToday} />
-          <Text className="mt-3 text-[38px] font-bold tabular-nums" style={{ color: t.ink }}>
+          {isCreditNote ? (
+            <Badge label="Кредит-нота" variant="neutral" />
+          ) : (
+            <InvoiceStatusBadge invoice={row} settlement={settlement} today={businessToday} />
+          )}
+          <Text
+            className="mt-3 text-[38px] font-bold"
+            style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
+          >
             {formatInvoiceMoney(row.total, row.currency)}
           </Text>
           <Text className="mt-1 text-sm" style={{ color: isOverdue ? t.danger : t.sub }}>
-            {isOverdue
-              ? `Оплата просрочена · до ${formatInvoiceDate(row.due_on)}`
-              : INVOICE_STATUS_LABELS[status]}
+            {isCreditNote
+              ? `Сторно инвойса ${(stornoOfId && numberById.get(stornoOfId)) || ""}`.trimEnd()
+              : isOverdue
+                ? `Оплата просрочена · до ${formatInvoiceDate(row.due_on)}`
+                : INVOICE_STATUS_LABELS[status]}
           </Text>
-          <Text className="mt-2 text-sm tabular-nums" style={{ color: t.body }}>
-            Оплачено {formatInvoiceMoney(settlement.paid, row.currency)} · остаток{" "}
-            {formatInvoiceMoney(settlement.remaining, row.currency)}
-          </Text>
+          {isCreditNote ? null : (
+            <Text
+              className="mt-2 text-sm"
+              style={{ color: t.body, fontVariant: ["tabular-nums"] }}
+            >
+              Оплачено {formatInvoiceMoney(settlement.paid, row.currency)} · остаток{" "}
+              {formatInvoiceMoney(settlement.remaining, row.currency)}
+            </Text>
+          )}
         </View>
 
         <SectionCard title="Документ">
           <InfoRow label="Выставлен" value={formatInvoiceDate(row.issued_on)} />
           <Divider inset={16} />
-          <InfoRow label="Оплатить до" value={formatInvoiceDate(row.due_on)} />
-          <Divider inset={16} />
+          {isCreditNote ? (
+            // Кредит-нота не ждёт оплаты — вместо срока ссылка на исходник.
+            stornoOfId ? (
+              <>
+                <ValueRow
+                  label="Сторнирует"
+                  value={numberById.get(stornoOfId) ?? "Открыть инвойс"}
+                  onPress={() => router.push(`/invoices/${stornoOfId}` as Href)}
+                />
+                <Divider inset={16} />
+              </>
+            ) : null
+          ) : (
+            <>
+              <InfoRow label="Оплатить до" value={formatInvoiceDate(row.due_on)} />
+              <Divider inset={16} />
+            </>
+          )}
+          {creditNoteId ? (
+            <>
+              <ValueRow
+                label="Кредит-нота"
+                value={numberById.get(creditNoteId) ?? "Открыть"}
+                onPress={() => router.push(`/invoices/${creditNoteId}` as Href)}
+              />
+              <Divider inset={16} />
+            </>
+          ) : null}
           <InfoRow label="Валюта" value={row.currency} />
         </SectionCard>
 
@@ -353,7 +457,10 @@ export default function InvoiceDetailScreen() {
                     {line.qty} × {formatInvoiceMoney(line.unit_price, row.currency)}
                   </Text>
                 </View>
-                <Text className="text-base font-semibold tabular-nums" style={{ color: t.ink }}>
+                <Text
+                  className="text-base font-semibold"
+                  style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
+                >
                   {formatInvoiceMoney(line.total, row.currency)}
                 </Text>
               </View>
@@ -373,6 +480,7 @@ export default function InvoiceDetailScreen() {
           <InfoRow label="К оплате" value={formatInvoiceMoney(row.total, row.currency)} strong />
         </SectionCard>
 
+        {isCreditNote ? null : (
         <SectionCard title="Оплата">
           <InfoRow
             label="Оплачено"
@@ -427,6 +535,7 @@ export default function InvoiceDetailScreen() {
             </>
           )}
         </SectionCard>
+        )}
 
         {row.notes ? (
           <SectionCard title="Комментарий" padded>
@@ -435,22 +544,35 @@ export default function InvoiceDetailScreen() {
         ) : null}
 
         <View className="mx-4 mt-5" style={{ gap: 9 }}>
-          {row.status !== "void" && settlement.remaining > 0 ? (
+          {awaitsPayment ? (
             <Button
               label={settlement.paid > 0 ? "Добавить платёж" : "Принять оплату"}
               onPress={openPayment}
             />
           ) : null}
-          {row.status === "issued" && settlement.paid === 0 ? (
+          {!isCreditNote && row.status === "issued" && payments.length === 0 ? (
+            <Button
+              label="Редактировать"
+              variant="secondary"
+              onPress={() => router.push(`/invoices/edit/${row.id}` as Href)}
+            />
+          ) : null}
+          {!isCreditNote && row.status === "issued" ? (
             <>
-              {payments.length === 0 ? (
-                <Button
-                  label="Редактировать"
-                  variant="secondary"
-                  onPress={() => router.push(`/invoices/edit/${row.id}` as Href)}
-                />
+              {/* Канонный отказ: «отказ → credit note». Легаси-«Аннулировать»
+                  (void без встречного документа) пока живёт рядом — сносить ли
+                  его совсем, решает владелец. */}
+              <Button
+                label="Отменить инвойс"
+                variant="secondary"
+                tone="danger"
+                onPress={cancelInvoice}
+                loading={cancel.isPending}
+                disabled={cancel.isPending}
+              />
+              {settlement.paid === 0 ? (
+                <Button label="Аннулировать инвойс" variant="secondary" tone="danger" onPress={voidInvoice} />
               ) : null}
-              <Button label="Аннулировать инвойс" variant="secondary" tone="danger" onPress={voidInvoice} />
             </>
           ) : null}
           <Button
@@ -514,8 +636,9 @@ function InfoRow({
     <View className="flex-row items-center justify-between px-4 py-3" style={{ minHeight: 48 }}>
       <Text className="text-base" style={{ color: t.ink }}>{label}</Text>
       <Text
-        className={strong ? "ml-3 text-lg font-bold tabular-nums" : "ml-3 flex-1 text-right text-base"}
-        style={{ color: muted ? t.faint : t.ink }}
+        className={strong ? "ml-3 text-lg font-bold" : "ml-3 flex-1 text-right text-base"}
+        // Только стилем: `tabular-nums` в className в этом стеке — пустышка.
+        style={{ color: muted ? t.faint : t.ink, fontVariant: ["tabular-nums"] }}
         numberOfLines={2}
       >
         {value}
@@ -523,13 +646,6 @@ function InfoRow({
     </View>
   );
 }
-
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Другое",
-};
 
 function PaymentHistoryRow({
   payment,
@@ -555,9 +671,7 @@ function PaymentHistoryRow({
   const meta = [
     formatInvoiceDate(payment.occurred_on),
     accountName || "Счёт не указан",
-    payment.payment_method
-      ? PAYMENT_METHOD_LABEL[payment.payment_method] ?? payment.payment_method
-      : null,
+    paymentMethodLabel(payment.payment_method) || null,
     payment.type === "income" && refundable <= 0 ? "возвращён полностью" : null,
     refundInAppointment
       ? onOpenAppointment
@@ -579,8 +693,8 @@ function PaymentHistoryRow({
       </View>
       <View className="items-end">
         <Text
-          className="text-base font-semibold tabular-nums"
-          style={{ color: isRefund ? t.danger : t.success }}
+          className="text-base font-semibold"
+          style={{ color: isRefund ? t.danger : t.success, fontVariant: ["tabular-nums"] }}
         >
           {isRefund ? "−" : ""}{formatInvoiceMoney(Math.abs(payment.amount), currency)}
         </Text>

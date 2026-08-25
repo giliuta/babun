@@ -146,7 +146,7 @@ const MessageRow = memo(function MessageRow({
       className={`my-0.5 min-h-11 max-w-[82%] justify-center ${out ? "self-end" : "self-start"}`}
     >
       <View
-        className="rounded-2xl px-3.5 py-2"
+        className="rounded-[10px] px-3.5 py-2"
         style={{
           backgroundColor: out
             ? t.accent
@@ -155,7 +155,7 @@ const MessageRow = memo(function MessageRow({
       >
         {quoted ? (
           <View
-            className="mb-1 rounded-md border-l-2 px-2 py-1"
+            className="mb-1 rounded-[10px] border-l-2 px-2 py-1"
             style={{
               borderColor: out ? "rgba(255,255,255,0.6)" : t.accent,
               backgroundColor: out
@@ -181,7 +181,7 @@ const MessageRow = memo(function MessageRow({
             style={{
               width: 200,
               height: 200,
-              borderRadius: 12,
+              borderRadius: t.radius.card,
               marginBottom: m.text ? 4 : 0,
             }}
             resizeMode="cover"
@@ -377,7 +377,7 @@ export default function ChatThreadScreen() {
 
   // «чат → клиент → запись». Раньше шло ЧЕРЕЗ таб «Календарь» (?new=1):
   // человек видел вспышку чужого календаря, у него подменялись день и
-  // бригада, а после «Готово» он оставался в календаре, потеряв чат. Теперь
+  // команда, а после «Готово» он оставался в календаре, потеряв чат. Теперь
   // экран записи открывается напрямую и возвращает в тот же диалог.
   const bookClient = (clientId?: string | null) => {
     if (!clientId) return;
@@ -622,7 +622,7 @@ export default function ChatThreadScreen() {
             keyboardAppearance="light"
             multiline
             accessibilityLabel="Текст сообщения"
-            className="max-h-24 flex-1 rounded-2xl px-4 py-2.5 text-base"
+            className="max-h-24 flex-1 rounded-[10px] px-4 py-2.5 text-base"
             style={{
               backgroundColor: t.fill,
               color: t.ink,
@@ -656,7 +656,7 @@ export default function ChatThreadScreen() {
           accessible={false}
         >
           <View
-            className="m-3 overflow-hidden rounded-2xl"
+            className="m-3 overflow-hidden rounded-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             {headerActions.map((a, i) => (
@@ -693,7 +693,7 @@ export default function ChatThreadScreen() {
           accessible={false}
         >
           <View
-            className="m-3 overflow-hidden rounded-2xl"
+            className="m-3 overflow-hidden rounded-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             {[
@@ -762,7 +762,7 @@ export default function ChatThreadScreen() {
           accessible={false}
         />
         <View
-          className="absolute bottom-0 left-0 right-0 max-h-[70%] rounded-t-3xl p-4 pb-8"
+          className="absolute bottom-0 left-0 right-0 max-h-[70%] rounded-t-[10px] p-4 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text className="mb-2 text-lg font-bold" style={{ color: t.ink }}>
@@ -886,7 +886,7 @@ export default function ChatThreadScreen() {
           accessible={false}
         />
         <View
-          className="h-[70%] rounded-t-3xl"
+          className="h-[70%] rounded-t-[10px]"
           style={{ backgroundColor: t.surface }}
         >
           <View className="flex-row items-center justify-between px-4 py-3">
@@ -913,7 +913,7 @@ export default function ChatThreadScreen() {
             ) : null}
           </View>
           <View
-            className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
+            className="mx-4 mb-2 flex-row items-center gap-2 rounded-[10px] px-3"
             style={{
               backgroundColor: t.fill,
             }}

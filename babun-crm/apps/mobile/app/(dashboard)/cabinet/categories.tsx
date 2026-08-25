@@ -11,9 +11,9 @@ import {
 } from "react-native";
 import { EyeOff, Trash2 } from "lucide-react-native";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
-import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -33,7 +33,7 @@ import {
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // tailwind-hued SWATCHES are gone — default stays индиго.
-const DEFAULT_COLOR = PRESET_COLORS[2].value;
+const DEFAULT_COLOR = PRESET_COLOR_CYCLE[2].value;
 
 export default function CategoriesScreen() {
   const th = useThemeColors();
@@ -231,7 +231,7 @@ export default function CategoriesScreen() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
         <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: th.surface }}>
+        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: th.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             {editing
               ? "Категория"
@@ -244,7 +244,7 @@ export default function CategoriesScreen() {
             placeholder="Напр. Бензин"
             autoFocus
           />
-          <ColorPicker value={color} onChange={setColor} />
+          <ColorField value={color} onChange={setColor} />
           <Button
             label={editing ? "Сохранить" : "Создать"}
             onPress={submit}

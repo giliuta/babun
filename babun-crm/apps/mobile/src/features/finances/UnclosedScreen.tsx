@@ -2,9 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   Text,
   TextInput,
@@ -17,16 +14,19 @@ import {
   type Appointment,
 } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
+import { countWordRu } from "@babun/shared/common/utils/pluralize";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, humanDay } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
@@ -38,6 +38,7 @@ import {
   unclosedTotal,
 } from "@babun/shared/local/selectors/unclosed";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { daysBetweenYmd } from "./accounts-sections";
 
 // «Незакрытые дни» — port of web /dashboard/unclosed: past days whose
 // work visits are still «Запланирован». The dispatcher works through the
@@ -53,23 +54,6 @@ const CANCEL_REASON_PRESETS = [
   "Не смогли дозвониться",
   "Адрес недоступен",
 ] as const;
-
-function daysSince(dateKey: string, todayKey: string): number {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const [ty, tm, td] = todayKey.split("-").map(Number);
-  const past = Date.UTC(y, (m ?? 1) - 1, d ?? 1);
-  const today = Date.UTC(ty, (tm ?? 1) - 1, td ?? 1);
-  return Math.max(0, Math.round((today - past) / 86_400_000));
-}
-
-function countWord(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 14) return many;
-  if (mod10 === 1) return one;
-  if (mod10 >= 2 && mod10 <= 4) return few;
-  return many;
-}
 
 export function UnclosedScreen() {
   const t = useThemeColors();
@@ -124,7 +108,10 @@ export function UnclosedScreen() {
         patch: buildDebtPaidPatch(apt, { method, amount: debt }),
       },
       {
-        onSuccess: () => toast("Оплата отмечена"),
+        onSuccess: () => {
+          haptics.success();
+          toast("Оплата отмечена");
+        },
         onError: (e) => Alert.alert("Ошибка", (e as Error).message),
       },
     );
@@ -177,8 +164,9 @@ export function UnclosedScreen() {
 
   return (
     <Screen edges={["top"]}>
+      {/* Счётчик — конвенцией продукта: «Счета · 3», «Операции · 12». */}
       <ScreenHeader
-        title={`Не закрыто${unclosed.length > 0 ? ` (${unclosed.length})` : ""}`}
+        title={`Не закрыто${unclosed.length > 0 ? ` · ${unclosed.length}` : ""}`}
       />
 
       {isLoading ? (
@@ -207,11 +195,11 @@ export function UnclosedScreen() {
                   Не подтверждено:
                 </Text>
                 <Text
-                  className="text-[15px] font-semibold tabular-nums"
-                  style={{ color: t.ink }}
+                  className="text-[15px] font-semibold"
+                  style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
                 >
                   {unclosed.length}{" "}
-                  {countWord(unclosed.length, "запись", "записи", "записей")} на{" "}
+                  {countWordRu(unclosed.length, "запись", "записи", "записей")} на{" "}
                   {formatEUR(totalAtRisk)}
                 </Text>
               </Card>
@@ -272,7 +260,9 @@ function UnclosedCard({
   onOpenClient: () => void;
 }) {
   const t = useThemeColors();
-  const days = daysSince(apt.date, todayKey);
+  // `?? 0` — нечитаемая дата не повод пугать «N дней назад»: бейдж просто
+  // не показывается.
+  const days = daysBetweenYmd(apt.date, todayKey) ?? 0;
   const amount = apt.total_amount ?? 0;
   return (
     <Card>
@@ -297,15 +287,15 @@ function UnclosedCard({
               {days > 0 ? (
                 <Text style={{ color: t.warning, fontWeight: "500" }}>
                   {"  ·  "}
-                  {days} {countWord(days, "день", "дня", "дней")} назад
+                  {days} {countWordRu(days, "день", "дня", "дней")} назад
                 </Text>
               ) : null}
             </Text>
           </View>
           {amount > 0 ? (
             <Text
-              className="text-[13px] font-semibold tabular-nums"
-              style={{ color: t.ink }}
+              className="text-[13px] font-semibold"
+              style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
             >
               {formatEUR(amount)}
             </Text>
@@ -351,6 +341,8 @@ function UnclosedCard({
 
 // Cancel-reason sheet (web v593): chip picker + «Другое…» free-text so
 // the dispatcher records the REAL reason, not a hard-coded default.
+// Канонический BottomSheet: title пропом (шапка целиком тянет лист),
+// кнопки в footer (он один платит нижний безопасный отступ).
 function CancelReasonSheet({
   apt,
   clientName,
@@ -367,7 +359,7 @@ function CancelReasonSheet({
   const t = useThemeColors();
   const [picked, setPicked] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
-  // Сброс по визиту: подтверждение (onConfirm) закрывает шит МИМО close(),
+  // Сброс по визиту: подтверждение (onConfirm) закрывает шит МИМО onClose,
   // и стейл-причина прошлого клиента иначе доехала бы до следующего.
   useEffect(() => {
     setPicked(null);
@@ -378,97 +370,92 @@ function CancelReasonSheet({
   const reasonToSubmit = isCustom ? customText.trim() : picked ?? "";
   const canSubmit = reasonToSubmit.length > 0 && !busy;
 
-  const close = () => {
-    setPicked(null);
-    setCustomText("");
-    onClose();
-  };
-
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 justify-end"
-        style={{ backgroundColor: t.scrim }}
-      >
-        <Pressable className="flex-1" onPress={close} accessible={false} />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
-          <Text className="text-lg font-bold" style={{ color: t.ink }}>
-            Отменить визит
-          </Text>
-          {apt ? (
-            <Text className="mt-1 text-[13px]" style={{ color: t.sub }}>
-              {clientName} · {humanDay(apt.date)} · {apt.time_start}
-            </Text>
-          ) : null}
-
-          <Text
-            className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider"
-            style={{ color: t.sub }}
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      title="Отменить визит"
+      avoidKeyboard
+      footer={
+        <View className="flex-row px-5" style={{ gap: 10 }}>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Назад"
+            className="flex-1 items-center justify-center rounded-full active:opacity-60"
+            style={{ height: 44, borderWidth: 1, borderColor: t.separator }}
           >
-            Причина
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {[...CANCEL_REASON_PRESETS, "__custom__"].map((r) => (
-              <Chip
-                key={r}
-                label={r === "__custom__" ? "Другое…" : r}
-                radio
-                selected={picked === r}
-                onPress={() => setPicked(r)}
-              />
-            ))}
-          </View>
-          {isCustom ? (
-            <TextInput
-              value={customText}
-              onChangeText={setCustomText}
-              autoFocus
-              placeholder="Опишите причину"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              accessibilityLabel="Причина отмены"
-              className="mt-3 rounded-[10px] px-3.5 text-[15px]"
-              style={{
-                height: 44,
-                backgroundColor: t.fill,
-                color: t.ink,
-              }}
-            />
-          ) : null}
-
-          <View className="mt-5 flex-row" style={{ gap: 10 }}>
-            <Pressable
-              onPress={close}
-              accessibilityRole="button"
-              accessibilityLabel="Назад"
-              className="flex-1 items-center justify-center rounded-full active:opacity-60"
-              style={{ height: 44, borderWidth: 1, borderColor: t.separator }}
+            <Text className="text-[15px] font-medium" style={{ color: t.sub }}>
+              Назад
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => onConfirm(reasonToSubmit)}
+            disabled={!canSubmit}
+            accessibilityRole="button"
+            accessibilityLabel="Отменить визит"
+            className="flex-1 items-center justify-center rounded-full active:opacity-80"
+            style={{
+              height: 44,
+              backgroundColor: t.danger,
+              opacity: canSubmit ? 1 : 0.5,
+            }}
+          >
+            <Text
+              className="text-[15px] font-semibold"
+              style={{ color: t.onAccent }}
             >
-              <Text className="text-[15px] font-medium" style={{ color: t.sub }}>
-                Назад
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onConfirm(reasonToSubmit)}
-              disabled={!canSubmit}
-              accessibilityRole="button"
-              accessibilityLabel="Отменить визит"
-              className="flex-1 items-center justify-center rounded-full active:opacity-80"
-              style={{
-                height: 44,
-                backgroundColor: t.danger,
-                opacity: canSubmit ? 1 : 0.5,
-              }}
-            >
-              <Text className="text-[15px] font-semibold" style={{ color: "#ffffff" }}>
-                Отменить визит
-              </Text>
-            </Pressable>
-          </View>
+              Отменить визит
+            </Text>
+          </Pressable>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      }
+    >
+      <View className="px-5 pb-4">
+        {apt ? (
+          <Text className="text-center text-[13px]" style={{ color: t.sub }}>
+            {clientName} · {humanDay(apt.date)} · {apt.time_start}
+          </Text>
+        ) : null}
+
+        <Text
+          className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider"
+          style={{ color: t.sub }}
+        >
+          Причина
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {[...CANCEL_REASON_PRESETS, "__custom__"].map((r) => (
+            <Chip
+              key={r}
+              label={r === "__custom__" ? "Другое…" : r}
+              radio
+              selected={picked === r}
+              onPress={() => setPicked(r)}
+            />
+          ))}
+        </View>
+        {isCustom ? (
+          <TextInput
+            value={customText}
+            onChangeText={setCustomText}
+            autoFocus
+            placeholder="Опишите причину"
+            placeholderTextColor={t.placeholder}
+            selectionColor={t.accent}
+            keyboardAppearance="light"
+            accessibilityLabel="Причина отмены"
+            className="mt-3 px-3.5 text-[15px]"
+            style={{
+              height: 44,
+              borderRadius: t.radius.input,
+              backgroundColor: t.fill,
+              color: t.ink,
+            }}
+          />
+        ) : null}
+      </View>
+    </BottomSheet>
   );
 }

@@ -5,7 +5,7 @@ import type { Location } from "@babun/shared/local/clients";
 import { addMonthsYmd, servicePlan } from "./service-plan";
 
 // Регулярность — обещание клиенту («приедем через месяц»). Ошибка здесь либо
-// зовёт бригаду впустую, либо молчит, когда клиент уже ждёт.
+// зовёт команду впустую, либо молчит, когда клиент уже ждёт.
 
 const TODAY = "2026-08-07";
 

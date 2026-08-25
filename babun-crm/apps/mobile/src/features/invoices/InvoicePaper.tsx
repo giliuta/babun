@@ -34,7 +34,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
     <View
       style={{
         backgroundColor: "#ffffff",
-        borderRadius: 14,
+        borderRadius: 10,
         paddingHorizontal: 18,
         paddingVertical: 20,
         borderWidth: 1,
@@ -65,7 +65,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 1, color: PAPER.muted }}>
-            ИНВОЙС
+            {doc.dict.invoice}
           </Text>
           <Text
             style={{ fontSize: 18, fontWeight: "800", color: PAPER.ink, marginTop: 2 }}
@@ -88,11 +88,11 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
       </View>
 
-      <Party title="Получатель" party={doc.client} />
+      <Party title={doc.dict.recipient} party={doc.client} />
 
       <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-        <Boxed label="Дата выставления" value={doc.issuedOn} />
-        <Boxed label="Оплатить до" value={doc.dueOn} />
+        <Boxed label={doc.dict.issuedOn} value={doc.issuedOn} />
+        <Boxed label={doc.dict.dueOn} value={doc.dueOn} />
       </View>
 
       {/* Позиции */}
@@ -105,14 +105,14 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
             borderBottomColor: "#cbd5e1",
           }}
         >
-          <Text style={[headCell, { flex: 1 }]}>Позиция</Text>
-          <Text style={[headCell, { width: 42, textAlign: "right" }]}>Кол-во</Text>
-          <Text style={[headCell, { width: 66, textAlign: "right" }]}>Цена</Text>
-          <Text style={[headCell, { width: 74, textAlign: "right" }]}>Сумма</Text>
+          <Text style={[headCell, { flex: 1 }]}>{doc.dict.lineTitle}</Text>
+          <Text style={[headCell, { width: 62, textAlign: "right" }]}>{doc.dict.qty}</Text>
+          <Text style={[headCell, { width: 66, textAlign: "right" }]}>{doc.dict.price}</Text>
+          <Text style={[headCell, { width: 74, textAlign: "right" }]}>{doc.dict.amount}</Text>
         </View>
         {doc.lines.length === 0 ? (
           <Text style={{ fontSize: 11, color: PAPER.faint, paddingVertical: 10 }}>
-            Позиции пока не заполнены.
+            {doc.dict.linesEmpty}
           </Text>
         ) : (
           doc.lines.map((line, index) => (
@@ -126,10 +126,35 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
                 borderBottomColor: PAPER.line,
               }}
             >
-              <Text style={{ flex: 1, fontSize: 11, fontWeight: "600", color: PAPER.ink }}>
-                {line.title || "Без названия"}
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: "600", color: PAPER.ink }}>
+                  {line.title || doc.dict.untitled}
+                </Text>
+                {/* ЧТО ВХОДИТ В РАБОТУ — второй строкой, приглушённо. Тот же
+                    приём, что у подробностей платежа ниже, и та же пара с
+                    `pdf.ts`: оба рендера правятся вместе. */}
+                {line.description ? (
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 14,
+                      color: PAPER.faint,
+                      marginTop: 2,
+                    }}
+                  >
+                    {line.description}
+                  </Text>
+                ) : null}
+              </View>
+              <Text
+                numberOfLines={1}
+                // Колонка выросла с 42 до 62: с 2026-08-25 она печатает не
+                // голое число, а «4 м» — единицу, которую раньше вписывали
+                // руками в название позиции.
+                style={[cell, { width: 62 }]}
+              >
+                {line.qty}
               </Text>
-              <Text style={[cell, { width: 42 }]}>{line.qty}</Text>
               <Text style={[cell, { width: 66 }]}>{line.unitPrice}</Text>
               <Text style={[cell, { width: 74, fontWeight: "700", color: PAPER.ink }]}>
                 {line.total}
@@ -145,7 +170,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
           style={{
             minWidth: 210,
             padding: 12,
-            borderRadius: 12,
+            borderRadius: 10,
             backgroundColor: PAPER.fill,
           }}
         >
@@ -188,7 +213,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
       </View>
 
       {doc.payTo.length > 0 ? (
-        <Section title="Реквизиты для оплаты">
+        <Section title={doc.dict.payTo}>
           {doc.payTo.map((line) => (
             <Text key={line} style={{ fontSize: 11, color: PAPER.body, marginTop: 1 }}>
               {line}
@@ -201,9 +226,9 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
       ) : null}
 
       {doc.settlement.length > 0 ? (
-        <Section title="Оплата">
+        <Section title={doc.dict.payment}>
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <Boxed label="Статус" value={doc.statusLabel} />
+            <Boxed label={doc.dict.status} value={doc.statusLabel} />
             {doc.settlement.map((metric) => (
               <Boxed key={metric.label} label={metric.label} value={metric.value} />
             ))}
@@ -243,14 +268,14 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
       ) : null}
 
       {doc.notes ? (
-        <Section title="Комментарий">
+        <Section title={doc.dict.notes}>
           <View
             style={{
               paddingHorizontal: 12,
               paddingVertical: 10,
               borderLeftWidth: 3,
               borderLeftColor: "#9db4e2",
-              borderRadius: 8,
+              borderRadius: 10,
               backgroundColor: PAPER.fill,
             }}
           >
@@ -283,7 +308,7 @@ function Party({ title, party }: { title: string; party: InvoiceDocument["client
         padding: 12,
         borderWidth: 1,
         borderColor: PAPER.border,
-        borderRadius: 12,
+        borderRadius: 10,
       }}
     >
       <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 0.8, color: PAPER.muted }}>

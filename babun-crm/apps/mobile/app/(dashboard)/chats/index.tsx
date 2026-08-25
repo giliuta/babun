@@ -335,7 +335,7 @@ export default function ChatsListScreen() {
       />
 
       <View
-        className="mx-4 mb-2 flex-row items-center gap-2 rounded-xl px-3"
+        className="mx-4 mb-2 flex-row items-center gap-2 rounded-[10px] px-3"
         style={{ backgroundColor: t.fill }}
       >
         <Search color={t.faint} size={ICON.sm} />

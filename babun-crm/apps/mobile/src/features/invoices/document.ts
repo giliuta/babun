@@ -1,6 +1,6 @@
 import type { Client } from "@babun/shared/local/clients";
+import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
 import {
-  INVOICE_STATUS_LABELS,
   invoiceDisplayStatus,
   type InvoiceLedgerWithLines,
   type InvoicePaymentLedger,
@@ -12,6 +12,11 @@ import {
   formatInvoiceMoney,
   invoiceVatMode,
 } from "./format";
+import {
+  invoiceDictionary,
+  type InvoiceDictionary,
+  type InvoiceLanguage,
+} from "./dictionary";
 
 // ОДИН ДОКУМЕНТ — ДВА РЕНДЕРА.
 //
@@ -32,6 +37,8 @@ export interface DocumentParty {
 
 export interface DocumentLine {
   title: string;
+  /** Что входит в работу — печатается второй строкой под названием. */
+  description: string | null;
   qty: string;
   unitPrice: string;
   total: string;
@@ -70,6 +77,10 @@ export interface InvoiceDocument {
   payments: DocumentPayment[];
   notes: string;
   footer: string;
+  /** Словарь, которым набран этот документ. Рендеры (экранная бумага и PDF)
+   *  берут ВСЕ свои заголовки отсюда: иначе половина счёта осталась бы
+   *  по-русски там, где её зашили в разметку. */
+  dict: InvoiceDictionary;
 }
 
 export interface InvoiceDocumentDraft {
@@ -77,7 +88,14 @@ export interface InvoiceDocumentDraft {
   issuedOn: string;
   dueOn: string | null;
   clientId: string | null;
-  lines: readonly { title: string; qty: number; unitPrice: number }[];
+  lines: readonly {
+    title: string;
+    qty: number;
+    unitPrice: number;
+    description?: string | null;
+    /** Единица количества: «4 м». `null`/пусто — печатается голое число. */
+    unit?: string | null;
+  }[];
   vatMode: "off" | "inclusive" | "exclusive";
   vatPercent: number;
   subtotalNet: number;
@@ -90,6 +108,8 @@ export interface InvoiceDocumentDraft {
 interface BaseInput {
   tenant?: Tenant;
   client?: Client;
+  /** Язык БУМАГИ, не приложения. Русский по умолчанию. */
+  language?: InvoiceLanguage;
 }
 
 export interface IssuedDocumentInput extends BaseInput {
@@ -103,13 +123,6 @@ export interface IssuedDocumentInput extends BaseInput {
 export interface DraftDocumentInput extends BaseInput {
   draft: InvoiceDocumentDraft;
 }
-
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Другое",
-};
 
 export function buildInvoiceDocument(
   input: IssuedDocumentInput | DraftDocumentInput,
@@ -125,7 +138,9 @@ function issuedDocument({
   payments,
   accountNames,
   businessToday,
+  language,
 }: IssuedDocumentInput): InvoiceDocument {
+  const dict = invoiceDictionary(language);
   const displayStatus = invoiceDisplayStatus(invoice, businessToday, settlement);
   const seller = invoice.seller_snapshot;
   const recipient = invoice.client_snapshot;
@@ -134,14 +149,18 @@ function issuedDocument({
   // компанию — и старый документ бесшумно переписался бы.
   const sellerName = seller
     ? firstNonEmpty(seller.legal_name, seller.name, seller.display_name)
-      || "Продавец не указан"
-    : firstNonEmpty(tenant?.legal_name, tenant?.name) || "Продавец не указан";
+      || dict.sellerMissing
+    : firstNonEmpty(tenant?.legal_name, tenant?.name) || dict.sellerMissing;
   const vatMode = invoiceVatMode(invoice);
 
   return {
     number: invoice.number,
     draft: false,
-    statusLabel: INVOICE_STATUS_LABELS[displayStatus],
+    dict,
+    // Статус — часть бумаги, значит тоже на её языке. Общий словарь
+    // `INVOICE_STATUS_LABELS` остаётся для СПИСКОВ приложения: там русский
+    // всегда, потому что списки читает владелец, а не клиент.
+    statusLabel: dict[`status_${displayStatus}`],
     // Старый снимок логотипа не знает — печатаем текущий: в тот день его
     // просто не записывали, и это честнее пустой шапки.
     logoUrl: clean(seller?.logo_url) || clean(tenant?.logo_url) || null,
@@ -158,7 +177,7 @@ function issuedDocument({
     },
     client: {
       name: (recipient ? clean(recipient.full_name) : clean(client?.full_name))
-        || "Получатель не указан",
+        || dict.recipientMissing,
       lines: compact([
         recipient
           ? firstNonEmpty(recipient.primary_address, recipient.address)
@@ -169,15 +188,17 @@ function issuedDocument({
         recipient ? clean(recipient.phone) : clean(client?.phone),
       ]),
     },
-    issuedOn: formatInvoiceDate(invoice.issued_on),
-    dueOn: formatInvoiceDate(invoice.due_on),
+    issuedOn: formatInvoiceDate(invoice.issued_on, dict.locale, dict.notSet),
+    dueOn: formatInvoiceDate(invoice.due_on, dict.locale, dict.notSet),
     lines: invoice.lines.map((line) => ({
       title: line.title,
-      qty: formatQty(line.qty),
-      unitPrice: formatInvoiceMoney(line.unit_price, invoice.currency),
-      total: formatInvoiceMoney(line.total, invoice.currency),
+      description: line.description?.trim() || null,
+      qty: formatQty(line.qty, line.unit, dict.locale),
+      unitPrice: formatInvoiceMoney(line.unit_price, invoice.currency, dict.locale),
+      total: formatInvoiceMoney(line.total, invoice.currency, dict.locale),
     })),
     totals: totalRows({
+      dict,
       currency: invoice.currency,
       subtotalNet: invoice.subtotal_net,
       vatAmount: invoice.vat_amount,
@@ -187,21 +208,25 @@ function issuedDocument({
     }),
     payTo: compact([
       prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
-      prefixed("Банк", seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
+      prefixed(dict.bank, seller ? clean(seller.bank_name) : clean(tenant?.bank_name)),
     ]),
     settlement: [
-      { label: "Оплачено", value: formatInvoiceMoney(settlement.paid, invoice.currency) },
-      { label: "Остаток", value: formatInvoiceMoney(settlement.remaining, invoice.currency) },
+      {
+        label: dict.paid,
+        value: formatInvoiceMoney(settlement.paid, invoice.currency, dict.locale),
+      },
+      {
+        label: dict.remaining,
+        value: formatInvoiceMoney(settlement.remaining, invoice.currency, dict.locale),
+      },
     ],
     payments: payments.map((payment) => {
       const account = payment.account_id ? accountNames?.get(payment.account_id) : undefined;
-      const method = payment.payment_method
-        ? PAYMENT_METHOD_LABEL[payment.payment_method] ?? payment.payment_method
-        : "";
+      const method = paymentMethodLabel(payment.payment_method);
       const refund = payment.type === "refund";
       return {
         date: formatInvoiceDate(payment.occurred_on),
-        title: refund ? "Возврат" : "Платёж",
+        title: refund ? dict.refundRow : dict.paymentRow,
         details: [account, method].filter(Boolean).join(" · "),
         amount: `${refund ? "−" : ""}${formatInvoiceMoney(Math.abs(payment.amount), invoice.currency)}`,
         refund,
@@ -212,14 +237,21 @@ function issuedDocument({
   };
 }
 
-function draftDocument({ draft, tenant, client }: DraftDocumentInput): InvoiceDocument {
+function draftDocument({
+  draft,
+  tenant,
+  client,
+  language,
+}: DraftDocumentInput): InvoiceDocument {
+  const dict = invoiceDictionary(language);
   return {
     number: draft.number,
     draft: true,
-    statusLabel: "Черновик",
+    dict,
+    statusLabel: dict.draft,
     logoUrl: clean(tenant?.logo_url) || null,
     seller: {
-      name: firstNonEmpty(tenant?.legal_name, tenant?.name) || "Продавец не указан",
+      name: firstNonEmpty(tenant?.legal_name, tenant?.name) || dict.sellerMissing,
       lines: compact([
         firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
         prefixed("VAT", clean(tenant?.vat_number)),
@@ -228,22 +260,28 @@ function draftDocument({ draft, tenant, client }: DraftDocumentInput): InvoiceDo
       ]),
     },
     client: {
-      name: clean(client?.full_name) || "Получатель не указан",
+      name: clean(client?.full_name) || dict.recipientMissing,
       lines: compact([
         client ? primaryClientAddress(client) : "",
         clean(client?.email),
         clean(client?.phone),
       ]),
     },
-    issuedOn: formatInvoiceDate(draft.issuedOn),
-    dueOn: formatInvoiceDate(draft.dueOn),
+    issuedOn: formatInvoiceDate(draft.issuedOn, dict.locale, dict.notSet),
+    dueOn: formatInvoiceDate(draft.dueOn, dict.locale, dict.notSet),
     lines: draft.lines.map((line) => ({
       title: line.title,
-      qty: formatQty(line.qty),
-      unitPrice: formatInvoiceMoney(line.unitPrice, draft.currency),
-      total: formatInvoiceMoney(round2(line.qty * line.unitPrice), draft.currency),
+      description: line.description?.trim() || null,
+      qty: formatQty(line.qty, line.unit, dict.locale),
+      unitPrice: formatInvoiceMoney(line.unitPrice, draft.currency, dict.locale),
+      total: formatInvoiceMoney(
+        round2(line.qty * line.unitPrice),
+        draft.currency,
+        dict.locale,
+      ),
     })),
     totals: totalRows({
+      dict,
       currency: draft.currency,
       subtotalNet: draft.subtotalNet,
       vatAmount: draft.vatAmount,
@@ -253,17 +291,18 @@ function draftDocument({ draft, tenant, client }: DraftDocumentInput): InvoiceDo
     }),
     payTo: compact([
       prefixed("IBAN", clean(tenant?.iban)),
-      prefixed("Банк", clean(tenant?.bank_name)),
+      prefixed(dict.bank, clean(tenant?.bank_name)),
     ]),
     // У черновика платить ещё нечего — блок оплаты не печатаем вовсе.
     settlement: [],
     payments: [],
     notes: clean(draft.notes),
-    footer: `Черновик. Номер ${draft.number} закрепится за документом при выставлении.`,
+    footer: dict.draftFooter(draft.number),
   };
 }
 
 function totalRows(input: {
+  dict: InvoiceDictionary;
   currency: string;
   subtotalNet: number;
   vatAmount: number;
@@ -275,20 +314,36 @@ function totalRows(input: {
   // «Без НДС · €0») — это выглядело как ошибка счёта. Строка налога появляется
   // только там, где налог есть.
   if (input.vatMode === "off" || input.vatAmount <= 0) {
+    const { dict } = input;
     return [
-      { label: "Сумма", value: formatInvoiceMoney(input.subtotalNet, input.currency) },
-      { label: "К оплате", value: formatInvoiceMoney(input.total, input.currency), grand: true },
+      {
+        label: dict.subtotal,
+        value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
+      },
+      {
+        label: dict.grandTotal,
+        value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+        grand: true,
+      },
     ];
   }
+  const { dict } = input;
   const vatLabel =
-    input.vatMode === "inclusive" ? "НДС включён в цены" : "НДС начислен сверху";
+    input.vatMode === "inclusive" ? dict.vatInclusive : dict.vatExclusive;
   return [
-    { label: "Без НДС", value: formatInvoiceMoney(input.subtotalNet, input.currency) },
     {
-      label: `${vatLabel} · ${formatPercent(input.vatPercent)}`,
-      value: formatInvoiceMoney(input.vatAmount, input.currency),
+      label: dict.netAmount,
+      value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
     },
-    { label: "К оплате", value: formatInvoiceMoney(input.total, input.currency), grand: true },
+    {
+      label: `${vatLabel} · ${formatPercent(input.vatPercent, dict.locale)}`,
+      value: formatInvoiceMoney(input.vatAmount, input.currency, dict.locale),
+    },
+    {
+      label: dict.grandTotal,
+      value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+      grand: true,
+    },
   ];
 }
 
@@ -326,10 +381,24 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function formatQty(value: number): string {
-  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 3 }).format(value);
+/** «4 м» вместо голого «4» (2026-08-25). Колонка «Кол-во» печатала число без
+ *  подписи, и на проде это уже вышло боком: человек вписал метры в НАЗВАНИЕ
+ *  позиции — «Трасса, 4 м», — потому что сказать их было больше негде.
+ *  Единица берётся из СТРОКИ СЧЁТА, а не из прайса: выставленный документ
+ *  заморожен, и смена единицы у услуги через месяц не переписывает бумагу,
+ *  которую клиент уже получил. */
+function formatQty(
+  value: number,
+  unit?: string | null,
+  locale = "ru-RU",
+): string {
+  const number = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 3,
+  }).format(value);
+  const suffix = unit?.trim();
+  return suffix ? `${number} ${suffix}` : number;
 }
 
-function formatPercent(value: number): string {
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value)}%`;
+function formatPercent(value: number, locale = "ru-RU"): string {
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value)}%`;
 }

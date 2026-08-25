@@ -1,6 +1,15 @@
-import { useMemo } from "react";
-import { Pressable, SectionList, Text, View } from "react-native";
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { useMemo, type ReactElement } from "react";
+import {
+  Pressable,
+  SectionList,
+  Text,
+  View,
+  type RefreshControlProps,
+} from "react-native";
+import {
+  formatEURExact as formatEUR,
+  moneySign,
+} from "@babun/shared/common/utils/money";
 import {
   signedAmount,
   type FinanceTransaction,
@@ -12,21 +21,36 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
+import { useCalendarSettings } from "@/features/settings/local-settings";
 import type { Team } from "@/features/reference/queries";
 import type { Service } from "@/features/services/queries";
+import { PanelHeader } from "./PanelHeader";
 
 // Day-grouped operations feed — port of the web TransactionsFeed
 // (mockup «Вариант 3»): colored pill on the left, «время · клиент» over
 // the description, amount on the right. An income tied to an appointment
 // titles itself with the visit's SERVICES and its tap jumps to the
 // client card; everything else opens the tx popup.
-// «ЧЧ:ММ» из ISO-времени — фолбэк контекста дохода (web hhmm parity).
-function hhmm(iso: string): string {
+// «ЧЧ:ММ» из ISO-времени по часам БИЗНЕСА — фолбэк контекста дохода.
+// `new Date(iso).getHours()` читал бы часы УСТРОЙСТВА: у диспетчера с
+// телефоном в другом поясе время оплаты уезжало на смещение, хотя весь
+// остальной контур живёт по calendar_settings.timezone.
+function hhmm(iso: string, timeZone: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes(),
-  ).padStart(2, "0")}`;
+  try {
+    return new Intl.DateTimeFormat("ru-RU", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(d);
+  } catch {
+    // Битая зона в настройках: часы устройства честнее пустой строки.
+    return `${String(d.getHours()).padStart(2, "0")}:${String(
+      d.getMinutes(),
+    ).padStart(2, "0")}`;
+  }
 }
 
 export function TransactionsFeed({
@@ -43,6 +67,8 @@ export function TransactionsFeed({
   onTxTap,
   contextMode = "default",
   scroll = true,
+  refreshControl,
+  footnote,
 }: {
   /** Подпись пустого состояния. По умолчанию «Нет операций за период»;
    *  при активном поиске экран честно говорит, где именно искали. */
@@ -65,8 +91,21 @@ export function TransactionsFeed({
   /** false — плоский рендер для вложения в родительский ScrollView
    *  (деталь счёта); SectionList внутри ScrollView не живёт. */
   scroll?: boolean;
+  /** Pull-to-refresh хозяина экрана (U86). Только для собственного
+   *  SectionList: в плоском рендере контрол ставит родительский скролл. */
+  refreshControl?: ReactElement<RefreshControlProps>;
+  /** ЧЕГО В ЛЕНТЕ НЕТ, А В ПЛИТКЕ ЕСТЬ. Расход экрана «Финансы» включает
+   *  материалы записей — расчётную величину, у которой нет проводки в
+   *  журнале. Без этой строки плитка показывала €540, лента складывалась в
+   *  €400, и разницу владелец искал пальцем по списку. */
+  footnote?: { text: string; onPress?: () => void };
 }) {
   const t = useThemeColors();
+  // Та же зона и тот же фолбэк, что у периода на экране финансов
+  // (finances/index.tsx): лента не имеет права печатать время в другом
+  // поясе, чем шапка периода над ней.
+  const businessTimezone =
+    useCalendarSettings().data?.timezone ?? "Europe/Nicosia";
 
   const lookups = useMemo(
     () => ({
@@ -130,17 +169,22 @@ export function TransactionsFeed({
     if (!desc) {
       desc = isIn
         ? tx.notes || cat?.name || (tx.type === "refund" ? "Возврат" : "Поступление")
-        : cat?.name || tx.notes || (isTr ? "Перевод" : "Расход");
+        : isTr
+          ? // Перевод не отдаёт заголовок заметке: «на бензин −€50» без слова
+            // «Перевод» неотличим от расхода, хотя для P&L строка нейтральна.
+            // Сама заметка уходит в ctx-строку ниже.
+            "Перевод"
+          : cat?.name || tx.notes || "Расход";
     }
 
-    // context line: время · клиент (income) / комментарий (expense)
+    // context line: время · клиент (income) / комментарий (expense/transfer)
     let ctx = "";
     if (isIn) {
       const client = tx.client_id ? lookups.client.get(tx.client_id) : null;
       // Доход без привязанной записи — время создания операции (web parity).
-      const time = appt?.time_start || hhmm(tx.created_at);
+      const time = appt?.time_start || hhmm(tx.created_at, businessTimezone);
       ctx = [time, client?.full_name].filter(Boolean).join(" · ");
-    } else if (isEx && cat && tx.notes) {
+    } else if (tx.notes && (isTr || (isEx && cat))) {
       ctx = tx.notes;
     }
     if (!ctx) {
@@ -185,8 +229,8 @@ export function TransactionsFeed({
           </Text>
         </View>
         <Text
-          className="text-base font-bold tabular-nums"
-          style={{ color: amountColor }}
+          className="text-base font-bold"
+          style={{ color: amountColor, fontVariant: ["tabular-nums"] }}
         >
           {sign}
           {formatEUR(Math.abs(tx.amount))}
@@ -195,48 +239,61 @@ export function TransactionsFeed({
     );
   };
 
-  const listHeader = (
-        <View className="flex-row items-center px-4 pb-1 pt-2">
-          <Text
-            className="text-xs font-semibold uppercase tracking-wider"
-            style={{ color: t.sub }}
-          >
-            {title}
-          </Text>
-          {onReset ? (
-            <Pressable
-              onPress={onReset}
-              accessibilityRole="button"
-              accessibilityLabel="Показать все операции"
-              className="ml-auto min-h-11 justify-center px-2 active:opacity-60"
-            >
-              <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
-                Все
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-  );
+  // Эйбрау — общий примитив всех панелей экрана (`PanelHeader`): своя копия
+  // жила здесь и потому оставалась единственной панелью с именем.
+  const listHeader = <PanelHeader title={title} onReset={onReset} />;
 
-  const sectionHeader = (section: { title: string; net: number }) => (
-    <View
-      className="flex-row items-center justify-between px-4 py-1.5"
-      style={{ backgroundColor: t.canvas }}
+  const sectionHeader = (section: { title: string; net: number }) => {
+    // Ноль движения — не приход: день, где приход и расход схлопнулись в €0,
+    // зелёным означал бы «деньги пришли». Цвет = смысл, у нуля его нет.
+    const netSign = moneySign(section.net);
+    return (
+      <View
+        className="flex-row items-center justify-between px-4 py-1.5"
+        style={{ backgroundColor: t.canvas }}
+      >
+        <Text
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: t.sub }}
+        >
+          {humanDay(section.title)}
+        </Text>
+        <Text
+          className="text-xs font-semibold"
+          style={{
+            color: netSign < 0 ? t.danger : netSign > 0 ? t.success : t.sub,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {formatEUR(section.net)}
+        </Text>
+      </View>
+    );
+  };
+
+  // Сноска — не строка ленты: у неё нет ни дня, ни счёта, ни тапа на правку.
+  // Поэтому она стоит ПОД списком, тише строк, и ведёт туда, где эти деньги
+  // разложены поимённо (разбор прибыли).
+  const footnoteNode = footnote ? (
+    <Pressable
+      onPress={footnote.onPress}
+      disabled={!footnote.onPress}
+      accessibilityRole={footnote.onPress ? "button" : "text"}
+      accessibilityLabel={footnote.text}
+      style={({ pressed }) => ({
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: pressed && footnote.onPress ? t.pressed : "transparent",
+      })}
     >
       <Text
-        className="text-xs font-semibold uppercase tracking-wider"
-        style={{ color: t.sub }}
+        maxFontSizeMultiplier={1.3}
+        style={{ fontSize: 13, lineHeight: 18, color: t.caption }}
       >
-        {humanDay(section.title)}
+        {footnote.text}
       </Text>
-      <Text
-        className="text-xs font-semibold tabular-nums"
-        style={{ color: section.net < 0 ? t.danger : t.success }}
-      >
-        {section.net < 0 ? "−" : ""}{formatEUR(Math.abs(section.net))}
-      </Text>
-    </View>
-  );
+    </Pressable>
+  ) : null;
 
   if (!scroll) {
     return (
@@ -259,6 +316,7 @@ export function TransactionsFeed({
             </View>
           ))
         )}
+        {footnoteNode}
       </View>
     );
   }
@@ -267,6 +325,7 @@ export function TransactionsFeed({
     <SectionList
       style={{ flex: 1 }}
       sections={sections}
+      refreshControl={refreshControl}
       keyExtractor={(tx) => tx.id}
       ListHeaderComponent={listHeader}
       contentContainerStyle={{ paddingBottom: 96 }}
@@ -278,6 +337,7 @@ export function TransactionsFeed({
       ListEmptyComponent={
         <EmptyState title={emptyTitle ?? "Нет операций за период"} />
       }
+      ListFooterComponent={footnoteNode}
     />
   );
 }

@@ -68,6 +68,7 @@ import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useToast } from "@/components/ui/Toast";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { AddRow } from "@/components/ui/AddRow";
+import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -592,7 +593,7 @@ export default function ClientHeader({
             flexDirection: "row",
             alignItems: "center",
             gap: 8,
-            marginHorizontal: 12,
+            marginHorizontal: GUTTER,
             marginTop: 8,
             paddingHorizontal: 16,
             paddingVertical: 12,

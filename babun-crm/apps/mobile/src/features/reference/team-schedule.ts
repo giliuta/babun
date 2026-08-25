@@ -77,7 +77,7 @@ export function useUpsertTeamSchedule() {
       schedule: TeamSchedule;
     }) => {
       if (role !== "owner") {
-        throw new Error("Изменять график бригады может только владелец.");
+        throw new Error("Изменять график команды может только владелец.");
       }
       await upsertScheduleEntry(supabase, tenantId as string, teamId, schedule);
     },

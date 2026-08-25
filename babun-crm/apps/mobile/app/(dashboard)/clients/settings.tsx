@@ -16,6 +16,7 @@ import {
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { Screen } from "@/components/ui/Screen";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { CONTACTS_AVAILABLE } from "@/features/clients/import/ContactsImportSheet";
@@ -124,7 +125,7 @@ export default function ClientsSettingsScreen() {
         <SectionEyebrow>Отображение</SectionEyebrow>
         <SectionCard>
           <SettingsRow
-            tile="#2F6FD6"
+            tile={SETTINGS_TILE.blue}
             icon={Eye}
             title="Что показывать на карточке"
             sub={cardFieldsSummary(prefs)}
@@ -132,7 +133,7 @@ export default function ClientsSettingsScreen() {
           />
           <Divider inset={56} />
           <SettingsRow
-            tile="#1F7A44"
+            tile={SETTINGS_TILE.green}
             icon={MessageCircle}
             title="Способы связи"
             // Каналы перечисляем, поля — счётчиком: полный список обоих
@@ -146,7 +147,7 @@ export default function ClientsSettingsScreen() {
 
           <Divider inset={56} />
           <SettingsRow
-            tile="#2F6FD6"
+            tile={SETTINGS_TILE.blue}
             icon={Navigation}
             title="Карты для маршрута"
             sub={mapServicesSummary(mapServices)}
@@ -162,7 +163,7 @@ export default function ClientsSettingsScreen() {
         <SectionEyebrow>Справочники</SectionEyebrow>
         <SectionCard>
           <SettingsRow
-            tile="#0E7C86"
+            tile={SETTINGS_TILE.teal}
             icon={Home}
             title="Типы объектов"
             sub="Вилла, дом, квартира, офис"
@@ -171,7 +172,7 @@ export default function ClientsSettingsScreen() {
 
           <Divider inset={56} />
           <SettingsRow
-            tile="#8E44AD"
+            tile={SETTINGS_TILE.purple}
             icon={Tags}
             title="Теги клиентов"
             sub={
@@ -196,7 +197,7 @@ export default function ClientsSettingsScreen() {
           {CONTACTS_AVAILABLE ? (
             <>
               <SettingsRow
-                tile="#2F6FD6"
+                tile={SETTINGS_TILE.blue}
                 icon={Smartphone}
                 title="Из контактов телефона"
                 sub="Выбрать, кого добавить"
@@ -206,7 +207,7 @@ export default function ClientsSettingsScreen() {
             </>
           ) : null}
           <SettingsRow
-            tile="#2F6FD6"
+            tile={SETTINGS_TILE.blue}
             icon={Upload}
             title="Импорт из CSV"
             sub="Загрузить клиентов из файла"
@@ -214,7 +215,7 @@ export default function ClientsSettingsScreen() {
           />
           <Divider inset={56} />
           <SettingsRow
-            tile="#2E7D32"
+            tile={SETTINGS_TILE.green}
             icon={Download}
             title="Выгрузить всех клиентов"
             sub={
@@ -228,7 +229,7 @@ export default function ClientsSettingsScreen() {
           />
           <Divider inset={56} />
           <SettingsRow
-            tile="#5B6678"
+            tile="neutral"
             icon={Archive}
             title="Архив клиентов"
             sub="Убраны из работы, история цела"
@@ -239,7 +240,7 @@ export default function ClientsSettingsScreen() {
               корзина — со счётчиком. Иначе «куда он делся» повторится, уже
               с двумя одинаковыми на вид дверями. */}
           <SettingsRow
-            tile="#C0392B"
+            tile={SETTINGS_TILE.red}
             icon={Trash2}
             title="Недавно удалённые"
             sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}

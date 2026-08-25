@@ -75,6 +75,35 @@ export async function deleteOperationReceipt(path: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Убирает файл, залитый в закрывшейся форме, — если он так и не стал ничьим.
+ *
+ * Файл уходит в бакет сразу при выборе, а форма закрывается двумя путями:
+ * «Сохранить» (путь записан в `receipt_url` операции) и «передумал» (путь не
+ * записан никуда). Сама форма при размонтировании не знает, каким путём её
+ * закрыли, поэтому спрашиваем базу: сохранение завершается ДО закрытия листа,
+ * и файл без единой ссылки — точно мусор этой формы.
+ *
+ * При любой ошибке (сеть пропала на закрытии) файл ОСТАЁТСЯ: лишний объект в
+ * бакете — копеечный мусор, а удалённый документ сохранённой операции —
+ * потеря, которую бухгалтеру не объяснить.
+ */
+export async function discardOperationReceiptIfOrphan(
+  path: string,
+): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from("finance_transactions")
+      .select("id")
+      .eq("receipt_url", path)
+      .limit(1);
+    if (error || (data ?? []).length > 0) return;
+    await deleteOperationReceipt(path);
+  } catch {
+    // Молча: жаловаться некому — форма уже закрыта, а оставить файл безопасно.
+  }
+}
+
 /** Подписанная ссылка на просмотр. Живёт 5 минут — ровно чтобы открыть. */
 export function useSignedReceiptUrl(path: string | null | undefined) {
   return useQuery({

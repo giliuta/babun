@@ -34,7 +34,7 @@ export function LabelPickerSheet({
   const inLibrary = cities.some((c) => c.name === value);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose}>
       <View className="items-center pb-2 pt-2">
         <Text
           accessibilityRole="header"

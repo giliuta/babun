@@ -231,7 +231,7 @@ export default function SmsTemplatesScreen() {
                     onPress={() => handlePreset(p)}
                     accessibilityRole="button"
                     accessibilityLabel={`Использовать шаблон ${p.name}`}
-                    className="mb-2 flex-row items-center justify-between rounded-xl px-4 py-3 active:opacity-60"
+                    className="mb-2 flex-row items-center justify-between rounded-[10px] px-4 py-3 active:opacity-60"
                     style={{
                       backgroundColor: t.fill,
                     }}
@@ -398,7 +398,7 @@ function TemplateEditor({
         <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
           <Pressable className="flex-1" onPress={onClose} accessible={false} />
           <View
-            className="h-[88%] overflow-hidden rounded-t-3xl"
+            className="h-[88%] overflow-hidden rounded-t-[10px]"
             style={{ backgroundColor: t.canvas }}
           >
             <View
@@ -479,7 +479,7 @@ function TemplateEditor({
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
                 keyboardAppearance="light"
-                className="rounded-xl px-4 py-3 text-base"
+                className="rounded-[10px] px-4 py-3 text-base"
                 style={{
                   minHeight: 110,
                   textAlignVertical: "top",
@@ -515,7 +515,7 @@ function TemplateEditor({
                       }
                       accessibilityRole="button"
                       accessibilityLabel={`Применить пресет ${p.label}`}
-                      className="mb-2 rounded-xl px-3 py-2.5 active:opacity-60"
+                      className="mb-2 rounded-[10px] px-3 py-2.5 active:opacity-60"
                       style={{
                         backgroundColor: t.surface,
                         borderWidth: 1,
@@ -570,7 +570,7 @@ function TemplateEditor({
                 Тест — как увидит клиент
               </Text>
               <View
-                className="rounded-xl px-3 py-3"
+                className="rounded-[10px] px-3 py-3"
                 style={{
                   backgroundColor: "rgba(52,199,89,0.08)",
                   borderWidth: 1,

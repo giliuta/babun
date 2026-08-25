@@ -182,6 +182,7 @@ export function ObjectEditSheet({
 
   return (
     <BottomSheet
+      padded={false}
       visible={visible}
       // Закрытие скримом/свайпом — тоже уход со строки: без этого набранный
       // адрес пропадал вместе с листом (onEditEnd при размонтировании не

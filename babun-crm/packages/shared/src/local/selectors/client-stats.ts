@@ -23,6 +23,7 @@
 import type { Appointment } from "../appointments";
 import { getPaidAmount, getDebtAmount } from "../appointments";
 import type { Client } from "../clients";
+import { FORMS_DEN, pluralRu } from "../../common/utils/plural-ru";
 
 export interface ClientStats {
   /** Number of completed visits. */
@@ -61,7 +62,7 @@ export interface ClientStats {
    *  сих пор не знал (аудит 2026-08-07). */
   unclosedVisits: number;
   /** Неполученные деньги: завершённые визиты с недоплатой ПЛЮС прошедшие
-   *  записи, по которым бригада не отчиталась, — для владельца это одно и
+   *  записи, по которым команда не отчиталась, — для владельца это одно и
    *  то же «нам не заплатили». */
   debt: number;
   /** Expected revenue — Σ total_amount of FUTURE scheduled/in-progress
@@ -469,17 +470,9 @@ export function getClientDisplayState(s: ClientStats): {
   if (d === 0) return { lastLine: "Был сегодня", tone: "default" };
   if (d === 1) return { lastLine: "Был вчера", tone: "default" };
   return {
-    lastLine: `Был ${d} ${pluralDays(d)} назад`,
+    lastLine: `Был ${d} ${pluralRu(d, FORMS_DEN)} назад`,
     tone: d > 60 ? "muted" : "default",
   };
-}
-
-function pluralDays(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "день";
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return "дня";
-  return "дней";
 }
 
 function formatRuShort(key: string): string {

@@ -67,12 +67,21 @@ function rowToSettings(r: Row): CalendarSettings {
   return {
     startHour: r.start_hour,
     endHour: r.end_hour,
+    // Минуты окна приезжают отдельным полем (миграция
+    // 20260817090000_calendar_window_minutes): час остался часом, чтобы
+    // не переписанный читатель не принял 510 минут за 510-й час.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    startMinute: (r as any).start_minute ?? 0,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    endMinute: (r as any).end_minute ?? 0,
     gridStep: grid,
     weekStart: r.week_start as "monday" | "sunday",
     timezone: r.timezone,
     bufferMinutes: r.buffer_minutes,
     hideCancelled: r.hide_cancelled,
     allowOvertime: r.allow_overtime,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    showDayFinance: (r as any).show_day_finance ?? true,
     // v449 — round-trip work / scroll-open hours through Supabase.
     // Older rows return null here; the caller's sanitizer fills them
     // with the visible-range defaults so the form never crashes.
@@ -129,12 +138,23 @@ export async function getOperationalCalendarSettings(
   return {
     startHour: row.start_hour,
     endHour: row.end_hour,
+    // Мастерский срез приходит из RPC, и минут в его сигнатуре пока нет —
+    // рельс мастера просто встаёт на целый час. Добавить их в
+    // `read_operational_calendar_settings_safe` можно тем же приёмом.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    startMinute: (row as any).start_minute ?? 0,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    endMinute: (row as any).end_minute ?? 0,
     gridStep: row.grid_step as 15 | 30 | 60,
     weekStart: row.week_start as "monday" | "sunday",
     timezone: row.timezone,
     bufferMinutes: row.buffer_minutes,
     hideCancelled: row.hide_cancelled,
     allowOvertime: row.allow_overtime,
+    // `showDayFinance` здесь НЕТ намеренно: полоса «Доход / Расход» — surface
+    // владельца (гейт `role === "owner"`), и мастерской проекции она не нужна
+    // ни для чего. Тест `maps the safe RPC without introducing private
+    // settings` ловит любую попытку протащить сюда лишнее поле — он и поймал.
     workStartHour: row.work_start_hour ?? undefined,
     workEndHour: row.work_end_hour ?? undefined,
     scrollOpenHour: row.scroll_open_hour ?? undefined,
@@ -154,11 +174,20 @@ export async function updateCalendarSettings(
   };
   if (patch.startHour !== undefined) insert.start_hour = patch.startHour;
   if (patch.endHour !== undefined) insert.end_hour = patch.endHour;
+  if (patch.startMinute !== undefined)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (insert as any).start_minute = patch.startMinute;
+  if (patch.endMinute !== undefined)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (insert as any).end_minute = patch.endMinute;
   if (patch.gridStep !== undefined) insert.grid_step = patch.gridStep;
   if (patch.weekStart !== undefined) insert.week_start = patch.weekStart;
   if (patch.timezone !== undefined) insert.timezone = patch.timezone;
   if (patch.bufferMinutes !== undefined) insert.buffer_minutes = patch.bufferMinutes;
   if (patch.hideCancelled !== undefined) insert.hide_cancelled = patch.hideCancelled;
+  if (patch.showDayFinance !== undefined)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (insert as any).show_day_finance = patch.showDayFinance;
   if (patch.allowOvertime !== undefined) insert.allow_overtime = patch.allowOvertime;
   // Cast through any — see rowToSettings comment for context.
   if (patch.workStartHour !== undefined)

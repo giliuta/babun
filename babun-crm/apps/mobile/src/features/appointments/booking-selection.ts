@@ -1,6 +1,8 @@
 export interface BookingServiceRef {
   id: string;
-  brigade_ids: unknown;
+  /** Команда-владелец услуги. С 2026-08-17 их ровно одна: списка команд и
+   *  правила «пусто = делают все» больше нет. */
+  team_id: string | null;
 }
 
 export interface BookingMasterRef {
@@ -8,20 +10,13 @@ export interface BookingMasterRef {
   team_id: string | null;
 }
 
-function brigadeIds(service: BookingServiceRef): string[] {
-  return Array.isArray(service.brigade_ids)
-    ? service.brigade_ids.filter(
-        (value): value is string => typeof value === "string",
-      )
-    : [];
-}
-
 export function isServiceAllowedForTeam(
   service: BookingServiceRef,
   teamId: string | null,
 ): boolean {
-  const ids = brigadeIds(service);
-  return ids.length === 0 || (teamId != null && ids.includes(teamId));
+  // Без команды каталог ПУСТ, а не «весь»: запись без команды никто не делает,
+  // и предлагать в ней чужой прайс — приглашение записать работу не на того.
+  return teamId != null && service.team_id === teamId;
 }
 
 export function isMasterAllowedForTeam(

@@ -174,7 +174,7 @@ export default function SyncStatusScreen() {
       >
         {!online ? (
           <View
-            className="mx-3 mt-3 flex-row items-center gap-3 rounded-2xl px-4 py-3"
+            className="mx-3 mt-3 flex-row items-center gap-3 rounded-[10px] px-4 py-3"
             style={{ backgroundColor: `${t.warning}1A` }}
           >
             <WifiOff color={t.warning} size={20} />
@@ -232,7 +232,7 @@ export default function SyncStatusScreen() {
                   accessibilityLabel="Повторить синхронизацию изменения"
                   disabled={busy}
                   onPress={() => void retry(op)}
-                  className="min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-xl"
+                  className="min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-[10px]"
                   style={({ pressed }) => ({
                     backgroundColor: `${t.accent}14`,
                     opacity: busy ? 0.45 : pressed ? 0.78 : 1,
@@ -249,7 +249,7 @@ export default function SyncStatusScreen() {
                     accessibilityLabel="Удалить несохранённое изменение"
                     disabled={busy}
                     onPress={() => discard(op)}
-                    className="min-h-11 flex-row items-center justify-center gap-2 rounded-xl px-4"
+                    className="min-h-11 flex-row items-center justify-center gap-2 rounded-[10px] px-4"
                     style={({ pressed }) => ({
                       backgroundColor: `${t.danger}12`,
                       opacity: busy ? 0.45 : pressed ? 0.78 : 1,
@@ -272,7 +272,7 @@ export default function SyncStatusScreen() {
             accessibilityLabel="Повторить все изменения"
             disabled={busyId !== null}
             onPress={() => void retry()}
-            className="mx-3 mt-4 min-h-[50px] items-center justify-center rounded-2xl"
+            className="mx-3 mt-4 min-h-[50px] items-center justify-center rounded-[10px]"
             style={({ pressed }) => ({
               backgroundColor: t.accent,
               opacity: busyId !== null ? 0.45 : pressed ? 0.82 : 1,

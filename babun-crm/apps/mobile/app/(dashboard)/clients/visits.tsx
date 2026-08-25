@@ -14,7 +14,7 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { useClient } from "@/features/clients/queries";
 import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
-import { useServices } from "@/features/services/queries";
+import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -46,7 +46,8 @@ export default function ClientVisitsScreen() {
   const { data: appointments = [], isLoading } = useClientAppointments(
     clientId ?? "",
   );
-  const { data: services = [] } = useServices();
+  // Прошлые визиты — чтение: имя убранной услуги обязано пережить её.
+  const { data: services = [] } = useAllServices();
 
   const serviceName = useMemo(() => {
     const m = new Map<string, string>();

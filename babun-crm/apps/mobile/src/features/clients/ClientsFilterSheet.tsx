@@ -140,7 +140,7 @@ function FilterRow({
         minHeight: 44,
         paddingVertical: 8,
         paddingHorizontal: 16,
-        borderRadius: 14,
+        borderRadius: t.radius.card,
         backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
       })}
     >
@@ -430,7 +430,7 @@ function FooterCta({
           alignItems: "center",
           justifyContent: "center",
           minHeight: 52,
-          borderRadius: 14,
+          borderRadius: t.radius.card,
           overflow: "hidden",
           backgroundColor: t.accent,
           opacity: pressed ? 0.85 : 1,
@@ -516,7 +516,7 @@ function MultiPickSheet({
     b.some((o) => (shown[o.value] ?? 0) > 0 || selected.includes(o.value)),
   );
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.85}>
       <View
         style={{
           flexDirection: "row",
@@ -676,7 +676,7 @@ function SinglePickSheet({
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={0.85}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.85}>
       <View style={{ paddingHorizontal: 20, paddingTop: 4, paddingBottom: 12 }}>
         <Text
           accessibilityRole="header"
@@ -1140,7 +1140,7 @@ export function ClientsFilterSheet({
   const propertyValue = summarize(result.propertyOptions, filter.propertyTypes);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} maxHeightRatio={HALF_RATIO}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={HALF_RATIO}>
       <View style={{ height: pageH }}>
         {/* Шапка 92│центр│92 — «Фильтры» оптически по центру всегда. */}
         <View
@@ -1247,7 +1247,7 @@ export function ClientsFilterSheet({
                 flexDirection: "row",
                 alignItems: "stretch",
                 minHeight: 44,
-                borderRadius: 14,
+                borderRadius: t.radius.card,
                 backgroundColor: t.rowFill,
               }}
             >
@@ -1266,8 +1266,8 @@ export function ClientsFilterSheet({
                   paddingLeft: 16,
                   paddingRight: 8,
                   gap: 4,
-                  borderTopLeftRadius: 14,
-                  borderBottomLeftRadius: 14,
+                  borderTopLeftRadius: t.radius.card,
+                  borderBottomLeftRadius: t.radius.card,
                   backgroundColor: pressed ? t.rowFillPressed : "transparent",
                 })}
               >
@@ -1303,8 +1303,8 @@ export function ClientsFilterSheet({
                   alignItems: "center",
                   paddingLeft: 12,
                   paddingRight: 16,
-                  borderTopRightRadius: 14,
-                  borderBottomRightRadius: 14,
+                  borderTopRightRadius: t.radius.card,
+                  borderBottomRightRadius: t.radius.card,
                   backgroundColor: pressed ? t.rowFillPressed : "transparent",
                 })}
               >

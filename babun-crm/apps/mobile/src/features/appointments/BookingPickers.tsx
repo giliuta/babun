@@ -14,7 +14,7 @@ import { Check, Search, UserRound, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -25,12 +25,17 @@ import { useThemeColors } from "@/theme/colors";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCreateClient } from "@/features/clients/queries";
+import { friendlyCreateError } from "@/features/clients/client-create-errors";
 import type { Service } from "@/features/services/queries";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
 } from "@/features/appointments/booking-prefill";
 import { useReduceMotion } from "@/lib/reduce-motion";
+import { InlineServiceCreate } from "@/features/services/InlineServiceCreate";
+import { ColorDot } from "@/components/ui/picker-fields";
+import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
+import { durationLabel } from "@/features/services/format";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -51,14 +56,17 @@ function TextInput({
   );
 }
 
-const durationLabel = (minutes: number) => {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return hours > 0
-    ? rest > 0
-      ? `${hours} ч ${rest} мин`
-      : `${hours} ч`
-    : `${rest} мин`;
+
+/** «Не делаем по вторникам» — родительный падеж множественного числа: слово
+ *  стоит в предложении, а не подписью в таблице. */
+const OFF_DAY_WORD: Record<number, string> = {
+  1: "понедельникам",
+  2: "вторникам",
+  3: "средам",
+  4: "четвергам",
+  5: "пятницам",
+  6: "субботам",
+  7: "воскресеньям",
 };
 
 export function ClientPicker({
@@ -136,7 +144,9 @@ export function ClientPicker({
       onPick(c);
       setQ("");
     } catch (e) {
-      Alert.alert("Ошибка", (e as Error).message);
+      // Сырой текст Postgres человеку показывать нельзя: быстрое создание
+      // говорит на том же языке, что и полная карточка клиента.
+      Alert.alert("Не получилось", friendlyCreateError(e));
     }
   };
 
@@ -163,7 +173,7 @@ export function ClientPicker({
         </View>
 
         <View
-          className="mx-3 mt-3 flex-row items-center gap-2 rounded-[12px] px-3"
+          className="mx-4 mt-3 flex-row items-center gap-2 rounded-[10px] px-3"
           style={{ height: 44, backgroundColor: t.fill }}
         >
           <Search color={t.placeholder} size={ICON.sm} />
@@ -175,6 +185,11 @@ export function ClientPicker({
             placeholder="Имя или телефон"
             placeholderTextColor={t.placeholder}
             keyboardType="default"
+            // Из этой же строки создаётся клиент: автозамена успевала
+            // подменить набранное имя до того, как его сохранят.
+            autoCorrect={false}
+            spellCheck={false}
+            autoCapitalize="words"
             style={{ flex: 1, fontSize: 16, color: t.ink }}
           />
           {q ? (
@@ -247,7 +262,7 @@ export function ClientPicker({
             <Pressable
               onPress={create}
               disabled={createClient.isPending}
-              className="mx-3 mt-2 flex-row items-center gap-3 rounded-[14px] px-4 py-3.5"
+              className="mx-4 mt-2 flex-row items-center gap-3 rounded-[10px] px-4 py-3.5"
               style={{
                 backgroundColor: `${t.accent}0d`,
                 opacity: createClient.isPending ? 0.55 : 1,
@@ -293,6 +308,8 @@ export function ServicePicker({
   services,
   frequent,
   selectedIds,
+  teamId,
+  date,
   onToggle,
 }: {
   visible: boolean;
@@ -300,6 +317,11 @@ export function ServicePicker({
   services: Service[];
   frequent: Service[];
   selectedIds: string[];
+  /** Команда записи: её прайс и показан. Ей же заводится услуга, если прайс
+   *  пуст — иначе запись на такую команду не завести вовсе. */
+  teamId: string | null;
+  /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
+  date?: string;
   onToggle: (id: string) => void;
 }) {
   const t = useThemeColors();
@@ -308,8 +330,30 @@ export function ServicePicker({
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return query ? services.filter((s) => s.name.toLowerCase().includes(query)) : services;
-  }, [q, services]);
+    const found = query
+      ? services.filter((s) => s.name.toLowerCase().includes(query))
+      : services;
+    if (!date) return found;
+    // УСЛУГА, КОТОРУЮ В ЭТОТ ДЕНЬ НЕ ДЕЛАЮТ, УЕЗЖАЕТ ВНИЗ — И ТОЛЬКО.
+    // Ни спрятать, ни запретить: человек, не нашедший услугу, решит, что она
+    // исчезла из прайса (так уже обжигались с убранными услугами), а продукт
+    // не отказывает в деньгах — сегодня не делаем, но если клиент просит и
+    // бригада согласна, запись обязана состояться.
+    const weekday = isoWeekdayOf(date);
+    const served = found.filter((s) => servedOnWeekday(s, weekday));
+    const rest = found.filter((s) => !servedOnWeekday(s, weekday));
+    return [...served, ...rest];
+  }, [q, services, date]);
+  const offDayIds = useMemo(() => {
+    if (!date) return new Set<string>();
+    const weekday = isoWeekdayOf(date);
+    return new Set(
+      services.filter((s) => !servedOnWeekday(s, weekday)).map((s) => s.id),
+    );
+  }, [services, date]);
+  const offDayLabel = date
+    ? `Не делаем по ${OFF_DAY_WORD[isoWeekdayOf(date)]}`
+    : "";
   // Живой счётчик выбранного — чтобы не закрывать модалку ради проверки.
   const subtotal = useMemo(
     () =>
@@ -343,7 +387,7 @@ export function ServicePicker({
         </View>
 
         <View
-          className="mx-3 mt-3 flex-row items-center gap-2 rounded-[12px] px-3"
+          className="mx-4 mt-3 flex-row items-center gap-2 rounded-[10px] px-3"
           style={{ height: 44, backgroundColor: t.fill }}
         >
           <Search color={t.placeholder} size={ICON.sm} />
@@ -362,7 +406,11 @@ export function ServicePicker({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
         >
-          {!q && frequent.length > 0 ? (
+          {/* «ЧАСТЫЕ» — короткий путь в ДЛИННОМ прайсе. Когда услуг всего
+              две-три, пилюли повторяют список, который и так виден целиком, —
+              и это читается как сбой (владелец 2026-08-17). Показываем, только
+              если под ними есть что искать. */}
+          {!q && frequent.length > 0 && services.length > frequent.length + 2 ? (
             <>
               <Text
                 className="px-5 pb-1.5 pt-4"
@@ -394,13 +442,23 @@ export function ServicePicker({
                     className="flex-row items-center px-4 py-3"
                     style={i > 0 ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
                     accessibilityRole="checkbox"
-                    accessibilityLabel={`${s.name}, ${formatEUR(s.price)}`}
+                    accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}`}
                     accessibilityState={{ checked: selectedIds.includes(s.id) }}
                   >
-                    <View className="flex-1">
-                      <Text style={{ fontSize: 15, color: t.ink }}>{s.name}</Text>
+                    <ColorDot value={s.color} size={10} />
+                    <View className="ml-3 flex-1">
+                      <Text
+                        style={{
+                          fontSize: 15,
+                          color: offDayIds.has(s.id) ? t.sub : t.ink,
+                        }}
+                      >
+                        {s.name}
+                      </Text>
                       <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
-                        {formatEUR(s.price)} · {durationLabel(s.duration_minutes)}
+                        {offDayIds.has(s.id)
+                          ? offDayLabel
+                          : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`}
                       </Text>
                     </View>
                     {on ? <Check color={t.accent} size={ICON.md} /> : null}
@@ -409,15 +467,24 @@ export function ServicePicker({
               })
             ) : (
               <EmptyState
-                title={q.trim() ? "Услуги не найдены" : "Нет доступных услуг"}
+                title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
                 subtitle={
                   q.trim()
                     ? "Измените запрос и попробуйте ещё раз."
-                    : "Для выбранной бригады пока не настроены услуги."
+                    : "Заведите первую — она сразу добавится в запись."
                 }
               />
             )}
           </SectionCard>
+          {/* ПУСТОЙ ПРАЙС — НЕ ТУПИК: услуга заводится прямо здесь и сразу
+              уходит в запись. Поиск с пустым каталогом ничего не ищет, поэтому
+              под него блок не показываем. */}
+          {services.length === 0 && !q.trim() ? (
+            <InlineServiceCreate
+              teamId={teamId}
+              onCreated={(id) => onToggle(id)}
+            />
+          ) : null}
         </ScrollView>
 
         {selectedIds.length > 0 ? (
@@ -434,12 +501,12 @@ export function ServicePicker({
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel={`Готово, выбрано услуг: ${selectedIds.length} на ${formatEUR(subtotal)}`}
+              accessibilityLabel={`Готово, выбрано услуг: ${selectedIds.length} на ${formatEURExact(subtotal)}`}
               className="items-center justify-center rounded-full"
               style={{ minHeight: 50, backgroundColor: t.accent }}
             >
               <Text style={{ fontSize: 16, fontWeight: "700", color: t.onAccent, fontVariant: ["tabular-nums"] }}>
-                Готово · {selectedIds.length} · {formatEUR(subtotal)}
+                Готово · {selectedIds.length} · {formatEURExact(subtotal)}
               </Text>
             </Pressable>
           </View>

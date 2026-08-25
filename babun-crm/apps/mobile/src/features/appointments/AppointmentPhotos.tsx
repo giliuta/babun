@@ -364,7 +364,7 @@ export function AppointmentPhotos({
                 return (
                   <View
                     key={photo.id}
-                    className="relative aspect-square w-[31%] overflow-hidden rounded-xl"
+                    className="relative aspect-square w-[31%] overflow-hidden rounded-[10px]"
                     style={{ backgroundColor: t.fill }}
                   >
                     <Pressable

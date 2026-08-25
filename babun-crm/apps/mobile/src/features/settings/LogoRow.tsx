@@ -75,7 +75,7 @@ export function LogoRow({
     <>
       <View className="flex-row items-center gap-3 px-4 py-3">
         <View
-          className="items-center justify-center overflow-hidden rounded-xl"
+          className="items-center justify-center overflow-hidden rounded-[10px]"
           style={{ width: 64, height: 44, backgroundColor: t.fill }}
         >
           {busy ? (

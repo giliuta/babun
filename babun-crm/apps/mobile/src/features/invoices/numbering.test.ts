@@ -26,6 +26,17 @@ describe("номер инвойса", () => {
     );
   });
 
+  // КОНТРАКТ ПАРИТЕТА С СЕРВЕРОМ. У SQL `format_invoice_number` ширина —
+  // greatest(coalesce(padding,3), 1, length(seq)), верхней границы нет. Клиент
+  // капал её восемью, и значение >8, записанное вебом или прямым SQL, давало
+  // образец в настройках, не совпадающий с выданным номером.
+  test("ширина больше восьми не срезается — как на сервере", () => {
+    assert.equal(
+      formatInvoiceNumber({ prefix: "INV", year: 2026, seq: 42, padding: 10, yearlyReset: false }),
+      "INV-0000000042",
+    );
+  });
+
   test("пустой префикс и мусорная ширина не ломают номер", () => {
     assert.equal(
       formatInvoiceNumber({ prefix: "  ", year: 2026, seq: 1, padding: 0, yearlyReset: true }),

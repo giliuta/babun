@@ -41,19 +41,19 @@ export function rescheduleWarning(
 
   const startMin = minutes(next.timeStart);
   const endMin = minutes(next.timeEnd);
-  if (workBand === null) return "Нерабочий день бригады";
+  if (workBand === null) return "Нерабочий день команды";
   if (
     workBand?.breaks?.some(
       (pause) => startMin < pause.endMin && endMin > pause.startMin,
     )
   ) {
-    return "Попадает на перерыв бригады";
+    return "Попадает на перерыв команды";
   }
   if (
     workBand &&
     (startMin < workBand.startMin || endMin > workBand.endMin)
   ) {
-    return "Вне рабочих часов бригады";
+    return "Вне рабочих часов команды";
   }
 
   const tight = findBufferClash(candidate, others, bufferMinutes);

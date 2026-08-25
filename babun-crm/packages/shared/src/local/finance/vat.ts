@@ -74,11 +74,50 @@ export interface VatSettings {
   mode: VatMode;
   /** Процент. 19 — Кипр, 24 — Греция. */
   rate: number;
-  /** Текст освобождения для документов (печатается вместо ставки). */
-  exemptionNote: string | null;
+  /** МЁРТВОЕ ПОЛЕ (аудит 2026-08-16, U39): текст освобождения нигде не
+   *  вводится и не печатается — из запросов и резолвера убран, колонки БД
+   *  не тронуты. Ключ остаётся необязательным, пока литералы в чужих
+   *  call sites его передают; убрать вместе с ними. */
+  exemptionNote?: string | null;
 }
 
-export const VAT_OFF: VatSettings = { mode: "off", rate: 0, exemptionNote: null };
+export const VAT_OFF: VatSettings = { mode: "off", rate: 0 };
+
+/** Переопределение НДС уровнем ниже компании: null — «наследовать выше». */
+export interface VatOverride {
+  mode: VatMode | null;
+  rate: number | null;
+}
+
+/**
+ * Действующий НДС для конкретной операции: счёт → команда → компания.
+ *
+ * КЛИЕНТСКОЕ ЗЕРКАЛО серверного триггера fill_transaction_vat: форма
+ * показывает налог по этой формуле, а в базу его пишет триггер — разъезд
+ * формул означал бы, что человек видит один налог, а в чек уходит другой.
+ * Правила зеркалятся точно:
+ * — тумблер компании «Работаем с НДС» = off гасит налог ВО ВСЁМ продукте,
+ *   включая режим, закреплённый за счётом или командой (сервер так же
+ *   проверяет t.vat_mode до coalesce — починка 2026-08-16);
+ * — режим наследуется счёт → команда → компания, ставка — команда →
+ *   компания: своей ставки у счёта нет намеренно, её задаёт страна работы
+ *   команды, а счёт отвечает только «здесь налог есть или нет».
+ *
+ * Счёт побеждает команду не по прихоти: «счёт с НДС» — это про то, КУДА
+ * приходят деньги. На расчётный падает выручка с налогом, а в кассу от
+ * частника — без, и обе операции живут в одной команде.
+ */
+export function effectiveVatSettings(
+  tenant: VatSettings | undefined,
+  teamOverride: VatOverride | null | undefined,
+  accountMode: VatMode | null | undefined,
+): VatSettings {
+  if (!tenant || tenant.mode === "off") return VAT_OFF;
+  return {
+    mode: accountMode ?? teamOverride?.mode ?? tenant.mode,
+    rate: teamOverride?.rate ?? tenant.rate,
+  };
+}
 
 /** Налог ВНУТРИ валовой суммы: 480 при ставке 20 → 80. */
 export function vatFromGross(gross: number, rate: number): number {
@@ -131,7 +170,10 @@ export function summarizeVat(
   let netIncome = 0;
   for (const t of transactions) {
     if (t.type === "transfer") continue;
-    const vat = t.vat_amount ?? 0;
+    // «Без НДС» нажато руками — снимку налога не верим, даже если он есть:
+    // UPDATE-путь мог оставить осиротевший vat_amount, и отчёт насчитал бы
+    // налог по операции, где оператор его явно выключил.
+    const vat = t.vat_mode === "none" ? 0 : (t.vat_amount ?? 0);
     if (t.type === "income" || t.type === "refund") {
       // refund хранится отрицательным — суммирование само вычитает.
       collected += vat;
@@ -148,6 +190,10 @@ export function summarizeVat(
   };
 }
 
-function round2(n: number): number {
+/** Канон денежного округления: half-up, как numeric round в Postgres.
+ *  EPSILON обязателен — без него float-пыль на ровной половине цента
+ *  (0,045 → 0,04499…) роняла округление вниз, и превью расходилось с
+ *  сохранённым сервером документом на цент. */
+export function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }

@@ -2,7 +2,7 @@ import { FlatList, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Receipt as ReceiptIcon } from "lucide-react-native";
 import { receiptClientName } from "@babun/shared/local/finance/receipt";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { money } from "@babun/shared/common/utils/money";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -16,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 // ЧЕКИ — ЛЕНТА ВЫДАННЫХ ДОКУМЕНТОВ.
 //
 // Читается сверху вниз как выписка: номер, кому, сколько, когда. Погашенные
-// (возврат) не прячутся, а показываются зачёркнутым статусом — документ
+// (возврат) не прячутся, а гаснут с пометкой «аннулирован» — документ
 // существовал, и проверяющий должен видеть, почему номер занят.
 
 export default function ReceiptsScreen() {
@@ -79,11 +79,13 @@ export default function ReceiptsScreen() {
                     {item.number}
                   </Text>
                   {dead ? (
+                    // Слово и тон — как в панели «Документы»: аннуляция —
+                    // факт, а не тревога, красным она не кричит.
                     <Text
                       className="text-[11px] font-semibold uppercase"
-                      style={{ color: t.danger }}
+                      style={{ color: t.caption }}
                     >
-                      погашен
+                      аннулирован
                     </Text>
                   ) : null}
                 </View>
@@ -96,13 +98,13 @@ export default function ReceiptsScreen() {
                   className="text-[15px] font-semibold"
                   style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
                 >
-                  {formatEUR(item.amount)}
+                  {money(item.amount, item.currency)}
                 </Text>
                 {/* НДС отдельной строкой: это не выручка компании, а чужие
                     деньги внутри полученной суммы. */}
                 {item.vat_amount ? (
                   <Text className="text-[11px]" style={{ color: t.sub }}>
-                    в т.ч. НДС {formatEUR(item.vat_amount)}
+                    в т.ч. НДС {money(item.vat_amount, item.currency)}
                   </Text>
                 ) : null}
               </View>

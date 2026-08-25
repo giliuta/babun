@@ -62,7 +62,7 @@ const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)
 
 // Per-date work band (minutes since midnight) resolved from team_schedules
 // by the parent via shared getDayScheduleForDate — web DayColumn.tsx:231.
-// breaks — перерывы бригады (обед и т.п.): серые полосы на сетке.
+// breaks — перерывы команды (обед и т.п.): серые полосы на сетке.
 export type WorkBand = {
   startMin: number;
   endMin: number;
@@ -350,7 +350,7 @@ function Block({
               backgroundColor: colors.fill,
               borderLeftColor: overdue ? t.warning : colors.stripe,
               borderLeftWidth: 3,
-              borderRadius: 8,
+              borderRadius: t.radius.card,
               paddingHorizontal: compact ? 3 : 6,
               paddingVertical: 2,
               overflow: "hidden",
@@ -406,7 +406,7 @@ function Block({
                 right: 3,
                 height: 15,
                 width: 15,
-                borderRadius: 8,
+                borderRadius: t.radius.card,
                 backgroundColor: t.success,
                 alignItems: "center",
                 justifyContent: "center",
@@ -513,7 +513,7 @@ export function TimeRail({
             top: pct(nowInWin - winStart, winEnd - winStart),
             marginTop: -8,
             height: 16,
-            borderRadius: 8,
+            borderRadius: t.radius.card,
             paddingHorizontal: 4,
             justifyContent: "center",
             backgroundColor: t.danger,
@@ -661,9 +661,15 @@ export function DayColumn({
   const offHoursFill = `${t.ink}1f`;
 
   // Off-hours wash band: per-date team schedule wins (workBand), else the
-  // global hour props. band === null → нерабочий день, wash suppressed
-  // entirely (workStart/End collapse onto the window edges), matching web
-  // DayColumn v473 (day-off signal lives in the header, body stays plain).
+  // global hour props.
+  //
+  // ВЫХОДНОЙ ЗАКРАШЕН ЦЕЛИКОМ (владелец 2026-08-17: «просто не подсвечивается и
+  // всё, остаётся как будто в прошлом»). До этого `band === null` ГАСИЛО wash
+  // совсем — обе полосы схлопывались на края окна, и колонка выходного
+  // оставалась БЕЛОЙ среди серых нерабочих часов рабочих дней. То есть
+  // единственный нерабочий день выглядел единственным подсвеченным — ровно
+  // наоборот смыслу. Теперь у выходного рабочей полосы нет вовсе, и весь день
+  // ложится под тот же серый, которым закрыты нерабочие часы: язык один.
   const band =
     workBand === undefined
       ? {
@@ -677,7 +683,9 @@ export function DayColumn({
   const clampWin = (min: number) =>
     Math.min(Math.max(min, winStartMin), winEndMin);
   const workStart = band ? clampWin(band.startMin) : winStartMin;
-  const workEnd = band ? clampWin(band.endMin) : winEndMin;
+  // Ноль рабочего времени у выходного: полоса «после смены» начинается на
+  // верхней кромке окна и кроет колонку целиком одним слоем.
+  const workEnd = band ? clampWin(band.endMin) : winStartMin;
 
   const onSlotPress = (hour: number, locationY: number) => {
     if (!onCreateAt) return;
@@ -741,7 +749,7 @@ export function DayColumn({
         />
       ) : null}
 
-      {/* Перерывы бригады (обед и т.п.) — тот же серый, что нерабочие часы:
+      {/* Перерывы команды (обед и т.п.) — тот же серый, что нерабочие часы:
           «сюда не записываем». Подпись только в широком дне. */}
       {band?.breaks?.map((b, i) =>
         b.endMin > winStartMin && b.startMin < winEndMin ? (
@@ -917,33 +925,12 @@ export function DayColumn({
         );
       })}
 
-      {/* Нерабочий день — тихая подпись по центру (web v473: сигнал в
-          шапке, тело чистое; подпись убирает «мёртвую пустоту»). */}
-      {workBand === null ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{
-              fontSize: compact ? 11 : 13,
-              fontWeight: "500",
-              color: t.faint,
-            }}
-          >
-            Выходной
-          </Text>
-        </View>
-      ) : null}
+      {/* ПОДПИСИ «ВЫХОДНОЙ» НА КОЛОНКЕ НЕТ (владелец 2026-08-17: «просто не
+          подсвечивается и всё»). Слово по центру пустого дня в Неделе ломалось
+          на две строки в 50-точечной колонке и было ровно тем шумом, который из
+          продукта убирают: серый уже сказал «здесь не работаем». Кто именно
+          выходной — отвечает плашка листа при тапе по слоту («Нерабочий день
+          команды»), и поставить запись всё равно можно. */}
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
           appointment; rendered before the blocks so colour cards sit on top
@@ -1054,17 +1041,20 @@ function DayHeader({
   dateYmd,
   isToday,
   isPast,
+  dayOff = false,
   label,
   onLabelTap,
 }: {
   dateYmd: string;
   isToday: boolean;
   isPast: boolean;
-  /** Метка дня (город бригады). null при отсутствии — шапка чистая,
+  /** У команды на эту дату выходной — на месте метки встанет слово. */
+  dayOff?: boolean;
+  /** Метка дня (город команды). null при отсутствии — шапка чистая,
    *  никакого «+ метка» (Phase I38). */
   label?: { name: string; color: string } | null;
   /** Тап по ВСЕЙ шапке открывает пикер метки (web onCityTap). undefined,
-   *  когда у бригады нет меток — шапка не интерактивна. */
+   *  когда у команды нет меток — шапка не интерактивна. */
   onLabelTap?: () => void;
 }) {
   const [y, m, d] = dateYmd.split("-").map(Number);
@@ -1088,6 +1078,7 @@ function DayHeader({
         isToday={isToday}
         isPast={isPast}
         label={label}
+        dayOff={dayOff}
       />
     </Pressable>
   );
@@ -1169,7 +1160,7 @@ export function DayView({
   nowMinutes?: number | null;
   /** Auto-scroll target on open (settings.scrollOpenHour). */
   scrollToHour?: number;
-  /** Метка дня по дате (undefined — у бригады нет меток, шапки чистые). */
+  /** Метка дня по дате (undefined — у команды нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
   onDayLabelTap?: () => void;
 }) {
@@ -1201,6 +1192,7 @@ export function DayView({
                 isToday={d === todayYmd}
                 isPast={d < todayYmd}
                 label={labelFor?.(d) ?? null}
+                dayOff={workBandFor?.(d) === null}
                 onLabelTap={off === 0 ? onDayLabelTap : undefined}
               />
             );

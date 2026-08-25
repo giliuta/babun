@@ -75,7 +75,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         style={({ pressed }) => ({
           alignItems: "center",
           backgroundColor: "#176BFF",
-          borderRadius: 14,
+          borderRadius: 10,
           justifyContent: "center",
           marginTop: 22,
           minHeight: 48,
@@ -157,13 +157,11 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(dashboard)" />
-      {/* Настройки календаря — сиблинг табов, а не экран внутри вкладки
-          «Кабинет»: шестерёнка живёт на вкладке «Календарь», а push в стек
-          чужого таба переключал бы таб-бар под пальцем и двоил «назад».
-          Здесь стек открывается ПОВЕРХ табов и всегда возвращает позвавшему. */}
-      <Stack.Screen name="calendar" />
-      {/* «Новая запись» — экран создания заявки/события. Тот же приём
-          сиблинга табов: тап по слоту push-ит /book поверх таб-бара. */}
+      {/* «Новая запись» — экран создания: сиблинг табов, тап по слоту push-ит
+          /book ПОВЕРХ таб-бара. Создание закрывает собой всё намеренно — из
+          него выходят «Готово» или «Отмена», а не прыжком в другую вкладку.
+          Настройки же (/calendar/*) переехали ВНУТРЬ вкладки «Календарь»
+          (app/(dashboard)/(home)), чтобы бар из-под них не исчезал. */}
       <Stack.Screen name="book" />
       {/* Финансовые документы открываются поверх табов и сами fail-closed
           проверяют роль владельца в app/invoices/_layout.tsx. */}

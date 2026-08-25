@@ -34,7 +34,7 @@ export function TagPickerSheet({
   const t = useThemeColors();
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet padded={false} visible={visible} onClose={onClose}>
       <View className="items-center pb-2 pt-2">
         <Text
           accessibilityRole="header"

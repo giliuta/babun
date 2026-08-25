@@ -21,6 +21,7 @@ const invoice: InvoiceLedgerWithLines = {
   vat_amount: 19,
   total: 119,
   currency: "EUR",
+  language: "ru",
   status: "issued",
   pdf_url: null,
   notes: "Оплата по договору <A&B>",
@@ -32,7 +33,9 @@ const invoice: InvoiceLedgerWithLines = {
     invoice_id: "invoice-1",
     position: 0,
     title: "Сервис <премиум>",
+    description: null,
     qty: 1,
+    unit: null,
     unit_price: 100,
     total: 100,
   }],
@@ -101,7 +104,10 @@ describe("invoice PDF HTML", () => {
     assert.match(html, /Основной адрес 5/);
     assert.match(html, /Сервис &lt;премиум&gt;/);
     assert.match(html, /Частично оплачен/);
-    assert.match(html, /Основной счёт · Перевод/);
+    // Способ `transfer` во всём продукте называется «Банк»: «Перевод» —
+    // это тип операции между своими счетами, и одно слово на две вещи
+    // путало даже нас.
+    assert.match(html, /Основной счёт · Банк/);
     assert.doesNotMatch(html, /<A&B>/);
   });
 

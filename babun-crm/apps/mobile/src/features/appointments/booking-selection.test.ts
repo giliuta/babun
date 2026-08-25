@@ -6,23 +6,25 @@ import {
   reconcileBookingSelection,
 } from "./booking-selection";
 
+// Услуга принадлежит РОВНО одной команде (2026-08-17): «услуги, доступные
+// всем» больше нет, а запись без команды не предлагает никакого прайса.
 const services = [
-  { id: "global", brigade_ids: [] },
-  { id: "red-only", brigade_ids: ["red"] },
-  { id: "blue-only", brigade_ids: ["blue"] },
+  { id: "red-only", team_id: "red" },
+  { id: "blue-only", team_id: "blue" },
 ];
 
 describe("booking team invariants", () => {
-  test("global service works for a selected team but scoped service does not work personally", () => {
+  test("услуга работает только у своей команды и никогда без команды", () => {
     assert.equal(isServiceAllowedForTeam(services[0], "red"), true);
-    assert.equal(isServiceAllowedForTeam(services[1], null), false);
+    assert.equal(isServiceAllowedForTeam(services[0], "blue"), false);
+    assert.equal(isServiceAllowedForTeam(services[0], null), false);
   });
 
   test("switching team prunes stale services and incompatible master", () => {
     assert.deepEqual(
       reconcileBookingSelection({
         teamId: "blue",
-        serviceIds: ["global", "red-only", "blue-only"],
+        serviceIds: ["red-only", "blue-only"],
         masterId: "red-master",
         services,
         masters: [
@@ -30,7 +32,7 @@ describe("booking team invariants", () => {
           { id: "floating", team_id: null },
         ],
       }),
-      { serviceIds: ["global", "blue-only"], masterId: null },
+      { serviceIds: ["blue-only"], masterId: null },
     );
   });
 

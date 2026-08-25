@@ -44,7 +44,7 @@ export function ViewModeDropdown({
         style={({ pressed }) => ({
           height: 36,
           paddingHorizontal: 12,
-          borderRadius: 18,
+          borderRadius: t.radius.card,
           flexDirection: "row",
           alignItems: "center",
           gap: 6,
@@ -82,7 +82,7 @@ export function ViewModeDropdown({
               minWidth: 180,
               backgroundColor: t.surface,
               // 14 — единый радиус поповеров шапки (MiniCalendar такой же).
-              borderRadius: 14,
+              borderRadius: t.radius.card,
               borderWidth: 1,
               borderColor: t.separator,
               paddingVertical: 4,

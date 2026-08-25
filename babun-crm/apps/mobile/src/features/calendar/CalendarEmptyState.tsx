@@ -106,7 +106,7 @@ export function CalendarEmptyState({ onCreate }: { onCreate: () => void }) {
             width: 32,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 16,
+            borderRadius: t.radius.card,
             opacity: pressed ? 0.6 : 1,
           })}
         >

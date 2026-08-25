@@ -431,6 +431,37 @@ export const useUpdateTeam = () => useRefUpdate("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
 export const useUpdateCity = () => useRefUpdate("cities");
+
+/**
+ * ПОРЯДОК МЕТОК — ЭТО ЧТЕНИЕ. Владелец 2026-08-17: «если задержать, можно
+ * будет переносить — справа шесть точек, чтоб можно было менять местами».
+ * Пишем `position` всем строкам разом: половина списка с новым номером и
+ * половина со старым — это не порядок, а лотерея, поэтому запросы уходят
+ * параллельно и инвалидация одна на всех.
+ */
+export function useReorderCities() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: readonly string[]) => {
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      assertCanWriteReference("cities", role);
+      await Promise.all(
+        ids.map((id, index) =>
+          updateRefRow({
+            table: "cities",
+            tenantId,
+            id,
+            patch: { position: index },
+          }),
+        ),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cities"] }),
+    meta: { errorHandled: true },
+  });
+}
 export const useDeleteCity = () => useRefDelete("cities");
 export const useUpdateService = () => useRefUpdate("services");
 export const useDeleteService = () => useRefDelete("services");

@@ -124,7 +124,7 @@ function MenuRow({
           width: 30,
           alignItems: "center",
           justifyContent: "center",
-          borderRadius: 8,
+          borderRadius: t.radius.card,
           backgroundColor: tone,
         }}
       >
@@ -146,7 +146,7 @@ function MenuRow({
             paddingHorizontal: 6,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 10,
+            borderRadius: t.radius.card,
             backgroundColor: t.warning,
           }}
         >
@@ -185,7 +185,7 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
       onPress={() => router.push("/cabinet/business")}
       accessibilityRole="button"
       accessibilityLabel={`${name}, открыть личную информацию`}
-      className="mx-3 mt-2 overflow-hidden rounded-[20px]"
+      className="mx-3 mt-2 overflow-hidden rounded-[10px]"
       style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
     >
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
@@ -206,7 +206,7 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
             width: 56,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 28,
+            borderRadius: t.radius.card,
             borderWidth: 2,
             borderColor: "rgba(255,255,255,0.7)",
             backgroundColor: "rgba(255,255,255,0.2)",
@@ -483,7 +483,7 @@ export default function CabinetHome() {
             icon={Landmark}
             tone={TILE.mint}
             title="Счета"
-            desc="Кассы и счета бригад"
+            desc="Кассы и счета команд"
             href="/accounts"
           />
             </SectionCard>
@@ -502,7 +502,7 @@ export default function CabinetHome() {
             icon={Users}
             tone={TILE.orange}
             title="Команды"
-            desc="Бригады: состав, цвет, расписание"
+            desc="Команды: состав, цвет, расписание"
             href="/cabinet/teams"
           />
           <Divider inset={58} />
@@ -510,7 +510,7 @@ export default function CabinetHome() {
             icon={Wrench}
             tone={TILE.indigo}
             title="Мастера"
-            desc="Сотрудники и их бригады"
+            desc="Сотрудники и их команды"
             href="/cabinet/masters"
           />
             </SectionCard>

@@ -20,6 +20,15 @@ import { readableColorOnTint, readableTextOnColor } from "./color-contrast";
 //                     border (team chips — the hue stays visible when idle)
 //   tint              selected → 8–16% hue tint + hue border + hue label;
 //                     idle → t.fill (filter toggles, tag pickers)
+//   scope             ЛЕНТА ОБЛАСТИ ПРОСМОТРА (`ScopeChips`): выбранный —
+//                     заливка цветом команды, остальные МОНОХРОМНЫ (ink 4% +
+//                     тихий ярлык), а цвет команды у них несёт точка 6pt.
+//                     Почему не `outline`: тот красил обводкой и словом КАЖДЫЙ
+//                     чип, и на денежном экране лента становилась самым пёстрым
+//                     местом — красная команда читалась как «долг», зелёная как
+//                     «приход». Тонируется ровно то, что выбрано (HIG: tint
+//                     only what needs emphasis), и выбранность несёт самый
+//                     сильный признак — заливку, а не толщину линии.
 export function Chip({
   label,
   selected = false,
@@ -43,7 +52,7 @@ export function Chip({
   onPress?: () => void;
   /** Active hue — defaults to accent. Pass t.danger / t.success / team color. */
   color?: string;
-  variant?: "filled" | "outline" | "tint";
+  variant?: "filled" | "outline" | "tint" | "scope";
   /** Trailing count badge (tabular-nums). */
   count?: number;
   /** Leading icon / flag node. */
@@ -77,6 +86,16 @@ export function Chip({
       bg = t.surface;
       fg = color ? readableColorOnTint(hue, t.surface, t.ink, 0) : t.ink;
       border = color ? hue : t.separator;
+    }
+  } else if (variant === "scope") {
+    if (selected) {
+      bg = hue;
+      fg = readableTextOnColor(hue, t.ink, t.onAccent);
+    } else {
+      // Материал покоя — те же чернила на 4%, а не серый пигмент: лента лежит
+      // и на белой шапке, и на канве, и на обеих обязана быть одной вещью.
+      bg = t.rowFill;
+      fg = t.caption;
     }
   } else if (variant === "tint") {
     if (selected) {
@@ -146,6 +165,7 @@ export function Chip({
         {
           minHeight: 32,
           borderRadius: t.radius.pill,
+          borderCurve: "continuous",
           paddingHorizontal: 14,
           flexDirection: "row",
           alignItems: "center",

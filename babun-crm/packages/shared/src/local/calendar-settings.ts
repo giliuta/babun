@@ -9,8 +9,15 @@ export interface CalendarSettings {
    *  treated as "visibleStartHour" but the field name stays for back-
    *  compat with any persisted localStorage entries. */
   startHour: number;
-  /** Visible-grid end hour. 0-23, default 20. */
+  /** Visible-grid end hour. 1-24 (24 = end of day), default 24. */
   endHour: number;
+  /** Минуты границы «С», кратные `MINUTE_STEP`. Вместе с `startHour` дают то,
+   *  что накрутили барабаны контрола времени. Барабан без этого поля был бы
+   *  обманом: 08:30 сохранялось бы как 08:00. */
+  startMinute?: number;
+  /** Минуты границы «До». При `endHour === 24` всегда 0 — 1440-й минуты в
+   *  сутках нет, и барабан минут на этом часе молчит. */
+  endMinute?: number;
   gridStep: 15 | 30 | 60;    // minutes, default 30
   weekStart: "monday" | "sunday";
   timezone: string;           // default "Europe/Nicosia"
@@ -23,6 +30,10 @@ export interface CalendarSettings {
   bufferMinutes?: number;
   /** Hide status=cancelled appointments from the calendar grid. */
   hideCancelled?: boolean;
+  /** Полоса «Доход / Расход» под сеткой. Раньше она пряталась САМА, когда за
+   *  видимую неделю не набиралось денег, — и выглядело это как пропавшая из
+   *  продукта функция (владелец 2026-08-17). Теперь ответ даёт человек. */
+  showDayFinance?: boolean;
   /** Allow an appointment to end past endHour (overflow). */
   allowOvertime?: boolean;
   // v438 — separate working hours from the visible range.
@@ -64,20 +75,27 @@ const STORAGE_KEY = "babun2:settings:calendar";
 const OPERATIONAL_STORAGE_PREFIX = "babun2:settings:calendar:operational";
 
 export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
-  // v439 — visible range covers the whole day (00:00 → 24:00) so the
-  // user can place a late event without changing settings first; the
-  // grid greys out anything outside workStartHour..workEndHour to
-  // visually separate "off-hours" from the work block.
+  // СТАНДАРТ ПРОДУКТА (владелец 2026-08-17): «часы календаря — ноль-ноль до 24,
+  // рабочие часы — с шести до 20:00; кто хочет поменять, тот заходит и меняет».
+  //
+  // Видимый отрезок — сутки целиком, чтобы поздний вызов можно было поставить,
+  // не заходя сперва в настройки; сетка красит серым всё вне
+  // workStartHour..workEndHour, поэтому «нерабочее» и так отличимо от смены.
+  // Пара 0–24 больше НЕ кодовое «Автоматически» — этого режима в продукте нет
+  // (см. features/calendar/window.ts).
   startHour: 0,
   endHour: 24,
+  startMinute: 0,
+  endMinute: 0,
   workStartHour: 6,
-  workEndHour: 22,
+  workEndHour: 20,
   scrollOpenHour: 9,
   gridStep: 30,
   weekStart: "monday",
   timezone: "Europe/Nicosia",
   bufferMinutes: 0,
   hideCancelled: false,
+  showDayFinance: true,
   allowOvertime: false,
 };
 

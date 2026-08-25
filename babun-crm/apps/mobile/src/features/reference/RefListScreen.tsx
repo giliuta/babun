@@ -15,7 +15,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { AddRow } from "@/components/ui/AddRow";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
@@ -205,7 +205,7 @@ export function RefListScreen<T extends { id: string }>({
           accessible={false}
         />
         <View
-          className="rounded-t-3xl p-5 pb-8"
+          className="rounded-t-[10px] p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text style={{ marginBottom: 12, fontSize: 18, fontWeight: "700", color: t.ink }}>
@@ -213,7 +213,7 @@ export function RefListScreen<T extends { id: string }>({
           </Text>
           {fields.map((f, i) =>
             f.type === "color" ? (
-              <ColorPicker
+              <ColorField
                 key={f.key}
                 label={f.label}
                 value={values[f.key]}

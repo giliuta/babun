@@ -23,36 +23,83 @@ import {
 } from "@babun/shared/db/repositories/finance-categories";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { NEVER_PAUSE } from "./accounts";
 
-// Finance transactions over a date range (inclusive on occurred_on),
-// optionally scoped to teams (brigadeIds). RLS scopes to tenant.
+/** Ключ среза журнала. Собирается ОДНОЙ функцией, потому что тот же срез
+ *  берут и хук, и разовая дозагрузка выписки — разъехавшиеся ключи молча
+ *  завели бы две копии одного месяца в кэше. */
+function ledgerRangeKey(
+  tenantId: string | null | undefined,
+  from: string,
+  to: string,
+  teamScope: string[] | null,
+  accountScope: string[] | null,
+) {
+  return ["transactions", tenantId, from, to, teamScope, accountScope];
+}
+
+/**
+ * Журнал за период (границы включительно по `occurred_on`), сужаемый до нужных
+ * команд и/или счетов. Тенант ограничивает RLS.
+ *
+ * `accountIds` — не оптимизация ради оптимизации: карточка обычной кассы
+ * показывает операции ОДНОГО счёта, а тянула месячный срез всего тенанта.
+ * Полный срез остаётся там, где он действительно нужен, — у счёта компании,
+ * где инкассацию атрибуцирует вторая нога перевода, лежащая на чужом счёте.
+ */
 export function useTransactions(
   from: string,
   to: string,
-  brigadeIds?: string[],
+  options: {
+    brigadeIds?: string[];
+    accountIds?: string[];
+    /** `false`, пока экран не знает, какой срез ему нужен: запрос не должен
+     *  уехать за полным журналом только потому, что строка счёта ещё не
+     *  приехала. */
+    enabled?: boolean;
+  } = {},
 ) {
   const tenantId = useTenantId();
-  const scope = brigadeIds?.length ? brigadeIds : null;
+  const teamScope = options.brigadeIds?.length ? options.brigadeIds : null;
+  const accountScope = options.accountIds?.length ? options.accountIds : null;
   return useQuery({
-    queryKey: ["transactions", tenantId, from, to, scope],
-    enabled: !!tenantId,
-    // Смена периода/скоупа держит прошлый срез до прихода нового — экран
-    // не мигает полноэкранным спиннером и не показывает нулевые итоги.
+    queryKey: ledgerRangeKey(tenantId, from, to, teamScope, accountScope),
+    enabled: !!tenantId && (options.enabled ?? true),
+    // Смена периода/скоупа держит прошлый срез до прихода нового — экран не
+    // мигает полноэкранным спиннером и не показывает нулевые итоги. Показывать
+    // его под НОВОЙ подписью нельзя: пока `isPlaceholderData`, экран обязан
+    // гасить цифры, а не выдавать чужой месяц за свой.
     placeholderData: keepPreviousData,
     queryFn: () =>
-      listTransactionsForRange(
-        supabase,
-        tenantId as string,
-        from,
-        to,
-        scope ? { brigadeIds: scope } : undefined,
-      ),
+      listTransactionsForRange(supabase, tenantId as string, from, to, {
+        ...(teamScope ? { brigadeIds: teamScope } : {}),
+        ...(accountScope ? { accountIds: accountScope } : {}),
+      }),
   });
+}
+
+/**
+ * Разовая дозагрузка ПОЛНОГО среза периода — по нажатию, а не подпиской.
+ *
+ * Нужна ровно одному месту: выписке по счёту. Её колонке «Корреспондент» нужна
+ * ВТОРАЯ нога перевода, а она лежит на чужом счёте и в суженный срез карточки
+ * не попадает. Держать ради этой колонки постоянную подписку на журнал всего
+ * тенанта — плохой размен: выписку просят раз в месяц, а карточку открывают
+ * двадцать раз в день.
+ */
+export function useFetchLedgerRange() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return (from: string, to: string) =>
+    qc.fetchQuery({
+      queryKey: ledgerRangeKey(tenantId, from, to, null, null),
+      queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
+    });
 }
 
 // Σ возвратов по каждому исходному доходу (refund_of_id → сумма) — кап для
 // «Создать возврат». Намеренно НЕ оконный запрос (та же логика, что у
-// listAccountBalanceDeltas): возврат датируется сегодняшним днём и может
+// остатков счетов): возврат датируется сегодняшним днём и может
 // лежать ВНЕ просматриваемого периода — периодная выборка занижала бы «уже
 // возвращено» и пропускала бы возвраты сверх остатка. Слим-проекция
 // (refund_of_id, amount) держит пейлоад маленьким; ключ под префиксом
@@ -75,19 +122,27 @@ export function useFinanceCategories() {
   });
 }
 
-// Every transaction write also invalidates ["accounts"] — the prefix covers
-// ["accounts", tenantId, "balances"], whose listAccountBalanceDeltas sums the
-// same ledger rows (web parity: refreshBalances() after each ledger mutation).
+// Каждая запись в журнал сбрасывает и ["accounts"]: под этим префиксом
+// лежат остатки счетов, которые считает тот же журнал (веб-паритет:
+// refreshBalances() после каждой мутации). Периодные итоги счетов живут под
+// ["transactions"] — их роняет первая же строка.
+//
+// ["receipts"] здесь не лишний: чеки выписывает СЕРВЕР триггером в момент
+// проводки дохода, правит при редактировании и оживляет при удалении
+// возврата. Открытая панель «Чеки» смонтирована и без инвалидации не
+// узнаёт о документе, который её же empty state обещает «выписывается сам».
 function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["transactions"] });
   qc.invalidateQueries({ queryKey: ["accounts"] });
   qc.invalidateQueries({ queryKey: ["invoices"] });
+  qc.invalidateQueries({ queryKey: ["receipts"] });
 }
 
 export function useInsertTransaction() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (draft: TransactionDraft) =>
       insertTransaction(supabase, tenantId as string, draft),
     onSuccess: () => invalidateLedger(qc),
@@ -98,6 +153,7 @@ export function useInsertTransaction() {
 export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, patch }: { id: string; patch: Partial<TransactionDraft> }) =>
       updateTransaction(supabase, id, patch),
     onSuccess: () => invalidateLedger(qc),
@@ -108,16 +164,21 @@ export function useUpdateTransaction() {
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (id: string) => deleteTransaction(supabase, id),
     onSuccess: () => invalidateLedger(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });
 }
 
+// Справочники — тоже онлайн-only на запись: без NEVER_PAUSE офлайн-вызов
+// встаёт в paused, mutateAsync не резолвится, и кнопка сохранения категории
+// крутится вечно без ошибки (см. комментарий у NEVER_PAUSE в accounts.ts).
 export function useInsertCategory() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (draft: NewFinanceCategory) =>
       insertFinanceCategory(supabase, tenantId as string, draft),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
@@ -128,6 +189,7 @@ export function useInsertCategory() {
 export function useUpdateCategory() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, patch }: { id: string; patch: FinanceCategoryPatch }) =>
       updateFinanceCategory(supabase, id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
@@ -142,6 +204,7 @@ export function useSetCategoryHidden() {
   const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: ({ id, hidden }: { id: string; hidden: boolean }) =>
       setFinanceCategoryHidden(supabase, tenantId as string, id, hidden),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
@@ -152,6 +215,7 @@ export function useSetCategoryHidden() {
 export function useDeleteCategory() {
   const qc = useQueryClient();
   return useMutation({
+    ...NEVER_PAUSE,
     mutationFn: (id: string) => deleteFinanceCategory(supabase, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
     meta: { errorHandled: true }, // call sites alert themselves

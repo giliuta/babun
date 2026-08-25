@@ -6,27 +6,23 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   CalendarClock,
-  ChevronDown,
   ChevronRight,
-  ChevronUp,
   MapPin,
   Package,
   Users as UsersIcon,
   Wrench,
 } from "lucide-react-native";
-import { TEAM_COLORS } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { Divider } from "@/components/ui/Divider";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { NameColorField } from "@/components/ui/picker-fields";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { ICON } from "@/components/ui/tokens";
@@ -38,7 +34,8 @@ import {
   useTeam,
   useUpdateTeam,
 } from "@/features/reference/queries";
-import { serviceBrigadeIds, useServices } from "@/features/services/queries";
+import { useServices } from "@/features/services/queries";
+import { FORMS_USLUGA, formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 
@@ -107,7 +104,6 @@ export default function TeamHubScreen() {
   const schedule = scheduleQuery.data;
   const update = useUpdateTeam();
 
-  const [colorOpen, setColorOpen] = useState(false);
   const [name, setName] = useState<string | null>(null);
   const [payout, setPayout] = useState<string | null>(null);
 
@@ -237,16 +233,12 @@ export default function TeamHubScreen() {
         ? memberNames.join(" · ")
         : `${memberNames[0]} · ${memberNames[1]} и ещё ${memberNames.length - 2}`;
 
-  // ── Услуги preview — web parity servicesPreview (teams/[id]/page.tsx):
-  // ноль привязанных услуг = «доступны все» (валидная настройка бригады,
-  // сознательно НЕ warning). useServices уже отдаёт только is_active.
-  const teamServicesCount = services.filter((s) =>
-    serviceBrigadeIds(s).includes(team.id),
-  ).length;
+  // ── Услуги команды. С 2026-08-17 услуга принадлежит РОВНО одной команде,
+  // поэтому «не заданы — доступны все» больше не бывает: пустой прайс значит
+  // пустой прайс, и записать работу на такую команду нельзя.
+  const teamServicesCount = services.filter((s) => s.team_id === team.id).length;
   const servicesPreview =
-    teamServicesCount === 0
-      ? "не заданы — доступны все"
-      : `выбрано: ${teamServicesCount}`;
+    teamServicesCount === 0 ? "Прайс пуст" : formatCountRu(teamServicesCount, FORMS_USLUGA);
 
   // ── Метки preview — web parity citiesPreview (teams/[id]/calendar):
   // без меток И без города по умолчанию календарь не подскажет город —
@@ -278,61 +270,21 @@ export default function TeamHubScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: 40 }}
         >
-          {/* Header: colour dot + editable name + colour picker toggle */}
-          <SectionCard>
-            <View className="flex-row items-center px-4 py-3">
-              <Pressable
-                onPress={() => setColorOpen((o) => !o)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Изменить цвет команды"
-                className="mr-3 active:opacity-60"
-              >
-                <View
-                  className="h-6 w-6 rounded-full"
-                  style={{ backgroundColor: team.color ?? t.faint }}
-                />
-              </Pressable>
-          <TextInput
-            value={nameDraft}
-            accessibilityLabel="Название команды"
-                onChangeText={setName}
-                onBlur={commitName}
-                placeholder="Название команды"
-                placeholderTextColor={t.placeholder}
-                selectionColor={t.accent}
-                keyboardAppearance="light"
-                returnKeyType="done"
-                onSubmitEditing={commitName}
-                style={{ flex: 1, fontSize: 18, fontWeight: "600", color: t.ink }}
-              />
-              <Pressable
-                onPress={() => setColorOpen((o) => !o)}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Цвет"
-              >
-                {colorOpen ? (
-                  <ChevronUp color={t.chevron} size={ICON.sm} />
-                ) : (
-                  <ChevronDown color={t.chevron} size={ICON.sm} />
-                )}
-              </Pressable>
-            </View>
-            {colorOpen ? (
-              <>
-                <Divider />
-                <View className="px-4 pt-3">
-                  <ColorPicker
-                    value={team.color}
-                    onChange={(hex) => patch({ color: hex })}
-                    colors={TEAM_COLORS.map((c) => c.value)}
-                    label={null}
-                  />
-                </View>
-              </>
-            ) : null}
-          </SectionCard>
+          {/* ИМЯ И ЦВЕТ БРИГАДЫ — ОДНА СТРОКА, как у услуги и у календаря
+              (владелец 2026-08-18). Здесь стояла своя вёрстка: точка-кнопка,
+              своё поле ввода с литералами и шеврон, раскрывающий палитру
+              внутрь карточки, — третий способ спросить то же самое. Имя
+              коммитится по завершении ввода, цвет — сразу по выбору. */}
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <NameColorField
+              label="Название команды"
+              name={nameDraft}
+              onNameChange={setName}
+              onBlur={commitName}
+              color={team.color}
+              onColorChange={(hex) => patch({ color: hex })}
+            />
+          </View>
 
           {/* Nav rows */}
           <SectionCard className="mt-5">
@@ -396,7 +348,7 @@ export default function TeamHubScreen() {
               returnKeyType="done"
             />
             <Text className="-mt-2 mb-1 text-xs" style={{ color: t.faint }}>
-              Используется для расчёта выплаты бригаде по выполненным работам.
+              Используется для расчёта выплаты команде по выполненным работам.
             </Text>
           </SectionCard>
 

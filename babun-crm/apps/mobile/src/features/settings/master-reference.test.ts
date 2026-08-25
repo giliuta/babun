@@ -41,6 +41,9 @@ describe("master reference projections", () => {
     const service = masterServiceJsonToService({
       id: "service-1",
       tenant_id: "tenant-1",
+      // Проекция мастера отдаёт команду-владельца: с 2026-08-17 услуга
+      // принадлежит ровно одной команде, и по ней собирается его каталог.
+      team_id: "team-1",
       name: "Чистка кондиционера",
       color: "#0A84FF",
       price: 250,
@@ -50,6 +53,7 @@ describe("master reference projections", () => {
     });
 
     assert.equal(service.name, "Чистка кондиционера");
+    assert.equal(service.team_id, "team-1");
     assert.equal(service.color, "#0A84FF");
     assert.equal(service.price, 0);
     assert.equal(service.cost_per_unit, 0);
@@ -61,12 +65,11 @@ describe("master reference projections", () => {
     const service = dispatcherServiceJsonToService({
       id: "service-1",
       tenant_id: "tenant-1",
-      category_id: "category-1",
+      team_id: "team-1",
       name: "Чистка",
       price: 80,
       duration_minutes: 60,
       color: "#0A84FF",
-      is_countable: true,
       price_tiers: [{ min_qty: 3, price_per_unit: 70 }],
       duration_tiers: [{ min_qty: 3, duration_minutes: 45 }],
       bulk_threshold: 3,
@@ -82,7 +85,10 @@ describe("master reference projections", () => {
 
     assert.equal(service.price, 80);
     assert.equal(service.bulk_price, 70);
-    assert.deepEqual(service.brigade_ids, ["team-1"]);
+    // Владелец услуги — одна команда; исторический список команд проекция
+    // больше не отдаёт и маппер его обнуляет.
+    assert.equal(service.team_id, "team-1");
+    assert.deepEqual(service.brigade_ids, []);
     assert.equal(service.cost_per_unit, 0);
     assert.deepEqual(service.material_costs, []);
   });

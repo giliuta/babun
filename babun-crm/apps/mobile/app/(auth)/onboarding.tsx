@@ -156,25 +156,36 @@ function Wizard({
   );
   const [error, setError] = useState<string | null>(null);
 
+  // СЧЕТОВ ЗДЕСЬ БОЛЬШЕ НЕ ЗАВОДИМ (владелец 2026-08-15: «общий счёт полностью
+  // убираем, счёт создаётся чётко на каждую команду»). Регистрация заводила
+  // «Наличные», «Расчётный счёт» и «Карту» СРАЗУ НА КОМПАНИЮ — то есть ровно ту
+  // сущность, которой в продукте не осталось; команды в этот момент ещё нет, и
+  // приписать деньги некому. Счета приезжают вместе с первой командой
+  // (`useCreateTeamAccounts` на экране команд), и раздел денег пустым не
+  // остаётся.
+  const saving = complete.isPending;
+
   const commit = (next: "team" | "calendar") => {
-    if (complete.isPending || !name.trim() || !vertical) return;
+    if (saving || !name.trim() || !vertical) return;
     setError(null);
-    complete.mutate(
-      { tenantId, name, vertical },
-      {
-        onSuccess: () => {
-          // Инвалидация tenant-состояния уже в onSuccess мутации — входим в
-          // dashboard без перезапуска приложения.
-          router.replace(next === "team" ? "/cabinet/teams" : "/");
+    void (async () => {
+      complete.mutate(
+        { tenantId, name, vertical },
+        {
+          onSuccess: () => {
+            // Инвалидация tenant-состояния уже в onSuccess мутации — входим в
+            // dashboard без перезапуска приложения.
+            router.replace(next === "team" ? "/cabinet/teams" : "/");
+          },
+          onError: (e) =>
+            setError(
+              e instanceof Error && e.message
+                ? e.message
+                : "Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.",
+            ),
         },
-        onError: (e) =>
-          setError(
-            e instanceof Error && e.message
-              ? e.message
-              : "Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.",
-          ),
-      },
-    );
+      );
+    })();
   };
 
   return (
@@ -199,7 +210,7 @@ function Wizard({
         <StepDone
           name={name}
           vertical={vertical}
-          saving={complete.isPending}
+          saving={saving}
           error={error}
           onBack={() => setStep(2)}
           onCommit={commit}

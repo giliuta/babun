@@ -44,7 +44,58 @@ const TRAPS: { tag: string; danger: RegExp; hint: string }[] = [
   },
 ];
 
+// `tabular-nums` В КЛАССЕ — МОЛЧАЛИВАЯ ПУСТЫШКА.
+//
+// react-native-css реализует из font-variant только `font-variant-caps`;
+// font-variant-numeric в пакете отсутствует, поэтому
+// `className="tabular-nums"` не доходит до текста ВООБЩЕ. Цифры в колонке
+// остатков гуляют по ширине при каждом рефетче, и на скриншоте это не
+// видно — только глазом на живом списке. Работает ровно одно:
+// `style={{ fontVariant: ["tabular-nums"] }}`.
+//
+// TODO: снять ограничение области и распространить правило на весь
+// apps/mobile — в продукте ещё 85 таких классов в 32 файлах (финансы,
+// клиенты, календарь, склад). Они правятся общей уборкой отдельной
+// задачей; пока правило держит только экраны счетов, где деньги
+// пересчитываются чаще всего.
+const TABULAR_SCOPE = [
+  "app/accounts",
+  "src/features/finances/AccountCreateSheet.tsx",
+  "src/features/finances/TransferSheet.tsx",
+];
+
+/** Классы всех `className` файла вместе с номером строки. */
+function classNamesOf(src: string): { cls: string; line: number }[] {
+  const out: { cls: string; line: number }[] = [];
+  for (const m of src.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
+    out.push({
+      cls: m[1] ?? m[2] ?? "",
+      line: src.slice(0, m.index).split("\n").length,
+    });
+  }
+  return out;
+}
+
 describe("ловушки nativewind", () => {
+  test("деньги счетов держат tabular-nums стилем, а не классом", () => {
+    const offenders: string[] = [];
+    for (const rel of TABULAR_SCOPE) {
+      const full = join(root, rel);
+      const files = statSync(full).isDirectory() ? walk(full) : [full];
+      for (const file of files) {
+        for (const { cls, line } of classNamesOf(readFileSync(file, "utf8"))) {
+          if (/\btabular-nums\b/.test(cls)) {
+            offenders.push(
+              `${file.replace(root + "/", "")}:${line} — класс "tabular-nums" ` +
+                'ничего не делает; перенесите в style={{ fontVariant: ["tabular-nums"] }}',
+            );
+          }
+        }
+      }
+    }
+    assert.deepEqual(offenders, []);
+  });
+
   test("textAlign и backgroundColor не приходят из класса", () => {
     const offenders: string[] = [];
     for (const file of [...walk(join(root, "src")), ...walk(join(root, "app"))]) {

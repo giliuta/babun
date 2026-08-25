@@ -11,6 +11,7 @@ import {
 } from "@/features/clients/queries";
 import { mergeClientPatch, phoneKey } from "@/features/clients/merge-clients";
 import { useToast } from "@/components/ui/Toast";
+import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -130,7 +131,7 @@ export function DuplicateNotice({ client }: { client: Client }) {
         flexDirection: "row",
         alignItems: "flex-start",
         gap: 12,
-        marginHorizontal: 12,
+        marginHorizontal: GUTTER,
         marginTop: 8,
         paddingHorizontal: 16,
         paddingVertical: 16,

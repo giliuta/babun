@@ -34,6 +34,11 @@ describe("operational calendar settings repository", () => {
     expect(settings).toEqual({
       startHour: 7,
       endHour: 23,
+      // Минуты окна у мастерского среза пока нулевые: их нет в сигнатуре
+      // `read_operational_calendar_settings_safe`, и проекция честно ставит 0,
+      // а не выдумывает значение. Рельс мастера встаёт на целый час.
+      startMinute: 0,
+      endMinute: 0,
       gridStep: 15,
       weekStart: "sunday",
       timezone: "Asia/Dubai",
@@ -46,6 +51,25 @@ describe("operational calendar settings repository", () => {
     });
     expect(settings).not.toHaveProperty("personalLabels");
     expect(settings).not.toHaveProperty("personalDefaultLabel");
+  });
+
+  // КОНТРАКТ НА ДЕНЬ, КОГДА RPC НАУЧИТСЯ МИНУТАМ. Фолбэк `?? 0` обязан
+  // отступать перед реальным значением, а не глотать его: иначе рельс мастера
+  // молча округлит окно, которое владелец выставил барабаном.
+  test("минуты окна проходят насквозь, когда RPC их отдаёт", async () => {
+    const supabase = {
+      rpc() {
+        return Promise.resolve({
+          data: [{ ...OPERATIONAL_ROW, start_minute: 30, end_minute: 45 }],
+          error: null,
+        });
+      },
+    };
+
+    const settings = await getOperationalCalendarSettings(supabase as never);
+
+    expect(settings.startMinute).toBe(30);
+    expect(settings.endMinute).toBe(45);
   });
 
   test("keeps the PostgREST code for strict fallback decisions", async () => {

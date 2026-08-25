@@ -1,14 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Check, ChevronRight } from "lucide-react-native";
 import {
@@ -18,19 +9,25 @@ import {
 } from "@babun/shared/local/appointments";
 import { getDayExtras, sumExtras } from "@babun/shared/local/day-extras";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
+import { isOnline, useIsOnline } from "@babun/shared/sync";
 import {
-  getCurrentCyprusTime,
-  getCurrentTimeInZone,
-} from "@babun/shared/common/utils/date-utils";
+  FORMS_KASSA,
+  FORMS_ZAPIS,
+  formatCountRu,
+} from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { Divider } from "@/components/ui/Divider";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
+import { todayYmd } from "@/features/invoices/format";
 import { useAppointments, useDayExtras } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
@@ -38,13 +35,39 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { buildDebtPaidPatch } from "@/features/appointments/payment";
 import { unclosedAppointments } from "@babun/shared/local/selectors/unclosed";
 import {
-  cashCentsToInput,
-  parseCashInputToCents,
   useCloseDay,
   useDayClosure,
   useReopenDay,
 } from "@/features/settings/day-closures";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { KIND_ICON } from "@/features/finances/account-ui";
+import {
+  brigadeTitle,
+  cashCountAlert,
+  sortAccountRows,
+} from "@/features/finances/accounts-sections";
+import { lastCountedOn, useLastCashCounts } from "@/features/finances/cash-counts";
+import { CashCountSheet } from "@/features/finances/CashCountSheet";
+
+// ЗАКРЫТИЕ ДНЯ — ВТОРАЯ ДВЕРЬ ОДНОЙ МЕХАНИКИ (ТЗ счетов 2026-08-10 §5.5).
+//
+// Поля «сколько денег в кассе фактически» на этом экране БОЛЬШЕ НЕТ. Оно и
+// было тем самым вторым числом: одна и та же касса отвечала на один и тот же
+// вопрос дважды — здесь пальцем и в пересчёте кассы, — и через неделю ответы
+// расходились, не сообщая, какой из них правда. Теперь экран показывает, какие
+// кассы уже пересчитаны за сегодня, а какие нет, и открывает тот же лист
+// пересчёта; факт дня складывает сервер из сверок.
+//
+// ОЖИДАЕМОЙ СУММЫ ЗДЕСЬ ТОЖЕ НЕТ. Строка «Должно быть» стояла ровно там, где
+// человек собирается считать деньги, — а увидев учётную цифру, её вписывают.
+// Это и есть слепой ввод: остаток по учёту показывается ПОСЛЕ ввода, внутри
+// листа пересчёта, и только своей кассы.
+
+/** Закрытие дня — серверная запись, как перевод и пересчёт: без сети кнопка
+ *  гаснет и объясняет себя, а не крутится (ТЗ счетов §8). */
+const OFFLINE_DAY_CLOSE =
+  "Без сети день не закрывается — он закрывается на сервере.";
 
 function Row({
   label,
@@ -62,8 +85,9 @@ function Row({
         {label}
       </Text>
       <Text
-        className={`text-[15px] tabular-nums ${tone ? "font-bold" : "font-semibold"}`}
+        className={`text-[15px] ${tone ? "font-bold" : "font-semibold"}`}
         style={{
+          fontVariant: ["tabular-nums"],
           color:
             tone === "green" ? t.success : tone === "red" ? t.danger : t.ink,
         }}
@@ -78,7 +102,11 @@ export default function CloseDayScreen() {
   const appointmentsQuery = useAppointments();
   const clientsQuery = useClients();
   const extrasQuery = useDayExtras();
-  const teamsQuery = useTeams();
+  // ВСЕ команды, включая архивные: касса живёт дольше своей команды, и её имя
+  // нужно строке пересчёта. Деньги дня тоже считаются по всем: визит архивной
+  // команды в доход входит, значит её ручной day-extra обязан входить так же
+  // (веб-паритет — computeFinancials на is_active не смотрит).
+  const teamsQuery = useTeams({ includeInactive: true });
   const calendarSettingsQuery = useCalendarSettings();
   const appts = useMemo(
     () => appointmentsQuery.data ?? [],
@@ -98,33 +126,26 @@ export default function CloseDayScreen() {
   const toast = useToast();
   const t = useThemeColors();
   const router = useRouter();
+  const online = useIsOnline();
 
   // Recomputed on focus in the company's BUSINESS timezone: a dispatcher may
   // use a phone configured for another country, while the server closes days
   // according to calendar_settings.timezone. Both sides must address the same
   // date around midnight.
   const readBusinessToday = useCallback(
-    () =>
-      formatYMD(
-        calendarSettings?.timezone
-          ? getCurrentTimeInZone(calendarSettings.timezone)
-          : getCurrentCyprusTime(),
-      ),
+    // Тот же todayYmd, что на «Финансах»: он же переживает битую таймзону.
+    () => todayYmd(calendarSettings?.timezone),
     [calendarSettings?.timezone],
   );
-  const [todayKey, setTodayKey] = useState(() =>
-    formatYMD(getCurrentCyprusTime()),
-  );
+  // Первый кадр читает ТУ ЖЕ таймзону из кэша: инициализация «по Кипру»
+  // группировала записи и кассы по чужой дате до первого фокуса — мигание
+  // списков около полуночи.
+  const [todayKey, setTodayKey] = useState(readBusinessToday);
   useFocusEffect(
     useCallback(() => {
       setTodayKey(readBusinessToday());
     }, [readBusinessToday]),
   );
-  const [actualCashStr, setActualCashStr] = useState("");
-  useEffect(() => {
-    setActualCashStr("");
-  }, [todayKey]);
-
   const nameById = useMemo(
     () => new Map(clients.map((c) => [c.id, c.full_name])),
     [clients],
@@ -132,7 +153,7 @@ export default function CloseDayScreen() {
   const clientName = (a: Appointment) =>
     (a.client_id && nameById.get(a.client_id)) || a.comment || "Запись";
 
-  const { completed, inProgress, stillScheduled, unpaid, income, cash } =
+  const { completed, inProgress, stillScheduled, unpaid, income } =
     useMemo(() => {
       const day = appts.filter((a) => a.date === todayKey);
       const completed = day.filter((a) => a.status === "completed");
@@ -148,8 +169,9 @@ export default function CloseDayScreen() {
       // invoiced total_amount, PLUS the manual day-extras income across
       // all teams — mirrors fin.totalIncome on the web close-day page
       // (computeFinancials with dayExtrasOf=getExtrasFor) and the mobile
-      // calendar footer (computeDayFinance). Extras deliberately do NOT
-      // touch the expected till cash — same as compute.ts.
+      // calendar footer (computeDayFinance). Учётный остаток касс этот экран
+      // больше не считает: его знает сервер, и спрашивают его в листе
+      // пересчёта — после того, как деньги посчитаны руками.
       const extrasIncome = teams.reduce(
         (s, team) =>
           s + sumExtras(getDayExtras(extrasMap, team.id, todayKey)).income,
@@ -157,39 +179,70 @@ export default function CloseDayScreen() {
       );
       const income =
         till.reduce((s, a) => s + getPaidAmount(a), 0) + extrasIncome;
-      // Expected TILL cash = cash-method payments + cash prepayments only.
-      // A card/transfer prepayment must never inflate the physical till.
-      // Cancelled/scheduled visits never hit the till in this operational
-      // close-out view.
-      const cash = till.reduce((s, a) => {
-        // Full refunds retain their original receipt rows for audit history;
-        // those rows are no longer money expected in the current cashbox.
-        if (a.payment_status === "refunded") return s;
-        let c = (a.payments ?? [])
-          .filter((p) => p.method === "cash" && p.amount > 0)
-          .reduce((ps, p) => ps + p.amount, 0);
-        if ((a.prepaid_amount ?? 0) > 0 && a.payment_method === "cash") {
-          c += a.prepaid_amount;
-        }
-        return s + c;
-      }, 0);
-      return { completed, inProgress, stillScheduled, unpaid, income, cash };
+      return { completed, inProgress, stillScheduled, unpaid, income };
     }, [appts, todayKey, extrasMap, teams]);
 
-  const fallbackExpectedCashCents = Math.round(cash * 100);
-  const closureQuery = useDayClosure(todayKey, fallbackExpectedCashCents);
-  const closeMutation = useCloseDay(todayKey, fallbackExpectedCashCents);
-  const reopenMutation = useReopenDay(todayKey, fallbackExpectedCashCents);
+  const closureQuery = useDayClosure(todayKey);
+  const closeMutation = useCloseDay(todayKey);
+  const reopenMutation = useReopenDay(todayKey);
   const closureState = closureQuery.data;
   const closedRec = closureState?.isClosed ? closureState : null;
   const closed = !!closedRec;
-  const expectedCashCents =
-    closureState?.expectedCashCents ?? fallbackExpectedCashCents;
-  const expectedCash = expectedCashCents / 100;
-  const actualCashCents = parseCashInputToCents(actualCashStr);
-  const deltaCents =
-    actualCashCents == null ? null : actualCashCents - expectedCashCents;
-  const delta = (deltaCents ?? 0) / 100;
+
+  // ─── Кассы и их сверки ───────────────────────────────────────────────────
+
+  const accountsQuery = useAccountsWithBalances();
+  const cashCounts = useLastCashCounts();
+  const [countingId, setCountingId] = useState<string | null>(null);
+
+  // Наличные кассы компании — ровно тот набор, который умеет пересчитывать
+  // сервер (`kind='cash'` и только живые счета: закрытую кассу он отобьёт).
+  const registers = useMemo(() => {
+    const cashAccounts = (accountsQuery.data ?? []).filter(
+      (a) => a.kind === "cash",
+    );
+    return sortAccountRows(cashAccounts).map((account) => {
+      const count = cashCounts.last?.byAccount.get(account.id) ?? null;
+      const countedToday = count?.businessDate === todayKey ? count : null;
+      const team = account.brigade_id
+        ? teams.find((item) => item.id === account.brigade_id)
+        : null;
+      return {
+        account,
+        countedToday,
+        owner:
+          // У счёта один владелец — команда (владелец 2026-08-15).
+          team
+            ? brigadeTitle(team.name)
+              : // Команду удалили, а деньги в кассе остались: пересчитать её
+                // всё равно надо, и назвать строку — тоже.
+                "Команда удалена",
+        // Та же янтарная правда, что в строке счёта на /accounts: «Не сверяли
+        // 12 дней» обязано читаться одинаково на обоих экранах.
+        alert: cashCountAlert(
+          lastCountedOn(cashCounts.last, account.id),
+          account.first_tx_on,
+          todayKey,
+        ),
+      };
+    });
+  }, [accountsQuery.data, cashCounts.last, teams, todayKey]);
+
+  const counting = countingId
+    ? (registers.find((r) => r.account.id === countingId)?.account ?? null)
+    : null;
+  const countedTodayCount = registers.filter((r) => r.countedToday).length;
+  const pendingRegisters = registers.length - countedTodayCount;
+  /** Факт дня по сверкам — ровно то, что сложит сервер. Клиент его печатает и
+   *  (пока не применена миграция) отдаёт старой сигнатуре закрытия. */
+  const countedCents = registers.reduce(
+    (sum, r) => sum + Math.round((r.countedToday?.counted ?? 0) * 100),
+    0,
+  );
+  const countedDeltaCents = registers.reduce(
+    (sum, r) => sum + Math.round((r.countedToday?.delta ?? 0) * 100),
+    0,
+  );
 
   // Следующий шаг после закрытия: бэклог прошлых дней (тот же фильтр, что
   // и в unclosed.tsx / бейдже хаба) — деньги «под вопросом» важнее всего.
@@ -214,6 +267,7 @@ export default function CloseDayScreen() {
       },
       {
         onSuccess: () => {
+          haptics.success();
           toast("Оплата отмечена");
           void closureQuery.refetch();
         },
@@ -237,33 +291,49 @@ export default function CloseDayScreen() {
   };
 
   const doCloseDay = async () => {
-    if (actualCashCents == null) {
-      Alert.alert(
-        "Проверьте сумму",
-        "Введите сумму в евро и не больше двух знаков после запятой.",
-      );
-      return;
-    }
     try {
-      await closeMutation.mutateAsync(actualCashCents);
+      await closeMutation.mutateAsync(countedCents);
+      haptics.success();
       toast("День закрыт");
     } catch (error) {
+      // Связь могла пропасть МЕЖДУ нажатием и ответом: тогда причина — не
+      // сырое «Network request failed», а закрытая дверь.
       Alert.alert(
         "Не удалось закрыть день",
-        error instanceof Error ? error.message : "Повторите попытку.",
+        !isOnline()
+          ? OFFLINE_DAY_CLOSE
+          : error instanceof Error
+            ? error.message
+            : "Повторите попытку.",
       );
     }
   };
-  // Web parity (close-day page): closing with scheduled work left is a
-  // conscious decision — confirm it instead of silently burying visits.
+  // Закрыть день с хвостами — сознательное решение, а не промах. Вопрос ОДИН
+  // на оба хвоста: два алерта подряд читаются как поломка и приучают жать
+  // «Закрыть», не читая.
   const closeDay = () => {
+    const leftovers: string[] = [];
     if (stillScheduled.length > 0) {
+      leftovers.push(
+        `${formatCountRu(stillScheduled.length, FORMS_ZAPIS)} не выполнены`,
+      );
+    }
+    if (pendingRegisters > 0) {
+      leftovers.push(`${formatCountRu(pendingRegisters, FORMS_KASSA)} не сверены`);
+    }
+    if (leftovers.length > 0) {
+      // Хвост называет последствие ИМЕННО оставшегося хвоста: предупреждение
+      // о кассах при полностью сверенных кассах — враньё экрана.
       Alert.alert(
-        "Остались запланированные записи",
-        `${stillScheduled.length} записей не выполнены. Закрыть день всё равно?`,
+        "Закрыть день?",
+        `${leftovers.join(" · ")}. ${
+          pendingRegisters > 0
+            ? "Несверенные кассы в итог дня не войдут."
+            : "Невыполненные записи останутся в «Не закрыто»."
+        }`,
         [
           { text: "Отмена", style: "cancel" },
-          { text: "Закрыть", onPress: () => void doCloseDay() },
+          { text: "Закрыть день", onPress: () => void doCloseDay() },
         ],
       );
       return;
@@ -281,11 +351,16 @@ export default function CloseDayScreen() {
           onPress: async () => {
             try {
               await reopenMutation.mutateAsync();
+              haptics.success();
               toast("День открыт");
             } catch (error) {
               Alert.alert(
                 "Не удалось открыть день",
-                error instanceof Error ? error.message : "Повторите попытку.",
+                !isOnline()
+                  ? "Без сети день не открывается — он открывается на сервере."
+                  : error instanceof Error
+                    ? error.message
+                    : "Повторите попытку.",
               );
             }
           },
@@ -308,7 +383,14 @@ export default function CloseDayScreen() {
     (calendarSettingsQuery.data === undefined
       ? calendarSettingsQuery.error
       : null);
-  const loadError = sourceError || closureQuery.error;
+  // Счета и сверки — часть ответа «что с кассами»: без них экран не имеет
+  // права предлагать закрыть день, иначе список касс молча окажется пустым и
+  // прочитается как «сверять нечего».
+  const loadError =
+    sourceError
+    || closureQuery.error
+    || (accountsQuery.data === undefined ? accountsQuery.error : null)
+    || (cashCounts.last === undefined ? cashCounts.error : null);
   const refreshAll = () =>
     void Promise.all([
       appointmentsQuery.refetch(),
@@ -317,9 +399,16 @@ export default function CloseDayScreen() {
       teamsQuery.refetch(),
       calendarSettingsQuery.refetch(),
       closureQuery.refetch(),
+      accountsQuery.refetch(),
+      cashCounts.refetch(),
     ]);
 
-  if (sourceLoading || closureQuery.isLoading) {
+  if (
+    sourceLoading
+    || closureQuery.isLoading
+    || accountsQuery.isLoading
+    || (cashCounts.isLoading && cashCounts.last === undefined)
+  ) {
     return (
       <Screen edges={["top"]}>
         <ScreenHeader title="Закрыть день" />
@@ -353,25 +442,20 @@ export default function CloseDayScreen() {
   return (
     <Screen edges={["top"]}>
       <ScreenHeader title="Закрыть день" />
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
       <ScrollView
         className="flex-1"
-        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingBottom: 32 }}
       >
         {closedRec ? (
           <View
-            className="mx-3 mt-2 flex-row items-start gap-3 rounded-2xl p-4"
-            style={{ backgroundColor: t.success + "1a" }}
+            className="mx-3 mt-2 flex-row items-start gap-3 p-4"
+            style={{ backgroundColor: t.success + "1a", borderRadius: t.radius.card }}
           >
             <View
-              className="h-10 w-10 items-center justify-center rounded-xl"
-              style={{ backgroundColor: t.success }}
+              className="h-10 w-10 items-center justify-center"
+              style={{ backgroundColor: t.success, borderRadius: t.radius.input }}
             >
-              <Check color="#fff" size={22} strokeWidth={2.5} />
+              <Check color={t.onAccent} size={22} strokeWidth={2.5} />
             </View>
             <View className="flex-1">
               <Text
@@ -380,17 +464,31 @@ export default function CloseDayScreen() {
               >
                 День закрыт
               </Text>
+              {/* Цифры закрытого дня печатаются СЕРВЕРНЫЕ: он сложил сверки
+                  под замком, и его ответ — единственный. */}
               <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }}>
                 {closedRec.actualCashCents == null ||
                 closedRec.deltaCashCents == null
                   ? "Фактическая касса не была сохранена"
-                  : `Касса ${formatEUR(closedRec.actualCashCents / 100)} · ${
-                      closedRec.deltaCashCents === 0
-                        ? "без расхождений"
-                        : closedRec.deltaCashCents > 0
-                          ? `излишек ${formatEUR(closedRec.deltaCashCents / 100)}`
-                          : formatEUR(closedRec.deltaCashCents / 100)
-                    }`}
+                  : // Все три колонки в нуле и сверок за день нет — значит
+                    // кассы не считали, а не «насчитали €0».
+                    countedTodayCount === 0
+                      && closedRec.actualCashCents === 0
+                      && closedRec.expectedCashCents === 0
+                    ? "Кассы в этот день не сверяли"
+                    : `По учёту ${formatEUR(
+                        closedRec.expectedCashCents / 100,
+                      )} · насчитали ${formatEUR(
+                        closedRec.actualCashCents / 100,
+                      )} · ${
+                        closedRec.deltaCashCents === 0
+                          ? "сходится"
+                          : closedRec.deltaCashCents > 0
+                            ? `излишек ${formatEUR(closedRec.deltaCashCents / 100)}`
+                            : `недостача ${formatEUR(
+                                Math.abs(closedRec.deltaCashCents) / 100,
+                              )}`
+                      }`}
               </Text>
               <Pressable
                 onPress={reopen}
@@ -412,8 +510,12 @@ export default function CloseDayScreen() {
                   onPress={() => router.push("/cabinet/unclosed")}
                   accessibilityRole="button"
                   accessibilityLabel={`Незакрытые дни, ${unclosedPast}`}
-                  className="mt-3 flex-row items-center justify-between rounded-xl px-3 active:opacity-70"
-                  style={{ minHeight: 44, backgroundColor: t.surface }}
+                  className="mt-3 flex-row items-center justify-between px-3 active:opacity-70"
+                  style={{
+                    minHeight: 44,
+                    backgroundColor: t.surface,
+                    borderRadius: t.radius.input,
+                  }}
                 >
                   <Text
                     className="text-[14px] font-semibold"
@@ -423,8 +525,8 @@ export default function CloseDayScreen() {
                   </Text>
                   <View className="flex-row items-center gap-1">
                     <Text
-                      className="text-[14px] font-bold tabular-nums"
-                      style={{ color: t.warning }}
+                      className="text-[14px] font-bold"
+                      style={{ color: t.warning, fontVariant: ["tabular-nums"] }}
                     >
                       {unclosedPast}
                     </Text>
@@ -451,8 +553,11 @@ export default function CloseDayScreen() {
             {unpaid.map((apt) => (
               <View
                 key={apt.id}
-                className="mx-3 my-1 flex-row items-center gap-3 rounded-xl p-2"
-                style={{ backgroundColor: t.danger + "0d" }}
+                className="mx-3 my-1 flex-row items-center gap-3 p-2"
+                style={{
+                  backgroundColor: t.danger + "0d",
+                  borderRadius: t.radius.input,
+                }}
               >
                 <View className="flex-1">
                   <Text
@@ -463,8 +568,8 @@ export default function CloseDayScreen() {
                     {clientName(apt)}
                   </Text>
                   <Text
-                    className="text-xs tabular-nums"
-                    style={{ color: t.sub }}
+                    className="text-xs"
+                    style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
                     {apt.time_start} · долг {formatEUR(getDebtAmount(apt))}
                   </Text>
@@ -474,15 +579,16 @@ export default function CloseDayScreen() {
                   disabled={update.isPending}
                   accessibilityRole="button"
                   accessibilityLabel={`${clientName(apt)}: отметить долг оплаченным наличными`}
-                  className="min-h-11 items-center justify-center rounded-lg px-3 active:opacity-80"
+                  className="min-h-11 items-center justify-center px-3 active:opacity-80"
                   style={{
                     backgroundColor: t.success,
+                    borderRadius: t.radius.input,
                     opacity: update.isPending ? 0.55 : 1,
                   }}
                 >
                   <Text
                     className="text-[13px] font-semibold"
-                    style={{ color: "#fff" }}
+                    style={{ color: t.onAccent }}
                   >
                     Оплачено
                   </Text>
@@ -492,8 +598,11 @@ export default function CloseDayScreen() {
             {stillScheduled.map((apt) => (
               <View
                 key={apt.id}
-                className="mx-3 my-1 flex-row items-center gap-3 rounded-xl p-2"
-                style={{ backgroundColor: t.warning + "1a" }}
+                className="mx-3 my-1 flex-row items-center gap-3 p-2"
+                style={{
+                  backgroundColor: t.warning + "1a",
+                  borderRadius: t.radius.input,
+                }}
               >
                 <View className="flex-1">
                   <Text
@@ -504,8 +613,8 @@ export default function CloseDayScreen() {
                     {clientName(apt)}
                   </Text>
                   <Text
-                    className="text-xs tabular-nums"
-                    style={{ color: t.sub }}
+                    className="text-xs"
+                    style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
                   >
                     {apt.time_start}–{apt.time_end} · ещё в плане
                   </Text>
@@ -515,9 +624,10 @@ export default function CloseDayScreen() {
                   disabled={update.isPending}
                   accessibilityRole="button"
                   accessibilityLabel={`${clientName(apt)}: перенести запись на завтра`}
-                  className="min-h-11 items-center justify-center rounded-lg px-3 active:opacity-80"
+                  className="min-h-11 items-center justify-center px-3 active:opacity-80"
                   style={{
                     backgroundColor: t.fill,
+                    borderRadius: t.radius.input,
                     opacity: update.isPending ? 0.55 : 1,
                   }}
                 >
@@ -536,99 +646,104 @@ export default function CloseDayScreen() {
 
         {!closed ? (
           <>
-          <SectionEyebrow>Касса</SectionEyebrow>
-          <SectionCard padded>
-            <View className="flex-row items-baseline justify-between">
-              <Text className="text-[15px]" style={{ color: t.sub }}>
-                Должно быть
+          <SectionEyebrow>Кассы</SectionEyebrow>
+          <SectionCard>
+            {registers.length === 0 ? (
+              <Text className="px-4 py-3 text-[13px]" style={{ color: t.faint }}>
+                Наличных касс нет — сверять нечего.
               </Text>
-              <Text
-                className="text-[15px] font-semibold tabular-nums"
-                style={{ color: t.ink }}
-              >
-                {formatEUR(expectedCash)}
-              </Text>
-            </View>
-            <Text
-              className="mb-1.5 mt-3 text-[12px] font-semibold uppercase tracking-wider"
-              style={{ color: t.sub }}
-            >
-              Сколько в кассе фактически (€)
-            </Text>
-            <TextInput
-              value={actualCashStr}
-              accessibilityLabel="Фактическая сумма наличных"
-              onChangeText={setActualCashStr}
-              keyboardType="decimal-pad"
-              placeholder={cashCentsToInput(expectedCashCents)}
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              className="h-12 rounded-[10px] px-3.5 text-[17px] tabular-nums"
-              style={{
-                backgroundColor: t.fill,
-                color: t.ink,
-              }}
-            />
-            {/* Тап-чип — заполняет поле ожидаемой суммой (сознательный тап,
-                не автозаполнение: пересчёт кассы должен остаться честным). */}
-            <Pressable
-              onPress={() =>
-                setActualCashStr(cashCentsToInput(expectedCashCents))
-              }
-              disabled={expectedCashCents < 0}
-              accessibilityRole="button"
-              accessibilityLabel={`Заполнить ожидаемой суммой ${formatEUR(expectedCash)}`}
-              className="mt-2 min-h-11 self-start justify-center rounded-full px-3 active:opacity-60"
-              style={{
-                backgroundColor: "rgba(44,91,224,0.10)",
-                opacity: expectedCashCents < 0 ? 0.45 : 1,
-              }}
-            >
-              <Text
-                className="text-[13px] font-medium tabular-nums"
-                style={{ color: t.accent }}
-              >
-                = Должно быть {formatEUR(expectedCash)}
-              </Text>
-            </Pressable>
-            {actualCashCents != null && deltaCents != null ? (
-              <Text
-                className="mt-2 text-[13px] font-medium tabular-nums"
-                style={{ color: delta >= 0 ? t.success : t.danger }}
-              >
-                {delta === 0
-                  ? "Касса сошлась"
-                  : delta > 0
-                    ? `Излишек ${formatEUR(delta)}`
-                    : `Не хватает ${formatEUR(Math.abs(delta))}`}
-              </Text>
-            ) : null}
-            {actualCashStr && actualCashCents == null ? (
-              <Text className="mt-2 text-[13px]" style={{ color: t.danger }}>
-                Введите сумму без минуса и не больше двух знаков после запятой
-              </Text>
-            ) : null}
-            <View className="mt-4">
-              <Button
-                label={closeMutation.isPending ? "Закрываем…" : "Закрыть день"}
-                onPress={closeDay}
-                disabled={actualCashCents == null || closeMutation.isPending}
-              />
-            </View>
-            {!actualCashStr ? (
-              <Text
-                className="mt-2 text-center text-[13px]"
-                style={{ color: t.faint }}
-              >
-                Введите фактическую сумму в кассе
-              </Text>
-            ) : null}
+            ) : (
+              registers.map((item, index) => (
+                <View key={item.account.id}>
+                  {index > 0 ? <Divider inset={48} /> : null}
+                  <SettingsRow
+                    icon={KIND_ICON.cash}
+                    title={item.account.name}
+                    sub={
+                      item.countedToday
+                        ? `${item.owner} · сверено сегодня`
+                        : `${item.owner} · ${
+                            item.alert
+                              ? item.alert.toLowerCase()
+                              : "сегодня не сверяли"
+                          }`
+                    }
+                    subColor={item.countedToday ? undefined : t.warning}
+                    /* Суммы в строке НЕТ намеренно: увидев остаток по учёту
+                       рядом с кнопкой «пересчитать», его же и вписывают. */
+                    value={
+                      item.countedToday
+                        ? formatEUR(item.countedToday.counted)
+                        : undefined
+                    }
+                    onPress={() => setCountingId(item.account.id)}
+                  />
+                </View>
+              ))
+            )}
           </SectionCard>
+          <Text
+            className="mx-4 mt-1.5 text-[13px]"
+            style={{ color: t.faint, lineHeight: 18 }}
+          >
+            {registers.length === 0
+              ? "День закроется без сверки касс."
+              : pendingRegisters === 0
+                ? "Все кассы сверены. Итог дня сложится из этих сверок."
+                : `Сверено ${countedTodayCount} из ${registers.length}. `
+                  + "Несверенные кассы в итог дня не войдут."}
+          </Text>
+
+          {countedTodayCount > 0 ? (
+            <SectionCard>
+              <Row label="Насчитали" value={formatEUR(countedCents / 100)} />
+              {countedDeltaCents !== 0 ? (
+                <Row
+                  label={countedDeltaCents > 0 ? "Излишек" : "Недостача"}
+                  value={formatEUR(Math.abs(countedDeltaCents) / 100)}
+                  tone={countedDeltaCents > 0 ? "green" : "red"}
+                />
+              ) : (
+                <Row label="Расхождений" value="нет" tone="green" />
+              )}
+            </SectionCard>
+          ) : null}
+
+          <View className="mx-3 mt-4">
+            <Button
+              label={closeMutation.isPending ? "Закрываем…" : "Закрыть день"}
+              onPress={closeDay}
+              // Закрытие дня пишется на сервере. Без сети кнопка гаснет и
+              // называет причину строкой ниже: крутящаяся кнопка не отвечает
+              // на единственный вопрос — закрылся день или нет (§8).
+              disabled={closeMutation.isPending || !online}
+            />
+            {online ? null : (
+              <Text
+                className="mt-1.5 text-[13px]"
+                style={{ color: t.faint, lineHeight: 18 }}
+              >
+                {OFFLINE_DAY_CLOSE}
+              </Text>
+            )}
+          </View>
           </>
         ) : null}
       </ScrollView>
-      </KeyboardAvoidingView>
+
+      {/* ТОТ ЖЕ ЛИСТ, что и на счетах: сверка у продукта одна, а дверей две. */}
+      <CashCountSheet
+        visible={counting !== null}
+        onClose={() => setCountingId(null)}
+        account={counting}
+        subtitle={
+          counting
+            ? `${counting.name} · ${
+                registers.find((r) => r.account.id === counting.id)?.owner ?? ""
+              }`
+            : ""
+        }
+      />
     </Screen>
   );
 }

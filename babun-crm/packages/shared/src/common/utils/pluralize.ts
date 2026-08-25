@@ -1,12 +1,12 @@
-// Russian pluralization: 1 кондиционер, 2 кондиционера, 5 кондиционеров
+// Russian pluralization: 1 кондиционер, 2 кондиционера, 5 кондиционеров.
+//
+// Само правило живёт в `plural-ru.ts` — здесь только вторая форма вызова
+// (три отдельных слова вместо кортежа). Пока правило было переписано в
+// каждом модуле, оно и врало по-разному: то на 11, то на 21.
+import { pluralRu } from "./plural-ru";
+
 export function pluralize(n: number, one: string, few: string, many: string): string {
-  const abs = Math.abs(n);
-  const last2 = abs % 100;
-  const last1 = abs % 10;
-  if (last2 >= 11 && last2 <= 19) return `${n} ${many}`;
-  if (last1 === 1) return `${n} ${one}`;
-  if (last1 >= 2 && last1 <= 4) return `${n} ${few}`;
-  return `${n} ${many}`;
+  return `${n} ${countWordRu(n, one, few, many)}`;
 }
 
 export function pluralizeAC(n: number): string {
@@ -21,13 +21,7 @@ export function pluralizeAC(n: number): string {
  *   countWordRu(5, "запись", "записи", "записей") === "записей"
  */
 export function countWordRu(n: number, one: string, few: string, many: string): string {
-  const abs = Math.abs(n);
-  const last2 = abs % 100;
-  const last1 = abs % 10;
-  if (last2 >= 11 && last2 <= 19) return many;
-  if (last1 === 1) return one;
-  if (last1 >= 2 && last1 <= 4) return few;
-  return many;
+  return pluralRu(n, [one, few, many]);
 }
 
 // Common app vocabulary so call sites stay typo-free.

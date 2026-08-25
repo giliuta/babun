@@ -58,8 +58,8 @@ export function TeamMasterSheet({
         <View
           style={{
             backgroundColor: t.canvas,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: t.radius.card,
+            borderTopRightRadius: t.radius.card,
             paddingBottom: insets.bottom + 12,
           }}
         >
@@ -67,12 +67,12 @@ export function TeamMasterSheet({
             className="flex-row items-center justify-between px-4 py-3"
             style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
           >
-            <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>Бригада и мастер</Text>
+            <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>Команда и мастер</Text>
             <Pressable
               onPress={onClose}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="Закрыть выбор бригады и мастера"
+              accessibilityLabel="Закрыть выбор команды и мастера"
               style={{ minHeight: 44, justifyContent: "center" }}
             >
               <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>Готово</Text>
@@ -98,14 +98,14 @@ export function TeamMasterSheet({
               </View>
             ) : (
               <View
-                className="mt-2 rounded-2xl px-4 py-4"
+                className="mt-2 rounded-[10px] px-4 py-4"
                 style={{ backgroundColor: t.surface }}
               >
                 <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-                  Бригад пока нет
+                  Команд пока нет
                 </Text>
                 <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
-                  Сначала создайте бригаду в кабинете, затем вернитесь к заявке.
+                  Сначала создайте команду в кабинете, затем вернитесь к заявке.
                 </Text>
               </View>
             )}
@@ -166,8 +166,8 @@ export function ColorSheet({
         <View
           style={{
             backgroundColor: t.canvas,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
+            borderTopLeftRadius: t.radius.card,
+            borderTopRightRadius: t.radius.card,
             paddingBottom: insets.bottom + 12,
           }}
         >

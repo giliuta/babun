@@ -107,7 +107,7 @@ export function OptionSheet<V extends string>({
           </View>
 
           <View
-            className="mx-3 mt-3 overflow-hidden rounded-[14px]"
+            className="mx-3 mt-3 overflow-hidden rounded-[10px]"
             style={{ backgroundColor: t.surface }}
           >
             <ScrollView style={{ maxHeight: 380 }} bounces={false}>

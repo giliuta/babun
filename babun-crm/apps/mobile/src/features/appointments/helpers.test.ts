@@ -16,21 +16,34 @@ function makeService(patch: Partial<Service> = {}): Service {
     brigade_ids: [],
     bulk_price: 0,
     bulk_threshold: 0,
+    description: null,
     category_id: null,
     color: "#2C5BE0",
     cost_per_unit: 0,
+    cost_tiers: [],
     created_at: "2026-01-01T00:00:00.000Z",
     duration_minutes: 60,
     duration_tiers: null,
+    team_id: "team-1",
     id: "service-one",
     is_active: true,
-    is_countable: true,
     material_costs: [],
     name: "Услуга",
     online_enabled: true,
     position: 0,
     price: 20,
+    buffer_before_min: 0,
+    buffer_after_min: 0,
+    required_staff: 1,
+    service_type: "quantity",
+    min_qty: 1,
+    max_qty: null,
+    overflow_price: null,
+    overflow_duration_min: null,
+    copied_from_service_id: null,
+    price_entry: "total",
     price_tiers: null,
+    unit: null,
     tenant_id: "tenant-one",
     updated_at: "2026-01-01T00:00:00.000Z",
     ...patch,
@@ -94,22 +107,115 @@ describe("appointment service economics", () => {
     assert.equal(lineAtFive.duration, 150);
   });
 
-  test("forces non-countable services to one unit", () => {
-    const service = makeService({
-      is_countable: false,
-      price_tiers: [{ min_qty: 2, price_per_unit: 1 }],
-      duration_tiers: [{ min_qty: 2, duration_minutes: 10 }],
-    });
+  test("quantity survives even when the catalogue changed under the line", () => {
+    // Флага «продаём целиком» больше нет, и правило только расширилось: любое
+    // уже записанное количество остаётся при себе, ни один байт снимка
+    // оплаченной записи не переписывается.
+    const service = makeService({});
     const [line] = buildServices(
       [service.id],
       new Map([[service.id, service]]),
       { [service.id]: { qty: 8 } },
     );
 
-    assert.equal(line.quantity, 1);
-    assert.equal(line.pricePerUnit, 20);
-    assert.equal(line.totalPrice, 20);
-    assert.equal(line.duration, 60);
+    assert.equal(line.quantity, 8);
+    assert.equal(line.totalPrice, 160);
+  });
+
+  test("the lock keeps a stored line at the numbers it was written with", () => {
+    // Прайс подорожал вдвое и лестница переписана — сохранённая строка обязана
+    // остаться собой, иначе открытие майской записи переписывает её деньги.
+    const service = makeService({
+      price: 120,
+      duration_minutes: 90,
+      price_tiers: [{ min_qty: 2, price_per_unit: 100 }],
+      duration_tiers: [{ min_qty: 2, duration_minutes: 200 }],
+    });
+    const [line] = buildServices([service.id], new Map([[service.id, service]]), {
+      [service.id]: {
+        qty: 2,
+        locked: { pricePerUnit: 50, originalPrice: 60, duration: 120 },
+      },
+    });
+
+    assert.equal(line.pricePerUnit, 50);
+    assert.equal(line.totalPrice, 100);
+    assert.equal(line.duration, 120);
+    // Цена каталога ТОГО дня: иначе байт снимка меняется от одного открытия
+    // и сторож оплаченной записи просыпается на правке комментария.
+    assert.equal(line.originalPrice, 60);
+  });
+
+  test("an operator price still wins over the lock", () => {
+    const service = makeService({ price: 120 });
+    const [line] = buildServices([service.id], new Map([[service.id, service]]), {
+      [service.id]: {
+        qty: 1,
+        price: 80,
+        locked: { pricePerUnit: 50, originalPrice: 60, duration: 120 },
+      },
+    });
+
+    assert.equal(line.pricePerUnit, 80);
+    // Длительность и цена каталога остаются из снимка — замок держит их.
+    assert.equal(line.duration, 120);
+    assert.equal(line.originalPrice, 60);
+  });
+
+  test("dropping the lock re-prices the line by today's ladder", () => {
+    // Так выглядит правка количества: замок снят, строка считается заново.
+    const service = makeService({
+      price: 120,
+      duration_minutes: 90,
+      price_tiers: [{ min_qty: 2, price_per_unit: 100 }],
+      duration_tiers: [{ min_qty: 2, duration_minutes: 200 }],
+    });
+    const [line] = buildServices([service.id], new Map([[service.id, service]]), {
+      [service.id]: { qty: 2 },
+    });
+
+    assert.equal(line.pricePerUnit, 100);
+    assert.equal(line.duration, 200);
+    assert.equal(line.originalPrice, 120);
+  });
+
+  test("the lock survives a service that vanished from the catalogue", () => {
+    const [line] = buildServices(["gone"], new Map(), {
+      gone: {
+        qty: 3,
+        locked: { pricePerUnit: 40, originalPrice: 40, duration: 150 },
+      },
+    });
+
+    assert.equal(line.pricePerUnit, 40);
+    assert.equal(line.totalPrice, 120);
+    assert.equal(line.duration, 150);
+  });
+
+  test("снимок помнит имя услуги на день записи", () => {
+    const service = makeService({ name: "Чистка сплит-системы", unit: "шт" });
+    const [line] = buildServices([service.id], new Map([[service.id, service]]));
+    assert.equal(line.serviceName, "Чистка сплит-системы");
+    assert.equal(line.unit, "шт");
+  });
+
+  test("переименование услуги НЕ переписывает прошлую запись", () => {
+    // Услуга в каталоге называется уже иначе, но у строки есть замок с тем
+    // именем, которым работу назвали тогда.
+    const renamed = makeService({ name: "Чистка сплит-системы X-line" });
+    const [line] = buildServices([renamed.id], new Map([[renamed.id, renamed]]), {
+      [renamed.id]: {
+        qty: 1,
+        locked: {
+          pricePerUnit: 50,
+          originalPrice: 50,
+          duration: 60,
+          serviceName: "Чистка",
+          unit: null,
+        },
+      },
+    });
+    assert.equal(line.serviceName, "Чистка");
   });
 
   test("falls back safely when tier JSON is malformed", () => {
@@ -150,5 +256,57 @@ describe("parseYMD", () => {
   test("мусор откатывается на сегодня, а не на 1970-й", () => {
     assert.ok(parseYMD("").getFullYear() > 2000);
     assert.ok(parseYMD("не дата").getFullYear() > 2000);
+  });
+});
+
+describe("услуга с вариантами в записи", () => {
+  const rooms = makeService({
+    id: "svc-rooms",
+    name: "Уборка квартиры",
+    service_type: "variant",
+    price: 50,
+    duration_minutes: 60,
+  });
+  const variants = new Map([
+    [
+      "svc-rooms",
+      [
+        { id: "v1", name: "1-комнатная", price: 50, durationMin: 60 },
+        { id: "v2", name: "3-комнатная", price: 100, durationMin: 120 },
+      ],
+    ],
+  ]);
+
+  test("цена и время берутся у выбранного варианта, а не у лестницы", () => {
+    const [line] = buildServices(
+      ["svc-rooms"],
+      new Map([["svc-rooms", rooms]]),
+      { "svc-rooms": { qty: 1, variantId: "v2" } },
+      variants,
+    );
+    assert.equal(line.pricePerUnit, 100);
+    assert.equal(line.duration, 120);
+    assert.equal(line.variantId, "v2");
+  });
+
+  test("КОЛИЧЕСТВО НЕ УМНОЖАЕТ ВАРИАНТ: трёхкомнатная — не «три раза комната»", () => {
+    const [line] = buildServices(
+      ["svc-rooms"],
+      new Map([["svc-rooms", rooms]]),
+      { "svc-rooms": { qty: 1, variantId: "v1" } },
+      variants,
+    );
+    assert.equal(line.pricePerUnit, 50);
+    assert.equal(line.totalPrice, 50);
+  });
+
+  test("вариант не выбран — цена услуги, а не ноль: строка не исчезает", () => {
+    const [line] = buildServices(
+      ["svc-rooms"],
+      new Map([["svc-rooms", rooms]]),
+      { "svc-rooms": { qty: 1 } },
+      variants,
+    );
+    assert.equal(line.pricePerUnit, 50);
   });
 });

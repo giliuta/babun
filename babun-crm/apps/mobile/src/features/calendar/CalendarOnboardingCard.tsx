@@ -103,7 +103,7 @@ export function CalendarOnboardingCard({
             right: 10,
             height: 28,
             width: 28,
-            borderRadius: 14,
+            borderRadius: t.radius.card,
             alignItems: "center",
             justifyContent: "center",
             zIndex: 1,
@@ -166,7 +166,7 @@ function StepRow({
         style={{
           height: 28,
           width: 28,
-          borderRadius: 14,
+          borderRadius: t.radius.card,
           backgroundColor: done ? `${t.success}1f` : `${t.accent}1f`,
           alignItems: "center",
           justifyContent: "center",

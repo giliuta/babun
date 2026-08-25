@@ -347,7 +347,7 @@ export default function MasterAccessScreen() {
         {/* ── Поиск по правам ───────────────────────────────────── */}
         <View className="mx-3 mt-4">
           <View
-            className="flex-row items-center rounded-2xl px-3"
+            className="flex-row items-center rounded-[10px] px-3"
             style={{ backgroundColor: t.fill }}
           >
             <Search color={t.faint} size={ICON.sm} />

@@ -1,47 +1,54 @@
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { X } from "lucide-react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Text, View } from "react-native";
+import { useQuery } from "@tanstack/react-query";
 import {
   formatEURExact as formatEUR,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
-import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
-import type { Account } from "@babun/shared/local/finance/account";
+import {
+  PAYMENT_METHOD_LABEL,
+  TX_TYPE_LABEL,
+  type FinanceTransaction,
+} from "@babun/shared/local/finance/transaction";
+import {
+  accountDisplayName,
+  type Account,
+} from "@babun/shared/local/finance/account";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
-import { ICON } from "@/components/ui/tokens";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { MoneyField } from "@/components/ui/MoneyField";
+import { ActionRow, RowGroup } from "@/components/ui/card-rows";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { haptics } from "@/lib/haptics";
+import { supabase } from "@/lib/supabase";
+import { useTenantId } from "@/lib/tenant";
+import { useTenant } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
 import type { Team } from "@/features/reference/queries";
+import { deleteTransferAlert } from "./account-alerts";
+import { refundRemainingCents as refundRemainingCentsOf } from "./refund";
 
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Наличные",
-  card: "Карта",
-  transfer: "Перевод",
-  other: "Иное",
-};
-
-const TYPE_LABEL: Record<string, string> = {
-  income: "Поступление",
-  expense: "Расход",
-  refund: "Возврат",
-  transfer: "Перевод",
-};
-
-function MetaRow({ label, value }: { label: string; value: string }) {
+/** Строка-факт витрины: ярлык слева, значение справа. Читается, но не
+ *  правится — правка живёт в форме операции. */
+function MetaRow({
+  label,
+  value,
+  first,
+}: {
+  label: string;
+  value: string;
+  /** Первая строка группы шва над собой не имеет. */
+  first?: boolean;
+}) {
   const t = useThemeColors();
   return (
     <View
-      className="flex-row items-center justify-between px-3 py-2"
-      style={{ borderTopWidth: 1, borderTopColor: t.separator }}
+      className="flex-row items-center justify-between px-4 py-2.5"
+      style={{
+        borderTopWidth: first ? 0 : 1,
+        borderTopColor: t.separator,
+      }}
     >
       <Text className="text-[13px]" style={{ color: t.sub }}>
         {label}
@@ -57,10 +64,49 @@ function MetaRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// Tx-detail popup — port of the web TransactionPopup: centered card with
-// the headline amount, meta rows and actions.
-// (opens the OperationSheet); «Создать возврат» writes a negative refund
-// row tied via refund_of_id and capped by «до остатка» (web semantics).
+/**
+ * Вторая нога перевода — id её счёта. Ленты грузят срез периода/счёта, и
+ * парной строки в пропсах может не оказаться вовсе (карточка кассы видит
+ * только свои операции), поэтому попап спрашивает её у леджера сам. Пара по
+ * инварианту БД ровно из двух строк — первого совпадения достаточно.
+ */
+function useTransferCounterpartAccountId(tx: FinanceTransaction | null) {
+  const tenantId = useTenantId();
+  const leg =
+    tx && tx.type === "transfer" && tx.transfer_group_id
+      ? { id: tx.id, groupId: tx.transfer_group_id }
+      : null;
+  return useQuery({
+    queryKey: ["transfer-counterpart", tenantId, leg?.id],
+    enabled: !!tenantId && !!leg,
+    queryFn: async (): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("account_id")
+        .eq("tenant_id", tenantId as string)
+        .eq("transfer_group_id", (leg as { groupId: string }).groupId)
+        .neq("id", (leg as { id: string }).id)
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return data?.[0]?.account_id ?? null;
+    },
+  });
+}
+
+// ВИТРИНА ОПЕРАЦИИ — НИЖНИЙ ЛИСТ, А НЕ КАРТОЧКА ПОСЕРЕДИНЕ ЭКРАНА.
+//
+// Была центрированная карточка на своём `Modal` с собственными кнопками-
+// пилюлями в 1px рамках — единственный такой жанр на весь продукт. Всплывающих
+// жанров в дизайн-системе ровно два: `BottomSheet` и системный ActionSheet
+// (владелец 2026-07-27: «мне не нравится, когда оно посередине вылазит — пусть
+// снизу выезжает, как и всё»). Заодно ушли три самодельные вещи: скрим и
+// анимация (их держит лист), крестик (у листа есть грабер и свайп) и пилюли
+// действий — теперь это `ActionRow`, тот же ряд, что «Удалить объект» на
+// карточке клиента.
+//
+// Содержимое не изменилось: сумма крупно, факты строками, действия рядами.
+// «Создать возврат» по-прежнему пишет отрицательную строку через refund_of_id
+// и упирается в остаток («до …»), а перевод отсюда только отменяется целиком.
 export function TransactionPopup({
   visible,
   transaction,
@@ -91,8 +137,17 @@ export function TransactionPopup({
   const [showRefundForm, setShowRefundForm] = useState(false);
   const [refundAmount, setRefundAmount] = useState("");
   const [busy, setBusy] = useState(false);
+  // Синхронный гард поверх busy: state включается только после ре-рендера,
+  // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
+  // тот же класс бага, что savingRef в OperationSheet.
+  const savingRef = useRef(false);
+  const currency = useTenant().data?.currency;
+  const { data: counterpartAccountId } = useTransferCounterpartAccountId(
+    visible ? transaction : null,
+  );
 
-  // The modal stays mounted — reset transient state per opened tx.
+  // Лист остаётся смонтированным — сбрасываем временное состояние на каждую
+  // открытую операцию.
   useEffect(() => {
     if (!visible) return;
     setShowRefundForm(false);
@@ -106,6 +161,25 @@ export function TransactionPopup({
   const account = accounts.find((a) => a.id === tx.account_id);
   const team = teams.find((x) => x.id === tx.team_id);
   const category = categories.find((c) => c.id === tx.category_id);
+
+  // Полные имена ног перевода («Наличка · Команда 2»): команды у сторон
+  // разные, и без владельца строки «Откуда/Куда» не отвечают на главный
+  // вопрос перевода. Корреспондент, выпавший из справочника (закрытый счёт
+  // не приехал в пропсы), честно оставляет попап на старой строке «Счёт».
+  const ownerName = (a: Account): string | undefined =>
+    (a.brigade_id && teams.find((x) => x.id === a.brigade_id)?.name) ||
+    undefined;
+  const counterpartAccount = counterpartAccountId
+    ? accounts.find((a) => a.id === counterpartAccountId)
+    : undefined;
+  const transferLegs =
+    tx.type === "transfer" && account && counterpartAccount
+      ? {
+          // Своя нога подписана знаком: минус — деньги ушли отсюда.
+          from: tx.amount < 0 ? account : counterpartAccount,
+          to: tx.amount < 0 ? counterpartAccount : account,
+        }
+      : null;
 
   const tone =
     tx.type === "income"
@@ -122,17 +196,20 @@ export function TransactionPopup({
   // only be refunded through that appointment; a generic refund here would
   // leave its paid/prepaid fields disagreeing with the ledger.
   const isAppointmentLedger = tx.source === "auto";
-  // Деньги сравниваются ТОЛЬКО в центах: float-вычитание (10 − 1.12 =
-  // 8.879999…) ломало префилл и запрещало вернуть ровно остаток.
-  const refundRemainingCents = Math.max(
-    0,
-    Math.round(tx.amount * 100) - Math.round(alreadyRefunded * 100),
+  // Кап в центах — чистой функцией под тестом: float-математика здесь уже
+  // ломалась однажды (см. refund.ts).
+  const refundRemainingCents = refundRemainingCentsOf(
+    tx.amount,
+    alreadyRefunded,
   );
   const refundRemaining = refundRemainingCents / 100;
   const canRefund =
     tx.type === "income" && !isAppointmentLedger && refundRemainingCents > 0;
-  const canDelete =
-    !isAppointmentLedger && !tx.invoice_id && tx.type !== "transfer";
+  // Перевод УДАЛЯЕТСЯ, но не правится и не возвращается: сервер запрещает
+  // редактировать ноги, а onDelete сверху отменяет перевод целиком — обе
+  // ноги атомарно по transfer_group_id. Это единственная дверь к отмене
+  // перевода с главного экрана.
+  const canDelete = !isAppointmentLedger && !tx.invoice_id;
   const canInvoice = tx.type === "income";
 
   const refundCents = parseMoneyInputToCents(refundAmount);
@@ -141,20 +218,34 @@ export function TransactionPopup({
     refundCents != null && refundCents <= refundRemainingCents;
 
   const handleDelete = () => {
-    Alert.alert("Удалить операцию?", "Действие нельзя отменить.", [
+    // У перевода — свой текст (общий на продукт, account-alerts): человек
+    // должен понимать, что отменяет ПЕРЕВОД ЦЕЛИКОМ — исчезнут обе операции,
+    // а не одна строка ленты.
+    const text =
+      tx.type === "transfer"
+        ? deleteTransferAlert()
+        : {
+            title: "Удалить операцию?",
+            message: "Действие нельзя отменить.",
+            confirm: "Удалить",
+          };
+    Alert.alert(text.title, text.message, [
       { text: "Отмена", style: "cancel" },
       {
-        text: "Удалить",
+        text: text.confirm,
         style: "destructive",
         onPress: async () => {
-          if (busy) return;
+          if (savingRef.current || busy) return;
+          savingRef.current = true;
           setBusy(true);
           try {
             await onDelete(tx);
+            haptics.success();
             onClose();
           } catch (e) {
             Alert.alert("Ошибка", (e as Error).message);
           } finally {
+            savingRef.current = false;
             setBusy(false);
           }
         },
@@ -163,244 +254,199 @@ export function TransactionPopup({
   };
 
   const handleRefund = async () => {
-    if (!refundValid || busy) return;
+    if (savingRef.current || !refundValid || busy) return;
+    savingRef.current = true;
     setBusy(true);
     try {
       await onRefund(tx, refundNum);
+      haptics.success();
       onClose();
     } catch (e) {
       Alert.alert("Ошибка", (e as Error).message);
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
 
-  const actionBtn = (
-    label: string,
-    onPress: () => void,
-    kind: "primary" | "danger" | "plain",
-    disabled?: boolean,
-  ) => (
-    <Pressable
-      key={label}
-      onPress={onPress}
-      disabled={disabled || busy}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      className="flex-1 items-center justify-center rounded-full active:opacity-80"
-      style={{
-        height: 44,
-        backgroundColor:
-          kind === "primary" ? t.accent : "transparent",
-        borderWidth: kind === "primary" ? 0 : 1,
-        borderColor:
-          kind === "danger" ? t.danger + "66" : t.separator,
-        opacity: disabled || busy ? 0.5 : 1,
-      }}
-    >
-      <Text
-        className="text-[13px] font-semibold"
-        style={{
-          color:
-            kind === "primary"
-              ? t.onAccent
-              : kind === "danger"
-                ? t.danger
-                : t.ink,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
+  // ФАКТЫ ОПЕРАЦИИ ОДНИМ СПИСКОМ. Собираются массивом, а не россыпью JSX,
+  // ровно ради одного: шов рисуется между строками, и первая обязана знать,
+  // что она первая, — какие именно строки существуют, зависит от операции.
+  const metaRows: { label: string; value: string }[] = [
+    { label: "Дата", value: humanDay(tx.occurred_on) },
+  ];
+  if (category) metaRows.push({ label: "Категория", value: category.name });
+  // Перевод отвечает «откуда и куда ушли деньги» обеими ногами; пока вторая
+  // не найдена — обычная строка «Счёт».
+  if (transferLegs) {
+    metaRows.push({
+      label: "Откуда",
+      value: accountDisplayName(transferLegs.from, ownerName(transferLegs.from)),
+    });
+    metaRows.push({
+      label: "Куда",
+      value: accountDisplayName(transferLegs.to, ownerName(transferLegs.to)),
+    });
+  } else if (account) {
+    metaRows.push({ label: "Счёт", value: account.name });
+  }
+  if (team) metaRows.push({ label: "Команда", value: team.name });
+  if (tx.payment_method) {
+    metaRows.push({
+      label: "Способ оплаты",
+      value: PAYMENT_METHOD_LABEL[tx.payment_method] ?? tx.payment_method,
+    });
+  }
+  // Снимок налога, если он есть: до этой строки ставку операции было негде
+  // увидеть, кроме формы правки (а у auto-строк — нигде). Нулевой снимок — не
+  // налог, а его отсутствие.
+  if (tx.vat_amount != null && tx.vat_amount !== 0) {
+    metaRows.push({
+      label: "НДС",
+      value: `в т.ч. ${formatEUR(Math.abs(tx.vat_amount))}${
+        tx.vat_rate != null ? ` (${tx.vat_rate}%)` : ""
+      }`,
+    });
+  }
+  if (tx.source === "auto") {
+    metaRows.push({ label: "Источник", value: "Автоматически (из записи)" });
+  }
+  if (isAppointmentLedger) {
+    metaRows.push({ label: "Изменение", value: "Через связанную заявку" });
+  }
+  if (Number.isFinite(alreadyRefunded) && alreadyRefunded > 0) {
+    metaRows.push({
+      label: "Уже возвращено",
+      value:
+        refundRemainingCents === 0
+          ? `${formatEUR(alreadyRefunded)} · полностью`
+          : formatEUR(alreadyRefunded),
+    });
+  }
+
+  // Действия — рядами того же языка, что «Удалить объект» на карточке
+  // клиента. Порядок от безобидного к разрушительному, удаление последним.
+  const actions: { label: string; tone?: "danger"; onPress: () => void }[] = [];
+  if (canInvoice) {
+    actions.push({
+      label: tx.invoice_id ? "Открыть инвойс" : "Выставить инвойс",
+      onPress: () => onInvoice(tx),
+    });
+  }
+  if (tx.client_id) {
+    actions.push({
+      label: "Открыть клиента",
+      onPress: () => onClientOpen(tx.client_id as string),
+    });
+  }
+  if (canRefund) {
+    actions.push({
+      label: "Создать возврат",
+      onPress: () => {
+        setShowRefundForm(true);
+        setRefundAmount(String(refundRemaining));
+      },
+    });
+  }
+  if (canDelete) {
+    actions.push({
+      label: tx.type === "transfer" ? "Отменить перевод" : "Удалить операцию",
+      tone: "danger",
+      onPress: handleDelete,
+    });
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1 items-center justify-center px-6"
-        style={{ backgroundColor: t.scrim }}
-      >
-        <Pressable
-          className="absolute inset-0"
-          onPress={onClose}
-          accessible={false}
-        />
-        <View
-          className="w-full overflow-hidden rounded-3xl"
-          style={{ backgroundColor: t.surface, maxWidth: 360 }}
-        >
-          {/* header */}
-          <View
-            className="flex-row items-center justify-center py-3"
-            style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      // Пока возврат/удаление в полёте, лист не закрывается ни свайпом, ни
+      // тапом мимо: Alert об ошибке иначе прилетал поверх пустого экрана.
+      onClose={busy ? () => {} : onClose}
+      title={TX_TYPE_LABEL[tx.type]}
+      avoidKeyboard
+      scroll
+    >
+      <View style={{ paddingBottom: 24 }}>
+        {/* СУММА — ГЕРОЙ ЛИСТА: ради неё его и открыли. Знак и цвет говорят
+            направление денег раньше, чем прочитан ярлык. */}
+        <View className="items-center px-5 pb-1">
+          <Text
+            className="text-[32px] font-bold"
+            style={{ color: tone, fontVariant: ["tabular-nums"] }}
           >
-            <Text className="text-base font-semibold" style={{ color: t.ink }}>
-              {TYPE_LABEL[tx.type]}
+            {sign}
+            {formatEUR(Math.abs(tx.amount))}
+          </Text>
+          {tx.notes ? (
+            <Text
+              className="mt-1 text-center text-[13px]"
+              style={{ color: t.sub }}
+            >
+              {tx.notes}
             </Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть"
-              className="absolute right-3 h-8 w-8 items-center justify-center rounded-full"
-              style={{ backgroundColor: t.pressed }}
-            >
-              <X color={t.sub} size={ICON.sm} />
-            </Pressable>
-          </View>
-
-          <View className="px-4 py-3" style={{ gap: 12 }}>
-            {/* headline amount */}
-            <View className="items-center py-1">
-              <Text
-                className="text-[32px] font-bold tabular-nums"
-                style={{ color: tone }}
-              >
-                {sign}
-                {formatEUR(Math.abs(tx.amount))}
-              </Text>
-              {tx.notes ? (
-                <Text
-                  className="mt-1 text-center text-[13px]"
-                  style={{ color: t.sub }}
-                >
-                  {tx.notes}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* meta rows */}
-            <View
-              className="overflow-hidden rounded-xl"
-              style={{ backgroundColor: t.canvas }}
-            >
-              <View className="flex-row items-center justify-between px-3 py-2">
-                <Text className="text-[13px]" style={{ color: t.sub }}>
-                  Дата
-                </Text>
-                <Text className="text-[13px] font-medium" style={{ color: t.ink }}>
-                  {humanDay(tx.occurred_on)}
-                </Text>
-              </View>
-              {category ? <MetaRow label="Категория" value={category.name} /> : null}
-              {account ? <MetaRow label="Счёт" value={account.name} /> : null}
-              {team ? <MetaRow label="Команда" value={team.name} /> : null}
-              {tx.payment_method ? (
-                <MetaRow
-                  label="Способ оплаты"
-                  value={METHOD_LABEL[tx.payment_method] ?? tx.payment_method}
-                />
-              ) : null}
-              {tx.source === "auto" ? (
-                <MetaRow label="Источник" value="Автоматически (из записи)" />
-              ) : null}
-              {isAppointmentLedger ? (
-                <MetaRow label="Изменение" value="Через связанную заявку" />
-              ) : null}
-              {Number.isFinite(alreadyRefunded) && alreadyRefunded > 0 ? (
-                <MetaRow
-                  label="Уже возвращено"
-                  value={
-                    refundRemainingCents === 0
-                      ? `${formatEUR(alreadyRefunded)} · полностью`
-                      : formatEUR(alreadyRefunded)
-                  }
-                />
-              ) : null}
-            </View>
-
-            {/* actions */}
-            {!showRefundForm ? (
-              <View style={{ gap: 8 }}>
-                {canInvoice
-                  ? actionBtn(
-                      tx.invoice_id ? "Открыть инвойс" : "Выставить инвойс",
-                      () => onInvoice(tx),
-                      "plain",
-                    )
-                  : null}
-                {tx.client_id
-                  ? actionBtn(
-                      "Открыть клиента",
-                      () => onClientOpen(tx.client_id as string),
-                      "plain",
-                    )
-                  : null}
-                {canDelete || canRefund ? (
-                  <View className="flex-row" style={{ gap: 8 }}>
-                    {canDelete ? actionBtn("Удалить", handleDelete, "danger") : null}
-                    {canRefund
-                      ? actionBtn(
-                          "Создать возврат",
-                          () => {
-                            setShowRefundForm(true);
-                            setRefundAmount(String(refundRemaining));
-                          },
-                          "plain",
-                        )
-                      : null}
-                  </View>
-                ) : null}
-              </View>
-            ) : (
-              <View style={{ gap: 8 }}>
-                <Text className="text-xs font-medium" style={{ color: t.sub }}>
-                  Сумма возврата (до {formatEUR(refundRemaining)})
-                </Text>
-                <View
-                  className="flex-row items-center rounded-xl px-3"
-                  style={{ backgroundColor: t.canvas, height: 44 }}
-                >
-                  <Text className="text-[15px]" style={{ color: t.sub }}>
-                    €
-                  </Text>
-                  <TextInput
-                    value={refundAmount}
-                    onChangeText={setRefundAmount}
-                    keyboardType="decimal-pad"
-                    autoFocus
-                    placeholder="0"
-                    placeholderTextColor={t.placeholder}
-                    selectionColor={t.accent}
-                    keyboardAppearance="light"
-                    accessibilityLabel="Сумма возврата"
-                    className="ml-1 flex-1 text-[15px] tabular-nums"
-                    style={{ color: t.ink }}
-                  />
-                </View>
-                {refundAmount && !refundValid ? (
-                  <Text className="text-xs" style={{ color: t.danger }}>
-                    Не больше {formatEUR(refundRemaining)} и больше нуля
-                  </Text>
-                ) : null}
-                <View className="flex-row" style={{ gap: 8 }}>
-                  {actionBtn("Отмена", () => setShowRefundForm(false), "plain")}
-                  <Pressable
-                    onPress={handleRefund}
-                    disabled={!refundValid || busy}
-                    accessibilityRole="button"
-                    accessibilityLabel="Подтвердить возврат"
-                    className="flex-1 items-center justify-center rounded-full active:opacity-80"
-                    style={{
-                      height: 44,
-                      backgroundColor: t.danger,
-                      opacity: !refundValid || busy ? 0.5 : 1,
-                    }}
-                  >
-                    <Text
-                      className="text-[13px] font-semibold"
-                      style={{ color: "#ffffff" }}
-                    >
-                      Возврат
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-          </View>
+          ) : null}
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+
+        <RowGroup>
+          {metaRows.map((row, i) => (
+            <MetaRow
+              key={row.label}
+              label={row.label}
+              value={row.value}
+              first={i === 0}
+            />
+          ))}
+        </RowGroup>
+
+        {!showRefundForm ? (
+          actions.length > 0 ? (
+            <RowGroup>
+              {actions.map((action, i) => (
+                <ActionRow
+                  key={action.label}
+                  label={action.label}
+                  tone={action.tone}
+                  separated={i > 0}
+                  dimmed={busy}
+                  onPress={action.onPress}
+                />
+              ))}
+            </RowGroup>
+          ) : null
+        ) : (
+          <>
+            <View style={{ paddingHorizontal: GUTTER, paddingTop: 16 }}>
+              <MoneyField
+                label={`Сумма возврата (до ${formatEUR(refundRemaining)})`}
+                value={refundAmount}
+                onChangeText={setRefundAmount}
+                currency={currency}
+                autoFocus
+                error={
+                  refundAmount && !refundValid
+                    ? `Не больше ${formatEUR(refundRemaining)} и больше нуля`
+                    : null
+                }
+              />
+            </View>
+            <RowGroup>
+              <ActionRow
+                label="Вернуть"
+                tone="danger"
+                dimmed={!refundValid || busy}
+                onPress={handleRefund}
+              />
+              <ActionRow
+                label="Отмена"
+                separated
+                dimmed={busy}
+                onPress={() => setShowRefundForm(false)}
+              />
+            </RowGroup>
+          </>
+        )}
+      </View>
+    </BottomSheet>
   );
 }

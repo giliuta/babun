@@ -33,6 +33,12 @@ const TENANT_SAFE_DEFAULTS: Tenant = {
   invoice_number_padding: 3,
   invoice_number_yearly_reset: true,
   invoice_next_number: null,
+  // Генератор счетов: ровно те значения, что стоят дефолтами в самой таблице —
+  // экран настроек и база обязаны говорить одно и то же на пустом кэше.
+  invoice_due_days: 7,
+  invoice_line_source: "services",
+  invoice_default_line_title: "Услуги",
+  invoice_footer_note: null,
   legal_name: null,
   logo_url: null,
   onboarded_at: null,
@@ -143,6 +149,11 @@ export function useCurrentRole() {
     // Membership can be revoked or changed while this device is open. Poll the
     // tiny RPC so an old owner/dispatcher surface is unmounted promptly instead
     // of keeping sensitive cached screens visible until the next app focus.
+    //
+    // Отзыв приезжает ОТВЕТОМ сервера, а не его отсутствием: упавший опрос
+    // оставляет прошлый успешный `data` на месте, и границы прав намеренно
+    // продолжают им пользоваться (fail-open, см. RoleCapabilityBoundary) —
+    // иначе пропавшая сеть выкидывала бы владельца с экрана денег.
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
     refetchIntervalInBackground: false,

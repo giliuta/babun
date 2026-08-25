@@ -33,7 +33,7 @@ export function CalendarHeader({
   return (
     <View
       // Без своего borderBottom: единый шов под хромом шапки несёт полоса
-      // TeamChips ниже — две линии подряд читались бы как случайный зазор.
+      // ScopeChips ниже — две линии подряд читались бы как случайный зазор.
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -54,7 +54,7 @@ export function CalendarHeader({
             height: 44,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 22,
+            borderRadius: t.radius.card,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >
@@ -73,7 +73,7 @@ export function CalendarHeader({
           gap: 4,
           height: 44,
           paddingHorizontal: 6,
-          borderRadius: 12,
+          borderRadius: t.radius.card,
           backgroundColor: pressed ? t.pressed : "transparent",
         })}
       >
@@ -109,7 +109,7 @@ export function CalendarHeader({
             height: 44,
             alignItems: "center",
             justifyContent: "center",
-            borderRadius: 22,
+            borderRadius: t.radius.card,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
         >

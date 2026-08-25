@@ -7,6 +7,43 @@ export type TransactionSource = "auto" | "manual";
 export type PaymentMethod = "cash" | "card" | "transfer" | "other";
 export type AppointmentPaymentKind = "prepayment" | "settlement";
 
+/** Порядок способов оплаты во всех списках и чипах: от самого частого. */
+export const PAYMENT_METHODS: readonly PaymentMethod[] = [
+  "cash",
+  "card",
+  "transfer",
+  "other",
+];
+
+/**
+ * Слова глоссария: одно слово на одну сущность во всём продукте.
+ *
+ * `transfer` — «Банк», а не «Перевод»: перевод между своими счетами это
+ * ТИП ОПЕРАЦИИ, и одно слово на две разные вещи путало даже нас (в одном
+ * экране «Нал», в другом «Наличные», в третьем «Иное»).
+ */
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "Наличные",
+  card: "Карта",
+  transfer: "Банк",
+  other: "Другое",
+};
+
+export const TX_TYPE_LABEL: Record<TransactionType, string> = {
+  income: "Доход",
+  expense: "Расход",
+  transfer: "Перевод",
+  refund: "Возврат",
+};
+
+/** То же слово для мест, где способ приходит из БД просто строкой (леджер
+ *  инвойса). Незнакомое значение печатается как есть — выдумывать способ,
+ *  которым приняли деньги, нельзя. */
+export function paymentMethodLabel(method: string | null | undefined): string {
+  if (!method) return "";
+  return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method;
+}
+
 export interface FinanceTransaction {
   id: string;
   tenant_id: string;
@@ -66,17 +103,34 @@ export function isExpense(t: FinanceTransaction): boolean {
   return t.type === "expense";
 }
 
+/** Штамп, которым `record_cash_count` подписывает свою коррекцию:
+ *  «Пересчёт кассы DD.MM.YYYY[ · комментарий]». Ссылка сверки
+ *  (`account_cash_counts.transaction_id`) живёт в другой таблице и со строкой
+ *  операции не приезжает — штамп заметки остаётся единственным признаком,
+ *  различимым по самой строке. */
+const CASH_COUNT_STAMP = /^Пересчёт кассы \d{2}\.\d{2}\.\d{4}(?: · |$)/;
+
+/** Коррекция пересчёта кассы. Пишется сервером как обычный manual
+ *  income/expense, но она — пара к строке сверки: изменить сумму значит
+ *  развести леджер с `account_cash_counts.delta`, и история сверок соврёт. */
+export function isCashCountCorrection(tx: FinanceTransaction): boolean {
+  return tx.source === "manual" && CASH_COUNT_STAMP.test(tx.notes ?? "");
+}
+
 /**
  * Можно ли править операцию прямо в её форме.
  *
- * Нельзя двоим: проводке, рождённой записью (`source === "auto"`) — она меняется
- * в самой записи, иначе деньги разъедутся с работой; и операции, привязанной к
- * инвойсу — её меняет документ. Всё остальное человек правит там же, где видит.
+ * Нельзя троим: проводке, рождённой записью (`source === "auto"`) — она меняется
+ * в самой записи, иначе деньги разъедутся с работой; операции, привязанной к
+ * инвойсу — её меняет документ; и коррекции пересчёта кассы — её родила сверка,
+ * и правка суммы сделала бы сверку лгущей. Всё остальное человек правит там же,
+ * где видит.
  */
 export function canEditTransaction(tx: FinanceTransaction): boolean {
   return (
     tx.source !== "auto" &&
     !tx.invoice_id &&
-    (tx.type === "income" || tx.type === "expense")
+    (tx.type === "income" || tx.type === "expense") &&
+    !isCashCountCorrection(tx)
   );
 }

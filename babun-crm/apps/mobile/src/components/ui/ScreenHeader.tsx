@@ -15,6 +15,7 @@ export function ScreenHeader({
   left,
   right,
   large,
+  seam = true,
 }: {
   title: string;
   subtitle?: string;
@@ -25,6 +26,9 @@ export function ScreenHeader({
   left?: ReactNode;
   right?: ReactNode;
   large?: boolean;
+  /** Шов под шапкой. Гасится, когда СРАЗУ под ней идёт лента чипов со своим
+   *  швом: две линии подряд читаются не как граница, а как случайный зазор. */
+  seam?: boolean;
 }) {
   const router = useRouter();
   const t = useThemeColors();
@@ -49,7 +53,10 @@ export function ScreenHeader({
   return (
     <View
       className="flex-row items-center px-1 py-1.5"
-      style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
+      style={{
+        borderBottomWidth: seam ? 1 : 0,
+        borderBottomColor: t.separator,
+      }}
     >
       <Pressable
         // Cold deep link (push / state restore) can land here with an empty
@@ -73,21 +80,34 @@ export function ScreenHeader({
       >
         <ChevronLeft color={t.body} size={ICON.md} />
       </Pressable>
-      <View className="flex-1">
+      {/* ЗАГОЛОВОК — ПО ЦЕНТРУ (владелец 2026-08-24: «надпись должна быть
+          посередине, мы всё абсолютно в центр»). Это же канон навигационной
+          шапки iOS. Центр честный: слева кнопка «назад» 44pt, справа контейнер
+          действий с той же минимальной шириной — заголовок стоит ровно
+          посередине экрана, а не посередине оставшегося места. */}
+      <View className="flex-1 items-center">
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          style={{
+            fontSize: 16,
+            fontWeight: "600",
+            color: t.ink,
+            textAlign: "center",
+          }}
           numberOfLines={1}
         >
           {title}
         </Text>
         {subtitle ? (
-          <Text style={{ fontSize: 12, color: t.sub }} numberOfLines={1}>
+          <Text
+            style={{ fontSize: 12, color: t.sub, textAlign: "center" }}
+            numberOfLines={1}
+          >
             {subtitle}
           </Text>
         ) : null}
       </View>
-      <View className="min-w-11 items-end pr-1">{right}</View>
+      <View className="min-w-11 items-end pr-1" style={{ minWidth: 44 }}>{right}</View>
     </View>
   );
 }

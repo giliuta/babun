@@ -109,7 +109,7 @@ export function MiniCalendar({
             // сетка ехала по 6 дней в ряду.
             width: 7 * CELL + 24 + 2,
             backgroundColor: t.surface,
-            borderRadius: 14,
+            borderRadius: t.radius.card,
             borderWidth: 1,
             borderColor: t.separator,
             padding: 12,
@@ -134,7 +134,7 @@ export function MiniCalendar({
                 height: 32,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 16,
+                borderRadius: t.radius.card,
                 backgroundColor: pressed ? t.pressed : "transparent",
               })}
             >
@@ -156,7 +156,7 @@ export function MiniCalendar({
                 height: 32,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 16,
+                borderRadius: t.radius.card,
                 backgroundColor: pressed ? t.pressed : "transparent",
               })}
             >
@@ -266,7 +266,7 @@ export function MiniCalendar({
             style={({ pressed }) => ({
               marginTop: 8,
               height: 44,
-              borderRadius: 14,
+              borderRadius: t.radius.card,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: `${t.accent}1a`,

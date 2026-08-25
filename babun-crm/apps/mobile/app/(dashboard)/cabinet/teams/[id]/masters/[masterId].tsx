@@ -349,7 +349,7 @@ function PresetButton({ label, onPress }: { label: string; onPress: () => void }
       style={{
         flex: 1,
         minHeight: 44,
-        borderRadius: 10,
+        borderRadius: t.radius.card,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: t.surface,
@@ -434,7 +434,7 @@ function RolePickerSheet({
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
         <Pressable className="flex-1" onPress={onClose} accessible={false} />
         <View
-          className="max-h-[88%] rounded-t-3xl"
+          className="max-h-[88%] rounded-t-[10px]"
           style={{ backgroundColor: t.surface }}
         >
           <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>

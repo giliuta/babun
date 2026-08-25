@@ -4,7 +4,7 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { lastVisitTarget, serviceIdsOf } from "./repeat-visit";
 
 // Строка «Как в прошлый раз» обещает именно прошлый раз. Ошибка здесь
-// подставит чужую услугу или чужой адрес — бригада уедет не туда и не с тем.
+// подставит чужую услугу или чужой адрес — команда уедет не туда и не с тем.
 
 const TODAY = "2026-08-07";
 /** Живой справочник услуг. Всё, чего здесь нет, считается снесённым. */
@@ -146,7 +146,7 @@ describe("повторить как в прошлый раз", () => {
     assert.equal(target, null);
   });
 
-  test("объект и бригада переезжают в заготовку", () => {
+  test("объект и команда переезжают в заготовку", () => {
     const target = lastVisitTarget(
       [withService({ location_id: "loc-2", team_id: "team-9" })],
       TODAY,

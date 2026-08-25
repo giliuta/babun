@@ -70,7 +70,7 @@ export const MonthView = memo(function MonthView({
   /** Долгий тап по дню — провалиться в Неделю этого дня (тап без меток —
    *  тоже, см. onPickLabelDay). */
   onPickDay: (d: Date) => void;
-  /** Тап по дню — попап метки (undefined, когда у бригады нет меток:
+  /** Тап по дню — попап метки (undefined, когда у команды нет меток:
    *  тогда и обычный тап открывает Неделю). */
   onPickLabelDay?: (dateYmd: string) => void;
   /** «Первый день недели» (calendar_settings.week_start). */

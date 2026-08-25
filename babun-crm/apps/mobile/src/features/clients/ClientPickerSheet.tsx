@@ -53,6 +53,7 @@ export function ClientPickerSheet({
 
   return (
     <BottomSheet
+      padded={false}
       visible={visible}
       onClose={onClose}
       maxHeightRatio={0.7}

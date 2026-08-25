@@ -3,12 +3,14 @@ import type { FinanceTransaction } from "./transaction";
 import {
   applyTxVat,
   defaultTxVatMode,
+  effectiveVatSettings,
   grossForPrice,
   inputFromGross,
   grossFromNet,
   netFromGross,
   summarizeVat,
   vatFromGross,
+  VAT_OFF,
   type VatSettings,
 } from "./vat";
 
@@ -16,7 +18,7 @@ import {
 // завышенная прибыль (налог посчитан заработком), либо неверная сумма к
 // уплате в декларации.
 
-const CY: VatSettings = { mode: "exclusive", rate: 19, exemptionNote: null };
+const CY: VatSettings = { mode: "exclusive", rate: 19 };
 
 let seq = 0;
 function tx(partial: Partial<FinanceTransaction>): FinanceTransaction {
@@ -27,6 +29,7 @@ function tx(partial: Partial<FinanceTransaction>): FinanceTransaction {
     type: "income",
     amount: 0,
     currency: "EUR",
+    vat_mode: null,
     vat_rate: null,
     vat_amount: null,
     category_id: null,
@@ -127,6 +130,17 @@ describe("сводка к уплате", () => {
     ]);
     expect(s.due).toBe(-76);
   });
+
+  test("«Без НДС» сказано вслух: осиротевшему vat_amount не верим", () => {
+    // UPDATE-путь может оставить снимок налога при явно выключенном режиме —
+    // отчёт обязан слушать клавишу оператора, а не мусор в колонке.
+    const s = summarizeVat([
+      tx({ type: "income", amount: 476, vat_mode: "none", vat_amount: 76, vat_rate: 19 }),
+    ]);
+    expect(s.collected).toBe(0);
+    expect(s.due).toBe(0);
+    expect(s.netIncome).toBe(476);
+  });
 });
 
 // ТРИ КЛАВИШИ НА ОПЕРАЦИИ. Ошибка здесь — это либо налог, начисленный на
@@ -164,15 +178,68 @@ describe("режим НДС на операции", () => {
   });
 
   test("выключенный НДС даёт операции «без НДС»", () => {
-    expect(defaultTxVatMode({ mode: "off", rate: 0, exemptionNote: null })).toBe(
-      "none",
-    );
-    expect(
-      defaultTxVatMode({ mode: "exclusive", rate: 19, exemptionNote: null }),
-    ).toBe("exclusive");
+    expect(defaultTxVatMode({ mode: "off", rate: 0 })).toBe("none");
+    expect(defaultTxVatMode({ mode: "exclusive", rate: 19 })).toBe("exclusive");
     // Режим включён, а ставки нет — налога всё равно не будет.
+    expect(defaultTxVatMode({ mode: "inclusive", rate: 0 })).toBe("none");
+  });
+});
+
+// ЗЕРКАЛО СЕРВЕРА. effectiveVatSettings повторяет резолвер триггера
+// fill_transaction_vat: форма показывает налог по клиентской формуле, а в
+// базу его пишет триггер — разъезд означал бы, что человек видит один налог,
+// а в чек уходит другой. Наследование: режим счёт → команда → компания,
+// ставка команда → компания (своей ставки у счёта нет намеренно).
+describe("действующий НДС: зеркало fill_transaction_vat", () => {
+  const company: VatSettings = { mode: "inclusive", rate: 19 };
+
+  test("без переопределений действует компания", () => {
+    expect(effectiveVatSettings(company, undefined, null)).toEqual({
+      mode: "inclusive",
+      rate: 19,
+    });
+  });
+
+  test("команда перебивает режим и ставку: Кипр 19 и Греция 24 одновременно", () => {
     expect(
-      defaultTxVatMode({ mode: "inclusive", rate: 0, exemptionNote: null }),
-    ).toBe("none");
+      effectiveVatSettings(company, { mode: "exclusive", rate: 24 }, null),
+    ).toEqual({ mode: "exclusive", rate: 24 });
+  });
+
+  test("пустая ставка команды наследует ставку компании", () => {
+    expect(
+      effectiveVatSettings(company, { mode: "exclusive", rate: null }, null),
+    ).toEqual({ mode: "exclusive", rate: 19 });
+  });
+
+  test("счёт перебивает только режим — ставка остаётся командной", () => {
+    expect(
+      effectiveVatSettings(company, { mode: "exclusive", rate: 24 }, "inclusive"),
+    ).toEqual({ mode: "inclusive", rate: 24 });
+  });
+
+  test("счёт «off» глушит налог при включённой компании", () => {
+    const v = effectiveVatSettings(company, undefined, "off");
+    expect(v.mode).toBe("off");
+    expect(defaultTxVatMode(v)).toBe("none");
+  });
+
+  test("тумблер компании «off» гасит и пины счёта/команды", () => {
+    // Канон: «Работаем с НДС» выключен — налога нет во всём продукте, даже
+    // если за счётом или командой закреплён свой режим (сервер проверяет
+    // t.vat_mode до coalesce — починка 2026-08-16, здесь то же правило).
+    expect(
+      effectiveVatSettings(
+        { mode: "off", rate: 19 },
+        { mode: "inclusive", rate: 24 },
+        "exclusive",
+      ),
+    ).toEqual(VAT_OFF);
+  });
+
+  test("нет тенанта — налог выключен", () => {
+    expect(
+      effectiveVatSettings(undefined, { mode: "inclusive", rate: 24 }, "inclusive"),
+    ).toEqual(VAT_OFF);
   });
 });

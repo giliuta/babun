@@ -38,9 +38,9 @@ import {
   generatePersonalEventTypeId,
   type PersonalEventTypeIcon,
 } from "@babun/shared/local/personal-event-types";
-import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AddRow } from "@/components/ui/AddRow";
@@ -56,7 +56,7 @@ import {
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // local SWATCHES list is gone — default stays синий.
-const DEFAULT_COLOR = PRESET_COLORS[1].value;
+const DEFAULT_COLOR = PRESET_COLOR_CYCLE[1].value;
 
 type IconCmp = ComponentType<{ color?: string; size?: number; strokeWidth?: number }>;
 
@@ -214,7 +214,6 @@ export default function EventTypesScreen() {
             <EmptyState
               fill
               title="Нет типов событий"
-              subtitle="Обед, встреча, выходной — чипы быстрого применения при создании события в календаре"
               action={{ label: "Добавить тип", onPress: () => setOpen(true) }}
             />
           }
@@ -232,10 +231,10 @@ export default function EventTypesScreen() {
           onPress={() => setOpen(false)}
           accessible={false}
         />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип события</Text>
           <Field label="Название" value={label} onChangeText={setLabel} placeholder="Обед" autoFocus />
-          <ColorPicker value={color} onChange={setColor} />
+          <ColorField value={color} onChange={setColor} />
           <Text className="mb-1.5 mt-3 text-[13px] font-medium" style={{ color: t.sub }}>
             Иконка
           </Text>

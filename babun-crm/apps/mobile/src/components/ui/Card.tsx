@@ -18,6 +18,12 @@ export function Card({
       style={[
         {
           borderRadius: t.radius.card,
+          // СКВИРКЛ, А НЕ ДУГА ОКРУЖНОСТИ. `borderCurve` не был проставлен в
+          // продукте НИ РАЗУ: все скругления рисовались круговой дугой, и
+          // угол «отламывался» от прямой стороны видимым изломом — та самая
+          // «дешевизна», которую не получается назвать словом. Радиус (14) не
+          // меняется, меняется форма дуги.
+          borderCurve: "continuous",
           backgroundColor: t.surface,
           overflow: "hidden",
           boxShadow: t.cardShadow,

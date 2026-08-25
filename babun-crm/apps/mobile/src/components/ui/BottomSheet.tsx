@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import {
   Dimensions,
   Keyboard,
@@ -6,6 +6,8 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
+  Text,
   View,
 } from "react-native";
 import {
@@ -24,7 +26,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { haptics } from "@/lib/haptics";
+import { useKeyboardShown } from "@/lib/keyboard";
 import { useThemeColors } from "@/theme/colors";
+import { GUTTER } from "@/components/ui/tokens";
 import { useReduceMotion } from "@/lib/reduce-motion";
 
 // ─── Канонический нижний лист приложения ───────────────────────────────
@@ -53,22 +57,65 @@ export function BottomSheet({
   visible,
   onClose,
   children,
+  /** Заголовок листа — под грабером и ВНУТРИ его жеста. Помечен как
+   *  `header`: без этого ротор VoiceOver внутри листа пуст. */
+  title,
+  /** Кнопка листа. Живёт ВНЕ прокрутки тела и платит нижний безопасный
+   *  отступ — иначе «Перевести» стоит на полосе home-индикатора и вместо
+   *  перевода даёт системный свайп на домашний экран. */
+  footer,
+  /** Тело листа прокручивается. Нужно всем листам, где содержимое зависит от
+   *  данных (8 счетов, 20 категорий): с поднятой клавиатурой лист упирается в
+   *  свой потолок, и без прокрутки нижние строки просто недостижимы. Листы со
+   *  своим списком внутри оставляют это выключенным. */
+  scroll = false,
+  scrollRef,
   /** Доля высоты экрана — потолок листа (контент выше скроллится внутри). */
   maxHeightRatio = 0.9,
   /** Показать «язычок» вверху (аффорданс листа). */
   grabber = true,
+  /** ПЛАШКА ПОВЕРХ ЛИСТА, У ВЕРХНЕЙ КРОМКИ ЭКРАНА. Тост здесь бесполезен:
+   *  он живёт в провайдере приложения, а лист — отдельное окно `Modal`, и
+   *  плашка честно всплывала ПОД ним. Всё, что лист хочет сказать поверх
+   *  себя, он передаёт сюда (см. `NoticeBar`). */
+  banner,
   /** Внутри листа есть ввод: поднимать его над клавиатурой. RN Modal —
    *  отдельное окно, и подъём экрана под ним листу не достаётся, поэтому
    *  KeyboardAvoidingView нужен ЗДЕСЬ. flex:1 обязателен: без него лист
    *  вырастает на высоту клавиатуры и уезжает шапкой за верхний край. */
   avoidKeyboard = false,
+  padded = true,
+  headerAction,
 }: {
   visible: boolean;
   onClose: () => void;
+  banner?: ReactNode;
   children: ReactNode;
+  title?: string;
+  footer?: ReactNode;
+  scroll?: boolean;
+  /** ССЫЛКА НА ПРОКРУТКУ ТЕЛА (2026-08-21). Лист с таблицей обязан САМ
+   *  доводить до глаза строку, которую только что добавили: она приезжает
+   *  вниз, берёт автофокус, клавиатура поднимается — и строка оказывается ПОД
+   *  клавиатурой, а команда «＋» снаружи выглядит не сделавшей ничего. То же с
+   *  раскрытым барабаном на последней строке. */
+  scrollRef?: RefObject<ScrollView | null>;
   maxHeightRatio?: number;
   grabber?: boolean;
   avoidKeyboard?: boolean;
+  /** ЛИСТ САМ ПЛАТИТ БОКОВЫЕ ПОЛЯ. По умолчанию да — иначе каждая новая форма
+   *  прилипает к краям листа (владелец 2026-08-17: «какого хуя оно всё слева
+   *  слито»), и разработчик обязан помнить про отступ, которого не видно в
+   *  коде. `false` — только для листов, которые пришли со своей раскладкой:
+   *  списки строк во всю ширину и карточки, уже отбивающие себя сами. */
+  padded?: boolean;
+  /** ОПАСНОЕ ДЕЙСТВИЕ ЖИВЁТ В ШАПКЕ, А НЕ ВТОРОЙ КНОПКОЙ ВНИЗУ (владелец
+   *  2026-08-18: «внизу строчка „удалить“ — там должна быть справа вверху
+   *  мусорка, это гораздо лучше, чем сразу две кнопки внизу»). Внизу листа
+   *  ровно ОДНА кнопка — та, ради которой лист открыли; «Удалить» под ней
+   *  стояло вплотную к большому пальцу и читалось как второй равноправный
+   *  выход. */
+  headerAction?: ReactNode;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -177,31 +224,93 @@ export function BottomSheet({
           // грабером за верхний край. Сжатие ложится на тело листа (у него
           // flexShrink: 1), а шапка и футер остаются на месте.
           flexShrink: 1,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          borderTopLeftRadius: t.radius.card,
+          borderTopRightRadius: t.radius.card,
           overflow: "hidden",
           backgroundColor: t.surface,
         },
         sheetStyle,
       ]}
     >
-      {grabber ? (
+      {/* ШАПКА ЦЕЛИКОМ ТЯНЕТ ЛИСТ. Жест висел на одной полоске 36×5pt — это
+          0,2% площади листа, и «свайп вниз» промахивался мимо неё почти
+          всегда. Заголовок ничего не нажимает, поэтому конфликта нет, а
+          площадь жеста вырастает до нормальной. */}
+      {grabber || title ? (
         <GestureDetector gesture={drag}>
-          <View className="items-center pb-1 pt-2.5">
-            <View
-              style={{
-                width: 36,
-                height: 5,
-                borderRadius: 3,
-                // «Чёрное не серое»: separator на surface ~1.1:1 — жест
-                // обещан, а язычка не видно. Ink+alpha, как у системного.
-                backgroundColor: "rgba(11,18,32,0.14)",
-              }}
-            />
+          <View>
+            {grabber ? (
+              <View className="items-center pb-1 pt-2.5">
+                <View
+                  style={{
+                    width: 36,
+                    height: 5,
+                    borderRadius: 3,
+                    // «Чёрное не серое»: separator на surface ~1.1:1 — жест
+                    // обещан, а язычка не видно. Ink+alpha, как у системного.
+                    backgroundColor: "rgba(11,18,32,0.14)",
+                  }}
+                />
+              </View>
+            ) : null}
+            {title ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingTop: grabber ? 4 : 12,
+                  paddingBottom: 12,
+                }}
+              >
+                {/* Заголовок остаётся ПО ЦЕНТРУ ЛИСТА: пустышка слева той же
+                    ширины, что действие справа, иначе имя уезжает влево тем
+                    сильнее, чем крупнее системный шрифт. */}
+                <View style={{ width: 44 }} />
+                <Text
+                  accessibilityRole="header"
+                  maxFontSizeMultiplier={1.2}
+                  numberOfLines={1}
+                  style={{
+                    flex: 1,
+                    fontSize: 17,
+                    fontWeight: "600",
+                    textAlign: "center",
+                    color: t.ink,
+                  }}
+                >
+                  {title}
+                </Text>
+                <View
+                  style={{
+                    width: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {headerAction}
+                </View>
+              </View>
+            ) : null}
           </View>
         </GestureDetector>
       ) : null}
-      {children}
+      {scroll ? (
+        <ScrollView
+          ref={scrollRef}
+          // flexShrink, а не flex: тело сжимается под клавиатурой, но короткий
+          // лист не растягивается на весь потолок.
+          style={{ flexShrink: 1 }}
+          contentContainerStyle={padded ? { paddingHorizontal: GUTTER } : undefined}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : padded ? (
+        <View style={{ paddingHorizontal: GUTTER }}>{children}</View>
+      ) : (
+        children
+      )}
+      {footer ? <SheetFooter padded={padded}>{footer}</SheetFooter> : null}
     </Animated.View>
   );
 
@@ -240,7 +349,50 @@ export function BottomSheet({
         ) : (
           sheet
         )}
+        {banner ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              top: insets.top + 8,
+              left: 16,
+              right: 16,
+            }}
+          >
+            {banner}
+          </View>
+        ) : null}
       </GestureHandlerRootView>
     </Modal>
+  );
+}
+
+/** Подвал листа — ЕДИНСТВЕННОЕ место, где лист платит нижний безопасный
+ *  отступ. Отдельным компонентом, чтобы подписка на клавиатуру жила только у
+ *  листов с подвалом: `BottomSheet` смонтирован у экрана всегда (закрытый он
+ *  просто рисует null), и общий хук подписал бы на события клавиатуры все
+ *  листы экрана разом.
+ *
+ *  Под клавиатурой отступ меньше: её кадр на iOS уже включает полосу
+ *  home-индикатора, и обе высоты вместе давали ~34pt пустоты, которые потолок
+ *  листа отбирал у содержимого. */
+function SheetFooter({
+  children,
+  padded,
+}: {
+  children: ReactNode;
+  padded?: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  const keyboardShown = useKeyboardShown();
+  return (
+    <View
+      style={{
+        paddingHorizontal: padded ? GUTTER : 0,
+        paddingBottom: keyboardShown ? 12 : Math.max(insets.bottom, 16),
+      }}
+    >
+      {children}
+    </View>
   );
 }

@@ -9,12 +9,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import {
-  DIGIT_FONT,
-  HOURS,
   ITEM_H,
+  MINUTE_STEP,
   PAD,
-  WheelColumn,
-  WheelWithLines,
+  TimeWheelPair,
 } from "@/components/ui/TimeWheel";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -23,12 +21,12 @@ import type { WorkBand } from "@/features/calendar/DayView";
 
 // Тап по пустому слоту сетки → этот лист (веб-паритет слот-попапа
 // babun.app, только снизу — закон «создание — листом»): дата УЖЕ выбрана
-// тапом и стоит по центру шапки, колесо правит только время (шаг 5 минут —
-// то же колесо, что в /book, см. @/components/ui/TimeWheel), внизу две
+// тапом и стоит по центру шапки, барабаны правят только время (канонический
+// `TimeWheelPair` — закольцованные часы и пятиминутки, DS §5), внизу две
 // дороги создания стопкой: «Событие» и главная «Клиент». /book открывается
 // уже с выбранными временем и типом.
 //
-// Время вне рабочих часов бригады подсвечивается, но НЕ блокируется
+// Время вне рабочих часов команды подсвечивается, но НЕ блокируется
 // (владелец: «даёт понять, что сотрудник уже не работает, но всё равно даёт
 // создать» — аварийные выезды ставят сознательно): амбер-полоса за выбранным
 // рядом + t.warning на активных цифрах + тихая подпись со словами словаря
@@ -36,8 +34,6 @@ import type { WorkBand } from "@/features/calendar/DayView";
 
 export type SlotDraft = { date: string; time: string };
 
-const STEP = 5;
-const MINUTES = Array.from({ length: 60 / STEP }, (_, i) => pad2(i * STEP));
 const FADE_MS = 140;
 
 const minToHM = (min: number) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`;
@@ -54,13 +50,13 @@ function dateLabel(date: string): string {
 // Состояние выбранной точки относительно рабочей полосы дня. Границы
 // полуоткрытые — паритет с wash сетки: startMin включительно (08:00 при
 // смене с 08:00 — рабочее), endMin исключительно (19:00 ровно — уже вне).
-type OffState =
+export type OffState =
   | { kind: "outside"; band: WorkBand }
   | { kind: "break"; startMin: number; endMin: number }
   | { kind: "dayoff" }
   | null;
 
-function offStateAt(band: WorkBand | null | undefined, minute: number): OffState {
+export function offStateAt(band: WorkBand | null | undefined, minute: number): OffState {
   if (band === undefined) return null;
   if (band === null) return { kind: "dayoff" };
   // Fail-safe: мусорная полоса (endMin ≤ startMin) — молча «рабочее»,
@@ -76,14 +72,14 @@ function offStateAt(band: WorkBand | null | undefined, minute: number): OffState
 // Словарь — дословно reschedule-warning.ts (один словарь на всё приложение);
 // хвост с диапазоном отвечает диспетчеру на следующий вопрос клиента —
 // «а до скольких они работают?».
-function captionFor(off: NonNullable<OffState>): string {
+export function captionFor(off: NonNullable<OffState>): string {
   switch (off.kind) {
     case "dayoff":
-      return "Нерабочий день бригады";
+      return "Нерабочий день команды";
     case "break":
-      return `Попадает на перерыв бригады · ${minToHM(off.startMin)}–${minToHM(off.endMin)}`;
+      return `Попадает на перерыв команды · ${minToHM(off.startMin)}–${minToHM(off.endMin)}`;
     case "outside":
-      return `Вне рабочих часов бригады · работают ${minToHM(off.band.startMin)}–${minToHM(off.band.endMin)}`;
+      return `Вне рабочих часов команды · работают ${minToHM(off.band.startMin)}–${minToHM(off.band.endMin)}`;
   }
 }
 
@@ -109,9 +105,6 @@ export function BookSlotSheet({
   // Появление/затухание сигнала — только opacity, ничего не едет (закон
   // движения DS). Объявлены до эффекта открытия: он снапит их значения.
   const bandOpacity = useSharedValue(0);
-  const captionOpacity = useSharedValue(0);
-  // Текст держится, пока подпись затухает — без прыжка на пустую строку.
-  const lastCaptionRef = useRef("");
 
   // Ресинк черновика — по фронту открытия: пока лист открыт, колесо
   // владеет значением, тики календаря его не перескакивают. Там же
@@ -135,42 +128,39 @@ export function BookSlotSheet({
       );
       bandOpacity.value =
         off?.kind === "outside" || off?.kind === "break" ? 1 : 0;
-      captionOpacity.value = off ? 1 : 0;
-      lastCaptionRef.current = off ? captionFor(off) : "";
     }
     wasOpen.current = slot != null;
-  }, [slot, bandFor, bandOpacity, captionOpacity]);
+  }, [slot, bandFor, bandOpacity]);
 
   const [h, m] = (draft?.time ?? "10:00").split(":").map(Number);
   const hourIdx = Math.max(0, Math.min(23, h || 0));
-  const minIdx = Math.max(0, Math.min(MINUTES.length - 1, Math.floor((m || 0) / STEP)));
+  const minIdx = Math.max(0, Math.min(60 / MINUTE_STEP - 1, Math.floor((m || 0) / MINUTE_STEP)));
   // Каждая колонка переписывает ТОЛЬКО свою половину от ПРЕДЫДУЩЕГО
   // черновика: сборка всего HH:MM из индексов замыкания теряла коммит
   // соседней колонки, когда два коммита попадали в один батч React.
-  const setHour = (i: number) =>
+  const setHour = (h: number) =>
     setDraft((d) =>
-      d ? { ...d, time: `${pad2(i)}:${d.time.split(":")[1] ?? "00"}` } : d,
+      d ? { ...d, time: `${pad2(h)}:${d.time.split(":")[1] ?? "00"}` } : d,
     );
-  const setMin = (i: number) =>
+  const setMin = (minute: number) =>
     setDraft((d) =>
-      d ? { ...d, time: `${d.time.split(":")[0] ?? "00"}:${MINUTES[i]}` } : d,
+      d ? { ...d, time: `${d.time.split(":")[0] ?? "00"}:${pad2(minute)}` } : d,
     );
 
   const offState = draft
-    ? offStateAt(bandFor?.(draft.date), hourIdx * 60 + minIdx * STEP)
+    ? offStateAt(bandFor?.(draft.date), hourIdx * 60 + minIdx * MINUTE_STEP)
     : null;
-  // Выходной НЕ красит колесо (паритет DayView v473: тело дня чистое,
-  // сигнал текстом) — амбер только у «вне часов» и «перерыва».
-  const amberOn = offState?.kind === "outside" || offState?.kind === "break";
+  // ВЫХОДНОЙ ТОЖЕ КРАСИТ БАРАБАН. Раньше он был исключением — «тело дня
+  // чистое, сигнал текстом», но с 2026-08-17 колонка выходного закрашена целиком
+  // (DayView), и держать самый сильный «мы не работаем» единственным без амбера
+  // значит выдавать его за обычное время.
+  const amberOn = offState != null;
   const captionOn = offState != null;
-  if (offState) lastCaptionRef.current = captionFor(offState);
 
   useEffect(() => {
     bandOpacity.value = withTiming(amberOn ? 1 : 0, { duration: FADE_MS });
-    captionOpacity.value = withTiming(captionOn ? 1 : 0, { duration: FADE_MS });
-  }, [amberOn, captionOn, bandOpacity, captionOpacity]);
+  }, [amberOn, bandOpacity]);
   const bandStyle = useAnimatedStyle(() => ({ opacity: bandOpacity.value }));
-  const captionStyle = useAnimatedStyle(() => ({ opacity: captionOpacity.value }));
 
   // Один тихий тик на commit-переходе рабочее→вне (не на открытии уже во
   // «вне» — серый слот сетки только что сказал то же самое, не отчитываем).
@@ -202,7 +192,8 @@ export function BookSlotSheet({
   const voSuffix = captionOn ? ", вне рабочих часов" : undefined;
 
   return (
-    <BottomSheet visible={slot != null} onClose={onClose}>
+    <BottomSheet padded={false} visible={slot != null} onClose={onClose}
+    >
       {draft ? (
         <View
           className="px-5 pt-1"
@@ -243,63 +234,19 @@ export function BookSlotSheet({
                   bandStyle,
                 ]}
               />
-              <WheelWithLines>
-                <WheelColumn
-                  items={HOURS}
-                  selectedIndex={hourIdx}
-                  onChange={setHour}
-                  accessibilityLabel="Время записи, часы"
-                  activeColor={amberOn ? t.warning : undefined}
-                  accessibilityValueSuffix={voSuffix}
-                />
-              </WheelWithLines>
-              {/* Декоративное двоеточие — VoiceOver его не читает. */}
-              <Text
-                accessible={false}
-                importantForAccessibility="no"
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  fontSize: DIGIT_FONT,
-                  fontWeight: "300",
-                  color: t.chevron,
-                  paddingHorizontal: 2,
-                }}
-              >
-                :
-              </Text>
-              <WheelWithLines>
-                <WheelColumn
-                  items={MINUTES}
-                  selectedIndex={minIdx}
-                  onChange={setMin}
-                  accessibilityLabel="Время записи, минуты"
-                  activeColor={amberOn ? t.warning : undefined}
-                  accessibilityValueSuffix={voSuffix}
-                />
-              </WheelWithLines>
+              <TimeWheelPair
+                hour={hourIdx}
+                minute={minIdx * MINUTE_STEP}
+                onChangeHour={setHour}
+                onChangeMinute={setMin}
+                labelPrefix="Время записи"
+                activeColor={amberOn ? t.warning : undefined}
+                accessibilityValueSuffix={voSuffix}
+              />
             </View>
           </View>
 
-          {/* Постоянный слот подписи — нулевой сдвиг макета при переключении. */}
-          <View style={{ height: 20, justifyContent: "center", marginBottom: 6 }}>
-            <Animated.Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              style={[
-                {
-                  fontSize: 13,
-                  fontWeight: "500",
-                  textAlign: "center",
-                  fontVariant: ["tabular-nums"],
-                  color: t.warning,
-                },
-                captionStyle,
-              ]}
-            >
-              {lastCaptionRef.current}
-            </Animated.Text>
-          </View>
+          <View style={{ height: 6 }} />
 
           {/* Две дороги создания стопкой (веб-паритет): Клиент — главная.
               Никогда не тонируются и не блокируются — вне часов запись

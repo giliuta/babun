@@ -4,6 +4,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
+import { rpcArgs } from "../rpc-args";
 import type {
   InvoiceLedger,
   InvoiceLedgerWithLines,
@@ -61,6 +62,7 @@ function rowToInvoice(r: Row): InvoiceLedger {
     year: r.year,
     seq: r.seq,
     issued_on: r.issued_on,
+    language: r.language ?? "ru",
     due_on: r.due_on,
     client_id: r.client_id,
     appointment_id: r.appointment_id,
@@ -87,7 +89,9 @@ function rowToLine(r: LineRow): InvoiceLineLedger {
     invoice_id: r.invoice_id,
     position: r.position,
     title: r.title,
+    description: r.description ?? null,
     qty: Number(r.qty ?? 1),
+    unit: r.unit ?? null,
     unit_price: Number(r.unit_price ?? 0),
     total: Number(r.total ?? 0),
   };
@@ -136,23 +140,32 @@ export async function issueInvoice(
   const lines = validateInvoiceDraft(draft);
   const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
   assertInvoiceTotal(totals.total);
-  const { data, error } = await supabase.rpc("issue_invoice", {
-    p_request_id: draft.request_id,
-    p_issued_on: draft.issued_on,
-    p_due_on: draft.due_on ?? null,
-    p_client_id: draft.client_id ?? null,
-    p_appointment_id: draft.appointment_id ?? null,
-    p_brigade_id: draft.brigade_id ?? null,
-    p_vat_mode: draft.vat_mode,
-    p_vat_percent: draft.vat_percent,
-    p_lines: lines.map((line) => ({
-      title: line.title,
-      qty: line.qty,
-      unit_price: line.unit_price,
-    })),
-    p_notes: draft.notes?.trim() || null,
-    p_link_to_tx_id: draft.link_to_tx_id ?? null,
-  });
+  const { data, error } = await supabase.rpc(
+    "issue_invoice",
+    rpcArgs<"issue_invoice">({
+      p_request_id: draft.request_id,
+      p_issued_on: draft.issued_on,
+      p_due_on: draft.due_on ?? null,
+      p_client_id: draft.client_id ?? null,
+      p_appointment_id: draft.appointment_id ?? null,
+      p_brigade_id: draft.brigade_id ?? null,
+      p_vat_mode: draft.vat_mode,
+      p_vat_percent: draft.vat_percent,
+      // ОПИСАНИЕ И ЕДИНИЦА ЕДУТ НА СЕРВЕР. Их не было в этом списке, и
+      // серверная функция, перечисляющая колонки поимённо, молча писала
+      // строку без них: в черновике текст стоял, в выставленном счёте
+      // исчезал. На проде так пропали описания всех пяти строк.
+      p_lines: lines.map((line) => ({
+        title: line.title,
+        description: line.description ?? null,
+        unit: line.unit ?? null,
+        qty: line.qty,
+        unit_price: line.unit_price,
+      })),
+      p_notes: draft.notes?.trim() || null,
+      p_link_to_tx_id: draft.link_to_tx_id ?? null,
+    }),
+  );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {
     throw new Error(`issueInvoice: ${error?.message ?? "создание не подтверждено сервером"}`);
   }
@@ -218,6 +231,28 @@ export async function updateInvoiceStatus(
   }
 }
 
+/**
+ * ЯЗЫК БУМАГИ — ОТДЕЛЬНОЙ ЗАПИСЬЮ, И ЭТО СОЗНАТЕЛЬНО.
+ *
+ * `issue_invoice` его не принимает: добавить параметр к функции с одиннадцатью
+ * аргументами значит создать ПЕРЕГРУЗКУ (Postgres не заменяет функцию с другой
+ * сигнатурой), а старый вызов остался бы жить рядом. Язык при этом не деньги:
+ * сторож `prevent_settled_invoice_rewrite` его не проверяет, и переключить его
+ * можно даже у оплаченного счёта — клиент попросил английский уже после
+ * выставления, и это законная просьба.
+ */
+export async function setInvoiceLanguage(
+  supabase: DbSupabase,
+  id: string,
+  language: "ru" | "en",
+): Promise<void> {
+  const { error } = await supabase
+    .from("invoices")
+    .update({ language })
+    .eq("id", id);
+  if (error) throw new Error(`setInvoiceLanguage: ${error.message}`);
+}
+
 /** Edit an unpaid invoice atomically under the database invoice-row lock. */
 export async function updateInvoice(
   supabase: DbSupabase,
@@ -228,21 +263,26 @@ export async function updateInvoice(
   const lines = validateInvoiceDraft({ ...draft, issued_on: issuedOn });
   const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
   assertInvoiceTotal(totals.total);
-  const { data, error } = await supabase.rpc("update_invoice_draft", {
-    p_invoice_id: id,
-    p_due_on: draft.due_on ?? null,
-    p_client_id: draft.client_id ?? null,
-    p_appointment_id: draft.appointment_id ?? null,
-    p_brigade_id: draft.brigade_id ?? null,
-    p_vat_mode: draft.vat_mode,
-    p_vat_percent: draft.vat_percent,
-    p_lines: lines.map((line) => ({
-      title: line.title,
-      qty: line.qty,
-      unit_price: line.unit_price,
-    })),
-    p_notes: draft.notes?.trim() || null,
-  });
+  const { data, error } = await supabase.rpc(
+    "update_invoice_draft",
+    rpcArgs<"update_invoice_draft">({
+      p_invoice_id: id,
+      p_due_on: draft.due_on ?? null,
+      p_client_id: draft.client_id ?? null,
+      p_appointment_id: draft.appointment_id ?? null,
+      p_brigade_id: draft.brigade_id ?? null,
+      p_vat_mode: draft.vat_mode,
+      p_vat_percent: draft.vat_percent,
+      p_lines: lines.map((line) => ({
+        title: line.title,
+        description: line.description ?? null,
+        unit: line.unit ?? null,
+        qty: line.qty,
+        unit_price: line.unit_price,
+      })),
+      p_notes: draft.notes?.trim() || null,
+    }),
+  );
   if (error || !data || data.id !== id || data.status !== "issued") {
     throw new Error(
       `updateInvoice: ${error?.message ?? "сохранение не подтверждено сервером"}`,

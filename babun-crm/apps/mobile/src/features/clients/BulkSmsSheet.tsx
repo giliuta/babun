@@ -138,7 +138,7 @@ export function BulkSmsSheet({
         accessible={false}
       />
       <View
-        className="absolute bottom-0 left-0 right-0 max-h-[86%] rounded-t-3xl p-5"
+        className="absolute bottom-0 left-0 right-0 max-h-[86%] rounded-t-[10px] p-5"
         style={{
           backgroundColor: t.surface,
           paddingBottom: Math.max(32, insets.bottom + 12),
@@ -245,7 +245,7 @@ export function BulkSmsSheet({
               keyboardAppearance="light"
               multiline
               maxLength={500}
-              className="min-h-[92px] rounded-[14px] px-3 py-2.5 text-base"
+              className="min-h-[92px] rounded-[10px] px-3 py-2.5 text-base"
               style={{ backgroundColor: t.fill, color: t.ink, textAlignVertical: "top" }}
             />
             <Text className="mt-2 text-[11px] leading-snug" style={{ color: t.faint }}>

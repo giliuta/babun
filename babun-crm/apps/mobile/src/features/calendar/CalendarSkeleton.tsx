@@ -6,6 +6,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { HEADER_H, RAIL_W } from "@/features/calendar/DayView";
 import { useReduceMotion } from "@/lib/reduce-motion";
@@ -87,10 +88,10 @@ function AgendaSkeleton({
           key={i}
           style={[
             {
-              marginHorizontal: 12,
+              marginHorizontal: GUTTER,
               marginBottom: 10,
               height: 64,
-              borderRadius: 14,
+              borderRadius: t.radius.card,
               backgroundColor: bone,
             },
             shimmer,
@@ -161,7 +162,7 @@ export function CalendarSkeleton({ mode = "week" }: { mode?: SkeletonMode }) {
               style={{
                 width: mode === "week" ? 22 : 26,
                 height: mode === "week" ? 22 : 26,
-                borderRadius: 13,
+                borderRadius: t.radius.card,
                 backgroundColor: bone,
               }}
             />
@@ -212,7 +213,7 @@ export function CalendarSkeleton({ mode = "week" }: { mode?: SkeletonMode }) {
                       right: mode === "week" ? 3 : 8,
                       top: b.top,
                       height: b.height,
-                      borderRadius: 8,
+                      borderRadius: t.radius.card,
                       backgroundColor: bone,
                     },
                     shimmer,

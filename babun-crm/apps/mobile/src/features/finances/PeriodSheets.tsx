@@ -76,7 +76,10 @@ export function PeriodPresetModal({
         {label}
       </Text>
       {hint ? (
-        <Text className="ml-auto text-[13px] tabular-nums" style={{ color: t.faint }}>
+        <Text
+          className="ml-auto text-[13px]"
+          style={{ color: t.faint, fontVariant: ["tabular-nums"] }}
+        >
           {hint}
         </Text>
       ) : null}
@@ -89,20 +92,12 @@ export function PeriodPresetModal({
   );
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <View className="px-5 pb-8 pt-1">
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          className="mb-3 text-[17px] font-semibold"
-          style={{ color: t.ink }}
-        >
-          Период
-        </Text>
+    <BottomSheet visible={visible} onClose={onClose} title="Период">
+      <View className="px-5 pb-8">
         {allTime ? (
           <View
-            className="mb-2 overflow-hidden rounded-xl"
-            style={{ backgroundColor: t.canvas }}
+            className="mb-2 overflow-hidden"
+            style={{ backgroundColor: t.fill, borderRadius: t.radius.card }}
           >
             {row("Всё время", allTime.hint, allTime.active, false, allTime.onSelect)}
           </View>
@@ -110,8 +105,8 @@ export function PeriodPresetModal({
         {PERIOD_BLOCKS.map(([cur, prev]) => (
           <View
             key={cur}
-            className="mb-2 overflow-hidden rounded-xl"
-            style={{ backgroundColor: t.canvas }}
+            className="mb-2 overflow-hidden"
+            style={{ backgroundColor: t.fill, borderRadius: t.radius.card }}
           >
             {[cur, prev].map((kind, i) =>
               row(
@@ -188,10 +183,12 @@ export function PeriodWheelsModal({
           haptics.tap();
           setSide(key);
         }}
-        className="flex-1 items-center justify-center rounded-[10px]"
+        className="flex-1 items-center justify-center"
         style={{
           minHeight: 48,
           paddingVertical: 4,
+          // Концентрично контейнеру сегмента: его радиус минус паддинг.
+          borderRadius: t.radius.card - 4,
           backgroundColor: active ? t.surface : "transparent",
         }}
       >
@@ -202,8 +199,8 @@ export function PeriodWheelsModal({
           {label}
         </Text>
         <Text
-          className="text-[15px] font-semibold tabular-nums"
-          style={{ color: t.ink }}
+          className="text-[15px] font-semibold"
+          style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
         >
           {value}
         </Text>
@@ -214,27 +211,29 @@ export function PeriodWheelsModal({
   const shown: Period = { preset: "custom", from, to };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
-      <View className="px-5 pb-8 pt-1">
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      title="Свой период"
+      footer={
+        <View className="px-5">
+          <Button label="Применить" onPress={apply} />
+        </View>
+      }
+    >
+      <View className="px-5 pb-2">
         <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          className="mb-1 text-[17px] font-semibold"
-          style={{ color: t.ink }}
-        >
-          Свой период
-        </Text>
-        <Text
-          className="mb-3 text-center text-base font-semibold tabular-nums"
-          style={{ color: t.sub }}
+          className="mb-3 text-center text-base font-semibold"
+          style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
         >
           {periodDates(shown)}
         </Text>
 
         {/* С | До endpoint segment */}
         <View
-          className="mb-3 flex-row rounded-xl p-1"
-          style={{ backgroundColor: t.fill, gap: 4 }}
+          className="mb-3 flex-row p-1"
+          style={{ backgroundColor: t.fill, gap: 4, borderRadius: t.radius.card }}
         >
           {segment("from", "С", periodDates({ preset: "custom", from, to: from }))}
           {segment("to", "До", periodDates({ preset: "custom", from: to, to }))}
@@ -254,10 +253,6 @@ export function PeriodWheelsModal({
               else setTo(formatYMD(d));
             }}
           />
-        </View>
-
-        <View className="mt-2">
-          <Button label="Применить" onPress={apply} />
         </View>
       </View>
     </BottomSheet>

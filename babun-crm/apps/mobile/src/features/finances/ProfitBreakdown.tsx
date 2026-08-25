@@ -4,7 +4,6 @@ import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
@@ -14,12 +13,14 @@ import {
   type BreakdownRow,
 } from "./breakdown";
 import { IncomeShareDonut } from "./IncomeShareDonut";
+import { PanelHeader } from "./PanelHeader";
 
-// «Разбор прибыли» — port of the web ProfitPanel (bars view): profit hero,
-// then «Что принесло денег» (income by service/category, breakdownIncome
-// resolves an income tx to the linked appointment's service) and «Куда
-// ушёл расход» (expense by category), each row with its ×N operation
-// count and a proportion bar.
+// «Разбор прибыли» — port of the web ProfitPanel (bars view): «Что принесло
+// денег» (income by service/category, breakdownIncome resolves an income tx
+// to the linked appointment's service) and «Куда ушёл расход» (expense by
+// category), each row with its ×N operation count and a proportion bar.
+// Цифру самой прибыли печатает переключатель над панелью — второго раза ей
+// здесь не нужно.
 //
 // The web «Доли %» donut (FinancePieChart, the last finance surface with
 // no mobile twin) now sits above the income rows as IncomeShareDonut —
@@ -67,10 +68,7 @@ export function ProfitBreakdown({
   // actually draw — otherwise one sale + one refund would look like two
   // buckets and render a pointless full ring.
   const positiveIncomeBuckets = incomeRows.filter((r) => r.amount > 0).length;
-
-  if (incomeRows.length === 0 && expenseRows.length === 0) {
-    return <EmptyState fill title="Нет данных за период" />;
-  }
+  const empty = incomeRows.length === 0 && expenseRows.length === 0;
 
   // Expense amounts are stored positive but represent outflows → always
   // «−». Income buckets are normally «+»; a refund whose original sale
@@ -117,16 +115,22 @@ export function ProfitBreakdown({
     );
   };
 
+  if (empty) {
+    return (
+      <ScrollView style={{ flex: 1 }}>
+        <PanelHeader title="Прибыль" />
+        <EmptyState title="Нет доходов и расходов за период" />
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 96 }}>
-      <Card style={{ marginHorizontal: 12, marginTop: 8, padding: 16 }}>
-        <Text className="text-xs" style={{ color: th.sub }}>
-          Прибыль за период
-        </Text>
-        <Text className="text-3xl font-bold" style={{ color: th.brandAccent }}>
-          {formatEUR(income - expense)}
-        </Text>
-      </Card>
+      {/* Эйбрау вместо героя-карточки. Сама цифра прибыли стоит строкой выше —
+          в переключателе, которым эту панель и открыли, и тем же кобальтом.
+          Карточка «Прибыль за период / €900» повторяла её через 8pt: одни и те
+          же деньги дважды на одном экране. */}
+      <PanelHeader title="Прибыль" />
 
       <View className="mt-1">
         <View className="flex-row items-baseline px-4 pb-1 pt-3">

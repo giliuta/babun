@@ -35,4 +35,27 @@ describe("что можно править прямо в форме", () => {
     assert.equal(canEditTransaction(tx({ type: "transfer" })), false);
     assert.equal(canEditTransaction(tx({ type: "refund" })), false);
   });
+
+  // Коррекцию рождает сверка (`record_cash_count`), и правка её суммы
+  // развела бы леджер с историей сверок. Признак — серверный штамп заметки:
+  // ссылка сверки со строкой операции не приезжает.
+  test("коррекция пересчёта кассы принадлежит сверке", () => {
+    assert.equal(
+      canEditTransaction(tx({ notes: "Пересчёт кассы 12.08.2026" })),
+      false,
+    );
+    assert.equal(
+      canEditTransaction(
+        tx({ type: "income", notes: "Пересчёт кассы 01.01.2026 · излишек" }),
+      ),
+      false,
+    );
+  });
+
+  test("своя заметка со словами про пересчёт — не коррекция", () => {
+    assert.equal(
+      canEditTransaction(tx({ notes: "вернул долг за пересчёт кассы" })),
+      true,
+    );
+  });
 });

@@ -30,8 +30,18 @@ export function AddRow({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
-      className="flex-row items-center px-4"
+      // БЕЗ className. `className` вместе со `style`-ФУНКЦИЕЙ молча убивает
+      // весь стиль: react-native-css складывает их в массив
+      // `[классовые_стили, fn]`, а React Native вызывает `style`, только когда
+      // он САМ функция — массив с функцией внутри выбрасывается целиком.
+      // Из-за этого строка рендерилась высотой 24pt (коробка шеврона) вместо
+      // 52: единственная дверь создания имела цель касания вдвое меньше
+      // минимума Apple. Заодно не работали подсветка нажатия, верхняя линия и
+      // гашение при disabled. Раскладку держим числами в той же функции.
       style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        paddingHorizontal: 16,
         minHeight: 52,
         opacity: disabled ? 0.4 : 1,
         borderTopWidth: separated ? 1 : 0,
@@ -43,8 +53,12 @@ export function AddRow({
         maxFontSizeMultiplier={1.3}
         adjustsFontSizeToFit
         minimumFontScale={0.75}
-        className="flex-1 text-base font-medium"
-        style={{ color: t.accent }}
+        // ТОЖЕ БЕЗ className, и по той же причине, что у строки выше: с
+        // `adjustsFontSizeToFit` кегль обязан приехать в САМОМ `style`.
+        // Классовый `text-base` доходит до текста другим путём, алгоритм сжатия
+        // считает диапазон без него — и подпись «Добавить счёт» ужималась до
+        // нечитаемых ~7pt, хотя `minimumFontScale` обещает не ниже 12.
+        style={{ flex: 1, fontSize: 16, fontWeight: "500", color: t.accent }}
         numberOfLines={1}
       >
         {label}

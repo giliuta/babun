@@ -252,7 +252,7 @@ export default function ClientsListScreen() {
   const openRemindMenu = (c: Client) => setRemindClient(c);
 
   // ЗАПИСАТЬ ПРЯМО ИЗ СПИСКА (свайп вправо и лист действий). Строка уже знает
-  // и основной объект, и последнюю бригаду — те же два поля, что подставляет
+  // и основной объект, и последнюю команду — те же два поля, что подставляет
   // карточка, поэтому лишний заход в карточку ради «Записать» больше не
   // нужен. Чёрный список спрашивает через тот же общий гейт.
   // Ссылка на открытую свайпом строку — чтобы закрыть её, когда открывают
@@ -493,7 +493,7 @@ export default function ClientsListScreen() {
               height: 44,
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: 22,
+              borderRadius: t.radius.card,
               backgroundColor: pressed ? t.pressed : "transparent",
             })}
           >
@@ -520,6 +520,8 @@ export default function ClientsListScreen() {
               selectionColor={t.accent}
               keyboardAppearance="light"
               autoCapitalize="none"
+              autoCorrect={false}
+              spellCheck={false}
               returnKeyType="search"
               clearButtonMode="while-editing"
               maxFontSizeMultiplier={1.3}
@@ -539,7 +541,7 @@ export default function ClientsListScreen() {
                 height: 44,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 22,
+                borderRadius: t.radius.card,
                 backgroundColor: pressed ? t.pressed : "transparent",
               })}
             >

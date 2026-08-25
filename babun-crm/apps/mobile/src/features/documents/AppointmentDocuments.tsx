@@ -1,12 +1,14 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { calculateInvoiceSettlement } from "@babun/shared/local/finance/invoice-ledger";
+import type { Receipt } from "@babun/shared/local/finance/receipt";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ActionRow, NavRow } from "@/components/ui/card-rows";
 import { useThemeColors } from "@/theme/colors";
 import { formatInvoiceMoney } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useReceipts } from "@/features/documents/receipts-queries";
+import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 
 // ДОКУМЕНТЫ ЖИВУТ РЯДОМ С РАБОТОЙ, ЗА КОТОРУЮ ИХ ВЫДАЛИ.
 //
@@ -20,20 +22,14 @@ import { useReceipts } from "@/features/documents/receipts-queries";
 
 export function AppointmentDocuments({
   appointmentId,
-  clientId,
-  teamId,
   amount,
-  title,
-  issuedOn,
   onOpen,
 }: {
   appointmentId: string;
-  clientId: string | null;
-  teamId: string | null;
-  /** Сумма записи — предзаполнение строки счёта. */
+  /** Сумма записи — только ПОРОГ кнопки: по бесплатной работе счёт не
+   *  выставляют. Сам документ генератор собирает из СОХРАНЁННОЙ записи, а не
+   *  из этого числа: счёт обязан называть ту же сумму, что деньги и долги. */
   amount: number;
-  title: string;
-  issuedOn: string;
   /** Уводит с экрана: лист закрывается сам, иначе новый экран уедет под него. */
   onOpen: (href: string) => void;
 }) {
@@ -41,6 +37,10 @@ export function AppointmentDocuments({
   const invoicesQuery = useInvoices();
   const paymentsQuery = useInvoicePayments();
   const receiptsQuery = useReceipts({ appointmentId });
+  // Чек раскрывается листом ПРЯМО ЗДЕСЬ (канон 2026-08-12: «чек открывается
+  // листом и высылается изнутри») — общий экран чеков не умел ни открыть
+  // конкретный, ни выслать его.
+  const [openReceipt, setOpenReceipt] = useState<Receipt | null>(null);
 
   const invoices = useMemo(
     () =>
@@ -90,7 +90,7 @@ export function AppointmentDocuments({
               ? "аннулирован"
               : formatInvoiceMoney(receipt.amount)
           }
-          onPress={() => onOpen("/documents/receipts")}
+          onPress={() => setOpenReceipt(receipt)}
         />
       ))}
 
@@ -98,14 +98,12 @@ export function AppointmentDocuments({
         <ActionRow
           separated={invoices.length + receipts.length > 0}
           label="Выставить счёт"
-          onPress={() =>
-            onOpen(
-              `/invoices/new?appointmentId=${appointmentId}` +
-                `&clientId=${clientId ?? ""}&teamId=${teamId ?? ""}` +
-                `&amount=${amount}&issuedOn=${issuedOn}` +
-                `&title=${encodeURIComponent(title)}`,
-            )
-          }
+          // В АДРЕСЕ ТОЛЬКО ЗАПИСЬ. Клиента, команду, дату, срок оплаты и
+          // строки собирает генератор из самой заявки и настроек компании
+          // (`generateInvoiceFromAppointment`). Тащить их сюда значило бы
+          // держать второе описание одного документа — и оно разъехалось бы
+          // с первым на первой же правке настроек.
+          onPress={() => onOpen(`/invoices/new?appointmentId=${appointmentId}`)}
         />
       ) : null}
 
@@ -116,6 +114,18 @@ export function AppointmentDocuments({
           </Text>
         </View>
       ) : null}
+
+      <ReceiptSheet
+        receipt={openReceipt}
+        // Мы уже стоим внутри этой записи — дверь «Запись» вела бы туда, где
+        // человек и так находится, поэтому строка молчит.
+        appointment={null}
+        // Счетов у экрана записи нет, и грузить их ради одной подписи не
+        // стоит: лист без имени счёта честно прячет строку.
+        accountName={null}
+        onClose={() => setOpenReceipt(null)}
+        onOpen={onOpen}
+      />
     </SectionCard>
   );
 }

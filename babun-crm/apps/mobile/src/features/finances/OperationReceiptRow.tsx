@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
@@ -9,6 +9,7 @@ import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import {
   deleteOperationReceipt,
+  discardOperationReceiptIfOrphan,
   uploadOperationReceipt,
   useSignedReceiptUrl,
 } from "./receipt-upload";
@@ -41,6 +42,21 @@ export function OperationReceiptRow({
   // иначе каждая опечатка («не тот чек») оставляла бы мусор навсегда.
   // Документ уже сохранённой операции не трогаем — он часть истории.
   const uploadedHere = useRef<Set<string>>(new Set());
+  const unmounted = useRef(false);
+  // Закрытие листа БЕЗ сохранения — тот же случай мусора: файл уже в бакете,
+  // а операция с ним так и не записана. Крестик формы про это не узнает,
+  // поэтому подчищаем на размонтировании; сохранённый файл переживёт чистку —
+  // discardOperationReceiptIfOrphan удаляет только то, на что не ссылается
+  // ни одна операция.
+  useEffect(
+    () => () => {
+      unmounted.current = true;
+      for (const path of uploadedHere.current) {
+        void discardOperationReceiptIfOrphan(path);
+      }
+    },
+    [],
+  );
   const signed = useSignedReceiptUrl(receiptUrl);
 
   const attach = async (from: "camera" | "gallery" | "file") => {
@@ -92,6 +108,12 @@ export function OperationReceiptRow({
         },
         tenantId,
       );
+      // Лист закрыли, пока файл летел: показать и сохранить его уже некому,
+      // а чистка размонтирования прошла до конца загрузки — убираем сами.
+      if (unmounted.current) {
+        void deleteOperationReceipt(path).catch(() => {});
+        return;
+      }
       uploadedHere.current.add(path);
       onPick(path);
     } catch (e) {
@@ -105,7 +127,11 @@ export function OperationReceiptRow({
     return (
       <View className="flex-row items-center gap-2 px-4 py-3">
         <Spinner size={18} />
-        <Text className="text-base" style={{ color: t.sub }}>
+        <Text
+          className="text-base"
+          maxFontSizeMultiplier={1.3}
+          style={{ color: t.sub }}
+        >
           Загружаем документ…
         </Text>
       </View>
@@ -123,10 +149,19 @@ export function OperationReceiptRow({
           accessibilityLabel="Открыть приложенный документ"
           style={({ pressed }) => ({ flex: 1, opacity: pressed ? 0.6 : 1 })}
         >
-          <Text className="text-base" style={{ color: t.ink }} numberOfLines={1}>
+          <Text
+            className="text-base"
+            maxFontSizeMultiplier={1.3}
+            style={{ color: t.ink }}
+            numberOfLines={1}
+          >
             Документ приложен
           </Text>
-          <Text className="mt-0.5 text-xs" style={{ color: t.sub }}>
+          <Text
+            className="mt-0.5 text-xs"
+            maxFontSizeMultiplier={1.3}
+            style={{ color: t.sub }}
+          >
             {signed ? "Нажмите, чтобы открыть" : "Готовим ссылку…"}
           </Text>
         </Pressable>
@@ -164,10 +199,18 @@ export function OperationReceiptRow({
         })}
       >
         <Paperclip color={t.accent} size={18} strokeWidth={2} />
-        <Text className="text-base font-semibold" style={{ color: t.accent }}>
+        <Text
+          className="text-base font-semibold"
+          maxFontSizeMultiplier={1.3}
+          style={{ color: t.accent }}
+        >
           Приложить документ
         </Text>
-        <Text className="ml-auto text-xs" style={{ color: t.faint }}>
+        <Text
+          className="ml-auto text-xs"
+          maxFontSizeMultiplier={1.3}
+          style={{ color: t.faint }}
+        >
           чек, инвойс
         </Text>
       </Pressable>

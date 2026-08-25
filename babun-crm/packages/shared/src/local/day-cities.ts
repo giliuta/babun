@@ -7,7 +7,7 @@ const STORAGE_KEY = "babun-day-cities";
 export type DayCityMap = Record<string, string>;
 
 /** Сентинел «метка явно снята» в day_cities (web v693): день с ним НЕ
- *  падает обратно на default_city бригады — пустая строка удалила бы
+ *  падает обратно на default_city команды — пустая строка удалила бы
  *  override, и дефолт перекрасил бы день на следующем рендере. */
 export const CITY_CLEARED = "__NONE__";
 

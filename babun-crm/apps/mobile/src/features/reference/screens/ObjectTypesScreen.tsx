@@ -178,7 +178,7 @@ export function ObjectTypesScreen() {
           onPress={() => setOpen(false)}
           accessible={false}
         />
-        <View className="rounded-t-3xl p-5 pb-8" style={{ backgroundColor: t.surface }}>
+        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: t.surface }}>
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>Новый тип</Text>
           <Field label="Название" value={name} onChangeText={setName} placeholder="Вилла" autoFocus />
           <Button

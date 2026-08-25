@@ -49,7 +49,6 @@ import {
 import {
   buildDebtPaidPatch,
   paymentMethodForAccountKind,
-  PAY_METHOD_LABELS,
   type PayMethod,
 } from "@/features/appointments/payment";
 import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts";
@@ -57,9 +56,17 @@ import { useRouter, type Href } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { AppointmentDocuments } from "@/features/documents/AppointmentDocuments";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
+import { round2 } from "@babun/shared/local/finance/appointment-calc";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { locationAddressForBooking } from "@babun/shared/local/clients";
-import { formatEUR } from "@babun/shared/common/utils/money";
+import { formatEUR, formatEURExact } from "@babun/shared/common/utils/money";
+import { durationLabel } from "@/features/services/format";
+import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
+import { InlineServiceCreate } from "@/features/services/InlineServiceCreate";
+import {
+  PAYMENT_METHOD_LABEL,
+  PAYMENT_METHODS,
+} from "@babun/shared/local/finance/transaction";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
@@ -68,7 +75,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ValueRow } from "@/components/ui/ValueRow";
-import { ICON } from "@/components/ui/tokens";
+import { GUTTER, ICON } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -78,11 +85,8 @@ import {
 } from "@/features/settings/local-settings";
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { useClients, useCreateClient } from "@/features/clients/queries";
-import {
-  useCreateService,
-  useServices,
-  type Service,
-} from "@/features/services/queries";
+import { useAllServices, useServices, type Service } from "@/features/services/queries";
+import { useServiceVariants } from "@/features/services/variant-queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { RepeatReminderSheet } from "@/features/recurring/RepeatReminderSheet";
 import { useCreateReminder } from "@/features/recurring/queries";
@@ -177,6 +181,39 @@ const hmToMin = (hm: string) => {
 };
 
 // Shallow id+qty+price signature — service-list equality for the dirty check.
+
+/** СЛОТ = БУФЕРЫ + РАБОТА. Буферы берутся МАКСИМАЛЬНЫЕ по выбранным услугам,
+ *  а не суммируются: дорога до адреса одна, и две работы в одном визите не
+ *  удваивают её. Без этого календарь показывал свободное время, которого нет,
+ *  — бригада в нём едет. */
+function serviceBuffersMinutes(
+  ids: readonly string[],
+  catalog: Map<string, Service>,
+): number {
+  const before = Math.max(
+    0,
+    ...ids.map((id) => catalog.get(id)?.buffer_before_min ?? 0),
+    0,
+  );
+  const after = Math.max(
+    0,
+    ...ids.map((id) => catalog.get(id)?.buffer_after_min ?? 0),
+    0,
+  );
+  return before + after;
+}
+
+/** «Не делаем по вторникам» — падеж для предложения, а не подпись таблицы. */
+const OFF_DAY_WORD: Record<number, string> = {
+  1: "понедельникам",
+  2: "вторникам",
+  3: "средам",
+  4: "четвергам",
+  5: "пятницам",
+  6: "субботам",
+  7: "воскресеньям",
+};
+
 const svcSignature = (
   list: { serviceId: string; quantity: number; pricePerUnit: number }[],
 ) => JSON.stringify(list.map((s) => [s.serviceId, s.quantity, s.pricePerUnit]));
@@ -229,6 +266,35 @@ export function AppointmentSheet({
     () => new Map(services.map((s) => [s.id, s])),
     [services],
   );
+  // ИМЯ РАБОТЫ ЖИВЁТ ДОЛЬШЕ САМОЙ УСЛУГИ. `catalog` — про выбор и про цену
+  // новых строк, и он справедливо не знает убранных; но запись, в которой
+  // услуга стоит с мая, обязана называть её по имени, а не «Услуга».
+  const { data: allServices = [] } = useAllServices();
+  // Варианты: услуга типа «варианты» продаётся выбором из списка, а не
+  // количеством. Читаются раз на весь экран.
+  const { data: serviceVariants = [] } = useServiceVariants();
+  const variantsByService = useMemo(() => {
+    const map = new Map<
+      string,
+      { id: string; name: string; price: number; durationMin: number }[]
+    >();
+    for (const variant of serviceVariants) {
+      map.set(variant.service_id, [
+        ...(map.get(variant.service_id) ?? []),
+        {
+          id: variant.id,
+          name: variant.name,
+          price: Number(variant.price),
+          durationMin: variant.duration_min,
+        },
+      ]);
+    }
+    return map;
+  }, [serviceVariants]);
+  const nameById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.name])),
+    [allServices],
+  );
 
   // История записей питает умные дефолты (кеш уже тёплый — календарь
   // грузит тот же queryKey): недавние клиенты, последняя команда,
@@ -256,7 +322,7 @@ export function AppointmentSheet({
   }, [allAppts]);
 
   // Команда последней созданной записи — дефолт для новой (умный дефолт:
-  // диспетчер обычно набивает день одной бригаде подряд).
+  // диспетчер обычно набивает день одной команде подряд).
   const lastTeamId = useMemo(() => {
     let best: string | null = null;
     let bestTs = "";
@@ -300,7 +366,7 @@ export function AppointmentSheet({
   const [reminderOn, setReminderOn] = useState(false);
   const [comment, setComment] = useState("");
   const [locationId, setLocationId] = useState<string | null>(null);
-  // Адрес денормализован в запись (бригада видит куда ехать даже у
+  // Адрес денормализован в запись (команда видит куда ехать даже у
   // клиента без объектов): предзаполняется из выбранного объекта,
   // правится руками. address_note — «подъезд, код» рядом с навигацией.
   const [address, setAddress] = useState("");
@@ -438,18 +504,29 @@ export function AppointmentSheet({
       setOverrides(
         Object.fromEntries(
           (appointment.services ?? []).map((s) => {
-            // Seed a price override only when the stored line really was
-            // overridden (differs from the catalog price of its day) or the
-            // catalog can't reprice it (service deleted / not loaded yet).
-            // Untouched lines stay ladder-priced, so qty edits re-tier —
-            // web parity (appointment-services.ts userOverride check).
-            const keepPrice =
-              catalog.size === 0 ||
-              !catalog.has(s.serviceId) ||
-              s.pricePerUnit !== s.originalPrice;
+            // ЗАМОК: сохранённая строка отдаёт свои числа, а не сегодняшние.
+            // Раньше здесь угадывали, «правили ли строку руками», и всё
+            // остальное молча пересчитывали по нынешнему прайсу — открытие
+            // записи меняло её деньги. Теперь снимок держит и цену, и время,
+            // и цену каталога того дня; снимает замок только правка
+            // количества (см. степпер ниже).
+            //
+            // Ручную цену дублируем в `price`: замок с неё снимется вместе с
+            // правкой количества, а договорённая сумма обязана пережить её.
+            const byHand = s.pricePerUnit !== s.originalPrice;
             return [
               s.serviceId,
-              { qty: s.quantity, ...(keepPrice ? { price: s.pricePerUnit } : {}) },
+              {
+                qty: s.quantity,
+                ...(byHand ? { price: s.pricePerUnit } : {}),
+                locked: {
+                  pricePerUnit: s.pricePerUnit,
+                  originalPrice: s.originalPrice,
+                  duration: s.duration,
+                  serviceName: s.serviceName,
+                  unit: s.unit,
+                },
+              },
             ];
           }),
         ),
@@ -502,7 +579,7 @@ export function AppointmentSheet({
       // Предвыбор услуг из ?new= («Записать сюда» / повторное ТО).
       setServiceIds(defaults?.service_ids ?? []);
       // Умный дефолт: команда последней созданной записи (записи одной
-      // бригаде обычно набивают подряд). Явный defaults?.team_id
+      // команде обычно набивают подряд). Явный defaults?.team_id
       // («Записать сюда» с карточки клиента) всегда важнее.
       setTeamId(defaults?.team_id ?? lastTeamId);
       setMasterId(null);
@@ -606,16 +683,17 @@ export function AppointmentSheet({
     loyaltyAppliedRef.current = { clientId, percent: tier.percent };
   }, [hydratedSeq, visible, clientId, clientVisits, loyalty, isEdit, appointment]);
   const selectedServices = useMemo(
-    () => buildServices(serviceIds, catalog, overrides),
-    [serviceIds, catalog, overrides],
+    () => buildServices(serviceIds, catalog, overrides, variantsByService),
+    [serviceIds, catalog, overrides, variantsByService],
   );
   const computedTotal = useMemo(
     () => appointmentTotal(selectedServices, globalDiscount),
     [selectedServices, globalDiscount],
   );
   const computedDuration = useMemo(
-    () => totalDuration(selectedServices),
-    [selectedServices],
+    () =>
+      totalDuration(selectedServices) + serviceBuffersMinutes(serviceIds, catalog),
+    [selectedServices, serviceIds, catalog],
   );
 
   // Live end-time recalc (web parity): end ≥ start + Σ service durations,
@@ -672,10 +750,10 @@ export function AppointmentSheet({
   const serviceSummary = useMemo(
     () =>
       serviceIds
-        .map((id) => catalog.get(id)?.name)
+        .map((id) => nameById.get(id))
         .filter((n): n is string => Boolean(n))
         .join(" · "),
-    [serviceIds, catalog],
+    [serviceIds, nameById],
   );
   // Web parity canSave: work needs a client + at least one service,
   // event needs a title — an empty €0 record must not save.
@@ -1273,7 +1351,7 @@ export function AppointmentSheet({
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
         <Pressable className="flex-1" onPress={requestClose} accessible={false} />
-        <View className="h-[88%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.canvas }}>
+        <View className="h-[88%] overflow-hidden rounded-t-[10px]" style={{ backgroundColor: t.canvas }}>
           {/* header */}
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: t.separator, backgroundColor: t.surface }}>
             <Pressable
@@ -1310,11 +1388,11 @@ export function AppointmentSheet({
                   setKind(k);
                   // «Личное» (team_id=null) валидно только для событий:
                   // возврат в «Работу» обязан вернуть команду, иначе
-                  // запись сохранится невидимой на календарях всех бригад.
+                  // запись сохранится невидимой на календарях всех команд.
                   if (k === "work" && !teamId)
                     setTeamId(defaults?.team_id ?? lastTeamId ?? teams[0]?.id ?? null);
                 }}
-                style={{ marginHorizontal: 12, marginTop: 12 }}
+                style={{ marginHorizontal: GUTTER, marginTop: 12 }}
               />
             ) : null}
 
@@ -1388,7 +1466,7 @@ export function AppointmentSheet({
               </SectionCard>
             ) : null}
 
-            {/* address — бригада должна знать куда ехать даже у клиента
+            {/* address — команда должна знать куда ехать даже у клиента
                 без объектов (web: address + address_note в buildPatch) */}
             <SectionCard title="Адрес">
               <TextInput
@@ -1422,7 +1500,7 @@ export function AppointmentSheet({
                 OverlapWarning parity) */}
             {overlap ? (
               <View
-                className="mx-3 mt-2 flex-row items-start gap-2 rounded-[14px] border px-3 py-2.5"
+                className="mx-4 mt-2 flex-row items-start gap-2 rounded-[10px] border px-3 py-2.5"
                 style={{
                   backgroundColor: `${t.warning}14`,
                   borderColor: `${t.warning}33`,
@@ -1439,7 +1517,7 @@ export function AppointmentSheet({
                 накладка, а «слишком впритык» */}
             {tight ? (
               <View
-                className="mx-3 mt-2 flex-row items-start gap-2 rounded-[14px] px-3 py-2.5"
+                className="mx-4 mt-2 flex-row items-start gap-2 rounded-[10px] px-3 py-2.5"
                 style={{ backgroundColor: t.fill }}
               >
                 <Clock color={t.sub} size={ICON.sm} />
@@ -1573,14 +1651,44 @@ export function AppointmentSheet({
               ) : (
                 serviceIds.map((id) => {
                   const s = catalog.get(id);
+                  // Услуга, стёртая вместе с командой до 2026-08-24, не
+                  // оставила имени нигде — ни в снимке записи, ни в счёте, ни
+                  // в бэкапах. Заглушка «Услуга» выглядела названием и врала;
+                  // эта говорит правду. Новых таких не будет: с 24 августа
+                  // прайс переживает удаление команды.
                   const ov = overrides[id] ?? {};
-                  const countable = s?.is_countable !== false;
-                  const qty = countable ? (ov.qty ?? 1) : 1;
+                  // Имя из СНИМКА первым: услугу могли переименовать, и
+                  // прошлая запись обязана называть работу так, как её назвали
+                  // тогда. Каталог — второй, заглушка — последняя.
+                  const name =
+                    ov.locked?.serviceName ?? nameById.get(id) ?? "Услуга удалена";
+                  const qty = ov.qty ?? 1;
                   // Effective price mirrors buildServices: operator override
-                  // wins, otherwise the bulk ladder reprices per quantity.
-                  const price = ov.price ?? (s ? unitPriceFor(s, qty) : 0);
+                  // wins, then the lock of the stored line, and only after
+                  // them the bulk ladder reprices per quantity.
+                  const price =
+                    ov.price ?? ov.locked?.pricePerUnit ?? (s ? unitPriceFor(s, qty) : 0);
+                  // СТРОКА ПОКАЗЫВАЕТ И ПРАВИТ СУММУ ЗА ВСЁ, А НЕ ЗА ОДНУ
+                  // (владелец 2026-08-21: «давай делать не за шт, а общая
+                  // цена… три комнаты стоит 100 — это им надо вписать 33.33,
+                  // неудобно»). Прайс с этого дня говорит суммами, и запись
+                  // обязана говорить так же: иначе одна и та же услуга
+                  // называется «100» в справочнике и «33,33» в записи — ровно
+                  // та двусмысленность, от которой уходили.
+                  //
+                  // В СНИМОК ПО-ПРЕЖНЕМУ УЕЗЖАЕТ ЦЕНА ЗА ОДНУ: `ov.price`,
+                  // `buildServices`, `appointments.services[]` и побайтовый
+                  // сторож оплаченной записи не тронуты — поменялся только
+                  // язык, которым спрашивают человека.
+                  const rowTotal = round2(price * qty);
                   const setOv = (p: ServiceOverride) =>
                     setOverrides((o) => ({ ...o, [id]: { ...o[id], ...p } }));
+                  // Правка количества — единственное, что снимает замок
+                  // сохранённой строки: объём работ изменили осознанно, и
+                  // новую сумму человек видит здесь же. Всё остальное
+                  // (открыть, дописать комментарий, сменить мастера) чужих
+                  // денег не трогает.
+                  const setQty = (n: number) => setOv({ qty: n, locked: undefined });
                   const removeService = () => {
                     setServiceIds((prev) => prev.filter((x) => x !== id));
                     setOverrides((o) => {
@@ -1594,66 +1702,65 @@ export function AppointmentSheet({
                       return rest;
                     });
                   };
+                  const rowVariants = variantsByService.get(id) ?? [];
+                  const isVariantRow = rowVariants.length > 0;
                   return (
+                    <View key={id}>
                     <View
-                      key={id}
                       className="flex-row items-center px-4 py-2.5"
                     >
                       <Text className="flex-1 pr-2 text-base tabular-nums" style={{ color: t.ink }} numberOfLines={1}>
-                        {s?.name ?? "Услуга"}
+                        {name}
                       </Text>
-                      {countable ? (
-                        <>
-                          <Pressable
-                            onPress={() => {
-                              if (qty <= 1) removeService();
-                              else setOv({ qty: qty - 1 });
-                            }}
-                            accessibilityRole="button"
-                            accessibilityLabel={
-                              qty <= 1
-                                ? `Убрать услугу ${s?.name ?? "Услуга"}`
-                                : `Уменьшить количество: ${s?.name ?? "Услуга"}`
-                            }
-                            accessibilityValue={{ now: qty, min: 1 }}
-                            className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-                            style={{ backgroundColor: t.fill }}
-                          >
-                            <ChevronDown color={t.body} size={13} />
-                          </Pressable>
-                          <Text className="w-6 text-center text-sm tabular-nums" style={{ color: t.sub }}>
-                            {qty}
-                          </Text>
-                          <Pressable
-                            onPress={() => setOv({ qty: qty + 1 })}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Увеличить количество: ${s?.name ?? "Услуга"}`}
-                            accessibilityValue={{ now: qty, min: 1 }}
-                            className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-                            style={{ backgroundColor: t.fill }}
-                          >
-                            <ChevronUp color={t.body} size={13} />
-                          </Pressable>
-                        </>
-                      ) : (
+                      {/* СТЕППЕР У КАЖДОЙ УСЛУГИ (2026-08-21): флага «продаём
+                          целиком» больше нет, второго вида строки — тоже. */}
                         <Pressable
-                          onPress={removeService}
+                          onPress={() => {
+                            if (qty <= 1) removeService();
+                            else setQty(qty - 1);
+                          }}
                           accessibilityRole="button"
-                          accessibilityLabel="Убрать услугу"
-                          style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}
+                          accessibilityLabel={
+                            qty <= 1
+                              ? `Убрать услугу ${name}`
+                              : `Уменьшить количество: ${name}`
+                          }
+                          accessibilityValue={{ now: qty, min: 1 }}
+                          className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
+                          style={{ backgroundColor: t.fill }}
                         >
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-                            Убрать
-                          </Text>
+                          <ChevronDown color={t.body} size={13} />
                         </Pressable>
-                      )}
+                        {/* КОЛИЧЕСТВО С ЕДИНИЦЕЙ: «4 м», а не голое «4»
+                            (2026-08-25). Бригадир, набивая четвёрку, обязан
+                            видеть, метры это или блоки, — ровно за этим
+                            единицу и вернули. */}
+                        <Text
+                          numberOfLines={1}
+                          className="text-center text-sm tabular-nums"
+                          style={{ minWidth: 24, color: t.sub }}
+                        >
+                          {s?.unit ? `${qty} ${s.unit}` : qty}
+                        </Text>
+                        <Pressable
+                          onPress={() => setQty(qty + 1)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Увеличить количество: ${name}`}
+                          accessibilityValue={{ now: qty, min: 1 }}
+                          className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
+                          style={{ backgroundColor: t.fill }}
+                        >
+                          <ChevronUp color={t.body} size={13} />
+                        </Pressable>
                       <TextInput
                         // Черновик строки, пока поле в фокусе: controlled
                         // String(price) съедал «12,» на каждом нажатии.
-                        value={priceDrafts[id] ?? String(price)}
+                        value={priceDrafts[id] ?? String(rowTotal)}
                         onChangeText={(v) => {
                           setPriceDrafts((d) => ({ ...d, [id]: v }));
-                          setOv({ price: parseMoneyInput(v) });
+                          // Делим БЕЗ округления: 100 на трёх обязаны доехать
+                          // до снимка целиком, иначе обратно выйдет 99,99.
+                          setOv({ price: parseMoneyInput(v) / Math.max(1, qty) });
                         }}
                         onEndEditing={() =>
                           setPriceDrafts((d) => {
@@ -1663,19 +1770,67 @@ export function AppointmentSheet({
                           })
                         }
                         keyboardType="decimal-pad"
-                        accessibilityLabel={`Стоимость услуги: ${s?.name ?? "Услуга"}`}
+                        accessibilityLabel={`Стоимость за всё: ${name}`}
                         // textAlign задаём СТИЛЕМ, а не классом: у TextInput
                         // react-native-css объявляет nativeStyleMapping
                         // { textAlign: true } и делает path.split(".") — на
                         // `true` это падает красной ошибкой «path.split is not
                         // a function». Класс text-right роняет ЛЮБОЙ TextInput.
-                        className="ml-2 min-h-11 w-14 text-sm tabular-nums"
+                        className="ml-2 min-h-11 w-16 text-sm tabular-nums"
                         style={{ color: t.sub, textAlign: "right" }}
                         placeholderTextColor={t.placeholder}
                         selectionColor={t.accent}
                         keyboardAppearance="light"
                       />
                       <Text className="text-sm" style={{ color: t.faint }}>€</Text>
+                    </View>
+
+                    {/* ВАРИАНТЫ — ЧИПАМИ ПОД СТРОКОЙ. Трёхкомнатная квартира
+                        это не «три раза комната», поэтому у такой услуги
+                        количество ничего не решает: выбирают объём работ, и
+                        цена приходит вместе с ним. Тап по активному чипу
+                        ничего не снимает — услуга без варианта не продаётся,
+                        а убрать её можно степпером. */}
+                    {isVariantRow ? (
+                      <View className="flex-row flex-wrap gap-2 px-4 pb-3">
+                        {rowVariants.map((variant) => {
+                          const active = ov.variantId === variant.id;
+                          return (
+                            <Pressable
+                              key={variant.id}
+                              onPress={() =>
+                                setOv({ variantId: variant.id, locked: undefined })
+                              }
+                              accessibilityRole="button"
+                              accessibilityState={{ selected: active }}
+                              accessibilityLabel={`${variant.name}, ${formatEURExact(
+                                variant.price,
+                              )}`}
+                              style={({ pressed }) => ({
+                                minHeight: 36,
+                                justifyContent: "center",
+                                paddingHorizontal: 12,
+                                borderRadius: t.radius.card,
+                                borderCurve: "continuous",
+                                backgroundColor: active ? t.accent : t.fill,
+                                opacity: pressed ? 0.6 : 1,
+                              })}
+                            >
+                              <Text
+                                maxFontSizeMultiplier={1.2}
+                                style={{
+                                  fontSize: 14,
+                                  fontWeight: active ? "700" : "500",
+                                  color: active ? t.onAccent : t.ink,
+                                }}
+                              >
+                                {`${variant.name} · ${formatEURExact(variant.price)}`}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : null}
                     </View>
                   );
                 })
@@ -1692,7 +1847,7 @@ export function AppointmentSheet({
                   items={teams.map((t) => ({ id: t.id, label: t.name }))}
                   selected={teamId}
                   // Работа: radio без снятия — запись без team_id невидима
-                  // на календарях бригад. Событие: повторный тап снимает
+                  // на календарях команд. Событие: повторный тап снимает
                   // команду → личное событие (web parity: team_id=null).
                   onSelect={(id) =>
                     setTeamId(kind === "event" && id === teamId ? null : id)
@@ -1807,7 +1962,7 @@ export function AppointmentSheet({
                       appointment.prepaid_amount > 0
                         ? `${formatEUR(appointment.prepaid_amount)} · ${
                             appointment.payment_method
-                              ? PAY_METHOD_LABELS[appointment.payment_method]
+                              ? PAYMENT_METHOD_LABEL[appointment.payment_method]
                               : "способ не указан"
                           }`
                         : "Не внесена"
@@ -2129,10 +2284,10 @@ export function AppointmentSheet({
                               | PayMethod
                               | null,
                           }))
-                        : (["cash", "card", "transfer", "other"] as const).map(
+                        : PAYMENT_METHODS.map(
                             (value) => ({
                               key: value as string,
-                              label: PAY_METHOD_LABELS[value],
+                              label: PAYMENT_METHOD_LABEL[value],
                               accountId: null as string | null,
                               method: value as PayMethod | null,
                             }),
@@ -2178,7 +2333,7 @@ export function AppointmentSheet({
                         Сумма сейчас
                       </Text>
                       <View
-                        className="flex-row items-center rounded-2xl border px-4"
+                        className="flex-row items-center rounded-[10px] border px-4"
                         style={{
                           borderColor: settlementAmountValid
                             ? t.separator
@@ -2258,11 +2413,7 @@ export function AppointmentSheet({
             {kind === "work" && appointment ? (
               <AppointmentDocuments
                 appointmentId={appointment.id}
-                clientId={clientId}
-                teamId={teamId}
                 amount={effectiveTotal}
-                title={comment.trim() || "Услуги"}
-                issuedOn={date}
                 onOpen={(href) => {
                   // Лист уезжает ПЕРВЫМ: новый экран, открытый поверх модалки,
                   // рисуется под ней — человек видит пустой лист.
@@ -2304,10 +2455,10 @@ export function AppointmentSheet({
             <SectionCard title={kind === "event" ? "Название" : "Комментарий"}>
               <TextInput
                 value={comment}
-                accessibilityLabel={kind === "event" ? "Название события" : "Заметка для бригады"}
+                accessibilityLabel={kind === "event" ? "Название события" : "Заметка для команды"}
                 onChangeText={setComment}
                 multiline
-                placeholder={kind === "event" ? "Обед, встреча, перерыв…" : "Заметка для бригады…"}
+                placeholder={kind === "event" ? "Обед, встреча, перерыв…" : "Заметка для команды…"}
                 placeholderTextColor={t.placeholder}
                 selectionColor={t.accent}
                 keyboardAppearance="light"
@@ -2468,11 +2619,25 @@ export function AppointmentSheet({
         onClose={() => setServicePicker(false)}
         title="Услуги"
         multi
-        items={services.map((s) => ({
-          id: s.id,
-          title: s.name,
-          subtitle: `${formatEUR(Number(s.price))} · ${s.duration_minutes} мин`,
-        }))}
+        // КАТАЛОГ ЗНАЕТ ДЕНЬ ЗАПИСИ. Услуга, которую в этот день не делают,
+        // уезжает вниз списка и говорит об этом вместо цены — но выбирается
+        // тем же тапом. Ни прятать, ни запрещать нельзя: спрятанную услугу
+        // считают исчезнувшей из прайса, а продукт не отказывает в деньгах.
+        items={[...services]
+          .sort((a, b) => {
+            const weekday = isoWeekdayOf(date);
+            return (
+              Number(servedOnWeekday(b, weekday)) -
+              Number(servedOnWeekday(a, weekday))
+            );
+          })
+          .map((s) => ({
+            id: s.id,
+            title: s.name,
+            subtitle: servedOnWeekday(s, isoWeekdayOf(date))
+              ? `${formatEURExact(Number(s.price))} · ${durationLabel(s.duration_minutes)}`
+              : `Не делаем по ${OFF_DAY_WORD[isoWeekdayOf(date)]}`,
+          }))}
         selectedIds={serviceIds}
         onToggle={(id) =>
           setServiceIds((prev) =>
@@ -2484,6 +2649,7 @@ export function AppointmentSheet({
         empty={
           services.length === 0 ? (
             <InlineServiceCreate
+              teamId={teamId}
               onCreated={(id) => setServiceIds((prev) => [...prev, id])}
             />
           ) : undefined
@@ -2588,7 +2754,7 @@ function PrepaymentEditor({
         <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
           <Pressable className="flex-1" onPress={onClose} accessible={false} />
           <View
-            className="rounded-t-3xl px-5 pb-8 pt-3"
+            className="rounded-t-[10px] px-5 pb-8 pt-3"
             style={{ backgroundColor: t.surface }}
           >
             <View className="mb-4 flex-row items-center">
@@ -2609,7 +2775,7 @@ function PrepaymentEditor({
               Сумма до {formatEUR(maximum)}
             </Text>
             <View
-              className="mb-4 flex-row items-center rounded-2xl border px-4"
+              className="mb-4 flex-row items-center rounded-[10px] border px-4"
               style={{ borderColor: t.separator, backgroundColor: t.canvas }}
             >
               <TextInput
@@ -2634,10 +2800,10 @@ function PrepaymentEditor({
                   Способ
                 </Text>
                 <View className="mb-4 flex-row flex-wrap gap-2">
-                  {(Object.keys(PAY_METHOD_LABELS) as PayMethod[]).map((value) => (
+                  {PAYMENT_METHODS.map((value) => (
                     <Chip
                       key={value}
-                      label={PAY_METHOD_LABELS[value]}
+                      label={PAYMENT_METHOD_LABEL[value]}
                       radio
                       selected={method === value}
                       onPress={() => setMethod(value)}
@@ -2674,71 +2840,6 @@ function PrepaymentEditor({
   );
 }
 
-// Пустой каталог услуг — тупик первой записи: минимальная inline-форма
-// (название + цена, час по умолчанию) прямо в пикере. Созданная услуга
-// сразу выбирается в запись; каталог доредактируют в кабинете.
-function InlineServiceCreate({
-  onCreated,
-}: {
-  onCreated: (id: string) => void;
-}) {
-  const t = useThemeColors();
-  const createService = useCreateService();
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-
-  const submit = async () => {
-    if (!name.trim()) return;
-    try {
-      const svc = await createService.mutateAsync({
-        name: name.trim(),
-        price: parseMoneyInput(price),
-        duration_minutes: 60,
-      });
-      onCreated(svc.id);
-    } catch (e) {
-      Alert.alert("Не удалось создать услугу", (e as Error).message);
-    }
-  };
-
-  return (
-    <View className="px-5 pt-4">
-      <Text className="mb-3 text-sm" style={{ color: t.sub }}>
-        Каталог пуст — создайте первую услугу, она сразу добавится в запись.
-      </Text>
-          <TextInput
-            value={name}
-            accessibilityLabel="Название услуги"
-        onChangeText={setName}
-        placeholder="Название услуги"
-        placeholderTextColor={t.placeholder}
-        selectionColor={t.accent}
-        keyboardAppearance="light"
-        autoFocus
-        className="mb-2 rounded-[14px] border px-4 py-3 text-base"
-        style={{ borderColor: t.separator, color: t.ink }}
-      />
-          <TextInput
-            value={price}
-            accessibilityLabel="Цена услуги"
-        onChangeText={setPrice}
-        placeholder="Цена, €"
-        placeholderTextColor={t.placeholder}
-        selectionColor={t.accent}
-        keyboardType="decimal-pad"
-        keyboardAppearance="light"
-        className="mb-4 rounded-[14px] border px-4 py-3 text-base"
-        style={{ borderColor: t.separator, color: t.ink }}
-      />
-      <Button
-        label="Создать услугу"
-        onPress={() => void submit()}
-        disabled={!name.trim() || createService.isPending}
-        loading={createService.isPending}
-      />
-    </View>
-  );
-}
 
 function ChipRow({
   items,
@@ -2816,7 +2917,7 @@ function PickerModal({
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: th.scrim }}>
         <Pressable className="flex-1" onPress={onClose} accessible={false} />
-        <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: th.surface }}>
+        <View className="h-[80%] overflow-hidden rounded-t-[10px]" style={{ backgroundColor: th.surface }}>
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: th.separator }}>
             <Text className="flex-1 px-2 text-base font-semibold" style={{ color: th.ink }}>
               {title}
@@ -3003,7 +3104,7 @@ function ClientPickerModal({
       >
       <View className="flex-1 justify-end" style={{ backgroundColor: t.scrim }}>
         <Pressable className="flex-1" onPress={onClose} accessible={false} />
-        <View className="h-[80%] overflow-hidden rounded-t-3xl" style={{ backgroundColor: t.surface }}>
+        <View className="h-[80%] overflow-hidden rounded-t-[10px]" style={{ backgroundColor: t.surface }}>
           <View className="flex-row items-center border-b px-2 py-2" style={{ borderColor: t.separator }}>
             {mode === "create" ? (
               <Pressable
@@ -3115,7 +3216,7 @@ function ClientPickerModal({
                 selectionColor={t.accent}
                 keyboardAppearance="light"
                 autoFocus
-                className="mb-2 rounded-[14px] border px-4 py-3 text-base"
+                className="mb-2 rounded-[10px] border px-4 py-3 text-base"
                 style={{ borderColor: t.separator, color: t.ink }}
               />
           <TextInput
@@ -3127,7 +3228,7 @@ function ClientPickerModal({
                 selectionColor={t.accent}
                 keyboardType="phone-pad"
                 keyboardAppearance="light"
-                className="mb-4 rounded-[14px] border px-4 py-3 text-base"
+                className="mb-4 rounded-[10px] border px-4 py-3 text-base"
                 style={{ borderColor: t.separator, color: t.ink }}
               />
               <Button

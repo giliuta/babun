@@ -86,7 +86,7 @@ export function ClientsFilterBar({
               minWidth: 18,
               height: 18,
               paddingHorizontal: 6,
-              borderRadius: 9,
+              borderRadius: t.radius.card,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: t.ink,

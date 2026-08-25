@@ -12,7 +12,7 @@ import {
 import { ChevronRight, Tags } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ClientTag } from "@babun/shared/local/clients";
-import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -21,7 +21,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
 import { AddRow } from "@/components/ui/AddRow";
 import { Field } from "@/components/ui/Field";
-import { ColorPicker } from "@/components/ui/ColorPicker";
+import { ColorField } from "@/components/ui/picker-fields";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { ICON } from "@/components/ui/tokens";
@@ -33,7 +33,7 @@ import {
   useUpdateClientTag,
 } from "@/features/clients/queries";
 
-const DEFAULT_COLOR = PRESET_COLORS[2]?.value ?? "#5E5CE6";
+const DEFAULT_COLOR = PRESET_COLOR_CYCLE[2].value;
 
 export default function ClientTagsScreen() {
   const t = useThemeColors();
@@ -207,7 +207,7 @@ export default function ClientTagsScreen() {
               <View>
                 <View className="items-center px-6 pb-4 pt-6">
                   <View
-                    className="mb-3 h-12 w-12 items-center justify-center rounded-[14px]"
+                    className="mb-3 h-12 w-12 items-center justify-center rounded-[10px]"
                     style={{ backgroundColor: `${t.accent}14` }}
                   >
                     <Tags color={t.accent} size={ICON.md} strokeWidth={2} />
@@ -231,14 +231,6 @@ export default function ClientTagsScreen() {
               </View>
             )}
           </SectionCard>
-
-          <Text
-            className="mx-5 mt-3 text-[13px] leading-5"
-            style={{ color: t.faint }}
-          >
-            Теги видны в карточках и фильтрах клиентов. Нажмите на тег, чтобы
-            изменить его название или цвет.
-          </Text>
         </ScrollView>
       )}
 
@@ -260,7 +252,7 @@ export default function ClientTagsScreen() {
           />
           <View
             accessibilityViewIsModal
-            className="rounded-t-3xl px-5 pt-4"
+            className="rounded-t-[10px] px-5 pt-4"
             style={{
               backgroundColor: t.surface,
               paddingBottom: Math.max(insets.bottom, 24),
@@ -284,7 +276,7 @@ export default function ClientTagsScreen() {
               editable={!busy}
               maxLength={80}
             />
-            <ColorPicker value={color} onChange={setColor} disabled={busy} />
+            <ColorField value={color} onChange={setColor} disabled={busy} />
             <Button
               label={editing ? "Сохранить" : "Создать тег"}
               onPress={() => void submit()}

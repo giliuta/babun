@@ -131,7 +131,7 @@ export default function RecurringScreen() {
   // ?new=1&client_id=…; мобильный обработчик в (dashboard)/index.tsx читает
   // new/clientId/locationId/teamId).
   // Экран записи открывается НАПРЯМУЮ, а не через таб «Календарь»: тот путь
-  // показывал вспышку чужого календаря, подменял день и активную бригаду и
+  // показывал вспышку чужого календаря, подменял день и активную команду и
   // после «Готово» оставлял человека в календаре, а не в списке ТО.
   const book = (item: RecurringReminder) =>
     bookNav({
@@ -222,7 +222,7 @@ export default function RecurringScreen() {
           onPress={() => book(item)}
           accessibilityRole="button"
           accessibilityLabel={`Записать: ${item.client_name}`}
-          className="mt-2 items-center rounded-xl py-2.5 active:opacity-80"
+          className="mt-2 items-center rounded-[10px] py-2.5 active:opacity-80"
           style={{ backgroundColor: t.accent }}
         >
           <Text className="text-sm font-semibold" style={{ color: t.onAccent }}>
@@ -277,7 +277,7 @@ export default function RecurringScreen() {
                   onPress={() => setShowAll(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`Показать ещё ${row.count} на потом`}
-                  className="mx-4 mt-2 items-center rounded-xl border border-dashed py-3 active:opacity-60"
+                  className="mx-4 mt-2 items-center rounded-[10px] border border-dashed py-3 active:opacity-60"
                   style={{ borderColor: t.separator }}
                 >
                   <Text className="text-sm font-medium" style={{ color: t.sub }}>
@@ -301,7 +301,6 @@ export default function RecurringScreen() {
             <EmptyState
               fill
               title="Нет повторных напоминаний"
-              subtitle="После выполненной записи «Повторить через…» создаст карточку — мы сами подскажем, когда звонить. Или добавьте вручную."
               action={{ label: "Добавить напоминание", onPress: () => setOpen(true) }}
             />
           }
@@ -420,7 +419,7 @@ function NewReminderSheet({
           accessible={false}
         />
         <View
-          className="h-[80%] rounded-t-3xl p-5 pb-8"
+          className="h-[80%] rounded-t-[10px] p-5 pb-8"
           style={{ backgroundColor: t.surface }}
         >
           <Text className="mb-3 text-lg font-bold" style={{ color: t.ink }}>
@@ -429,7 +428,7 @@ function NewReminderSheet({
           {!client ? (
             <>
               <View
-                className="mb-2 flex-row items-center gap-2 rounded-xl px-3"
+                className="mb-2 flex-row items-center gap-2 rounded-[10px] px-3"
                 style={{ backgroundColor: t.fill }}
               >
                 <Search color={t.faint} size={ICON.sm} />
@@ -478,7 +477,7 @@ function NewReminderSheet({
                 onPress={() => setClientId(null)}
                 accessibilityRole="button"
                 accessibilityLabel="Сменить клиента"
-                className="mb-2 flex-row items-center justify-between rounded-xl px-3 py-2.5"
+                className="mb-2 flex-row items-center justify-between rounded-[10px] px-3 py-2.5"
                 style={{ backgroundColor: t.canvas }}
               >
                 <Text className="text-base font-semibold" style={{ color: t.ink }}>
