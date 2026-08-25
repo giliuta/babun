@@ -85,3 +85,32 @@ fi
 echo
 echo "Локальные ветки, у которых на remote больше нет пары, чистятся так:"
 echo "  git fetch --prune && git branch -vv | grep ': gone]' | awk '{print \$1}' | xargs -r git branch -D"
+
+echo
+echo "──────────────────────────────────────────────────────────────────────"
+echo "ОТДЕЛЬНЫЙ ШАГ: перевести master на код React Native"
+echo
+echo "Сейчас master отстаёт на $(git rev-list --count origin/master..HEAD) коммитов, и babun.app отдаёт СТАРОЕ"
+echo "Next.js-приложение. После этого шага master будет содержать код"
+echo "React Native, и Vercel начнёт собирать веб из него."
+echo
+echo "Домен переключится НЕ сразу: пока в настройках проекта Vercel"
+echo "Root Directory = babun-crm/apps/web (папки нет), сборка падает, и"
+echo "babun.app продолжает отдавать последний удачный старый деплой."
+echo "То есть порядок безопасный: сначала этот шаг, потом настройка."
+echo "──────────────────────────────────────────────────────────────────────"
+printf "Перевести master? [y/N] "
+read -r answer
+case "$answer" in
+  [yY]*)
+    if git push origin HEAD:master; then
+      echo "   master переведён. Теперь в панели Vercel, проект babun2:"
+      echo "     Settings → Build & Deployment → Root Directory  →  очистить"
+      echo "     Settings → Build & Deployment → Framework Preset →  Other"
+      echo "   Остальное возьмёт на себя vercel.json в корне репозитория."
+    else
+      echo "   не прошло"
+    fi
+    ;;
+  *) echo "   пропущено — master остался как был" ;;
+esac
