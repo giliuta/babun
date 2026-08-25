@@ -1,2 +1,0 @@
-[    1888ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://rdtokosbqvgemicqeqwz.supabase.co/rest/v1/profiles?select=full_name%2Crole%2Cphone&id=eq.b311d04c-f85a-40ea-97d1-d84e2e8dbaaf:0
-[    2070ms] [ERROR] Failed to load resource: the server responded with a status of 403 () @ https://rdtokosbqvgemicqeqwz.supabase.co/rest/v1/teams?select=id%2Cname%2Cregion%2Ccolor:0

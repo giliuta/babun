@@ -54,7 +54,7 @@
   .nav .titlewrap{display:inline-flex;align-items:center;justify-content:center;flex:1;min-width:0;}
   .nav .title{font-size:17px;font-weight:600;letter-spacing:-.01em;}
   .nav .actions{display:flex;align-items:center;gap:0;}
-  .iconbtn{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);}
+  .iconbtn{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);}
   .iconbtn.sm{width:36px;height:36px;}
   .nav .actions{position:relative;}
   .iomenu{display:none;position:absolute;top:40px;right:6px;width:214px;background:var(--surface-card);border-radius:14px;
@@ -313,7 +313,10 @@
 
   /* cards */
   .cards{display:flex;flex-direction:column;gap:8px;}
-  .card{background:var(--surface-card);border-radius:14px;box-shadow:var(--shadow-card);padding:12px;display:flex;gap:12px;}
+  .card{background:var(--surface-card);border-radius:14px;box-shadow:var(--shadow-card);padding:12px;display:flex;gap:12px;transition:transform .1s,background .15s;}
+  .card:has(.card-main:active){transform:scale(.992);background:var(--surface-card-secondary);}
+  .card-main{display:flex;align-items:flex-start;gap:12px;flex:1;min-width:0;color:inherit;text-decoration:none;border-radius:10px;}
+  .card-main:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
   .avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;
     color:#fff;font-weight:700;font-size:14px;flex:none;}
   .cbody{flex:1;min-width:0;}
@@ -343,8 +346,9 @@
   .acpill{display:inline-flex;align-items:center;gap:2px;padding:0 6px;height:20px;border-radius:9999px;
     background:var(--fill-tertiary);color:var(--label-secondary);font-size:11px;font-weight:600;}
   .tag{display:inline-flex;align-items:center;padding:0 6px;height:20px;border-radius:9999px;font-size:11px;font-weight:600;}
-  .phonebtn{width:40px;height:40px;border-radius:50%;background:rgba(52,199,89,.12);color:var(--system-green);
-    display:flex;align-items:center;justify-content:center;flex:none;align-self:center;}
+  .phonebtn{width:44px;height:44px;border-radius:50%;background:rgba(52,199,89,.12);color:var(--system-green);
+    display:flex;align-items:center;justify-content:center;flex:none;align-self:center;text-decoration:none;}
+  .phonebtn.disabled{color:var(--label-tertiary);background:var(--fill-tertiary);}
   /* v4: factual card — money figures (semantic colors), last visit date, muted team+label */
   .name{flex:1;min-width:0;}
   .money{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:11px;font-weight:600;margin-top:3px;}
@@ -400,7 +404,7 @@
   .snote{margin-top:16px;padding:12px 14px;border-radius:12px;background:rgba(255,149,0,.10);color:var(--system-orange);
     font-size:13px;font-weight:600;line-height:1.4;display:flex;align-items:flex-start;gap:8px;}
   .snote svg{flex:none;margin-top:1px;}
-</style></style>
+</style>
 </head>
 <body>
 
@@ -429,7 +433,7 @@
         <span class="iconbtn" id="settingsBtn" title="Настройки клиентов" style="cursor:pointer"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
         <span class="titlewrap"><span class="title">Клиенты</span></span>
         <div class="actions">
-          <span class="iconbtn" title="Добавить клиента">
+          <span class="iconbtn" id="addClientBtn" role="button" tabindex="0" aria-label="Добавить клиента" title="Добавить клиента" style="cursor:pointer">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5v14"/></svg>
           </span>
         </div>
@@ -442,7 +446,7 @@
           <!-- search -->
           <div class="search">
             <svg class="si" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <input placeholder="Поиск по имени, телефону..." />
+            <input id="clientSearch" type="search" aria-label="Поиск клиентов" placeholder="Поиск по имени, телефону..." />
           </div>
 
           <!-- v23: single summary bar (entry) — opens the centered «Фильтры» panel; filled in JS -->
@@ -564,9 +568,10 @@
   </div>
 
   <div class="caption" style="opacity:.8">
-    iPhone · 392 px · нижний таб-бар «Клиенты» активен. Прокрути список внутри рамки — всего 12 карточек.
+    iPhone · 392 px · нижний таб-бар «Клиенты» активен. Прокрути список внутри рамки.
   </div>
 
+<script src="client-store.js"></script>
 <script>
   // ── SVG icon snippets (lucide), kept tiny ──
   const I = {
@@ -583,21 +588,9 @@
 
   function tagAlpha(hex,a){const c=hex.replace('#','');const r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;}
 
-  // v6 — one-line meta: последняя запись · календарь · метка(город) · тег. brig=null → no team.
-  const clients = [
-    { first:'Angela',    ini:'AM', color:'#FF2D55', brig:'D&K',  city:'Лимассол', tag:'',           exp:80,  inc:0,   debt:0,   last:null,     appts:[] },
-    { first:'Johannes',  ini:'JW', color:'#FFCC00', brig:'D&K',  city:'',         tag:'',           exp:0,   inc:0,   debt:0,   last:null,     appts:[] },
-    { first:'John',      ini:'JT', color:'#FF9500', brig:'Y&D',  city:'Ларнака',  tag:'VIP',        exp:120, inc:420, debt:0,   last:'2 мар',  appts:['2026-01-15','2026-03-02'] },
-    { first:'Laima',     ini:'LB', color:'#32ADE6', brig:'Y&D',  city:'Пафос',    tag:'',           exp:0,   inc:90,  debt:0,   last:'12 фев', appts:['2026-02-12'] },
-    { first:'Marina',    ini:'MA', color:'#AF52DE', brig:null,   city:'',         tag:'',           exp:0,   inc:0,   debt:0,   last:null,     appts:[] },
-    { first:'Александр', ini:'АС', color:'#A2845E', brig:'Y&D',  city:'Никосия',  tag:'Проблемный', exp:0,   inc:120, debt:0,   last:'18 апр', appts:['2025-11-20','2026-04-18'] },
-    { first:'Анастасия', ini:'АП', color:'#007AFF', brig:'Y&D',  city:'Лимассол', tag:'VIP',        exp:160, inc:640, debt:0,   last:'30 мая', appts:['2026-01-10','2026-04-09','2026-05-30'] },
-    { first:'Надежда',   ini:'НВ', color:'#34C759', brig:'D&K',  city:'Никосия',  tag:'',           exp:0,   inc:240, debt:0,   last:'3 мая',  appts:['2026-03-03','2026-05-03'] },
-    { first:'Ольга',     ini:'ОН', color:'#5E5CE6', brig:'Y&D',  city:'Пафос',    tag:'',           exp:0,   inc:270, debt:0,   last:'25 мая', appts:['2026-05-25'] },
-    { first:'Руслан',    ini:'РА', color:'#00C7BE', brig:'D&K',  city:'',         tag:'',           exp:0,   inc:0,   debt:0,   last:null,     appts:[] },
-    { first:'Светлана',  ini:'СК', color:'#30B0C7', brig:'Y&D',  city:'Айя-Напа', tag:'',           exp:0,   inc:180, debt:0,   last:'1 июн',  appts:['2026-02-01','2026-06-01'] },
-    { first:'Сергей',    ini:'СМ', color:'#FF3B30', brig:'Y&D',  city:'Лимассол', tag:'Постоянный', exp:120, inc:560, debt:135, last:'10 мая', appts:['2026-02-20','2026-05-10'] },
-  ];
+  // Единый источник данных для списка, создания и просмотра профиля.
+  const clients = BabunClients.list();
+  let searchQuery = '';
 
   // ── v7: filter state + dropdown pickers (команда / метка / тег) ──
   const CARET = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
@@ -643,6 +636,8 @@
   const pluralClients = (n) => { const a=n%100,b=n%10; if(a>10&&a<20)return 'клиентов'; if(b===1)return 'клиент'; if(b>=2&&b<=4)return 'клиента'; return 'клиентов'; };
   function clearAllFilters(){ filters.team=[]; filters.city=[]; filters.tag=[]; filters.period=null; renderCards(); }
 
+  const esc = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+
   function cardHTML(c){
     // compact money — colored € amounts, no words (grey=ожид · green=доход · gold=долг)
     const figs = [];
@@ -654,18 +649,24 @@
     const segs = [`<span class="seg seg-last">${c.last ? clock + c.last : 'нет записей'}</span>`];
     let mfirst = true;
     const addMeta = (t) => { segs.push(`<span class="seg seg-meta${mfirst ? ' mfirst' : ''}">${t}</span>`); mfirst = false; };
-    if (c.brig) addMeta(c.brig);
-    if (c.city) addMeta(c.city);
-    if (c.tag)  addMeta(c.tag);
+    if (c.brig) addMeta(esc(c.brig));
+    if (c.city) addMeta(esc(c.city));
+    if (c.tag)  addMeta(esc(c.tag));
+    const tel = String(c.phone || '').replace(/[^+\d]/g, '');
+    const phoneAction = tel
+      ? `<a class="phonebtn" href="tel:${esc(tel)}" aria-label="Позвонить клиенту ${esc(c.fullName || c.first)}">${I.phone}</a>`
+      : `<span class="phonebtn disabled" aria-hidden="true">${I.phone}</span>`;
     return `
       <div class="card">
-        <div class="avatar" style="background:${c.color}">${c.ini}</div>
-        <div class="cbody">
-          <div class="r1"><span class="name">${c.first}</span></div>
-          ${money}
-          <div class="meta">${segs.join('')}</div>
-        </div>
-        <div class="phonebtn">${I.phone}</div>
+        <a class="card-main" href="client-create.html?id=${encodeURIComponent(c.id)}" aria-label="Открыть клиента ${esc(c.fullName || c.first)}">
+          <div class="avatar" style="background:${esc(c.color)}">${esc(c.ini)}</div>
+          <div class="cbody">
+            <div class="r1"><span class="name">${esc(c.fullName || c.first)}</span></div>
+            ${money}
+            <div class="meta">${segs.join('')}</div>
+          </div>
+        </a>
+        ${phoneAction}
       </div>`;
   }
 
@@ -685,6 +686,7 @@
   const periodOk = (c) => !filters.period ||
     c.appts.some(d => d >= filters.period.from && d <= filters.period.to);
   const visibleClients = () => sortClients(clients.filter(c =>
+    (!searchQuery || `${c.fullName || c.first} ${c.phone || ''}`.toLocaleLowerCase('ru').includes(searchQuery)) &&
     (filters.team.length===0 || filters.team.includes(c.brig)) &&
     (filters.city.length===0 || filters.city.includes(c.city)) &&
     (filters.tag.length===0  || filters.tag.includes(c.tag)) &&
@@ -695,7 +697,11 @@
     document.getElementById('cards').innerHTML = list.length
       ? list.map(cardHTML).join('')
       : '<div class="emptyf">Никого не нашлось по фильтру<div class="empty-reset" id="emptyReset">Сбросить фильтры</div></div>';
-    document.getElementById('emptyReset')?.addEventListener('click', clearAllFilters);
+    document.getElementById('emptyReset')?.addEventListener('click', () => {
+      searchQuery = '';
+      document.getElementById('clientSearch').value = '';
+      clearAllFilters();
+    });
     renderBar();
   }
 
@@ -868,6 +874,10 @@
 
   document.getElementById('filterbar').addEventListener('click', openFilterPanel);
   document.getElementById('sortRow')?.addEventListener('click', openFilterPanel);
+  document.getElementById('clientSearch').addEventListener('input', event => { searchQuery = event.target.value.trim().toLocaleLowerCase('ru'); renderCards(); });
+  const openNewClient = () => { location.href = 'client-create.html'; };
+  document.getElementById('addClientBtn').addEventListener('click', openNewClient);
+  document.getElementById('addClientBtn').addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openNewClient(); } });
   renderCards();
 
   // v2: combined Import/Export button toggles its dropdown list.
