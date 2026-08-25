@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Babun2 — Карточка клиента: сейчас vs идеально</title>
+<style>
+  :root{
+    --surface-grouped:#EFEFF4; --surface-card:#FFFFFF;
+    --separator:rgba(60,60,67,0.10);
+    --label:#000000; --label-secondary:#3C3C4399; --label-tertiary:rgba(60,60,67,0.30); --label-quaternary:rgba(60,60,67,0.18);
+    --fill-tertiary:rgba(118,118,128,0.12);
+    --system-red:#FF3B30; --system-orange:#FF9500; --system-green:#34C759; --system-blue:#007AFF;
+    --accent:#3E88F7; --accent-tint:rgba(62,136,247,0.12);
+    --shadow-card:0 0 0 0.5px rgba(15,23,42,0.04),0 1px 2px rgba(15,23,42,0.04);
+    --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
+  html,body{margin:0;}
+  body{font-family:var(--font-sans);background:radial-gradient(1200px 800px at 50% -10%,#fbfbfd,#e7e9ee 60%,#dfe2e8);
+    min-height:100vh;padding:28px 20px 60px;color:var(--label);font-variant-numeric:tabular-nums;}
+
+  .head{max-width:820px;margin:0 auto 18px;text-align:center;}
+  .head h1{font-size:19px;font-weight:700;letter-spacing:-.01em;margin:0 0 8px;}
+  .legend{display:inline-flex;flex-wrap:wrap;gap:6px 10px;justify-content:center;font-size:12.5px;color:#475569;
+    background:#fff;border:.5px solid #e2e5ea;border-radius:12px;padding:10px 14px;box-shadow:var(--shadow-card);max-width:760px;}
+  .legend b{color:#0f172a;}
+  .legend .k{display:inline-flex;align-items:center;gap:5px;}
+  .dotcol{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
+  .compare{max-width:820px;margin:0 auto;display:flex;gap:22px;justify-content:center;align-items:flex-start;}
+  .col{flex:1;max-width:372px;min-width:330px;}
+  .colhead{display:flex;align-items:baseline;gap:8px;padding:0 4px 10px;}
+  .colhead .lab{font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+  .colhead .now{color:var(--label-tertiary);} .colhead .new{color:var(--accent);}
+  .colhead .sub{font-size:11px;color:var(--label-tertiary);}
+  .panel{background:var(--surface-grouped);border-radius:22px;padding:12px;display:flex;flex-direction:column;gap:9px;
+    box-shadow:inset 0 0 0 .5px rgba(15,23,42,.05);}
+
+  /* ── OLD card (faithful copy of current) ── */
+  .card{background:var(--surface-card);border-radius:14px;box-shadow:var(--shadow-card);padding:12px;display:flex;gap:12px;}
+  .avatar{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:none;}
+  .cbody{flex:1;min-width:0;}
+  .r1{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .namewrap{display:flex;align-items:center;gap:6px;min-width:0;}
+  .name{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pin{color:var(--accent);flex:none;display:flex;}
+  .debt{flex:none;display:inline-flex;align-items:center;padding:0 6px;height:20px;border-radius:9999px;background:rgba(255,59,48,.12);color:var(--system-red);font-size:11px;font-weight:700;}
+  .badge{flex:none;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .b-bday{background:rgba(255,149,0,.12);color:var(--system-orange);} .b-cal{background:var(--accent-tint);color:var(--accent);}
+  .b-vip{background:rgba(255,204,0,.18);color:#B78600;} .b-new{background:rgba(52,199,89,.12);color:var(--system-green);}
+  .rdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--system-orange);}
+  .ltv{font-size:11px;font-weight:600;color:var(--label-secondary);flex:none;}
+  .r2{display:flex;align-items:center;gap:6px;font-size:12px;margin-top:2px;}
+  .ph{color:var(--label-tertiary);flex:none;} .mid{color:var(--label-quaternary);}
+  .st-default{color:var(--label-secondary);} .st-accent{color:var(--accent);font-weight:600;} .st-muted{color:var(--label-tertiary);}
+  .r3{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--label-secondary);margin-top:2px;}
+  .r4{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .acpill{display:inline-flex;align-items:center;gap:2px;padding:0 6px;height:20px;border-radius:9999px;background:var(--fill-tertiary);color:var(--label-secondary);font-size:11px;font-weight:600;}
+  .tag{display:inline-flex;align-items:center;padding:0 6px;height:20px;border-radius:9999px;font-size:11px;font-weight:600;}
+  .phonebtn{width:40px;height:40px;border-radius:50%;background:rgba(52,199,89,.12);color:var(--system-green);display:flex;align-items:center;justify-content:center;flex:none;align-self:center;}
+
+  /* ── NEW "ideal" card ── */
+  .cardx{background:var(--surface-card);border-radius:16px;box-shadow:var(--shadow-card);padding:13px 14px;display:flex;gap:12px;align-items:flex-start;}
+  .cardx .av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;flex:none;}
+  .cxb{flex:1;min-width:0;}
+  .cx1{display:flex;align-items:center;gap:6px;}
+  .cx1 .nm{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cx1 .pinx{color:var(--accent);flex:none;display:flex;}
+  .fl{flex:none;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;}
+  .money{margin-left:auto;flex:none;font-weight:700;font-size:14px;}
+  .money.debt{color:var(--system-red);} .money.ltv{color:var(--label-tertiary);font-size:12px;font-weight:600;}
+  .cx2{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;margin-top:3px;}
+  .cx2.due{color:var(--system-orange);} .cx2.appt{color:var(--accent);font-weight:600;} .cx2.bday{color:var(--system-orange);}
+  .cx2.recent{color:var(--label-secondary);} .cx2.cold{color:var(--label-tertiary);}
+  .cx3{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--label-tertiary);margin-top:4px;}
+  .cx3 .d{opacity:.45;}
+  .act{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;align-self:center;}
+  .act.call{background:rgba(52,199,89,.12);color:var(--system-green);}
+  .act.wa{background:rgba(37,211,102,.14);color:#1FB855;}
+  .lang{display:inline-flex;align-items:center;height:16px;padding:0 5px;border-radius:5px;background:var(--fill-tertiary);color:var(--label-secondary);font-size:10px;font-weight:700;letter-spacing:.02em;}
+</style>
+</head>
+<body>
+  <div class="head">
+    <h1>Карточка клиента — сейчас vs идеально</h1>
+    <div class="legend">
+      <span>Что меняет «идеальная»:</span>
+      <span class="k"><span class="dotcol" style="background:var(--system-orange)"></span><b>🔧 «Пора обслуживать»</b> — сигнал повторного сервиса (деньги)</span>
+      <span class="k">·</span>
+      <span class="k">1 главный сигнал на строку вместо тесноты</span>
+      <span class="k">·</span>
+      <span class="k">справа одна цифра — <b style="color:var(--system-red)">долг</b> или LTV</span>
+      <span class="k">·</span>
+      <span class="k">контекст в строку: район · техника · бригада · язык</span>
+      <span class="k">·</span>
+      <span class="k">действие настраивается (звонок/WhatsApp)</span>
+    </div>
+  </div>
+
+  <div class="compare">
+    <!-- ───────── СЕЙЧАС ───────── -->
+    <div class="col">
+      <div class="colhead"><span class="lab now">Сейчас</span><span class="sub">как в проде</span></div>
+      <div class="panel">
+
+        <!-- Сергей — долг -->
+        <div class="card">
+          <div class="avatar" style="background:#FF3B30">СМ</div>
+          <div class="cbody">
+            <div class="r1"><div class="namewrap"><span class="name">Сергей Морозов</span><span class="debt">€135</span></div><span class="ltv">€560</span></div>
+            <div class="r2"><span class="ph">+357 93 456789</span><span class="mid">·</span><span class="st-default">Был 23 дня назад</span></div>
+            <div class="r4"><span class="acpill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/></svg>3</span><span class="tag" style="background:rgba(16,185,129,.14);color:#10b981">Постоянный</span></div>
+          </div>
+          <div class="phonebtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+        <!-- John — запись + VIP -->
+        <div class="card">
+          <div class="avatar" style="background:#FF9500">JT</div>
+          <div class="cbody">
+            <div class="r1"><div class="namewrap"><span class="name">John Thompson</span><span class="badge b-vip"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/></svg></span><span class="badge b-cal"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg></span></div><span class="ltv">€420</span></div>
+            <div class="r2"><span class="ph">+357 96 123456</span><span class="mid">·</span><span class="st-accent">📅 Завтра 14:00</span></div>
+            <div class="r4"><span class="acpill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/></svg>2</span><span class="tag" style="background:rgba(245,158,11,.14);color:#f59e0b">VIP</span></div>
+          </div>
+          <div class="phonebtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+        <!-- Angela — ДР, ни разу -->
+        <div class="card">
+          <div class="avatar" style="background:#FF2D55">AM</div>
+          <div class="cbody">
+            <div class="r1"><div class="namewrap"><span class="name">Angela Martinez</span><span class="badge b-bday"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3"/></svg></span></div></div>
+            <div class="r2"><span class="ph">+357 91 234567</span><span class="mid">·</span><span class="st-muted">Ни разу не был</span></div>
+            <div class="r3"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><span>Лимассол</span></div>
+          </div>
+          <div class="phonebtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+        <!-- Анастасия — закреп, недавно -->
+        <div class="card">
+          <div class="avatar" style="background:#007AFF">АП</div>
+          <div class="cbody">
+            <div class="r1"><div class="namewrap"><span class="pin"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span><span class="name">Анастасия Петрова</span></div><span class="ltv">€640</span></div>
+            <div class="r2"><span class="ph">+357 99 352086</span><span class="mid">·</span><span class="st-default">Была 3 дня назад</span></div>
+            <div class="r3"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><span>Лимассол, Agios Tychonas 21</span></div>
+            <div class="r4"><span class="acpill"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.8 19.6A2 2 0 1 0 14 16H2"/><path d="M17.5 8a2.5 2.5 0 1 1 2 4H2"/><path d="M9.8 4.4A2 2 0 1 1 11 8H2"/></svg>4</span><span class="tag" style="background:rgba(16,185,129,.14);color:#10b981">Постоянный</span></div>
+          </div>
+          <div class="phonebtn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ───────── ИДЕАЛЬНАЯ ───────── -->
+    <div class="col">
+      <div class="colhead"><span class="lab new">Идеальная</span><span class="sub">предложение</span></div>
+      <div class="panel">
+
+        <!-- Сергей — долг + сервис-дью -->
+        <div class="cardx">
+          <div class="av" style="background:#FF3B30">СМ</div>
+          <div class="cxb">
+            <div class="cx1"><span class="nm">Сергей Морозов</span><span class="money debt">€135</span></div>
+            <div class="cx2 due"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Пора обслуживать · сезонная чистка</div>
+            <div class="cx3"><span>Пиргос</span><span class="d">·</span><span>3 A/C</span><span class="d">·</span><span>Y&amp;D</span></div>
+          </div>
+          <div class="act call"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+        <!-- John — запись + VIP + EN, WhatsApp -->
+        <div class="cardx">
+          <div class="av" style="background:#FF9500">JT</div>
+          <div class="cxb">
+            <div class="cx1"><span class="nm">John Thompson</span><span class="fl" style="background:rgba(255,204,0,.18);color:#B78600"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.2l1-5.8L3.5 9.2l5.9-.9z"/></svg></span><span class="money ltv">€420</span></div>
+            <div class="cx2 appt"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Завтра, 14:00</div>
+            <div class="cx3"><span>Ларнака</span><span class="d">·</span><span>2 A/C</span><span class="d">·</span><span class="lang">EN</span></div>
+          </div>
+          <div class="act wa" title="WhatsApp"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2zm0 1.7a8.3 8.3 0 0 1 5.9 14.2 8.3 8.3 0 0 1-10.6 1l-.3-.2-2.8.7.8-2.7-.2-.3A8.3 8.3 0 0 1 12 3.7zm-2.6 4c-.1 0-.3 0-.5.2s-.7.7-.7 1.6.7 1.9.8 2 1.4 2.3 3.5 3.1c1.7.7 2.1.6 2.5.5s1.1-.5 1.3-.9.2-.8.1-.9l-.6-.3-1.2-.6c-.2-.1-.3-.1-.5.1l-.6.8c-.1.1-.2.1-.4 0a4.6 4.6 0 0 1-1.4-.8 5 5 0 0 1-.9-1.2c-.1-.2 0-.3.1-.4l.3-.4.2-.4v-.4l-.6-1.4c-.1-.3-.3-.3-.4-.3z"/></svg></div>
+        </div>
+
+        <!-- Angela — ДР как сигнал, EN, новый -->
+        <div class="cardx">
+          <div class="av" style="background:#FF2D55">AM</div>
+          <div class="cxb">
+            <div class="cx1"><span class="nm">Angela Martinez</span><span class="fl" style="background:rgba(52,199,89,.12);color:var(--system-green)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.9 2.5 12 8l5.5 2.1L12 12.2 9.9 17.7 7.8 12.2 2.3 10.1 7.8 8z"/></svg></span></div>
+            <div class="cx2 bday"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3"/></svg>День рождения через 4 дня</div>
+            <div class="cx3"><span>Лимассол</span><span class="d">·</span><span class="lang">EN</span><span class="d">·</span><span>ни разу не была</span></div>
+          </div>
+          <div class="act wa" title="WhatsApp"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2zm0 1.7a8.3 8.3 0 0 1 5.9 14.2 8.3 8.3 0 0 1-10.6 1l-.3-.2-2.8.7.8-2.7-.2-.3A8.3 8.3 0 0 1 12 3.7zm-2.6 4c-.1 0-.3 0-.5.2s-.7.7-.7 1.6.7 1.9.8 2 1.4 2.3 3.5 3.1c1.7.7 2.1.6 2.5.5s1.1-.5 1.3-.9.2-.8.1-.9l-.6-.3-1.2-.6c-.2-.1-.3-.1-.5.1l-.6.8c-.1.1-.2.1-.4 0a4.6 4.6 0 0 1-1.4-.8 5 5 0 0 1-.9-1.2c-.1-.2 0-.3.1-.4l.3-.4.2-.4v-.4l-.6-1.4c-.1-.3-.3-.3-.4-.3z"/></svg></div>
+        </div>
+
+        <!-- Анастасия — закреп, недавно, LTV -->
+        <div class="cardx">
+          <div class="av" style="background:#007AFF">АП</div>
+          <div class="cxb">
+            <div class="cx1"><span class="pinx"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></span><span class="nm">Анастасия Петрова</span><span class="money ltv">€640</span></div>
+            <div class="cx2 recent">Была 3 дня назад</div>
+            <div class="cx3"><span>Лимассол</span><span class="d">·</span><span>4 A/C</span><span class="d">·</span><span>Y&amp;D</span></div>
+          </div>
+          <div class="act call"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.8.4 1.6.7 2.3a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.7.3 1.5.6 2.3.7A2 2 0 0 1 22 16.9z"/></svg></div>
+        </div>
+
+      </div>
+      <div style="font-size:11.5px;color:var(--label-tertiary);padding:10px 6px 0;line-height:1.5;">
+        🔧 «Пора обслуживать» и язык (EN) — новые сигналы, которых сейчас нет. Долг/LTV — одной цифрой справа. Действие у Джона и Анджелы = WhatsApp (настраивается на бизнес).
+      </div>
+    </div>
+  </div>
+</body>
+</html>
