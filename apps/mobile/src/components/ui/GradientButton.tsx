@@ -105,7 +105,7 @@ export function GradientButton({
             // secondary pills sitting next to it on the same sheet.
             minHeight: 52,
             paddingVertical: 14,
-            borderRadius: t.radius.pill,
+            borderRadius: t.radius.cta,
             borderCurve: "continuous",
             overflow: "hidden",
             alignItems: "center",
