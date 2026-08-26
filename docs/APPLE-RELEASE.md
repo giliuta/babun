@@ -22,49 +22,46 @@
 | Автоматика | `.github/workflows/ios-testflight.yml` — сборка + отправка одной кнопкой |
 | Релизная конфигурация | компилируется: `bun run ios:prod:verify` → BUILD SUCCEEDED |
 | `ios/` | генерируется `expo prebuild`, в git не лежит и лежать не должен |
+| Проект EAS | `@artemgiliuta/babun`, `projectId` в `app.json` |
+| Счётчик сборок | выставлен в 1 — следующая уедет как 2, на один выше той, что в TestFlight |
+| Переменные окружения | `EXPO_PUBLIC_SUPABASE_URL` и `..._PUBLISHABLE_KEY` в окружении `production` на EAS |
 
-## Что требуется от владельца — один раз
+## Что требуется от владельца — осталось два шага
 
-**1. Аккаунт Expo и привязка проекта.** Без `projectId` сборка не стартует.
+**1. Ключ App Store Connect API** — то, что делает отправку по-настоящему
+автоматической. Без него и `eas build`, и `eas submit` требуют живого
+входа в Apple, и никакой workflow не поможет.
 
-```bash
-eas login
-```
-
-```bash
-cd /Users/artem/Documents/Babun/apps/mobile && eas init
-```
-
-Если прошлая TestFlight-сборка делалась через EAS, проект в аккаунте уже
-есть — тогда привязываться надо к нему, а не создавать второй.
-Проверяется командой `eas project:info`.
-
-**2. Узнать номер последней сборки в TestFlight.** EAS ведёт нумерацию у
-себя и начнёт с единицы, а Apple отклоняет сборку с номером не больше уже
-загруженного. Смотреть в App Store Connect → вкладка TestFlight, колонка
-Build. Число сообщить — оно выставляется в EAS один раз.
-
-**3. Ключ App Store Connect API** — то, что делает отправку по-настоящему
-автоматической. Без него `eas submit` каждый раз требует живого входа в
-Apple, и никакой workflow не поможет.
-
-App Store Connect → **Users and Access → Integrations → App Store Connect
-API** → создать ключ с ролью **App Manager** → скачать файл `.p8`
-(даётся ровно один раз, второй скачки не будет).
+App Store Connect → **Пользователи и доступ → Интеграции → App Store
+Connect API** → создать ключ с ролью **App Manager** → скачать файл
+`.p8` (даётся ровно один раз, второй скачки не будет). Оттуда же
+выписать **Key ID** и **Issuer ID**.
 
 Дальше отдать ключ в EAS:
 
 ```bash
-cd /Users/artem/Documents/Babun/apps/mobile && eas credentials
+eas credentials
 ```
 
-Платформа iOS → профиль `production` → App Store Connect API Key → указать
-скачанный файл. После этого ключ живёт у Expo, и локально его хранить не
-нужно.
+Платформа iOS → профиль `production` → App Store Connect API Key →
+указать файл, Key ID и Issuer ID. После этого ключ живёт у Expo, и
+локально его хранить не нужно.
 
-**4. Токен Expo для GitHub.** expo.dev → Account settings → Access tokens →
-создать токен. Положить его в репозиторий: **Settings → Secrets and
+**2. Токен Expo для GitHub.** expo.dev → Account settings → Access
+tokens → создать токен. Положить в репозиторий: **Settings → Secrets and
 variables → Actions → New repository secret**, имя `EXPO_TOKEN`.
+
+## Уже сделано, повторять не нужно
+
+- `eas login`, `eas init` — проект `@artemgiliuta/babun` создан и связан.
+- Счётчик сборок инициализирован единицей: `eas build:version:set`.
+  Проверка — `eas build:version:get -p ios -e production`.
+- Переменные окружения залиты в `production` на EAS через
+  `eas env:push production --path .env.local`. **Пустые значения ломают
+  команду** («Variable value can not be empty») — `EXPO_PUBLIC_SENTRY_DSN`
+  в `.env.local` пуст, поэтому отправлялся отфильтрованный файл.
+  Без этих переменных сборка собирается, запускается и не может войти:
+  Supabase некуда стучаться.
 
 ## Как выпускать после этого
 
