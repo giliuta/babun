@@ -29,7 +29,6 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "ЗАПОЛНИТ eas submit ПРИ ПЕРВОМ ЗАПУСКЕ",
         "appleTeamId": "LW4NJRQ462"
       }
     }
