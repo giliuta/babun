@@ -70,8 +70,8 @@ also render the button URL from it, so both halves must agree.
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/giliuta/babun2.git
-cd babun2
+git clone https://github.com/giliuta/babun.git
+cd babun
 bun install              # from repo root — workspaces: apps/*, packages/*
 ```
 
