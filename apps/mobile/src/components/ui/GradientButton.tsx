@@ -100,8 +100,11 @@ export function GradientButton({
           {
             // minHeight + padding (not a fixed height) so Dynamic Type can
             // grow the label without clipping — same recipe as PillButton.
-            minHeight: 50,
-            paddingVertical: 13,
+            // 52, not 50: §5 fixes the primary CTA at 52pt, and the 2pt debt
+            // made the loudest button in the product SHORTER than the
+            // secondary pills sitting next to it on the same sheet.
+            minHeight: 52,
+            paddingVertical: 14,
             borderRadius: t.radius.pill,
             borderCurve: "continuous",
             overflow: "hidden",
