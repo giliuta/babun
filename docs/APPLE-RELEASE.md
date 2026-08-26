@@ -102,16 +102,40 @@ bun run ios:prod:verify
 нативной части релизной конфигурации, но не проверяет подпись и приём на
 стороне Apple — это видно только на настоящем `eas build`.
 
-## Что мешает жить, но не блокирует
+## Патч-дрейф Expo SDK — НЕ ЧИНИТЬ
 
-`bunx expo-doctor` показывает две вещи, обе старше этой задачи:
+`bunx expo-doctor` даёт 17/18 и одно предупреждение: `expo` 54.0.36 против
+ожидаемых ~54.0.37, плюс `expo-constants` и `expo-file-system` на патч
+позади. Очевидное лечение — `bunx expo install --fix` — **ломает веб**.
 
-1. **Две копии React.** `lucide-react-native` тянет себе `react@19.2.4`
-   поверх приколоченного 19.1.0. `overrides` в корневом `package.json`
-   снял часть копий, но не эту; дедуп в `metro.config.js` держит бандл
-   целым. Для нативной сборки это риск «Invalid hook call» — закрыть
-   отдельной задачей до раздачи бригадам.
-2. **Патч-дрейф Expo SDK**: `expo` 54.0.36 против ожидаемых 54.0.37, плюс
-   `expo-constants` и `expo-file-system`. Лечится
-   `bunx expo install --check` — правка зависимостей, отдельным коммитом
-   и с прогоном гейтов.
+Проверено 2026-08-26 прямым опытом, а не рассуждением:
+
+- после `expo install --fix` `bun run build:web` падает с
+  `Unable to resolve module react-native-web/dist/index` из
+  `expo-router/build/renderRootComponent.js`;
+- на закоммиченном состоянии та же команда проходит: «Exported: dist»;
+- то есть починка одного предупреждения роняет production-сборку
+  babun.app — цена несоразмерна трём патч-версиям.
+
+Побочно всплыло и то, что бамп `expo-constants` до 18.0.14 создаёт
+дубль нативного модуля: `expo-asset`, `expo-linking` и
+`expo-notifications` держат 18.0.13. Лечится `overrides`, но лечить
+нечего — без бампа дубля нет вовсе.
+
+Вернуться к этому стоит на следующем минорном обновлении SDK, когда
+`expo-router` и `react-native-web` поедут вместе.
+
+## Две копии React — закрыто
+
+Было: `lucide-react-native` тянула `react@19.2.4` поверх приколоченного
+19.1.0, и это грозило «Invalid hook call» в нативной сборке. Оказалось
+мусором от старой установки — в `bun.lock` такой копии нет вообще.
+Ушло после чистой переустановки, правок в коде не потребовалось:
+
+```bash
+cd /Users/artem/Documents/Babun && rm -rf node_modules apps/mobile/node_modules packages/shared/node_modules && bun install
+```
+
+Эта же команда — первое, что стоит пробовать, если `expo-doctor` снова
+заговорит про дубликаты: копии в `node_modules` живут дольше, чем
+причины, которые их породили.
