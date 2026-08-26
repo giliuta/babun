@@ -60,6 +60,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "01a65b63-51e6-49d1-8405-96673cfa8676"
+      }
+    },
+    "owner": "artemgiliuta"
   }
 }
