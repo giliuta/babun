@@ -43,18 +43,20 @@ export function FirstRunCalendarChoice({
       style={{
         flex: 1,
         backgroundColor: t.canvas,
-        alignItems: "center",
-        justifyContent: "center",
-        paddingHorizontal: 24,
+        // Главное действие экрана живёт ВНИЗУ, в зоне большого пальца
+        // (владелец 2026-08-27). По центру кнопка стоит там, куда палец не
+        // дотягивается на ходу, — а этим приложением пользуются стоя у
+        // сплит-системы, одной рукой.
+        justifyContent: "flex-end",
+        paddingHorizontal: 16,
+        paddingBottom: 16,
       }}
     >
-      <View style={{ width: "100%", maxWidth: 360 }}>
-        <GradientButton
-          label="Создать календарь"
-          onPress={onCreate}
-          loading={creating}
-        />
-      </View>
+      <GradientButton
+        label="Создать календарь"
+        onPress={onCreate}
+        loading={creating}
+      />
     </View>
   );
 }
