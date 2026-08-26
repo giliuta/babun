@@ -1,0 +1,63 @@
+name: iOS → TestFlight
+
+# Сборка релиза и автоматическая отправка в TestFlight.
+#
+# ЗАПУСКАЕТСЯ ТОЛЬКО РУКАМИ ИЛИ ПО ТЕГУ — намеренно. Сборка на серверах
+# EAS платная (на бесплатном тарифе — очередь), а Apple принимает
+# ограниченное число сборок в сутки. Гнать её на каждый push в master
+# значило бы жечь и то и другое на коммиты вроде правки README.
+#
+#   вручную  — вкладка Actions → «iOS → TestFlight» → Run workflow
+#   по тегу  — git tag v1.0.1 && git push origin v1.0.1
+#
+# ТРЕБУЕТ ДВУХ ВЕЩЕЙ, ПОКА ИХ НЕТ — workflow упадёт на первом же шаге:
+#   1. Секрет EXPO_TOKEN в настройках репозитория
+#      (Settings → Secrets and variables → Actions → New secret).
+#      Берётся на expo.dev → Account settings → Access tokens.
+#   2. Ключ App Store Connect API, загруженный в EAS
+#      (`eas credentials`, платформа iOS, профиль production).
+#      Без него отправка требует живого входа в Apple, то есть
+#      «автоматически» не получится.
+#
+# Порядок шагов не переставлять: гейты идут ДО сборки. Сломанный релиз,
+# уехавший в TestFlight, откатить нельзя — только выложить новый поверх.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build + submit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      # Те же гейты, что у pre-push. Красный typecheck или тест
+      # останавливает релиз здесь, а не после раздачи бригадам.
+      - name: Гейты
+        run: |
+          bun run typecheck
+          bun test
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # --auto-submit отправляет сборку в App Store Connect сразу после
+      # успешной сборки, одним вызовом. Номер сборки инкрементит EAS
+      # (appVersionSource: remote в eas.json) — руками его трогать не надо.
+      - name: EAS build + submit
+        working-directory: apps/mobile
+        run: eas build --platform ios --profile production --non-interactive --auto-submit
