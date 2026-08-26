@@ -89,7 +89,11 @@ export function ScreenHeader({
         <Text
           accessibilityRole="header"
           style={{
-            fontSize: 16,
+            // Headline 17/600 — §2. 16 не существует в шкале вовсе, и
+            // заголовок КАЖДОЙ внутренней страницы продукта был набран
+            // мимо неё; заодно он оказывался мельче имени клиента в
+            // списке, на который эта же страница открывается.
+            fontSize: 17,
             fontWeight: "600",
             color: t.ink,
             textAlign: "center",
@@ -100,7 +104,8 @@ export function ScreenHeader({
         </Text>
         {subtitle ? (
           <Text
-            style={{ fontSize: 12, color: t.sub, textAlign: "center" }}
+            // Subhead 13/500 — §2. 12 тоже вне шкалы.
+            style={{ fontSize: 13, color: t.sub, textAlign: "center" }}
             numberOfLines={1}
           >
             {subtitle}
