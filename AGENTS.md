@@ -25,7 +25,7 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 - **Styling:** NativeWind (Tailwind v4 синтаксис поверх RN StyleSheet)
 - **DB:** Supabase (PostgreSQL + RLS + Auth + Realtime); SQLite/MMKV — offline-кэш и очередь
 - **Deploy:** Vercel — сборка `bun run build:web` из `apps/mobile`
-- **Repo:** github.com/giliuta/babun2 — branch **`master`** (не `main`)
+- **Repo:** github.com/giliuta/babun — branch **`master`** (не `main`)
 
 ## Operating Mode — AUTONOMOUS-WITH-VERIFY (MUST читать первым, нарушение = откат всей сессии)
 
