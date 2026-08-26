@@ -134,6 +134,8 @@ export interface CtaGradient {
   to: string;
   label: string;
   shadow: string;
+  /** Контактная тень нажатия: ближе к странице и ПЛОТНЕЕ парящей. */
+  shadowPressed: string;
   /** false for pale hues carrying an ink label — the white sheen/edge would
    *  read dirty over a near-white fill, so the CTA gates them off. */
   sheen: boolean;
@@ -144,6 +146,7 @@ const COBALT_CTA: CtaGradient = {
   to: "#1f4fcc",
   label: "#ffffff",
   shadow: "0px 8px 28px rgba(44,91,224,0.28)",
+  shadowPressed: "0px 2px 8px rgba(44,91,224,0.34)",
   sheen: true,
 };
 
@@ -158,6 +161,8 @@ export function ctaGradient(hue: string): CtaGradient {
   const lighten = (amount: number) => composite(WHITE, rgb, amount);
   const ratio = (fg: string, bg: RGB) => contrastRatio(fg, toHex(bg));
   const shadow = `0px 8px 28px ${hue}47`; // hue at ~28% — matches brand shadow
+  // Нажатая: зазор 8 → 2, альфа 28% → 34%. Плотнее, а не бледнее.
+  const shadowPressed = `0px 2px 8px ${hue}57`;
 
   // Prefer white: step the base toward black until white clears AA on it.
   let d = 0;
@@ -168,6 +173,7 @@ export function ctaGradient(hue: string): CtaGradient {
       to: toHex(darken(Math.min(0.6, d + 0.14))),
       label: "#ffffff",
       shadow,
+      shadowPressed,
       sheen: true,
     };
   }
@@ -181,6 +187,7 @@ export function ctaGradient(hue: string): CtaGradient {
     to: toHex(lighten(l)),
     label: "#0b1220",
     shadow,
+    shadowPressed,
     sheen: false,
   };
 }
