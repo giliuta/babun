@@ -1,0 +1,59 @@
+name: Обновление · подготовка
+
+# Первая ступень доставки: каждый коммит в master уезжает обновлением
+# на ветку `preview`. Туда не смотрит ни один установленный телефон —
+# это накопитель, из которого потом одним нажатием выкатывают бригадам
+# (workflow «Обновление · выкатить бригадам»).
+#
+# Почему не сразу в production: обновление доходит до телефонов за
+# минуту, и сломанная правка дойдёт ровно так же быстро — а мастера в
+# этот момент на объекте у клиента. Ступень с паузой в руках владельца
+# стоит одного нажатия и снимает этот риск.
+#
+# Гейты идут ДО публикации. Сломанное обновление отозвать нельзя,
+# можно только выпустить следующее поверх.
+#
+# По воздуху едет только JS: экраны, логика, тексты, стили. Нативная
+# часть — нет. Новая сборка в TestFlight нужна, когда добавляется
+# библиотека с нативным кодом или меняются разрешения в app.json.
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ota-preview
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: опубликовать в preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Гейты
+        run: |
+          bun run typecheck
+          bun test
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Сообщение коммита приходит через env, а не через подстановку в
+      # строку команды: в нём может оказаться кавычка или перевод строки,
+      # и подстановка сломала бы шелл. Берётся только первая строка.
+      - name: Публикация обновления
+        working-directory: apps/mobile
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          MSG="${COMMIT_MESSAGE%%$'\n'*}"
+          eas update --branch preview --message "$MSG" --non-interactive

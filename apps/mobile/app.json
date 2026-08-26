@@ -27,7 +27,11 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -67,6 +71,12 @@
         "projectId": "01a65b63-51e6-49d1-8405-96673cfa8676"
       }
     },
-    "owner": "artemgiliuta"
+    "owner": "artemgiliuta",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/01a65b63-51e6-49d1-8405-96673cfa8676"
+    }
   }
 }

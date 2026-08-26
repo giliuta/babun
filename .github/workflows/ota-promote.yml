@@ -1,0 +1,62 @@
+name: Обновление · выкатить бригадам
+
+# Вторая ступень доставки: берёт последнее обновление с ветки `preview`
+# и переносит его на `production`. Телефоны бригад слушают именно
+# production — обновление доходит до них за минуту, без сборки и без
+# участия Apple.
+#
+# Переносится ГОТОВЫЙ артефакт, а не пересобирается заново: бригады
+# получают ровно то, что владелец посмотрел, байт в байт. Поэтому здесь
+# нет гейтов — код уже прошёл их по дороге в preview.
+#
+# Запуск только руками: Actions → этот workflow → Run workflow.
+#
+# Откатить обновление нельзя, можно только выпустить следующее поверх.
+# Если выкатили плохое — самый быстрый путь назад это не паника, а
+# `eas update:rollback` с машины (вернёт телефоны на предыдущее).
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ota-promote
+
+jobs:
+  promote:
+    name: preview → production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      # Нужен не для сборки, а чтобы eas прочитал app.config.js —
+      # тот требует установленного `expo`.
+      - run: bun install --frozen-lockfile
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Найти последнее обновление в preview
+        id: last
+        working-directory: apps/mobile
+        run: |
+          GROUP=$(eas update:list --branch preview --json --non-interactive --limit 1 \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['currentPage'][0]['group'])")
+          if [ -z "$GROUP" ]; then
+            echo "На ветке preview нет ни одного обновления — выкатывать нечего." >&2
+            exit 1
+          fi
+          echo "group=$GROUP" >> "$GITHUB_OUTPUT"
+          echo "Выкатываю группу $GROUP"
+
+      - name: Перенести на production
+        working-directory: apps/mobile
+        run: |
+          eas update:republish \
+            --branch preview \
+            --destination-branch production \
+            --group "${{ steps.last.outputs.group }}" \
+            --non-interactive
