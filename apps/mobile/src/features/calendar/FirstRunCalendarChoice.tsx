@@ -1,15 +1,35 @@
-import { Text, View } from "react-native";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { CalendarDays } from "lucide-react-native";
+import { View } from "react-native";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 
-const FILL = { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as const;
-
-// Web parity: apps/web/src/components/empty-states/FirstRunCalendarChoice.tsx.
-// Shown by the calendar tab when the tenant has no team calendar yet. One
-// CTA spins up the first team calendar; «Мой календарь» stays parked (web
-// PERSONAL_CALENDAR_ENABLED), so the only first-run path is a team calendar.
+// Показывается вкладкой календаря, когда у тенанта ещё нет ни одного
+// командного календаря. Одна кнопка заводит первый.
+//
+// БЫЛО (до 2026-08-27): плитка 64pt с градиентом и значком календаря,
+// заголовок «Здесь будет ваш календарь» 22pt и абзац на три строки
+// «Календарь — это расписание, куда вы записываете клиентов по дням и
+// часам. Создайте первый — и можно начинать.»
+//
+// Владелец 2026-08-27: «не нравится, когда полностью объяснение, и иконка
+// этого календаря — убирай, просто кнопочка создать календарь».
+//
+// Ушло и почему:
+//   1. АБЗАЦ ОБЪЯСНЯЛ СЛОВО, КОТОРОЕ НЕ ТРЕБУЕТ ОБЪЯСНЕНИЯ. «Календарь —
+//      это расписание» читает человек, который управляет двумя бригадами и
+//      уже нажал вкладку «Календарь». Это тот же LOCKED-закон, что и запрет
+//      объясняшек под карточками (§5, 2026-08-17): назвать контрол так,
+//      чтобы объяснять было нечего. Кнопка «Создать календарь» называет.
+//   2. ЗНАЧОК КАЛЕНДАРЯ СТОЯЛ НА ВКЛАДКЕ «КАЛЕНДАРЬ». Он повторял то, что
+//      уже сказано таб-баром, заголовком и самой кнопкой — четвёртый раз
+//      подряд одно и то же слово.
+//   3. ЗАГОЛОВОК «Здесь будет ваш календарь» — пятый. Пустой экран не нужно
+//      подписывать «здесь пусто».
+//
+// Компонент был перенесён с веба один в один («web parity:
+// apps/web/src/components/empty-states/FirstRunCalendarChoice.tsx»), а
+// веб-приложения не существует с 2026-08-25. Разъяснительный тон родом
+// оттуда: на большом экране абзац стоил ничего, на телефоне он занимает
+// треть высоты и стоит между человеком и единственным действием.
 export function FirstRunCalendarChoice({
   onCreate,
   creating,
@@ -28,64 +48,12 @@ export function FirstRunCalendarChoice({
         paddingHorizontal: 24,
       }}
     >
-      <View style={{ width: "100%", maxWidth: 360, alignItems: "center" }}>
-        {/* Brand-gradient calendar mark — same cobalt
-            gradient recipe as the primary button (DS: the only gradients). */}
-        <View
-          style={{
-            height: 64,
-            width: 64,
-            borderRadius: t.radius.card,
-            overflow: "hidden",
-            alignItems: "center",
-            justifyContent: "center",
-            marginBottom: 16,
-            boxShadow: t.brandShadow,
-          }}
-        >
-          <Svg style={FILL} width="100%" height="100%" pointerEvents="none">
-            <Defs>
-              <LinearGradient id="cal-mark" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={t.accentFrom} />
-                <Stop offset="1" stopColor={t.accentTo} />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height="100%" fill="url(#cal-mark)" />
-          </Svg>
-          <CalendarDays color={t.onAccent} size={30} strokeWidth={2} />
-        </View>
-
-        <Text
-          style={{
-            fontSize: 22,
-            fontWeight: "600",
-            color: t.ink,
-            textAlign: "center",
-            letterSpacing: -0.3,
-          }}
-        >
-          Здесь будет ваш календарь
-        </Text>
-        <Text
-          style={{
-            marginTop: 8,
-            fontSize: 14,
-            lineHeight: 20,
-            color: t.sub,
-            textAlign: "center",
-          }}
-        >
-          Календарь — это расписание, куда вы записываете клиентов по дням и
-          часам. Создайте первый — и можно начинать.
-        </Text>
-
-        <View style={{ marginTop: 24, width: "100%" }}>
-          <GradientButton
-            label="Создать календарь"
-            onPress={onCreate}
-            loading={creating}
-          />
-        </View>
+      <View style={{ width: "100%", maxWidth: 360 }}>
+        <GradientButton
+          label="Создать календарь"
+          onPress={onCreate}
+          loading={creating}
+        />
       </View>
     </View>
   );
