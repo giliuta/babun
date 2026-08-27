@@ -1035,10 +1035,9 @@ export default function CalendarTab() {
     });
   };
 
-  // First-run gate CTA — spins up the first team calendar (web parity:
-  // /dashboard/teams?new=1 immediately creates a team). Default name +
-  // first unused palette colour; the «Назвать» toast lands on /calendar,
-  // whose identity card renames and recolours in place.
+  // Заводит первый календарь тенанта. Вызывается АВТОМАТИЧЕСКИ эффектом
+  // ниже; кнопка осталась только запасным выходом, если автосоздание не
+  // прошло (нет связи, отказ базы).
   const createFirstCalendar = () => {
     const used = new Set(
       (teams as { color?: string | null }[]).map((tm) => tm.color).filter(Boolean),
@@ -1055,18 +1054,47 @@ export default function CalendarTab() {
         onSuccess: (team) => {
           setTeamChoice(team.id);
           rememberView({ teamId: team.id });
-          // Не роутим в настройки: человек только что попросил календарь —
-          // он должен увидеть СВОЙ КАЛЕНДАРЬ, а не допрос про часы. Имя
-          // предлагаем поменять действием в тосте, необязательным.
-          toast("Календарь создан", "success", {
-            label: "Назвать",
-            onPress: () => router.push(`/calendar?team=${team.id}`),
-          });
+          // Тоста нет намеренно: календарь заводится САМ, человек его не
+          // просил — сообщать ему о результате действия, которого он не
+          // совершал, значит требовать внимания ни за чем. Имя видно в
+          // чипе над сеткой, переименование живёт под шестерёнкой.
         },
-        onError: () => toast("Не удалось создать календарь"),
+        onError: () => {
+          // Автосоздание не прошло — показываем кнопку как ручной выход.
+          // Молча оставить пустой экран нельзя: человек окажется в
+          // календаре, которого нет, без единого способа это исправить.
+          setFirstCalendarFailed(true);
+          toast("Не удалось создать календарь");
+        },
       },
     );
   };
+
+  // КАЛЕНДАРЬ ЗАВОДИТСЯ САМ (владелец 2026-08-27: «когда я впервые захожу
+  // в календарь, я хочу, чтобы там уже был создан календарь — не надо было
+  // нажимать кнопку, она по сути бессмысленный этап»).
+  //
+  // Шаг и правда был пустым: единственная кнопка единственного экрана
+  // делала ровно одно действие без единого выбора — ни имени, ни цвета, ни
+  // типа. Экран, который спрашивает «продолжить?», не спрашивает ничего.
+  //
+  // Условия строгие, потому что цена ошибки — лишняя команда в базе:
+  // только владелец (мастер календарей не заводит), только когда список
+  // команд ДОЗАГРУЖЕН и пуст, только один раз за жизнь экрана (ref, а не
+  // state — он не должен перезапускать эффект).
+  const firstCalendarStarted = useRef(false);
+  const [firstCalendarFailed, setFirstCalendarFailed] = useState(false);
+  useEffect(() => {
+    if (firstCalendarStarted.current) return;
+    if (role !== "owner") return;
+    if (teamsFetching || teamsError) return;
+    if (teams.length > 0) return;
+    firstCalendarStarted.current = true;
+    createFirstCalendar();
+    // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
+    // каждый рендер, и его включение превратило бы эффект в цикл.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, teamsFetching, teamsError, teams.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
@@ -1881,11 +1909,20 @@ export default function CalendarTab() {
                 : "Первый календарь создаёт владелец компании."
             }
           />
-        ) : (
+        ) : firstCalendarFailed ? (
+          // Запасной выход. В обычной жизни сюда не попадают: календарь
+          // заводится сам эффектом выше.
           <FirstRunCalendarChoice
-            onCreate={createFirstCalendar}
-            creating={createTeam.isPending || teamsFetching}
+            onCreate={() => {
+              setFirstCalendarFailed(false);
+              createFirstCalendar();
+            }}
+            creating={createTeam.isPending}
           />
+        ) : (
+          // Календарь уже создаётся — показываем скелет сетки, а не кнопку:
+          // человек пришёл в календарь, и ждать он должен календарь.
+          <CalendarSkeleton mode="week" />
         )}
       </Screen>
     );
