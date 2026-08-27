@@ -259,7 +259,6 @@ export function LabelsScreen() {
           fill
           icon={<MapPin color={t.accent} size={28} />}
           title="Меток пока нет"
-          subtitle="Лимассол, Германия, День ног — метка вешается на день тапом по шапке даты в календаре и красит колонку своим цветом."
         />
       ) : (
         <ScrollView
