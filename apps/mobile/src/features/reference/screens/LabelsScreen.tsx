@@ -6,11 +6,10 @@ import { ColorField } from "@/components/ui/picker-fields";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { AddRow } from "@/components/ui/AddRow";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
@@ -261,7 +260,6 @@ export function LabelsScreen() {
           icon={<MapPin color={t.accent} size={28} />}
           title="Меток пока нет"
           subtitle="Лимассол, Германия, День ног — метка вешается на день тапом по шапке даты в календаре и красит колонку своим цветом."
-          action={{ label: "Добавить метку", onPress: () => setEditing({ mode: "create" }) }}
         />
       ) : (
         <ScrollView
@@ -372,14 +370,21 @@ export function LabelsScreen() {
                 </SwipeRow>
               )}
             </ReorderList>
-            <Divider inset={16} />
-            <AddRow
-              label="Добавить метку"
-              onPress={() => setEditing({ mode: "create" })}
-            />
           </SectionCard>
         </ScrollView>
       )}
+
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ ЭКРАНА — ВНИЗУ (LOCKED 2026-08-27, владелец: «когда
+          открываю метку дня — кнопка снизу, как услуга, как и везде»).
+          Кнопка стоит ВСЕГДА, а не только в пустом состоянии: метки заводят
+          пачкой, и после первой не должно приходиться доскролливать список,
+          чтобы завести вторую. Ровно тот же приём, что на экране услуг. */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+        <GradientButton
+          label="Добавить метку"
+          onPress={() => setEditing({ mode: "create" })}
+        />
+      </View>
 
       <LabelSheet
         editing={editing}
