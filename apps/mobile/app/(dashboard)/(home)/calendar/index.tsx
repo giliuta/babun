@@ -18,8 +18,6 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
-import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
@@ -257,8 +255,6 @@ export default function CalendarSettingsScreen() {
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {team ? (
           <>
-            {/* Заголовок секции = имя календаря: он и есть область действия. */}
-            <SectionEyebrow>{team.name}</SectionEyebrow>
             <CalendarIdentityCard
               key={team.id}
               team={team}
@@ -288,7 +284,8 @@ export default function CalendarSettingsScreen() {
                 sub={`${formatHm(window.start)}–${formatHm(window.end)}`}
                 onPress={() => setPicker("view")}
               />
-              <Divider inset={56} />
+            </SectionCard>
+            <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
                 icon={CalendarClock}
@@ -300,7 +297,6 @@ export default function CalendarSettingsScreen() {
           </>
         ) : null}
 
-        <SectionEyebrow>Все календари</SectionEyebrow>
         <SectionCard>
           <SettingsRow
             tile={SETTINGS_TILE.indigo}
@@ -309,7 +305,8 @@ export default function CalendarSettingsScreen() {
             sub={s.hideCancelled ? "Отменённые скрыты" : "Показываем всё"}
             onPress={() => router.push("/calendar/display")}
           />
-          <Divider inset={56} />
+        </SectionCard>
+        <SectionCard>
           <SettingsRow
             tile="neutral"
             icon={Globe}
@@ -323,7 +320,6 @@ export default function CalendarSettingsScreen() {
             (владелец 2026-08-02: «метки мы не делаем в клиентах — метки
             должны стоять в настройках календаря»): метка — это про ДЕНЬ и
             маршрут команды, а карточка клиента её только показывает. */}
-        <SectionEyebrow>Справочники</SectionEyebrow>
         <SectionCard>
           {/* Услуги — здесь, потому что именно они дают ДЛИТЕЛЬНОСТЬ записи
               (настройки «Длительность» на календаре больше нет). Тот же
@@ -347,7 +343,8 @@ export default function CalendarSettingsScreen() {
               )
             }
           />
-          <Divider inset={56} />
+        </SectionCard>
+        <SectionCard>
           <SettingsRow
             tile={SETTINGS_TILE.purple}
             icon={Tags}
