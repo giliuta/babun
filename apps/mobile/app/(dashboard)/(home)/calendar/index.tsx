@@ -20,6 +20,8 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { AddRow } from "@/components/ui/AddRow";
+import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { NameColorField } from "@/components/ui/picker-fields";
@@ -127,6 +129,7 @@ export default function CalendarSettingsScreen() {
   // `TeamScheduleSheet` — там же, почему это исключение из закона «настройка —
   // всегда страница».
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
@@ -238,7 +241,9 @@ export default function CalendarSettingsScreen() {
       {/* Шов под шапкой один — его несёт лента чипов. */}
       <ScreenHeader
         title="Календарь"
-        seam={false}
+        // Шов несёт лента чипов, но при нуле календарей она не рисуется —
+        // тогда линию берёт на себя шапка, иначе она висит в воздухе.
+        seam={teams.length === 0}
         right={<SavedIndicator tick={savedTick} />}
       />
       {/* КОМАНДЫ СВЕРХУ, КАК ВЕЗДЕ. Владелец 2026-08-10: «зачем делать другой
@@ -296,6 +301,18 @@ export default function CalendarSettingsScreen() {
             </SectionCard>
           </>
         ) : null}
+
+        {/* СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ В ПРОДУКТЕ (владелец
+            2026-08-27). Стоит на границе «настройки ЭТОГО календаря» →
+            «настройки всех»: выше сгиба даже на маленьком экране, а задача
+            и возникла из того, что владелец кнопку НЕ УВИДЕЛ.
+
+            ВНЕ ветки `team ? … : null` намеренно: иначе ровно в состоянии
+            «календарей нет» единственная дверь создания и не рисуется. При
+            нуле календарей она становится первой карточкой экрана. */}
+        <SectionCard>
+          <AddRow label="Добавить календарь" onPress={() => setCreateOpen(true)} />
+        </SectionCard>
 
         <SectionCard>
           <SettingsRow
@@ -372,6 +389,13 @@ export default function CalendarSettingsScreen() {
           </SectionCard>
         ) : null}
       </ScrollView>
+
+      <CalendarCreateSheet
+        visible={createOpen}
+        onClose={() => setCreateOpen(false)}
+        teams={teams}
+        onCreated={(created) => router.setParams({ team: created.id })}
+      />
 
       {/* Часы календаря — нижним листом «С … До …» (владелец 2026-08-16: «как
           время в финансах»): сегмент С|До, список часов, «Применить». */}
