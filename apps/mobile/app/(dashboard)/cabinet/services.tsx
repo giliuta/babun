@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Archive, Copy, Scissors, Trash2, X } from "lucide-react-native";
+import { Archive, Briefcase, Copy, Trash2, X } from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -371,7 +371,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         //
         // Подписи под заголовком нет: пустое состояние говорит ровно одно —
         // чего здесь нет (LOCKED 2026-08-27, §5).
-        <EmptyState fill icon={<Scissors color={t.accent} size={28} />} title="Услуг пока нет" />
+        <EmptyState fill icon={<Briefcase color={t.accent} size={28} />} title="Услуг пока нет" />
       ) : (
         <ScrollView
           className="flex-1"

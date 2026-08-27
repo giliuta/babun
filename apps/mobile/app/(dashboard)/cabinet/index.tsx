@@ -32,7 +32,7 @@ import {
   Receipt,
   RefreshCw,
   RotateCw,
-  Scissors,
+  Briefcase,
   Shield,
   Star,
   Tag,
@@ -448,7 +448,7 @@ export default function CabinetHome() {
           />
           <Divider inset={58} />
           <MenuRow
-            icon={Scissors}
+            icon={Briefcase}
             tone={TILE.blue}
             title="Услуги"
             desc="Каталог работ и цены"

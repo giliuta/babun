@@ -6,7 +6,7 @@ import {
   CalendarRange,
   Eye,
   Globe,
-  Scissors,
+  Briefcase,
   Tags,
 } from "lucide-react-native";
 import { getStorage } from "@babun/shared/storage";
@@ -344,7 +344,7 @@ export default function CalendarSettingsScreen() {
               наружу этот стек не ведёт (закон навигации). */}
           <SettingsRow
             tile={SETTINGS_TILE.blue}
-            icon={Scissors}
+            icon={Briefcase}
             title="Услуги"
             sub="Каталог работ и цены"
             // Отдаём ТУ команду, чьи настройки открыты: иначе прайс
