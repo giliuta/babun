@@ -33,6 +33,7 @@ import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
+import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { notify } from "@/lib/notify";
 import {
@@ -152,7 +153,12 @@ export default function CalendarSettingsScreen() {
   };
 
   const work = effectiveWorkHours(s);
-  const timezone = s.timezone ?? DEFAULT_CALENDAR_SETTINGS.timezone;
+  // ПОЯС ЭТОГО КАЛЕНДАРЯ. Порядок ровно тот же, что читает весь продукт
+  // (`activeTeam?.timezone ?? calSettings?.timezone` в календаре, в записи и в
+  // напоминаниях), — экран не имеет права разрешать его иначе, чем сетка.
+  const companyZone = s.timezone ?? DEFAULT_CALENDAR_SETTINGS.timezone;
+  const timezone = team?.timezone ?? companyZone;
+  const zoneInherited = !team?.timezone;
   // «Часы календаря» — видимое окно рельса ЭТОГО календаря (владелец
   // 2026-08-17: «на команде один я могу выбрать такие часы, а на команде два
   // совершенно другие»). Читается буквально: «Автоматически» из продукта
@@ -261,8 +267,10 @@ export default function CalendarSettingsScreen() {
                 него считаются границы дня в календаре, в финансах и в
                 отчётах. Остальные настройки экрана живут ВНУТРИ суток,
                 которые он определяет, — значит он им предшествует.
-                Настройка общая на все календари; это сказано в самой
-                строке, а не сноской под карточкой. */}
+                Настройка У КАЖДОГО КАЛЕНДАРЯ СВОЯ (владелец 2026-08-27):
+                второй календарь может стоять в другой стране, и колонка
+                `teams.timezone` под это была всегда — не было только места,
+                где её выставить. */}
             <SectionCard>
               <SettingsRow
                 tile="neutral"
@@ -271,8 +279,8 @@ export default function CalendarSettingsScreen() {
                 // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
                 // Проверить, что продукт считает день правильно, можно за
                 // секунду — сверив это время с часами в статус-баре.
-                sub={`${tzLabel(timezone)} · ${zoneClock(timezone)}${settings?.timezoneAuto ? "" : " · вручную"}`}
-                onPress={() => router.push("/calendar/timezone")}
+                sub={`${tzLabel(timezone)} · ${zoneClock(timezone)}`}
+                onPress={() => setPicker("tz")}
               />
             </SectionCard>
             {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
@@ -417,6 +425,13 @@ export default function CalendarSettingsScreen() {
             calendar_window_end: formatHm({ hour: v.end, minute: v.endMinute }),
           })
         }
+      />
+      <TimezoneSheet
+        visible={picker === "tz"}
+        onClose={() => setPicker(null)}
+        value={timezone}
+        inherited={zoneInherited}
+        onApply={(zone) => patchTeam({ timezone: zone })}
       />
       <TeamScheduleSheet
         visible={scheduleOpen}

@@ -1,23 +1,8 @@
-// ЗОНА ТЕЛЕФОНА И ЧТО С НЕЙ МОЖНО ДЕЛАТЬ.
+// ЧАСОВОЙ ПОЯС: СМЕЩЕНИЕ И ЧАСЫ.
 //
-// Главное правило файла: сравнивать зоны ПО СМЕЩЕНИЮ, а не по строке.
-// Симулятор отдаёт `Asia/Nicosia`, в списке лежит `Europe/Nicosia` — строки
-// разные, сутки одни и те же. Сравнение строк заставило бы продукт
-// переписывать зону при каждом запуске и «дрейфовать», стоя на месте.
-
-export const FALLBACK_ZONE = "Europe/Nicosia";
-
-/** Зона устройства. До 2026-08-27 не спрашивалась НИ РАЗУ: в дефолтах лежала
- *  Никосия, и мастер в Варшаве жил по кипрским суткам, ни разу не открыв
- *  экран настроек. */
-export function deviceZone(): string {
-  try {
-    const z = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    return z && z.length > 2 ? z : FALLBACK_ZONE;
-  } catch {
-    return FALLBACK_ZONE;
-  }
-}
+// Смещение и часы зоны — то, что печатается человеку в списке поясов.
+// Считается через `formatToParts`: готового API у `Intl` нет, а
+// `getTimezoneOffset` знает только зону самого устройства.
 
 /** Смещение зоны в минутах на момент `at`. Через `formatToParts`, потому что
  *  готового API у `Intl` нет, а `getTimezoneOffset` знает только зону
@@ -49,24 +34,6 @@ export function zoneOffsetMinutes(zone: string, at: Date = new Date()): number {
   } catch {
     return 0;
   }
-}
-
-const HALF_YEAR_MS = 183 * 24 * 60 * 60 * 1000;
-
-/** Две зоны дают ОДНУ И ТУ ЖЕ границу суток — сейчас и через полгода.
- *
- *  Полугодовая проба и есть проверка на перевод часов: `Asia/Nicosia` и
- *  `Europe/Nicosia` совпадут в обеих точках, а `Europe/Warsaw` и `Etc/GMT-2`
- *  разойдутся в последнее воскресенье октября. Без второй пробы продукт
- *  считал бы фиксированную зону равной живой — и 25 октября всё, что
- *  происходит после 23:00, уехало бы в другие сутки: в кассе, в закрытии
- *  дня, в отчётах. */
-export function sameDayBoundary(a: string, b: string, at: Date = new Date()): boolean {
-  const later = new Date(at.getTime() + HALF_YEAR_MS);
-  return (
-    zoneOffsetMinutes(a, at) === zoneOffsetMinutes(b, at) &&
-    zoneOffsetMinutes(a, later) === zoneOffsetMinutes(b, later)
-  );
 }
 
 /** «UTC+3», «UTC−5:30», «UTC». Печатается человеку, поэтому минус — типографский. */

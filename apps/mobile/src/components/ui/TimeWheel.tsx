@@ -75,8 +75,10 @@ export function LoopWheelColumn({
   accessibilityLabel,
   activeColor,
   accessibilityValueSuffix,
+  width = COLUMN_W,
+  fontSize,
 }: {
-  /** ОДИН цикл значений: 24 часа либо 12 пятиминуток. */
+  /** ОДИН цикл значений: 24 часа, 12 пятиминуток либо 59 часовых поясов. */
   items: string[];
   /** Индекс внутри цикла (0…items.length−1). */
   value: number;
@@ -86,6 +88,10 @@ export function LoopWheelColumn({
   /** Суффикс к accessibilityValue («, вне рабочих часов») — VoiceOver обязан
    *  слышать состояние, а не только видеть цвет. */
   accessibilityValueSuffix?: string;
+  /** Ширина колонки. Цифрам хватает узкой, названию пояса — нет. */
+  width?: number;
+  /** Кегль активной строки. Цифры крупные; словам такой кегль не по ширине. */
+  fontSize?: number;
 }) {
   const t = useThemeColors();
   const ref = useRef<ScrollView>(null);
@@ -178,7 +184,7 @@ export function LoopWheelColumn({
         if (event.nativeEvent.actionName === "increment") adjust(1);
         if (event.nativeEvent.actionName === "decrement") adjust(-1);
       }}
-      style={{ width: COLUMN_W, height: WHEEL_H }}
+      style={{ width, height: WHEEL_H }}
       contentContainerStyle={{ paddingVertical: PAD }}
     >
       {Array.from({ length: REPS * len }, (_, i) => {
@@ -192,11 +198,15 @@ export function LoopWheelColumn({
               // Кап 1.2: геометрия колеса фиксированная — цифры не должны
               // вырастать из своего ряда при AX-шрифтах.
               maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
               style={{
                 fontVariant: ["tabular-nums"],
                 color: active ? activeColor ?? t.ink : t.placeholder,
                 fontWeight: active ? "700" : "500",
-                fontSize: active ? DIGIT_FONT : DIGIT_FONT - 3,
+                fontSize: active
+                  ? fontSize ?? DIGIT_FONT
+                  : (fontSize ?? DIGIT_FONT) - 3,
+                paddingHorizontal: 8,
               }}
             >
               {items[norm(i)]}

@@ -1,3 +1,4 @@
+export { TIMEZONE_OPTIONS } from "./timezones";
 // Calendar display settings. Persisted via the storage seam (WebKVStorage
 // on web, MMKV on RN). Drives auto-scroll start position and grid range.
 
@@ -23,9 +24,6 @@ export interface CalendarSettings {
   /** Зона IANA. ВСЕГДА валидная строка — никаких null и sentinel-ов: её
    *  читают три десятка мест и сразу отдают в `Intl`, который на null падает. */
   timezone: string;
-  /** Пояс взят с телефона и следит за ним. ОТДЕЛЬНОЕ поле, а не признак
-   *  внутри `timezone`, по той же причине. */
-  timezoneAuto: boolean;
   // Sprint 033 Phase I35 — Bumpix-inspired calendar toggles.
   /** Minutes reserved after every appointment for travel / cleanup. The
    *  grid paints the gap as a band, and creating / rescheduling into it
@@ -73,11 +71,10 @@ export interface CalendarSettings {
  */
 export type OperationalCalendarSettings = Omit<
   CalendarSettings,
-  // `timezoneAuto` мастеру не достаётся: настройки календаря он писать не
-  // вправе (`useSaveCalendarSettings` бросает «только владелец»), а знать,
+  //   // вправе (`useSaveCalendarSettings` бросает «только владелец»), а знать,
   // следит ли зона за телефоном, ему незачем — за неё отвечает владелец.
   // Контрактный тест мастерского среза ловит любую попытку это протащить.
-  "personalLabels" | "personalDefaultLabel" | "timezoneAuto"
+  "personalLabels" | "personalDefaultLabel"
 >;
 
 const STORAGE_KEY = "babun2:settings:calendar";
@@ -107,7 +104,6 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   // ни разу не открыв настройки, и «сегодня» в его кассе кончалось в 23:00.
   // Фолбэк остаётся Кипром — на случай, если Intl вернул пустое.
   timezone: deviceZone(),
-  timezoneAuto: true,
   bufferMinutes: 0,
   hideCancelled: false,
   showDayFinance: true,
@@ -130,68 +126,6 @@ function deviceZone(): string {
   }
 }
 
-export const TIMEZONE_OPTIONS: string[] = [
-  // Европа
-  "Europe/Amsterdam",
-  "Europe/Athens",
-  "Europe/Belgrade",
-  "Europe/Berlin",
-  "Europe/Bratislava",
-  "Europe/Brussels",
-  "Europe/Bucharest",
-  "Europe/Budapest",
-  "Europe/Chisinau",
-  "Europe/Copenhagen",
-  "Europe/Dublin",
-  "Europe/Helsinki",
-  "Europe/Istanbul",
-  "Europe/Kyiv",
-  "Europe/Lisbon",
-  "Europe/Ljubljana",
-  "Europe/London",
-  "Europe/Luxembourg",
-  "Europe/Madrid",
-  "Europe/Malta",
-  "Europe/Minsk",
-  "Europe/Moscow",
-  "Europe/Nicosia",
-  "Europe/Oslo",
-  "Europe/Paris",
-  "Europe/Prague",
-  "Europe/Riga",
-  "Europe/Rome",
-  "Europe/Sarajevo",
-  "Europe/Sofia",
-  "Europe/Stockholm",
-  "Europe/Tallinn",
-  "Europe/Tirane",
-  "Europe/Vienna",
-  "Europe/Vilnius",
-  "Europe/Warsaw",
-  "Europe/Zagreb",
-  "Europe/Zurich",
-  // Ближний Восток и Кавказ
-  "Asia/Baku",
-  "Asia/Beirut",
-  "Asia/Dubai",
-  "Asia/Jerusalem",
-  "Asia/Qatar",
-  "Asia/Riyadh",
-  "Asia/Tbilisi",
-  "Asia/Yerevan",
-  // Центральная Азия
-  "Asia/Almaty",
-  "Asia/Tashkent",
-  // Африка
-  "Africa/Cairo",
-  "Africa/Casablanca",
-  // Америка
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/New_York",
-  "America/Toronto",
-];
 
 export function loadCalendarSettings(): CalendarSettings {
   // Storage seam (STORY-035): WebKVStorage on web, MMKV on RN.

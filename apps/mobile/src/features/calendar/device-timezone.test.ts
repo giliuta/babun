@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import {
-  sameDayBoundary,
-  utcLabel,
-  zoneClock,
-  zoneOffsetMinutes,
-} from "./device-timezone";
+import { utcLabel, zoneClock, zoneOffsetMinutes } from "./device-timezone";
 
 // ЭТИ ФУНКЦИИ РЕШАЮТ, КОГДА У БИЗНЕСА КОНЧАЕТСЯ ДЕНЬ.
 //
@@ -35,31 +30,6 @@ describe("зона устройства и границы суток", () => {
 
   test("получасовые зоны не округляются в ноль", () => {
     assert.equal(zoneOffsetMinutes("Asia/Kolkata", WINTER), 330);
-  });
-
-  test("разные имена ОДНОЙ границы суток считаются равными", () => {
-    // Симулятор отдаёт Asia/Nicosia, в списке лежит Europe/Nicosia.
-    // Строки разные — сутки одни, переписывать зону не за чем.
-    assert.equal(sameDayBoundary("Asia/Nicosia", "Europe/Nicosia", WINTER), true);
-    assert.equal(sameDayBoundary("Asia/Nicosia", "Europe/Nicosia", SUMMER), true);
-  });
-
-  test("ГЛАВНОЕ: живая зона и фиксированная НЕ равны, даже когда сегодня совпали", () => {
-    // Зимой Кипр = UTC+2 = Etc/GMT-2. Сегодня одно и то же.
-    assert.equal(zoneOffsetMinutes("Europe/Nicosia", WINTER), 120);
-    assert.equal(zoneOffsetMinutes("Etc/GMT-2", WINTER), 120);
-    // Но через полгода Кипр уходит на +3, а фиксированная зона — нет.
-    // Без этой проверки продукт молча заменил бы живую зону фиксированной,
-    // и после перевода часов всё после 23:00 уехало бы в другие сутки.
-    assert.equal(
-      sameDayBoundary("Europe/Nicosia", "Etc/GMT-2", WINTER),
-      false,
-      "живая зона не должна считаться равной фиксированной",
-    );
-  });
-
-  test("разные зоны с разной границей суток не равны", () => {
-    assert.equal(sameDayBoundary("Europe/Warsaw", "Europe/Nicosia", WINTER), false);
   });
 
   test("подпись смещения читается человеком", () => {

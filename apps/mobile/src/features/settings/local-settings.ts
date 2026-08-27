@@ -120,9 +120,7 @@ function safeLoadOperationalCalendarSettings(
   tenantId: string,
 ): CalendarSettings {
   try {
-    // Достраиваем до полной формы: `timezoneAuto` в мастерский срез не
-    // входит намеренно, а тип настроек его требует. Мастеру всегда «нет».
-    return { ...loadOperationalCalendarSettings(tenantId), timezoneAuto: false };
+    return { ...loadOperationalCalendarSettings(tenantId) };
   } catch {
     return { ...DEFAULT_CALENDAR_SETTINGS };
   }
@@ -154,14 +152,8 @@ export function useCalendarSettings() {
           const settings = await getOperationalCalendarSettings(supabase);
           safeSaveOperationalCalendarSettings(activeTenantId, {
             ...settings,
-            timezoneAuto: false,
           });
-          // `timezoneAuto` в мастерский срез не входит НАМЕРЕННО (см. тип
-          // OperationalCalendarSettings): писать настройки календаря мастер
-          // не вправе, и следит ли зона за телефоном — не его дело. Здесь
-          // достраиваем поле до полной формы значением «нет»: мастер флаг не
-          // увидит и переключить не сможет.
-          return { ...settings, timezoneAuto: false };
+          return { ...settings };
         }
         if (role === "owner" || role === "dispatcher") {
           const s = await getCalendarSettings(supabase, activeTenantId);
