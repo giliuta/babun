@@ -99,18 +99,72 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   allowOvertime: false,
 };
 
+// ЧАСОВЫЕ ПОЯСА. Было одиннадцать (владелец 2026-08-27: «добавь больше
+// часовых поясов»). Список не машинный: полный набор IANA — это 400+ строк,
+// среди которых человек ищет свой город дольше, чем печатает его руками.
+// Здесь — Европа целиком плюс те города вне её, где сервисный бизнес уже
+// встречается, по алфавиту зоны.
 export const TIMEZONE_OPTIONS: string[] = [
-  "Europe/Nicosia",
+  // Европа
+  "Europe/Amsterdam",
   "Europe/Athens",
-  "Europe/Moscow",
-  "Europe/Kiev",
-  "Europe/London",
+  "Europe/Belgrade",
   "Europe/Berlin",
+  "Europe/Bratislava",
+  "Europe/Brussels",
+  "Europe/Bucharest",
+  "Europe/Budapest",
+  "Europe/Chisinau",
+  "Europe/Copenhagen",
+  "Europe/Dublin",
+  "Europe/Helsinki",
+  "Europe/Istanbul",
+  "Europe/Kyiv",
+  "Europe/Lisbon",
+  "Europe/Ljubljana",
+  "Europe/London",
+  "Europe/Luxembourg",
+  "Europe/Madrid",
+  "Europe/Malta",
+  "Europe/Minsk",
+  "Europe/Moscow",
+  "Europe/Nicosia",
+  "Europe/Oslo",
   "Europe/Paris",
+  "Europe/Prague",
+  "Europe/Riga",
+  "Europe/Rome",
+  "Europe/Sarajevo",
+  "Europe/Sofia",
+  "Europe/Stockholm",
+  "Europe/Tallinn",
+  "Europe/Tirane",
+  "Europe/Vienna",
+  "Europe/Vilnius",
+  "Europe/Warsaw",
+  "Europe/Zagreb",
+  "Europe/Zurich",
+  // Ближний Восток и Кавказ
+  "Asia/Baku",
+  "Asia/Beirut",
   "Asia/Dubai",
   "Asia/Jerusalem",
-  "America/New_York",
+  "Asia/Qatar",
+  "Asia/Riyadh",
+  "Asia/Tbilisi",
+  "Asia/Yerevan",
+  // Центральная Азия
+  "Asia/Almaty",
+  "Asia/Tashkent",
+  // Африка
+  "Africa/Cairo",
+  "Africa/Casablanca",
+  // Америка
+  "America/Chicago",
+  "America/Denver",
   "America/Los_Angeles",
+  "America/New_York",
+  "America/Toronto",
 ];
 
 export function loadCalendarSettings(): CalendarSettings {
