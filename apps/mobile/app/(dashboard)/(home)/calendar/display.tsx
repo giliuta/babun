@@ -73,15 +73,6 @@ export default function CalendarDisplayScreen() {
           />
         </SectionCard>
 
-        <SectionEyebrow>Неделя</SectionEyebrow>
-        <SectionCard>
-          <SwitchRow
-            label="Неделя начинается с воскресенья"
-            hint="Выключено — неделя начинается с понедельника"
-            value={s.weekStart === "sunday"}
-            onChange={(v) => patch({ weekStart: v ? "sunday" : "monday" })}
-          />
-        </SectionCard>
       </ScrollView>
     </Screen>
   );

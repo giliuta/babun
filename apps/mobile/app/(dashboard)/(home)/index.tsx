@@ -970,7 +970,7 @@ export default function CalendarTab() {
   );
 
   const weekDays = useMemo(() => {
-    const first = startOfWeek(day, weekStart);
+    const first = startOfWeek(day);
     return Array.from({ length: 7 }, (_, i) => addDays(first, i));
   }, [day, weekStart]);
   const weekYmds = useMemo(() => weekDays.map(formatYMD), [weekDays]);
@@ -2150,7 +2150,6 @@ export default function CalendarTab() {
                   financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
-                  weekStart={weekStart}
                   showFinance={canViewCompanyFinance}
                   labelFor={labelFor}
                   onPickDay={openWeekFromMonth}
@@ -2334,7 +2333,6 @@ export default function CalendarTab() {
         currentDate={day}
         todayYmd={todayYmd}
         appointments={visibleAppts}
-        weekStart={weekStart}
         onSelectDate={jumpToDate}
         onClose={() => setMiniCalOpen(false)}
       />

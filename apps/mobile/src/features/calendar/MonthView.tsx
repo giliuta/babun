@@ -12,7 +12,6 @@ import {
   isWeekendColumn,
   weekdayIndex,
   weekdayLabels,
-  type WeekStart,
 } from "@/features/calendar/week";
 import { useThemeColors } from "@/theme/colors";
 
@@ -48,7 +47,6 @@ export const MonthView = memo(function MonthView({
   labelFor,
   onPickDay,
   onPickLabelDay,
-  weekStart = "monday",
   showFinance = true,
 }: {
   month: Date; // first of the displayed month
@@ -73,20 +71,18 @@ export const MonthView = memo(function MonthView({
   /** Тап по дню — попап метки (undefined, когда у команды нет меток:
    *  тогда и обычный тап открывает Неделю). */
   onPickLabelDay?: (dateYmd: string) => void;
-  /** «Первый день недели» (calendar_settings.week_start). */
-  weekStart?: WeekStart;
   /** Company money is owner-only; other roles still get counts and labels. */
   showFinance?: boolean;
 }) {
   const cells = useMemo(() => {
     const y = month.getFullYear();
     const m = month.getMonth();
-    const startDow = weekdayIndex(new Date(y, m, 1).getDay(), weekStart);
+    const startDow = weekdayIndex(new Date(y, m, 1).getDay());
     const out: Date[] = [];
     for (let i = 0; i < 42; i++) out.push(new Date(y, m, 1 - startDow + i));
     return out;
-  }, [month, weekStart]);
-  const WD = weekdayLabels(weekStart);
+  }, [month]);
+  const WD = weekdayLabels();
 
   const byDay = useMemo(() => groupByDate(appointments), [appointments]);
   const financeByDay = useMemo(
@@ -148,7 +144,7 @@ export const MonthView = memo(function MonthView({
               fontWeight: "600",
               letterSpacing: 0.6,
               textTransform: "uppercase",
-              color: isWeekendColumn(i, weekStart) ? t.danger : t.sub,
+              color: isWeekendColumn(i) ? t.danger : t.sub,
             }}
           >
             {w}

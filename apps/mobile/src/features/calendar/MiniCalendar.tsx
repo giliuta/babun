@@ -5,11 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
-import {
-  weekdayIndex,
-  weekdayLabels,
-  type WeekStart,
-} from "@/features/calendar/week";
+import { weekdayIndex, weekdayLabels } from "@/features/calendar/week";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 
@@ -42,7 +38,6 @@ export function MiniCalendar({
   appointments,
   onSelectDate,
   onClose,
-  weekStart = "monday",
 }: {
   visible: boolean;
   currentDate: Date;
@@ -51,8 +46,6 @@ export function MiniCalendar({
   appointments: Appointment[];
   onSelectDate: (d: Date) => void;
   onClose: () => void;
-  /** «Первый день недели» (calendar_settings.week_start). */
-  weekStart?: WeekStart;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -80,7 +73,7 @@ export function MiniCalendar({
     return m;
   }, [appointments]);
 
-  const DAY_HEADERS = weekdayLabels(weekStart);
+  const DAY_HEADERS = weekdayLabels();
 
   const prevMonth = () => {
     if (viewMonth === 0) {
@@ -224,7 +217,7 @@ export function MiniCalendar({
                   const anchor = new Date(viewYear, viewMonth + off, 1);
                   const y = anchor.getFullYear();
                   const m = anchor.getMonth();
-                  const lead = weekdayIndex(anchor.getDay(), weekStart);
+                  const lead = weekdayIndex(anchor.getDay());
                   const total = new Date(y, m + 1, 0).getDate();
                   return (
                     <View style={{ flexDirection: "row", flexWrap: "wrap" }}>

@@ -1,38 +1,42 @@
-// Первый день недели. Настройка живёт в calendar_settings.week_start и
-// давно есть в вебе; на мобиле понедельник был зашит тремя независимыми
-// константами — в Неделе (mondayOf), в Месяце и в мини-календаре. Здесь
-// один дом на все три, иначе следующая правка снова разъедется.
+// НЕДЕЛЯ ВСЕГДА НАЧИНАЕТСЯ С ПОНЕДЕЛЬНИКА (LOCKED 2026-08-27).
+//
+// Владелец: «настройку „неделя начинается с воскресенья" убираем вообще,
+// стандарт — с понедельника по воскресенье; убираем всё лишнее, что нам
+// может не понадобиться».
+//
+// Настройка была перенесена с веба вместе с колонкой `calendar_settings
+// .week_start` и переключателем на экране «Что показывать». Стоила она
+// параметра в пяти функциях этого файла и проброса через четыре компонента
+// (Неделя, Месяц, мини-календарь, корневой экран) — при нулевом спросе:
+// владелец единственного тенанта ею не пользуется, а воскресенье-первым
+// это привычка американского рынка, которого у продукта нет.
+//
+// Колонка в базе не тронута: удалять данные ради чистоты кода нельзя, а
+// читателей у неё больше нет. Понадобится снова — вернуть параметр проще,
+// чем вернуть удалённые строки.
 
-export type WeekStart = "monday" | "sunday";
-
-const WD_MON = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const WD_SUN = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 /** Подписи колонок в порядке недели. */
-export function weekdayLabels(weekStart: WeekStart): string[] {
-  return weekStart === "sunday" ? WD_SUN : WD_MON;
+export function weekdayLabels(): string[] {
+  return WEEKDAYS;
 }
 
-/** Номер колонки для JS-дня недели (0=Вс … 6=Сб) при данном первом дне. */
-export function weekdayIndex(jsDay: number, weekStart: WeekStart): number {
-  return weekStart === "sunday" ? jsDay : (jsDay + 6) % 7;
+/** Номер колонки для JS-дня недели (0=Вс … 6=Сб). */
+export function weekdayIndex(jsDay: number): number {
+  return (jsDay + 6) % 7;
 }
 
-/** Обратное к weekdayIndex: JS-день недели (0=Вс) для колонки i. */
-function jsDayOfColumn(i: number, weekStart: WeekStart): number {
-  return weekStart === "sunday" ? i : (i + 1) % 7;
-}
-
-/** Выходной ли столбец — считается по реальному дню, а не по номеру
- *  колонки: при воскресенье-первым выходные стоят по краям (0 и 6). */
-export function isWeekendColumn(i: number, weekStart: WeekStart): boolean {
-  const jsDay = jsDayOfColumn(i, weekStart);
+/** Выходной ли столбец. Считается по реальному дню, а не по номеру колонки:
+ *  при понедельнике-первом выходные — две последние колонки (5 и 6). */
+export function isWeekendColumn(i: number): boolean {
+  const jsDay = (i + 1) % 7;
   return jsDay === 0 || jsDay === 6;
 }
 
 /** Начало недели, в которую попадает дата (локальная полночь). */
-export function startOfWeek(d: Date, weekStart: WeekStart): Date {
+export function startOfWeek(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  x.setDate(x.getDate() - weekdayIndex(x.getDay(), weekStart));
+  x.setDate(x.getDate() - weekdayIndex(x.getDay()));
   return x;
 }
