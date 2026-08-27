@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -9,8 +10,27 @@ import {
   weekdayLabels,
   type WeekStart,
 } from "@/features/calendar/week";
+import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { useThemeColors } from "@/theme/colors";
 
+// ЛИСТАЕТСЯ СВАЙПОМ, А НЕ ТОЛЬКО СТРЕЛКАМИ (владелец 2026-08-27: «стрелочки
+// влево-вправо это классно, но я хотел бы ещё листать свайпом»).
+//
+// Свайп НЕ написан здесь заново: взят `usePeriodPager` — тот же механизм,
+// которым листаются день и неделя в самом календаре. Он даёт «бесконечную
+// ось»: смонтированы ровно три месяца (пред / текущий / след), контент едет
+// ЗА ПАЛЬЦЕМ, отпускание доводит до соседнего. Второй свайп в продукте
+// заводить нельзя — жест обязан ощущаться одинаково везде, где листают
+// период (канон §5, «Горизонтальный пейджинг периода»).
+//
+// Стрелки остались и работают как ВНЕШНИЙ прыжок: пейджер это умеет —
+// ось встаёт на новый месяц без доводки. Убирать их нельзя: свайп невидим,
+// а VoiceOver его не знает вовсе.
+//
+// Высота сетки ФИКСИРОВАНА шестью рядами. В месяце бывает 5 или 6 недель, и
+// без фиксации попап дёргался бы по высоте на каждом свайпе — а он висит
+// под шапкой, то есть прыгал бы прямо под пальцем.
+//
 // Web-parity date jumper (web MiniCalendar, trimmed): tap the «Месяц Год ⌄»
 // header title → this popover; pick any day to jump the calendar there.
 // Dot under a day = it has non-cancelled appointments. «Сегодня» at the
@@ -60,8 +80,6 @@ export function MiniCalendar({
     return m;
   }, [appointments]);
 
-  const firstDow = weekdayIndex(new Date(viewYear, viewMonth, 1).getDay(), weekStart);
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const DAY_HEADERS = weekdayLabels(weekStart);
 
   const prevMonth = () => {
@@ -77,6 +95,13 @@ export function MiniCalendar({
     } else setViewMonth(viewMonth + 1);
   };
 
+  // Пейджер месяцев. periodKey меняется и от свайпа, и от стрелок — во
+  // втором случае это внешний прыжок, ось встаёт без доводки.
+  const pager = usePeriodPager({
+    periodKey: `${viewYear}-${viewMonth}`,
+    onCommit: (dir) => (dir === 1 ? nextMonth() : prevMonth()),
+  });
+
   const monthTitle = new Date(viewYear, viewMonth, 1)
     .toLocaleDateString("ru-RU", { month: "long", year: "numeric" })
     .replace(/\s*г\.?\s*$/i, "");
@@ -84,6 +109,9 @@ export function MiniCalendar({
   // 44 — минимальная тап-мишень HIG: раньше 40pt-ячейки были единственным
   // суб-минимальным контролом всего джампера.
   const CELL = 44;
+  // Шесть рядов всегда: в месяце бывает 5 или 6 недель, и без фиксации
+  // попап дёргался бы по высоте на каждом свайпе.
+  const GRID_H = 6 * CELL;
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -186,74 +214,95 @@ export function MiniCalendar({
             ))}
           </View>
 
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-            {Array.from({ length: firstDow }).map((_, i) => (
-              <View key={`e-${i}`} style={{ width: CELL, height: CELL }} />
-            ))}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1;
-              const date = new Date(viewYear, viewMonth, day);
-              const key = formatYMD(date);
-              const isToday = key === todayYmd;
-              // Просматриваемый сейчас день (≠ сегодня) — лёгкий акцентный
-              // тинт: джампер открывают, уйдя с сегодня, и точка отсчёта
-              // обязана быть видна (HIG: visibility of current state).
-              const isViewed = !isToday && key === openKey;
-              const count = countByDate.get(key) ?? 0;
-              return (
-                <Pressable
-                  key={day}
-                  onPress={() => onSelectDate(date)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${day} ${date.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
-                  style={({ pressed }) => ({
-                    width: CELL,
-                    height: CELL,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: CELL / 2,
-                    backgroundColor: isToday
-                      ? t.accent
-                      : isViewed
-                        ? `${t.accent}14`
-                        : pressed
-                          ? t.pressed
-                          : "transparent",
-                  })}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.2}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: isToday || isViewed ? "700" : "400",
-                      color: isToday
-                        ? t.onAccent
-                        : isViewed
-                          ? t.accent
-                          : t.ink,
-                    }}
-                    className="tabular-nums"
-                  >
-                    {day}
-                  </Text>
-                  <View
-                    style={{
-                      width: 4,
-                      height: 4,
-                      borderRadius: 2,
-                      marginTop: 1,
-                      backgroundColor:
-                        count > 0
-                          ? isToday
-                            ? "rgba(255,255,255,0.8)"
-                            : t.accent
-                          : "transparent",
-                    }}
-                  />
-                </Pressable>
-              );
-            })}
-          </View>
+          {/* Три месяца на бесконечной оси; жест — тот же `usePeriodPager`,
+              что листает день и неделю. */}
+          <GestureDetector gesture={pager.pan}>
+            <View style={{ height: GRID_H }}>
+              <PagedStrip
+                pager={pager}
+                renderPage={(off) => {
+                  const anchor = new Date(viewYear, viewMonth + off, 1);
+                  const y = anchor.getFullYear();
+                  const m = anchor.getMonth();
+                  const lead = weekdayIndex(anchor.getDay(), weekStart);
+                  const total = new Date(y, m + 1, 0).getDate();
+                  return (
+                    <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                      {Array.from({ length: lead }).map((_, i) => (
+                        <View key={`e-${i}`} style={{ width: CELL, height: CELL }} />
+                      ))}
+                      {Array.from({ length: total }).map((_, i) => {
+                        const day = i + 1;
+                        const date = new Date(y, m, day);
+                        const key = formatYMD(date);
+                        const isToday = key === todayYmd;
+                        // Просматриваемый сейчас день (≠ сегодня) — лёгкий
+                        // акцентный тинт: джампер открывают, уйдя с сегодня,
+                        // и точка отсчёта обязана быть видна (HIG).
+                        const isViewed = !isToday && key === openKey;
+                        const count = countByDate.get(key) ?? 0;
+                        return (
+                          <Pressable
+                            key={day}
+                            onPress={() => onSelectDate(date)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${day} ${date.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${isViewed ? ", открыт" : ""}${count > 0 ? `, записей: ${count}` : ""}`}
+                            style={({ pressed }) => ({
+                              width: CELL,
+                              height: CELL,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: CELL / 2,
+                              backgroundColor: isToday
+                                ? t.accent
+                                : isViewed
+                                  ? `${t.accent}14`
+                                  : pressed
+                                    ? t.pressed
+                                    : "transparent",
+                            })}
+                          >
+                            <Text
+                              maxFontSizeMultiplier={1.2}
+                              // fontVariant, а НЕ className="tabular-nums":
+                              // класс — чистый no-op, NativeWind молча его
+                              // выбрасывает (канон §2), и числа прыгали.
+                              style={{
+                                fontSize: 14,
+                                fontWeight: isToday || isViewed ? "700" : "400",
+                                fontVariant: ["tabular-nums"],
+                                color: isToday
+                                  ? t.onAccent
+                                  : isViewed
+                                    ? t.accent
+                                    : t.ink,
+                              }}
+                            >
+                              {day}
+                            </Text>
+                            <View
+                              style={{
+                                width: 4,
+                                height: 4,
+                                borderRadius: 2,
+                                marginTop: 1,
+                                backgroundColor:
+                                  count > 0
+                                    ? isToday
+                                      ? "rgba(255,255,255,0.8)"
+                                      : t.accent
+                                    : "transparent",
+                              }}
+                            />
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  );
+                }}
+              />
+            </View>
+          </GestureDetector>
 
           <Pressable
             onPress={() => {
