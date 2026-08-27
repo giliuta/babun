@@ -22,6 +22,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
+import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { NameColorField } from "@/components/ui/picker-fields";
@@ -436,12 +437,10 @@ export default function CalendarSettingsScreen() {
         onBufferChange={(minutes) => patchTeam({ buffer_minutes: minutes })}
         onClose={() => setScheduleOpen(false)}
       />
-      <OptionSheet
+      <TimezoneSheet
         visible={picker === "tz"}
-        title="Часовой пояс"
-        options={TIMEZONE_OPTIONS.map((tz) => ({ value: tz, label: tzLabel(tz) }))}
         value={timezone}
-        onPick={(v) => patchCompany({ timezone: v })}
+        onApply={(v) => patchCompany({ timezone: v })}
         onClose={() => setPicker(null)}
       />
     </Screen>
