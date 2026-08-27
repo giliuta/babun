@@ -245,7 +245,6 @@ export default function CalendarTab() {
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
-  const weekStart = calSettings?.weekStart ?? "monday";
   const updateAppt = useUpdateAppointment();
   const undoPayment = useUndoAppointmentPayment();
   const createTeam = useCreateTeam();
@@ -972,7 +971,7 @@ export default function CalendarTab() {
   const weekDays = useMemo(() => {
     const first = startOfWeek(day);
     return Array.from({ length: 7 }, (_, i) => addDays(first, i));
-  }, [day, weekStart]);
+  }, [day]);
   const weekYmds = useMemo(() => weekDays.map(formatYMD), [weekDays]);
   // Финансы недельного футера — денежный набор (см. financeAppts выше).
   const financeWeekAppts = useMemo(

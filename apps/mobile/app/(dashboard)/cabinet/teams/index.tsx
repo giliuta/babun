@@ -69,8 +69,6 @@ export default function TeamsScreen() {
               <Text style={{ fontSize: 14, color: th.faint }}>
                 В архиве — открыть, чтобы вернуть
               </Text>
-            ) : item.region ? (
-              <Text style={{ fontSize: 14, color: th.sub }}>{item.region}</Text>
             ) : null}
           </View>
           <ChevronRight color={th.chevron} size={ICON.sm} />

@@ -261,7 +261,6 @@ export default function TeamHubScreen() {
     <Screen edges={["top"]}>
       <ScreenHeader
         title={team.name || "Команда"}
-        subtitle={team.region ?? undefined}
       />
       <KeyboardAvoidingView
         style={{ flex: 1 }}

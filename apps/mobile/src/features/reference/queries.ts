@@ -115,7 +115,6 @@ export function useCreateTeam() {
   return useMutation({
     mutationFn: async (input: {
       name: string;
-      region?: string;
       color?: string;
     }) => {
       if (role !== "owner") {
@@ -127,7 +126,6 @@ export function useCreateTeam() {
           id: generateId("team"),
           tenant_id: tenantId as string,
           name: input.name,
-          region: input.region || null,
           color: input.color || null,
           // Календарные колонки НЕ засеваются: null = «как везде». Раньше
           // здесь прописывались окно 00:00–23:00, скролл 10:00 и строка

@@ -824,7 +824,7 @@ export function InvoiceEditor({
         visible={picker === "team"}
         title="Команда"
         selectedId={teamId}
-        options={teams.map((team) => ({ id: team.id, title: team.name, subtitle: team.region ?? undefined }))}
+        options={teams.map((team) => ({ id: team.id, title: team.name }))}
         onPick={changeTeam}
         onClose={() => setPicker(null)}
       />
