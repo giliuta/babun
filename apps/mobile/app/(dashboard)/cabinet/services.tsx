@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Archive, Copy, Trash2, X } from "lucide-react-native";
+import { Archive, Copy, Scissors, Trash2, X } from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -361,19 +361,17 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           }}
         />
       ) : services.length === 0 ? (
-        // ПУСТО — ОДНИМ СЛОВОМ. Объяснение «заведите первую — она появится в
-        // выборе при записи» владелец снёс 24 августа («люди не дураки»), но
-        // ВООБЩЕ ничего оказалось хуже: белый экран не отличить от «не
-        // загрузилось», и человек не понимал, чей прайс перед ним пустой.
-        // Слово — одно, и это факт, а не инструкция.
-        <View className="flex-1 items-center justify-center px-8">
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ fontSize: 15, color: t.faint, textAlign: "center" }}
-          >
-            {activeTeam ? `У «${activeTeam.name}» пока пусто` : "Пока пусто"}
-          </Text>
-        </View>
+        // ПУСТО — КАК ВЕЗДЕ (владелец 2026-08-27: «сделай то же самое,
+        // красиво, маленькое: „услуг пока нет" — как в метках»).
+        //
+        // Было своей вёрсткой: текст 15/faint по центру, без значка, мимо
+        // примитива. И с именем команды в самой фразе («У „Мой календарь"
+        // пока пусто») — оно отвечало на вопрос «чей прайс пустой», но
+        // ОТВЕТ УЖЕ СТОИТ В ШАПКЕ подзаголовком, двумя строками выше.
+        //
+        // Подписи под заголовком нет: пустое состояние говорит ровно одно —
+        // чего здесь нет (LOCKED 2026-08-27, §5).
+        <EmptyState fill icon={<Scissors color={t.accent} size={28} />} title="Услуг пока нет" />
       ) : (
         <ScrollView
           className="flex-1"
