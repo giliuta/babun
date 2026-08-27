@@ -67,6 +67,12 @@ function rowToSettings(r: Row): CalendarSettings {
   return {
     startHour: r.start_hour,
     endHour: r.end_hour,
+    // Отставший проект типов: колонка приезжает с сервера, но в
+    // database.types.ts её ещё нет. `?? false` — действующий тенант
+    // остаётся в РУЧНОМ режиме: его зона уже отвечает про его бизнес,
+    // и переписывать её задним числом нельзя.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    timezoneAuto: (r as any).timezone_auto ?? false,
     // Минуты окна приезжают отдельным полем (миграция
     // 20260817090000_calendar_window_minutes): час остался часом, чтобы
     // не переписанный читатель не принял 510 минут за 510-й час.
@@ -183,6 +189,10 @@ export async function updateCalendarSettings(
   if (patch.gridStep !== undefined) insert.grid_step = patch.gridStep;
   if (patch.weekStart !== undefined) insert.week_start = patch.weekStart;
   if (patch.timezone !== undefined) insert.timezone = patch.timezone;
+  if (patch.timezoneAuto !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (insert as any).timezone_auto = patch.timezoneAuto;
+  }
   if (patch.bufferMinutes !== undefined) insert.buffer_minutes = patch.bufferMinutes;
   if (patch.hideCancelled !== undefined) insert.hide_cancelled = patch.hideCancelled;
   if (patch.showDayFinance !== undefined)

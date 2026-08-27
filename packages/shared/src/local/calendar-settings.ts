@@ -20,7 +20,12 @@ export interface CalendarSettings {
   endMinute?: number;
   gridStep: 15 | 30 | 60;    // minutes, default 30
   weekStart: "monday" | "sunday";
-  timezone: string;           // default "Europe/Nicosia"
+  /** Зона IANA. ВСЕГДА валидная строка — никаких null и sentinel-ов: её
+   *  читают три десятка мест и сразу отдают в `Intl`, который на null падает. */
+  timezone: string;
+  /** Пояс взят с телефона и следит за ним. ОТДЕЛЬНОЕ поле, а не признак
+   *  внутри `timezone`, по той же причине. */
+  timezoneAuto: boolean;
   // Sprint 033 Phase I35 — Bumpix-inspired calendar toggles.
   /** Minutes reserved after every appointment for travel / cleanup. The
    *  grid paints the gap as a band, and creating / rescheduling into it
@@ -68,7 +73,11 @@ export interface CalendarSettings {
  */
 export type OperationalCalendarSettings = Omit<
   CalendarSettings,
-  "personalLabels" | "personalDefaultLabel"
+  // `timezoneAuto` мастеру не достаётся: настройки календаря он писать не
+  // вправе (`useSaveCalendarSettings` бросает «только владелец»), а знать,
+  // следит ли зона за телефоном, ему незачем — за неё отвечает владелец.
+  // Контрактный тест мастерского среза ловит любую попытку это протащить.
+  "personalLabels" | "personalDefaultLabel" | "timezoneAuto"
 >;
 
 const STORAGE_KEY = "babun2:settings:calendar";
@@ -92,7 +101,13 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   scrollOpenHour: 9,
   gridStep: 30,
   weekStart: "monday",
-  timezone: "Europe/Nicosia",
+  // ЗОНА ТЕЛЕФОНА, А НЕ КИПР (2026-08-27). До этого здесь была прибита
+  // Europe/Nicosia, а `Intl.DateTimeFormat().resolvedOptions().timeZone` не
+  // вызывался в продукте НИ РАЗУ: мастер в Варшаве жил по кипрским суткам,
+  // ни разу не открыв настройки, и «сегодня» в его кассе кончалось в 23:00.
+  // Фолбэк остаётся Кипром — на случай, если Intl вернул пустое.
+  timezone: deviceZone(),
+  timezoneAuto: true,
   bufferMinutes: 0,
   hideCancelled: false,
   showDayFinance: true,
@@ -104,6 +119,17 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
 // среди которых человек ищет свой город дольше, чем печатает его руками.
 // Здесь — Европа целиком плюс те города вне её, где сервисный бизнес уже
 // встречается, по алфавиту зоны.
+/** Зона устройства. Дублируется здесь (а не импортируется из mobile), потому
+ *  что дефолты живут в shared, а shared не вправе зависеть от приложения. */
+function deviceZone(): string {
+  try {
+    const z = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return z && z.length > 2 ? z : "Europe/Nicosia";
+  } catch {
+    return "Europe/Nicosia";
+  }
+}
+
 export const TIMEZONE_OPTIONS: string[] = [
   // Европа
   "Europe/Amsterdam",
