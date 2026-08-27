@@ -12,7 +12,6 @@ import {
 import { getStorage } from "@babun/shared/storage";
 import {
   DEFAULT_CALENDAR_SETTINGS,
-  TIMEZONE_OPTIONS,
   type CalendarSettings,
 } from "@babun/shared/local/calendar-settings";
 import { Screen } from "@/components/ui/Screen";
@@ -22,14 +21,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
-import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { OptionSheet } from "@/components/ui/OptionSheet";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCalendarSettings,
-  useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
 import { useCities, useTeams, useUpdateTeam } from "@/features/reference/queries";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
@@ -49,6 +45,7 @@ import {
   hourLabel,
   tzLabel,
 } from "@/features/calendar/setting-options";
+import { zoneClock } from "@/features/calendar/device-timezone";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -117,7 +114,6 @@ export default function CalendarSettingsScreen() {
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
   const { data: schedules = {} } = useAllTeamSchedules();
   const { data: labels = [] } = useCities();
-  const save = useSaveCalendarSettings();
   const update = useUpdateTeam();
   const [savedTick, setSavedTick] = useState(0);
   // Отдельной двери к общим «Рабочим часам» больше нет (владелец 2026-08-17):
@@ -144,13 +140,6 @@ export default function CalendarSettingsScreen() {
   // Instant-commit: контрол шлёт частичный патч сразу, кнопки «Сохранить» нет.
   // До резолва запроса патчи игнорируем — контролы показывают ещё
   // неподтверждённые дефолты, и правка ушла бы не от той базы.
-  const patchCompany = (p: Partial<CalendarSettings>) => {
-    if (!settings) return;
-    save.mutate(p, {
-      onSuccess: () => setSavedTick(Date.now()),
-      onError: (e) => notify("Ошибка", e.message),
-    });
-  };
   const patchTeam = (p: Record<string, unknown>) => {
     if (!team) return;
     update.mutate(
@@ -279,8 +268,11 @@ export default function CalendarSettingsScreen() {
                 tile="neutral"
                 icon={Globe}
                 title="Часовой пояс"
-                sub={tzLabel(timezone)}
-                onPress={() => setPicker("tz")}
+                // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
+                // Проверить, что продукт считает день правильно, можно за
+                // секунду — сверив это время с часами в статус-баре.
+                sub={`${tzLabel(timezone)} · ${zoneClock(timezone)}${settings?.timezoneAuto ? "" : " · вручную"}`}
+                onPress={() => router.push("/calendar/timezone")}
               />
             </SectionCard>
             {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
@@ -437,12 +429,7 @@ export default function CalendarSettingsScreen() {
         onBufferChange={(minutes) => patchTeam({ buffer_minutes: minutes })}
         onClose={() => setScheduleOpen(false)}
       />
-      <TimezoneSheet
-        visible={picker === "tz"}
-        value={timezone}
-        onApply={(v) => patchCompany({ timezone: v })}
-        onClose={() => setPicker(null)}
-      />
+
     </Screen>
   );
 }
