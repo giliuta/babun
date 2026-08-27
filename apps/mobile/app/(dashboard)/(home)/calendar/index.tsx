@@ -265,6 +265,23 @@ export default function CalendarSettingsScreen() {
               team={team}
               onPatch={patchTeam}
             />
+            {/* ЧАСОВОЙ ПОЯС — СРАЗУ ПОД ИМЕНЕМ КАЛЕНДАРЯ (владелец
+                2026-08-27: «перемести в самый верх… нет, под названием „Мой
+                календарь"»). Он задаёт, что для этого бизнеса значит «сегодня»: от
+                него считаются границы дня в календаре, в финансах и в
+                отчётах. Остальные настройки экрана живут ВНУТРИ суток,
+                которые он определяет, — значит он им предшествует.
+                Настройка общая на все календари; это сказано в самой
+                строке, а не сноской под карточкой. */}
+            <SectionCard>
+              <SettingsRow
+                tile="neutral"
+                icon={Globe}
+                title="Часовой пояс"
+                sub={tzLabel(timezone)}
+                onPress={() => setPicker("tz")}
+              />
+            </SectionCard>
             {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
                 длительность даёт УСЛУГА, а не настройка календаря. Дефолт
                 тапа по слоту остался кодовым фолбэком 30 мин. */}
@@ -321,15 +338,6 @@ export default function CalendarSettingsScreen() {
             title="Что показывать"
             sub={s.hideCancelled ? "Отменённые скрыты" : "Показываем всё"}
             onPress={() => router.push("/calendar/display")}
-          />
-        </SectionCard>
-        <SectionCard>
-          <SettingsRow
-            tile="neutral"
-            icon={Globe}
-            title="Часовой пояс"
-            sub={tzLabel(timezone)}
-            onPress={() => setPicker("tz")}
           />
         </SectionCard>
 
