@@ -885,14 +885,14 @@ function ServiceSheet({
   const ladderSteps: LadderStep[] = [
     {
       tier: null,
-      qtyLabel: unit ? `1 ${unit}` : "1",
+      qty: "1",
       price,
       cost,
       duration,
     },
     ...economics.tiers.map((tier) => ({
       tier,
-      qtyLabel: `от ${tier.minQuantity || "?"}${unit ? ` ${unit}` : ""}`,
+      qty: tier.minQuantity,
       price: tier.rowPrice,
       cost: tier.rowCost,
       duration: tier.totalDuration,
