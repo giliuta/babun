@@ -22,7 +22,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
-import { GUTTER } from "@/components/ui/tokens";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
 import {
@@ -42,6 +41,7 @@ import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { confirmThen } from "@/lib/confirm";
+import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
 import {
   effectiveCalendarWindow,
@@ -124,6 +124,7 @@ export default function CalendarSettingsScreen() {
   const { data: labels = [] } = useCities();
   const update = useUpdateTeam();
   const removeTeam = useDeleteTeam();
+  const toast = useToast();
   const [savedTick, setSavedTick] = useState(0);
   // Отдельной двери к общим «Рабочим часам» больше нет (владелец 2026-08-17):
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
@@ -440,7 +441,28 @@ export default function CalendarSettingsScreen() {
                 человек оказался бы в тупике, из которого только создание. */}
             <SectionCard className="mt-4">
               <Pressable
-                onPress={() =>
+                onPress={() => {
+                  // ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ — и говорится это ПЛАШКОЙ СВЕРХУ,
+                  // как все прочие запреты продукта (владелец 2026-08-27:
+                  // «подсказку убери и вставь её, когда человек нажмёт»).
+                  //
+                  // Кнопка НЕ гасится намеренно. Погашенная кнопка молчит:
+                  // человек видит серое «Удалить календарь» и не знает,
+                  // сломано это или так задумано. Нажимаемая кнопка отвечает
+                  // на его вопрос ровно тогда, когда он его задал, — а
+                  // постоянная строка-объяснение под кнопкой висела на экране
+                  // всё время у всех, включая тех, у кого календарей много.
+                  if (teams.length < 2) {
+                    toast(
+                      "Это последний календарь — удалить нельзя. Сначала создайте другой.",
+                      "warn",
+                      // Плашка говорит «создайте другой» — здесь же и даёт
+                      // это сделать. Без кнопки человек читает указание,
+                      // закрывает плашку и ищет, чем его выполнить.
+                      { label: "Создать", onPress: () => setCreateOpen(true) },
+                    );
+                    return;
+                  }
                   confirmThen(
                     `Удалить календарь «${team.name}»?`,
                     {
@@ -460,16 +482,14 @@ export default function CalendarSettingsScreen() {
                         },
                         onError: (e) => notify("Ошибка", e.message),
                       }),
-                  )
-                }
-                disabled={teams.length < 2 || removeTeam.isPending}
+                  );
+                }}
+                disabled={removeTeam.isPending}
                 accessibilityRole="button"
                 accessibilityLabel={`Удалить календарь ${team.name}`}
-                accessibilityState={{ disabled: teams.length < 2 }}
                 className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
                 style={({ pressed }: { pressed: boolean }) => ({
                   backgroundColor: pressed ? t.pressed : "transparent",
-                  opacity: teams.length < 2 ? 0.4 : 1,
                 })}
               >
                 <Trash2 color={t.danger} size={16} strokeWidth={2.2} />
@@ -478,22 +498,6 @@ export default function CalendarSettingsScreen() {
                 </Text>
               </Pressable>
             </SectionCard>
-            {teams.length < 2 ? (
-              // Погашенная кнопка без причины читается как поломка.
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{
-                  paddingHorizontal: GUTTER,
-                  paddingTop: 8,
-                  fontSize: 13,
-                  lineHeight: 18,
-                  color: t.sub,
-                  textAlign: "center",
-                }}
-              >
-                Единственный календарь удалить нельзя — сначала создайте другой.
-              </Text>
-            ) : null}
 
         {teams.length === 0 ? (
           <SectionCard>
