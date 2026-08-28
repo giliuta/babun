@@ -12,10 +12,13 @@ import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 import { FieldLabel } from "@/components/ui/Field";
-import { WEEKDAY_LABELS } from "@babun/shared/local/services";
 import { GUTTER, ICON } from "@/components/ui/tokens";
+import {
+  ServiceLadder,
+  type LadderStep,
+} from "@/features/services/ServiceLadder";
 import { useThemeColors } from "@/theme/colors";
 import { getStorage } from "@babun/shared/storage";
 import { useToast } from "@/components/ui/Toast";
@@ -26,18 +29,8 @@ import {
 } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import {
-  calcPrice,
-  calcSavings,
-  calcSlot,
-  calcWorkDuration,
 } from "@babun/shared/local/services-pricing";
 import {
-  CollapsibleSection,
-  NumberField,
-  OverflowRule,
-  PriceCalculator,
-  ServiceTypeToggle,
-  VariantRows,
   type VariantDraft,
 } from "@/features/services/ServiceEditorParts";
 import {
@@ -59,8 +52,6 @@ import { durationLabel } from "@/features/services/format";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import {
-  ServiceBlocks,
-  SETTINGS_PANEL,
   roundToStep,
 } from "@/features/services/ServiceBlocks";
 import {
@@ -773,7 +764,9 @@ function ServiceSheet({
   const [weekdays, setWeekdays] = useState<number[]>([]);
   /** Столбец расхода показан. У всех услуг прода он нулевой, поэтому по
    *  умолчанию его на экране нет — приходит по команде из «Как считаем». */
-  const [costShown, setCostShown] = useState(false);
+  // Расход показан ВСЕГДА своим блоком — флага «показывать ли его»
+  // больше нет. Сеттер остался только у сеялки из шаблона.
+  const [, setCostShown] = useState(false);
   /** ТИП УСЛУГИ решает всё устройство листа: «количество» считает лестницей,
    *  «варианты» — плоским списком без единой формулы. */
   const [serviceType, setServiceType] = useState<"quantity" | "variant">("quantity");
@@ -788,7 +781,6 @@ function ServiceSheet({
   const [minQty, setMinQty] = useState("1");
   const [maxQty, setMaxQty] = useState("");
   /** Количество в блоке «Проверка» — живой калькулятор, не данные услуги. */
-  const [checkQty, setCheckQty] = useState(1);
   const [economics, setEconomics] = useState<ServiceEconomicsDraft>(() =>
     economicsDraftFromService(),
   );
@@ -853,7 +845,6 @@ function ServiceSheet({
     );
     setMinQty(String(from?.min_qty ?? 1));
     setMaxQty(from?.max_qty == null ? "" : String(Number(from.max_qty)));
-    setCheckQty(1);
     setPriceEntry(from?.price_entry === "unit" ? "unit" : "total");
     setWeekdays(
       Array.isArray(from?.available_weekdays)
@@ -887,6 +878,26 @@ function ServiceSheet({
       setEconomicsErrors(validateServiceEconomics(next).errors);
     }
   };
+
+  // ЛЕСЕНКА ОДНИМ СПИСКОМ: базовая строка (количество 1) плюс ступени.
+  // Четыре блока рисуют ОДИН И ТОТ ЖЕ список — иначе они разъехались бы по
+  // столбцам, и цена оказалась бы у количества, которого нет.
+  const ladderSteps: LadderStep[] = [
+    {
+      tier: null,
+      qtyLabel: unit ? `1 ${unit}` : "1",
+      price,
+      cost,
+      duration,
+    },
+    ...economics.tiers.map((tier) => ({
+      tier,
+      qtyLabel: `от ${tier.minQuantity || "?"}${unit ? ` ${unit}` : ""}`,
+      price: tier.rowPrice,
+      cost: tier.rowCost,
+      duration: tier.totalDuration,
+    })),
+  ];
 
   const submit = () => {
     // У ВАРИАНТОВ СВОЕЙ ЦЕНЫ И ДЛИТЕЛЬНОСТИ НЕТ — они у каждого варианта. Но
@@ -1015,66 +1026,6 @@ function ServiceSheet({
 
   // Одна красная строка ПОД таблицей: три подписи под тремя колонками сломали
   // бы выравнивание, ради которого таблица и затевалась.
-  /** ПРОВЕРКА СЧИТАЕТСЯ ОБЩИМ ЯДРОМ, а не своей формулой на экране. Иначе
-   *  калькулятор показывал бы одно, а запись считала другое — и разошлись бы
-   *  они молча. Черновик листа переводится в ту же форму, в которой расчёт
-   *  живёт для всего продукта. */
-  const pricedDraft = useMemo(() => {
-    const num = (raw: string) => {
-      const parsed = Number(raw.trim().replace(",", "."));
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-    const baseTier = {
-      fromQty: 1,
-      price: num(price),
-      durationMin: num(duration),
-    };
-    const tiers = [
-      baseTier,
-      ...economics.tiers
-        .filter((tier) => tier.minQuantity.trim() !== "")
-        .map((tier) => ({
-          fromQty: num(tier.minQuantity),
-          // Черновик хранит числа «за всю строку»; ядро считает по цене
-          // ступени, поэтому делим ровно там же, где делит сохранение.
-          price:
-            num(tier.minQuantity) > 0
-              ? num(tier.rowPrice) / num(tier.minQuantity)
-              : num(tier.rowPrice),
-          durationMin: num(tier.totalDuration),
-        })),
-    ];
-    return {
-      serviceType,
-      pricingMode: "per_unit" as const,
-      tiers,
-      variants: variants.map((variant) => ({
-        id: variant.id,
-        name: variant.name,
-        price: num(variant.price),
-        durationMin: num(variant.duration),
-      })),
-      unit,
-      overflowPrice: overflowPrice.trim() === "" ? null : num(overflowPrice),
-      overflowDurationMin:
-        overflowDuration.trim() === "" ? null : num(overflowDuration),
-      bufferBeforeMin: num(bufferBefore),
-      bufferAfterMin: num(bufferAfter),
-    };
-  }, [
-    price, duration, economics.tiers, serviceType, variants, unit,
-    overflowPrice, overflowDuration, bufferBefore, bufferAfter,
-  ]);
-
-  const lastTierQty = economics.tiers.reduce(
-    (max, tier) => Math.max(max, Number(tier.minQuantity) || 0),
-    1,
-  );
-  const checkWork = calcWorkDuration(pricedDraft, checkQty);
-  const checkSlot = calcSlot([{ service: pricedDraft, qty: checkQty }], 15);
-  const checkPrice = String(calcPrice(pricedDraft, checkQty));
-  const savingsValue = calcSavings(pricedDraft, checkQty);
-  const checkSavings = savingsValue > 0 ? String(savingsValue) : null;
 
   const firstError =
     baseErrors.price ??
@@ -1257,265 +1208,81 @@ function ServiceSheet({
         ) : null}
       </View>
 
-      {/* ТИП УСЛУГИ РЕШАЕТ ВСЁ ОСТАЛЬНОЕ (спека владельца v4). Тест простой:
-          имеет ли смысл вопрос «сколько стоит одна штука». Кондиционер — да;
-          комната в трёхкомнатной — нет, потому что трёхкомнатная это НЕ «три
-          раза комната». Первое считается лестницей, второе — плоским списком
-          без единой формулы. */}
-      <View style={{ paddingHorizontal: GUTTER, marginBottom: 16 }}>
-        <FieldLabel text="Тип услуги" />
-        <ServiceTypeToggle
-          value={serviceType}
-          locked={!!service}
-          onChange={(next) => {
-            setServiceType(next);
-            if (next === "variant") {
-              setEconomics({ tiers: [] });
-              if (variants.length === 0) {
-                setVariants([
-                  { id: `var-${Date.now()}`, name: "", price: "", duration: "60" },
-                ]);
-              }
-            } else {
-              setVariants([]);
-            }
-            setOpenRow(null);
-          }}
-        />
-      </View>
+      {/* ЧЕТЫРЕ БЛОКА ВМЕСТО ВСЕГО, ЧТО ЗДЕСЬ БЫЛО (владелец 2026-08-27:
+          «всё, что ниже названия, удаляем; первый блок — количество, второй —
+          цена, третий — расход, четвёртый — время»).
 
-      {serviceType === "variant" ? (
-        <View style={{ paddingHorizontal: GUTTER, marginBottom: 16 }}>
-          <FieldLabel text="Варианты" />
-          <VariantRows
-            variants={variants}
-            currencySymbol={currencySymbol}
-            onChange={setVariants}
-            onAdd={() =>
-              setVariants((current) => [
-                ...current,
-                {
-                  id: `var-${Date.now()}-${current.length}`,
-                  name: "",
-                  price: "",
-                  duration: "60",
-                },
-              ])
-            }
-          />
-        </View>
-      ) : (
-        <>
-          {/* БЛОКИ-СТРОКИ: одно количество — одна строка, подписей нет вовсе.
-              Устройство и арифметика ширин — в шапке `ServiceBlocks.tsx`. */}
-          <View style={{ paddingHorizontal: GUTTER }}>
-            <RowGroupHeader
-              title="Цена и время"
-              action={
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                  <Pressable
-                    onPress={() =>
-                      setOpenRow(openRow === SETTINGS_PANEL ? null : SETTINGS_PANEL)
-                    }
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: openRow === SETTINGS_PANEL }}
-                    accessibilityLabel="Как считаем"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
-                    >
-                      {priceEntry === "total"
-                        ? "за всё"
-                        : unit
-                          ? `за 1 ${unit}`
-                          : "за одну"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={addTier}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel="Добавить количество"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-                    >
-                      ＋
-                    </Text>
-                  </Pressable>
-                </View>
-              }
-            />
-          </View>
-          <ServiceBlocks
-            price={price}
-            cost={cost}
-            duration={duration}
-            value={economics}
-            unit={unit}
-            priceEntry={priceEntry}
-            costShown={costShown}
-            onCostShownChange={setCostShown}
-            currencySymbol={currencySymbol}
-            openRow={openRow}
-            onOpenRow={setOpenRow}
-            onPriceChange={setPrice}
-            onCostChange={setCost}
-            onDurationChange={setDuration}
-            onUnitChange={setUnit}
-            onPriceEntryChange={setPriceEntry}
-            onChange={updateEconomics}
-          />
+          ЧТО УБРАНО ИЗ ИНТЕРФЕЙСА:
+            • «Тип услуги» и ветка «Варианты» — плоский список именованных
+              опций;
+            • «Проверка» — живой калькулятор «что получится на N штуках»;
+            • «Время вокруг работы» (дорога, после, людей) и «Ограничения»
+              (минимум, максимум);
+            • «Работаем по дням» — семь плиток.
 
-          {/* ПРАВИЛО ЗА ПОСЛЕДНИМ ПОРОГОМ — словами, а не догадкой. Без него
-              цена за пределами лестницы берёт последнюю ступень, а время
-              тянется наклоном: продукт называет числа, которых никто не
-              вводил. Появляется вместе со второй ступенью — у одной цены
-              «свыше» не от чего считать. */}
-          {economics.tiers.length > 0 ? (
-            <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-              <OverflowRule
-                fromQty={lastTierQty}
-                unit={unit}
-                price={overflowPrice}
-                duration={overflowDuration}
-                currencySymbol={currencySymbol}
-                onPriceChange={setOverflowPrice}
-                onDurationChange={setOverflowDuration}
-              />
-            </View>
-          ) : null}
-
-          {/* ПРОВЕРКА — живой калькулятор. Владелец видит, что получится, ДО
-              сохранения, а не узнаёт от бригады на объекте. Показывает и
-              работу, и слот с буферами: в календарь уходит именно слот. */}
-          <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-            <FieldLabel text="Проверка" />
-            <PriceCalculator
-              qty={checkQty}
-              unit={unit}
-              onQtyChange={setCheckQty}
-              price={checkPrice}
-              work={checkWork}
-              slot={checkSlot}
-              savings={checkSavings}
-              currencySymbol={currencySymbol}
-            />
-          </View>
-        </>
-      )}
-
-      {/* ВРЕМЯ ВОКРУГ РАБОТЫ И ОГРАНИЧЕНИЯ — СВЁРНУТЫ. Салон с тремя услугами
-          их не увидит, выездной сервис развернёт. Свёрнутая секция при этом
-          говорит, что внутри не пусто: спрятанное значение однажды выстрелит. */}
-      <View style={{ paddingHorizontal: GUTTER, marginTop: 18, gap: 6 }}>
-        <CollapsibleSection
-          title="Время вокруг работы"
-          summary={`Дорога ${bufferBefore || 0} мин · после ${bufferAfter || 0} мин · людей ${requiredStaff || 1}`}
-          marked={
-            Number(bufferBefore) > 0 ||
-            Number(bufferAfter) > 0 ||
-            Number(requiredStaff) > 1
-          }
-        >
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <NumberField
-              label="Дорога, мин"
-              value={bufferBefore}
-              onChangeText={setBufferBefore}
-            />
-            <NumberField
-              label="После, мин"
-              value={bufferAfter}
-              onChangeText={setBufferAfter}
-            />
-            <NumberField
-              label="Людей"
-              value={requiredStaff}
-              onChangeText={setRequiredStaff}
-            />
-          </View>
-        </CollapsibleSection>
-
-        {serviceType === "quantity" ? (
-          <CollapsibleSection
-            title="Ограничения"
-            summary={`Минимум ${minQty || 1}${maxQty ? ` · максимум ${maxQty}` : ""} · расход ${cost || 0}`}
-            marked={Number(minQty) > 1 || maxQty.trim() !== "" || Number(cost) > 0}
-          >
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <NumberField label="Минимум" value={minQty} onChangeText={setMinQty} />
-              <NumberField
-                label="Максимум"
-                value={maxQty}
-                onChangeText={setMaxQty}
-                placeholder="без предела"
-              />
-            </View>
-          </CollapsibleSection>
-        ) : null}
-      </View>
-
-      {/* ДНИ, ПО КОТОРЫМ УСЛУГУ ДЕЛАЮТ. Заведены ВМЕСТЕ С ЧИТАТЕЛЕМ (каталог
-          выбора услуги в записи): семь тумблеров, которых никто не прочитает,
-          — это ровно та единица измерения, которую владелец снёс со словами
-          «что мы от этого поимеем? если ничего, тогда лучше удалить».
-          Все зажжены — значит «любой день», и пустой список в базе означает
-          то же самое: заставлять зажигать семь плиток ради «как обычно»
-          незачем. Сб и Вс погашенными не рождаются: календарь красит их
-          красным как ГОСУДАРСТВЕННЫЕ выходные, а услуга — про работу команды. */}
-      <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-        <FieldLabel text="Работаем по дням" />
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
-            const on = weekdays.length === 0 || weekdays.includes(day);
-            return (
-              <Pressable
-                key={day}
-                onPress={() => {
-                  // Гашение первого дня разворачивает «пусто = все» в явный
-                  // список: иначе снять один день было бы нечем.
-                  const current = weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
-                  const next = current.includes(day)
-                    ? current.filter((x) => x !== day)
-                    : [...current, day].sort((a, b) => a - b);
-                  // Зажгли всё обратно — возвращаемся к «любой день».
-                  setWeekdays(next.length === 7 ? [] : next);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  height: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: t.radius.card,
-                  borderCurve: "continuous",
-                  backgroundColor: on ? t.accent : t.fill,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    fontSize: 14,
-                    fontWeight: on ? "700" : "500",
-                    color: on ? t.onAccent : t.faint,
-                  }}
-                >
-                  {WEEKDAY_LABELS[day]}
-                </Text>
-              </Pressable>
+          НИ ОДНО ПОЛЕ БАЗЫ НЕ ТРОНУТО. Состояние живо, `submit` пишет те же
+          колонки прежними значениями, уже заведённые услуги ничего не теряют
+          при сохранении. Убран ТОЛЬКО интерфейс — вернуть его можно, не
+          трогая данные. */}
+      <ServiceLadder
+        steps={ladderSteps}
+        currencySymbol={currencySymbol}
+        unit={unit}
+        openTimeId={openRow}
+        onOpenTime={(id) => {
+          setOpenRow(id);
+          // Барабан раскрывается ПОД строкой и в блоке «Время», то есть у
+          // самого низа листа — за кнопкой «Создать». Лист обязан сам довести
+          // его до глаза, иначе тап по времени выглядит не сделавшим ничего.
+          if (id) {
+            requestAnimationFrame(() =>
+              scrollRef.current?.scrollToEnd({ animated: true }),
             );
-          })}
-        </View>
-      </View>
+          }
+        }}
+        onQtyChange={(id, v) =>
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, minQuantity: v } : x,
+            ),
+          })
+        }
+        onPriceChange={(id, v) => {
+          if (id === "base") return setPrice(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, rowPrice: v } : x,
+            ),
+          });
+        }}
+        onCostChange={(id, v) => {
+          if (id === "base") return setCost(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, rowCost: v } : x,
+            ),
+          });
+        }}
+        onDurationChange={(id, v) => {
+          if (id === "base") return setDuration(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, totalDuration: v } : x,
+            ),
+          });
+        }}
+        onAdd={addTier}
+        onRemove={(id) =>
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.filter((x) => x.id !== id),
+          })
+        }
+      />
 
       {/* ПОД ТАБЛИЦЕЙ — ТОЛЬКО ОШИБКА (владелец 2026-08-21: «внизу не нужно
           писать, это полная хуета»). Тихая строка-проверка «а что будет на
