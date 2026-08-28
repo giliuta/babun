@@ -158,7 +158,6 @@ export default function CalendarSettingsScreen() {
   // напоминаниях), — экран не имеет права разрешать его иначе, чем сетка.
   const companyZone = s.timezone ?? DEFAULT_CALENDAR_SETTINGS.timezone;
   const timezone = team?.timezone ?? companyZone;
-  const zoneInherited = !team?.timezone;
   // «Часы календаря» — видимое окно рельса ЭТОГО календаря (владелец
   // 2026-08-17: «на команде один я могу выбрать такие часы, а на команде два
   // совершенно другие»). Читается буквально: «Автоматически» из продукта
@@ -430,7 +429,6 @@ export default function CalendarSettingsScreen() {
         visible={picker === "tz"}
         onClose={() => setPicker(null)}
         value={timezone}
-        inherited={zoneInherited}
         onApply={(zone) => patchTeam({ timezone: zone })}
       />
       <TeamScheduleSheet

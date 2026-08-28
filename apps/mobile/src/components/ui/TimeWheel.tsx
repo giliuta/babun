@@ -77,6 +77,7 @@ export function LoopWheelColumn({
   accessibilityValueSuffix,
   width = COLUMN_W,
   fontSize,
+  rows = VISIBLE_ROWS,
 }: {
   /** ОДИН цикл значений: 24 часа, 12 пятиминуток либо 59 часовых поясов. */
   items: string[];
@@ -92,9 +93,19 @@ export function LoopWheelColumn({
   width?: number;
   /** Кегль активной строки. Цифры крупные; словам такой кегль не по ширине. */
   fontSize?: number;
+  /** Сколько строк видно разом. Трёх хватает часам и минутам — там значения
+   *  известны наперёд. Длинному набору нужен обзор: у часовых поясов их 61,
+   *  и по трём строкам не понять, куда крутить (владелец 2026-08-27: «около
+   *  шести… или из семи: три сверху, три снизу и посередине одна»). */
+  rows?: number;
 }) {
   const t = useThemeColors();
   const ref = useRef<ScrollView>(null);
+  // Геометрия своя у каждого экземпляра: высота — целое число строк, отступ
+  // сверху и снизу — ровно половина остатка, иначе выбранная строка встаёт
+  // не по центру и линия среза врёт.
+  const wheelH = ITEM_H * rows;
+  const pad = (wheelH - ITEM_H) / 2;
   const len = items.length;
   const mid = Math.floor(REPS / 2) * len;
   /** Абсолютный индекс в повторённой ленте — только для крупной цифры. */
@@ -184,8 +195,8 @@ export function LoopWheelColumn({
         if (event.nativeEvent.actionName === "increment") adjust(1);
         if (event.nativeEvent.actionName === "decrement") adjust(-1);
       }}
-      style={{ width, height: WHEEL_H }}
-      contentContainerStyle={{ paddingVertical: PAD }}
+      style={{ width, height: wheelH }}
+      contentContainerStyle={{ paddingVertical: pad }}
     >
       {Array.from({ length: REPS * len }, (_, i) => {
         const active = i === live;
