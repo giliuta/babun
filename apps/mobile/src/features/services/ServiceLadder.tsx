@@ -33,24 +33,28 @@ import type { ServiceTierDraft } from "./economics";
 // занимали в два с половиной раза больше места, чем числа под ними), и
 // колонки его не отменяют, а исполняют буквально: подпись у колонки одна.
 
-const ROW_H = 52;
+const ROW_H = 56;
+/** Высота плитки внутри строки: 44 — минимальная цель пальца. */
+const CELL_H = 44;
 
 const W_QTY = 46;
 const W_COST = 88;
 const W_TIME = 94;
-const GAP = 6;
+const GAP = 8;
 
-// ВЕРТИКАЛЬНЫЕ ЧЕРТЫ МЕЖДУ КОЛОНКАМИ (владелец 2026-08-27: «раздели между
-// единичкой, ценой и расходом, чтоб это тоже были отдельные блоки»). Без них
-// четыре числа в строке читались одной длинной подписью: «1 0€ 0€ 1ч». Черта
-// делает из строки таблицу — глаз видит, где кончается одно число и
-// начинается другое, и колонка становится колонкой.
-function Divider() {
-  const t = useThemeColors();
-  return (
-    <View style={{ width: 1, alignSelf: "stretch", backgroundColor: t.separator }} />
-  );
-}
+// КОЛОНКИ РАЗДЕЛЕНЫ БЛОКАМИ, А НЕ ЧЕРТАМИ (владелец 2026-08-27: «разделение
+// между столбиками не волосинка, а полноценно правильные блоки, красивые
+// блоки как в iOS»).
+//
+// Волосинка стояла здесь один заход и была полумерой: она рисует границу, но
+// не делает ячейку предметом — четыре числа всё равно читались одной строкой
+// с насечками. Теперь у каждой ячейки СВОЯ залитая плитка со скруглением, а
+// между плитками воздух. Так устроены группы в самом iOS: предмет отделяется
+// не линией, а собственным телом и зазором вокруг него.
+//
+// Заливка ещё и подсказывает, что в ячейку МОЖНО ПИСАТЬ: на белом фоне поле
+// ввода ничем не отличалось от подписи, и человек не понимал, где тут число,
+// а где надпись.
 
 export interface LadderStep {
   /** `null` — базовая строка (количество 1): её нельзя убрать, она и есть
@@ -85,8 +89,17 @@ function Cell({
   const t = useThemeColors();
   return (
     <View
-      className="flex-row items-center"
-      style={{ width, flex: width ? undefined : 1, gap: 2 }}
+      className="flex-row items-center justify-end"
+      style={{
+        width,
+        flex: width ? undefined : 1,
+        gap: 2,
+        height: CELL_H,
+        paddingHorizontal: 10,
+        borderRadius: t.radius.input,
+        borderCurve: "continuous",
+        backgroundColor: t.fill,
+      }}
     >
       <TextInput
         value={value}
@@ -188,11 +201,8 @@ export function ServiceLadder({
         >
           {unit ?? "Кол"}
         </Text>
-        <Divider />
         {headCell("Цена")}
-        <Divider />
         {headCell("Расход", W_COST)}
-        <Divider />
         {headCell("Время", W_TIME)}
       </View>
 
@@ -208,8 +218,7 @@ export function ServiceLadder({
                 backgroundColor: t.surface,
                 paddingHorizontal: 12,
                 gap: GAP,
-                borderTopWidth: 1,
-                borderTopColor: t.separator,
+                paddingVertical: 4,
               }}
             >
               {/* КОЛИЧЕСТВО. Первая строка — сама услуга, её единица не
@@ -223,22 +232,31 @@ export function ServiceLadder({
                   accessibilityLabel="Количество"
                 />
               ) : (
-                <Text
-                  maxFontSizeMultiplier={1.2}
+                <View
                   style={{
                     width: W_QTY,
-                    textAlign: "center",
-                    fontSize: 16,
-                    fontWeight: "600",
-                    color: t.ink,
-                    fontVariant: ["tabular-nums"],
+                    height: CELL_H,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: t.radius.input,
+                    borderCurve: "continuous",
+                    backgroundColor: t.fill,
                   }}
                 >
-                  1
-                </Text>
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "600",
+                      color: t.ink,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    1
+                  </Text>
+                </View>
               )}
 
-              <Divider />
               <Cell
                 value={s.price}
                 onChange={(v) => onPriceChange(id, v)}
@@ -246,7 +264,6 @@ export function ServiceLadder({
                 placeholder="0"
                 accessibilityLabel={`Цена за ${s.qty}`}
               />
-              <Divider />
               <Cell
                 value={s.cost}
                 onChange={(v) => onCostChange(id, v)}
@@ -256,7 +273,6 @@ export function ServiceLadder({
                 accessibilityLabel={`Расход за ${s.qty}`}
               />
 
-              <Divider />
               {/* ВРЕМЯ — НЕ ПОЛЕ ВВОДА, А ДВЕРЬ К БАРАБАНАМ: «1 ч 40» с
                   клавиатуры не набирается, а «100 минут» человек не считает. */}
               <Pressable
@@ -267,6 +283,13 @@ export function ServiceLadder({
                 hitSlop={6}
                 style={({ pressed }) => ({
                   width: W_TIME,
+                  height: CELL_H,
+                  alignItems: "flex-end",
+                  justifyContent: "center",
+                  paddingHorizontal: 10,
+                  borderRadius: t.radius.input,
+                  borderCurve: "continuous",
+                  backgroundColor: t.fill,
                   opacity: pressed ? 0.5 : 1,
                 })}
               >

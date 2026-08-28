@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Archive, Briefcase, Copy, Trash2, X } from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
-import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -209,16 +209,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     [everyService, activeTeamId],
   );
   const [removedOpen, setRemovedOpen] = useState(false);
-  const [copyOpen, setCopyOpen] = useState(false);
-  /** Услуги ДРУГИХ команд — источник копирования. */
-  const foreignServices = useMemo(
-    () =>
-      activeTeamId
-        ? allServices.filter((s) => s.team_id !== activeTeamId)
-        : [],
-    [allServices, activeTeamId],
-  );
-
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
@@ -546,14 +536,14 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
               router.push("/cabinet/teams");
               return;
             }
-            // ГОТОВОЕ ИЗ ДРУГОЙ КОМАНДЫ — ВМЕСТО ПОВТОРНОГО НАБОРА. Прайс у
-            // команд обычно один и тот же с поправкой на цену: пять порогов
-            // руками в каждой из пяти команд — это работа, которой не должно
-            // быть. Предлагаем только когда есть что предложить.
-            if (foreignServices.length > 0) {
-              setCopyOpen(true);
-              return;
-            }
+            // ВСЕГДА С НУЛЯ (владелец 2026-08-27: «что значит „создать с
+            // нуля"? Убираем, всегда создаётся с нуля — лучше один раз
+            // пересоздать, чем это»). Раньше здесь вставал лист «Создать с
+            // нуля / или взять готовую» — лишний экран между намерением и
+            // формой, и вставал он ТОЛЬКО когда в других командах что-то
+            // было, то есть кнопка вела себя по-разному в разные дни.
+            // Копирование готовой никуда не делось: у каждой услуги есть
+            // «дублировать» в её собственном редакторе.
             setEditing({ mode: "create" });
           }}
         />
@@ -570,77 +560,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         variantsByService={variantsByService}
       />
 
-      {/* ВЗЯТЬ ГОТОВУЮ ИЗ ДРУГОЙ КОМАНДЫ. Копируется ВСЁ: пороги, варианты,
-          единица, режим, буферы, дни, ограничения — и открывается редактор с
-          заполненными полями, чтобы сразу поправить цену под эту команду.
-          Связь `copied_from_service_id` пишется молча: интерфейс её не
-          показывает, она нужна отчётам, чтобы склеить одну и ту же работу по
-          всем командам, не полагаясь на совпадение названий. */}
-      <BottomSheet
-        visible={copyOpen}
-        onClose={() => setCopyOpen(false)}
-        title="Новая услуга"
-        scroll
-      >
-        <Button
-          label="Создать с нуля"
-          onPress={() => {
-            setCopyOpen(false);
-            setTimeout(() => setEditing({ mode: "create" }), SHEET_EXIT_MS);
-          }}
-        />
-        <View style={{ height: 16 }} />
-        <FieldLabel text="или взять готовую" />
-        <View
-          className="overflow-hidden"
-          style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-        >
-          {foreignServices.map((svc, index) => {
-            const owner = teams.find((tm) => tm.id === svc.team_id);
-            return (
-              <Pressable
-                key={svc.id}
-                onPress={() => {
-                  // ДВА ЛИСТА НЕ ОТКРЫВАЮТСЯ В ОДНОМ КАДРЕ: RN Modal — это
-                  // отдельное окно, и редактор, поднятый ровно в тот момент,
-                  // когда уходит каталог, не показывается вовсе. Ждём ухода.
-                  setCopyOpen(false);
-                  setTimeout(
-                    () => setEditing({ mode: "create", from: svc, copy: true }),
-                    SHEET_EXIT_MS,
-                  );
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Взять «${svc.name}» из команды ${owner?.name ?? ""}`}
-                className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-                style={
-                  index > 0
-                    ? { borderTopWidth: 1, borderTopColor: t.separator }
-                    : undefined
-                }
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                  >
-                    {svc.name}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                    {owner?.name ?? "Другая команда"}
-                  </Text>
-                </View>
-                <Text
-                  className="tabular-nums"
-                  style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {formatEURExact(Number(svc.price))}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </BottomSheet>
 
       {/* УБРАННЫЕ. Возврат — одним тапом по строке: убирали услугу тоже одним
           действием, и обратная дорога обязана быть такой же короткой. */}
