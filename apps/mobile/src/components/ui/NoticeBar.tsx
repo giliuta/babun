@@ -17,26 +17,34 @@ import { useThemeColors } from "@/theme/colors";
  *   warn    — «так нельзя, но можно»: правило нарушено, и рядом стоит
  *             кнопка, которой его снимают.
  *
- * ТОН `warn` РИСУЕТСЯ ТИХО, И ЭТО ЗАКОН, А НЕ ВКУС (владелец 2026-08-24:
- * «не должна быть броской и бросаться в глаза, вообще не делай её ядовитую»;
- * 2026-08-27: «должно быть точно так же, как когда я не могу заполнить в
- * календаре в прошлом времени — всё единое архитектуры»).
+ * ═══ ТОН `warn` = ПЛАШКА КАЛЕНДАРЯ, ЗНАК В ЗНАК (LOCKED 2026-08-27) ═══
  *
- * Правило и его рецепт взяты у `CalendarNotice` — плашки «в прошлое
- * записывать нельзя», которую владелец утвердил первой. Разница между ними
- * была только в том, что одну писали в августе, а другую позже: обе говорят
- * «так нельзя, но вот дверь», и выглядеть по-разному не имеют права.
+ * Владелец: «сделай точно такую же плашку, как когда я не могу записать в
+ * прошлом — всё единое архитектуры». Эталон — `CalendarNotice`, утверждённый
+ * 24 августа («не должна быть броской, вообще не делай её ядовитую»).
  *
- * ДВА СЛОЯ ВМЕСТО ОДНОЙ ЗАЛИВКИ: белая подложка держит читаемость, янтарь
- * поверх неё только окрашивает воздух. Одним цветом в 100% это была бы та
- * самая ядовитая плашка. Громкость несёт КНОПКА, а не фон, — поэтому она
- * синяя и без пилюли: в тихой плашке заливка под кнопкой была бы вторым
- * пятном цвета.
+ * Совпадать обязаны НЕ ТОЛЬКО ЦВЕТА, НО И ФОРМА. Первый заход 27 августа
+ * подогнал только палитру, и плашка осталась висящей карточкой со
+ * скруглением, тенью и полями по бокам — рядом с плоской полосой календаря
+ * это читалось как другой элемент. Поэтому здесь закреплено всё:
  *
- * Остальные тона залиты сплошняком намеренно: они сообщают ФАКТ («сделано»,
- * «не вышло»), а не задают вопрос, и отвечать на них нечем.
+ *   форма   — БЕЗ скругления, БЕЗ тени, во всю ширину, вплотную к верху;
+ *             единственная линия — волосяная снизу (`warning` 18%);
+ *   фон     — белый + янтарь 8% поверх: два слоя, а не одна заливка;
+ *   текст   — 14/600 янтарём, одна строка;
+ *   кнопка  — 15/700 АКЦЕНТОМ, простой надписью без пилюли: заливка под ней
+ *             стала бы вторым пятном цвета, а громкость несёт надпись;
+ *   отступы — 16 слева, 6 справа (кнопка добирает своими 12).
+ *
+ * Меняешь что-то здесь — меняй и в `CalendarNotice`, иначе они опять
+ * разъедутся. Остальные тона залиты сплошняком НАМЕРЕННО: они сообщают ФАКТ
+ * («сделано», «не вышло»), а не задают вопрос, и отвечать на них нечем.
  */
 export type NoticeTone = "success" | "error" | "info" | "warn";
+
+/** Тон рисуется плоской полосой во всю ширину, а не карточкой. Тост читает
+ *  это, чтобы убрать свои поля и прижать плашку к верхней кромке. */
+export const isQuietTone = (tone: NoticeTone) => tone === "warn";
 
 export function NoticeBar({
   tone,
@@ -50,28 +58,23 @@ export function NoticeBar({
   action?: { label: string; onPress: () => void };
 }) {
   const t = useThemeColors();
-  const quiet = tone === "warn";
-  const bg = quiet
-    ? "#ffffff"
-    : tone === "error"
-      ? t.danger
-      : tone === "info"
-        ? t.ink
-        : t.success;
-  const ink = quiet ? t.warning : tone === "info" ? t.canvas : "#ffffff";
 
-  return (
-    <View
-      className="flex-row items-center gap-3 overflow-hidden rounded-[10px] px-4 py-3 shadow-lg"
-      style={{
-        backgroundColor: bg,
-        borderWidth: quiet ? 1 : 0,
-        borderColor: quiet ? `${t.warning}2e` : "transparent",
-      }}
-    >
-      {/* Янтарный воздух поверх белой подложки — те же 8%, что у плашки
-          «в прошлое записывать нельзя». */}
-      {quiet ? (
+  if (isQuietTone(tone)) {
+    return (
+      <View style={{ minHeight: 48, justifyContent: "center" }}>
+        {/* Белая подложка держит читаемость, янтарь поверх неё только
+            окрашивает воздух — как в `CalendarNotice`. */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "#ffffff",
+          }}
+        />
         <View
           pointerEvents="none"
           style={{
@@ -81,9 +84,61 @@ export function NoticeBar({
             right: 0,
             bottom: 0,
             backgroundColor: `${t.warning}14`,
+            borderBottomWidth: 1,
+            borderBottomColor: `${t.warning}2e`,
           }}
         />
-      ) : null}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingLeft: 16,
+            paddingRight: 6,
+            gap: 8,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.2}
+            style={{ flex: 1, fontSize: 14, fontWeight: "600", color: t.warning }}
+          >
+            {message}
+          </Text>
+          {action ? (
+            <Pressable
+              onPress={action.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              hitSlop={8}
+              style={({ pressed }) => ({
+                minHeight: 44,
+                justifyContent: "center",
+                paddingHorizontal: 12,
+                opacity: pressed ? 0.5 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 15, fontWeight: "700", color: t.accent }}
+              >
+                {action.label}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  const bg =
+    tone === "error" ? t.danger : tone === "info" ? t.ink : t.success;
+  const ink = tone === "info" ? t.canvas : "#ffffff";
+
+  return (
+    <View
+      className="flex-row items-center gap-3 rounded-[10px] px-4 py-3 shadow-lg"
+      style={{ backgroundColor: bg }}
+    >
       <Text
         className="flex-1 text-sm font-semibold"
         style={{ color: ink, textAlign: action ? "left" : "center" }}
@@ -100,15 +155,10 @@ export function NoticeBar({
           style={{
             minHeight: 44,
             justifyContent: "center",
-            // В тихой плашке пилюли нет: заливка под кнопкой стала бы вторым
-            // пятном цвета, а громкость должна нести сама надпись.
-            backgroundColor: quiet ? "transparent" : "rgba(255,255,255,0.22)",
+            backgroundColor: "rgba(255,255,255,0.22)",
           }}
         >
-          <Text
-            className="text-sm font-bold"
-            style={{ color: quiet ? t.accent : ink, fontSize: quiet ? 15 : 14 }}
-          >
+          <Text className="text-sm font-bold" style={{ color: ink }}>
             {action.label}
           </Text>
         </Pressable>

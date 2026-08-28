@@ -10,7 +10,7 @@ import {
 import { AccessibilityInfo, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceMotion } from "@/lib/reduce-motion";
-import { NoticeBar, type NoticeTone } from "./NoticeBar";
+import { NoticeBar, isQuietTone, type NoticeTone } from "./NoticeBar";
 
 /** Тона — общие с `NoticeBar`: одна плашка на весь продукт, разные места. */
 type ToastType = NoticeTone;
@@ -86,6 +86,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const quiet = toast ? isQuietTone(toast.type) : false;
+
   return (
     <ToastCtx.Provider value={show}>
       {children}
@@ -94,9 +96,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           pointerEvents={toast.action ? "box-none" : "none"}
           style={{
             position: "absolute",
-            top: insets.top + 8,
-            left: 16,
-            right: 16,
+            // Тихая плашка — ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху: ровно
+            // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
+            // висящую карточку. Остальные тона остаются карточкой.
+            top: insets.top + (quiet ? 0 : 8),
+            left: quiet ? 0 : 16,
+            right: quiet ? 0 : 16,
             opacity,
             transform: [{ translateY }],
           }}
