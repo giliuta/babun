@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, Text } from "react-native";
+import { Pressable, ScrollView, Text } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   CalendarClock,
@@ -19,7 +19,6 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
-import { AddRow } from "@/components/ui/AddRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
@@ -248,6 +247,39 @@ export default function CalendarSettingsScreen() {
       <ScopeChips
         items={teams}
         activeId={team?.id ?? null}
+        // СОЗДАНИЕ ЖИВЁТ В ЛЕНТЕ КАЛЕНДАРЕЙ, СПРАВА (владелец 2026-08-27:
+        // «переносим в правую сторону, там где все календари, закрепляем
+        // кнопку»). Отдельной строкой ниже оно стояло среди НАСТРОЕК
+        // выбранного календаря — то есть в списке свойств одного объекта
+        // лежало действие, создающее другой.
+        //
+        // ПРИКОЛОТА, А НЕ ВЛОЖЕНА В ЛЕНТУ: при трёх календарях со средними
+        // именами лента длиннее экрана, а автоскролл подводит её к выбранному
+        // чипу — вложенная кнопка пряталась бы ровно у того, кому она нужнее.
+        //
+        // ТЕКСТОМ, БЕЗ «+»: канон — «действия создания всегда подписаны
+        // текстом», и это стережёт контрактный тест (импорт Plus из lucide
+        // запрещён). Слово «календарь» в подписи лишнее: лента и так из них.
+        trailing={
+          <Pressable
+            onPress={() => setCreateOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить календарь"
+            style={({ pressed }: { pressed: boolean }) => ({
+              minHeight: 44,
+              justifyContent: "center",
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
+            >
+              Добавить
+            </Text>
+          </Pressable>
+        }
         // «Все календари разом» здесь нет: настройки правятся у КОНКРЕТНОЙ
         // команды, и лента другого выбора не предлагает.
         onSelect={(id) => router.setParams({ team: id })}
@@ -329,17 +361,6 @@ export default function CalendarSettingsScreen() {
           </>
         ) : null}
 
-        {/* СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ В ПРОДУКТЕ (владелец
-            2026-08-27). Стоит на границе «настройки ЭТОГО календаря» →
-            «настройки всех»: выше сгиба даже на маленьком экране, а задача
-            и возникла из того, что владелец кнопку НЕ УВИДЕЛ.
-
-            ВНЕ ветки `team ? … : null` намеренно: иначе ровно в состоянии
-            «календарей нет» единственная дверь создания и не рисуется. При
-            нуле календарей она становится первой карточкой экрана. */}
-        <SectionCard>
-          <AddRow label="Добавить календарь" onPress={() => setCreateOpen(true)} />
-        </SectionCard>
 
         <SectionCard>
           <SettingsRow
