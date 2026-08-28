@@ -15,6 +15,10 @@ import { ITEM_H, LoopWheelColumn } from "@/components/ui/TimeWheel";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { utcLabel } from "@/features/calendar/device-timezone";
+import {
+  NAMES_IN_LABEL,
+  zoneGroupIndexOf,
+} from "@/features/calendar/zone-label";
 
 // ЧАСОВОЙ ПОЯС — БАРАБАН НА ПОЛЭКРАНА, У КАЖДОГО КАЛЕНДАРЯ СВОЙ.
 //
@@ -42,9 +46,6 @@ import { utcLabel } from "@/features/calendar/device-timezone";
 
 /** Строк видно разом: три сверху, выбранная, три снизу. */
 const WHEEL_ROWS = 7;
-
-/** Сколько городов помещается в подпись, не обрезаясь на 340pt. */
-const NAMES_IN_LABEL = 3;
 
 // ОДНА СТРОКА НА ДВА РЕЖИМА — БАРАБАН И ПОИСК (владелец 2026-08-27: «когда
 // прописываю Киев, получается Киев слева, справа само время — сделай так же,
@@ -117,20 +118,7 @@ export function TimezoneSheet({
   const t = useThemeColors();
   const { width } = useWindowDimensions();
 
-  // Сохранённая зона может не совпасть с представителем группы: телефон
-  // отдаёт `Asia/Nicosia`, представителем стоит `Europe/Kyiv`. Ищем по
-  // ГОРОДАМ группы, а не по одной строке, иначе барабан встал бы на нулевую.
-  const indexOfZone = (z: string) => {
-    const i = ZONE_GROUPS.findIndex((g) => g.cities.some((c) => c.zone === z));
-    if (i >= 0) return i;
-    const city = z.split("/").pop()?.replace(/_/g, " ");
-    const byCity = ZONE_GROUPS.findIndex((g) =>
-      g.cities.some((c) => c.name === city),
-    );
-    return byCity >= 0 ? byCity : 0;
-  };
-
-  const [idx, setIdx] = useState(() => indexOfZone(value));
+  const [idx, setIdx] = useState(() => zoneGroupIndexOf(value));
   const [query, setQuery] = useState("");
   // Что уйдёт в базу. Барабан отдаёт представителя группы, поиск — зону
   // ВЫБРАННОГО города: киевлянину сохраняется `Europe/Kyiv`, а не
@@ -142,7 +130,7 @@ export function TimezoneSheet({
   // выбором, сделанным для ДРУГОГО календаря.
   useEffect(() => {
     if (!visible) return;
-    setIdx(indexOfZone(value));
+    setIdx(zoneGroupIndexOf(value));
     setQuery("");
     setPicked(null);
   }, [visible, value]);

@@ -44,9 +44,9 @@ import {
   effectiveBuffer,
   effectiveWorkHours,
   hourLabel,
-  tzLabel,
 } from "@/features/calendar/setting-options";
-import { zoneClock } from "@/features/calendar/device-timezone";
+import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
+import { zoneCities } from "@/features/calendar/zone-label";
 
 // ─── «Календарь» — ВСЕ настройки на одном экране ─────────────────────
 // Сюда ведёт шестерёнка. Уровня «/calendar/[teamId]» больше нет: целый экран
@@ -278,7 +278,16 @@ export default function CalendarSettingsScreen() {
                 // Строка печатает РАСПИСКУ, а не имя зоны: город и часы.
                 // Проверить, что продукт считает день правильно, можно за
                 // секунду — сверив это время с часами в статус-баре.
-                sub={`${tzLabel(timezone)} · ${zoneClock(timezone)}`}
+                // Строка называет пояс ТЕМИ ЖЕ словами, что и барабан, из
+                // которого его выбрали: «Kyiv, Nicosia, Helsinki · UTC+3».
+                // Печатать один город было неправдой — выглядело так, будто
+                // выбран он один, хотя это целая группа.
+                sub={`${zoneCities(timezone)} · ${utcLabel(timezone)}`}
+                // Часы — справа, отдельным значением: закон «подпись слева,
+                // значение справа». Сверить их с часами в статус-баре —
+                // самый быстрый способ убедиться, что продукт считает день
+                // так же, как ты.
+                value={zoneClock(timezone)}
                 onPress={() => setPicker("tz")}
               />
             </SectionCard>

@@ -63,8 +63,3 @@ export function effectiveBuffer(
 export function bufferLabel(min: number): string {
   return BUFFER_CHOICES.find((o) => o.value === String(min))?.label ?? `${min} мин`;
 }
-
-/** Город из «Europe/Nicosia» — в списке и в строке значения. */
-export function tzLabel(tz: string): string {
-  return tz.replace(/^.*\//, "").replace(/_/g, " ");
-}
