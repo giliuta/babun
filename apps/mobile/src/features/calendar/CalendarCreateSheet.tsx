@@ -4,9 +4,9 @@ import { useRouter } from "expo-router";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Field } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { ColorField } from "@/components/ui/picker-fields";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { NameColorField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -163,23 +163,31 @@ export function CalendarCreateSheet({
         </View>
       }
     >
-      <View style={{ paddingHorizontal: GUTTER, paddingBottom: 8 }}>
-        <Field
-          label="Название"
-          value={name}
-          onChangeText={(v) => {
-            setName(v);
-            setFailure(null);
-          }}
-          placeholder="Бригада 2"
-          autoFocus
-        />
-        {/* Строка, которая раскрывает решётку по тапу (канон §5): сорок
-            цветов распахнутыми забивают лист собой. */}
-        <ColorField
-          value={color}
-          onChange={(hex) => setColor(color === hex ? null : hex)}
-        />
+      {/* ТА ЖЕ СТРОКА, ЧТО И В НАСТРОЙКАХ КАЛЕНДАРЯ (владелец 2026-08-27:
+          «название и так далее сделаем то же самое, как в основном
+          календаре: слева цвет, справа название»). Раньше здесь стояли поле
+          «Название» и отдельная строка «Цвет» — два элемента там, где в
+          настройках один, и созданный календарь выглядел иначе, чем тот же
+          календарь минутой позже.
+
+          ПОДСКАЗКИ «Бригада 2» БОЛЬШЕ НЕТ. Она предлагала назвать календарь
+          бригадой — словом из другой части продукта, — и на пустом поле
+          читалась как уже введённое имя. */}
+      <View style={{ paddingBottom: 8 }}>
+        <SectionCard>
+          <NameColorField
+            bare
+            label={null}
+            name={name}
+            onNameChange={(v) => {
+              setName(v);
+              setFailure(null);
+            }}
+            color={color}
+            onColorChange={(hex) => setColor(hex)}
+            autoFocus
+          />
+        </SectionCard>
       </View>
     </BottomSheet>
   );

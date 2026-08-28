@@ -8,6 +8,7 @@ import {
   Globe,
   Briefcase,
   Tags,
+  Trash2,
 } from "lucide-react-native";
 import { getStorage } from "@babun/shared/storage";
 import {
@@ -21,12 +22,18 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
+import { GUTTER } from "@/components/ui/tokens";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCalendarSettings,
 } from "@/features/settings/local-settings";
-import { useCities, useTeams, useUpdateTeam } from "@/features/reference/queries";
+import {
+  useCities,
+  useDeleteTeam,
+  useTeams,
+  useUpdateTeam,
+} from "@/features/reference/queries";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -34,6 +41,7 @@ import { schedulePreview } from "@/features/calendar/schedule-days";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
+import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import {
   effectiveCalendarWindow,
@@ -115,6 +123,7 @@ export default function CalendarSettingsScreen() {
   const { data: schedules = {} } = useAllTeamSchedules();
   const { data: labels = [] } = useCities();
   const update = useUpdateTeam();
+  const removeTeam = useDeleteTeam();
   const [savedTick, setSavedTick] = useState(0);
   // Отдельной двери к общим «Рабочим часам» больше нет (владелец 2026-08-17):
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
@@ -412,6 +421,79 @@ export default function CalendarSettingsScreen() {
             onPress={() => router.push("/calendar/labels")}
           />
         </SectionCard>
+
+            {/* УДАЛЕНИЕ КАЛЕНДАРЯ — ПОСЛЕДНЕЙ СТРОКОЙ ЭКРАНА (владелец
+                2026-08-27: «а как удалять команду — вот если я создал, а
+                удалить её как?»). Ответ был: никак. Механизм мягкого
+                удаления лежал написанным (`useRefDelete`), но наружу для
+                команд его не выводили — завести календарь стало можно, а
+                убрать нечем, и после переноса кнопки «Добавить» в ленту эта
+                дыра только расширилась.
+
+                МЯГКОЕ (`is_active=false`), и это не полумера: записи
+                ссылаются на `team_id`, жёсткое удаление порвало бы им ссылку
+                и унесло историю выручки. Календарь пропадает из ленты, его
+                записи остаются в базе.
+
+                ПОСЛЕДНИЙ УДАЛИТЬ НЕЛЬЗЯ. Без единого календаря продукту
+                некуда писать запись, а в ленте не остаётся даже чипа —
+                человек оказался бы в тупике, из которого только создание. */}
+            <SectionCard className="mt-4">
+              <Pressable
+                onPress={() =>
+                  confirmThen(
+                    `Удалить календарь «${team.name}»?`,
+                    {
+                      message:
+                        "Он пропадёт из ленты. Записи и деньги останутся в базе — их видно в отчётах.",
+                      confirmLabel: "Удалить",
+                      destructive: true,
+                    },
+                    () =>
+                      removeTeam.mutate(team.id, {
+                        onSuccess: () => {
+                          // Экран смотрел на удалённый календарь: уводим на
+                          // соседний, иначе он показывает настройки того,
+                          // чего уже нет.
+                          const next = teams.find((x) => x.id !== team.id);
+                          router.setParams({ team: next?.id });
+                        },
+                        onError: (e) => notify("Ошибка", e.message),
+                      }),
+                  )
+                }
+                disabled={teams.length < 2 || removeTeam.isPending}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить календарь ${team.name}`}
+                accessibilityState={{ disabled: teams.length < 2 }}
+                className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"
+                style={({ pressed }: { pressed: boolean }) => ({
+                  backgroundColor: pressed ? t.pressed : "transparent",
+                  opacity: teams.length < 2 ? 0.4 : 1,
+                })}
+              >
+                <Trash2 color={t.danger} size={16} strokeWidth={2.2} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
+                  Удалить календарь
+                </Text>
+              </Pressable>
+            </SectionCard>
+            {teams.length < 2 ? (
+              // Погашенная кнопка без причины читается как поломка.
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{
+                  paddingHorizontal: GUTTER,
+                  paddingTop: 8,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  color: t.sub,
+                  textAlign: "center",
+                }}
+              >
+                Единственный календарь удалить нельзя — сначала создайте другой.
+              </Text>
+            ) : null}
 
         {teams.length === 0 ? (
           <SectionCard>

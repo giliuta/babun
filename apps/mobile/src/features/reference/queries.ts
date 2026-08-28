@@ -428,6 +428,12 @@ function useRefDelete(table: RefTable) {
 export const useUpdateTeam = () => useRefUpdate("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
+// Удаление КАЛЕНДАРЯ. Механизм лежал написанным с самого начала, но наружу
+// его не выводили: завести календарь было можно, убрать — нечем (владелец
+// 2026-08-27: «а как удалять команду, вот если я создал, а удалить её как»).
+// Оно мягкое (`is_active=false`): записи ссылаются на `team_id`, и жёсткое
+// удаление порвало бы им ссылку. Строка из базы не уходит, из ленты — да.
+export const useDeleteTeam = () => useRefDelete("teams");
 export const useUpdateCity = () => useRefUpdate("cities");
 
 /**
