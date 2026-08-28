@@ -38,7 +38,7 @@ const ROW_H = 56;
 /** Высота плитки внутри строки: 44 — минимальная цель пальца. */
 const CELL_H = 44;
 
-const W_QTY = 46;
+const W_QTY = 62;
 const W_COST = 88;
 const W_TIME = 94;
 const GAP = 8;
@@ -71,6 +71,7 @@ function Cell({
   value,
   onChange,
   width,
+  prefix,
   suffix,
   align = "right",
   accessibilityLabel,
@@ -79,6 +80,8 @@ function Cell({
   value: string;
   onChange: (v: string) => void;
   width?: number;
+  /** Приписка СЛЕВА от числа — «от» у количества. */
+  prefix?: string;
   /** Знак валюты. Стоит СПРАВА ОТ ЧИСЛА, а не слева от ячейки: слева он
    *  прижимался к соседней колонке и читался её частью — строка начиналась
    *  «1 €», хотя единица это количество, а евро уже цена. */
@@ -102,6 +105,9 @@ function Cell({
         backgroundColor: t.fill,
       }}
     >
+      {prefix ? (
+        <Text style={{ fontSize: 13, color: t.sub }}>{prefix}</Text>
+      ) : null}
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -216,6 +222,20 @@ export function ServiceLadder({
 }) {
   const t = useThemeColors();
   const idOf = (s: LadderStep) => s.tier?.id ?? "base";
+
+  // ЛЕСЕНКИ НЕТ — И ТАБЛИЦЫ НЕТ (владелец 2026-08-27, посмотрев вживую:
+  // «услуга с одной ценой и одним временем выглядит электронной таблицей»).
+  //
+  // Так у подавляющего большинства услуг: одна цена, одно время, никаких
+  // порогов. Столбец количества в этом случае показывает единственное «от 1»
+  // — колонка ради строки, — а шапка из четырёх подписей превращает три
+  // числа в отчёт. Ровно это владелец забраковал 25 августа на уровне
+  // строки; здесь оно вернулось на уровне блока.
+  //
+  // Свёрнутый вид убирает КОЛИЧЕСТВО целиком: без порогов оно всегда 1 и
+  // сообщать нечего. Остаются три числа и три подписи над ними — это уже не
+  // таблица, а поля. «＋ Добавить» разворачивает блок в полную таблицу.
+  const flat = steps.length === 1;
   /** Какая шапка раскрыта своим выбором. `null` — все закрыты. */
   const [panel, setPanel] = useState<"unit" | "price" | "cost" | null>(null);
   const toggle = (next: "unit" | "price" | "cost") =>
@@ -239,7 +259,7 @@ export function ServiceLadder({
     const label = (
       <Text
         maxFontSizeMultiplier={1.2}
-        numberOfLines={1}
+        numberOfLines={2}
         style={{
           textAlign: "right",
           fontSize: 11,
@@ -274,11 +294,29 @@ export function ServiceLadder({
     );
   };
 
+  // ШАПКА ВСЕГДА НАЗЫВАЕТ РЕЖИМ (владелец 2026-08-27, посмотрев вживую:
+  // «глядя на 5 € невозможно понять, это за квадрат или за всё»). Раньше
+  // подписан был только режим «за всё», а основной молчал — и число значило
+  // одно из двух, не говоря какое. Подпись переносится на две строки: лучше
+  // две строки правды, чем одна строка загадки.
+  const modeLabel = (word: string, mode: PriceEntryMode) =>
+    mode === "total" ? `${word} за всё` : `${word} за ${unit ?? "одну"}`;
+
   const modeRow = (
     current: PriceEntryMode,
     apply: (m: PriceEntryMode) => void,
   ) => (
     <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
+      {/* В свёрнутом виде подписи «Кол» нет, и единицу измерения выставить
+          было бы негде — она живёт здесь, рядом с режимом, которому и
+          придаёт смысл («за 1 м²»). */}
+      {flat ? (
+        <Pill
+          label={unit ? `Единица: ${unit}` : "Единица"}
+          active={false}
+          onPress={() => setPanel("unit")}
+        />
+      ) : null}
       <Pill
         label={unit ? `За 1 ${unit}` : "За одну"}
         active={current === "unit"}
@@ -310,6 +348,7 @@ export function ServiceLadder({
           gap: GAP,
         }}
       >
+        {flat ? null : (
         <Pressable
           onPress={() => toggle("unit")}
           hitSlop={8}
@@ -331,16 +370,9 @@ export function ServiceLadder({
             {unit ?? "Кол"}
           </Text>
         </Pressable>
-        {headCell(
-          priceEntry === "total" ? "Цена за всё" : "Цена",
-          undefined,
-          () => toggle("price"),
         )}
-        {headCell(
-          costEntry === "total" ? "Расх. за всё" : "Расход",
-          W_COST,
-          () => toggle("cost"),
-        )}
+        {headCell(modeLabel("Цена", priceEntry), undefined, () => toggle("price"))}
+        {headCell(modeLabel("Расход", costEntry), W_COST, () => toggle("cost"))}
         {headCell("Время", W_TIME)}
       </View>
 
@@ -388,28 +420,35 @@ export function ServiceLadder({
                 paddingVertical: 4,
               }}
             >
-              {/* КОЛИЧЕСТВО. Первая строка — сама услуга, её единица не
-                  правится: «1» это не ступень, а точка отсчёта. */}
-              {s.tier ? (
+              {/* КОЛИЧЕСТВО. В свёрнутом виде его нет вовсе: без порогов оно
+                  всегда «от 1» и сообщать нечего. */}
+              {flat ? null : s.tier ? (
                 <Cell
                   value={s.qty}
                   onChange={(v) => onQtyChange(id, v)}
                   width={W_QTY}
-                  align="center"
-                  accessibilityLabel="Количество"
+                  prefix="от"
+                  placeholder="—"
+                  accessibilityLabel="Количество, от"
                 />
               ) : (
                 <View
+                  className="flex-row items-center justify-end"
                   style={{
                     width: W_QTY,
                     height: CELL_H,
-                    alignItems: "center",
-                    justifyContent: "center",
+                    paddingHorizontal: 10,
+                    gap: 2,
                     borderRadius: t.radius.input,
                     borderCurve: "continuous",
                     backgroundColor: t.fill,
                   }}
                 >
+                  {/* «ОТ 1», А НЕ «1». Иначе в одном столбце два разных
+                      смысла: первая строка значит «ровно одна», все
+                      остальные — «от N». При метрах это ещё и звучало
+                      бессмыслицей: «1 м²» никто не продаёт. */}
+                  <Text style={{ fontSize: 13, color: t.sub }}>от</Text>
                   <Text
                     maxFontSizeMultiplier={1.2}
                     style={{

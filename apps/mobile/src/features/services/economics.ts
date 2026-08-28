@@ -218,77 +218,8 @@ function parseCostDrafts(raw: unknown): CostTierValue[] {
   return [...byMinimum.values()].sort((a, b) => a.min_qty - b.min_qty);
 }
 
-/** Якоря лестницы по возрастанию количества: сама услуга при одной штуке плюс
- *  каждая заведённая строка. Пустая клетка — НЕ ЯКОРЬ: она значит «здесь ничего
- *  не задано», и правило идёт сквозь неё. */
-function ladderAnchors(
-  existing: ServiceTierDraft[],
-  baseValue: number,
-  pick: (tier: ServiceTierDraft) => string,
-): { qty: number; value: number }[] {
-  const anchors = [{ qty: 1, value: baseValue }];
-  for (const tier of existing) {
-    const qty = looseNumber(tier.minQuantity);
-    const raw = looseNumber(pick(tier));
-    if (qty === null || raw === null) continue;
-    if (!Number.isSafeInteger(qty) || qty < 2 || raw < 0) continue;
-    anchors.push({ qty, value: raw });
-  }
-  return anchors.sort((a, b) => a.qty - b.qty);
-}
 
-/** ВРЕМЯ НОВОЙ СТРОКИ — ПРОДОЛЖЕНИЕ ЛЕСТНИЦЫ, А НЕ «БАЗА × КОЛИЧЕСТВО»
- *  (аудит 2026-08-21).
- *
- *  Прежний сев умножал базу на количество, не глядя на уже заведённые ступени.
- *  На живой услуге это выглядело так: 40 мин · 1 ч · 1 ч 30 — ряд шагом
- *  полчаса, — а четвёртая строка приезжала с «2 ч 40», потому что 40 × 4.
- *  Число не продолжало ряд и не значило ничего. Теперь сев считает ровно тем
- *  же способом, каким `durationForQuantity` считает время в самой записи:
- *  берёт два последних якоря и продолжает их наклон. */
-function seedDurationFor(
-  existing: ServiceTierDraft[],
-  baseDuration: number,
-  minimum: number,
-): number {
-  const anchors = ladderAnchors(
-    existing,
-    Math.max(0, Math.round(baseDuration)),
-    (tier) => tier.totalDuration,
-  );
-  const last = anchors[anchors.length - 1];
-  const prev = anchors[anchors.length - 2];
-  // Одна лишь база — наклона ещё нет, и «столько же работы столько раз»
-  // остаётся единственной честной догадкой.
-  if (!prev || last.qty === prev.qty) {
-    return Math.max(0, Math.round(baseDuration * minimum));
-  }
-  const slope = (last.value - prev.value) / (last.qty - prev.qty);
-  return Math.max(0, Math.round(last.value + slope * (minimum - last.qty)));
-}
 
-/** РАСХОД НАСЛЕДУЕТСЯ ЗА ОДНУ, А ПОДСТАВЛЯЕТСЯ ЗА ВСЁ. У материалов скидки от
- *  количества нет — та же химия на ту же штуку, — поэтому наследуем именно
- *  расход НА ЕДИНИЦУ строки выше и умножаем его на новое количество. Взять
- *  чужой тотал как есть было бы ошибкой: «20 за две» и «20 за три» — это
- *  разный расход на штуку. */
-function seedCostFor(
-  existing: ServiceTierDraft[],
-  baseCost: string,
-  minimum: number,
-): string {
-  let unit = looseNumber(baseCost) ?? 0;
-  const sorted = [...existing]
-    .map((tier) => ({
-      qty: looseNumber(tier.minQuantity),
-      total: looseNumber(tier.rowCost),
-    }))
-    .filter((x): x is { qty: number; total: number } => x.qty !== null && x.total !== null)
-    .sort((a, b) => a.qty - b.qty);
-  const last = sorted[sorted.length - 1];
-  if (last && last.qty > 0) unit = last.total / last.qty;
-  return String(round2(Math.max(0, unit) * minimum));
-}
 
 /** НОВАЯ СТРОКА НЕ ПОДСТАВЛЯЕТ ЦЕНУ (владелец 2026-08-21: «когда я добавляю
  *  новое, оно меняет цену всегда на 50 — мне это не нравится»). Цена от
@@ -302,19 +233,29 @@ export function createTierDraft(
   /** Расход ПЕРВОЙ строки (количество 1, значит он же — за единицу). */
   baseCost = "0",
 ): ServiceTierDraft {
-  const used = new Set(
-    existing
-      .map((tier) => looseNumber(tier.minQuantity))
-      .filter((value): value is number => value !== null),
-  );
-  let minimum = 2;
-  while (used.has(minimum)) minimum += 1;
+  // КОЛИЧЕСТВО ПРИЕЗЖАЕТ ПУСТЫМ (владелец 2026-08-27, посмотрев вживую:
+  // «продукт не знает моих порогов и не должен их сочинять»).
+  //
+  // Раньше сюда подставлялось следующее свободное число — 2, потом 3. Для
+  // штук это выглядело безобидно, а стоило услуге на квадратных метрах:
+  // строка «от 2 м²» — бессмыслица, никто не делит уборку по два квадрата.
+  // Пороги знает только бизнес, и любое число здесь — выдумка продукта.
+  //
+  // ВРЕМЯ НАСЛЕДУЕТСЯ, А НЕ МАСШТАБИРУЕТСЯ. Оно обязано быть числом (услуга
+  // без длительности не встаёт в сетку), поэтому пустым его оставить нельзя.
+  // Но и умножать нельзя: прежняя заготовка на второй строке писала «2 ч»,
+  // которых человек не вводил, — продукт называл цифру за него. Берём время
+  // предыдущей строки как есть: это заметно неверно и просится под правку,
+  // а не притворяется расчётом.
+  const previous = existing[existing.length - 1];
   return {
     id: `new-${Date.now()}-${existing.length}`,
-    minQuantity: String(minimum),
+    minQuantity: "",
     rowPrice: "",
-    rowCost: seedCostFor(existing, baseCost, minimum),
-    totalDuration: String(seedDurationFor(existing, baseDuration, minimum)),
+    rowCost: previous ? previous.rowCost : baseCost,
+    totalDuration: String(
+      previous ? looseNumber(previous.totalDuration) ?? baseDuration : baseDuration,
+    ),
   };
 }
 
