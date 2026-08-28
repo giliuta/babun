@@ -4,7 +4,6 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   CalendarClock,
   CalendarRange,
-  Eye,
   Globe,
   Briefcase,
   Tags,
@@ -20,12 +19,14 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { CalendarCreateSheet } from "@/features/calendar/CalendarCreateSheet";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { useThemeColors } from "@/theme/colors";
 import {
   useCalendarSettings,
+  useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
 import {
   useCities,
@@ -123,6 +124,7 @@ export default function CalendarSettingsScreen() {
   const { data: schedules = {} } = useAllTeamSchedules();
   const { data: labels = [] } = useCities();
   const update = useUpdateTeam();
+  const saveSettings = useSaveCalendarSettings();
   const removeTeam = useDeleteTeam();
   const toast = useToast();
   const [savedTick, setSavedTick] = useState(0);
@@ -159,6 +161,13 @@ export default function CalendarSettingsScreen() {
         onError: (e) => notify("Ошибка", e.message),
       },
     );
+  };
+
+  // Эти два переключателя — НАСТРОЙКА КОМПАНИИ, а не календаря: сетку они
+  // меняют во всех сразу. Пишутся тем же instant-commit, что и всё здесь.
+  const patchSettings = (p: Partial<CalendarSettings>) => {
+    if (!settings) return;
+    saveSettings.mutate(p, { onError: (e) => notify("Ошибка", e.message) });
   };
 
   const work = effectiveWorkHours(s);
@@ -372,16 +381,6 @@ export default function CalendarSettingsScreen() {
         ) : null}
 
 
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.indigo}
-            icon={Eye}
-            title="Что показывать"
-            sub={s.hideCancelled ? "Отменённые скрыты" : "Показываем всё"}
-            onPress={() => router.push("/calendar/display")}
-          />
-        </SectionCard>
-
         {/* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки переехали сюда из настроек клиентов
             (владелец 2026-08-02: «метки мы не делаем в клиентах — метки
             должны стоять в настройках календаря»): метка — это про ДЕНЬ и
@@ -423,6 +422,39 @@ export default function CalendarSettingsScreen() {
           />
         </SectionCard>
 
+        {/* ЧТО ПОКАЗЫВАТЬ — ДВА ТУМБЛЕРА ЗДЕСЬ, А НЕ НА СВОЕЙ СТРАНИЦЕ
+            (владелец 2026-08-27: «саму страницу „что показывать" можем
+            полностью убрать, что там находится — поставим в самый конец, над
+            „удалить календарь"; только коротко, без объяснений»).
+
+            Страница заводилась по образцу клиентской «Что показывать на
+            карточке», чтобы главный экран не превращался в простыню
+            тумблеров. Но тумблеров оказалось ДВА, и целая страница ради двух
+            переключателей — это лишний заход и лишняя дверь: строка «Что
+            показывать · Показываем всё» отвечала на вопрос, которого никто
+            не задавал.
+
+            ПОДПИСИ БЕЗ ПОЯСНЕНИЙ. Прежние («Полоса по дням: сверху доход,
+            снизу расход, тап по дню открывает разбор») описывали то, что
+            видно на самой сетке через секунду после переключения. */}
+        <SectionCard className="mt-4">
+          <SwitchRow
+            label="Показывать доход и расход"
+            value={s.showDayFinance !== false}
+            onChange={(v) => patchSettings({ showDayFinance: v })}
+          />
+          <SwitchRow
+            label="Скрывать отменённые"
+            value={!!s.hideCancelled}
+            onChange={(v) => patchSettings({ hideCancelled: v })}
+          />
+        </SectionCard>
+
+        {/* ПОД ПРОВЕРКОЙ `team` НЕ ДЛЯ КРАСОТЫ: карточка печатает `team.name`,
+            а при нуле календарей его нет — экран падал бы на первом же кадре.
+            Дыру открыл я сам, когда добавлял удаление 27 августа. */}
+        {team ? (
+          <>
             {/* УДАЛЕНИЕ КАЛЕНДАРЯ — ПОСЛЕДНЕЙ СТРОКОЙ ЭКРАНА (владелец
                 2026-08-27: «а как удалять команду — вот если я создал, а
                 удалить её как?»). Ответ был: никак. Механизм мягкого
@@ -500,6 +532,8 @@ export default function CalendarSettingsScreen() {
                 </Text>
               </Pressable>
             </SectionCard>
+          </>
+        ) : null}
 
         {teams.length === 0 ? (
           <SectionCard>
