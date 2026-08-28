@@ -7,14 +7,14 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { Check, Search } from "lucide-react-native";
+import { Search } from "lucide-react-native";
 import { ZONE_GROUPS } from "@babun/shared/local/timezones";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ITEM_H, LoopWheelColumn } from "@/components/ui/TimeWheel";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { utcLabel, zoneClock } from "@/features/calendar/device-timezone";
+import { utcLabel } from "@/features/calendar/device-timezone";
 
 // ЧАСОВОЙ ПОЯС — БАРАБАН НА ПОЛЭКРАНА, У КАЖДОГО КАЛЕНДАРЯ СВОЙ.
 //
@@ -45,6 +45,62 @@ const WHEEL_ROWS = 7;
 
 /** Сколько городов помещается в подпись, не обрезаясь на 340pt. */
 const NAMES_IN_LABEL = 3;
+
+// ОДНА СТРОКА НА ДВА РЕЖИМА — БАРАБАН И ПОИСК (владелец 2026-08-27: «когда
+// прописываю Киев, получается Киев слева, справа само время — сделай так же,
+// если даже не прописываешь»).
+//
+// До этого барабан центрировал «города · смещение» одним блоком, а поиск
+// раскидывал их по краям: два разных ритма на одном листе, и переход из
+// одного в другой читался как переход на другой экран. Теперь раскладка одна:
+// города слева, смещение справа по правому краю.
+//
+// Правый край и есть смысл: смещения выстраиваются в СТОЛБЕЦ и читаются
+// сверху вниз одним движением глаза. При центрировании «UTC+2», «UTC+3»,
+// «UTC+3:30» начинались с разного места, и сравнить их было нельзя.
+function zoneRow({
+  t,
+  cities,
+  offset,
+  active,
+}: {
+  t: ReturnType<typeof useThemeColors>;
+  cities: string;
+  offset: string;
+  active: boolean;
+}) {
+  return (
+    <View
+      className="flex-row items-center"
+      style={{ width: "100%", paddingHorizontal: 14, gap: 10 }}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{
+          flex: 1,
+          fontSize: active ? 17 : 15,
+          fontWeight: active ? "600" : "400",
+          letterSpacing: -0.2,
+          color: active ? t.ink : t.placeholder,
+        }}
+      >
+        {cities}
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{
+          fontSize: active ? 14 : 13,
+          fontWeight: "500",
+          color: active ? t.sub : t.faint,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {offset}
+      </Text>
+    </View>
+  );
+}
 
 export function TimezoneSheet({
   visible,
@@ -125,12 +181,22 @@ export function TimezoneSheet({
   // ПОИСК ИЩЕТ ПО ВСЕМ ГОРОДАМ ГРУППЫ, А НЕ ПО ПОДПИСИ: в подпись попадают
   // три из сорока, а человек набирает свой.
   const q = query.trim().toLowerCase();
+  // НАЧАЛО СЛОВА ВПЕРЁД. Подстрока сама по себе даёт мусор в голове списка:
+  // на «ki» первым выпадал «Rankin Inlet», а человек набирал Kigali, Kinshasa
+  // или Kirov. Совпадения с начала имени идут первыми, остальные — следом,
+  // и внутри каждой пачки сохраняется порядок с запада на восток.
   const hits = q
     ? ZONE_GROUPS.flatMap((g, i) =>
         g.cities
           .filter((c) => c.name.toLowerCase().includes(q))
-          .map((c) => ({ city: c, groupIndex: i })),
-      ).slice(0, 40)
+          .map((c) => ({
+            city: c,
+            groupIndex: i,
+            starts: c.name.toLowerCase().startsWith(q),
+          })),
+      )
+        .sort((a, b) => Number(b.starts) - Number(a.starts))
+        .slice(0, 40)
     : [];
 
   // ПОКА ИЩУТ — БАРАБАНА НЕТ. Кольцо из двух-трёх значений показывает одну и
@@ -207,35 +273,27 @@ export function TimezoneSheet({
                   }}
                   accessibilityRole="radio"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`${city.name}, ${utcLabel(city.zone)}, сейчас ${zoneClock(city.zone)}`}
+                  accessibilityLabel={`${city.name}, ${utcLabel(city.zone)}`}
                   style={({ pressed }) => ({
-                    height: 52,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    paddingHorizontal: 12,
+                    height: ITEM_H,
+                    justifyContent: "center",
                     borderRadius: t.radius.card,
-                    backgroundColor: pressed ? t.pressed : "transparent",
+                    // ТА ЖЕ ПОЛОСА, ЧТО ПОД СРЕЗОМ БАРАБАНА. Владелец: «он
+                    // просто слегка подсвечивается». Галочки здесь нет
+                    // намеренно — она была бы вторым сообщением об одном.
+                    backgroundColor: pressed
+                      ? t.pressed
+                      : active
+                        ? t.canvas
+                        : "transparent",
                   })}
                 >
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    numberOfLines={1}
-                    style={{ flex: 1, fontSize: 17, color: t.ink }}
-                  >
-                    {city.name}
-                  </Text>
-                  <Text
-                    maxFontSizeMultiplier={1.3}
-                    style={{ fontSize: 15, color: t.sub }}
-                  >
-                    {utcLabel(city.zone)}
-                  </Text>
-                  {active ? (
-                    <Check color={t.accent} size={18} strokeWidth={2.5} />
-                  ) : (
-                    <View style={{ width: 18 }} />
-                  )}
+                  {zoneRow({
+                    t,
+                    cities: city.name,
+                    offset: utcLabel(city.zone),
+                    active: true,
+                  })}
                 </Pressable>
               );
             })
@@ -284,37 +342,12 @@ export function TimezoneSheet({
               rows={WHEEL_ROWS}
               renderItem={(_label, active, i) => {
                 const r = rows[i] ?? rows[0];
-                return (
-                  <View
-                    className="flex-row items-baseline"
-                    style={{ maxWidth: "100%", paddingHorizontal: 14, gap: 7 }}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      numberOfLines={1}
-                      style={{
-                        flexShrink: 1,
-                        fontSize: active ? 17 : 15,
-                        fontWeight: active ? "600" : "400",
-                        letterSpacing: -0.2,
-                        color: active ? t.ink : t.placeholder,
-                      }}
-                    >
-                      {r.cities}
-                    </Text>
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      style={{
-                        fontSize: active ? 13 : 12,
-                        fontWeight: "500",
-                        color: active ? t.sub : t.faint,
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {r.offset}
-                    </Text>
-                  </View>
-                );
+                return zoneRow({
+                  t,
+                  cities: r.cities,
+                  offset: r.offset,
+                  active,
+                });
               }}
             />
           </View>
