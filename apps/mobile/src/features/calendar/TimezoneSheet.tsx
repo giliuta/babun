@@ -96,15 +96,30 @@ export function TimezoneSheet({
   // Свой город — первым в подписи СВОЕЙ группы. Иначе киевлянин видел бы
   // «(UTC+2) Helsinki, Athens, Nicosia» и не понимал, что строка про него.
   const ownCity = value.split("/").pop()?.replace(/_/g, " ");
-  const items = useMemo(
+  // СТРОКА СОБИРАЕТСЯ ИЗ ДВУХ КУСКОВ РАЗНОЙ ВАЖНОСТИ. Города — то, по чему
+  // человек себя узнаёт; смещение — справка. Одним кеглем и в скобках они
+  // спорили: «(UTC+3) Nicosia, Kyiv, Helsinki» читалось как техническая
+  // надпись, а не как «мой пояс». Теперь город идёт первым и весом, а
+  // смещение — мельче и приглушённым, за тонким разделителем.
+  const rows = useMemo(
     () =>
       ZONE_GROUPS.map((g) => {
         const names = g.cities.map((c) => c.name);
         const own = ownCity && names.includes(ownCity) ? ownCity : null;
         const head = own ? [own, ...names.filter((n) => n !== own)] : names;
-        return `(${utcLabel(g.zone)}) ${head.slice(0, NAMES_IN_LABEL).join(", ")}`;
+        return {
+          cities: head.slice(0, NAMES_IN_LABEL).join(", "),
+          offset: utcLabel(g.zone),
+        };
       }),
     [ownCity],
+  );
+
+  // `items` остаются строками: их произносит VoiceOver, и по ним же барабан
+  // считает свою длину.
+  const items = useMemo(
+    () => rows.map((r) => `${r.cities}, ${r.offset}`),
+    [rows],
   );
 
   // ПОИСК ИЩЕТ ПО ВСЕМ ГОРОДАМ ГРУППЫ, А НЕ ПО ПОДПИСИ: в подпись попадают
@@ -237,6 +252,24 @@ export function TimezoneSheet({
               overflow: "hidden",
             }}
           >
+            {/* ПОЛОСА ВЫБОРА — ПОД ОДНОЙ СТРОКОЙ, А НЕ ПОД ВСЕМ БАРАБАНОМ.
+                Ровно этим системный пикер и отличается от столбика текста:
+                видно, ГДЕ срез. Прежняя серая плита во весь блок тонировала
+                пол-листа и читалась как выделение всего сразу — её владелец
+                и снёс 27 августа. Здесь заливка лежит на одной строке,
+                скруглена и не ловит касания. */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: ((WHEEL_ROWS - 1) / 2) * ITEM_H,
+                height: ITEM_H,
+                borderRadius: t.radius.card,
+                backgroundColor: t.canvas,
+              }}
+            />
             <LoopWheelColumn
               items={items}
               value={idx}
@@ -248,8 +281,41 @@ export function TimezoneSheet({
               }}
               accessibilityLabel="Часовой пояс"
               width={Math.min(width - GUTTER * 2, 360)}
-              fontSize={16}
               rows={WHEEL_ROWS}
+              renderItem={(_label, active, i) => {
+                const r = rows[i] ?? rows[0];
+                return (
+                  <View
+                    className="flex-row items-baseline"
+                    style={{ maxWidth: "100%", paddingHorizontal: 14, gap: 7 }}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      numberOfLines={1}
+                      style={{
+                        flexShrink: 1,
+                        fontSize: active ? 17 : 15,
+                        fontWeight: active ? "600" : "400",
+                        letterSpacing: -0.2,
+                        color: active ? t.ink : t.placeholder,
+                      }}
+                    >
+                      {r.cities}
+                    </Text>
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      style={{
+                        fontSize: active ? 13 : 12,
+                        fontWeight: "500",
+                        color: active ? t.sub : t.faint,
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {r.offset}
+                    </Text>
+                  </View>
+                );
+              }}
             />
           </View>
         </View>
