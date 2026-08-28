@@ -55,6 +55,8 @@ import {
   roundToStep,
 } from "@/features/services/ServiceBlocks";
 import {
+  displayValue,
+  draftValue,
   createTierDraft,
   economicsDraftFromService,
   parsePriceTiers,
@@ -678,7 +680,18 @@ function ServiceSheet({
    *  и слово лишнее»: тогда всё печатается голым числом, как раньше. */
   const [unit, setUnit] = useState<string | null>(null);
   /** Линза показа чисел: «за всё» или «за одну». Хранение не меняет. */
-  const [priceEntry, setPriceEntry] = useState<PriceEntryMode>("total");
+  // ЗА ЕДИНИЦУ ПО УМОЛЧАНИЮ (владелец 2026-08-27, согласившись с разбором):
+  // тогда лесенка значит «сколько стоит одна единица при таком объёме», и
+  // промежуточный объём считается сам. При «за всё» таблица становится
+  // справочником, и на 13 м² между ступенями 10 и 20 продукт обязан гадать.
+  // У уже заведённых услуг режим свой — он лежит в колонке `price_entry`.
+  const [priceEntry, setPriceEntry] = useState<PriceEntryMode>("unit");
+  // РЕЖИМ РАСХОДА КОЛОНКИ В БАЗЕ НЕ ИМЕЕТ. Расход хранится ЗА ЕДИНИЦУ всегда
+  // (`cost_per_unit`), а этот флаг — только способ ввода: «за всё» делит
+  // напечатанное на количество. Поэтому он не переживает переоткрытие листа,
+  // и это честно: само ЧИСЛО в базе от режима не зависит и не портится.
+  // Долг: колонка `cost_entry`, чтобы режим запоминался.
+  const [costEntry, setCostEntry] = useState<PriceEntryMode>("unit");
   /** Дни недели ISO 1..7. Пустой массив — делаем в любой день. */
   const [weekdays, setWeekdays] = useState<number[]>([]);
   /** Столбец расхода показан. У всех услуг прода он нулевой, поэтому по
@@ -764,7 +777,8 @@ function ServiceSheet({
     );
     setMinQty(String(from?.min_qty ?? 1));
     setMaxQty(from?.max_qty == null ? "" : String(Number(from.max_qty)));
-    setPriceEntry(from?.price_entry === "unit" ? "unit" : "total");
+    setPriceEntry(from?.price_entry === "total" ? "total" : "unit");
+    setCostEntry("unit");
     setWeekdays(
       Array.isArray(from?.available_weekdays)
         ? (from.available_weekdays as unknown[]).filter(
@@ -801,6 +815,27 @@ function ServiceSheet({
   // ЛЕСЕНКА ОДНИМ СПИСКОМ: базовая строка (количество 1) плюс ступени.
   // Четыре блока рисуют ОДИН И ТОТ ЖЕ список — иначе они разъехались бы по
   // столбцам, и цена оказалась бы у количества, которого нет.
+  // ЧТО ЛЕЖИТ В ЧЕРНОВИКЕ И ЧТО ВИДИТ ЧЕЛОВЕК — РАЗНЫЕ ЧИСЛА, и направление
+  // пересчёта у цены и расхода ПРОТИВОПОЛОЖНОЕ:
+  //   цена   хранится ЗА ВСЮ строку  → в режиме «за единицу» делим на кол-во;
+  //   расход хранится ЗА ЕДИНИЦУ     → в режиме «за всё» умножаем на кол-во.
+  // Перепутать их местами — значит показать человеку число в десять раз
+  // больше или меньше, и он не заметит, пока не выставит счёт.
+  const qtyOf = (raw: string) => {
+    const n = Number(String(raw).trim().replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  };
+  const showCost = (raw: string, qty: number) => {
+    if (costEntry === "unit" || raw.trim() === "" || qty <= 1) return raw;
+    const n = Number(raw.trim().replace(",", "."));
+    return Number.isFinite(n) ? String(Math.round(n * qty * 100) / 100) : raw;
+  };
+  const storeCost = (typed: string, qty: number) => {
+    if (costEntry === "unit" || typed.trim() === "" || qty <= 1) return typed;
+    const n = Number(typed.trim().replace(",", "."));
+    return Number.isFinite(n) ? String(Math.round((n / qty) * 100) / 100) : typed;
+  };
+
   const ladderSteps: LadderStep[] = [
     {
       tier: null,
@@ -809,13 +844,16 @@ function ServiceSheet({
       cost,
       duration,
     },
-    ...economics.tiers.map((tier) => ({
-      tier,
-      qty: tier.minQuantity,
-      price: tier.rowPrice,
-      cost: tier.rowCost,
-      duration: tier.totalDuration,
-    })),
+    ...economics.tiers.map((tier) => {
+      const q = qtyOf(tier.minQuantity);
+      return {
+        tier,
+        qty: tier.minQuantity,
+        price: displayValue(tier.rowPrice, q, priceEntry),
+        cost: showCost(tier.rowCost, q),
+        duration: tier.totalDuration,
+      };
+    }),
   ];
 
   const submit = () => {
@@ -1187,6 +1225,11 @@ function ServiceSheet({
         steps={ladderSteps}
         currencySymbol={currencySymbol}
         unit={unit}
+        priceEntry={priceEntry}
+        costEntry={costEntry}
+        onUnitChange={setUnit}
+        onPriceEntryChange={setPriceEntry}
+        onCostEntryChange={setCostEntry}
         openTimeId={openRow}
         onOpenTime={(id) => {
           setOpenRow(id);
@@ -1212,7 +1255,9 @@ function ServiceSheet({
           updateEconomics({
             ...economics,
             tiers: economics.tiers.map((x) =>
-              x.id === id ? { ...x, rowPrice: v } : x,
+              x.id === id
+                ? { ...x, rowPrice: draftValue(v, qtyOf(x.minQuantity), priceEntry) }
+                : x,
             ),
           });
         }}
@@ -1221,7 +1266,9 @@ function ServiceSheet({
           updateEconomics({
             ...economics,
             tiers: economics.tiers.map((x) =>
-              x.id === id ? { ...x, rowCost: v } : x,
+              x.id === id
+                ? { ...x, rowCost: storeCost(v, qtyOf(x.minQuantity)) }
+                : x,
             ),
           });
         }}

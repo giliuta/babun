@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
@@ -7,8 +7,9 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import { confirmThen } from "@/lib/confirm";
+import { SERVICE_UNITS } from "./ServiceBlocks";
 import { durationLabel } from "./format";
-import type { ServiceTierDraft } from "./economics";
+import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 
 // ЛЕСЕНКА УСЛУГИ — ТАБЛИЦА В ЧЕТЫРЕ КОЛОНКИ.
 //
@@ -127,10 +128,59 @@ function Cell({
   );
 }
 
+// ПИЛЮЛЯ ВЫБОРА. Своя, а не общий `chooseValue`: тот рисует нижний лист
+// поверх экрана, а редактор услуги САМ живёт в листе-`Modal` — выбор честно
+// появлялся бы ЗА ним и был бы не виден вовсе. Та же ловушка описана в шапке
+// `NoticeBar`: из `Modal` нельзя показать то, что живёт в приложении.
+function Pill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={label}
+      style={({ pressed }) => ({
+        minHeight: 38,
+        justifyContent: "center",
+        paddingHorizontal: 12,
+        borderRadius: t.radius.card,
+        borderCurve: "continuous",
+        backgroundColor: active ? t.accent : t.fill,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{
+          fontSize: 14,
+          fontWeight: active ? "700" : "500",
+          color: active ? t.onAccent : t.ink,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 export function ServiceLadder({
   steps,
   currencySymbol,
   unit,
+  priceEntry,
+  costEntry,
+  onUnitChange,
+  onPriceEntryChange,
+  onCostEntryChange,
   openTimeId,
   onOpenTime,
   onQtyChange,
@@ -142,7 +192,18 @@ export function ServiceLadder({
 }: {
   steps: LadderStep[];
   currencySymbol: string;
+  /** Единица измерения. `null` — считаем штуками, слово лишнее. */
   unit: string | null;
+  /** Как ВВОДИТСЯ цена: за одну единицу (по умолчанию) или за всю строку.
+   *  Владелец 2026-08-27 выбрал «за единицу» основным: тогда лесенка значит
+   *  «сколько стоит один квадрат при таком объёме», и промежуточный объём
+   *  считается сам. При «за всё» таблица становится справочником, и на 13 м²
+   *  между ступенями 10 и 20 продукту пришлось бы гадать. */
+  priceEntry: PriceEntryMode;
+  costEntry: PriceEntryMode;
+  onUnitChange: (u: string | null) => void;
+  onPriceEntryChange: (m: PriceEntryMode) => void;
+  onCostEntryChange: (m: PriceEntryMode) => void;
   /** Какая строка раскрыта барабаном времени. `null` — все закрыты. */
   openTimeId: string | null;
   onOpenTime: (id: string | null) => void;
@@ -155,24 +216,86 @@ export function ServiceLadder({
 }) {
   const t = useThemeColors();
   const idOf = (s: LadderStep) => s.tier?.id ?? "base";
+  /** Какая шапка раскрыта своим выбором. `null` — все закрыты. */
+  const [panel, setPanel] = useState<"unit" | "price" | "cost" | null>(null);
+  const toggle = (next: "unit" | "price" | "cost") =>
+    setPanel((cur) => (cur === next ? null : next));
 
-  const headCell = (text: string, width?: number) => (
-    <Text
-      maxFontSizeMultiplier={1.2}
-      numberOfLines={1}
-      style={{
-        width,
-        flex: width ? undefined : 1,
-        textAlign: "right",
-        fontSize: 11,
-        fontWeight: "700",
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        color: t.faint,
-      }}
-    >
-      {text}
-    </Text>
+  // ШАПКА — НЕ ПОДПИСЬ, А НАСТРОЙКА КОЛОНКИ (владелец 2026-08-27: «если топаю
+  // на количество, там выбирается не количество, а единица измерения; если
+  // топаю на цену — можно выбрать цена за всё или цена за единицу»).
+  //
+  // Это и решает старую беду: подписи занимали больше места, чем числа. Здесь
+  // подпись ОДНА на колонку и вдобавок работает — она же и есть тот
+  // переключатель, который иначе стоял бы отдельной строкой.
+  //
+  // Нажимаемая подпись помечена цветом акцента: серая читалась бы обычным
+  // ярлыком, и на неё никто бы не нажал.
+  const headCell = (
+    text: string,
+    width?: number,
+    onPress?: () => void,
+  ) => {
+    const label = (
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{
+          textAlign: "right",
+          fontSize: 11,
+          fontWeight: "700",
+          letterSpacing: 0.6,
+          textTransform: "uppercase",
+          color: onPress ? t.accent : t.faint,
+        }}
+      >
+        {text}
+      </Text>
+    );
+    if (!onPress) {
+      return (
+        <View style={{ width, flex: width ? undefined : 1 }}>{label}</View>
+      );
+    }
+    return (
+      <Pressable
+        onPress={onPress}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${text} — изменить`}
+        style={({ pressed }) => ({
+          width,
+          flex: width ? undefined : 1,
+          opacity: pressed ? 0.5 : 1,
+        })}
+      >
+        {label}
+      </Pressable>
+    );
+  };
+
+  const modeRow = (
+    current: PriceEntryMode,
+    apply: (m: PriceEntryMode) => void,
+  ) => (
+    <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
+      <Pill
+        label={unit ? `За 1 ${unit}` : "За одну"}
+        active={current === "unit"}
+        onPress={() => {
+          apply("unit");
+          setPanel(null);
+        }}
+      />
+      <Pill
+        label="За всё"
+        active={current === "total"}
+        onPress={() => {
+          apply("total");
+          setPanel(null);
+        }}
+      />
+    </View>
   );
 
   return (
@@ -187,24 +310,68 @@ export function ServiceLadder({
           gap: GAP,
         }}
       >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{
-            width: W_QTY,
-            textAlign: "center",
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.faint,
-          }}
+        <Pressable
+          onPress={() => toggle("unit")}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Единица измерения — изменить"
+          style={({ pressed }) => ({ width: W_QTY, opacity: pressed ? 0.5 : 1 })}
         >
-          {unit ?? "Кол"}
-        </Text>
-        {headCell("Цена")}
-        {headCell("Расход", W_COST)}
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{
+              textAlign: "center",
+              fontSize: 11,
+              fontWeight: "700",
+              letterSpacing: 0.6,
+              textTransform: "uppercase",
+              color: t.accent,
+            }}
+          >
+            {unit ?? "Кол"}
+          </Text>
+        </Pressable>
+        {headCell(
+          priceEntry === "total" ? "Цена за всё" : "Цена",
+          undefined,
+          () => toggle("price"),
+        )}
+        {headCell(
+          costEntry === "total" ? "Расх. за всё" : "Расход",
+          W_COST,
+          () => toggle("cost"),
+        )}
         {headCell("Время", W_TIME)}
       </View>
+
+      {/* ПАНЕЛЬ ВЫБОРА РАСКРЫВАЕТСЯ ПОД ШАПКОЙ, НАД ЧИСЛАМИ. Не над всей
+          карточкой и не поверх экрана: человек нажал подпись колонки, и
+          ответ обязан появиться там же, где вопрос. */}
+      {panel ? (
+        <View style={{ paddingHorizontal: 12, paddingBottom: 10, gap: 6 }}>
+          {panel === "unit" ? (
+            <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
+              {[null, ...SERVICE_UNITS].map((option) => (
+                <Pill
+                  key={option ?? "none"}
+                  label={option ?? "Штуки"}
+                  active={unit === option}
+                  // Единица ОДНА на всю услугу: «от 3 в метрах, от 7 в штуках»
+                  // — это две разные услуги, а не одна лесенка.
+                  onPress={() => {
+                    onUnitChange(option);
+                    setPanel(null);
+                  }}
+                />
+              ))}
+            </View>
+          ) : panel === "price" ? (
+            modeRow(priceEntry, onPriceEntryChange)
+          ) : (
+            modeRow(costEntry, onCostEntryChange)
+          )}
+        </View>
+      ) : null}
 
       {steps.map((s) => {
         const id = idOf(s);
@@ -375,22 +542,29 @@ export function ServiceLadder({
         );
       })}
 
-      {/* Текстом, без «+»: канон — действия создания подписаны словом. */}
+      {/* ПОД СЕТКОЙ, КОМПАКТНО (владелец 2026-08-27: «кнопку убираем, делаем
+          как „плюс добавить" под самой этой сеткой»). Полосой во всю карточку
+          она читалась пятой строкой таблицы — пустой и без чисел.
+          «＋» здесь допустим: он не голый, при нём стоит слово. Иконка Plus
+          из lucide по-прежнему запрещена контрактным тестом. */}
       <Pressable
         onPress={onAdd}
+        hitSlop={8}
         accessibilityRole="button"
         accessibilityLabel="Добавить количество"
         style={({ pressed }) => ({
-          minHeight: ROW_H,
-          justifyContent: "center",
+          // СПРАВА, как «＋ Описание» у названия (владелец 2026-08-27).
+          // Слева она вставала под колонкой «Кол» и читалась подписью к ней —
+          // будто добавляет что-то в первый столбец, а не строку целиком.
+          alignSelf: "flex-end",
           paddingHorizontal: 12,
-          borderTopWidth: 1,
-          borderTopColor: t.separator,
-          backgroundColor: pressed ? t.pressed : "transparent",
+          paddingTop: 2,
+          paddingBottom: 12,
+          opacity: pressed ? 0.5 : 1,
         })}
       >
-        <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>
-          Добавить количество
+        <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
+          ＋ Добавить
         </Text>
       </Pressable>
     </SectionCard>
