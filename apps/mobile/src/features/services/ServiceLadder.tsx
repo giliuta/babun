@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
@@ -152,50 +152,6 @@ function Cell({
   );
 }
 
-// ПИЛЮЛЯ ВЫБОРА. Своя, а не общий `chooseValue`: тот рисует нижний лист
-// поверх экрана, а редактор услуги САМ живёт в листе-`Modal` — выбор честно
-// появлялся бы ЗА ним и был бы не виден вовсе. Та же ловушка описана в шапке
-// `NoticeBar`: из `Modal` нельзя показать то, что живёт в приложении.
-function Pill({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      accessibilityLabel={label}
-      style={({ pressed }) => ({
-        minHeight: 38,
-        justifyContent: "center",
-        paddingHorizontal: 12,
-        borderRadius: t.radius.card,
-        borderCurve: "continuous",
-        backgroundColor: active ? t.accent : t.fill,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{
-          fontSize: 14,
-          fontWeight: active ? "700" : "500",
-          color: active ? t.onAccent : t.ink,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 export function ServiceLadder({
   steps,
   currencySymbol,
@@ -249,10 +205,6 @@ export function ServiceLadder({
   // сообщать нечего. Остаются три числа и три подписи над ними — это уже не
   // таблица, а поля. «＋ Добавить» разворачивает блок в полную таблицу.
   const flat = steps.length === 1;
-  /** Какая шапка раскрыта своим выбором. `null` — все закрыты. */
-  const [panel, setPanel] = useState<"price" | "cost" | null>(null);
-  const toggle = (next: "price" | "cost") =>
-    setPanel((cur) => (cur === next ? null : next));
 
   // ШАПКА — НЕ ПОДПИСЬ, А НАСТРОЙКА КОЛОНКИ (владелец 2026-08-27: «если топаю
   // на количество, там выбирается не количество, а единица измерения; если
@@ -264,80 +216,83 @@ export function ServiceLadder({
   //
   // Нажимаемая подпись помечена цветом акцента: серая читалась бы обычным
   // ярлыком, и на неё никто бы не нажал.
+  // ШАПКА КОЛОНКИ: ИМЯ СВЕРХУ, РЕЖИМ В СКОБКАХ СНИЗУ, ТАП ПЕРЕКЛЮЧАЕТ
+  // (владелец 2026-08-27: «цена — первая строчка, внизу в скобках „за одну";
+  // топну один раз — скобки поменяются на „за всё"»).
+  //
+  // До этого тап открывал панель с двумя пилюлями. На ДВУХ значениях панель —
+  // лишний ход: она занимала целую строку блока, толкала таблицу вниз и
+  // висела, пока в неё не ткнут второй раз. Переключатель из двух положений
+  // переключается тапом, а не выбором из списка.
+  //
+  // Имя колонки серое, как у «Кол» и «Время», — все четыре читаются
+  // одинаково. Синие только скобки: они и есть то, что нажимается, и они же
+  // говорят текущее состояние. Одна строка отвечает на оба вопроса.
   const headCell = (
     text: string,
     width?: number,
-    onPress?: () => void,
+    mode?: PriceEntryMode,
+    onToggle?: () => void,
   ) => {
-    const label = (
-      <Text
-        maxFontSizeMultiplier={1.2}
-        numberOfLines={2}
-        style={{
-          textAlign: "right",
-          fontSize: 11,
-          fontWeight: "700",
-          letterSpacing: 0.6,
-          textTransform: "uppercase",
-          color: onPress ? t.accent : t.faint,
-        }}
-      >
-        {text}
-      </Text>
+    const body = (
+      <>
+        <Text
+          maxFontSizeMultiplier={1.2}
+          numberOfLines={1}
+          style={{
+            textAlign: "right",
+            fontSize: 11,
+            fontWeight: "700",
+            letterSpacing: 0.6,
+            textTransform: "uppercase",
+            color: t.faint,
+          }}
+        >
+          {text}
+        </Text>
+        {mode ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            style={{
+              textAlign: "right",
+              fontSize: 11,
+              fontWeight: "600",
+              color: t.accent,
+              marginTop: 1,
+            }}
+          >
+            {mode === "total" ? "(за всё)" : "(за одну)"}
+          </Text>
+        ) : null}
+      </>
     );
-    if (!onPress) {
+    if (!onToggle) {
       return (
-        <View style={{ width, flex: width ? undefined : 1 }}>{label}</View>
+        <View style={{ width, flex: width ? undefined : 1 }}>{body}</View>
       );
     }
     return (
       <Pressable
-        onPress={onPress}
+        onPress={onToggle}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`${text} — изменить`}
+        accessibilityLabel={`${text}, сейчас ${
+          mode === "total" ? "за всё" : "за одну"
+        }. Переключить`}
         style={({ pressed }) => ({
           width,
           flex: width ? undefined : 1,
           opacity: pressed ? 0.5 : 1,
         })}
       >
-        {label}
+        {body}
       </Pressable>
     );
   };
 
-  // ШАПКА ВСЕГДА НАЗЫВАЕТ РЕЖИМ (владелец 2026-08-27, посмотрев вживую:
-  // «глядя на 5 € невозможно понять, это за квадрат или за всё»). Раньше
-  // подписан был только режим «за всё», а основной молчал — и число значило
-  // одно из двух, не говоря какое. Подпись переносится на две строки: лучше
-  // две строки правды, чем одна строка загадки.
-  const modeLabel = (word: string, mode: PriceEntryMode) =>
-    mode === "total" ? `${word} за всё` : `${word} за одну`;
-
-  const modeRow = (
-    current: PriceEntryMode,
-    apply: (m: PriceEntryMode) => void,
-  ) => (
-    <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
-      <Pill
-        label="За одну"
-        active={current === "unit"}
-        onPress={() => {
-          apply("unit");
-          setPanel(null);
-        }}
-      />
-      <Pill
-        label="За всё"
-        active={current === "total"}
-        onPress={() => {
-          apply("total");
-          setPanel(null);
-        }}
-      />
-    </View>
-  );
+  const flip = (m: PriceEntryMode): PriceEntryMode =>
+    m === "total" ? "unit" : "total";
 
   return (
     <SectionCard>
@@ -367,23 +322,14 @@ export function ServiceLadder({
             Кол
           </Text>
         )}
-        {headCell(modeLabel("Цена", priceEntry), undefined, () => toggle("price"))}
-        {headCell(modeLabel("Расход", costEntry), W_COST, () => toggle("cost"))}
+        {headCell("Цена", undefined, priceEntry, () =>
+          onPriceEntryChange(flip(priceEntry)),
+        )}
+        {headCell("Расход", W_COST, costEntry, () =>
+          onCostEntryChange(flip(costEntry)),
+        )}
         {headCell("Время", W_TIME)}
       </View>
-
-      {/* ПАНЕЛЬ ВЫБОРА РАСКРЫВАЕТСЯ ПОД ШАПКОЙ, НАД ЧИСЛАМИ. Не над всей
-          карточкой и не поверх экрана: человек нажал подпись колонки, и
-          ответ обязан появиться там же, где вопрос. */}
-      {panel ? (
-        <View style={{ paddingHorizontal: 12, paddingBottom: 10, gap: 6 }}>
-          {panel === "price" ? (
-            modeRow(priceEntry, onPriceEntryChange)
-          ) : (
-            modeRow(costEntry, onCostEntryChange)
-          )}
-        </View>
-      ) : null}
 
       {steps.map((s) => {
         const id = idOf(s);
