@@ -12,7 +12,7 @@
 // сверка (по 15-м числам) этого не ловила: Иерусалим и Газа переводят часы
 // не в те же дни, что ЕС, и с ней они стояли в одной строке с Хельсинки.
 // Несколько дней в году граница суток у них разъезжалась бы с европейской,
-// и выручка падала бы не в те сутки. Групп: 63 из 445 зон.
+// и выручка падала бы не в те сутки. Групп: 62 из 418 зон.
 //
 // ИМЕНА ЗОН СОВРЕМЕННЫЕ. ICU по старой памяти отдаёт `Europe/Kiev`,
 // `Asia/Calcutta`, `Asia/Saigon`, `America/Godthab` и ещё восемь
@@ -42,15 +42,8 @@ export interface ZoneGroup {
 
 export const ZONE_GROUPS: ZoneGroup[] = [
   {
-    zone: "Etc/GMT+12",
+    zone: "Pacific/Midway",
     cities: [
-      { name: "GMT+12", zone: "Etc/GMT+12" },
-    ],
-  },
-  {
-    zone: "Etc/GMT+11",
-    cities: [
-      { name: "GMT+11", zone: "Etc/GMT+11" },
       { name: "Midway", zone: "Pacific/Midway" },
       { name: "Niue", zone: "Pacific/Niue" },
       { name: "Pago Pago", zone: "Pacific/Pago_Pago" },
@@ -66,7 +59,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     zone: "Pacific/Honolulu",
     cities: [
       { name: "Honolulu", zone: "Pacific/Honolulu" },
-      { name: "GMT+10", zone: "Etc/GMT+10" },
       { name: "Rarotonga", zone: "Pacific/Rarotonga" },
       { name: "Tahiti", zone: "Pacific/Tahiti" },
     ],
@@ -89,9 +81,8 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     ],
   },
   {
-    zone: "Etc/GMT+9",
+    zone: "Pacific/Gambier",
     cities: [
-      { name: "GMT+9", zone: "Etc/GMT+9" },
       { name: "Gambier", zone: "Pacific/Gambier" },
     ],
   },
@@ -109,9 +100,8 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     ],
   },
   {
-    zone: "Etc/GMT+8",
+    zone: "Pacific/Pitcairn",
     cities: [
-      { name: "GMT+8", zone: "Etc/GMT+8" },
       { name: "Pitcairn", zone: "Pacific/Pitcairn" },
     ],
   },
@@ -137,7 +127,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Hermosillo", zone: "America/Hermosillo" },
       { name: "Mazatlan", zone: "America/Mazatlan" },
       { name: "Whitehorse", zone: "America/Whitehorse" },
-      { name: "GMT+7", zone: "Etc/GMT+7" },
     ],
   },
   {
@@ -173,7 +162,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Regina", zone: "America/Regina" },
       { name: "Swift Current", zone: "America/Swift_Current" },
       { name: "Tegucigalpa", zone: "America/Tegucigalpa" },
-      { name: "GMT+6", zone: "Etc/GMT+6" },
       { name: "Galapagos", zone: "Pacific/Galapagos" },
     ],
   },
@@ -211,7 +199,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Guayaquil", zone: "America/Guayaquil" },
       { name: "Jamaica", zone: "America/Jamaica" },
       { name: "Rio Branco", zone: "America/Rio_Branco" },
-      { name: "GMT+5", zone: "Etc/GMT+5" },
     ],
   },
   {
@@ -254,7 +241,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "St Thomas", zone: "America/St_Thomas" },
       { name: "St Vincent", zone: "America/St_Vincent" },
       { name: "Tortola", zone: "America/Tortola" },
-      { name: "GMT+4", zone: "Etc/GMT+4" },
     ],
   },
   {
@@ -318,7 +304,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Palmer", zone: "Antarctica/Palmer" },
       { name: "Rothera", zone: "Antarctica/Rothera" },
       { name: "Stanley", zone: "Atlantic/Stanley" },
-      { name: "GMT+3", zone: "Etc/GMT+3" },
     ],
   },
   {
@@ -326,7 +311,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     cities: [
       { name: "Noronha", zone: "America/Noronha" },
       { name: "South Georgia", zone: "Atlantic/South_Georgia" },
-      { name: "GMT+2", zone: "Etc/GMT+2" },
     ],
   },
   {
@@ -346,7 +330,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     zone: "Atlantic/Cape_Verde",
     cities: [
       { name: "Cape Verde", zone: "Atlantic/Cape_Verde" },
-      { name: "GMT+1", zone: "Etc/GMT+1" },
     ],
   },
   {
@@ -374,7 +357,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Sao Tome", zone: "Africa/Sao_Tome" },
       { name: "Danmarkshavn", zone: "America/Danmarkshavn" },
       { name: "St Helena", zone: "Atlantic/St_Helena" },
-      { name: "UTC", zone: "UTC" },
     ],
   },
   {
@@ -407,7 +389,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Ndjamena", zone: "Africa/Ndjamena" },
       { name: "Niamey", zone: "Africa/Niamey" },
       { name: "Porto-Novo", zone: "Africa/Porto-Novo" },
-      { name: "GMT-1", zone: "Etc/GMT-1" },
     ],
   },
   {
@@ -480,7 +461,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Lusaka", zone: "Africa/Lusaka" },
       { name: "Maseru", zone: "Africa/Maseru" },
       { name: "Mbabane", zone: "Africa/Mbabane" },
-      { name: "GMT-2", zone: "Etc/GMT-2" },
     ],
   },
   {
@@ -538,7 +518,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Aden", zone: "Asia/Aden" },
       { name: "Bahrain", zone: "Asia/Bahrain" },
       { name: "Qatar", zone: "Asia/Qatar" },
-      { name: "GMT-3", zone: "Etc/GMT-3" },
       { name: "Kirov", zone: "Europe/Kirov" },
       { name: "Simferopol", zone: "Europe/Simferopol" },
       { name: "Comoro", zone: "Indian/Comoro" },
@@ -560,7 +539,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Tbilisi", zone: "Asia/Tbilisi" },
       { name: "Yerevan", zone: "Asia/Yerevan" },
       { name: "Samara", zone: "Europe/Samara" },
-      { name: "GMT-4", zone: "Etc/GMT-4" },
       { name: "Astrakhan", zone: "Europe/Astrakhan" },
       { name: "Saratov", zone: "Europe/Saratov" },
       { name: "Ulyanovsk", zone: "Europe/Ulyanovsk" },
@@ -593,7 +571,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Qostanay", zone: "Asia/Qostanay" },
       { name: "Qyzylorda", zone: "Asia/Qyzylorda" },
       { name: "Samarkand", zone: "Asia/Samarkand" },
-      { name: "GMT-5", zone: "Etc/GMT-5" },
       { name: "Kerguelen", zone: "Indian/Kerguelen" },
       { name: "Maldives", zone: "Indian/Maldives" },
     ],
@@ -619,7 +596,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Thimphu", zone: "Asia/Thimphu" },
       { name: "Omsk", zone: "Asia/Omsk" },
       { name: "Urumqi", zone: "Asia/Urumqi" },
-      { name: "GMT-6", zone: "Etc/GMT-6" },
       { name: "Chagos", zone: "Indian/Chagos" },
     ],
   },
@@ -646,7 +622,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Novokuznetsk", zone: "Asia/Novokuznetsk" },
       { name: "Pontianak", zone: "Asia/Pontianak" },
       { name: "Tomsk", zone: "Asia/Tomsk" },
-      { name: "GMT-7", zone: "Etc/GMT-7" },
       { name: "Christmas", zone: "Indian/Christmas" },
     ],
   },
@@ -667,7 +642,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Casey", zone: "Antarctica/Casey" },
       { name: "Kuching", zone: "Asia/Kuching" },
       { name: "Makassar", zone: "Asia/Makassar" },
-      { name: "GMT-8", zone: "Etc/GMT-8" },
     ],
   },
   {
@@ -687,7 +661,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Dili", zone: "Asia/Dili" },
       { name: "Jayapura", zone: "Asia/Jayapura" },
       { name: "Khandyga", zone: "Asia/Khandyga" },
-      { name: "GMT-9", zone: "Etc/GMT-9" },
       { name: "Palau", zone: "Pacific/Palau" },
     ],
   },
@@ -706,7 +679,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "DumontDUrville", zone: "Antarctica/DumontDUrville" },
       { name: "Ust-Nera", zone: "Asia/Ust-Nera" },
       { name: "Lindeman", zone: "Australia/Lindeman" },
-      { name: "GMT-10", zone: "Etc/GMT-10" },
       { name: "Chuuk", zone: "Pacific/Chuuk" },
       { name: "Guam", zone: "Pacific/Guam" },
       { name: "Saipan", zone: "Pacific/Saipan" },
@@ -741,7 +713,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Magadan", zone: "Asia/Magadan" },
       { name: "Sakhalin", zone: "Asia/Sakhalin" },
       { name: "Srednekolymsk", zone: "Asia/Srednekolymsk" },
-      { name: "GMT-11", zone: "Etc/GMT-11" },
       { name: "Bougainville", zone: "Pacific/Bougainville" },
       { name: "Efate", zone: "Pacific/Efate" },
       { name: "Guadalcanal", zone: "Pacific/Guadalcanal" },
@@ -755,7 +726,6 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Fiji", zone: "Pacific/Fiji" },
       { name: "Kamchatka", zone: "Asia/Kamchatka" },
       { name: "Anadyr", zone: "Asia/Anadyr" },
-      { name: "GMT-12", zone: "Etc/GMT-12" },
       { name: "Funafuti", zone: "Pacific/Funafuti" },
       { name: "Kwajalein", zone: "Pacific/Kwajalein" },
       { name: "Majuro", zone: "Pacific/Majuro" },
@@ -772,9 +742,8 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     ],
   },
   {
-    zone: "Etc/GMT-13",
+    zone: "Pacific/Apia",
     cities: [
-      { name: "GMT-13", zone: "Etc/GMT-13" },
       { name: "Apia", zone: "Pacific/Apia" },
       { name: "Fakaofo", zone: "Pacific/Fakaofo" },
       { name: "Kanton", zone: "Pacific/Kanton" },
@@ -795,9 +764,8 @@ export const ZONE_GROUPS: ZoneGroup[] = [
     ],
   },
   {
-    zone: "Etc/GMT-14",
+    zone: "Pacific/Kiritimati",
     cities: [
-      { name: "GMT-14", zone: "Etc/GMT-14" },
       { name: "Kiritimati", zone: "Pacific/Kiritimati" },
     ],
   },

@@ -128,6 +128,36 @@ describe("группы часовых поясов", () => {
     expect([...offs].sort((a, b) => a - b)).toEqual(offs);
   });
 
+  test("СЛУЖЕБНЫХ ЗОН НЕТ: ни Etc/GMT, ни UTC, ни однобуквенных", () => {
+    // Они не места, а фиксированные смещения: часы не переводят вовсе.
+    // У `Etc/GMT+N` вдобавок ИНВЕРТИРОВАН знак — строка «GMT+12» означает
+    // UTC−12, то есть подпись противоречит значению рядом с ней. Bun отдаёт
+    // их вместе с настоящими зонами (Node — нет), и один раз они уже
+    // проехали в барабан: 27 августа их там было 27 штук.
+    const zones = ZONE_GROUPS.flatMap((g) => g.cities.map((c) => c.zone));
+    for (const z of zones) {
+      expect(z.startsWith("Etc/")).toBe(false);
+      expect(z).not.toBe("UTC");
+      expect(z).not.toBe("GMT");
+      // Настоящая зона всегда «Регион/Город»; служебные — без слэша.
+      expect(z.includes("/")).toBe(true);
+    }
+  });
+
+  test("ПОКРЫТИЕ: города, по которым работает бизнес, на месте", () => {
+    // Не весь мир — те, чьё отсутствие заметит живой человек. Кипр и
+    // Украина здесь потому, что мастера продукта живут именно там.
+    const MUST = [
+      "Nicosia", "Kyiv", "Moscow", "Minsk", "Warsaw", "Berlin", "London",
+      "Paris", "Madrid", "Rome", "Athens", "Istanbul", "Tbilisi", "Yerevan",
+      "Baku", "Almaty", "Tashkent", "Dubai", "Tel Aviv", "Jerusalem",
+      "New York", "Los Angeles", "Toronto", "Sao Paulo", "Tokyo", "Shanghai",
+      "Kolkata", "Bangkok", "Sydney", "Auckland", "Cairo", "Johannesburg",
+    ].filter((c) => c !== "Tel Aviv"); // в IANA Израиль — Asia/Jerusalem
+    const names = new Set(ZONE_GROUPS.flatMap((g) => g.cities.map((c) => c.name)));
+    for (const city of MUST) expect(names.has(city)).toBe(true);
+  });
+
   test("имя города уникально во ВСЁМ списке", () => {
     // Bun отдаёт зоны вместе с псевдонимами, и без этой проверки поиск по
     // «Kyiv» мог бы вернуть две строки, между которыми человеку не выбрать.
