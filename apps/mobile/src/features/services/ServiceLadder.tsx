@@ -3,6 +3,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { Trash2 } from "lucide-react-native";
 
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import { confirmThen } from "@/lib/confirm";
@@ -38,6 +39,18 @@ const W_QTY = 46;
 const W_COST = 88;
 const W_TIME = 94;
 const GAP = 6;
+
+// ВЕРТИКАЛЬНЫЕ ЧЕРТЫ МЕЖДУ КОЛОНКАМИ (владелец 2026-08-27: «раздели между
+// единичкой, ценой и расходом, чтоб это тоже были отдельные блоки»). Без них
+// четыре числа в строке читались одной длинной подписью: «1 0€ 0€ 1ч». Черта
+// делает из строки таблицу — глаз видит, где кончается одно число и
+// начинается другое, и колонка становится колонкой.
+function Divider() {
+  const t = useThemeColors();
+  return (
+    <View style={{ width: 1, alignSelf: "stretch", backgroundColor: t.separator }} />
+  );
+}
 
 export interface LadderStep {
   /** `null` — базовая строка (количество 1): её нельзя убрать, она и есть
@@ -175,8 +188,11 @@ export function ServiceLadder({
         >
           {unit ?? "Кол"}
         </Text>
+        <Divider />
         {headCell("Цена")}
+        <Divider />
         {headCell("Расход", W_COST)}
+        <Divider />
         {headCell("Время", W_TIME)}
       </View>
 
@@ -184,12 +200,12 @@ export function ServiceLadder({
         const id = idOf(s);
         const minutes = Math.max(0, Number(s.duration) || 0);
         const open = openTimeId === id;
-        return (
-          <Fragment key={id}>
+        const row = (
             <View
               className="flex-row items-center"
               style={{
                 minHeight: ROW_H,
+                backgroundColor: t.surface,
                 paddingHorizontal: 12,
                 gap: GAP,
                 borderTopWidth: 1,
@@ -222,6 +238,7 @@ export function ServiceLadder({
                 </Text>
               )}
 
+              <Divider />
               <Cell
                 value={s.price}
                 onChange={(v) => onPriceChange(id, v)}
@@ -229,6 +246,7 @@ export function ServiceLadder({
                 placeholder="0"
                 accessibilityLabel={`Цена за ${s.qty}`}
               />
+              <Divider />
               <Cell
                 value={s.cost}
                 onChange={(v) => onCostChange(id, v)}
@@ -238,6 +256,7 @@ export function ServiceLadder({
                 accessibilityLabel={`Расход за ${s.qty}`}
               />
 
+              <Divider />
               {/* ВРЕМЯ — НЕ ПОЛЕ ВВОДА, А ДВЕРЬ К БАРАБАНАМ: «1 ч 40» с
                   клавиатуры не набирается, а «100 минут» человек не считает. */}
               <Pressable
@@ -266,27 +285,40 @@ export function ServiceLadder({
                 </Text>
               </Pressable>
 
-              {s.tier ? (
-                <Pressable
-                  onPress={() =>
-                    confirmThen(
-                      `Убрать количество «${s.qty}»?`,
-                      { confirmLabel: "Убрать", destructive: true },
-                      () => onRemove(id),
-                    )
-                  }
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Убрать количество ${s.qty}`}
-                  style={({ pressed }) => ({
-                    paddingLeft: 4,
-                    opacity: pressed ? 0.4 : 1,
-                  })}
-                >
-                  <Trash2 color={t.faint} size={15} strokeWidth={2} />
-                </Pressable>
-              ) : null}
             </View>
+        );
+
+        return (
+          <Fragment key={id}>
+            {/* УБИРАЕТСЯ СВАЙПОМ, А НЕ МУСОРКОЙ (владелец 2026-08-27: «эту
+                мусорку убери, оно лучше сдвигать вправо»). Иконка занимала
+                место в самой узкой строке продукта и стояла у КАЖДОЙ ступени,
+                хотя убирают их редко. Свайп — общий язык всех списков
+                продукта, и он же прячет разрушительное действие от
+                случайного пальца.
+                `fullSwipe` НЕ включён намеренно: закон канона — размашистый
+                свайп не носит разрушительного, у «Убрать» промах стоил бы
+                ступени. Подтверждение остаётся: строка уносит с собой цену,
+                расход и время. */}
+            {s.tier ? (
+              <SwipeRow
+                label="Убрать"
+                color={t.danger}
+                icon={Trash2}
+                accessibilityLabel={`Убрать количество ${s.qty}`}
+                onAction={() =>
+                  confirmThen(
+                    `Убрать количество «${s.qty}»?`,
+                    { confirmLabel: "Убрать", destructive: true },
+                    () => onRemove(id),
+                  )
+                }
+              >
+                {row}
+              </SwipeRow>
+            ) : (
+              row
+            )}
 
             {/* ДВА БАРАБАНА — ЧАСЫ И МИНУТЫ — под своей строкой, во всю ширину.
                 Половины коммитятся ПОРОЗНЬ и каждая считает от предыдущего
