@@ -7,10 +7,28 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import { confirmThen } from "@/lib/confirm";
-import { SERVICE_UNITS } from "./ServiceBlocks";
 import { durationLabel } from "./format";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 
+// ЕДИНИЦЫ ИЗМЕРЕНИЯ ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ УПРОЩЕНИЕ
+// (владелец 2026-08-27, после живого прогона):
+//
+//   «Единица уезжает в НАЗВАНИЕ. Надо обмотку — пишу „Обмотка 1 м", и два
+//    метра это просто количество 2: в счёте будет „Обмотка 1 м × 2".
+//    Надо чистку — пишу „Чистка 10 м²", и тридцать метров это × 3 либо
+//    отдельная услуга „Чистка 30 м²".»
+//
+// Почему это лучше отдельной колонки единиц:
+//   · КЛИЕНТ ВИДИТ ТО ЖЕ, ЧТО И ТЫ. «Обмотка 1 м × 2» читается в счёте без
+//     пояснений; «2 м» в служебной колонке требовало знать, чего именно два.
+//   · Исчезает целый класс бессмыслицы: строка «от 2 м²» была абсурдом, а
+//     «×2» абсурдом быть не может — это просто две штуки одного и того же.
+//   · Количество снова значит РОВНО ОДНО: сколько раз взяли услугу.
+//
+// «ОТ» ТОЖЕ УБРАНО из подписи: строки читаются как 1, 2, 3, 4. Внутри они
+// ОСТАЛИСЬ ПОРОГАМИ (`price_tiers.min_qty`), и на количестве, которого в
+// таблице нет, берётся ближайшая меньшая строка — так работает опт везде.
+//
 // ЛЕСЕНКА УСЛУГИ — ТАБЛИЦА В ЧЕТЫРЕ КОЛОНКИ.
 //
 // Владелец 2026-08-27: «первая колонка — количество, и там я записываю 1, 2,
@@ -38,7 +56,7 @@ const ROW_H = 56;
 /** Высота плитки внутри строки: 44 — минимальная цель пальца. */
 const CELL_H = 44;
 
-const W_QTY = 62;
+const W_QTY = 50;
 const W_COST = 88;
 const W_TIME = 94;
 const GAP = 8;
@@ -181,10 +199,8 @@ function Pill({
 export function ServiceLadder({
   steps,
   currencySymbol,
-  unit,
   priceEntry,
   costEntry,
-  onUnitChange,
   onPriceEntryChange,
   onCostEntryChange,
   openTimeId,
@@ -198,8 +214,6 @@ export function ServiceLadder({
 }: {
   steps: LadderStep[];
   currencySymbol: string;
-  /** Единица измерения. `null` — считаем штуками, слово лишнее. */
-  unit: string | null;
   /** Как ВВОДИТСЯ цена: за одну единицу (по умолчанию) или за всю строку.
    *  Владелец 2026-08-27 выбрал «за единицу» основным: тогда лесенка значит
    *  «сколько стоит один квадрат при таком объёме», и промежуточный объём
@@ -207,7 +221,6 @@ export function ServiceLadder({
    *  между ступенями 10 и 20 продукту пришлось бы гадать. */
   priceEntry: PriceEntryMode;
   costEntry: PriceEntryMode;
-  onUnitChange: (u: string | null) => void;
   onPriceEntryChange: (m: PriceEntryMode) => void;
   onCostEntryChange: (m: PriceEntryMode) => void;
   /** Какая строка раскрыта барабаном времени. `null` — все закрыты. */
@@ -237,8 +250,8 @@ export function ServiceLadder({
   // таблица, а поля. «＋ Добавить» разворачивает блок в полную таблицу.
   const flat = steps.length === 1;
   /** Какая шапка раскрыта своим выбором. `null` — все закрыты. */
-  const [panel, setPanel] = useState<"unit" | "price" | "cost" | null>(null);
-  const toggle = (next: "unit" | "price" | "cost") =>
+  const [panel, setPanel] = useState<"price" | "cost" | null>(null);
+  const toggle = (next: "price" | "cost") =>
     setPanel((cur) => (cur === next ? null : next));
 
   // ШАПКА — НЕ ПОДПИСЬ, А НАСТРОЙКА КОЛОНКИ (владелец 2026-08-27: «если топаю
@@ -300,25 +313,15 @@ export function ServiceLadder({
   // одно из двух, не говоря какое. Подпись переносится на две строки: лучше
   // две строки правды, чем одна строка загадки.
   const modeLabel = (word: string, mode: PriceEntryMode) =>
-    mode === "total" ? `${word} за всё` : `${word} за ${unit ?? "одну"}`;
+    mode === "total" ? `${word} за всё` : `${word} за одну`;
 
   const modeRow = (
     current: PriceEntryMode,
     apply: (m: PriceEntryMode) => void,
   ) => (
     <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
-      {/* В свёрнутом виде подписи «Кол» нет, и единицу измерения выставить
-          было бы негде — она живёт здесь, рядом с режимом, которому и
-          придаёт смысл («за 1 м²»). */}
-      {flat ? (
-        <Pill
-          label={unit ? `Единица: ${unit}` : "Единица"}
-          active={false}
-          onPress={() => setPanel("unit")}
-        />
-      ) : null}
       <Pill
-        label={unit ? `За 1 ${unit}` : "За одну"}
+        label="За одну"
         active={current === "unit"}
         onPress={() => {
           apply("unit");
@@ -349,27 +352,20 @@ export function ServiceLadder({
         }}
       >
         {flat ? null : (
-        <Pressable
-          onPress={() => toggle("unit")}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Единица измерения — изменить"
-          style={({ pressed }) => ({ width: W_QTY, opacity: pressed ? 0.5 : 1 })}
-        >
           <Text
             maxFontSizeMultiplier={1.2}
             style={{
+              width: W_QTY,
               textAlign: "center",
               fontSize: 11,
               fontWeight: "700",
               letterSpacing: 0.6,
               textTransform: "uppercase",
-              color: t.accent,
+              color: t.faint,
             }}
           >
-            {unit ?? "Кол"}
+            Кол
           </Text>
-        </Pressable>
         )}
         {headCell(modeLabel("Цена", priceEntry), undefined, () => toggle("price"))}
         {headCell(modeLabel("Расход", costEntry), W_COST, () => toggle("cost"))}
@@ -381,23 +377,7 @@ export function ServiceLadder({
           ответ обязан появиться там же, где вопрос. */}
       {panel ? (
         <View style={{ paddingHorizontal: 12, paddingBottom: 10, gap: 6 }}>
-          {panel === "unit" ? (
-            <View className="flex-row" style={{ flexWrap: "wrap", gap: 6 }}>
-              {[null, ...SERVICE_UNITS].map((option) => (
-                <Pill
-                  key={option ?? "none"}
-                  label={option ?? "Штуки"}
-                  active={unit === option}
-                  // Единица ОДНА на всю услугу: «от 3 в метрах, от 7 в штуках»
-                  // — это две разные услуги, а не одна лесенка.
-                  onPress={() => {
-                    onUnitChange(option);
-                    setPanel(null);
-                  }}
-                />
-              ))}
-            </View>
-          ) : panel === "price" ? (
+          {panel === "price" ? (
             modeRow(priceEntry, onPriceEntryChange)
           ) : (
             modeRow(costEntry, onCostEntryChange)
@@ -427,28 +407,21 @@ export function ServiceLadder({
                   value={s.qty}
                   onChange={(v) => onQtyChange(id, v)}
                   width={W_QTY}
-                  prefix="от"
+                  align="center"
                   placeholder="—"
-                  accessibilityLabel="Количество, от"
+                  accessibilityLabel="Количество"
                 />
               ) : (
                 <View
-                  className="flex-row items-center justify-end"
+                  className="flex-row items-center justify-center"
                   style={{
                     width: W_QTY,
                     height: CELL_H,
-                    paddingHorizontal: 10,
-                    gap: 2,
                     borderRadius: t.radius.input,
                     borderCurve: "continuous",
                     backgroundColor: t.fill,
                   }}
                 >
-                  {/* «ОТ 1», А НЕ «1». Иначе в одном столбце два разных
-                      смысла: первая строка значит «ровно одна», все
-                      остальные — «от N». При метрах это ещё и звучало
-                      бессмыслицей: «1 м²» никто не продаёт. */}
-                  <Text style={{ fontSize: 13, color: t.sub }}>от</Text>
                   <Text
                     maxFontSizeMultiplier={1.2}
                     style={{

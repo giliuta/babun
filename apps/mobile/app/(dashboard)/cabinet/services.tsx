@@ -1224,10 +1224,8 @@ function ServiceSheet({
       <ServiceLadder
         steps={ladderSteps}
         currencySymbol={currencySymbol}
-        unit={unit}
         priceEntry={priceEntry}
         costEntry={costEntry}
-        onUnitChange={setUnit}
         onPriceEntryChange={setPriceEntry}
         onCostEntryChange={setCostEntry}
         openTimeId={openRow}
