@@ -33,3 +33,23 @@ update public.teams set default_city = null where default_city is not null;
 
 comment on column public.teams.default_city is
   'НЕ ИСПОЛЬЗУЕТСЯ с 2026-08-29. Заменено на cities.weekdays. Удалить, когда веб перестанет читать.';
+
+-- ═══ ОТЛОЖЕННОЕ УДАЛЕНИЕ: 30 ДНЕЙ ═══
+--
+-- Владелец 2026-08-29: «удалить — это спустя 30 дней; она уйдёт как
+-- удаление, и 30 дней должно пройти, чтобы её полностью удалить».
+--
+-- Метка хранится СТРОКОЙ-ИМЕНЕМ в трёх местах (`day_cities.city`,
+-- `teams.cities`, `clients.city`), и связи с таблицей у неё нет. Значит
+-- мгновенное удаление рвёт не ссылку, а СМЫСЛ: день остаётся с именем, у
+-- которого больше нет ни цвета, ни строки в справочнике. Тридцать дней —
+-- это окно, в которое ошибку видно и она обратима.
+alter table public.cities
+  add column if not exists deleted_at timestamptz;
+
+create index if not exists cities_deleted_at_idx
+  on public.cities (tenant_id, deleted_at)
+  where deleted_at is not null;
+
+comment on column public.cities.deleted_at is
+  'Помечена к удалению. Через 30 дней строка удаляется окончательно; до тех пор её можно вернуть.';
