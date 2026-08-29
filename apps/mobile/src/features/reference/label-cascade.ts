@@ -10,7 +10,7 @@ import { useTenantId } from "@/lib/tenant";
 import { teamCities, useTeams, useUpdateTeam } from "./queries";
 
 // Каскад переименования метки/города по всем местам, где имя хранится
-// СТРОКОЙ (не id): team.cities[] + default_city, day_cities, метки
+// СТРОКОЙ (не id): team.cities[], day_cities, метки
 // клиентов (clients.city, «Тихий лист 2») и personalLabels веба. Без
 // каскада переименование в библиотеке (cities) тихо осиротит метки
 // команд, дней и клиентов — аудит кабинета P1-12.
@@ -19,7 +19,7 @@ import { teamCities, useTeams, useUpdateTeam } from "./queries";
 // правят одну таблицу. Частичные сбои не бросают: возвращается список
 // мест, которые не обновились, — экран показывает один алерт.
 export function useRenameLabelCascade() {
-  // Все команды, включая архивные: у них тоже есть cities/default_city,
+  // Все команды, включая архивные: у них тоже есть cities,
   // и после разархивации метки должны остаться живыми.
   const { data: teams = [] } = useTeams({ includeInactive: true });
   const updateTeam = useUpdateTeam();
@@ -35,13 +35,11 @@ export function useRenameLabelCascade() {
     for (const team of teams) {
       const list = teamCities(team);
       const usesList = list.includes(oldName);
-      const usesDefault = team.default_city === oldName;
-      if (!usesList && !usesDefault) continue;
+      if (!usesList) continue;
       const patch: Record<string, unknown> = {};
       if (usesList) {
         patch.cities = list.map((n) => (n === oldName ? newName : n));
       }
-      if (usesDefault) patch.default_city = newName;
       try {
         await updateTeam.mutateAsync({ id: team.id, patch });
       } catch {

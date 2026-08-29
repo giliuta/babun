@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { MapPin, Star } from "lucide-react-native";
+import { MapPin } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { ColorField } from "@/components/ui/picker-fields";
 import { Chip } from "@/components/ui/Chip";
@@ -22,7 +22,6 @@ import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { notify } from "@/lib/notify";
@@ -41,7 +40,7 @@ import {
 // Метки команды — web parity teams/[id]/cities (BrigadeCitiesPage).
 // Список меток команды = team.cities[] (имена). Цвет каждой метки берём
 // из глобального справочника `cities` по имени (метка и город — одна
-// сущность). Основная метка = team.default_city (★ красит день на
+// сущность). Основной метки больше нет: метка ставится только по датам
 // календаре). Тумблер «Подсвечивать день» = team.tint_days_by_label.
 // НЕ дублируем CRUD городов: имена храним в team.cities через useUpdateTeam,
 // а библиотечные записи (цвет) — через useCreateCity/useUpdateCity.
@@ -69,9 +68,6 @@ export default function TeamCitiesScreen() {
     () => (team ? teamCities(team) : []),
     [team],
   );
-  const defaultCity = team?.default_city ?? "";
-  const effectiveBase =
-    defaultCity && brigadeCityNames.includes(defaultCity) ? defaultCity : "";
 
   // Имя → запись библиотеки (цвет). Пропавшие из библиотеки имена получают
   // серую «призрачную» строку, чтобы её всё ещё можно было открыть/удалить.
@@ -105,18 +101,14 @@ export default function TeamCitiesScreen() {
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
-  // default_city остаётся, только если ещё в списке; иначе сбрасываем в ""
-  // (web parity: нет принудительного отката на первый элемент).
-  const resolveBase = (next: string[], prev: string): string =>
-    prev && next.includes(prev) ? prev : "";
-
-  const persistCities = async (next: string[], prevBase: string) => {
+  // ОСНОВНОЙ МЕТКИ БОЛЬШЕ НЕТ (владелец 2026-08-29: «кнопку „основная"
+  // вообще стираем — это мусор; поставить метку можно только выбором по
+  // датам»). Поэтому здесь остаётся один список подключённых меток, а
+  // `default_city` не пишется вовсе.
+  const persistCities = async (next: string[]) => {
     await update.mutateAsync({
       id: id as string,
-      patch: {
-        cities: next,
-        default_city: resolveBase(next, prevBase),
-      },
+      patch: { cities: next },
     });
   };
 
@@ -137,7 +129,7 @@ export default function TeamCitiesScreen() {
         await createCity.mutateAsync({ name: trimmed, color });
       }
       if (!brigadeCityNames.includes(resolvedName)) {
-        await persistCities([...brigadeCityNames, resolvedName], defaultCity);
+        await persistCities([...brigadeCityNames, resolvedName]);
       }
       setEditing(null);
       toast("Метка добавлена");
@@ -177,7 +169,6 @@ export default function TeamCitiesScreen() {
           id: id as string,
           patch: {
             cities: next,
-            default_city: defaultCity === oldName ? trimmed : defaultCity,
           },
         });
       }
@@ -198,24 +189,12 @@ export default function TeamCitiesScreen() {
       },
       async () => {
         try {
-          await persistCities(
-            brigadeCityNames.filter((n) => n !== name),
-            defaultCity === name ? "" : defaultCity,
-          );
+          await persistCities(brigadeCityNames.filter((n) => n !== name));
           setEditing(null);
         } catch (e) {
           alertError(e);
         }
       },
-    );
-  };
-
-  const setBase = (name: string) => {
-    // Toggle: повторный тап по звезде основной метки снимает её.
-    const next = effectiveBase === name ? "" : name;
-    update.mutate(
-      { id: id as string, patch: { default_city: next } },
-      { onError: alertError },
     );
   };
 
@@ -312,23 +291,6 @@ export default function TeamCitiesScreen() {
                       {row.name}
                     </Text>
                   </Pressable>
-                  <Pressable
-                    onPress={() => setBase(row.name)}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      effectiveBase === row.name
-                        ? `Снять основную метку ${row.name}`
-                        : `Сделать ${row.name} основной`
-                    }
-                    className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-                  >
-                    <Star
-                      color={effectiveBase === row.name ? t.warning : t.chevron}
-                      fill={effectiveBase === row.name ? t.warning : "none"}
-                      size={ICON.sm}
-                    />
-                  </Pressable>
                 </View>
               </View>
             ))}
@@ -340,11 +302,6 @@ export default function TeamCitiesScreen() {
           </SectionCard>
         )}
 
-        <Text className="mx-4 mt-3 text-xs leading-4" style={{ color: t.faint }}>
-          {effectiveBase
-            ? "Основная метка (★) автоматически красит новые даты своим цветом."
-            : "Нет основной — под каждой датой серая плашка выбора метки. Выделите одну звездой."}
-        </Text>
       </ScrollView>
 
       <LabelSheet

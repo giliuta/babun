@@ -841,17 +841,21 @@ export default function CalendarTab() {
   }, [notice]);
   // Разбор финансов дня по тапу на футер Доход/Расход (null = закрыт).
   const [finModalYmd, setFinModalYmd] = useState<string | null>(null);
-  // Date-label resolver: explicit (day_cities) → team default_city (web
-  // getCityFor parity). Shared by the day-header pill, the week header
-  // pills and the label-tint column wash below.
+  // МЕТКА ДНЯ — ТОЛЬКО ЯВНАЯ (владелец 2026-08-29: «кнопку „основная" вообще
+  // стираем; поставить метку можно исключительно выбором по датам — надо
+  // везде, выберу все даты»).
+  //
+  // Фолбэка на `team.default_city` больше нет. Он был «одна метка на все дни
+  // сразу» — невидимая настройка, которая красила календарь из другого
+  // экрана: день выглядел помеченным, хотя на нём никто ничего не ставил, и
+  // снять это можно было только найдя звезду в справочнике.
   const labelFor = useCallback(
     (dateYmd: string): { name: string; color: string } | null => {
       if (!activeTeamId) return null;
       const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
-      // Сентинел CITY_CLEARED = «метка явно снята» — БЕЗ отката на
-      // default_city (web getCityFor, DashboardClientLayout v693).
+      // Сентинел CITY_CLEARED = «метка явно снята».
       if (assigned === CITY_CLEARED) return null;
-      const name = assigned ?? activeTeam?.default_city ?? "";
+      const name = assigned ?? "";
       if (!name) return null;
       // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
       // метки сливалась с кругом «сегодня» и читалась как второй маркер.
@@ -860,7 +864,7 @@ export default function CalendarTab() {
         color: cities.find((c) => c.name === name)?.color ?? t.faint,
       };
     },
-    [activeTeamId, activeTeam?.default_city, dayCities, cities, t.faint],
+    [activeTeamId, dayCities, cities, t.faint],
   );
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
   // DayLabelSheet показывает честное пустое состояние и ведёт в настройки.

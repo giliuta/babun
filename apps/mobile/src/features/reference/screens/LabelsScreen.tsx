@@ -103,7 +103,6 @@ export function LabelsScreen() {
     };
     for (const team of teams) {
       const names = new Set(teamCities(team));
-      if (team.default_city) names.add(team.default_city);
       for (const n of names) bump(n, "teams");
     }
     for (const name of Object.values(dayCities)) bump(name, "days");
