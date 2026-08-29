@@ -695,6 +695,13 @@ function ServiceSheet({
   const [costEntry, setCostEntry] = useState<PriceEntryMode>("unit");
   /** Дни недели ISO 1..7. Пустой массив — делаем в любой день. */
   const [weekdays, setWeekdays] = useState<number[]>([]);
+  // РАБОЧИЕ ДНИ — НЕОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, А НЕ ЧАСТЬ ФОРМЫ (владелец
+  // 2026-08-29: «это исключительно для тех, кому нужно; случайно нажмёшь — и
+  // он просто не будет работать»). Семь всегда зажжённых плиток были
+  // приглашением погасить день мимоходом и тихо сломать услугу: она бы
+  // перестала предлагаться, а причина осталась бы в форме, куда больше не
+  // заходят. Пустой список = «любой день», и пока он пуст, блока нет вовсе.
+  const [hasWeekdays, setHasWeekdays] = useState(false);
   /** Столбец расхода показан. У всех услуг прода он нулевой, поэтому по
    *  умолчанию его на экране нет — приходит по команде из «Как считаем». */
   // Расход показан ВСЕГДА своим блоком — флага «показывать ли его»
@@ -787,6 +794,12 @@ function ServiceSheet({
               typeof day === "number" && day >= 1 && day <= 7,
           )
         : [],
+    );
+    // Блок показывается, только если у услуги ДЕЙСТВИТЕЛЬНО есть ограничение.
+    // Пустой список — «любой день», показывать нечего.
+    setHasWeekdays(
+      Array.isArray(from?.available_weekdays) &&
+        (from.available_weekdays as unknown[]).length > 0,
     );
     setOpenRow(null);
   }
@@ -1290,64 +1303,112 @@ function ServiceSheet({
       />
       )}
 
-      {/* РАБОЧИЕ ДНИ УСЛУГИ. Не «когда работает команда» — это график
-          календаря, — а «в какие дни ЭТУ работу вообще берут». Разница
-          настоящая: команда выезжает всю неделю, но чистку кондиционеров в
-          воскресенье не ставят, потому что поставщик закрыт.
+      {/* РАБОЧИЕ ДНИ — ПАРАМЕТР, КОТОРЫЙ ДОБАВЛЯЮТ, А НЕ ФОРМА, КОТОРУЮ
+          ЗАПОЛНЯЮТ (владелец 2026-08-29). Пока его нет — одна строчка-кнопка,
+          как «＋ Описание» у названия. Заведён — семь плиток и крестик,
+          который снимает ограничение целиком.
 
-          ВСЕ ЗАЖЖЕНЫ = ЛЮБОЙ ДЕНЬ, и пустой список в базе значит то же
-          самое: заставлять зажигать семь плиток ради «как обычно» незачем.
-          Суббота и воскресенье не рождаются погашенными — календарь красит
-          их красным как ГОСУДАРСТВЕННЫЕ выходные, а услуга про работу
-          команды. */}
-      <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
-        <FieldLabel text="Работаем по дням" />
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
-            const on = weekdays.length === 0 || weekdays.includes(day);
-            return (
-              <Pressable
-                key={day}
-                onPress={() => {
-                  // Гашение первого дня разворачивает «пусто = все» в явный
-                  // список: иначе снять один день было бы нечем.
-                  const current =
-                    weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
-                  const next = current.includes(day)
-                    ? current.filter((x) => x !== day)
-                    : [...current, day].sort((a, b) => a - b);
-                  // Зажгли всё обратно — возвращаемся к «любой день».
-                  setWeekdays(next.length === 7 ? [] : next);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  height: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: t.radius.card,
-                  borderCurve: "continuous",
-                  backgroundColor: on ? t.accent : t.fill,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    fontSize: 14,
-                    fontWeight: on ? "700" : "500",
-                    color: on ? t.onAccent : t.faint,
+          Ограничение не про график команды: команда выезжает всю неделю, а
+          чистку кондиционеров в воскресенье не ставят, потому что поставщик
+          закрыт. Поэтому все семь зажжены сразу после добавления — гасят из
+          них лишние, а не набирают нужные.
+
+          КРЕСТИК ВОЗВРАЩАЕТ «ЛЮБОЙ ДЕНЬ», а не пустой набор дней: услуга без
+          единого дня не предлагалась бы никогда, и это была бы поломка,
+          выглядящая как настройка. */}
+      {hasWeekdays ? (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel text="Работаем по дням" />
+            <Pressable
+              onPress={() => {
+                setHasWeekdays(false);
+                setWeekdays([]);
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать ограничение по дням"
+              style={({ pressed }) => ({
+                paddingBottom: 6,
+                opacity: pressed ? 0.4 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2} />
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
+              const on = weekdays.length === 0 || weekdays.includes(day);
+              return (
+                <Pressable
+                  key={day}
+                  onPress={() => {
+                    // Гашение первого дня разворачивает «пусто = все» в явный
+                    // список: иначе снять один день было бы нечем.
+                    const current =
+                      weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
+                    const next = current.includes(day)
+                      ? current.filter((x) => x !== day)
+                      : [...current, day].sort((a, b) => a - b);
+                    setWeekdays(next.length === 7 ? [] : next);
                   }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: t.radius.card,
+                    borderCurve: "continuous",
+                    backgroundColor: on ? t.accent : t.fill,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
                 >
-                  {WEEKDAY_LABELS[day]}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: on ? "700" : "500",
+                      color: on ? t.onAccent : t.faint,
+                    }}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
+          <Pressable
+            onPress={() => setHasWeekdays(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить ограничение по дням недели"
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              paddingVertical: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
+            >
+              ＋ Работаем по дням
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* ОНЛАЙН-ЗАПИСЬ — ЗАГЛУШКА, И ОНА ЧЕСТНАЯ (владелец 2026-08-29:
           «пока не включаем, ставим заглушку — скоро»).
