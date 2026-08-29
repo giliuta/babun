@@ -1,7 +1,14 @@
 import { useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Archive, Briefcase, Copy, Trash2, X } from "lucide-react-native";
+import {
+  Briefcase,
+  Copy,
+  EyeOff,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -25,6 +32,8 @@ import { getStorage } from "@babun/shared/storage";
 import { useToast } from "@/components/ui/Toast";
 import {
   useDeleteService,
+  usePurgeService,
+  useServiceUsageCount,
   useTeams,
   useUpdateService,
 } from "@/features/reference/queries";
@@ -139,6 +148,8 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const create = useCreateService();
   const update = useUpdateService();
   const del = useDeleteService();
+  const purge = usePurgeService();
+  const countUsage = useServiceUsageCount();
   const saveVariants = useSaveServiceVariants();
   const reorder = useReorderServices();
 
@@ -181,13 +192,26 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
    *  разные вещи, и путать их нельзя ни в кнопке, ни в пустом состоянии. */
   const teamsUnknown = teamsQuery.isLoading;
 
-  const services = useMemo(
-    () =>
-      activeTeamId
-        ? allServices.filter((s) => s.team_id === activeTeamId)
-        : [],
-    [allServices, activeTeamId],
-  );
+  // ВЫКЛЮЧЕННЫЕ ОСТАЮТСЯ В СПИСКЕ, СЕРЫМИ И В ХВОСТЕ (владелец 2026-08-29:
+  // «смахнул вправо — и она просто выключена, серая, не используется»).
+  //
+  // Раньше выключенная услуга исчезала из списка и жила за иконкой архива в
+  // шапке. Прайс от этого выглядел полным, хотя половина работ была снята, —
+  // и вспомнить, что именно ты выключил, можно было только зайдя в архив.
+  // Теперь виден весь каталог: живые сверху, выключенные под ними серыми.
+  //
+  // Имя выключенной услуги в ИСТОРИИ не теряется: календарь и лист записи
+  // читают полный справочник (`useAllServices`). Фильтр по активным остался
+  // там, где он и нужен, — в выборе при записи и в «повторить как в прошлый
+  // раз»: предлагать снятую работу нельзя.
+  const services = useMemo(() => {
+    if (!activeTeamId) return [];
+    const mine = everyService.filter((s) => s.team_id === activeTeamId);
+    return [
+      ...mine.filter((s) => s.is_active),
+      ...mine.filter((s) => !s.is_active),
+    ];
+  }, [everyService, activeTeamId]);
   /** Убранные услуги ЭТОЙ команды — полный справочник минус живой. */
   /** Варианты всех услуг — нужны и списку (диапазон цен в строке), и листу. */
   const variantsQuery = useServiceVariants();
@@ -202,18 +226,51 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     return map;
   }, [variantsQuery.data]);
 
-  const removed = useMemo(
-    () =>
-      activeTeamId
-        ? everyService.filter(
-            (s) => s.team_id === activeTeamId && !s.is_active,
-          )
-        : [],
-    [everyService, activeTeamId],
-  );
-  const [removedOpen, setRemovedOpen] = useState(false);
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
+
+  /** УДАЛЕНИЕ НАСОВСЕМ — с честным пересчётом последствий.
+   *
+   *  `appointments.service_ids` это jsonb-массив, а не связь с таблицей: база
+   *  удалению не помешает и ничего не спросит. Значит спросить обязан
+   *  продукт — иначе человек сотрёт услугу и молча обнулит имя работы в
+   *  собственной истории, а вернуть его будет неоткуда.
+   *
+   *  Поэтому перед вопросом считаем, в скольких записях услуга стоит, и
+   *  говорим ЧИСЛО. «Может повлиять на историю» — не предупреждение; «стоит
+   *  в 47 записях» — предупреждение. */
+  const handlePurge = async (svc: Service) => {
+    let used = 0;
+    try {
+      used = await countUsage(svc.id);
+    } catch {
+      // Счёт не сошёлся — не повод молчать о самом удалении. Предупреждаем
+      // без числа: неизвестность здесь хуже завышенной оценки.
+      used = -1;
+    }
+    confirmThen(
+      "Удалить услугу навсегда?",
+      {
+        message:
+          used === 0
+            ? `«${svc.name}» ещё не стоит ни в одной записи — удалить её можно без следа.`
+            : used > 0
+              ? `«${svc.name}» стоит в ${formatCountRu(used, ["записи", "записях", "записях"])}. После удаления имя работы там пропадёт, и вернуть его будет неоткуда. Если нужно просто убрать её из выбора — скройте.`
+              : `«${svc.name}» может стоять в уже сделанных записях. После удаления имя работы в них пропадёт безвозвратно. Если нужно просто убрать её из выбора — скройте.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await purge.mutateAsync(svc.id);
+          setEditing(null);
+          toast("Услуга удалена");
+        } catch (e) {
+          alertError(e);
+        }
+      },
+    );
+  };
 
   const handleSave = async (
     draft: ServiceInput,
@@ -261,11 +318,12 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   // принадлежит одной команде, а прежняя ветка при пустом `brigade_ids`
   // молча уносила услугу у ВСЕХ команд (владелец правил одну, ломал три).
   const handleDelete = (svc: Service) => {
-    // ОДИН ГЛАГОЛ РАЗРУШЕНИЯ НА ВЕСЬ ЭКРАН — «Убрать»: блок убирают, фразу
-    // убирают, услугу убирают из прайса. Удаление и так мягкое (`is_active`),
-    // а слово «Удалить» обещало необратимость, которой нет.
+    // СКРЫТЬ ≠ УДАЛИТЬ (владелец 2026-08-29: «удалить услугу, чтоб её вообще
+    // не было, и выключить — это разные вещи»). Здесь — скрытие: строка
+    // остаётся в базе и на экране серой, история цела. Удаление живёт
+    // отдельно, за другой кромкой свайпа.
     confirmThen(
-      "Убрать услугу из прайса?",
+      "Скрыть услугу?",
       {
         // ЧЕСТНЫЙ ТЕКСТ (аудит 2026-08-21). Здесь стояло «Записи, где она уже
         // стоит, не изменятся» — прямая неправда: все читатели имени услуги
@@ -273,15 +331,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         // услуга теряет ИМЯ везде — в записи, в наряде команды, в ленте клиента,
         // в счёте, — печатаясь заглушкой «Услуга». Деньги и правда не меняются,
         // и обещать надо ровно это.
-        message: `«${svc.name}» исчезнет из выбора при записи. Уже сделанные записи и счета не изменятся — имя работы в них останется.`,
-        confirmLabel: "Убрать",
+        message: `«${svc.name}» перестанет предлагаться при записи и станет серой в списке. Уже сделанные записи и счета не изменятся.`,
+        confirmLabel: "Скрыть",
         destructive: true,
       },
       async () => {
         try {
           await del.mutateAsync(svc.id);
           setEditing(null);
-          toast("Услуга убрана из прайса");
+          toast("Услуга скрыта");
         } catch (e) {
           alertError(e);
         }
@@ -302,27 +360,14 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           (Кабинет → Команды → услуги) или из той, что открыта в календаре.
           Имя команды стоит подзаголовком — «какой команде принадлежат
           услуги» видно, но тронуть его отсюда нельзя. */}
-      {/* УБРАННУЮ УСЛУГУ ВОЗВРАЩАЮТ ОТСЮДА. `useServices()` фильтрует по
-          `is_active`, и убранная исчезала из продукта совсем: у Команды 1 так
-          и висел невидимый «Монтаж внутреннего блока» за €125, которого не
-          вернуть ни одной дверью. Кнопка показывается, только когда убранные
-          у этой команды есть, — пустая дверь не нужна. */}
+      {/* ИКОНКИ АРХИВА В ШАПКЕ БОЛЬШЕ НЕТ. Она вела на отдельный экран
+          убранных услуг — он был нужен, пока выключенная услуга исчезала из
+          списка совсем. Теперь она остаётся на месте серой, и включают её тем
+          же свайпом, каким выключили: дверь во второй экран стала дверью в
+          пустую комнату. */}
       <ScreenHeader
         title="Услуги"
         subtitle={activeTeam?.name ?? undefined}
-        right={
-          removed.length > 0 ? (
-            <Pressable
-              onPress={() => setRemovedOpen(true)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Убранные услуги: ${removed.length}`}
-              className="h-11 w-11 items-center justify-center active:opacity-60"
-            >
-              <Archive color={t.sub} size={ICON.sm} strokeWidth={2} />
-            </Pressable>
-          ) : undefined
-        }
       />
 
       {servicesQuery.isLoading ? (
@@ -378,12 +423,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
               spaced
               handleInside
               labelFor={(s) => s.name}
-              // Внутри команды список ОТФИЛЬТРОВАН, и записать позиции 0..n
-              // только видимым — значит перемешать невидимых. Ручка живёт там,
-              // где виден весь прайс.
-              rangeFor={(index) =>
-                teamId ? [index, index] : [0, services.length - 1]
-              }
+              // ПЕРЕТАСКИВАНИЕ РАЗРЕШЕНО (владелец 2026-08-29: «хочу шесть
+              // точек справа, чтоб можно было менять услуги местами»).
+              //
+              // Запрет стоял не зря: список был ОТФИЛЬТРОВАН по `is_active`, и
+              // записать позиции 0..n только видимым значило перемешать
+              // невидимых. Теперь фильтра нет — скрытые лежат тут же серыми,
+              // то есть на экране весь прайс команды целиком, и позиции
+              // пишутся полному набору.
+              rangeFor={() => [0, services.length - 1]}
               onReorder={(ids) => reorder.mutate(ids, { onError: alertError })}
               onDraggingChange={setDragging}
             >
@@ -422,31 +470,55 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                           Math.max(...variantPrices),
                         )}`
                     : formatEURExact(Number(svc.price));
+                const off = !svc.is_active;
                 return (
                   <SwipeRow
-                    label="Убрать"
-                    color={t.danger}
-                    icon={Trash2}
-                    accessibilityLabel={`Убрать услугу ${svc.name}`}
-                    onAction={() => handleDelete(svc)}
-                    // ОБРАТНОЕ РАЗРУШЕНИЮ — «ПРОИЗВЕСТИ». Прайс растёт
-                    // вариантами: «Монтаж внутреннего блока» → «наружного»,
-                    // «Чистка» → «Чистка двух блоков». Дубль открывает лист с
-                    // копией (цена, минуты, команды, себестоимость уже
-                    // заполнены), а не пишет строку молча: строка, возникшая
-                    // от жеста сама, читается как сбой.
+                    // ВЫКЛЮЧЕННАЯ ПРЕДЛАГАЕТ ВКЛЮЧИТЬ, А НЕ ВЫКЛЮЧИТЬ СНОВА.
+                    // Одна кромка — одно действие, и оно зависит от того, в
+                    // каком состоянии строка: иначе «Убрать» у уже убранной
+                    // читалось бы как удаление насовсем.
+                    label={off ? "Показать" : "Скрыть"}
+                    color={off ? t.success : t.warning}
+                    icon={off ? RotateCcw : EyeOff}
+                    accessibilityLabel={
+                      off
+                        ? `Показать услугу ${svc.name}`
+                        : `Скрыть услугу ${svc.name}`
+                    }
+                    onAction={() =>
+                      off
+                        ? update.mutate(
+                            { id: svc.id, patch: { is_active: true } },
+                            {
+                              onSuccess: () => toast("Услуга показана"),
+                              onError: alertError,
+                            },
+                          )
+                        : handleDelete(svc)
+                    }
+                    // ВТОРАЯ КРОМКА — УДАЛЕНИЕ НАСОВСЕМ (владелец 2026-08-29:
+                    // «влево дубль не нужен: влево — скрыть, вправо —
+                    // удалить»). Дубль отсюда убран: он был удобством, а
+                    // место понадобилось действию, которого в продукте не
+                    // было вовсе. Копировать услугу по-прежнему можно —
+                    // «Создать» и заполнить, а прежний дубль всё равно
+                    // открывал ту же форму с копией.
                     leading={{
-                      label: "Дубль",
-                      color: t.accent,
-                      icon: Copy,
-                      accessibilityLabel: `Дублировать услугу ${svc.name}`,
-                      onAction: () => setEditing({ mode: "create", from: svc }),
+                      label: "Удалить",
+                      color: t.danger,
+                      icon: Trash2,
+                      accessibilityLabel: `Удалить услугу ${svc.name} навсегда`,
+                      onAction: () => void handlePurge(svc),
                     }}
                   >
                     <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        // Выключенная не исчезает и не кричит — она просто
+                        // тише живых. Полупрозрачность гасит и цветную точку
+                        // услуги, и цену: строка целиком уходит на второй план.
+                        opacity: off ? 0.45 : 1,
                         backgroundColor: t.surface,
                       }}
                     >
@@ -564,60 +636,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
       />
 
 
-      {/* УБРАННЫЕ. Возврат — одним тапом по строке: убирали услугу тоже одним
-          действием, и обратная дорога обязана быть такой же короткой. */}
-      <BottomSheet
-        visible={removedOpen}
-        onClose={() => setRemovedOpen(false)}
-        title="Убранные"
-        scroll
-      >
-        <View
-          className="overflow-hidden"
-          style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-        >
-          {removed.map((svc, index) => (
-            <Pressable
-              key={svc.id}
-              onPress={() => {
-                update.mutate(
-                  { id: svc.id, patch: { is_active: true } },
-                  {
-                    onError: alertError,
-                    onSuccess: () => toast(`«${svc.name}» вернулась в прайс`),
-                  },
-                );
-                if (removed.length === 1) setRemovedOpen(false);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Вернуть «${svc.name}» в прайс`}
-              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-              style={
-                index > 0
-                  ? { borderTopWidth: 1, borderTopColor: t.separator }
-                  : undefined
-              }
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  numberOfLines={1}
-                  style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {svc.name}
-                </Text>
-                <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                  {`${formatEURExact(Number(svc.price))} · ${durationLabel(
-                    svc.duration_minutes,
-                  )}`}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-                Вернуть
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </BottomSheet>
     </Screen>
   );
 }
@@ -702,6 +720,12 @@ function ServiceSheet({
   // перестала предлагаться, а причина осталась бы в форме, куда больше не
   // заходят. Пустой список = «любой день», и пока он пуст, блока нет вовсе.
   const [hasWeekdays, setHasWeekdays] = useState(false);
+  // ПЕРЕРЫВ ПОСЛЕ УСЛУГИ — тоже добавляемый параметр (владелец 2026-08-29:
+  // «можно добавить, сделать более автоматически — плюс добавить перерыв
+  // после услуги»). Это дорога до следующего объекта и уборка после работы:
+  // время, которое сейчас не считает никто, и поэтому в день влезает меньше
+  // работ, чем обещает сетка.
+  const [hasBufferAfter, setHasBufferAfter] = useState(false);
   /** Столбец расхода показан. У всех услуг прода он нулевой, поэтому по
    *  умолчанию его на экране нет — приходит по команде из «Как считаем». */
   // Расход показан ВСЕГДА своим блоком — флага «показывать ли его»
@@ -801,6 +825,7 @@ function ServiceSheet({
       Array.isArray(from?.available_weekdays) &&
         (from.available_weekdays as unknown[]).length > 0,
     );
+    setHasBufferAfter(Number(from?.buffer_after_min ?? 0) > 0);
     setOpenRow(null);
   }
 
@@ -1050,7 +1075,7 @@ function ServiceSheet({
             onPress={() => onDelete(service)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`Убрать услугу ${service.name} из прайса`}
+            accessibilityLabel={`Скрыть услугу ${service.name}`}
             style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
           >
             <Trash2 color={t.danger} size={ICON.sm} strokeWidth={2} />
@@ -1405,6 +1430,105 @@ function ServiceSheet({
               style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
             >
               ＋ Работаем по дням
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ПЕРЕРЫВ ПОСЛЕ УСЛУГИ. Не часть работы, а то, что идёт ПОСЛЕ неё:
+          дорога до следующего объекта, уборка, мойка инструмента. В сетку
+          он встаёт вместе с записью, поэтому следующая работа не садится
+          вплотную — а раньше садилась, и день оказывался плотнее, чем он
+          есть на самом деле.
+
+          Пресеты, а не поле ввода: перерыв — это «пятнадцать минут» или
+          «полчаса», а не 17. Клавиатура ради двух цифр здесь лишняя.
+          «Нет» снимает параметр целиком — то же, что крестик. */}
+      {hasBufferAfter ? (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel text="Перерыв после услуги" />
+            <Pressable
+              onPress={() => {
+                setHasBufferAfter(false);
+                setBufferAfter("0");
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать перерыв после услуги"
+              style={({ pressed }) => ({
+                paddingBottom: 6,
+                opacity: pressed ? 0.4 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2} />
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {[10, 15, 20, 30, 45, 60].map((min) => {
+              const on = Number(bufferAfter) === min;
+              return (
+                <Pressable
+                  key={min}
+                  onPress={() => setBufferAfter(String(min))}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${min} минут после услуги`}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: t.radius.card,
+                    borderCurve: "continuous",
+                    backgroundColor: on ? t.accent : t.fill,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: on ? "700" : "500",
+                      color: on ? t.onAccent : t.faint,
+                    }}
+                  >
+                    {min}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 10 }}>
+          <Pressable
+            onPress={() => {
+              setHasBufferAfter(true);
+              // Пятнадцать минут — самый частый перерыв: дорога внутри города
+              // и разгрузка. Ноль означал бы «параметр есть, но не работает».
+              if (Number(bufferAfter) <= 0) setBufferAfter("15");
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить перерыв после услуги"
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              paddingVertical: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
+            >
+              ＋ Перерыв после услуги
             </Text>
           </Pressable>
         </View>

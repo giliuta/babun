@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQuery,
@@ -469,6 +470,62 @@ export function useReorderCities() {
 export const useDeleteCity = () => useRefDelete("cities");
 export const useUpdateService = () => useRefUpdate("services");
 export const useDeleteService = () => useRefDelete("services");
+
+/** СКОЛЬКО ЗАПИСЕЙ ССЫЛАЮТСЯ НА УСЛУГУ.
+ *
+ *  Нужен ровно одному месту — подтверждению перед НАСТОЯЩИМ удалением. Связи
+ *  с таблицей у услуги нет: `appointments.service_ids` это jsonb-массив, и
+ *  база удалению не помешает. Значит спросить обязан продукт, иначе человек
+ *  сотрёт услугу и молча обнулит имя работы в своей же истории. */
+export function useServiceUsageCount() {
+  const tenantId = useTenantId();
+  return useCallback(
+    async (serviceId: string): Promise<number> => {
+      if (!tenantId) return 0;
+      // `.contains([...])` ЗДЕСЬ НЕ РАБОТАЕТ, и это не мелочь: supabase-js
+      // сериализует массив как МАССИВ POSTGRES (`cs.{...}`), а `service_ids`
+      // это `jsonb` — ему нужен JSON (`cs.[...]`). Запрос падал, счёт
+      // возвращался неизвестным, и подтверждение печатало запасное «может
+      // стоять в записях» вместо числа. Поймано на симуляторе.
+      const { count, error } = await supabase
+        .from("appointments")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("service_ids", "cs", JSON.stringify([serviceId]));
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    [tenantId],
+  );
+}
+
+/** НАСТОЯЩЕЕ УДАЛЕНИЕ УСЛУГИ — строка уходит из базы совсем.
+ *
+ *  Отдельно от `useDeleteService`, и это НЕ дубль: тот выключает
+ *  (`is_active = false`), услуга остаётся в списке серой, история цела.
+ *  Этот стирает — и вместе со строкой пропадает имя работы во всех уже
+ *  сделанных записях и счетах, потому что называть их станет нечем.
+ *  Владелец 2026-08-29: «удалить услугу, чтоб её вообще не было, и выключить
+ *  — это разные вещи». Разные и здесь. */
+export function usePurgeService() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      assertCanWriteReference("services", role);
+      const { error } = await supabase
+        .from("services")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
+    meta: { errorHandled: true },
+  });
+}
 
 // ─── Brigade membership write (roles/members ↔ lead_ids/helper_ids) ───
 // RISK-2 parity: the web finances / schedule readers still consume the
