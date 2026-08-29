@@ -614,33 +614,39 @@ export type Database = {
         Row: {
           color: string | null
           country: string
+          deleted_at: string | null
           created_at: string
           id: string
           is_active: boolean
           name: string
           position: number
+          weekdays: number[]
           tenant_id: string
           updated_at: string
         }
         Insert: {
           color?: string | null
           country?: string
+          deleted_at?: string | null
           created_at?: string
           id: string
           is_active?: boolean
           name: string
           position?: number
+          weekdays?: number[]
           tenant_id: string
           updated_at?: string
         }
         Update: {
           color?: string | null
           country?: string
+          deleted_at?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           name?: string
           position?: number
+          weekdays?: number[]
           tenant_id?: string
           updated_at?: string
         }

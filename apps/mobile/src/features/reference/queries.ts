@@ -279,7 +279,13 @@ export function useCreateCity() {
   return useMutation({
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
     // per-city accent colour that tints the calendar day chip (web parity).
-    mutationFn: async (input: { name: string; country?: string; color?: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      country?: string;
+      color?: string;
+      /** Дни недели (1=Пн…7=Вс), когда метка встаёт сама. Пусто — вручную. */
+      weekdays?: number[];
+    }) => {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Добавлять метки может владелец или диспетчер.");
       }
@@ -291,6 +297,7 @@ export function useCreateCity() {
           name: input.name,
           country: input.country || "",
           color: input.color || null,
+          weekdays: input.weekdays ?? [],
         })
         .select("*")
         .single();

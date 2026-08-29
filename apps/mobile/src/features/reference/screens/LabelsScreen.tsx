@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EyeOff, MapPin, RotateCcw, Trash2 } from "lucide-react-native";
+import { EyeOff, MapPin, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { FieldLabel } from "@/components/ui/Field";
+import { WEEKDAY_LABELS } from "@babun/shared/local/services";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -112,7 +114,7 @@ export function LabelsScreen() {
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
-  const add = async (name: string, color: string) => {
+  const add = async (name: string, color: string, weekdays: number[]) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
@@ -121,9 +123,12 @@ export function LabelsScreen() {
       );
       if (existing) {
         // Уже в библиотеке — просто обновляем цвет.
-        await updateCity.mutateAsync({ id: existing.id, patch: { color } });
+        await updateCity.mutateAsync({
+          id: existing.id,
+          patch: { color, weekdays },
+        });
       } else {
-        await createCity.mutateAsync({ name: trimmed, color });
+        await createCity.mutateAsync({ name: trimmed, color, weekdays });
       }
       setEditing(null);
       toast("Метка добавлена");
@@ -132,7 +137,12 @@ export function LabelsScreen() {
     }
   };
 
-  const edit = async (city: City, newName: string, color: string) => {
+  const edit = async (
+    city: City,
+    newName: string,
+    color: string,
+    weekdays: number[],
+  ) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
     try {
@@ -146,12 +156,15 @@ export function LabelsScreen() {
         // Слияние с существующей меткой: цвет уходит в целевую, старая
         // запись скрывается, ссылки переезжают на целевое имя.
         target = collision.name;
-        await updateCity.mutateAsync({ id: collision.id, patch: { color } });
+        await updateCity.mutateAsync({
+          id: collision.id,
+          patch: { color, weekdays },
+        });
         await deleteCity.mutateAsync(city.id);
       } else {
         await updateCity.mutateAsync({
           id: city.id,
-          patch: { name: trimmed, color },
+          patch: { name: trimmed, color, weekdays },
         });
       }
       if (renamed) {
@@ -380,8 +393,13 @@ function LabelSheet({
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, color: string) => void;
-  onUpdate: (city: City, newName: string, color: string) => void;
+  onCreate: (name: string, color: string, weekdays: number[]) => void;
+  onUpdate: (
+    city: City,
+    newName: string,
+    color: string,
+    weekdays: number[],
+  ) => void;
   onRemove: (city: City) => void;
 }) {
   const t = useThemeColors();
@@ -390,6 +408,11 @@ function LabelSheet({
   // от editing при каждом открытии (паттерн «render-time reset»).
   const [name, setName] = useState("");
   const [color, setColor] = useState<string>(FALLBACK_COLOR);
+  // ДНИ НЕДЕЛИ — НЕОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, как «＋ Описание» у услуги. Пусто =
+  // «ставлю руками»; это и есть поведение по умолчанию, поэтому блока сразу
+  // нет — он появляется по кнопке.
+  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [hasWeekdays, setHasWeekdays] = useState(false);
   const [seeded, setSeeded] = useState<Editing | null>(null);
 
   if (editing !== seeded) {
@@ -398,6 +421,11 @@ function LabelSheet({
     setColor(
       isEdit ? editing.city.color ?? FALLBACK_COLOR : PRESET_COLOR_CYCLE[0].value,
     );
+    const days = isEdit
+      ? (editing.city.weekdays ?? []).filter((d) => d >= 1 && d <= 7)
+      : [];
+    setWeekdays(days);
+    setHasWeekdays(days.length > 0);
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
@@ -418,7 +446,9 @@ function LabelSheet({
           <Button
             label={isEdit ? "Сохранить" : "Создать"}
             onPress={() =>
-              isEdit ? onUpdate(editing.city, name, color) : onCreate(name, color)
+              isEdit
+                ? onUpdate(editing.city, name, color, weekdays)
+                : onCreate(name, color, weekdays)
             }
             disabled={!canSubmit}
             loading={busy}
@@ -462,6 +492,110 @@ function LabelSheet({
         onColorChange={setColor}
         autoFocus
       />
+
+      {/* В КАКИЕ ДНИ МЕТКА ВСТАЁТ САМА (владелец 2026-08-29: «сюда закинь
+          выбор недели, чтобы автоматически метка проставлялась»).
+          Заменяет «основную метку» — ту, что красила ВСЕ дни разом и была
+          невидима с календаря. Здесь видно и ЧТО, и КОГДА.
+
+          ПРОШЛОЕ НЕ ТРОГАЕТСЯ (канон, LOCKED 2026-08-29): расписание
+          считается только для дат сегодня и вперёд, а прошедший день
+          показывает то, что на нём фактически было. Поэтому смена дней не
+          перекрашивает историю. */}
+      {hasWeekdays ? (
+        <View style={{ marginTop: 14, marginBottom: 8 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel text="Ставится сама по дням" />
+            <Pressable
+              onPress={() => {
+                setHasWeekdays(false);
+                setWeekdays([]);
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать автоматическую постановку"
+              style={({ pressed }) => ({
+                paddingBottom: 6,
+                opacity: pressed ? 0.4 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2} />
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
+              const on = weekdays.includes(day);
+              return (
+                <Pressable
+                  key={day}
+                  onPress={() =>
+                    setWeekdays(
+                      on
+                        ? weekdays.filter((x) => x !== day)
+                        : [...weekdays, day].sort((a, b) => a - b),
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: t.radius.card,
+                    borderCurve: "continuous",
+                    backgroundColor: on ? color : t.fill,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: on ? "700" : "500",
+                      color: on ? "#ffffff" : t.faint,
+                    }}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : (
+        <Pressable
+          onPress={() => {
+            setHasWeekdays(true);
+            // Все семь: «надо каждый день — выберу все» (владелец). Гасят из
+            // них лишние, а не набирают нужные с нуля.
+            if (weekdays.length === 0) setWeekdays([1, 2, 3, 4, 5, 6, 7]);
+          }}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Ставить метку автоматически по дням недели"
+          style={({ pressed }) => ({
+            alignSelf: "flex-start",
+            paddingTop: 10,
+            paddingBottom: 4,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
+          >
+            ＋ Ставить по дням недели
+          </Text>
+        </Pressable>
+      )}
     </BottomSheet>
   );
 }

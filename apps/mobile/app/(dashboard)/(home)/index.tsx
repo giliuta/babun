@@ -137,6 +137,7 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
+import { isoWeekday } from "@/features/calendar/iso-weekday";
 import {
   teamCities,
   useCities,
@@ -855,7 +856,26 @@ export default function CalendarTab() {
       const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
       // Сентинел CITY_CLEARED = «метка явно снята».
       if (assigned === CITY_CLEARED) return null;
-      const name = assigned ?? "";
+      // ЯВНАЯ МЕТКА → РАСПИСАНИЕ, И ТОЛЬКО ВПЕРЁД.
+      //
+      // Расписание («по вторникам — Греция») считается ИСКЛЮЧИТЕЛЬНО для дат
+      // сегодня и дальше. Прошедший день показывает то, что на нём
+      // фактически стояло, и меняется только руками — закон канона от
+      // 2026-08-29: «прошлое не трогаем, оно остаётся как в истории».
+      //
+      // Без этой границы смена расписания перекрашивала бы позапрошлый
+      // вторник: вычисляемое значение по определению следует за текущей
+      // настройкой. Здесь оно обрезано датой.
+      const scheduled =
+        assigned == null && dateYmd >= todayYmd
+          ? cities.find(
+              (c) =>
+                c.is_active &&
+                !c.deleted_at &&
+                (c.weekdays ?? []).includes(isoWeekday(dateYmd)),
+            )?.name
+          : undefined;
+      const name = assigned ?? scheduled ?? "";
       if (!name) return null;
       // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
       // метки сливалась с кругом «сегодня» и читалась как второй маркер.
@@ -864,7 +884,7 @@ export default function CalendarTab() {
         color: cities.find((c) => c.name === name)?.color ?? t.faint,
       };
     },
-    [activeTeamId, dayCities, cities, t.faint],
+    [activeTeamId, dayCities, cities, todayYmd, t.faint],
   );
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
   // DayLabelSheet показывает честное пустое состояние и ведёт в настройки.
