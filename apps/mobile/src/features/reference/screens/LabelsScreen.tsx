@@ -10,7 +10,6 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { GUTTER } from "@/components/ui/tokens";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
@@ -476,16 +475,20 @@ function LabelSheet({
           формат, а СМЫСЛ — что вообще писать в метку, — и на пустом поле
           читалась как уже введённое значение. Метка это свободный текст,
           объяснять его примерами незачем. */}
-      <View style={{ paddingHorizontal: GUTTER }}>
-        <NameColorField
-          label="Название"
-          name={name}
-          onNameChange={setName}
-          color={color}
-          onColorChange={setColor}
-          autoFocus
-        />
-      </View>
+      {/* БЕЗ СВОЕЙ ОБЁРТКИ: этот лист идёт с `padded` по умолчанию и уже
+          добавляет `GUTTER` сам. Своя обёртка складывалась с его отступом, и
+          поле метки выходило на 32pt уже, чем такое же поле в услуге, — а
+          услуга гасит собственный отступ листа (`padded={false}`) и ставит
+          `GUTTER` руками. Ширина обязана совпадать: это одна и та же строка
+          в двух местах продукта. */}
+      <NameColorField
+        label="Название"
+        name={name}
+        onNameChange={setName}
+        color={color}
+        onColorChange={setColor}
+        autoFocus
+      />
     </BottomSheet>
   );
 }
