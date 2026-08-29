@@ -14,6 +14,7 @@ import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { RowCaption } from "@/components/ui/card-rows";
 import { FieldLabel } from "@/components/ui/Field";
+import { WEEKDAY_LABELS } from "@babun/shared/local/services";
 import { GUTTER, ICON } from "@/components/ui/tokens";
 import {
   ServiceLadder,
@@ -1288,6 +1289,104 @@ function ServiceSheet({
         }
       />
       )}
+
+      {/* РАБОЧИЕ ДНИ УСЛУГИ. Не «когда работает команда» — это график
+          календаря, — а «в какие дни ЭТУ работу вообще берут». Разница
+          настоящая: команда выезжает всю неделю, но чистку кондиционеров в
+          воскресенье не ставят, потому что поставщик закрыт.
+
+          ВСЕ ЗАЖЖЕНЫ = ЛЮБОЙ ДЕНЬ, и пустой список в базе значит то же
+          самое: заставлять зажигать семь плиток ради «как обычно» незачем.
+          Суббота и воскресенье не рождаются погашенными — календарь красит
+          их красным как ГОСУДАРСТВЕННЫЕ выходные, а услуга про работу
+          команды. */}
+      <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+        <FieldLabel text="Работаем по дням" />
+        <View style={{ flexDirection: "row", gap: 6 }}>
+          {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
+            const on = weekdays.length === 0 || weekdays.includes(day);
+            return (
+              <Pressable
+                key={day}
+                onPress={() => {
+                  // Гашение первого дня разворачивает «пусто = все» в явный
+                  // список: иначе снять один день было бы нечем.
+                  const current =
+                    weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
+                  const next = current.includes(day)
+                    ? current.filter((x) => x !== day)
+                    : [...current, day].sort((a, b) => a - b);
+                  // Зажгли всё обратно — возвращаемся к «любой день».
+                  setWeekdays(next.length === 7 ? [] : next);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: t.radius.card,
+                  borderCurve: "continuous",
+                  backgroundColor: on ? t.accent : t.fill,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{
+                    fontSize: 14,
+                    fontWeight: on ? "700" : "500",
+                    color: on ? t.onAccent : t.faint,
+                  }}
+                >
+                  {WEEKDAY_LABELS[day]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* ОНЛАЙН-ЗАПИСЬ — ЗАГЛУШКА, И ОНА ЧЕСТНАЯ (владелец 2026-08-29:
+          «пока не включаем, ставим заглушку — скоро»).
+
+          Строка НЕ ПЕРЕКЛЮЧАЕТСЯ намеренно. Живой тумблер над невыполненной
+          функцией — худший вид вранья в продукте: человек его включает,
+          уходит уверенный, что клиенты записываются сами, и узнаёт правду
+          пустым календарём. Поэтому здесь нет тумблера вовсе — только
+          название и слово «Скоро».
+
+          Колонка `online_enabled` в базе есть и по умолчанию `true`; когда
+          функция появится, эта строка станет настоящим переключателем без
+          миграции. */}
+      <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+        <View
+          className="flex-row items-center"
+          style={{
+            minHeight: 52,
+            paddingHorizontal: 16,
+            gap: 12,
+            borderRadius: t.radius.card,
+            borderCurve: "continuous",
+            backgroundColor: t.fill,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ flex: 1, fontSize: 16, color: t.sub }}
+          >
+            Онлайн-запись
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 13, fontWeight: "600", color: t.faint }}
+          >
+            Скоро
+          </Text>
+        </View>
+      </View>
 
       {/* ПОД ТАБЛИЦЕЙ — ТОЛЬКО ОШИБКА (владелец 2026-08-21: «внизу не нужно
           писать, это полная хуета»). Тихая строка-проверка «а что будет на
