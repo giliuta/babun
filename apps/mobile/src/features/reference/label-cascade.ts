@@ -1,67 +1,55 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { renameClientCity } from "@babun/shared/db/repositories/clients";
 import {
   useCalendarSettings,
   useSaveCalendarSettings,
 } from "@/features/settings/local-settings";
 import { useRenameDayCity } from "@/features/calendar/day-cities";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
-import { teamCities, useTeams, useUpdateTeam } from "./queries";
 
-// Каскад переименования метки/города по всем местам, где имя хранится
-// СТРОКОЙ (не id): team.cities[], day_cities, метки
-// клиентов (clients.city, «Тихий лист 2») и personalLabels веба. Без
-// каскада переименование в библиотеке (cities) тихо осиротит метки
-// команд, дней и клиентов — аудит кабинета P1-12.
+// КАСКАД ПЕРЕИМЕНОВАНИЯ МЕТКИ. Имя хранится СТРОКОЙ (не id) в днях
+// (`day_cities.city`) и в личных метках веба, поэтому переименование в
+// справочнике надо разнести по этим местам — иначе метки осиротеют
+// (аудит кабинета P1-12).
 //
-// Используют «Метки» (labels.tsx) и «Города» (cities.tsx) — оба экрана
-// правят одну таблицу. Частичные сбои не бросают: возвращается список
-// мест, которые не обновились, — экран показывает один алерт.
+// СУЗИЛСЯ ДВАЖДЫ 29 августа, когда метка стала собственностью команды:
+//   • `teams.cities` больше не правится — этот список был ПОДБОРОМ имён из
+//     общего справочника, а с владением он рудимент;
+//   • клиенты не трогаются вовсе: своей команды у клиента нет, а по закону
+//     канона «прошлое не переписывается настройкой» его метка — отметка
+//     «где обслуживали тогда», и старое имя в карточке это правда о прошлом.
+//
+// Частичные сбои не бросают: возвращается список мест, которые не
+// обновились, — экран показывает один алерт.
 export function useRenameLabelCascade() {
-  // Все команды, включая архивные: у них тоже есть cities,
-  // и после разархивации метки должны остаться живыми.
-  const { data: teams = [] } = useTeams({ includeInactive: true });
-  const updateTeam = useUpdateTeam();
   const renameDays = useRenameDayCity();
   const { data: settings } = useCalendarSettings();
   const saveSettings = useSaveCalendarSettings();
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
 
-  const run = async (oldName: string, newName: string): Promise<string[]> => {
+  const run = async (
+    teamId: string,
+    oldName: string,
+    newName: string,
+  ): Promise<string[]> => {
     if (oldName === newName) return [];
     const failures: string[] = [];
-    for (const team of teams) {
-      const list = teamCities(team);
-      const usesList = list.includes(oldName);
-      if (!usesList) continue;
-      const patch: Record<string, unknown> = {};
-      if (usesList) {
-        patch.cities = list.map((n) => (n === oldName ? newName : n));
-      }
-      try {
-        await updateTeam.mutateAsync({ id: team.id, patch });
-      } catch {
-        failures.push(`команда «${team.name}»`);
-      }
-    }
+    // `teams.cities` каскад больше не правит: этот список был ПОДБОРОМ имён
+    // из общего справочника, а с владением (`cities.team_id`) он рудимент —
+    // метки команды и есть её строки в справочнике.
     try {
-      await renameDays.mutateAsync({ from: oldName, to: newName });
+      await renameDays.mutateAsync({ teamId, from: oldName, to: newName });
     } catch {
       failures.push("метки дней");
     }
-    // Метки клиентов (clients.city) — прямой batch-update по имени, как
-    // renameDayCity; city_manual сохраняется (rename ≠ смена режима).
-    if (tenantId) {
-      try {
-        await renameClientCity(supabase, tenantId, oldName, newName);
-        qc.invalidateQueries({ queryKey: ["clients"] });
-        qc.invalidateQueries({ queryKey: ["client"] });
-      } catch {
-        failures.push("метки клиентов");
-      }
-    }
+    // МЕТКИ КЛИЕНТОВ ПЕРЕИМЕНОВАНИЕ НЕ ТРОГАЕТ (2026-08-29).
+    //
+    // Раньше здесь шёл batch-update `clients.city` по имени на весь тенант.
+    // С тех пор как метка принадлежит команде, это стало утечкой: правка
+    // «Лимассола» у своей бригады переписала бы клиентов всех остальных —
+    // одноимённые метки разных календарей теперь РАЗНЫЕ метки.
+    //
+    // Ограничить его командой нечем: своего поля команды у клиента нет, она
+    // выводится из записей. Но чинить и не надо — по закону канона от
+    // 2026-08-29 «прошлое не переписывается настройкой»: метка клиента это
+    // отметка «где его обслуживали тогда», и переименование справочника её
+    // трогать не должно. Старое имя в карточке — правда о прошлом.
     const personal = settings?.personalLabels ?? [];
     if (personal.includes(oldName)) {
       try {
@@ -82,6 +70,6 @@ export function useRenameLabelCascade() {
   return {
     run,
     pending:
-      updateTeam.isPending || renameDays.isPending || saveSettings.isPending,
+      renameDays.isPending || saveSettings.isPending,
   };
 }

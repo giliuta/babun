@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { getStorage } from "@babun/shared/storage";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -32,6 +32,7 @@ import {
   useDeleteCity,
   useReorderCities,
   useTeams,
+  usePurgeExpiredCities,
   useUpdateCity,
   type City,
 } from "@/features/reference/queries";
@@ -113,11 +114,24 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   const citiesQuery = useCities({ includeInactive: true, teamId });
   const dayCitiesQuery = useDayCities();
   const schedulesQuery = useAllTeamSchedules();
-  // Живые сверху, скрытые под ними — тем же порядком, что у услуг.
+  // Живые сверху, скрытые под ними, удалённые в самом хвосте — тем же
+  // порядком, что у услуг. Удалённая остаётся ВИДНОЙ: обещание «можно
+  // вернуть 30 дней» без двери было бы враньём.
   const cities = useMemo(() => {
     const all = citiesQuery.data ?? [];
-    return [...all.filter((c) => c.is_active), ...all.filter((c) => !c.is_active)];
+    return [
+      ...all.filter((c) => c.is_active && !c.deleted_at),
+      ...all.filter((c) => !c.is_active && !c.deleted_at),
+      ...all.filter((c) => c.deleted_at),
+    ];
   }, [citiesQuery.data]);
+
+  // Обещанные 30 дней истекают здесь: крона нет, а зачистка обязана когда-то
+  // случиться. Открытие экрана — тот же момент, где удаляют.
+  const purgeExpired = usePurgeExpiredCities();
+  useEffect(() => {
+    void purgeExpired();
+  }, [purgeExpired]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
     [dayCitiesQuery.data],
@@ -251,7 +265,9 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         });
       }
       if (renamed) {
-        const failures = await cascade.run(city.name, target);
+        const failures = teamId
+          ? await cascade.run(teamId, city.name, target)
+          : [];
         if (failures.length > 0) {
           notify(
             "Метка переименована частично",
@@ -266,23 +282,59 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
     }
   };
 
+  // УДАЛЕНИЕ ОТЛОЖЕНО НА 30 ДНЕЙ (владелец 2026-08-29: «удалить — это спустя
+  // 30 дней; она уйдёт как удаление, и 30 дней должно пройти»).
+  //
+  // Метка адресуется ИМЕНЕМ (`day_cities.city`, `clients.city`), связи с
+  // таблицей нет — база удалению не мешает. Поэтому мгновенное «Удалить»
+  // рвёт не ссылку, а СМЫСЛ: день остаётся с именем, у которого больше нет
+  // ни цвета, ни строки в справочнике. Тридцать дней — окно, в котором
+  // ошибку видно и она обратима (канон, LOCKED 2026-08-29).
   const remove = (city: City) => {
+    // ЛИСТ ЗАКРЫВАЕТСЯ ПЕРВЫМ, И ЭТО НЕ КОСМЕТИКА.
+    //
+    // `confirmThen` рисуется хостом на УРОВНЕ ПРИЛОЖЕНИЯ, а редактор метки —
+    // `Modal`, отдельное окно. Диалог, вызванный из листа, честно выезжает
+    // ЗА ним и не виден вовсе: кнопка «Удалить метку» просто не работала.
+    // Та же ловушка описана в шапке `NoticeBar` и поймана сегодня трижды.
+    //
+    // Спрашиваем не по таймеру, а КОГДА ЛИСТ ФАКТИЧЕСКИ УШЁЛ: таймер
+    // угадывает момент, а эффект его знает. Вопрос, заданный во время
+    // анимации закрытия, всё ещё попадает за уезжающее окно.
+    setEditing(null);
+    setPendingRemove(city);
+  };
+
+  const [pendingRemove, setPendingRemove] = useState<City | null>(null);
+  useEffect(() => {
+    if (!pendingRemove || editing !== null) return;
+    const city = pendingRemove;
+    setPendingRemove(null);
+    confirmRemove(city);
+    // confirmRemove пересоздаётся каждый рендер; эффект должен сработать
+    // ровно на переходе «лист закрыт + есть отложенное удаление».
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRemove, editing]);
+
+  const confirmRemove = (city: City) => {
     const u = usage.get(city.name);
     const used = u && (u.teams > 0 || u.days > 0);
     confirmThen(
       "Удалить метку?",
       {
         message: used
-          ? `«${city.name}» исчезнет из выбора. Команды и дни, где она уже назначена, останутся с серой меткой.`
-          : `«${city.name}» будет скрыта из библиотеки.`,
+          ? `«${city.name}» исчезнет из выбора. Дни, где она уже стоит, сохранят её имя. Совсем удалится через 30 дней — до тех пор можно вернуть.`
+          : `«${city.name}» удалится совсем через 30 дней. До тех пор её можно вернуть.`,
         confirmLabel: "Удалить",
         destructive: true,
       },
       async () => {
         try {
-          await deleteCity.mutateAsync(city.id);
-          setEditing(null);
-          toast("Метка удалена");
+          await updateCity.mutateAsync({
+            id: city.id,
+            patch: { deleted_at: new Date().toISOString(), is_active: false },
+          });
+          toast("Метка удалена — вернуть можно 30 дней");
         } catch (e) {
           alertError(e);
         }
@@ -349,7 +401,8 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
               onDraggingChange={setDragging}
             >
               {(city, _index, handle) => {
-                const hidden = !city.is_active;
+                const deleted = !!city.deleted_at;
+                const hidden = !city.is_active && !deleted;
                 return (
                 <SwipeRow
                   label="Удалить"
@@ -375,10 +428,21 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
                       : `Скрыть метку ${city.name}`,
                     onAction: () =>
                       updateCity.mutate(
-                        { id: city.id, patch: { is_active: !hidden } },
+                        {
+                          id: city.id,
+                          patch: deleted
+                            ? { deleted_at: null, is_active: true }
+                            : { is_active: !hidden },
+                        },
                         {
                           onSuccess: () =>
-                            toast(hidden ? "Метка показана" : "Метка скрыта"),
+                            toast(
+                              deleted
+                                ? "Метка возвращена"
+                                : hidden
+                                  ? "Метка показана"
+                                  : "Метка скрыта",
+                            ),
                           onError: alertError,
                         },
                       ),
@@ -392,7 +456,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
                       flexDirection: "row",
                       alignItems: "center",
                       // Скрытая не исчезает и не кричит — просто тише живых.
-                      opacity: hidden ? 0.45 : 1,
+                      opacity: deleted ? 0.3 : hidden ? 0.45 : 1,
                       backgroundColor: t.surface,
                     }}
                   >

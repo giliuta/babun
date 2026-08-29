@@ -139,7 +139,6 @@ import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { isoWeekday } from "@/features/calendar/iso-weekday";
 import {
-  teamCities,
   useCities,
   useCreateTeam,
   useTeams,
@@ -904,15 +903,18 @@ export default function CalendarTab() {
   // Web CityPickerModal pickerList: активные метки справочника, суженные до
   // меток команды, когда они заданы; пустой список команды при заданном
   // default_city → весь активный справочник (web parity).
-  const labelOptions = useMemo(() => {
-    const source = cities
-      .filter((c) => c.is_active)
-      .map((c) => ({ name: c.name, color: c.color ?? t.accent }));
-    const brigade = activeTeam ? teamCities(activeTeam) : [];
-    return brigade.length > 0
-      ? source.filter((c) => brigade.includes(c.name))
-      : source;
-  }, [activeTeam, cities, t.accent]);
+  const labelOptions = useMemo(
+    () =>
+      // ПОДБОРА БОЛЬШЕ НЕТ. Здесь стоял фильтр по `teams.cities` — списку
+      // имён, подобранных команде из ОБЩЕГО справочника. С 29 августа метка
+      // принадлежит команде, и `cities` уже приходят её собственные; старый
+      // фильтр стал не сужением, а ПОТЕРЕЙ: у команды со списком из одного
+      // имени её же вторая метка исчезала из выбора.
+      cities
+        .filter((c) => c.is_active && !c.deleted_at)
+        .map((c) => ({ name: c.name, color: c.color ?? t.accent })),
+    [cities, t.accent],
+  );
 
   // Скрывать отменённые: настройка команды побеждает глобальную (web
   // parity: dashboard/page.tsx:1613 `activeTeam?.hide_cancelled ?? …`).

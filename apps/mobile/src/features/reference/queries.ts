@@ -489,6 +489,32 @@ export function useReorderCities() {
   });
 }
 export const useDeleteCity = () => useRefDelete("cities");
+
+/** ОКОНЧАТЕЛЬНАЯ ЗАЧИСТКА МЕТОК, УДАЛЁННЫХ БОЛЬШЕ 30 ДНЕЙ НАЗАД.
+ *
+ *  Крона в продукте нет, а обещание «через 30 дней удалится совсем» должно
+ *  когда-то исполняться. Естественный момент — открытие экрана меток: там же,
+ *  где удаляют, и не чаще, чем туда заходят.
+ *
+ *  Тихая: сбой зачистки не повод показывать человеку ошибку — метка просто
+ *  доживёт до следующего захода. */
+export function usePurgeExpiredCities() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useCallback(async () => {
+    if (!tenantId) return;
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { error, count } = await supabase
+      .from("cities")
+      .delete({ count: "exact" })
+      .eq("tenant_id", tenantId)
+      .not("deleted_at", "is", null)
+      .lt("deleted_at", cutoff);
+    if (!error && (count ?? 0) > 0) {
+      qc.invalidateQueries({ queryKey: ["cities"] });
+    }
+  }, [tenantId, qc]);
+}
 export const useUpdateService = () => useRefUpdate("services");
 export const useDeleteService = () => useRefDelete("services");
 

@@ -1342,7 +1342,7 @@ function ServiceSheet({
               justifyContent: "space-between",
             }}
           >
-            <FieldLabel text="Работаем по дням" />
+            <FieldLabel text="График недели" />
             <Pressable
               onPress={() => {
                 setHasWeekdays(false);
@@ -1410,7 +1410,7 @@ function ServiceSheet({
             onPress={() => setHasWeekdays(true)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Добавить ограничение по дням недели"
+            accessibilityLabel="График недели: в какие дни услуга доступна"
             style={({ pressed }) => ({
               alignSelf: "flex-start",
               paddingVertical: 4,
@@ -1421,7 +1421,7 @@ function ServiceSheet({
               maxFontSizeMultiplier={1.3}
               style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
             >
-              ＋ Работаем по дням
+              ＋ График недели
             </Text>
           </Pressable>
         </View>

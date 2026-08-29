@@ -88,9 +88,16 @@ export async function setDayCity(
 /** Bulk-rename a label across every day assignment of the tenant —
  *  day_cities stores plain names, so a library rename must cascade
  *  here or old assignments silently orphan (grey ghost labels). */
+/** ПЕРЕИМЕНОВАНИЕ — ТОЛЬКО В СВОЕЙ КОМАНДЕ (2026-08-29).
+ *
+ *  С тех пор как метка принадлежит команде (`cities.team_id`), одноимённые
+ *  метки в разных календарях — РАЗНЫЕ метки. Правка по одному лишь имени
+ *  переименовала бы дни всех команд разом: диспетчер правит «Лимассол» у
+ *  своей бригады, а уезжает он у трёх чужих. */
 export async function renameDayCity(
   supabase: DbSupabase,
   tenantId: string,
+  teamId: string,
   from: string,
   to: string,
 ): Promise<void> {
@@ -98,6 +105,7 @@ export async function renameDayCity(
     .from("day_cities")
     .update({ city: to })
     .eq("tenant_id", tenantId)
+    .eq("team_id", teamId)
     .eq("city", from);
   if (error) throw new Error(`renameDayCity: ${error.message}`);
 }
