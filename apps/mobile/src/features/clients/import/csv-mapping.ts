@@ -23,7 +23,7 @@ export const FIELD_LABEL: Record<ImportableField, string> = {
   full_name: "Имя *",
   phone: "Телефон",
   email: "Email",
-  city: "Город",
+  city: "Метка",
   address: "Адрес",
   comment: "Заметка",
 };

@@ -26,7 +26,6 @@ import {
   IdCard,
   Landmark,
   LogOut,
-  MapPin,
   MessageSquareText,
   Package,
   Receipt,
@@ -426,7 +425,7 @@ export default function CabinetHome() {
                 icon={Tag}
                 tone={TILE.cyan}
                 title="Метки"
-                desc="Город / тег под датой в календаре"
+                desc="Что стоит под датой в календаре"
                 href={"/cabinet/labels" as Href}
               />
             </>
@@ -453,14 +452,6 @@ export default function CabinetHome() {
             title="Услуги"
             desc="Каталог работ и цены"
             href="/cabinet/services"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={MapPin}
-            tone={TILE.cyan}
-            title="Города"
-            desc="Список и активность"
-            href="/cabinet/cities"
           />
           <Divider inset={58} />
           <MenuRow

@@ -192,7 +192,7 @@ export default function TeamCitiesScreen() {
     confirmThen(
       "Убрать метку?",
       {
-        message: `«${name}» останется в библиотеке городов.`,
+        message: `«${name}» останется в библиотеке меток.`,
         confirmLabel: "Убрать",
         destructive: true,
       },

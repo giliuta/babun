@@ -63,7 +63,8 @@ describe("mobile client CSV export", () => {
       stats,
     );
 
-    assert.ok(csv.startsWith("\uFEFFИмя;Телефон;Город;Долг;Теги\r\n"));
+    // Колонка называется МЕТКОЙ: `clients.city` хранит метку, а не город.
+    assert.ok(csv.startsWith("\uFEFFИмя;Телефон;Метка;Долг;Теги\r\n"));
     assert.match(csv, /"Иван ""Иваныч"""/);
     assert.match(csv, /€1\u00A0200/);
     assert.match(csv, /"VIP; важный"/);

@@ -281,7 +281,7 @@ export function useCreateCity() {
     // per-city accent colour that tints the calendar day chip (web parity).
     mutationFn: async (input: { name: string; country?: string; color?: string }) => {
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Добавлять города может владелец или диспетчер.");
+        throw new Error("Добавлять метки может владелец или диспетчер.");
       }
       const { data, error } = await supabase
         .from("cities")
@@ -315,7 +315,7 @@ function assertCanWriteReference(
 ): void {
   if (table === "cities") {
     if (role === "owner" || role === "dispatcher") return;
-    throw new Error("Изменять города может владелец или диспетчер.");
+    throw new Error("Изменять метки может владелец или диспетчер.");
   }
   if (role !== "owner") {
     throw new Error("Изменять этот справочник может только владелец.");
