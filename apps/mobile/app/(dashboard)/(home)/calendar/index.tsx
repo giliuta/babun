@@ -413,7 +413,7 @@ export default function CalendarSettingsScreen() {
           <SettingsRow
             tile={SETTINGS_TILE.purple}
             icon={Tags}
-            title="Метки дня"
+            title="Метки"
             // Подпись показывает СВОИ метки, а не жанр: «Города и районы» врали
             // про содержимое (владелец 2026-08-17: «туда можно писать что
             // угодно, это всё метки»).

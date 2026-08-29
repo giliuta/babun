@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { MapPin, Star, Trash2 } from "lucide-react-native";
+import { EyeOff, MapPin, RotateCcw, Trash2 } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { Screen } from "@/components/ui/Screen";
@@ -26,7 +26,6 @@ import {
   useReorderCities,
   useTeams,
   useUpdateCity,
-  useUpdateTeam,
   type City,
 } from "@/features/reference/queries";
 
@@ -66,10 +65,17 @@ type Editing =
 export function LabelsScreen() {
   const t = useThemeColors();
   const toast = useToast();
-  const citiesQuery = useCities();
+  // ВКЛЮЧАЯ СКРЫТЫЕ: они остаются в списке серыми, как выключенные услуги.
+  // Раньше `useCities()` их отфильтровывал, и скрытая метка исчезала с экрана
+  // совсем — вернуть её было нечем.
+  const citiesQuery = useCities({ includeInactive: true });
   const teamsQuery = useTeams();
   const dayCitiesQuery = useDayCities();
-  const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
+  // Живые сверху, скрытые под ними — тем же порядком, что у услуг.
+  const cities = useMemo(() => {
+    const all = citiesQuery.data ?? [];
+    return [...all.filter((c) => c.is_active), ...all.filter((c) => !c.is_active)];
+  }, [citiesQuery.data]);
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
@@ -82,31 +88,10 @@ export function LabelsScreen() {
   const updateCity = useUpdateCity();
   const deleteCity = useDeleteCity();
   const reorder = useReorderCities();
-  const updateTeam = useUpdateTeam();
   const cascade = useRenameLabelCascade();
 
   const [editing, setEditing] = useState<Editing | null>(null);
   const [dragging, setDragging] = useState(false);
-
-  // ОСНОВНАЯ МЕТКА — та, что стоит на КАЖДОМ дне сама (владелец 2026-08-17:
-  // «ставлю звёздочку, делаю её основной — и тогда она проставляет
-  // автоматически на всех днях»). Механика в продукте уже была: календарь
-  // читает метку дня как «явная (day_cities) → основная команды
-  // (teams.default_city)», поэтому звезда ничего не пишет по дням — она
-  // задаёт ФОЛБЭК. Иначе снятие звезды пришлось бы разгребать по тысяче дат.
-  //
-  // Метки общие на компанию, поэтому и звезда общая: она ставится всем
-  // календарям сразу. Звезда горит, только если у ВСЕХ команд основная одна и
-  // та же — при разнобое (кто-то поставил свою в настройках команды) список
-  // молчит, а не выбирает за человека, чья правда важнее.
-  const defaultName = useMemo(() => {
-    if (teams.length === 0) return null;
-    // Пустая строка — это тоже «не выбрано»: в проде у одной команды лежит
-    // `''` из веб-мастера, и без нормализации она считалась бы четвёртым
-    // мнением о том, какая метка основная.
-    const names = new Set(teams.map((tm) => tm.default_city || null));
-    return names.size === 1 ? ([...names][0] ?? null) : null;
-  }, [teams]);
 
   // Использование метки: сколько команд подключили + на скольких днях висит.
   const usage = useMemo(() => {
@@ -127,21 +112,6 @@ export function LabelsScreen() {
 
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
-
-  const setDefault = (city: City) => {
-    const next = defaultName === city.name ? null : city.name;
-    const targets = teams.filter((tm) => (tm.default_city || null) !== next);
-    if (targets.length === 0) return;
-    void Promise.all(
-      targets.map((tm) =>
-        updateTeam.mutateAsync({ id: tm.id, patch: { default_city: next } }),
-      ),
-    )
-      .then(() =>
-        toast(next ? `Основная метка: ${next}` : "Основная метка снята"),
-      )
-      .catch(alertError);
-  };
 
   const add = async (name: string, color: string) => {
     const trimmed = name.trim();
@@ -281,26 +251,40 @@ export function LabelsScreen() {
               }
               onDraggingChange={setDragging}
             >
-              {(city, _index, handle) => (
+              {(city, _index, handle) => {
+                const hidden = !city.is_active;
+                return (
                 <SwipeRow
                   label="Удалить"
                   color={t.danger}
                   icon={Trash2}
                   accessibilityLabel={`Удалить метку ${city.name}`}
                   onAction={() => remove(city)}
-                  // ЗВЕЗДА ЖИВЁТ В ЖЕСТЕ, А НЕ В СТРОКЕ (владелец 2026-08-17):
-                  // кнопка в каждой строке — это колонка кнопок, которая
-                  // спорит с именем за ширину, хотя нажимают её раз в год.
-                  // Тянут вправо — как «прочитано» в почте.
+                  // СЛЕВА — «СКРЫТЬ», КАК У УСЛУГ (владелец 2026-08-29).
+                  // Здесь была «Основная» — звезда, ставившая метку фолбэком
+                  // на все дни всех команд. Она уходит: то же самое будет
+                  // выражаться недельным расписанием («по вторникам —
+                  // Греция»), где видно, ЧТО и КОГДА, а не одна метка на всё
+                  // сразу.
+                  //
+                  // Стороны те же, что у услуг: справа «Удалить», слева
+                  // «Скрыть». Разрушительное действие на постоянном месте.
                   leading={{
-                    label: defaultName === city.name ? "Снять" : "Основная",
-                    color: t.accent,
-                    icon: Star,
-                    accessibilityLabel:
-                      defaultName === city.name
-                        ? `Снять основную метку ${city.name}`
-                        : `Сделать ${city.name} основной меткой`,
-                    onAction: () => setDefault(city),
+                    label: hidden ? "Показать" : "Скрыть",
+                    color: hidden ? t.success : t.warning,
+                    icon: hidden ? RotateCcw : EyeOff,
+                    accessibilityLabel: hidden
+                      ? `Показать метку ${city.name}`
+                      : `Скрыть метку ${city.name}`,
+                    onAction: () =>
+                      updateCity.mutate(
+                        { id: city.id, patch: { is_active: !hidden } },
+                        {
+                          onSuccess: () =>
+                            toast(hidden ? "Метка показана" : "Метка скрыта"),
+                          onError: alertError,
+                        },
+                      ),
                   }}
                 >
                   {/* Содержимое кромки — РЯД: сама строка тянется, ручка едет
@@ -310,6 +294,8 @@ export function LabelsScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
+                      // Скрытая не исчезает и не кричит — просто тише живых.
+                      opacity: hidden ? 0.45 : 1,
                       backgroundColor: t.surface,
                     }}
                   >
@@ -345,19 +331,6 @@ export function LabelsScreen() {
                     >
                       {city.name}
                     </Text>
-                    {/* ОСНОВНУЮ ВИДНО БЕЗ ЖЕСТА — звёздочка стоит ОТМЕТКОЙ у
-                        имени, а не кнопкой: нажимать её незачем (ставит и
-                        снимает свайп), а ответ «какая метка стоит на всех
-                        днях» обязан читаться со списка. */}
-                    {defaultName === city.name ? (
-                      <Star
-                        size={14}
-                        strokeWidth={2}
-                        color={t.accent}
-                        fill={t.accent}
-                        style={{ marginLeft: 6 }}
-                      />
-                    ) : null}
                     <View style={{ flex: 1, minWidth: 8 }} />
                   </Pressable>
                   {/* Ручка — СНАРУЖИ нажимаемой области: вложенная внутрь, она
@@ -366,7 +339,8 @@ export function LabelsScreen() {
                   {handle}
                   </View>
                 </SwipeRow>
-              )}
+                );
+              }}
             </ReorderList>
           </SectionCard>
         </ScrollView>
