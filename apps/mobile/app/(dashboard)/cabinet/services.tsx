@@ -40,13 +40,12 @@ import {
 import { useTenant } from "@/features/settings/tenant";
 import {
 } from "@babun/shared/local/services-pricing";
-import {
-  type VariantDraft,
-} from "@/features/services/ServiceEditorParts";
+
 import {
   useSaveServiceVariants,
   useServiceVariants,
   type ServiceVariant,
+  type VariantDraft,
 } from "@/features/services/variant-queries";
 import {
   useCreateService,
@@ -58,12 +57,11 @@ import {
 } from "@/features/services/queries";
 import { ColorDot, NameColorField } from "@/components/ui/picker-fields";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel, roundToStep } from "@/features/services/format";
+import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
-import {
-  roundToStep,
-} from "@/features/services/ServiceBlocks";
+
 import {
   displayValue,
   draftValue,
@@ -853,6 +851,8 @@ function ServiceSheet({
     }
   };
 
+  const bufferAfterMin = Math.max(0, Number(bufferAfter) || 0);
+
   // ЛЕСЕНКА ОДНИМ СПИСКОМ: базовая строка (количество 1) плюс ступени.
   // Четыре блока рисуют ОДИН И ТОТ ЖЕ список — иначе они разъехались бы по
   // столбцам, и цена оказалась бы у количества, которого нет.
@@ -1455,7 +1455,9 @@ function ServiceSheet({
               justifyContent: "space-between",
             }}
           >
-            <FieldLabel text="Перерыв после услуги" />
+            <FieldLabel
+              text={`Перерыв после услуги · ${durationLabel(bufferAfterMin)}`}
+            />
             <Pressable
               onPress={() => {
                 setHasBufferAfter(false);
@@ -1472,40 +1474,30 @@ function ServiceSheet({
               <X color={t.faint} size={16} strokeWidth={2} />
             </Pressable>
           </View>
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            {[10, 15, 20, 30, 45, 60].map((min) => {
-              const on = Number(bufferAfter) === min;
-              return (
-                <Pressable
-                  key={min}
-                  onPress={() => setBufferAfter(String(min))}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${min} минут после услуги`}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    height: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: t.radius.card,
-                    borderCurve: "continuous",
-                    backgroundColor: on ? t.accent : t.fill,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.2}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: on ? "700" : "500",
-                      color: on ? t.onAccent : t.faint,
-                    }}
-                  >
-                    {min}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          {/* ВРЕМЯ ВЫБИРАЕТСЯ БАРАБАНОМ. ВСЕГДА. Первый заход поставил здесь
+              пресеты 10/15/20/30/45/60 — и это было нарушением архитектуры
+              продукта, а не находкой: время в Babun выбирают барабаном везде,
+              от часов календаря до длительности услуги строкой выше. Владелец
+              2026-08-29: «у нас же выбор времени всегда заложен барабанами,
+              на хуя тут 10, 15, 20». Пресеты вдобавок ВРАЛИ: перерыв в 25
+              минут ими не выставить вовсе. */}
+          <View style={{ alignItems: "center" }}>
+            <TimeWheelPair
+              hour={Math.floor(bufferAfterMin / 60)}
+              minute={bufferAfterMin % 60}
+              // Половины коммитятся ПОРОЗНЬ и каждая считает от предыдущего
+              // состояния: колонка знает соседнее значение только по пропу, и
+              // два коммита в одном батче унесли бы устаревшую половину.
+              onChangeHour={(next) =>
+                setBufferAfter(String(next * 60 + (bufferAfterMin % 60)))
+              }
+              onChangeMinute={(next) =>
+                setBufferAfter(
+                  String(Math.floor(bufferAfterMin / 60) * 60 + next),
+                )
+              }
+              labelPrefix="Перерыв после услуги"
+            />
           </View>
         </View>
       ) : (

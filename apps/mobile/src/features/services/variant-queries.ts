@@ -5,6 +5,15 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
 
+/** Черновик варианта в редакторе: имя, цена, длительность. Считать нечего,
+ *  поэтому ни режимов, ни единиц, ни правила «свыше» у него нет. */
+export interface VariantDraft {
+  id: string;
+  name: string;
+  price: string;
+  duration: string;
+}
+
 export type ServiceVariant =
   Database["public"]["Tables"]["service_variants"]["Row"];
 
