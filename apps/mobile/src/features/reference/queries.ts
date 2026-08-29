@@ -251,13 +251,20 @@ export function useCreateMaster() {
 // `includeInactive` — экран «Города» показывает и выключенные (тумблер
 // активности + реактивация); пикеры/метки зовут без опции и видят
 // только активные (паттерн useTeams).
-export function useCities(opts?: { includeInactive?: boolean }) {
+// МЕТКИ ЧИТАЮТСЯ ПО КОМАНДЕ (владелец 2026-08-29: «метка закрепляется за
+// командой — то же самое, как график, как услуга; нельзя поставить метку в
+// другую команду»). Без `teamId` вернётся весь справочник тенанта: так
+// читают экраны, которым нужно назвать метку прошлого дня, а не предложить
+// её к выбору.
+export function useCities(opts?: {
+  includeInactive?: boolean;
+  teamId?: string | null;
+}) {
   const tenantId = useTenantId();
   const includeInactive = !!opts?.includeInactive;
+  const teamId = opts?.teamId ?? null;
   return useQuery({
-    queryKey: includeInactive
-      ? ["cities", tenantId, "all"]
-      : ["cities", tenantId],
+    queryKey: ["cities", tenantId, includeInactive ? "all" : "live", teamId],
     enabled: !!tenantId,
     queryFn: async () => {
       let q = supabase
@@ -265,6 +272,10 @@ export function useCities(opts?: { includeInactive?: boolean }) {
         .select("*")
         .eq("tenant_id", tenantId as string);
       if (!includeInactive) q = q.eq("is_active", true);
+      // Метка принадлежит команде: без её id вернётся весь справочник
+      // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
+      // дня, а не предложить её к выбору.
+      if (teamId) q = q.eq("team_id", teamId);
       const { data, error } = await q.order("position");
       if (error) throw new Error(error.message);
       return data;
@@ -285,6 +296,8 @@ export function useCreateCity() {
       color?: string;
       /** Дни недели (1=Пн…7=Вс), когда метка встаёт сама. Пусто — вручную. */
       weekdays?: number[];
+      /** Команда-владелец. Метка без команды больше не существует. */
+      teamId: string;
     }) => {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Добавлять метки может владелец или диспетчер.");
@@ -298,6 +311,7 @@ export function useCreateCity() {
           country: input.country || "",
           color: input.color || null,
           weekdays: input.weekdays ?? [],
+          team_id: input.teamId,
         })
         .select("*")
         .single();

@@ -813,7 +813,10 @@ export default function CalendarTab() {
   );
 
   // ─── Метки дней (web parity: city pill в шапке дня) ─────────────────
-  const citiesQuery = useCities();
+  // МЕТКИ АКТИВНОГО КАЛЕНДАРЯ, а не всего тенанта. С 2026-08-29 метка
+  // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
+  // показывал «Лимассол» столько раз, сколько в компании команд.
+  const citiesQuery = useCities({ teamId: activeTeamId });
   const dayCitiesQuery = useDayCities();
   const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
   const dayCities = useMemo(

@@ -122,7 +122,6 @@ export default function CalendarSettingsScreen() {
   const settings = settingsQuery.data;
   const { data: teams = [], isLoading: teamsLoading } = useTeams();
   const { data: schedules = {} } = useAllTeamSchedules();
-  const { data: labels = [] } = useCities();
   const update = useUpdateTeam();
   const saveSettings = useSaveCalendarSettings();
   const removeTeam = useDeleteTeam();
@@ -146,6 +145,8 @@ export default function CalendarSettingsScreen() {
   const persisted = getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
+  // Метки ЭТОГО календаря: подпись строки обязана перечислять его собственные.
+  const { data: labels = [] } = useCities({ teamId: activeId ?? null });
 
   const s: CalendarSettings = settings ?? DEFAULT_CALENDAR_SETTINGS;
 

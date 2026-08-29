@@ -620,6 +620,7 @@ export type Database = {
           is_active: boolean
           name: string
           position: number
+          team_id: string
           weekdays: number[]
           tenant_id: string
           updated_at: string
@@ -633,6 +634,7 @@ export type Database = {
           is_active?: boolean
           name: string
           position?: number
+          team_id: string
           weekdays?: number[]
           tenant_id: string
           updated_at?: string
@@ -646,6 +648,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           position?: number
+          team_id?: string
           weekdays?: number[]
           tenant_id?: string
           updated_at?: string

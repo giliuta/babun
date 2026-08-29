@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
+import { getStorage } from "@babun/shared/storage";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { EyeOff, MapPin, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
 import { WEEKDAY_LABELS } from "@babun/shared/local/services";
+
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -17,6 +20,8 @@ import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { useDayCities } from "@/features/calendar/day-cities";
+import { useAllTeamSchedules } from "@/features/reference/team-schedule";
+import { allDays, ISO_BY_KEY } from "@/features/calendar/schedule-days";
 import { useRenameLabelCascade } from "@/features/reference/label-cascade";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -30,6 +35,17 @@ import {
   useUpdateCity,
   type City,
 } from "@/features/reference/queries";
+
+/** Полное имя дня по ISO-номеру — для объяснения, почему день не берётся. */
+const WEEKDAY_FULL_BY_ISO: Record<number, string> = {
+  1: "Понедельник",
+  2: "Вторник",
+  3: "Среда",
+  4: "Четверг",
+  5: "Пятница",
+  6: "Суббота",
+  7: "Воскресенье",
+};
 
 // Метки календаря — БИБЛИОТЕКА имён+цветов (таблица `cities`), которую
 // реально потребляет календарь: команды подключают метки в своих
@@ -64,25 +80,49 @@ type Editing =
   | { mode: "create" }
   | { mode: "edit"; city: City };
 
-export function LabelsScreen() {
+export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}) {
+  // ЭКРАН ПРИНАДЛЕЖИТ КОМАНДЕ (владелец 2026-08-29: «метка закрепляется за
+  // командой; если у меня команда два — значит и метка команды два»).
+  //
+  // Команда приходит параметром из настроек календаря, а если её нет —
+  // берётся та, что открыта в самом календаре (тот же ключ MMKV, что у
+  // экрана настроек). Абстрактной «первой» здесь быть не может: человек
+  // правит метки того календаря, в котором работает.
+  const params = useLocalSearchParams<{ team?: string }>();
+  const persistedTeam = getStorage().get<{ teamId?: string | null }>(
+    "calendar.view",
+  )?.teamId;
   const t = useThemeColors();
   const toast = useToast();
+  const teamsQuery = useTeams();
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  // Явно переданная команда (маршрут Кабинет → Команды → метки) побеждает:
+  // там человек стоит В КОНКРЕТНОЙ команде, и подставлять ей ту, что открыта
+  // в календаре, значило бы править чужой список.
+  const teamId =
+    forced ??
+    (Array.isArray(params.team) ? params.team[0] : params.team) ??
+    persistedTeam ??
+    teams[0]?.id ??
+    null;
+  const teamName =
+    teams.find((x) => x.id === teamId)?.name ?? teams[0]?.name ?? null;
   // ВКЛЮЧАЯ СКРЫТЫЕ: они остаются в списке серыми, как выключенные услуги.
   // Раньше `useCities()` их отфильтровывал, и скрытая метка исчезала с экрана
   // совсем — вернуть её было нечем.
-  const citiesQuery = useCities({ includeInactive: true });
-  const teamsQuery = useTeams();
+  const citiesQuery = useCities({ includeInactive: true, teamId });
   const dayCitiesQuery = useDayCities();
+  const schedulesQuery = useAllTeamSchedules();
   // Живые сверху, скрытые под ними — тем же порядком, что у услуг.
   const cities = useMemo(() => {
     const all = citiesQuery.data ?? [];
     return [...all.filter((c) => c.is_active), ...all.filter((c) => !c.is_active)];
   }, [citiesQuery.data]);
-  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const dayCities = useMemo(
     () => dayCitiesQuery.data ?? {},
     [dayCitiesQuery.data],
   );
+  const schedules = useMemo(() => schedulesQuery.data ?? {}, [schedulesQuery.data]);
   const isLoading =
     citiesQuery.isLoading || teamsQuery.isLoading || dayCitiesQuery.isLoading;
   const error = citiesQuery.error || teamsQuery.error || dayCitiesQuery.error;
@@ -111,6 +151,43 @@ export function LabelsScreen() {
     return m;
   }, [teams, dayCities]);
 
+  // ═══ ДВА СТОЛКНОВЕНИЯ, КОТОРЫЕ НАДО НЕ ДОПУСТИТЬ ═══
+  //
+  // Владелец 2026-08-29:
+  //   «по четвергам выходной — значит в четверг метку ставить нельзя, там
+  //    пересекутся метка выходного и метка дня»;
+  //   «две метки на понедельник — вторую уже не поставить, день занят».
+  //
+  // Обе беды одной природы: у дня ОДНА метка. Разрешить второй встать в тот
+  // же день — значит сделать календарь недетерминированным: какая из двух
+  // покрасит день, зависело бы от порядка строк в ответе базы.
+  //
+  // ЗАНЯТЫЕ ДНИ. Кто уже держит день недели — считаем по всем живым меткам,
+  // кроме той, что сейчас правим (иначе метка «занимала» бы день у самой
+  // себя и её нельзя было бы сохранить).
+  const takenBy = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of cities) {
+      if (!c.is_active || c.deleted_at) continue;
+      for (const d of c.weekdays ?? []) if (!m.has(d)) m.set(d, c.name);
+    }
+    return m;
+  }, [cities]);
+
+  // ВЫХОДНЫЕ — ЭТОЙ КОМАНДЫ (владелец: «по четвергам выходной — значит в
+  // четверг метку ставить нельзя, там пересекутся метка выходного и метка
+  // дня»). Раз метка принадлежит команде, спрашивать надо её собственный
+  // график, а не сводку по компании.
+  const companyDaysOff = useMemo(() => {
+    const schedule = teamId ? schedules[teamId] : undefined;
+    if (!schedule) return new Set<number>();
+    const off = new Set<number>();
+    for (const { key, day } of allDays(schedule)) {
+      if (!day.is_working) off.add(ISO_BY_KEY[key]);
+    }
+    return off;
+  }, [schedules, teamId]);
+
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
@@ -128,7 +205,13 @@ export function LabelsScreen() {
           patch: { color, weekdays },
         });
       } else {
-        await createCity.mutateAsync({ name: trimmed, color, weekdays });
+        if (!teamId) return;
+        await createCity.mutateAsync({
+          name: trimmed,
+          color,
+          weekdays,
+          teamId,
+        });
       }
       setEditing(null);
       toast("Метка добавлена");
@@ -215,7 +298,9 @@ export function LabelsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Метки" subtitle="Календарь" />
+      {/* Подзаголовок называет КОМАНДУ, а не раздел: метки теперь её
+          собственность, и человек обязан видеть, чьи он правит. */}
+      <ScreenHeader title="Метки" subtitle={teamName ?? undefined} />
 
       {isLoading ? (
         <EmptyState state="loading" fill />
@@ -372,6 +457,8 @@ export function LabelsScreen() {
 
       <LabelSheet
         editing={editing}
+        takenBy={takenBy}
+        daysOff={companyDaysOff}
         busy={busy}
         onClose={() => setEditing(null)}
         onCreate={add}
@@ -384,6 +471,8 @@ export function LabelsScreen() {
 
 function LabelSheet({
   editing,
+  takenBy,
+  daysOff,
   busy,
   onClose,
   onCreate,
@@ -391,6 +480,10 @@ function LabelSheet({
   onRemove,
 }: {
   editing: Editing | null;
+  /** День недели → имя метки, которая его уже держит. */
+  takenBy: Map<number, string>;
+  /** Дни, в которые не работает НИ ОДНА команда. */
+  daysOff: Set<number>;
   busy: boolean;
   onClose: () => void;
   onCreate: (name: string, color: string, weekdays: number[]) => void;
@@ -413,6 +506,9 @@ function LabelSheet({
   // нет — он появляется по кнопке.
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [hasWeekdays, setHasWeekdays] = useState(false);
+  /** Почему день не берётся. Пишется под плитками, а не плашкой сверху:
+   *  ответ обязан стоять там, где задан вопрос. */
+  const [blockNote, setBlockNote] = useState<string | null>(null);
   const [seeded, setSeeded] = useState<Editing | null>(null);
 
   if (editing !== seeded) {
@@ -429,6 +525,19 @@ function LabelSheet({
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
+
+  // У ДНЯ ОДНА МЕТКА. Разрешить второй встать в тот же день — значит сделать
+  // календарь недетерминированным: какая из двух покрасит понедельник,
+  // зависело бы от порядка строк в ответе базы.
+  //
+  // Свой собственный день занятым не считаем: иначе метка отбирала бы день у
+  // самой себя и её нельзя было бы пересохранить.
+  const ownName = isEdit ? editing.city.name : null;
+  const blockedBy = (day: number): string | null => {
+    if (daysOff.has(day)) return "выходной";
+    const holder = takenBy.get(day);
+    return holder && holder !== ownName ? holder : null;
+  };
 
   // ЛИСТ — КАНОНИЧЕСКИЙ `BottomSheet`, а не самописный `Modal animationType
   // ="slide"` (владелец 2026-08-17: «какая-то серая плашка поднимается вверх,
@@ -511,7 +620,7 @@ function LabelSheet({
               justifyContent: "space-between",
             }}
           >
-            <FieldLabel text="Ставится сама по дням" />
+            <FieldLabel text="График недели" />
             <Pressable
               onPress={() => {
                 setHasWeekdays(false);
@@ -530,20 +639,36 @@ function LabelSheet({
           </View>
           <View style={{ flexDirection: "row", gap: 6 }}>
             {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
-              const on = weekdays.includes(day);
+              const blocked = blockedBy(day);
+              const on = weekdays.includes(day) && !blocked;
               return (
                 <Pressable
                   key={day}
-                  onPress={() =>
+                  onPress={() => {
+                    // ЗАНЯТЫЙ ДЕНЬ НЕ МОЛЧИТ. Погашенная плитка без ответа
+                    // читается как поломка; она обязана сказать, КЕМ занята.
+                    if (blocked) {
+                      setBlockNote(
+                        blocked === "выходной"
+                          ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у всех команд`
+                          : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${blocked}»`,
+                      );
+                      return;
+                    }
+                    setBlockNote(null);
                     setWeekdays(
                       on
                         ? weekdays.filter((x) => x !== day)
                         : [...weekdays, day].sort((a, b) => a - b),
-                    )
-                  }
+                    );
+                  }}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`}
+                  accessibilityState={{ selected: on, disabled: !!blocked }}
+                  accessibilityLabel={
+                    blocked
+                      ? `${WEEKDAY_LABELS[day]} — занят: ${blocked}`
+                      : `${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`
+                  }
                   style={({ pressed }) => ({
                     flex: 1,
                     height: 44,
@@ -552,7 +677,9 @@ function LabelSheet({
                     borderRadius: t.radius.card,
                     borderCurve: "continuous",
                     backgroundColor: on ? color : t.fill,
-                    opacity: pressed ? 0.6 : 1,
+                    // Занятый гасится, но остаётся нажимаемым: тап — это его
+                    // способ объяснить, почему он не берётся.
+                    opacity: blocked ? 0.35 : pressed ? 0.6 : 1,
                   })}
                 >
                   <Text
@@ -569,6 +696,19 @@ function LabelSheet({
               );
             })}
           </View>
+          {blockNote ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={{
+                marginTop: 8,
+                fontSize: 13,
+                lineHeight: 18,
+                color: t.sub,
+              }}
+            >
+              {blockNote}
+            </Text>
+          ) : null}
         </View>
       ) : (
         <Pressable
@@ -576,11 +716,18 @@ function LabelSheet({
             setHasWeekdays(true);
             // Все семь: «надо каждый день — выберу все» (владелец). Гасят из
             // них лишние, а не набирают нужные с нуля.
-            if (weekdays.length === 0) setWeekdays([1, 2, 3, 4, 5, 6, 7]);
+            // ВСЕ СВОБОДНЫЕ, а не все семь: занятые чужой меткой или общим
+            // выходным всё равно не встанут, и подсвечивать их было бы
+            // обещанием, которое сохранение не выполнит.
+            if (weekdays.length === 0) {
+              setWeekdays(
+                [1, 2, 3, 4, 5, 6, 7].filter((d) => !blockedBy(d)),
+              );
+            }
           }}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Ставить метку автоматически по дням недели"
+          accessibilityLabel="График недели: в какие дни метка ставится сама"
           style={({ pressed }) => ({
             alignSelf: "flex-start",
             paddingTop: 10,
@@ -592,7 +739,7 @@ function LabelSheet({
             maxFontSizeMultiplier={1.3}
             style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
           >
-            ＋ Ставить по дням недели
+            ＋ График недели
           </Text>
         </Pressable>
       )}

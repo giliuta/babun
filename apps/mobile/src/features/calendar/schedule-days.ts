@@ -24,6 +24,20 @@ const JS_DAY: Record<WeekdayKey, number> = {
   sat: 6,
 };
 
+/** Ключ дня → ISO-номер (1=Пн…7=Вс). В этой нумерации живут расписание
+ *  меток (`cities.weekdays`) и рабочие дни услуги, а график команды —
+ *  в своих ключах; без явной таблицы их легко перепутать, и неделя уехала
+ *  бы на день. */
+export const ISO_BY_KEY: Record<WeekdayKey, number> = {
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
+  sun: 7,
+};
+
 export const WEEKDAY_FULL: Record<WeekdayKey, string> = {
   mon: "Понедельник",
   tue: "Вторник",
