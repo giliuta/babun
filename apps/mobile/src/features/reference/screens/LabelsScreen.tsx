@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { MapPin, Star, Trash2 } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
-import { ColorField } from "@/components/ui/picker-fields";
+import { NameColorField } from "@/components/ui/picker-fields";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -10,8 +10,8 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
+import { GUTTER } from "@/components/ui/tokens";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -466,15 +466,26 @@ function LabelSheet({
         </>
       }
     >
-      <Field
-        label="Название"
-        value={name}
-        onChangeText={setName}
-        placeholder="Лимассол, Германия, День ног…"
-        autoFocus
-      />
+      {/* ТА ЖЕ СТРОКА, ЧТО У КАЛЕНДАРЯ И УСЛУГИ (владелец 2026-08-29:
+          «делаем как везде по архитектуре»): цвет точкой слева, имя справа,
+          один элемент вместо двух. Здесь стояли поле «Название» и отдельная
+          строка «Цвет» — та самая пара, которую 27 августа уже свели в одну
+          у календаря, а потом у услуги; метка осталась последней.
 
-      <ColorField value={color} onChange={setColor} />
+          ПОДСКАЗКИ НЕТ. «Лимассол, Германия, День ног…» подсказывала не
+          формат, а СМЫСЛ — что вообще писать в метку, — и на пустом поле
+          читалась как уже введённое значение. Метка это свободный текст,
+          объяснять его примерами незачем. */}
+      <View style={{ paddingHorizontal: GUTTER }}>
+        <NameColorField
+          label="Название"
+          name={name}
+          onNameChange={setName}
+          color={color}
+          onColorChange={setColor}
+          autoFocus
+        />
+      </View>
     </BottomSheet>
   );
 }
