@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import {
   Briefcase,
-  Copy,
   EyeOff,
   RotateCcw,
   Trash2,
@@ -22,7 +21,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { RowCaption } from "@/components/ui/card-rows";
 import { FieldLabel } from "@/components/ui/Field";
 import { WEEKDAY_LABELS } from "@babun/shared/local/services";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
 import {
   ServiceLadder,
   type LadderStep,
@@ -630,8 +629,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         busy={busy}
         onClose={() => setEditing(null)}
         onSave={handleSave}
-        onDelete={handleDelete}
-        onDuplicate={(svc) => setEditing({ mode: "create", from: svc })}
         variantsByService={variantsByService}
       />
 
@@ -650,8 +647,6 @@ function ServiceSheet({
   busy,
   onClose,
   onSave,
-  onDelete,
-  onDuplicate,
   variantsByService,
 }: {
   editing: ServiceEditing | null;
@@ -664,10 +659,8 @@ function ServiceSheet({
     serviceId?: string,
     variants?: { name: string; price: number; duration_min: number }[],
   ) => void;
-  onDelete: (svc: Service) => void;
   /** Дубль из шапки листа — вторая дверь к тому же, что делает свайп вправо
    *  по строке прайса (который перехватывает системный жест «назад»). */
-  onDuplicate: (svc: Service) => void;
   /** Варианты по услуге — читаются один раз списком, лист берёт готовое. */
   variantsByService: Map<string, ServiceVariant[]>;
 }) {
@@ -910,12 +903,19 @@ function ServiceSheet({
     const parsedPrice = Number(effectivePrice.trim().replace(",", "."));
     const parsedDuration = Number(effectiveDuration.trim());
     const nextBaseErrors: { price?: string; duration?: string } = {};
-    // ПУСТО — ЭТО НЕ НОЛЬ. `Number("")` даёт 0, и услуга молча уезжала в
-    // прайс бесплатной, запекалась в снимок записи и всплывала у клиента в
-    // счёте. Напечатанный руками «0» законен: гарантийный выезд бесплатен.
-    if (effectivePrice.trim() === "") {
-      nextBaseErrors.price = "Впишите цену";
-    } else if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+    // ПУСТАЯ ЦЕНА = БЕСПЛАТНО, И ЭТО ЗАКОННО (владелец 2026-08-29: «цену
+    // необязательно вписывать — услуга может быть полностью бесплатной, её
+    // сделали, но денег не берём»).
+    //
+    // Запрет ставился против молчаливого нуля: `Number("")` даёт 0, и услуга
+    // уезжала в прайс бесплатной незаметно для человека. Довод отпал, когда
+    // ячейка цены стала показывать «0 €» подсказкой: пустое поле теперь
+    // ЧИТАЕТСЯ нулём, а не выглядит незаполненным. Молчания больше нет —
+    // значит нет и повода запрещать.
+    //
+    // Гарантийный выезд, переделка, бонус постоянному клиенту — работа
+    // сделана, денег нет. Заставлять писать «0» ради проформы незачем.
+    if (effectivePrice.trim() !== "" && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
       nextBaseErrors.price = "Цена от 0";
     }
     // НОЛЬ ЗАПРЕЩЁН ВАЛИДАЦИЕЙ, А НЕ БАРАБАНОМ: кольцо проносит через 00:00, и
@@ -1055,36 +1055,17 @@ function ServiceSheet({
       scrollRef={scrollRef}
       avoidKeyboard
       padded={false}
-      // Опасное действие — значком в шапке, а не второй кнопкой под
-      // «Сохранить»: две кнопки внизу стояли вплотную к большому пальцу и
-      // читались как равноправные выходы.
-      headerAction={
-        service ? (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* ДУБЛЬ ЖЕСТОМ БЫЛ НЕДОСТИЖИМ: свайп ВПРАВО по строке съедает
-              системный жест «назад», и до кромки «Дубль» палец не доходил.
-              Вторая дверь — здесь, словом и значком. */}
-          <Pressable
-            onPress={() => onDuplicate(service)}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={`Дублировать услугу ${service.name}`}
-            className="h-11 w-11 items-center justify-center active:opacity-60"
-          >
-            <Copy color={t.sub} size={ICON.sm} strokeWidth={2} />
-          </Pressable>
-          <Pressable
-            onPress={() => onDelete(service)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Скрыть услугу ${service.name}`}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-          >
-            <Trash2 color={t.danger} size={ICON.sm} strokeWidth={2} />
-          </Pressable>
-          </View>
-        ) : undefined
-      }
+      // ЗНАЧКОВ В ШАПКЕ НЕТ (владелец 2026-08-29: «убери эти кнопочки, они
+      // нам на хер не нужны — у нас свайп вправо и можно удалить»).
+      //
+      // Здесь стояли «дублировать» и «удалить». Обе двери стали лишними:
+      // удаление и скрытие теперь живут на кромках свайпа, у каждой своя
+      // сторона и своё подтверждение. А мусорка вдобавок ОБРЕЗАЛАСЬ правым
+      // краем листа — красный значок наполовину уходил за экран.
+      //
+      // Дубль исчез вместе с ней: он был обходом того, что свайп вправо
+      // когда-то съедал системный жест «назад». Сейчас вправо — «Удалить»,
+      // и обходить нечего; скопировать услугу можно, заведя новую.
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
         <Button

@@ -378,6 +378,9 @@ export function validateServiceEconomics(
     ) {
       tierErrors.totalDuration = "Целые минуты";
     }
+    // Пустая цена ступени — тоже «бесплатно» (владелец 2026-08-29). Требовать
+    // хоть что-то одно всё же надо: строка без цены И без времени не
+    // добавляет к услуге ничего и лишь занимает место в таблице.
     if (tier.rowPrice.trim() === "" && tier.totalDuration.trim() === "") {
       tierErrors.row = "Впишите цену или время";
     }

@@ -111,6 +111,19 @@ export function CrewAppointmentSheet({
   const serviceNames = useMemo(() => {
     if (!appointment) return [];
     const byId = new Map(services.map((item) => [item.id, item.name]));
+    // СНИМОК ЗАПИСИ ПЕРВЫМ, каталог вторым. Наряд читает бригада НА ОБЪЕКТЕ:
+    // если услугу к тому времени стёрли из прайса, строка «Услуга удалена»
+    // не говорит человеку, что именно он приехал делать. Имя работы на день
+    // визита лежит в самой записи — берём его.
+    const snapshot = appointment.services ?? [];
+    if (snapshot.length > 0) {
+      return snapshot.map(
+        (line) =>
+          line.serviceName?.trim() ||
+          byId.get(line.serviceId) ||
+          "Услуга удалена",
+      );
+    }
     return appointment.service_ids.map((id) => byId.get(id) ?? "Услуга удалена");
   }, [appointment, services]);
 
