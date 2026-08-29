@@ -8,7 +8,6 @@ import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { useThemeColors } from "@/theme/colors";
 import { confirmThen } from "@/lib/confirm";
 import { durationLabel } from "./format";
-import { ladderRanges } from "./ladder-ranges";
 import type { PriceEntryMode, ServiceTierDraft } from "./economics";
 
 // ЕДИНИЦЫ ИЗМЕРЕНИЯ ЗДЕСЬ НЕТ, И ЭТО РЕШЕНИЕ, А НЕ УПРОЩЕНИЕ
@@ -295,7 +294,6 @@ export function ServiceLadder({
   const flip = (m: PriceEntryMode): PriceEntryMode =>
     m === "total" ? "unit" : "total";
 
-  const ranges = ladderRanges(steps.map((x) => x.qty));
 
   return (
     <SectionCard>
@@ -502,21 +500,6 @@ export function ServiceLadder({
           </Fragment>
         );
       })}
-
-      {ranges ? (
-        <Text
-          maxFontSizeMultiplier={1.2}
-          style={{
-            paddingHorizontal: 12,
-            paddingTop: 2,
-            fontSize: 12,
-            lineHeight: 16,
-            color: t.sub,
-          }}
-        >
-          Считается по строкам: {ranges}
-        </Text>
-      ) : null}
 
       {/* ПОД СЕТКОЙ, КОМПАКТНО (владелец 2026-08-27: «кнопку убираем, делаем
           как „плюс добавить" под самой этой сеткой»). Полосой во всю карточку
