@@ -77,6 +77,8 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { useToast } from "@/components/ui/Toast";
+import { resolveDayLabel } from "@babun/shared/local/day-cities";
+import { useDayCities } from "@/features/calendar/day-cities";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -263,6 +265,7 @@ export default function BookScreen() {
   // чтобы back-свайп-защита не показывала второй Alert поверх нашего.
   const bypassGuardRef = useRef(false);
   const toast = useToast();
+  const { data: dayCities = {} } = useDayCities();
   const params = useLocalSearchParams<{
     date?: string;
     time_start?: string;
@@ -504,6 +507,51 @@ export default function BookScreen() {
     [clients, clientId],
   );
   const clientLocations = client?.locations ?? [];
+
+  // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
+  //
+  // Владелец 2026-08-29: «вы записываете клиента, у которого уже была метка
+  // такая-то — просто предупреждение».
+  //
+  // Метка у клиента появляется сама: рабочая запись в день с явной меткой
+  // переносит её на клиента (`autoAssignClientLabel`, решение 2026-07-22).
+  // То есть метка клиента — это «где его обслуживали в прошлый раз», а метка
+  // дня — «где команда работает в этот день». Их расхождение и есть тот
+  // случай, ради которого метки заводились: бригада едет в Лимассол, а в
+  // день просунули клиента из Пафоса — крюк на полдня, о котором узнают
+  // утром на выезде.
+  //
+  // ПРЕДУПРЕЖДЕНИЕ, А НЕ ЗАПРЕТ. Причин записать «не туда» полно: клиент сам
+  // приедет, работа срочная, по пути. Продукт называет факт и уходит с
+  // дороги.
+  //
+  // МОЛЧИТ, КОГДА МЕТКИ СОВПАЛИ: сообщать «вы записываете клиента туда же,
+  // куда и всегда» — это шум, который научит не читать плашки вовсе.
+  const clientLabel = (client?.city ?? "").trim();
+  const dayLabel = resolveDayLabel(dayCities, teamId, date);
+  const labelClash = useMemo(
+    () =>
+      clientLabel !== "" && dayLabel !== null && dayLabel !== clientLabel
+        ? { client: clientLabel, day: dayLabel }
+        : null,
+    [clientLabel, dayLabel],
+  );
+  // Показываем ОДИН раз на пару «клиент + день», а не на каждый рендер:
+  // плашка, выезжающая от каждого касания формы, читается как поломка.
+  const clashShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!labelClash || !clientId) {
+      clashShown.current = null;
+      return;
+    }
+    const key = `${clientId}|${date}|${labelClash.day}`;
+    if (clashShown.current === key) return;
+    clashShown.current = key;
+    toast(
+      `Клиент из «${labelClash.client}», а день — «${labelClash.day}»`,
+      "warn",
+    );
+  }, [labelClash, clientId, date, toast]);
   const team = teams.find((tm) => tm.id === teamId) ?? null;
   const slotFallback = team?.default_slot_minutes ?? 30;
 
