@@ -18,6 +18,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { WeekMirror } from "@/features/reference/WeekMirror";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -721,7 +722,6 @@ function LabelSheet({
             {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
               const blocked = blockedBy(day);
               const on = weekdays.includes(day) && !blocked;
-              const holder = blocked?.kind === "label" ? blocked : null;
               return (
                 <Pressable
                   key={day}
@@ -761,18 +761,11 @@ function LabelSheet({
                     gap: 2,
                     borderRadius: t.radius.card,
                     borderCurve: "continuous",
-                    backgroundColor: on
-                      ? color
-                      : holder
-                        ? `${holder.color}22`
-                        : t.fill,
-                    // Выходной — пунктиром: это не «занято кем-то», а «в этот
-                    // день не работают», и различать причины обязано зрение,
-                    // а не только текст под плитками.
-                    borderWidth: blocked?.kind === "off" ? 1 : 0,
-                    borderStyle: "dashed",
-                    borderColor: t.separator,
-                    opacity: pressed ? 0.6 : 1,
+                    backgroundColor: on ? color : t.fill,
+                    // ЗАНЯТЫЙ ДЕНЬ ПРИГЛУШЁН, А НЕ ПОДПИСАН. Кто его держит —
+                    // видно в зеркале недели ниже, настоящим корешком метки.
+                    // Плитка отвечает на один вопрос: «беру этот день?»
+                    opacity: blocked ? 0.4 : pressed ? 0.6 : 1,
                   })}
                 >
                   <Text
@@ -780,41 +773,11 @@ function LabelSheet({
                     style={{
                       fontSize: 14,
                       fontWeight: on ? "700" : "500",
-                      color: on
-                        ? "#ffffff"
-                        : holder
-                          ? holder.color
-                          : t.faint,
+                      color: on ? "#ffffff" : t.faint,
                     }}
                   >
                     {WEEKDAY_LABELS[day]}
                   </Text>
-                  {/* Вторая строчка плитки: чей это день. ДАТЫ ЗДЕСЬ НЕТ
-                      (владелец 2026-08-30): число под плиткой читалось как
-                      «вот эта среда», а правило говорит про КАЖДУЮ среду.
-                      Обрезается, а не переносится: плитка одной высоты у
-                      всех семи. */}
-                  {holder ? (
-                    <Text
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={1.1}
-                      style={{
-                        fontSize: 9,
-                        lineHeight: 11,
-                        color: holder.color,
-                      }}
-                    >
-                      {holder.name.slice(0, 5)}
-                    </Text>
-                  ) : blocked?.kind === "off" ? (
-                    <Text
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={1.1}
-                      style={{ fontSize: 9, lineHeight: 11, color: t.faint }}
-                    >
-                      вых
-                    </Text>
-                  ) : null}
                 </Pressable>
               );
             })}
@@ -834,18 +797,17 @@ function LabelSheet({
             </Text>
           ) : null}
 
-          {/* ПОЛОСА БЛИЖАЙШИХ ДАТ — обещание, названное вслух. Выбор «вторник»
-              говорит о будущем, а проверить его можно было только уйдя в
-              календарь и пролистав месяц.
-
-              ЗДЕСЬ ЖЕ ЖИВЁТ ПРЕДУПРЕЖДЕНИЕ О ПЕРЕСЕЧЕНИИ (владелец
-              2026-08-30: «если на пятницу 4 сентября поставлена другая метка,
-              автоматически туда проставляться не должно»). Так оно и
-              работает — явная метка дня побеждает расписание, — но узнать об
-              этом было неоткуда: пропуск происходил молча. Зачёркнутая дата и
-              строка под ней и есть тот самый ответ. Отдельной плашки нет
-              намеренно: предупреждение обязано стоять там, где видно, о какой
-              дате речь. */}
+          {/* ЗЕРКАЛО НЕДЕЛИ (владелец 2026-08-30: «сразу на неделе внизу
+              построим — грубо говоря зеркало, как будет выглядеть в
+              календаре»). Плитки — вопрос, зеркало — ответ, и ответ дан тем
+              же языком, каким календарь говорит каждый день. */}
+          <WeekMirror
+            weekdays={weekdays}
+            color={color}
+            name={name}
+            takenBy={takenBy}
+            daysOff={daysOff}
+          />
         </View>
       ) : (
         <Pressable
