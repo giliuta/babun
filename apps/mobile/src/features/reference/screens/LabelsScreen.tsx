@@ -27,7 +27,6 @@ import { useRenameLabelCascade } from "@/features/reference/label-cascade";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import {
-  teamCities,
   useCities,
   useCreateCity,
   useDeleteCity,
@@ -160,21 +159,20 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   const [editing, setEditing] = useState<Editing | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Использование метки: сколько команд подключили + на скольких днях висит.
+  // Использование метки: на скольких днях она уже стоит рукой.
+  //
+  // СЧЁТЧИК КОМАНД УБРАН (2026-08-30). Он складывался по `teams.cities` —
+  // легаси-списку имён, подобранных команде из ОБЩЕГО справочника. С 29
+  // августа метка принадлежит ровно одной команде, подбор снесён, и список
+  // застыл пустым: «сколько команд подключили» всегда давало ноль, а сам
+  // вопрос перестал существовать — ответ на него теперь всегда «одна, эта».
   const usage = useMemo(() => {
-    const m = new Map<string, { teams: number; days: number }>();
-    const bump = (name: string, key: "teams" | "days") => {
-      const cur = m.get(name) ?? { teams: 0, days: 0 };
-      cur[key] += 1;
-      m.set(name, cur);
-    };
-    for (const team of teams) {
-      const names = new Set(teamCities(team));
-      for (const n of names) bump(n, "teams");
+    const m = new Map<string, number>();
+    for (const name of Object.values(dayCities)) {
+      m.set(name, (m.get(name) ?? 0) + 1);
     }
-    for (const name of Object.values(dayCities)) bump(name, "days");
     return m;
-  }, [teams, dayCities]);
+  }, [dayCities]);
 
   // ═══ ДВА СТОЛКНОВЕНИЯ, КОТОРЫЕ НАДО НЕ ДОПУСТИТЬ ═══
   //
@@ -309,8 +307,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   // ни цвета, ни строки в справочнике. Тридцать дней — окно, в котором
   // ошибку видно и она обратима (канон, LOCKED 2026-08-29).
   const remove = (city: City) => {
-    const u = usage.get(city.name);
-    const used = u && (u.teams > 0 || u.days > 0);
+    const used = (usage.get(city.name) ?? 0) > 0;
     confirmThen(
       "Удалить метку?",
       {

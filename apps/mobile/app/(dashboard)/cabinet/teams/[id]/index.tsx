@@ -27,8 +27,8 @@ import { Field } from "@/components/ui/Field";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import {
-  teamCities,
   teamMembers,
+  useCities,
   useMasters,
   useTeam,
   useUpdateTeam,
@@ -101,6 +101,11 @@ export default function TeamHubScreen() {
   // services.brigade_ids, у команды своей колонки нет.
   const servicesQuery = useServices();
   const scheduleQuery = useTeamSchedule(id);
+  // Метки команды — её собственные строки справочника. ЗДЕСЬ, А НЕ У МЕСТА
+  // ПОКАЗА: ниже стоят три ранних `return` (загрузка, ошибка, «команды
+  // нет»), и хук за ними вызывался бы не на каждом рендере — React считает
+  // хуки по порядку и падает на «больше хуков, чем в прошлый раз».
+  const labelsQuery = useCities({ teamId: id });
   const services = servicesQuery.data ?? [];
   const schedule = scheduleQuery.data;
   const update = useUpdateTeam();
@@ -241,21 +246,25 @@ export default function TeamHubScreen() {
   const servicesPreview =
     teamServicesCount === 0 ? "Прайс пуст" : formatCountRu(teamServicesCount, FORMS_USLUGA);
 
-  // ── Метки preview — web parity citiesPreview (teams/[id]/calendar):
-  // без меток И без города по умолчанию календарь не подскажет город —
-  // это warning; иначе имена через запятую (длинный хвост обрезает
-  // numberOfLines у NavRow).
-  const cityNames = teamCities(team);
-  const effectiveCityNames =
-    cityNames.length === 0 && team.default_city
-      ? [team.default_city]
-      : cityNames;
+  // ── Метки preview: имена через запятую, длинный хвост сворачивается
+  // («Лимассол, Пафос и ещё 2») — сам NavRow обрезал бы по ширине молча.
+  //
+  // ЧИТАЕТ СПРАВОЧНИК КОМАНДЫ, А НЕ `teams.cities` (2026-08-30). До этой
+  // правки строка строилась из легаси-списка ИМЁН, подобранных команде из
+  // общего справочника, плюс `default_city`. С 29 августа метка принадлежит
+  // команде (`cities.team_id`), подбор снесён, а `default_city` стёрт из
+  // продукта — и оба источника застыли пустыми. На проде это давало
+  // «Метки — не заданы» ЯНТАРНЫМ ПРЕДУПРЕЖДЕНИЕМ у ВСЕХ ШЕСТИ команд, у
+  // каждой из которых метки на самом деле есть. Ложная тревога на каждой
+  // карточке — хуже, чем её отсутствие: к янтарю перестают относиться
+  // серьёзно там, где он настоящий.
+  const cityNames = (labelsQuery.data ?? []).map((c) => c.name);
   const citiesPreview =
-    effectiveCityNames.length === 0
+    cityNames.length === 0
       ? null
-      : effectiveCityNames.length <= 3
-        ? effectiveCityNames.join(", ")
-        : `${effectiveCityNames.slice(0, 2).join(", ")} и ещё ${effectiveCityNames.length - 2}`;
+      : cityNames.length <= 3
+        ? cityNames.join(", ")
+        : `${cityNames.slice(0, 2).join(", ")} и ещё ${cityNames.length - 2}`;
 
   return (
     <Screen edges={["top"]}>
@@ -315,7 +324,7 @@ export default function TeamHubScreen() {
             {/* Метки — web parity: в вебе живёт в calendar-подхабе рядом с
                 «Запись» (teams/[id]/calendar → Метки/cities). Здесь настройки
                 календаря свёрнуты в хаб, поэтому строка стоит рядом с осталь-
-                ными nav-строками. Ведёт на team.cities[] + default_city ★. */}
+                ными nav-строками. */}
             <NavRow
               icon={<MapPin color={t.accent} size={ICON.md} />}
               title="Метки"
