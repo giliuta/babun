@@ -40,27 +40,6 @@ export function tierSentence(tier: {
   return parts.length > 0 ? `${head} — ${parts.join(" · ")}` : head;
 }
 
-/** СВЁРНУТАЯ СТУПЕНЬ ПЕЧАТАЕТ ВСЕ СВОИ ЧИСЛА (редизайн 2026-08-22). Лестница
- *  обязана читаться сверху вниз как прайс, без единого тапа: «от 1 · €50 ·
- *  30 мин» / «от 3 · €135 · 1 ч 30 мин». Отличается от `tierSentence` тем, что
- *  НЕ повторяет количество — оно уже стоит слева в своей колонке строки. */
-export function tierSummary(tier: {
-  rowPrice: string;
-  totalDuration: string;
-}): string {
-  const parts: string[] = [];
-  const price = Number(tier.rowPrice.trim().replace(",", "."));
-  if (tier.rowPrice.trim() && Number.isFinite(price)) {
-    parts.push(formatEURExact(price));
-  }
-  const minutes = Number(tier.totalDuration.trim());
-  if (tier.totalDuration.trim() && Number.isFinite(minutes)) {
-    parts.push(durationLabel(minutes));
-  }
-  // Пустая ступень честно молчит прочерком, а не печатает «€0 · 0 мин».
-  return parts.length > 0 ? parts.join(" · ") : "—";
-}
-
 /** Потолок барабана: часы кольцом 0–23, минуты по 5. Больше суток услуга не
  *  длится, а ветка «конец суток» у примитива при 23 не срабатывает никогда. */
 export const MAX_DURATION = 23 * 60 + 55;

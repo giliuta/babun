@@ -689,9 +689,6 @@ function ServiceSheet({
    *  гасится пропом `visible`, поэтому чужой `useState` переезжал бы от
    *  услуги к услуге. */
   const [openRow, setOpenRow] = useState<string | null>(null);
-  /** Единица измерения услуги — одна на все блоки. `null` = «продаём штуками
-   *  и слово лишнее»: тогда всё печатается голым числом, как раньше. */
-  const [unit, setUnit] = useState<string | null>(null);
   /** Линза показа чисел: «за всё» или «за одну». Хранение не меняет. */
   // ЗА ЕДИНИЦУ ПО УМОЛЧАНИЮ (владелец 2026-08-27, согласившись с разбором):
   // тогда лесенка значит «сколько стоит одна единица при таком объёме», и
@@ -729,15 +726,33 @@ function ServiceSheet({
    *  «варианты» — плоским списком без единой формулы. */
   const [serviceType, setServiceType] = useState<"quantity" | "variant">("quantity");
   const [variants, setVariants] = useState<VariantDraft[]>([]);
-  /** Время вокруг работы: дорога до адреса и уборка за собой. */
-  const [bufferBefore, setBufferBefore] = useState("0");
+  // СЕМЬ СОСТОЯНИЙ УБРАНЫ ОТСЮДА 2026-08-30, и все семь были одинаковы:
+  // заводились, посевались из услуги и уезжали обратно в базу тем же
+  // значением — БЕЗ ЕДИНОГО ЭЛЕМЕНТА УПРАВЛЕНИЯ в форме. Форма делала вид,
+  // что ими распоряжается.
+  //   `unit`, `overflow_price`, `overflow_duration_min` — владелец убрал сами
+  //     настройки 27–29 августа (единица живёт в НАЗВАНИИ услуги: «Обмотка
+  //     1 м», регрессия «свыше N» снесена целиком);
+  //   `min_qty`, `max_qty`, `required_staff`, `buffer_before_min` — двери на
+  //     мобильном не было никогда.
+  //
+  // УДАЛЕНИЕ НИЧЕГО НЕ СТИРАЕТ, и это проверено по обоим путям: обновление
+  // шлёт ЧАСТИЧНЫЙ патч — не отправленная колонка остаётся как была; а
+  // создание подставляет в `useCreateService` ровно те же значения по
+  // умолчанию, что стояли здесь (`unit ?? null`, `min_qty ?? 1`,
+  // `required_staff ?? 1`, `buffer_before_min ?? 0`). Значение, выставленное
+  // из веба, переживает сохранение с мобильного и так и так.
+  //
+  // `service_type` и `variants` НЕ ТРОНУТЫ, хотя тоже без управления: они
+  // НЕСУЩИЕ. Без них сохранение вариантной услуги взяло бы цену из лестницы
+  // вместо первого варианта, а `saveVariants` стёр бы варианты пустым
+  // списком.
+  //
+  // ДВЕ ИЗ СЕМИ КОЛОНОК ЖИВЫ и читаются записью — `unit` печатает «2 м» в
+  // строке услуги, `buffer_before_min` резервирует дорогу ДО работы. Это не
+  // мусор, а функции без двери на мобильном; сказано владельцу отдельно.
+  /** Перерыв ПОСЛЕ работы: дорога до следующего адреса и уборка за собой. */
   const [bufferAfter, setBufferAfter] = useState("0");
-  const [requiredStaff, setRequiredStaff] = useState("1");
-  /** Правило за последним порогом — «свыше N: +X и +M мин за каждую». */
-  const [overflowPrice, setOverflowPrice] = useState("");
-  const [overflowDuration, setOverflowDuration] = useState("");
-  const [minQty, setMinQty] = useState("1");
-  const [maxQty, setMaxQty] = useState("");
   /** Количество в блоке «Проверка» — живой калькулятор, не данные услуги. */
   const [economics, setEconomics] = useState<ServiceEconomicsDraft>(() =>
     economicsDraftFromService(),
@@ -779,7 +794,6 @@ function ServiceSheet({
     setColor(from?.color || PRESET_COLOR_CYCLE[0].value);
     setDescription(from?.description ?? "");
     setHasDescription(!!from?.description?.trim());
-    setUnit(typeof from?.unit === "string" && from.unit ? from.unit : null);
     setCostShown(Number(from?.cost_per_unit ?? 0) > 0);
     setServiceType(from?.service_type === "variant" ? "variant" : "quantity");
     setVariants(
@@ -790,19 +804,7 @@ function ServiceSheet({
         duration: String(variant.duration_min),
       })),
     );
-    setBufferBefore(String(from?.buffer_before_min ?? 0));
     setBufferAfter(String(from?.buffer_after_min ?? 0));
-    setRequiredStaff(String(from?.required_staff ?? 1));
-    setOverflowPrice(
-      from?.overflow_price == null ? "" : String(Number(from.overflow_price)),
-    );
-    setOverflowDuration(
-      from?.overflow_duration_min == null
-        ? ""
-        : String(from.overflow_duration_min),
-    );
-    setMinQty(String(from?.min_qty ?? 1));
-    setMaxQty(from?.max_qty == null ? "" : String(Number(from.max_qty)));
     setPriceEntry(from?.price_entry === "total" ? "total" : "unit");
     setCostEntry("unit");
     setWeekdays(
@@ -974,22 +976,13 @@ function ServiceSheet({
         duration_minutes: parsedDuration,
         // Уезжают ВСЕГДА, а не по «если заполнено»: снятая единица обязана
         // писаться явным `null`, снятые дни — явным пустым массивом.
-        unit,
         price_entry: priceEntry,
         available_weekdays: weekdays,
         service_type: serviceType,
         ...(editing?.mode === "create" && editing.copy && source
           ? { copied_from_service_id: source.id }
           : {}),
-        buffer_before_min: Math.max(0, Number(bufferBefore) || 0),
         buffer_after_min: Math.max(0, Number(bufferAfter) || 0),
-        required_staff: Math.max(1, Number(requiredStaff) || 1),
-        overflow_price:
-          overflowPrice.trim() === "" ? null : Number(overflowPrice.replace(",", ".")),
-        overflow_duration_min:
-          overflowDuration.trim() === "" ? null : Number(overflowDuration),
-        min_qty: Math.max(1, Number(minQty) || 1),
-        max_qty: maxQty.trim() === "" ? null : Number(maxQty),
         ...validated.value,
       },
       service?.id,
