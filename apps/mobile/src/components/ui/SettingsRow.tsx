@@ -88,7 +88,15 @@ export function SettingsRow({
    *  списка денежное действие оказалось бы доступно только зрячему пальцу. */
   a11yActions?: readonly { name: string; label: string }[];
   onA11yAction?: (name: string) => void;
-  onPress: () => void;
+  /** Отсутствует — строка ЗАГЛУШКА: рисуется, но не нажимается и не
+   *  притворяется кнопкой (без роли, без отклика на касание).
+   *
+   *  Живой контрол над невыполненной функцией — худший вид вранья в
+   *  продукте: человек нажимает, уходит уверенный, и узнаёт правду пустым
+   *  экраном. Опция здесь, а НЕ вторая строка рядом (закон канона от
+   *  2026-08-30): облик строки настроек обязан остаться одним на всё
+   *  приложение — расходятся не отступы, расходятся копии. */
+  onPress?: () => void;
   /** Меню по долгому нажатию. У жеста ОБЯЗАН быть видимый дублёр словом —
    *  строка, живущая только в долгом нажатии, недостижима ни для VoiceOver,
    *  ни для Voice Control. */
@@ -186,14 +194,61 @@ export function SettingsRow({
     </Text>
   ) : null;
 
+  const layout = {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
+    // 17/22 имени + 13/18 подписи = 40pt текста; 60 — это те же 10pt
+    // воздуха сверху и снизу, что были у строки 15/13 при 56.
+    minHeight: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  };
+  const label = a11yLabel ?? [title, sub, value].filter(Boolean).join(", ");
+
+  // ТЕЛО СТРОКИ — ОДНО НА ОБЕ ВЕТКИ. Написанное дважды, оно уже начало
+  // расходиться на первой же правке: в «стопке» плитка стоит ВНУТРИ первого
+  // ряда, рядом с названием, и копия про это забыла.
+  const body = stacked ? (
+    <View style={{ flex: 1, gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {tileNode}
+        {titleNode}
+      </View>
+      {subNode || valueNode ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          {subNode ?? <View style={{ flex: 1 }} />}
+          {valueNode}
+        </View>
+      ) : null}
+    </View>
+  ) : (
+    <>
+      {tileNode}
+      <View style={{ flex: 1 }}>
+        {titleNode}
+        {subNode}
+      </View>
+      {valueNode}
+    </>
+  );
+
+  // ЗАГЛУШКА: та же строка, но без роли кнопки, отклика на касание и шеврона.
+  // Шеврон обещает, что за строкой что-то есть, — обещать нечего.
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={label} style={layout}>
+        {body}
+      </View>
+    );
+  }
+
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={
-        a11yLabel ?? [title, sub, value].filter(Boolean).join(", ")
-      }
+      accessibilityLabel={label}
       accessibilityActions={a11yActions ? [...a11yActions] : undefined}
       onAccessibilityAction={
         onA11yAction
@@ -201,43 +256,12 @@ export function SettingsRow({
           : undefined
       }
       style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        // 17/22 имени + 13/18 подписи = 40pt текста; 60 — это те же 10pt
-        // воздуха сверху и снизу, что были у строки 15/13 при 56.
-        minHeight: 60,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        ...layout,
         // Нажатие УГЛУБЛЯЕТ материал, а не гасит строку прозрачностью.
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      {stacked ? (
-        <View style={{ flex: 1, gap: 6 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {tileNode}
-            {titleNode}
-          </View>
-          {subNode || valueNode ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-            >
-              {subNode ?? <View style={{ flex: 1 }} />}
-              {valueNode}
-            </View>
-          ) : null}
-        </View>
-      ) : (
-        <>
-          {tileNode}
-          <View style={{ flex: 1 }}>
-            {titleNode}
-            {subNode}
-          </View>
-          {valueNode}
-        </>
-      )}
+      {body}
       {/* Шеврон — указатель, а не участник строки: −35% массы (18/2.2 → 16/1.75)
           при том же контрасте. Он держится альфой чернил, а не размером. */}
       <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />
