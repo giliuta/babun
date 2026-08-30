@@ -85,7 +85,6 @@ import {
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { useClients, useCreateClient } from "@/features/clients/queries";
 import { useAllServices, useServices, type Service } from "@/features/services/queries";
-import { useServiceVariants } from "@/features/services/variant-queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { RepeatReminderSheet } from "@/features/recurring/RepeatReminderSheet";
 import { useCreateReminder } from "@/features/recurring/queries";
@@ -272,27 +271,6 @@ export function AppointmentSheet({
   // новых строк, и он справедливо не знает убранных; но запись, в которой
   // услуга стоит с мая, обязана называть её по имени, а не «Услуга».
   const { data: allServices = [] } = useAllServices();
-  // Варианты: услуга типа «варианты» продаётся выбором из списка, а не
-  // количеством. Читаются раз на весь экран.
-  const { data: serviceVariants = [] } = useServiceVariants();
-  const variantsByService = useMemo(() => {
-    const map = new Map<
-      string,
-      { id: string; name: string; price: number; durationMin: number }[]
-    >();
-    for (const variant of serviceVariants) {
-      map.set(variant.service_id, [
-        ...(map.get(variant.service_id) ?? []),
-        {
-          id: variant.id,
-          name: variant.name,
-          price: Number(variant.price),
-          durationMin: variant.duration_min,
-        },
-      ]);
-    }
-    return map;
-  }, [serviceVariants]);
   const nameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
     [allServices],
@@ -685,8 +663,8 @@ export function AppointmentSheet({
     loyaltyAppliedRef.current = { clientId, percent: tier.percent };
   }, [hydratedSeq, visible, clientId, clientVisits, loyalty, isEdit, appointment]);
   const selectedServices = useMemo(
-    () => buildServices(serviceIds, catalog, overrides, variantsByService),
-    [serviceIds, catalog, overrides, variantsByService],
+    () => buildServices(serviceIds, catalog, overrides),
+    [serviceIds, catalog, overrides],
   );
   const computedTotal = useMemo(
     () => appointmentTotal(selectedServices, globalDiscount),
@@ -1705,8 +1683,6 @@ export function AppointmentSheet({
                       return rest;
                     });
                   };
-                  const rowVariants = variantsByService.get(id) ?? [];
-                  const isVariantRow = rowVariants.length > 0;
                   return (
                     <View key={id}>
                     <View
@@ -1788,52 +1764,6 @@ export function AppointmentSheet({
                       <Text className="text-sm" style={{ color: t.faint }}>€</Text>
                     </View>
 
-                    {/* ВАРИАНТЫ — ЧИПАМИ ПОД СТРОКОЙ. Трёхкомнатная квартира
-                        это не «три раза комната», поэтому у такой услуги
-                        количество ничего не решает: выбирают объём работ, и
-                        цена приходит вместе с ним. Тап по активному чипу
-                        ничего не снимает — услуга без варианта не продаётся,
-                        а убрать её можно степпером. */}
-                    {isVariantRow ? (
-                      <View className="flex-row flex-wrap gap-2 px-4 pb-3">
-                        {rowVariants.map((variant) => {
-                          const active = ov.variantId === variant.id;
-                          return (
-                            <Pressable
-                              key={variant.id}
-                              onPress={() =>
-                                setOv({ variantId: variant.id, locked: undefined })
-                              }
-                              accessibilityRole="button"
-                              accessibilityState={{ selected: active }}
-                              accessibilityLabel={`${variant.name}, ${formatEURExact(
-                                variant.price,
-                              )}`}
-                              style={({ pressed }) => ({
-                                minHeight: 36,
-                                justifyContent: "center",
-                                paddingHorizontal: 12,
-                                borderRadius: t.radius.card,
-                                borderCurve: "continuous",
-                                backgroundColor: active ? t.accent : t.fill,
-                                opacity: pressed ? 0.6 : 1,
-                              })}
-                            >
-                              <Text
-                                maxFontSizeMultiplier={1.2}
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: active ? "700" : "500",
-                                  color: active ? t.onAccent : t.ink,
-                                }}
-                              >
-                                {`${variant.name} · ${formatEURExact(variant.price)}`}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : null}
                     </View>
                   );
                 })

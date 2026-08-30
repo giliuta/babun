@@ -38,15 +38,6 @@ import {
 } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import {
-} from "@babun/shared/local/services-pricing";
-
-import {
-  useSaveServiceVariants,
-  useServiceVariants,
-  type ServiceVariant,
-  type VariantDraft,
-} from "@/features/services/variant-queries";
-import {
   useCreateService,
   useReorderServices,
   useAllServices,
@@ -107,9 +98,6 @@ const CAL_VIEW_KEY = "calendar.view";
  *  соседей перелетел палец. Две строки текста + воздух. */
 const ROW_H = 60;
 
-/** «1 вариант · 2 варианта · 5 вариантов» — склонение как во всём продукте. */
-const FORMS_VARIANT: [string, string, string] = ["вариант", "варианта", "вариантов"];
-
 type ServiceEditing =
   // `copy` — источник из ДРУГОЙ команды: имя не получает «копия» (в новой
   // команде это не копия, а своя услуга) и пишется связь для отчётов.
@@ -148,7 +136,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const del = useDeleteService();
   const purge = usePurgeService();
   const countUsage = useServiceUsageCount();
-  const saveVariants = useSaveServiceVariants();
   const reorder = useReorderServices();
 
   const [editing, setEditing] = useState<ServiceEditing | null>(null);
@@ -211,18 +198,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     ];
   }, [everyService, activeTeamId]);
   /** Убранные услуги ЭТОЙ команды — полный справочник минус живой. */
-  /** Варианты всех услуг — нужны и списку (диапазон цен в строке), и листу. */
-  const variantsQuery = useServiceVariants();
-  const variantsByService = useMemo(() => {
-    const map = new Map<string, ServiceVariant[]>();
-    for (const variant of variantsQuery.data ?? []) {
-      map.set(variant.service_id, [
-        ...(map.get(variant.service_id) ?? []),
-        variant,
-      ]);
-    }
-    return map;
-  }, [variantsQuery.data]);
 
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
@@ -270,11 +245,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
     );
   };
 
-  const handleSave = async (
-    draft: ServiceInput,
-    serviceId?: string,
-    variants?: { name: string; price: number; duration_min: number }[],
-  ) => {
+  const handleSave = async (draft: ServiceInput, serviceId?: string) => {
     try {
       // РАСХОД ЧИТАЕТСЯ ИЗ ЖИВОГО КАТАЛОГА, А НЕ ИЗ СНИМКА ЗАПИСИ. Значит
       // первое же ненулевое число немедленно уменьшит показанную прибыль ВСЕХ
@@ -287,21 +258,10 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         !!serviceId &&
         draft.cost_per_unit !== undefined &&
         Number(before?.cost_per_unit ?? 0) !== draft.cost_per_unit;
-      let savedId = serviceId;
       if (serviceId) {
         await update.mutateAsync({ id: serviceId, patch: { ...draft } });
       } else {
-        const created = await create.mutateAsync({
-          ...draft,
-          position: allServices.length,
-        });
-        savedId = created?.id;
-      }
-      // ВАРИАНТЫ СОХРАНЯЮТСЯ ПОСЛЕ САМОЙ УСЛУГИ И ТОЛЬКО ДЛЯ СВОЕГО ТИПА: у
-      // «количества» их не бывает, и пустой список туда пишется явно —
-      // сменили тип, значит старые варианты обязаны уйти.
-      if (savedId && variants) {
-        await saveVariants.mutateAsync({ serviceId: savedId, variants });
+        await create.mutateAsync({ ...draft, position: allServices.length });
       }
       setEditing(null);
       toast(
@@ -440,34 +400,19 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                 // выглядела услугой с одной ценой, а внутри лежали ещё «от 2 —
                 // €100» и «от 3 — €135». По этому прайсу диктуют цену по
                 // телефону, и он обязан сказать, что цена не одна.
-                // СТРОКА ГОВОРИТ ТО, ЧТО РЕШАЕТ ТИП УСЛУГИ. У «количества» —
-                // есть ли лестница; у «вариантов» — сколько их и в каком
-                // разбросе цены. Дублировать «€50 · 30 мин» рядом с ценой
-                // справа незачем: это одно и то же число дважды.
+                // СТРОКА ГОВОРИТ, ЕСТЬ ЛИ У УСЛУГИ ЛЕСТНИЦА. Дублировать
+                // «€50 · 30 мин» рядом с ценой справа незачем: это одно и то
+                // же число дважды.
                 const tierCount = parsePriceTiers(svc.price_tiers).length;
-                const rowVariants = variantsByService.get(svc.id) ?? [];
                 const sub =
-                  svc.service_type === "variant"
-                    ? `${formatCountRu(rowVariants.length, FORMS_VARIANT)}`
-                    : tierCount > 0
-                      ? `${durationLabel(svc.duration_minutes)} · цена от количества`
-                      : durationLabel(svc.duration_minutes);
+                  tierCount > 0
+                    ? `${durationLabel(svc.duration_minutes)} · цена от количества`
+                    : durationLabel(svc.duration_minutes);
                 // ЦЕНА С КОПЕЙКАМИ. `formatEUR` округляет до целых евро
                 // (`money(Math.round(...))`), и услуга за 49,50 печаталась в
                 // прайсе как «€50» — прайс обязан говорить ровно ту цену,
                 // которая уедет в запись и в счёт.
-                const variantPrices = (variantsByService.get(svc.id) ?? []).map(
-                  (variant) => Number(variant.price),
-                );
-                const price =
-                  svc.service_type === "variant" && variantPrices.length > 0
-                    ? variantPrices.length === 1 ||
-                      Math.min(...variantPrices) === Math.max(...variantPrices)
-                      ? formatEURExact(variantPrices[0])
-                      : `${formatEURExact(Math.min(...variantPrices))}–${formatEURExact(
-                          Math.max(...variantPrices),
-                        )}`
-                    : formatEURExact(Number(svc.price));
+                const price = formatEURExact(Number(svc.price));
                 const off = !svc.is_active;
                 return (
                   <SwipeRow
@@ -630,7 +575,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         busy={busy}
         onClose={() => setEditing(null)}
         onSave={handleSave}
-        variantsByService={variantsByService}
       />
 
 
@@ -648,22 +592,15 @@ function ServiceSheet({
   busy,
   onClose,
   onSave,
-  variantsByService,
 }: {
   editing: ServiceEditing | null;
   /** Per-team-контекст: новая услуга сразу привязана к этой команде. */
   lockedTeamId?: string;
   busy: boolean;
   onClose: () => void;
-  onSave: (
-    draft: ServiceInput,
-    serviceId?: string,
-    variants?: { name: string; price: number; duration_min: number }[],
-  ) => void;
+  onSave: (draft: ServiceInput, serviceId?: string) => void;
   /** Дубль из шапки листа — вторая дверь к тому же, что делает свайп вправо
    *  по строке прайса (который перехватывает системный жест «назад»). */
-  /** Варианты по услуге — читаются один раз списком, лист берёт готовое. */
-  variantsByService: Map<string, ServiceVariant[]>;
 }) {
   const t = useThemeColors();
   // ЗНАК ВАЛЮТЫ — ИЗ ТЕНАНТА, а не зашитый «€»: у компании в другой валюте
@@ -724,8 +661,6 @@ function ServiceSheet({
   const [, setCostShown] = useState(false);
   /** ТИП УСЛУГИ решает всё устройство листа: «количество» считает лестницей,
    *  «варианты» — плоским списком без единой формулы. */
-  const [serviceType, setServiceType] = useState<"quantity" | "variant">("quantity");
-  const [variants, setVariants] = useState<VariantDraft[]>([]);
   // СЕМЬ СОСТОЯНИЙ УБРАНЫ ОТСЮДА 2026-08-30, и все семь были одинаковы:
   // заводились, посевались из услуги и уезжали обратно в базу тем же
   // значением — БЕЗ ЕДИНОГО ЭЛЕМЕНТА УПРАВЛЕНИЯ в форме. Форма делала вид,
@@ -743,10 +678,10 @@ function ServiceSheet({
   // `required_staff ?? 1`, `buffer_before_min ?? 0`). Значение, выставленное
   // из веба, переживает сохранение с мобильного и так и так.
   //
-  // `service_type` и `variants` НЕ ТРОНУТЫ, хотя тоже без управления: они
-  // НЕСУЩИЕ. Без них сохранение вариантной услуги взяло бы цену из лестницы
-  // вместо первого варианта, а `saveVariants` стёр бы варианты пустым
-  // списком.
+  // `service_type` и `variants` УБРАНЫ СЛЕДОМ, 30 августа: владелец решил
+  // «удалить тогда», а данные подтвердили, что ломать нечего — вариантных
+  // услуг в базе НОЛЬ и строк вариантов НОЛЬ. Таблица `service_variants` и
+  // колонка `service_type` в базе целы: удалён интерфейс, а не данные.
   //
   // ДВЕ ИЗ СЕМИ КОЛОНОК ЖИВЫ и читаются записью — `unit` печатает «2 м» в
   // строке услуги, `buffer_before_min` резервирует дорогу ДО работы. Это не
@@ -795,15 +730,6 @@ function ServiceSheet({
     setDescription(from?.description ?? "");
     setHasDescription(!!from?.description?.trim());
     setCostShown(Number(from?.cost_per_unit ?? 0) > 0);
-    setServiceType(from?.service_type === "variant" ? "variant" : "quantity");
-    setVariants(
-      (from ? variantsByService.get(from.id) ?? [] : []).map((variant) => ({
-        id: variant.id,
-        name: variant.name,
-        price: String(Number(variant.price)),
-        duration: String(variant.duration_min),
-      })),
-    );
     setBufferAfter(String(from?.buffer_after_min ?? 0));
     setPriceEntry(from?.price_entry === "total" ? "total" : "unit");
     setCostEntry("unit");
@@ -894,17 +820,8 @@ function ServiceSheet({
   ];
 
   const submit = () => {
-    // У ВАРИАНТОВ СВОЕЙ ЦЕНЫ И ДЛИТЕЛЬНОСТИ НЕТ — они у каждого варианта. Но
-    // колонки `price`/`duration_minutes` читают строка прайса, каталог выбора
-    // и старые записи, поэтому в них уезжает ПЕРВЫЙ вариант: «от €50» в
-    // списке честнее пустоты, и ни один читатель не падает.
-    const firstVariant = variants.find((v) => v.name.trim() !== "");
-    const effectivePrice =
-      serviceType === "variant" ? (firstVariant?.price ?? "0") : price;
-    const effectiveDuration =
-      serviceType === "variant" ? (firstVariant?.duration ?? "60") : duration;
-    const parsedPrice = Number(effectivePrice.trim().replace(",", "."));
-    const parsedDuration = Number(effectiveDuration.trim());
+    const parsedPrice = Number(price.trim().replace(",", "."));
+    const parsedDuration = Number(duration.trim());
     const nextBaseErrors: { price?: string; duration?: string } = {};
     // ПУСТАЯ ЦЕНА = БЕСПЛАТНО, И ЭТО ЗАКОННО (владелец 2026-08-29: «цену
     // необязательно вписывать — услуга может быть полностью бесплатной, её
@@ -918,7 +835,7 @@ function ServiceSheet({
     //
     // Гарантийный выезд, переделка, бонус постоянному клиенту — работа
     // сделана, денег нет. Заставлять писать «0» ради проформы незачем.
-    if (effectivePrice.trim() !== "" && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
+    if (price.trim() !== "" && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
       nextBaseErrors.price = "Цена от 0";
     }
     // НУЛЕВОЕ ВРЕМЯ РАЗРЕШЕНО (владелец 2026-08-29: «гарантия или диагностика
@@ -935,28 +852,6 @@ function ServiceSheet({
     // счёт», а испорченное число.
     if (!Number.isSafeInteger(parsedDuration) || parsedDuration < 0) {
       nextBaseErrors.duration = "Поставьте время";
-    }
-    // У ВАРИАНТОВ СВОЯ ПРОВЕРКА: лестницы нет, зато список не может быть
-    // пустым и имена в нём не повторяются — иначе в записи два одинаковых
-    // чипа, и выбрать между ними нечем.
-    if (serviceType === "variant") {
-      const named = variants.filter((v) => v.name.trim() !== "");
-      if (named.length === 0) {
-        setBaseErrors({ price: "Добавьте хотя бы один вариант" });
-        return;
-      }
-      const names = named.map((v) => v.name.trim().toLowerCase());
-      if (new Set(names).size !== names.length) {
-        setBaseErrors({ price: "Названия вариантов повторяются" });
-        return;
-      }
-      const priceless = named.find(
-        (v) => v.price.trim() === "" || !Number.isFinite(Number(v.price.replace(",", "."))),
-      );
-      if (priceless) {
-        setBaseErrors({ price: `Впишите цену: ${priceless.name.trim()}` });
-        return;
-      }
     }
     const validated = validateServiceEconomics(economics);
     setBaseErrors(nextBaseErrors);
@@ -978,7 +873,6 @@ function ServiceSheet({
         // писаться явным `null`, снятые дни — явным пустым массивом.
         price_entry: priceEntry,
         available_weekdays: weekdays,
-        service_type: serviceType,
         ...(editing?.mode === "create" && editing.copy && source
           ? { copied_from_service_id: source.id }
           : {}),
@@ -986,15 +880,6 @@ function ServiceSheet({
         ...validated.value,
       },
       service?.id,
-      serviceType === "variant"
-        ? variants
-            .filter((variant) => variant.name.trim() !== "")
-            .map((variant) => ({
-              name: variant.name.trim(),
-              price: Number(variant.price.replace(",", ".")) || 0,
-              duration_min: Math.max(1, Number(variant.duration) || 60),
-            }))
-        : [],
     );
   };
 
@@ -1206,46 +1091,6 @@ function ServiceSheet({
           колонки прежними значениями, уже заведённые услуги ничего не теряют
           при сохранении. Убран ТОЛЬКО интерфейс — вернуть его можно, не
           трогая данные. */}
-      {/* УСЛУГА С ВАРИАНТАМИ РЕДАКТИРУЕТСЯ НЕ ЗДЕСЬ, И ОБ ЭТОМ СКАЗАНО ВСЛУХ.
-          Ветку «Варианты» убрали 27 августа по просьбе владельца; проверяя
-          перед сносом, я посмотрел ОДИН календарь (в нём услуг не было) и
-          решил, что таких услуг нет вовсе. Они есть — «Flat cleaning,
-          2 варианта» в другом календаре.
-
-          Без этой заглушки такая услуга открывалась обычной лесенкой, и
-          цена в ней была цифрой ПЕРВОГО варианта: правка в поле уезжала в
-          никуда — `submit` для вариантных услуг берёт цену у варианта, а не
-          из этого поля. То есть человек менял 50 на 60, жал «Сохранить» и не
-          получал ничего, без единого слова.
-
-          Данные целы: `submit` пишет варианты прежними. Здесь закрыт только
-          путь к молчаливой потере правки. */}
-      {serviceType === "variant" ? (
-        <View style={{ paddingHorizontal: GUTTER }}>
-          <View
-            style={{
-              padding: 16,
-              borderRadius: t.radius.card,
-              borderCurve: "continuous",
-              backgroundColor: t.fill,
-            }}
-          >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-            >
-              {formatCountRu(variants.length, ["вариант", "варианта", "вариантов"])}
-            </Text>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 14, lineHeight: 20, color: t.sub, marginTop: 4 }}
-            >
-              Цену и время задают варианты. Здесь они не правятся — имя и
-              описание сохранятся, варианты останутся как есть.
-            </Text>
-          </View>
-        </View>
-      ) : (
       <ServiceLadder
         steps={ladderSteps}
         currencySymbol={currencySymbol}
@@ -1312,7 +1157,6 @@ function ServiceSheet({
           })
         }
       />
-      )}
 
       {/* РАБОЧИЕ ДНИ — ПАРАМЕТР, КОТОРЫЙ ДОБАВЛЯЮТ, А НЕ ФОРМА, КОТОРУЮ
           ЗАПОЛНЯЮТ (владелец 2026-08-29). Пока его нет — одна строчка-кнопка,

@@ -94,7 +94,6 @@ import {
   useServices,
   type Service,
 } from "@/features/services/queries";
-import { useServiceVariants } from "@/features/services/variant-queries";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
@@ -286,25 +285,6 @@ export default function BookScreen() {
   const servicesQuery = useServices();
   // Услуга типа «варианты» продаётся выбором объёма работ, а не количеством:
   // трёхкомнатная квартира — это не «три раза комната».
-  const { data: serviceVariants = [] } = useServiceVariants();
-  const variantsByService = useMemo(() => {
-    const map = new Map<
-      string,
-      { id: string; name: string; price: number; durationMin: number }[]
-    >();
-    for (const variant of serviceVariants) {
-      map.set(variant.service_id, [
-        ...(map.get(variant.service_id) ?? []),
-        {
-          id: variant.id,
-          name: variant.name,
-          price: Number(variant.price),
-          durationMin: variant.duration_min,
-        },
-      ]);
-    }
-    return map;
-  }, [serviceVariants]);
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
   const loyaltyQuery = useLoyalty();
@@ -805,8 +785,8 @@ export default function BookScreen() {
 
   // ── производные суммы ──
   const selectedServices = useMemo(
-    () => buildServices(serviceIds, catalog, overrides, variantsByService),
-    [serviceIds, catalog, overrides, variantsByService],
+    () => buildServices(serviceIds, catalog, overrides),
+    [serviceIds, catalog, overrides],
   );
   const computedTotal = useMemo(
     () => selectedServices.reduce((s, x) => s + x.totalPrice, 0),
@@ -2002,8 +1982,6 @@ export default function BookScreen() {
                         line.serviceName ??
                         nameById.get(line.serviceId) ??
                         "Услуга удалена";
-                      const rowVariants =
-                        variantsByService.get(line.serviceId) ?? [];
                       return (
                         <View
                           key={line.serviceId}
@@ -2021,14 +1999,12 @@ export default function BookScreen() {
                               вместо количества — больше нет: флаг «продаём
                               целиком» снят, а убрать услугу по-прежнему можно
                               тем же степпером до нуля. */}
-                          {rowVariants.length === 0 ? (
-                            <Stepper
-                              qty={line.quantity}
-                              unit={line.unit ?? svc?.unit ?? null}
-                              onDec={() => setQty(line.serviceId, line.quantity - 1)}
-                              onInc={() => setQty(line.serviceId, line.quantity + 1)}
-                            />
-                          ) : null}
+                          <Stepper
+                            qty={line.quantity}
+                            unit={line.unit ?? svc?.unit ?? null}
+                            onDec={() => setQty(line.serviceId, line.quantity - 1)}
+                            onInc={() => setQty(line.serviceId, line.quantity + 1)}
+                          />
                           <Text
                             style={{
                               fontSize: 15,
@@ -2043,56 +2019,6 @@ export default function BookScreen() {
                           </Text>
                         </View>
 
-                        {/* ВАРИАНТЫ ЧИПАМИ. У такой услуги количество ничего
-                            не решает — выбирают объём работ, и цена приходит
-                            вместе с ним. */}
-                        {rowVariants.length > 0 ? (
-                          <View className="flex-row flex-wrap gap-2 px-4 pb-3">
-                            {rowVariants.map((variant) => {
-                              const active =
-                                overrides[line.serviceId]?.variantId === variant.id;
-                              return (
-                                <Pressable
-                                  key={variant.id}
-                                  onPress={() =>
-                                    setOverrides((p) => ({
-                                      ...p,
-                                      [line.serviceId]: {
-                                        ...p[line.serviceId],
-                                        variantId: variant.id,
-                                      },
-                                    }))
-                                  }
-                                  accessibilityRole="button"
-                                  accessibilityState={{ selected: active }}
-                                  accessibilityLabel={`${variant.name}, ${formatEURExact(
-                                    variant.price,
-                                  )}`}
-                                  style={({ pressed }) => ({
-                                    minHeight: 36,
-                                    justifyContent: "center",
-                                    paddingHorizontal: 12,
-                                    borderRadius: t.radius.card,
-                                    borderCurve: "continuous",
-                                    backgroundColor: active ? t.accent : t.fill,
-                                    opacity: pressed ? 0.6 : 1,
-                                  })}
-                                >
-                                  <Text
-                                    maxFontSizeMultiplier={1.2}
-                                    style={{
-                                      fontSize: 14,
-                                      fontWeight: active ? "700" : "500",
-                                      color: active ? t.onAccent : t.ink,
-                                    }}
-                                  >
-                                    {`${variant.name} · ${formatEURExact(variant.price)}`}
-                                  </Text>
-                                </Pressable>
-                              );
-                            })}
-                          </View>
-                        ) : null}
                         </View>
                       );
                     })}
