@@ -853,7 +853,7 @@ export default function CalendarTab() {
   // экрана: день выглядел помеченным, хотя на нём никто ничего не ставил, и
   // снять это можно было только найдя звезду в справочнике.
   const labelFor = useCallback(
-    (dateYmd: string): { name: string; color: string } | null => {
+    (dateYmd: string): { name: string; color: string; tint: boolean } | null => {
       if (!activeTeamId) return null;
       const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
       // Сентинел CITY_CLEARED = «метка явно снята».
@@ -881,9 +881,15 @@ export default function CalendarTab() {
       if (!name) return null;
       // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
       // метки сливалась с кругом «сегодня» и читалась как второй маркер.
+      const city = cities.find((c) => c.name === name);
+      // ЗАЛИВКА — РЕШЕНИЕ САМОЙ МЕТКИ (владелец 2026-08-30: «не все метки
+      // должны подсвечиваться»). Имя на дате остаётся всегда, красится ли
+      // колонка — спрашиваем у метки. Метки, которой уже нет в справочнике,
+      // верим на слово: имя на дне стоит, красить нечем и незачем.
       return {
         name,
-        color: cities.find((c) => c.name === name)?.color ?? t.faint,
+        color: city?.color ?? t.faint,
+        tint: city?.tint_day ?? true,
       };
     },
     [activeTeamId, dayCities, cities, todayYmd, t.faint],
@@ -898,7 +904,12 @@ export default function CalendarTab() {
   // team.tint_days_by_label (default on) drops the resolver entirely.
   const labelTintFor = useMemo(() => {
     if (!(activeTeam?.tint_days_by_label ?? true)) return undefined;
-    return (dateYmd: string) => labelFor(dateYmd)?.color ?? null;
+    // Два уровня, и оба нужны: командный `tint_days_by_label` гасит заливку
+    // во всём календаре разом, метка-уровневый `tint_day` — только свою.
+    return (dateYmd: string) => {
+      const label = labelFor(dateYmd);
+      return label?.tint ? label.color : null;
+    };
   }, [activeTeam?.tint_days_by_label, labelFor]);
   // Web CityPickerModal pickerList: активные метки справочника, суженные до
   // меток команды, когда они заданы; пустой список команды при заданном

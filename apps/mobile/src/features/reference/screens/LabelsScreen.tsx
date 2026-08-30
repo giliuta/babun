@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { getStorage } from "@babun/shared/storage";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -17,9 +17,17 @@ import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
-import { useDayCities } from "@/features/calendar/day-cities";
+import { dayCityKey, useDayCities } from "@/features/calendar/day-cities";
+import { CITY_CLEARED } from "@babun/shared/local/day-cities";
+import { formatYMD } from "@/features/appointments/helpers";
+import { formatDateShortRu } from "@babun/shared/common/utils/date-utils";
+import {
+  nextDateForWeekday,
+  upcomingOccurrences,
+} from "@/features/reference/label-schedule";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { allDays, ISO_BY_KEY } from "@/features/calendar/schedule-days";
 import { useRenameLabelCascade } from "@/features/reference/label-cascade";
@@ -36,6 +44,22 @@ import {
   useUpdateCity,
   type City,
 } from "@/features/reference/queries";
+
+/** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
+ *  аргументами: имя, цвет, дни и заливка — один ответ на один вопрос «какая
+ *  это метка», и порядок в вызове не должен быть частью правды. */
+/** Сколько ближайших дат показывать полосой. Пять — это чуть больше месяца
+ *  для одного выбранного дня недели и полторы недели для пяти: достаточно,
+ *  чтобы увидеть ритм и ближайший пропуск, и мало, чтобы полоса не поехала
+ *  в две строки на узком экране. */
+const OCCURRENCE_LIMIT = 5;
+
+interface LabelDraft {
+  name: string;
+  color: string;
+  weekdays: number[];
+  tintDay: boolean;
+}
 
 /** Полное имя дня по ISO-номеру — для объяснения, почему день не берётся. */
 const WEEKDAY_FULL_BY_ISO: Record<number, string> = {
@@ -95,6 +119,9 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   )?.teamId;
   const t = useThemeColors();
   const toast = useToast();
+  // Сегодня считаем ОДИН РАЗ на рендер: полоса дат и подписи на плитках
+  // обязаны говорить об одном и том же дне, иначе на полуночи они разъедутся.
+  const todayYmd = useMemo(() => formatYMD(new Date()), []);
   const teamsQuery = useTeams();
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   // Явно переданная команда (маршрут Кабинет → Команды → метки) побеждает:
@@ -179,14 +206,34 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   // ЗАНЯТЫЕ ДНИ. Кто уже держит день недели — считаем по всем живым меткам,
   // кроме той, что сейчас правим (иначе метка «занимала» бы день у самой
   // себя и её нельзя было бы сохранить).
+  //
+  // ХОЗЯИН ДНЯ ЕДЕТ ВМЕСТЕ С ЦВЕТОМ (2026-08-30): плитка занятого дня теперь
+  // красится в цвет занявшей метки и подписывается её именем. До этого она
+  // просто гасла, а имя хозяина приходилось выковыривать тапом — карта
+  // недели лежала в данных, но на экран не попадала.
   const takenBy = useMemo(() => {
-    const m = new Map<number, string>();
+    const m = new Map<number, { name: string; color: string | null }>();
     for (const c of cities) {
       if (!c.is_active || c.deleted_at) continue;
-      for (const d of c.weekdays ?? []) if (!m.has(d)) m.set(d, c.name);
+      for (const d of c.weekdays ?? []) {
+        if (!m.has(d)) m.set(d, { name: c.name, color: c.color });
+      }
     }
     return m;
   }, [cities]);
+
+  // ЯВНАЯ МЕТКА НА КОНКРЕТНОЙ ДАТЕ — не то же самое, что занятый день недели.
+  // День недели занимает ЧУЖОЕ РАСПИСАНИЕ (и это запрет: у дня одна метка).
+  // Дату занимает РУКА диспетчера — и это не запрет, а предупреждение: туда
+  // расписание просто не встанет, история важнее настройки.
+  const assignedOn = useCallback(
+    (ymd: string): string | null => {
+      if (!teamId) return null;
+      const v = dayCities[dayCityKey(teamId, ymd)];
+      return v && v !== CITY_CLEARED ? v : null;
+    },
+    [dayCities, teamId],
+  );
 
   // ВЫХОДНЫЕ — ЭТОЙ КОМАНДЫ (владелец: «по четвергам выходной — значит в
   // четверг метку ставить нельзя, там пересекутся метка выходного и метка
@@ -205,7 +252,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
-  const add = async (name: string, color: string, weekdays: number[]) => {
+  const add = async ({ name, color, weekdays, tintDay }: LabelDraft) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
@@ -216,7 +263,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         // Уже в библиотеке — просто обновляем цвет.
         await updateCity.mutateAsync({
           id: existing.id,
-          patch: { color, weekdays },
+          patch: { color, weekdays, tint_day: tintDay },
         });
       } else {
         if (!teamId) return;
@@ -224,6 +271,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
           name: trimmed,
           color,
           weekdays,
+          tintDay,
           teamId,
         });
       }
@@ -236,9 +284,7 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
 
   const edit = async (
     city: City,
-    newName: string,
-    color: string,
-    weekdays: number[],
+    { name: newName, color, weekdays, tintDay }: LabelDraft,
   ) => {
     const trimmed = newName.trim();
     if (!trimmed) return;
@@ -255,13 +301,13 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         target = collision.name;
         await updateCity.mutateAsync({
           id: collision.id,
-          patch: { color, weekdays },
+          patch: { color, weekdays, tint_day: tintDay },
         });
         await deleteCity.mutateAsync(city.id);
       } else {
         await updateCity.mutateAsync({
           id: city.id,
-          patch: { name: trimmed, color, weekdays },
+          patch: { name: trimmed, color, weekdays, tint_day: tintDay },
         });
       }
       if (renamed) {
@@ -509,6 +555,8 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         editing={editing}
         takenBy={takenBy}
         daysOff={companyDaysOff}
+        assignedOn={assignedOn}
+        todayYmd={todayYmd}
         busy={busy}
         onClose={() => setEditing(null)}
         onCreate={add}
@@ -522,25 +570,25 @@ function LabelSheet({
   editing,
   takenBy,
   daysOff,
+  assignedOn,
+  todayYmd,
   busy,
   onClose,
   onCreate,
   onUpdate,
 }: {
   editing: Editing | null;
-  /** День недели → имя метки, которая его уже держит. */
-  takenBy: Map<number, string>;
-  /** Дни, в которые не работает НИ ОДНА команда. */
+  /** День недели → метка, которая его уже держит, вместе с её цветом. */
+  takenBy: Map<number, { name: string; color: string | null }>;
+  /** Дни, в которые не работает эта команда. */
   daysOff: Set<number>;
+  /** Явная метка на конкретной дате или null. */
+  assignedOn: (ymd: string) => string | null;
+  todayYmd: string;
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, color: string, weekdays: number[]) => void;
-  onUpdate: (
-    city: City,
-    newName: string,
-    color: string,
-    weekdays: number[],
-  ) => void;
+  onCreate: (draft: LabelDraft) => void;
+  onUpdate: (city: City, draft: LabelDraft) => void;
 }) {
   const t = useThemeColors();
   const isEdit = editing?.mode === "edit";
@@ -553,6 +601,9 @@ function LabelSheet({
   // нет — он появляется по кнопке.
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [hasWeekdays, setHasWeekdays] = useState(false);
+  /** Заливать ли колонку дня цветом метки (владелец 2026-08-30: «не все
+   *  метки должны подсвечиваться»). Имя на дате остаётся в любом случае. */
+  const [tintDay, setTintDay] = useState(true);
   /** Почему день не берётся. Пишется под плитками, а не плашкой сверху:
    *  ответ обязан стоять там, где задан вопрос. */
   const [blockNote, setBlockNote] = useState<string | null>(null);
@@ -569,6 +620,7 @@ function LabelSheet({
       : [];
     setWeekdays(days);
     setHasWeekdays(days.length > 0);
+    setTintDay(isEdit ? editing.city.tint_day ?? true : true);
   }
 
   const canSubmit = name.trim().length > 0 && !busy;
@@ -580,11 +632,35 @@ function LabelSheet({
   // Свой собственный день занятым не считаем: иначе метка отбирала бы день у
   // самой себя и её нельзя было бы пересохранить.
   const ownName = isEdit ? editing.city.name : null;
-  const blockedBy = (day: number): string | null => {
-    if (daysOff.has(day)) return "выходной";
+  /** Кто держит день недели: имя чужой метки, «выходной» — или null. */
+  const blockedBy = (
+    day: number,
+  ): { kind: "off" } | { kind: "label"; name: string; color: string } | null => {
+    if (daysOff.has(day)) return { kind: "off" };
     const holder = takenBy.get(day);
-    return holder && holder !== ownName ? holder : null;
+    if (!holder || holder.name === ownName) return null;
+    return {
+      kind: "label",
+      name: holder.name,
+      color: holder.color ?? FALLBACK_COLOR,
+    };
   };
+
+  // ДАТЫ, НА КОТОРЫЕ ВСТАНЕТ РАСПИСАНИЕ. Выбор «вторник» — обещание про
+  // будущее; до сих пор проверить его можно было только уйдя в календарь.
+  // Здесь оно названо конкретными днями, и там же видно пропуски.
+  const occurrences = useMemo(
+    () =>
+      upcomingOccurrences({
+        weekdays,
+        fromYmd: todayYmd,
+        limit: OCCURRENCE_LIMIT,
+        assignedOn,
+        ownName,
+      }),
+    [weekdays, todayYmd, assignedOn, ownName],
+  );
+  const skipped = occurrences.filter((o) => o.takenBy !== null);
 
   // ЛИСТ — КАНОНИЧЕСКИЙ `BottomSheet`, а не самописный `Modal animationType
   // ="slide"` (владелец 2026-08-17: «какая-то серая плашка поднимается вверх,
@@ -601,11 +677,11 @@ function LabelSheet({
         <>
           <Button
             label={isEdit ? "Сохранить" : "Создать"}
-            onPress={() =>
-              isEdit
-                ? onUpdate(editing.city, name, color, weekdays)
-                : onCreate(name, color, weekdays)
-            }
+            onPress={() => {
+              const draft: LabelDraft = { name, color, weekdays, tintDay };
+              if (isEdit) onUpdate(editing.city, draft);
+              else onCreate(draft);
+            }}
             disabled={!canSubmit}
             loading={busy}
           />
@@ -659,7 +735,7 @@ function LabelSheet({
           показывает то, что на нём фактически было. Поэтому смена дней не
           перекрашивает историю. */}
       {hasWeekdays ? (
-        <View style={{ marginTop: 14, marginBottom: 8 }}>
+        <View style={{ marginTop: 14, marginBottom: 4 }}>
           <View
             style={{
               flexDirection: "row",
@@ -672,6 +748,7 @@ function LabelSheet({
               onPress={() => {
                 setHasWeekdays(false);
                 setWeekdays([]);
+                setBlockNote(null);
               }}
               hitSlop={10}
               accessibilityRole="button"
@@ -684,21 +761,31 @@ function LabelSheet({
               <X color={t.faint} size={16} strokeWidth={2} />
             </Pressable>
           </View>
-          <View style={{ flexDirection: "row", gap: 6 }}>
+
+          {/* НЕДЕЛЯ КАК КАРТА ВЛАДЕНИЯ, А НЕ КАК СЕМЬ ОДИНАКОВЫХ КНОПОК
+              (владелец 2026-08-30: «надо понимать, какие даты выбраны»).
+              Занятый день красится в цвет ЗАНЯВШЕЙ метки и подписан её
+              именем; выходной обведён пунктиром. До этого и то и другое
+              выглядело одинаково — просто погасшая плитка, — а имя хозяина
+              приходилось выковыривать тапом. */}
+          <View style={{ flexDirection: "row", gap: 5 }}>
             {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
               const blocked = blockedBy(day);
               const on = weekdays.includes(day) && !blocked;
+              const holder = blocked?.kind === "label" ? blocked : null;
+              const nextYmd = on ? nextDateForWeekday(day, todayYmd) : null;
               return (
                 <Pressable
                   key={day}
                   onPress={() => {
-                    // ЗАНЯТЫЙ ДЕНЬ НЕ МОЛЧИТ. Погашенная плитка без ответа
-                    // читается как поломка; она обязана сказать, КЕМ занята.
+                    // ЗАНЯТЫЙ ДЕНЬ НЕ МОЛЧИТ. Он и так называет хозяина
+                    // цветом и подписью, но подпись мелкая — тап повторяет
+                    // это словами, целиком.
                     if (blocked) {
                       setBlockNote(
-                        blocked === "выходной"
-                          ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у всех команд`
-                          : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${blocked}»`,
+                        blocked.kind === "off"
+                          ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у команды`
+                          : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${blocked.name}». У дня одна метка.`,
                       );
                       return;
                     }
@@ -713,20 +800,33 @@ function LabelSheet({
                   accessibilityState={{ selected: on, disabled: !!blocked }}
                   accessibilityLabel={
                     blocked
-                      ? `${WEEKDAY_LABELS[day]} — занят: ${blocked}`
-                      : `${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`
+                      ? blocked.kind === "off"
+                        ? `${WEEKDAY_LABELS[day]} — выходной`
+                        : `${WEEKDAY_LABELS[day]} — занят меткой ${blocked.name}`
+                      : on && nextYmd
+                        ? `${WEEKDAY_LABELS[day]} — ставится, ближайший ${formatDateShortRu(nextYmd)}`
+                        : `${WEEKDAY_LABELS[day]} — не ставится`
                   }
                   style={({ pressed }) => ({
                     flex: 1,
-                    height: 44,
+                    height: 52,
                     alignItems: "center",
                     justifyContent: "center",
+                    gap: 2,
                     borderRadius: t.radius.card,
                     borderCurve: "continuous",
-                    backgroundColor: on ? color : t.fill,
-                    // Занятый гасится, но остаётся нажимаемым: тап — это его
-                    // способ объяснить, почему он не берётся.
-                    opacity: blocked ? 0.35 : pressed ? 0.6 : 1,
+                    backgroundColor: on
+                      ? color
+                      : holder
+                        ? `${holder.color}22`
+                        : t.fill,
+                    // Выходной — пунктиром: это не «занято кем-то», а «в этот
+                    // день не работают», и различать причины обязано зрение,
+                    // а не только текст под плитками.
+                    borderWidth: blocked?.kind === "off" ? 1 : 0,
+                    borderStyle: "dashed",
+                    borderColor: t.separator,
+                    opacity: pressed ? 0.6 : 1,
                   })}
                 >
                   <Text
@@ -734,15 +834,56 @@ function LabelSheet({
                     style={{
                       fontSize: 14,
                       fontWeight: on ? "700" : "500",
-                      color: on ? "#ffffff" : t.faint,
+                      color: on
+                        ? "#ffffff"
+                        : holder
+                          ? holder.color
+                          : t.faint,
                     }}
                   >
                     {WEEKDAY_LABELS[day]}
                   </Text>
+                  {/* Вторая строчка плитки: у выбранного дня — ближайшая
+                      дата, у занятого — чей он. Обрезается, а не переносится:
+                      плитка одной высоты у всех семи. */}
+                  {on && nextYmd ? (
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.1}
+                      style={{
+                        fontSize: 9,
+                        lineHeight: 11,
+                        color: "rgba(255,255,255,0.85)",
+                      }}
+                    >
+                      {formatDateShortRu(nextYmd).replace(/\s.*/, "")}
+                    </Text>
+                  ) : holder ? (
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.1}
+                      style={{
+                        fontSize: 9,
+                        lineHeight: 11,
+                        color: holder.color,
+                      }}
+                    >
+                      {holder.name.slice(0, 5)}
+                    </Text>
+                  ) : blocked?.kind === "off" ? (
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.1}
+                      style={{ fontSize: 9, lineHeight: 11, color: t.faint }}
+                    >
+                      вых
+                    </Text>
+                  ) : null}
                 </Pressable>
               );
             })}
           </View>
+
           {blockNote ? (
             <Text
               maxFontSizeMultiplier={1.2}
@@ -755,6 +896,75 @@ function LabelSheet({
             >
               {blockNote}
             </Text>
+          ) : null}
+
+          {/* ПОЛОСА БЛИЖАЙШИХ ДАТ — обещание, названное вслух. Выбор «вторник»
+              говорит о будущем, а проверить его можно было только уйдя в
+              календарь и пролистав месяц.
+
+              ЗДЕСЬ ЖЕ ЖИВЁТ ПРЕДУПРЕЖДЕНИЕ О ПЕРЕСЕЧЕНИИ (владелец
+              2026-08-30: «если на пятницу 4 сентября поставлена другая метка,
+              автоматически туда проставляться не должно»). Так оно и
+              работает — явная метка дня побеждает расписание, — но узнать об
+              этом было неоткуда: пропуск происходил молча. Зачёркнутая дата и
+              строка под ней и есть тот самый ответ. Отдельной плашки нет
+              намеренно: предупреждение обязано стоять там, где видно, о какой
+              дате речь. */}
+          {occurrences.length > 0 ? (
+            <View style={{ marginTop: 12 }}>
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 12, color: t.faint, marginBottom: 7 }}
+              >
+                Встанет на эти дни
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {occurrences.map((o) => (
+                  <View
+                    key={o.ymd}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: t.radius.pill,
+                      backgroundColor: o.takenBy ? t.fill : `${color}1f`,
+                    }}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      style={{
+                        fontSize: 12,
+                        color: o.takenBy ? t.faint : color,
+                        textDecorationLine: o.takenBy
+                          ? "line-through"
+                          : "none",
+                      }}
+                    >
+                      {formatDateShortRu(o.ymd)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+              {skipped.length > 0 ? (
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{
+                    marginTop: 8,
+                    fontSize: 12,
+                    lineHeight: 17,
+                    color: t.warning,
+                  }}
+                >
+                  {/* ИМЯ МЕТКИ — ВСЕГДА В ИМЕНИТЕЛЬНОМ. «Останется за
+                      „Пафос"» просило родительный, а склонять произвольное имя
+                      («Y&D», «Лимассол», «Дом 5») кодом нельзя: правило
+                      сломается на первом же не-русском названии. Фраза
+                      построена так, что падеж не нужен вовсе. */}
+                  {skipped.length === 1
+                    ? `${formatDateShortRu(skipped[0].ymd)} уже занято меткой «${skipped[0].takenBy}» — расписание туда не встанет`
+                    : `${skipped.length} из этих дней уже заняты другими метками — расписание их не тронет`}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
         </View>
       ) : (
@@ -782,7 +992,7 @@ function LabelSheet({
           style={({ pressed }) => ({
             alignSelf: "flex-start",
             paddingTop: 2,
-            paddingBottom: 18,
+            paddingBottom: 6,
             opacity: pressed ? 0.5 : 1,
           })}
         >
@@ -794,6 +1004,39 @@ function LabelSheet({
           </Text>
         </Pressable>
       )}
+
+      {/* ПОДСВЕЧИВАТЬ ДЕНЬ — РЕШЕНИЕ САМОЙ МЕТКИ (владелец 2026-08-30: «не все
+          дни надо подсвечивать, не все метки должны подсвечиваться»).
+
+          СТОИТ ПОД ГРАФИКОМ, а не над ним: сперва «когда метка встаёт», потом
+          «как она при этом выглядит». Обратный порядок спрашивал бы про вид
+          того, чего ещё нет.
+
+          ЭТО НЕ ВТОРОЙ ТУМБЛЕР РЯДОМ С КОМАНДНЫМ. Командный
+          `tint_days_by_label` гасит заливку во всём календаре разом, и
+          переключателя для него на мобильном нет вовсе — так что доступ к
+          решению «красить или нет» появляется здесь впервые, и сразу на
+          верном уровне: красить ли день, зависит от того, ЧТО за метка. */}
+      <View
+        style={{
+          marginTop: 6,
+          paddingTop: 6,
+          // ВОЗДУХ ДО «СОХРАНИТЬ» (тот же счёт, что владелец предъявил
+          // «Графику недели» 2026-08-30). Прижатая к футеру строка читается
+          // его частью — а это приписка к форме, не второе главное действие.
+          marginBottom: 12,
+          borderTopWidth: 1,
+          borderTopColor: t.separator,
+        }}
+      >
+        <SwitchRow
+          inset={false}
+          label="Подсвечивать день"
+          hint="Заливка колонки в календаре"
+          value={tintDay}
+          onChange={setTintDay}
+        />
+      </View>
     </BottomSheet>
   );
 }

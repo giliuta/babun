@@ -298,6 +298,8 @@ export function useCreateCity() {
       weekdays?: number[];
       /** Команда-владелец. Метка без команды больше не существует. */
       teamId: string;
+      /** Заливать ли колонку дня цветом метки. По умолчанию да. */
+      tintDay?: boolean;
     }) => {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Добавлять метки может владелец или диспетчер.");
@@ -311,6 +313,7 @@ export function useCreateCity() {
           country: input.country || "",
           color: input.color || null,
           weekdays: input.weekdays ?? [],
+          tint_day: input.tintDay ?? true,
           team_id: input.teamId,
         })
         .select("*")

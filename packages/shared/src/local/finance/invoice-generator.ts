@@ -1,6 +1,7 @@
 import type { Appointment } from "../appointments";
 import { lineTotal, subtotal } from "./appointment-calc";
 import { invoiceLineTotal } from "./invoice-ledger";
+import { addDaysYmd } from "../../common/utils/date-utils";
 
 // ГЕНЕРАТОР ИНВОЙСА ИЗ ЗАПИСИ.
 //
@@ -212,14 +213,10 @@ function lineTitle(
   );
 }
 
-/** YYYY-MM-DD + N дней. Считается в UTC намеренно: дата документа — календарный
- *  день без времени, и местная полночь не должна сдвигать срок оплаты. */
-export function addDaysYmd(ymd: string, days: number): string {
-  const [year, month, day] = ymd.split("-").map(Number);
-  const date = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+// `addDaysYmd` переехал в `common/utils/date-utils` (2026-08-30): его второй
+// читатель — расписание меток, и справочнику незачем импортировать финансы
+// ради сложения дней. Реэкспорт оставлен, чтобы не трогать зовущих отсюда.
+export { addDaysYmd };
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;

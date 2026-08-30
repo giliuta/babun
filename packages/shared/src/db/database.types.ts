@@ -621,6 +621,7 @@ export type Database = {
           name: string
           position: number
           team_id: string
+          tint_day: boolean
           weekdays: number[]
           tenant_id: string
           updated_at: string
@@ -635,6 +636,7 @@ export type Database = {
           name: string
           position?: number
           team_id: string
+          tint_day?: boolean
           weekdays?: number[]
           tenant_id: string
           updated_at?: string
@@ -649,6 +651,7 @@ export type Database = {
           name?: string
           position?: number
           team_id?: string
+          tint_day?: boolean
           weekdays?: number[]
           tenant_id?: string
           updated_at?: string

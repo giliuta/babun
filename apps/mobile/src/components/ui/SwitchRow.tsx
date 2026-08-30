@@ -15,12 +15,21 @@ export function SwitchRow({
   value,
   onChange,
   disabled = false,
+  inset = true,
 }: {
   label: string;
   hint?: string;
   value: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  /** Нести ли собственные боковые 16pt. `false` — внутри поверхности, которая
+   *  уже западдирована сама (лист с `padded`), иначе отступ удвоится.
+   *
+   *  ОДИН ВЛАДЕЛЕЦ ГОРИЗОНТАЛЬНОГО ОТСТУПА — закон канона от 2026-08-29:
+   *  ровно это удвоение уже ловил владелец на форме метки, где поле оказалось
+   *  на 32pt уже, чем в услуге. Опция здесь, а не своя строка рядом: облик
+   *  тумблера обязан остаться одним на всё приложение. */
+  inset?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -39,7 +48,7 @@ export function SwitchRow({
         minHeight: 48,
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 16,
+        paddingHorizontal: inset ? 16 : 0,
         paddingVertical: 8,
         // Нажатие УГЛУБЛЯЕТ материал — тот же отклик, что у остальных строк.
         backgroundColor: pressed && !disabled ? t.pressed : "transparent",

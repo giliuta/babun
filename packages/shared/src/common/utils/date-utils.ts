@@ -5,6 +5,19 @@ const MONTH_NAMES_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
+/** YYYY-MM-DD + N дней. Считается в UTC намеренно: дата документа — календарный
+ *  день без времени, и местная полночь не должна сдвигать срок оплаты.
+ *
+ *  ЖИЛ В `invoice-generator` ДО 2026-08-30, пока читателем был один счёт. С
+ *  тех пор те же сутки считает расписание меток, а справочник, импортирующий
+ *  финансовый модуль ради сложения дней, — не зависимость, а случайность. */
+export function addDaysYmd(ymd: string, days: number): string {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 // Formats "2026-04-12" as "12 апреля 2026 г."
 export function formatDateLongRu(dateKey: string): string {
   const d = new Date(dateKey + "T00:00:00");
