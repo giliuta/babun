@@ -9,7 +9,7 @@ import { FieldLabel } from "@/components/ui/Field";
 
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
+import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { ReorderList } from "@/components/ui/ReorderList";
@@ -378,10 +378,22 @@ export function LabelsScreen() {
           // Пока строку тянут, страница не должна уезжать под пальцем.
           scrollEnabled={!dragging}
         >
-          <SectionCard>
+          {/* КАЖДАЯ МЕТКА — СВОЯ КАРТОЧКА, А НЕ СТРОКА ОБЩЕГО ПОЛОТНА
+              (владелец 2026-08-30: «раздели в метках так же, как в услугах —
+              разделитель не волосина, а полноценный блок»).
+              Ровно та же конструкция, что у прайса: не `SectionCard` со швами
+              внутри, а `spaced`-список, где строка сама себе поверхность —
+              свой радиус, свой фон, свой зазор. Разделять их нечем, потому что
+              они и так раздельные.
+              Дело не только во вкусе: волосяной шов рвался под пальцем. У
+              строки, которую смахивают или тянут, фон уезжает, у соседней
+              остаётся — и линия повисает между ними ничьей. Тот же счёт
+              владелец предъявил услугам 29 августа. */}
+          <View style={{ marginHorizontal: GUTTER, marginTop: 8 }}>
             <ReorderList
               items={cities}
               rowHeight={ROW_H}
+              spaced
               labelFor={(city) => city.name}
               // Ручка внутри строки: строка ещё и смахивается влево, а колонка
               // ручки снаружи не уезжает — «Удалить» упиралось бы в неё.
@@ -508,7 +520,7 @@ export function LabelsScreen() {
                 );
               }}
             </ReorderList>
-          </SectionCard>
+          </View>
         </ScrollView>
       )}
 
