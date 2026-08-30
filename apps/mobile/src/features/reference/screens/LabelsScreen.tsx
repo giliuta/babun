@@ -6,7 +6,6 @@ import { EyeOff, MapPin, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
-import { WEEKDAY_LABELS } from "@babun/shared/local/services";
 
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -18,7 +17,7 @@ import { SwipeRow } from "@/components/ui/SwipeRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { WeekMirror } from "@/features/reference/WeekMirror";
+import { WeekProjection } from "@/features/reference/WeekProjection";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -598,19 +597,9 @@ function LabelSheet({
   // Свой собственный день занятым не считаем: иначе метка отбирала бы день у
   // самой себя и её нельзя было бы пересохранить.
   const ownName = isEdit ? editing.city.name : null;
-  /** Кто держит день недели: имя чужой метки, «выходной» — или null. */
-  const blockedBy = (
-    day: number,
-  ): { kind: "off" } | { kind: "label"; name: string; color: string } | null => {
-    if (daysOff.has(day)) return { kind: "off" };
-    const holder = takenBy.get(day);
-    if (!holder || holder.name === ownName) return null;
-    return {
-      kind: "label",
-      name: holder.name,
-      color: holder.color ?? FALLBACK_COLOR,
-    };
-  };
+  // Кто держит день, решает сама проекция: у неё для этого уже есть и
+  // `takenBy`, и `daysOff`, и имя метки. Второй счётчик здесь разошёлся бы
+  // с первым.
 
   // ЛИСТ — КАНОНИЧЕСКИЙ `BottomSheet`, а не самописный `Modal animationType
   // ="slide"` (владелец 2026-08-17: «какая-то серая плашка поднимается вверх,
@@ -712,76 +701,37 @@ function LabelSheet({
             </Pressable>
           </View>
 
-          {/* НЕДЕЛЯ КАК КАРТА ВЛАДЕНИЯ, А НЕ КАК СЕМЬ ОДИНАКОВЫХ КНОПОК
-              (владелец 2026-08-30: «надо понимать, какие даты выбраны»).
-              Занятый день красится в цвет ЗАНЯВШЕЙ метки и подписан её
-              именем; выходной обведён пунктиром. До этого и то и другое
-              выглядело одинаково — просто погасшая плитка, — а имя хозяина
-              приходилось выковыривать тапом. */}
-          <View style={{ flexDirection: "row", gap: 5 }}>
-            {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
-              const blocked = blockedBy(day);
-              const on = weekdays.includes(day) && !blocked;
-              return (
-                <Pressable
-                  key={day}
-                  onPress={() => {
-                    // ЗАНЯТЫЙ ДЕНЬ НЕ МОЛЧИТ. Он и так называет хозяина
-                    // цветом и подписью, но подпись мелкая — тап повторяет
-                    // это словами, целиком.
-                    if (blocked) {
-                      setBlockNote(
-                        blocked.kind === "off"
-                          ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у команды`
-                          : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${blocked.name}». У дня одна метка.`,
-                      );
-                      return;
-                    }
-                    setBlockNote(null);
-                    setWeekdays(
-                      on
-                        ? weekdays.filter((x) => x !== day)
-                        : [...weekdays, day].sort((a, b) => a - b),
-                    );
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on, disabled: !!blocked }}
-                  accessibilityLabel={
-                    blocked
-                      ? blocked.kind === "off"
-                        ? `${WEEKDAY_LABELS[day]} — выходной`
-                        : `${WEEKDAY_LABELS[day]} — занят меткой ${blocked.name}`
-                      : `${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`
-                  }
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    height: 52,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
-                    borderRadius: t.radius.card,
-                    borderCurve: "continuous",
-                    backgroundColor: on ? color : t.fill,
-                    // ЗАНЯТЫЙ ДЕНЬ ПРИГЛУШЁН, А НЕ ПОДПИСАН. Кто его держит —
-                    // видно в зеркале недели ниже, настоящим корешком метки.
-                    // Плитка отвечает на один вопрос: «беру этот день?»
-                    opacity: blocked ? 0.4 : pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.2}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: on ? "700" : "500",
-                      color: on ? "#ffffff" : t.faint,
-                    }}
-                  >
-                    {WEEKDAY_LABELS[day]}
-                  </Text>
-                </Pressable>
+          {/* НЕДЕЛЯ ОДНИМ РЯДОМ БОЧОНКОВ (владелец 2026-08-30: «я хочу, чтоб
+              это был один единый блок-бочонок… вместо чисел понедельник,
+              вторник»). Плитка-переключатель и корешок метки под ней были
+              двумя рядами про один и тот же день: сверху «выбрано» заливкой,
+              снизу «будет так» настоящим тегом. Теперь это один элемент —
+              колонка календаря, в которой вместо числа стоит день. */}
+          <WeekProjection
+            weekdays={weekdays}
+            color={color}
+            name={name}
+            ownName={ownName}
+            takenBy={takenBy}
+            daysOff={daysOff}
+            onToggle={(day) => {
+              setBlockNote(null);
+              setWeekdays(
+                weekdays.includes(day)
+                  ? weekdays.filter((x) => x !== day)
+                  : [...weekdays, day].sort((a, b) => a - b),
               );
-            })}
-          </View>
+            }}
+            // ЗАНЯТЫЙ ДЕНЬ НЕ МОЛЧИТ. Он и так называет хозяина корешком, но
+            // корешок мелкий — тап повторяет это словами, целиком.
+            onBlocked={(day, reason) =>
+              setBlockNote(
+                reason === "off"
+                  ? `${WEEKDAY_FULL_BY_ISO[day]} — выходной у команды`
+                  : `${WEEKDAY_FULL_BY_ISO[day]} занят меткой «${reason.holder}». У дня одна метка.`,
+              )
+            }
+          />
 
           {blockNote ? (
             <Text
@@ -796,34 +746,21 @@ function LabelSheet({
               {blockNote}
             </Text>
           ) : null}
-
-          {/* ЗЕРКАЛО НЕДЕЛИ (владелец 2026-08-30: «сразу на неделе внизу
-              построим — грубо говоря зеркало, как будет выглядеть в
-              календаре»). Плитки — вопрос, зеркало — ответ, и ответ дан тем
-              же языком, каким календарь говорит каждый день. */}
-          <WeekMirror
-            weekdays={weekdays}
-            color={color}
-            name={name}
-            takenBy={takenBy}
-            daysOff={daysOff}
-          />
         </View>
       ) : (
         <Pressable
-          onPress={() => {
-            setHasWeekdays(true);
-            // Все семь: «надо каждый день — выберу все» (владелец). Гасят из
-            // них лишние, а не набирают нужные с нуля.
-            // ВСЕ СВОБОДНЫЕ, а не все семь: занятые чужой меткой или общим
-            // выходным всё равно не встанут, и подсвечивать их было бы
-            // обещанием, которое сохранение не выполнит.
-            if (weekdays.length === 0) {
-              setWeekdays(
-                [1, 2, 3, 4, 5, 6, 7].filter((d) => !blockedBy(d)),
-              );
-            }
-          }}
+          // БЛОК ОТКРЫВАЕТСЯ ПУСТЫМ (владелец 2026-08-30: «когда нажимаю на
+          // кнопку, оно не сразу всё горит, а можно выбирать»).
+          //
+          // Раньше зажигались все свободные дни — по его же просьбе от 29
+          // августа «надо каждый день, выберу все; гасят лишние, а не
+          // набирают с нуля». С зеркалом это перестало работать: блок
+          // открывался УЖЕ С ГОТОВЫМ ответом, и неделя внизу мгновенно
+          // заполнялась меткой на все семь дней — расписание, которого
+          // человек не выбирал, показанное как решённое. Набрать три дня из
+          // пустоты короче, чем погасить четыре из семи, и честнее: пустая
+          // неделя внизу говорит правду — пока не выбрано ничего.
+          onPress={() => setHasWeekdays(true)}
           hitSlop={8}
           accessibilityRole="button"
           // КНОПКА И ЗАГОЛОВОК РАЗНЫМИ СЛОВАМИ — НАМЕРЕННО. Заголовок
