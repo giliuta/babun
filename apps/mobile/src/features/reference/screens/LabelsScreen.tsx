@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { getStorage } from "@babun/shared/storage";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -20,14 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
-import { dayCityKey, useDayCities } from "@/features/calendar/day-cities";
-import { CITY_CLEARED } from "@babun/shared/local/day-cities";
-import { formatYMD } from "@/features/appointments/helpers";
-import { formatDateShortRu } from "@babun/shared/common/utils/date-utils";
-import {
-  nextDateForWeekday,
-  upcomingOccurrences,
-} from "@/features/reference/label-schedule";
+import { useDayCities } from "@/features/calendar/day-cities";
 import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { allDays, ISO_BY_KEY } from "@/features/calendar/schedule-days";
 import { useRenameLabelCascade } from "@/features/reference/label-cascade";
@@ -48,12 +41,6 @@ import {
 /** Что лист отдаёт наружу при сохранении. Объектом, а не пятью позиционными
  *  аргументами: имя, цвет, дни и заливка — один ответ на один вопрос «какая
  *  это метка», и порядок в вызове не должен быть частью правды. */
-/** Сколько ближайших дат показывать полосой. Пять — это чуть больше месяца
- *  для одного выбранного дня недели и полторы недели для пяти: достаточно,
- *  чтобы увидеть ритм и ближайший пропуск, и мало, чтобы полоса не поехала
- *  в две строки на узком экране. */
-const OCCURRENCE_LIMIT = 5;
-
 interface LabelDraft {
   name: string;
   color: string;
@@ -119,9 +106,6 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   )?.teamId;
   const t = useThemeColors();
   const toast = useToast();
-  // Сегодня считаем ОДИН РАЗ на рендер: полоса дат и подписи на плитках
-  // обязаны говорить об одном и том же дне, иначе на полуночи они разъедутся.
-  const todayYmd = useMemo(() => formatYMD(new Date()), []);
   const teamsQuery = useTeams();
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   // Явно переданная команда (маршрут Кабинет → Команды → метки) побеждает:
@@ -222,18 +206,6 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
     return m;
   }, [cities]);
 
-  // ЯВНАЯ МЕТКА НА КОНКРЕТНОЙ ДАТЕ — не то же самое, что занятый день недели.
-  // День недели занимает ЧУЖОЕ РАСПИСАНИЕ (и это запрет: у дня одна метка).
-  // Дату занимает РУКА диспетчера — и это не запрет, а предупреждение: туда
-  // расписание просто не встанет, история важнее настройки.
-  const assignedOn = useCallback(
-    (ymd: string): string | null => {
-      if (!teamId) return null;
-      const v = dayCities[dayCityKey(teamId, ymd)];
-      return v && v !== CITY_CLEARED ? v : null;
-    },
-    [dayCities, teamId],
-  );
 
   // ВЫХОДНЫЕ — ЭТОЙ КОМАНДЫ (владелец: «по четвергам выходной — значит в
   // четверг метку ставить нельзя, там пересекутся метка выходного и метка
@@ -555,8 +527,6 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         editing={editing}
         takenBy={takenBy}
         daysOff={companyDaysOff}
-        assignedOn={assignedOn}
-        todayYmd={todayYmd}
         busy={busy}
         onClose={() => setEditing(null)}
         onCreate={add}
@@ -570,8 +540,6 @@ function LabelSheet({
   editing,
   takenBy,
   daysOff,
-  assignedOn,
-  todayYmd,
   busy,
   onClose,
   onCreate,
@@ -582,9 +550,6 @@ function LabelSheet({
   takenBy: Map<number, { name: string; color: string | null }>;
   /** Дни, в которые не работает эта команда. */
   daysOff: Set<number>;
-  /** Явная метка на конкретной дате или null. */
-  assignedOn: (ymd: string) => string | null;
-  todayYmd: string;
   busy: boolean;
   onClose: () => void;
   onCreate: (draft: LabelDraft) => void;
@@ -645,22 +610,6 @@ function LabelSheet({
       color: holder.color ?? FALLBACK_COLOR,
     };
   };
-
-  // ДАТЫ, НА КОТОРЫЕ ВСТАНЕТ РАСПИСАНИЕ. Выбор «вторник» — обещание про
-  // будущее; до сих пор проверить его можно было только уйдя в календарь.
-  // Здесь оно названо конкретными днями, и там же видно пропуски.
-  const occurrences = useMemo(
-    () =>
-      upcomingOccurrences({
-        weekdays,
-        fromYmd: todayYmd,
-        limit: OCCURRENCE_LIMIT,
-        assignedOn,
-        ownName,
-      }),
-    [weekdays, todayYmd, assignedOn, ownName],
-  );
-  const skipped = occurrences.filter((o) => o.takenBy !== null);
 
   // ЛИСТ — КАНОНИЧЕСКИЙ `BottomSheet`, а не самописный `Modal animationType
   // ="slide"` (владелец 2026-08-17: «какая-то серая плашка поднимается вверх,
@@ -743,7 +692,7 @@ function LabelSheet({
               justifyContent: "space-between",
             }}
           >
-            <FieldLabel text="График недели" />
+            <FieldLabel text="Всегда по этим дням" />
             <Pressable
               onPress={() => {
                 setHasWeekdays(false);
@@ -773,7 +722,6 @@ function LabelSheet({
               const blocked = blockedBy(day);
               const on = weekdays.includes(day) && !blocked;
               const holder = blocked?.kind === "label" ? blocked : null;
-              const nextYmd = on ? nextDateForWeekday(day, todayYmd) : null;
               return (
                 <Pressable
                   key={day}
@@ -803,9 +751,7 @@ function LabelSheet({
                       ? blocked.kind === "off"
                         ? `${WEEKDAY_LABELS[day]} — выходной`
                         : `${WEEKDAY_LABELS[day]} — занят меткой ${blocked.name}`
-                      : on && nextYmd
-                        ? `${WEEKDAY_LABELS[day]} — ставится, ближайший ${formatDateShortRu(nextYmd)}`
-                        : `${WEEKDAY_LABELS[day]} — не ставится`
+                      : `${WEEKDAY_LABELS[day]} — ${on ? "ставится" : "не ставится"}`
                   }
                   style={({ pressed }) => ({
                     flex: 1,
@@ -843,22 +789,12 @@ function LabelSheet({
                   >
                     {WEEKDAY_LABELS[day]}
                   </Text>
-                  {/* Вторая строчка плитки: у выбранного дня — ближайшая
-                      дата, у занятого — чей он. Обрезается, а не переносится:
-                      плитка одной высоты у всех семи. */}
-                  {on && nextYmd ? (
-                    <Text
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={1.1}
-                      style={{
-                        fontSize: 9,
-                        lineHeight: 11,
-                        color: "rgba(255,255,255,0.85)",
-                      }}
-                    >
-                      {formatDateShortRu(nextYmd).replace(/\s.*/, "")}
-                    </Text>
-                  ) : holder ? (
+                  {/* Вторая строчка плитки: чей это день. ДАТЫ ЗДЕСЬ НЕТ
+                      (владелец 2026-08-30): число под плиткой читалось как
+                      «вот эта среда», а правило говорит про КАЖДУЮ среду.
+                      Обрезается, а не переносится: плитка одной высоты у
+                      всех семи. */}
+                  {holder ? (
                     <Text
                       numberOfLines={1}
                       maxFontSizeMultiplier={1.1}
@@ -910,62 +846,6 @@ function LabelSheet({
               строка под ней и есть тот самый ответ. Отдельной плашки нет
               намеренно: предупреждение обязано стоять там, где видно, о какой
               дате речь. */}
-          {occurrences.length > 0 ? (
-            <View style={{ marginTop: 12 }}>
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{ fontSize: 12, color: t.faint, marginBottom: 7 }}
-              >
-                Встанет на эти дни
-              </Text>
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {occurrences.map((o) => (
-                  <View
-                    key={o.ymd}
-                    style={{
-                      paddingHorizontal: 9,
-                      paddingVertical: 5,
-                      borderRadius: t.radius.pill,
-                      backgroundColor: o.takenBy ? t.fill : `${color}1f`,
-                    }}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      style={{
-                        fontSize: 12,
-                        color: o.takenBy ? t.faint : color,
-                        textDecorationLine: o.takenBy
-                          ? "line-through"
-                          : "none",
-                      }}
-                    >
-                      {formatDateShortRu(o.ymd)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-              {skipped.length > 0 ? (
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    lineHeight: 17,
-                    color: t.warning,
-                  }}
-                >
-                  {/* ИМЯ МЕТКИ — ВСЕГДА В ИМЕНИТЕЛЬНОМ. «Останется за
-                      „Пафос"» просило родительный, а склонять произвольное имя
-                      («Y&D», «Лимассол», «Дом 5») кодом нельзя: правило
-                      сломается на первом же не-русском названии. Фраза
-                      построена так, что падеж не нужен вовсе. */}
-                  {skipped.length === 1
-                    ? `${formatDateShortRu(skipped[0].ymd)} уже занято меткой «${skipped[0].takenBy}» — расписание туда не встанет`
-                    : `${skipped.length} из этих дней уже заняты другими метками — расписание их не тронет`}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
         </View>
       ) : (
         <Pressable
@@ -984,7 +864,12 @@ function LabelSheet({
           }}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="График недели: в какие дни метка ставится сама"
+          // КНОПКА И ЗАГОЛОВОК РАЗНЫМИ СЛОВАМИ — НАМЕРЕННО. Заголовок
+          // «Всегда по этим дням» работает только когда плитки уже под ним:
+          // «этим» обязано на что-то указывать. В кнопке плиток ещё нет, и
+          // то же слово указывало бы в пустоту — проверено на экране.
+          // Кнопка говорит, ЧТО добавляешь; заголовок — что это значит.
+          accessibilityLabel="По дням недели: в какие дни метка ставится сама"
           // ПОДНЯТА И ОТСТАВЛЕНА ОТ КНОПКИ (владелец 2026-08-30: «слишком
           // низко опущена — поднять выше и дать пространство до „Сохранить"»).
           // Прижатая к футеру, строчка читалась его частью: глаз видел две
@@ -1000,7 +885,7 @@ function LabelSheet({
             maxFontSizeMultiplier={1.3}
             style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
           >
-            ＋ График недели
+            ＋ По дням недели
           </Text>
         </Pressable>
       )}
