@@ -22,7 +22,6 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
-  Lock,
   Navigation,
   Palette,
   Phone,
@@ -91,6 +90,7 @@ import {
   useUpdateClientById,
 } from "@/features/clients/queries";
 import {
+  useAllServices,
   useServices,
   type Service,
 } from "@/features/services/queries";
@@ -99,8 +99,8 @@ import { useMasters, useTeams } from "@/features/reference/queries";
 import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
+import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
-import { useCurrentRole } from "@/features/settings/tenant";
 import {
   useCalendarSettings,
   useLoyalty,
@@ -275,6 +275,9 @@ export default function BookScreen() {
     locationId?: string;
     services?: string;
     reminderId?: string;
+    /** Правка существующей записи. Та же страница, тот же порядок полей —
+     *  других форм записи в продукте нет (STORY-064). */
+    appointmentId?: string;
   }>();
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
@@ -335,18 +338,39 @@ export default function BookScreen() {
       : null;
   const teamsLoading = teamsQuery.isLoading;
   const clientsLoading = clientsQuery.isLoading;
-  const role = useCurrentRole().data ?? null;
 
   const catalog = useMemo(
     () => new Map(services.map((s) => [s.id, s])),
     [services],
   );
+  // ИМЯ РАБОТЫ ЖИВЁТ ДОЛЬШЕ САМОЙ УСЛУГИ. `catalog` — про выбор и цену новых
+  // строк, и он справедливо не знает убранных из прайса; но запись, в которой
+  // услуга стоит с мая, обязана называть её по имени. Тот же справочник, что
+  // держала карточка записи.
+  const { data: allServices = [] } = useAllServices();
+  const nameById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.name])),
+    [allServices],
+  );
 
-  // ── роль на одном экране: скидку правит только владелец, диспетчер
-  //    видит цену, но не может дать скидку. BookLayout fail-closed ждёт
-  //    подтверждённую роль, поэтому неизвестная роль никогда не получает
-  //    привилегии владельца. ──
-  const canDiscount = role === "owner";
+  // ── ПРАВКА СУЩЕСТВУЮЩЕЙ ЗАПИСИ (STORY-064) ──
+  // Одна страница создаёт и правит. Запись берём из того же списка, что
+  // рисует календарь: кеш уже тёплый, отдельный запрос завёл бы вторую
+  // правду о той же записи.
+  const editId = first(params.appointmentId) ?? null;
+  const isEdit = editId != null;
+  const editing = useMemo(
+    () => (editId ? allAppts.find((a) => a.id === editId) ?? null : null),
+    [allAppts, editId],
+  );
+  const updateMut = useUpdateAppointment();
+
+  // ── роли на этой странице пока нет (владелец 2026-08-30: «сейчас мы делаем
+  //    как для одного, для директора… а потом уже, когда сделаем страницу
+  //    мастера и будем добавлять сотрудников, тогда уже будем делать под
+  //    каждый блок разрешения»). Скидка поэтому открыта всем, кто дошёл до
+  //    формы; прежний owner-only гейт снят, а не расширен на правку —
+  //    иначе правило существовало бы в одной дороге из двух (находка Б2). ──
 
   // ── состояние ──
   const initialKind = first(params.kind) === "event" ? "event" : "work";
@@ -591,10 +615,110 @@ export default function BookScreen() {
     ? serviceDue.overdue.length + serviceDue.soon.length
     : 0;
 
+  // ═══ ГИДРАЦИЯ ПРАВКИ ═══
+  //
+  // Один раз, когда запись доехала из кеша. Дальше страница живёт обычной
+  // жизнью: все умные дефолты ниже (команда, префилл клиента, лояльность,
+  // авто-конец) выключены в режиме правки — им нечего доопределять, а
+  // затереть сохранённое они могут.
+  //
+  // ЗАМОК СТРОК ОБЯЗАТЕЛЕН. Сохранённая строка отдаёт числа того дня, когда
+  // её записали, а не сегодняшний прайс. Без `locked` открытие майской
+  // записи пересобирало бы её из нынешнего каталога: подняли цену «Чистки» —
+  // и любой, кто просто заглянул в запись, переписал её деньги и долг
+  // клиента. Тот же снимок, что держит карточка записи.
+  // ФЛАГ ГОТОВНОСТИ, А НЕ REF. Эффекты «авто-конец» и «сумма по услугам»
+  // объявлены НИЖЕ гидрации, поэтому в том же коммите отрабатывают следом за
+  // ней — но со СТАРЫМ состоянием: конец записи становился 10:30 от дефолтных
+  // 10:00, а итог обнулялся. Ref здесь не спасает: он выставляется синхронно и
+  // к моменту их запуска уже истинен. Флаг состояния переключается только со
+  // следующим рендером — то есть ровно тогда, когда гидрация УЖЕ легла.
+  // Создание готово сразу: доопределять там нечего.
+  const [hydrated, setHydrated] = useState(!isEdit);
+  const editHydrated = useRef(false);
+  useEffect(() => {
+    if (!isEdit || editHydrated.current || !editing) return;
+    editHydrated.current = true;
+    setKind(editing.kind === "work" ? "work" : "event");
+    setClientId(editing.client_id);
+    setDate(editing.date);
+    setTimeStart(editing.time_start);
+    setTimeEnd(editing.time_end);
+    setServiceIds(
+      editing.service_ids?.length
+        ? editing.service_ids
+        : (editing.services ?? []).map((s) => s.serviceId),
+    );
+    setOverrides(
+      Object.fromEntries(
+        (editing.services ?? []).map((s) => {
+          const byHand = s.pricePerUnit !== s.originalPrice;
+          return [
+            s.serviceId,
+            {
+              qty: s.quantity,
+              ...(byHand ? { price: s.pricePerUnit } : {}),
+              locked: {
+                pricePerUnit: s.pricePerUnit,
+                originalPrice: s.originalPrice,
+                duration: s.duration,
+                serviceName: s.serviceName,
+                unit: s.unit,
+              },
+            },
+          ];
+        }),
+      ),
+    );
+    setTeamId(editing.team_id);
+    setMasterId(editing.master_id ?? null);
+    setLocationId(editing.location_id ?? null);
+    setAddress(editing.address ?? "");
+    setAddressNote(editing.address_note ?? "");
+    setCustomTotal(!!editing.custom_total);
+    setTotalDraft(String(editing.total_amount ?? 0));
+    setDiscountType(editing.global_discount?.type ?? null);
+    setDiscountValue(
+      editing.global_discount ? String(editing.global_discount.value) : "",
+    );
+    setDiscountReason(editing.global_discount?.reason ?? null);
+    setStatus(editing.status);
+    setSource(editing.source ?? null);
+    setReminderOn(editing.reminder_enabled);
+    setColorOverride(editing.color_override ?? null);
+    setPrepayDraft(
+      (editing.prepaid_amount ?? 0) > 0 ? String(editing.prepaid_amount) : "",
+    );
+    setPayMethod(editing.payment_method ?? null);
+    setPayAccountId(editing.payment_account_id ?? null);
+    if (editing.kind === "work") {
+      setComment(editing.comment ?? "");
+    } else {
+      setEventTitle(editing.comment ?? "");
+      setEventColor(editing.color_override ?? null);
+      setEventNotes(editing.event_notes ?? "");
+      setEventAddress(editing.address ?? "");
+      setEventUrl(editing.event_url ?? "");
+      setEventReminderOffset(
+        editing.event_push_enabled
+          ? editing.event_push_offsets?.[0] ?? null
+          : null,
+      );
+      setAllDay(editing.event_all_day ?? false);
+      setRepeat(editing.event_repeat ?? { kind: "none" });
+    }
+    // Дата и конец записи заданы самой записью — эффекты «умного» роста и
+    // резолва таймзоны обязаны молчать.
+    dateTouchedRef.current = true;
+    setDurationTouched(true);
+    setHydrated(true);
+  }, [isEdit, editing]);
+
   // ── дефолт команды при первом рендере (params → последняя → первая) ──
   const teamSeeded = useRef(false);
   const clientPrefillHydrated = useRef(false);
   useEffect(() => {
+    if (isEdit) return;
     if (teamSeeded.current || teamsLoading) return;
     const resolved = resolveBookingTeamId(
       first(params.teamId),
@@ -603,12 +727,17 @@ export default function BookScreen() {
     );
     if (teamId !== resolved) setTeamId(resolved);
     teamSeeded.current = true;
-  }, [teams, teamsLoading, lastTeamId, teamId, params.teamId]);
+  }, [isEdit, teams, teamsLoading, lastTeamId, teamId, params.teamId]);
 
   // Reference data can arrive in a different order. Reconcile URL/client
   // prefills after every successful catalog refresh so stale selections can
   // never be submitted under the wrong brigade.
+  //
+  // ПРАВКУ НЕ СВЕРЯЕМ. У сохранённой записи услуга могла уехать из каталога
+  // или сменить команду — и тогда сверка молча вычистила бы оплаченные
+  // строки из чужой записи. Их держит замок снимка, а не сегодняшний прайс.
   useEffect(() => {
+    if (isEdit) return;
     if (!teamsQuery.isSuccess || !servicesQuery.isSuccess || !mastersQuery.isSuccess) {
       return;
     }
@@ -630,6 +759,7 @@ export default function BookScreen() {
     }
     if (next.masterId !== masterId) setMasterId(next.masterId);
   }, [
+    isEdit,
     masterId,
     masters,
     mastersQuery.isSuccess,
@@ -645,6 +775,7 @@ export default function BookScreen() {
   // сохраняла location_id с пустыми address/address_note. Гидратируем ровно
   // один раз после загрузки клиентов, чтобы не перетирать ручной ввод адреса.
   useEffect(() => {
+    if (isEdit) return;
     if (clientPrefillHydrated.current || clientsLoading) return;
     const requestedClientId = first(params.clientId);
     if (!requestedClientId) {
@@ -670,7 +801,7 @@ export default function BookScreen() {
     setAddressNote(prefill.addressNote);
     if (prefill.masterId) setMasterId(prefill.masterId);
     clientPrefillHydrated.current = true;
-  }, [clients, clientsLoading, params.clientId, params.locationId]);
+  }, [isEdit, clients, clientsLoading, params.clientId, params.locationId]);
 
   // ── производные суммы ──
   const selectedServices = useMemo(
@@ -708,6 +839,7 @@ export default function BookScreen() {
   // explicitly changes it. A manual amount then stays stable while services
   // are adjusted; «По услугам» reconnects it to the automatic calculation.
   useEffect(() => {
+    if (!hydrated) return;
     if (customTotal) return;
     // Копейки не отбрасываем: «49.5» в поле рядом с «€49,50» в строке
     // услуги читались как две разные суммы за одну работу.
@@ -716,18 +848,24 @@ export default function BookScreen() {
         ? String(automaticTotal)
         : automaticTotal.toFixed(2),
     );
-  }, [automaticTotal, customTotal]);
+  }, [automaticTotal, customTotal, hydrated]);
 
   // ── авто-конец = старт + Σ длительности (растёт, не трогали руками) ──
   useEffect(() => {
+    if (!hydrated) return;
     if (durationTouched) return;
     const grow = computedDuration > 0 ? computedDuration : slotFallback;
     setTimeEnd(addMinutesHM(timeStart, grow));
-  }, [timeStart, computedDuration, durationTouched, slotFallback]);
+  }, [timeStart, computedDuration, durationTouched, slotFallback, hydrated]);
 
   // ── лояльность показана, не спрятана: авто-скидка по числу визитов ──
+  //
+  // ТОЛЬКО ПРИ СОЗДАНИИ. В сохранённой записи скидка — уже принятое решение,
+  // о котором договорились с клиентом. Пересчитать её при открытии значит
+  // молча уценить чужую запись и включить ложное «есть несохранённое».
   const loyaltyAppliedRef = useRef(false);
   useEffect(() => {
+    if (isEdit) return;
     if (kind !== "work" || !client || !loyalty) return;
     // ручная скидка всегда побеждает; авто-скидка заменяет только себя.
     if (discountType && !loyaltyAppliedRef.current) return;
@@ -1090,9 +1228,15 @@ export default function BookScreen() {
     services,
     masters,
   });
+  // Сверка держит СОЗДАНИЕ: пока черновик собирается, услуга чужой команды в
+  // него попасть не должна. Сохранённую запись она не судит — там строки
+  // держит замок снимка, и услуга, убранная из каталога полгода назад, не
+  // повод запретить правку комментария.
   const workSelectionValid =
-    reconciledSelection.masterId === masterId &&
-    reconciledSelection.serviceIds.join("\u0000") === serviceIds.join("\u0000");
+    isEdit ||
+    (reconciledSelection.masterId === masterId &&
+      reconciledSelection.serviceIds.join("\u0000") ===
+        serviceIds.join("\u0000"));
   const referenceQueries =
     kind === "event"
       ? ([
@@ -1121,10 +1265,20 @@ export default function BookScreen() {
   // лояльности/без предупреждения о наложении).
   const essentialQueries =
     kind === "event"
-      ? ([{ label: "команды", query: teamsQuery }] as const)
+      ? ([
+          { label: "команды", query: teamsQuery },
+          // Правка ждёт сам список записей: без него страница показала бы
+          // пустой черновик вместо той записи, которую открыли.
+          ...(isEdit
+            ? ([{ label: "запись", query: appointmentsQuery }] as const)
+            : ([] as const)),
+        ] as const)
       : ([
           { label: "команды", query: teamsQuery },
           { label: "клиентов", query: clientsQuery },
+          ...(isEdit
+            ? ([{ label: "запись", query: appointmentsQuery }] as const)
+            : ([] as const)),
           // Если услуги пришли параметром (deep-link), а каталог не грузится —
           // гейтим экраном-ретраем, иначе фантомный service_id навсегда держит
           // canSave=false без способа его убрать (soft-lock).
@@ -1151,7 +1305,7 @@ export default function BookScreen() {
         clientId != null &&
         hasValidTeam &&
         workSelectionValid);
-  const bookingBusy = booking.isPending;
+  const bookingBusy = booking.isPending || updateMut.isPending;
   const missingHint = bookingBusy
     ? "Сохраняем…"
     : failedReference
@@ -1231,14 +1385,23 @@ export default function BookScreen() {
       return;
     }
     try {
-      await booking.save({
-        patch: buildPatch(),
-        kind,
-        reminderId,
-        eventReminderOffset,
-        timezone:
-          team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
-      });
+      if (isEdit && editId) {
+        // Правка идёт мимо useBookingSave: тот хук — про РОЖДЕНИЕ заявки и
+        // её хвост (гашение напоминания ТО, постановка push события). У
+        // существующей записи этот хвост уже отработал в день создания.
+        await updateMut.mutateAsync({ id: editId, patch: buildPatch() });
+        toast("Изменения сохранены", "success");
+        haptics.success();
+      } else {
+        await booking.save({
+          patch: buildPatch(),
+          kind,
+          reminderId,
+          eventReminderOffset,
+          timezone:
+            team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
+        });
+      }
       leaveBook();
     } catch (e) {
       haptics.error();
@@ -1246,8 +1409,25 @@ export default function BookScreen() {
     }
   };
 
-  const dirty =
-    kind !== initialKind ||
+  // ── «есть несохранённое» ──
+  //
+  // У СОЗДАНИЯ это «человек что-то ввёл»: сравнивать не с чем, пустой
+  // черновик закрывается молча. У ПРАВКИ вопрос другой — «отличается ли
+  // форма от того, что лежит в базе», поэтому сравниваем собранный патч со
+  // снимком, снятым сразу после гидрации. Снимок берётся эффектом, а не в
+  // самой гидрации: сеты состояния к тому моменту ещё не легли.
+  const editSignature = isEdit ? JSON.stringify(buildPatch()) : "";
+  const editBaselineRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isEdit || !editHydrated.current || editBaselineRef.current != null) {
+      return;
+    }
+    editBaselineRef.current = editSignature;
+  }, [isEdit, editSignature]);
+
+  const dirty = isEdit
+    ? editBaselineRef.current != null && editSignature !== editBaselineRef.current
+    : kind !== initialKind ||
     (kind === "event"
       ? eventTitle.trim().length > 0 ||
         eventNotes.trim().length > 0 ||
@@ -1303,7 +1483,13 @@ export default function BookScreen() {
     confirmDiscard(() => navigation.dispatch(data.action));
   });
 
-  const title = kind === "event" ? "Событие" : "Новая запись";
+  const title = isEdit
+    ? kind === "event"
+      ? "Событие"
+      : "Запись"
+    : kind === "event"
+      ? "Событие"
+      : "Новая запись";
 
   // ── identity-цвет записи → живая подсветка всего экрана ──
   // Выбранный цвет — это цвет ЭТОЙ записи (тот же, что станет блоком в
@@ -1342,6 +1528,46 @@ export default function BookScreen() {
     haptics.tap();
     setRouteOpen(true);
   };
+
+  // Запись открыли по ссылке, справочники доехали, а её самой нет: удалили с
+  // другого устройства или ссылка протухла. Пустой черновик на этом месте
+  // читался бы как «запись очистилась», и «Сохранить» создал бы дубль.
+  if (isEdit && !referencesPending && !failedReference && !editing) {
+    return (
+      <Screen edges={["top", "bottom"]}>
+        <View className="flex-row items-center px-3" style={{ height: 48 }}>
+          <Pressable
+            onPress={leaveBook}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Вернуться к календарю"
+            style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 16, color: t.body }}>Назад</Text>
+          </Pressable>
+          <Text
+            className="flex-1 text-center"
+            style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
+          >
+            Запись
+          </Text>
+          <View style={{ minWidth: 72 }} />
+        </View>
+        <View className="flex-1 items-center justify-center px-7">
+          <Text
+            style={{ fontSize: 20, fontWeight: "700", color: t.ink, textAlign: "center" }}
+          >
+            Записи больше нет
+          </Text>
+          <Text
+            style={{ fontSize: 14, lineHeight: 20, color: t.sub, textAlign: "center", marginTop: 8 }}
+          >
+            Её удалили или ссылка устарела.
+          </Text>
+        </View>
+      </Screen>
+    );
+  }
 
   if (failedReference || referencesPending) {
     const errorMessage =
@@ -1433,7 +1659,9 @@ export default function BookScreen() {
             onPress={requestClose}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Отменить создание записи"
+            accessibilityLabel={
+              isEdit ? "Закрыть запись" : "Отменить создание записи"
+            }
             style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
           >
             <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
@@ -1763,8 +1991,17 @@ export default function BookScreen() {
                 ) : (
                   <>
                     {selectedServices.map((line) => {
+                      // СТРОКА ЖИВЁТ БЕЗ КАТАЛОГА. Раньше здесь стоял
+                      // `catalog.get(id) ?? return null`, и у сохранённой
+                      // записи строки просто исчезали с экрана, когда услугу
+                      // убирали из прайса: сумма в «Итого» оставалась, а
+                      // работы, за которые её взяли, было не видно. Имя,
+                      // единицу и длительность держит снимок строки.
                       const svc = catalog.get(line.serviceId);
-                      if (!svc) return null;
+                      const lineName =
+                        line.serviceName ??
+                        nameById.get(line.serviceId) ??
+                        "Услуга удалена";
                       const rowVariants =
                         variantsByService.get(line.serviceId) ?? [];
                       return (
@@ -1774,7 +2011,7 @@ export default function BookScreen() {
                         >
                         <View className="flex-row items-center px-4 py-2.5">
                           <View className="flex-1 pr-2">
-                            <Text style={{ fontSize: 15, color: t.ink }}>{svc.name}</Text>
+                            <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
                             <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
                               {durationLabel(line.duration)}
                             </Text>
@@ -1787,7 +2024,7 @@ export default function BookScreen() {
                           {rowVariants.length === 0 ? (
                             <Stepper
                               qty={line.quantity}
-                              unit={svc.unit}
+                              unit={line.unit ?? svc?.unit ?? null}
                               onDec={() => setQty(line.serviceId, line.quantity - 1)}
                               onInc={() => setQty(line.serviceId, line.quantity + 1)}
                             />
@@ -2102,64 +2339,62 @@ export default function BookScreen() {
 
               {showAdvanced ? (
                 <SectionCard>
-                  {/* Скидка — только директор; иначе locked «нужен директор» */}
+                  {/* СКИДКА ОТКРЫТА ВСЕМ (2026-08-30). Прежний owner-only замок
+                      «нужен директор» стоял только здесь, а карточка записи
+                      правила скидку без единой проверки роли — то есть правило
+                      обходилось переоткрытием записи (находка Б2). Владелец
+                      решил снять его, а не достроить: разрешения делаются
+                      отдельным заходом вместе со страницей мастера, и тогда
+                      закроются оба конца сразу. */}
                   <View className="px-4 py-3">
                     <View className="flex-row items-center">
                       <Text style={{ fontSize: 14, color: t.sub, flex: 1 }}>Скидка</Text>
-                      {!canDiscount ? (
-                        <View className="flex-row items-center gap-1">
-                          <Lock color={t.placeholder} size={ICON.xs} />
-                          <Text style={{ fontSize: 13, color: t.placeholder }}>нужен директор</Text>
-                        </View>
+                    </View>
+                    <View className="mt-2 flex-row gap-2">
+                      {([
+                        { v: null, l: "Нет" },
+                        { v: "fixed", l: "€" },
+                        { v: "percent", l: "%" },
+                      ] as const).map((o) => (
+                        <Chip
+                          key={o.l}
+                          label={o.l}
+                          variant="tint"
+                          radio
+                          selected={discountType === o.v}
+                          onPress={() => {
+                            setDiscountType(o.v);
+                            setDiscountReason(null);
+                            loyaltyAppliedRef.current = false;
+                            haptics.tap();
+                          }}
+                        />
+                      ))}
+                      {discountType ? (
+                        <TextInput
+                          keyboardAppearance="light"
+                          accessibilityLabel="Размер скидки"
+                          value={discountValue}
+                          onChangeText={(v) => {
+                            setDiscountValue(v);
+                            setDiscountReason(null);
+                            loyaltyAppliedRef.current = false;
+                          }}
+                          placeholder={discountType === "percent" ? "%" : "€"}
+                          placeholderTextColor={t.placeholder}
+                          keyboardType="decimal-pad"
+                          inputAccessoryViewID={kbdAccessory}
+                          style={{
+                            marginLeft: "auto",
+                            minWidth: 60,
+                            minHeight: 44,
+                            fontSize: 15,
+                            color: t.ink,
+                            textAlign: "right",
+                          }}
+                        />
                       ) : null}
                     </View>
-                    {canDiscount ? (
-                      <View className="mt-2 flex-row gap-2">
-                        {([
-                          { v: null, l: "Нет" },
-                          { v: "fixed", l: "€" },
-                          { v: "percent", l: "%" },
-                        ] as const).map((o) => (
-                          <Chip
-                            key={o.l}
-                            label={o.l}
-                            variant="tint"
-                            radio
-                            selected={discountType === o.v}
-                            onPress={() => {
-                              setDiscountType(o.v);
-                              setDiscountReason(null);
-                              loyaltyAppliedRef.current = false;
-                              haptics.tap();
-                            }}
-                          />
-                        ))}
-                        {discountType ? (
-                          <TextInput
-                            keyboardAppearance="light"
-                            accessibilityLabel="Размер скидки"
-                            value={discountValue}
-                            onChangeText={(v) => {
-                              setDiscountValue(v);
-                              setDiscountReason(null);
-                              loyaltyAppliedRef.current = false;
-                            }}
-                            placeholder={discountType === "percent" ? "%" : "€"}
-                            placeholderTextColor={t.placeholder}
-                            keyboardType="decimal-pad"
-                            inputAccessoryViewID={kbdAccessory}
-                            style={{
-                              marginLeft: "auto",
-                              minWidth: 60,
-                              minHeight: 44,
-                              fontSize: 15,
-                              color: t.ink,
-                              textAlign: "right",
-                            }}
-                          />
-                        ) : null}
-                      </View>
-                    ) : null}
                   </View>
                   {/* Статус */}
                   <View
@@ -2466,7 +2701,13 @@ export default function BookScreen() {
         {/* Дата · время · сумма уже названы в докете и «Итого» — CTA их не
             дублирует; градиент носит выбранный цвет записи. */}
         <GradientButton
-          label={kind === "event" ? "Создать событие" : "Создать запись"}
+          label={
+            isEdit
+              ? "Сохранить"
+              : kind === "event"
+                ? "Создать событие"
+                : "Создать запись"
+          }
           onPress={save}
           disabled={!canSave || bookingBusy}
           loading={bookingBusy}
