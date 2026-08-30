@@ -43,7 +43,7 @@ describe("role policy", () => {
     assert.equal(canAccessCabinetPath("owner", "/cabinet/accounts"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/recurring"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/unclosed"), true);
-    assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/teams"), false);
+    assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/masters"), false);
     assert.equal(canAccessCabinetPath("master", "/cabinet/business/"), true);
     assert.equal(canAccessCabinetPath("master", "/cabinet/masters/master-1"), false);
     assert.equal(canAccessCabinetPath(null, "/cabinet"), false);
@@ -76,7 +76,7 @@ describe("role policy", () => {
       "/cabinet/masters",
       "/cabinet/services",
       "/cabinet/team-access",
-      "/cabinet/teams",
+      "/cabinet/masters",
       "/cabinet/templates",
     ];
 

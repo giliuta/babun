@@ -233,7 +233,7 @@ export function AccountCreateSheet({
               // Экран команд открывается ПОСЛЕ отъезда листа — то же правило,
               // что в PickerSheet: окно поверх закрывающегося листа не
               // появляется.
-              setTimeout(() => router.push("/cabinet/teams"), SHEET_EXIT_MS);
+              setTimeout(() => router.push("/calendar"), SHEET_EXIT_MS);
             }}
           />
         </View>

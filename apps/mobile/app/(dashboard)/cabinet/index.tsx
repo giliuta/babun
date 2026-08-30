@@ -37,7 +37,6 @@ import {
   Tag,
   Tags,
   UserCog,
-  Users,
   Wallet,
   Wrench,
 } from "lucide-react-native";
@@ -489,14 +488,6 @@ export default function CabinetHome() {
                 href={"/cabinet/team-access" as Href}
               />
               <Divider inset={58} />
-          <MenuRow
-            icon={Users}
-            tone={TILE.orange}
-            title="Команды"
-            desc="Команды: состав, цвет, расписание"
-            href="/cabinet/teams"
-          />
-          <Divider inset={58} />
           <MenuRow
             icon={Wrench}
             tone={TILE.indigo}
