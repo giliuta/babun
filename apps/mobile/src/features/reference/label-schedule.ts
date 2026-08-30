@@ -1,5 +1,7 @@
-import { addDaysYmd } from "@babun/shared/common/utils/date-utils";
-import { isoWeekday } from "@/features/calendar/iso-weekday";
+import {
+  addDaysYmd,
+  isoWeekdayOf,
+} from "@babun/shared/common/utils/date-utils";
 
 // БЛИЖАЙШИЕ ДАТЫ, НА КОТОРЫЕ ВСТАНЕТ РАСПИСАНИЕ МЕТКИ.
 //
@@ -52,7 +54,7 @@ export function upcomingOccurrences(opts: {
   const out: LabelOccurrence[] = [];
   for (let i = 0; i < HORIZON_DAYS && out.length < opts.limit; i++) {
     const ymd = i === 0 ? opts.fromYmd : addDaysYmd(opts.fromYmd, i);
-    const weekday = isoWeekday(ymd);
+    const weekday = isoWeekdayOf(ymd);
     if (!days.has(weekday)) continue;
     const assigned = opts.assignedOn(ymd);
     out.push({
@@ -73,7 +75,7 @@ export function nextDateForWeekday(
 ): string | null {
   for (let i = 0; i < 7; i++) {
     const ymd = i === 0 ? fromYmd : addDaysYmd(fromYmd, i);
-    if (isoWeekday(ymd) === weekday) return ymd;
+    if (isoWeekdayOf(ymd) === weekday) return ymd;
   }
   return null;
 }

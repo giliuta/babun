@@ -49,6 +49,7 @@ import {
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
+  isoWeekdayOf,
 } from "@babun/shared/common/utils/date-utils";
 import { X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -137,7 +138,6 @@ import {
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
-import { isoWeekday } from "@/features/calendar/iso-weekday";
 import {
   useCities,
   useCreateTeam,
@@ -874,7 +874,7 @@ export default function CalendarTab() {
               (c) =>
                 c.is_active &&
                 !c.deleted_at &&
-                (c.weekdays ?? []).includes(isoWeekday(dateYmd)),
+                (c.weekdays ?? []).includes(isoWeekdayOf(dateYmd)),
             )?.name
           : undefined;
       const name = assigned ?? scheduled ?? "";
