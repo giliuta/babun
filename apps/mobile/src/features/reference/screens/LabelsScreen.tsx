@@ -291,32 +291,6 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
   // ни цвета, ни строки в справочнике. Тридцать дней — окно, в котором
   // ошибку видно и она обратима (канон, LOCKED 2026-08-29).
   const remove = (city: City) => {
-    // ЛИСТ ЗАКРЫВАЕТСЯ ПЕРВЫМ, И ЭТО НЕ КОСМЕТИКА.
-    //
-    // `confirmThen` рисуется хостом на УРОВНЕ ПРИЛОЖЕНИЯ, а редактор метки —
-    // `Modal`, отдельное окно. Диалог, вызванный из листа, честно выезжает
-    // ЗА ним и не виден вовсе: кнопка «Удалить метку» просто не работала.
-    // Та же ловушка описана в шапке `NoticeBar` и поймана сегодня трижды.
-    //
-    // Спрашиваем не по таймеру, а КОГДА ЛИСТ ФАКТИЧЕСКИ УШЁЛ: таймер
-    // угадывает момент, а эффект его знает. Вопрос, заданный во время
-    // анимации закрытия, всё ещё попадает за уезжающее окно.
-    setEditing(null);
-    setPendingRemove(city);
-  };
-
-  const [pendingRemove, setPendingRemove] = useState<City | null>(null);
-  useEffect(() => {
-    if (!pendingRemove || editing !== null) return;
-    const city = pendingRemove;
-    setPendingRemove(null);
-    confirmRemove(city);
-    // confirmRemove пересоздаётся каждый рендер; эффект должен сработать
-    // ровно на переходе «лист закрыт + есть отложенное удаление».
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingRemove, editing]);
-
-  const confirmRemove = (city: City) => {
     const u = usage.get(city.name);
     const used = u && (u.teams > 0 || u.days > 0);
     confirmThen(
@@ -419,13 +393,25 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
                   //
                   // Стороны те же, что у услуг: справа «Удалить», слева
                   // «Скрыть». Разрушительное действие на постоянном месте.
+                  // ТРИ СОСТОЯНИЯ СТРОКИ — ТРИ РАЗНЫХ ЛЕВЫХ ДЕЙСТВИЯ:
+                  //   живая    → «Скрыть»   (перестаёт предлагаться);
+                  //   скрытая  → «Показать» (возвращается в выбор);
+                  //   удалённая→ «Вернуть»  (снимается пометка на удаление).
+                  // Подпись обязана называть то, что произойдёт: до правки
+                  // удалённая предлагала «Скрыть», а по нажатию возвращалась.
                   leading={{
-                    label: hidden ? "Показать" : "Скрыть",
-                    color: hidden ? t.success : t.warning,
-                    icon: hidden ? RotateCcw : EyeOff,
-                    accessibilityLabel: hidden
-                      ? `Показать метку ${city.name}`
-                      : `Скрыть метку ${city.name}`,
+                    label: deleted
+                      ? "Вернуть"
+                      : hidden
+                        ? "Показать"
+                        : "Скрыть",
+                    color: deleted || hidden ? t.success : t.warning,
+                    icon: deleted || hidden ? RotateCcw : EyeOff,
+                    accessibilityLabel: deleted
+                      ? `Вернуть удалённую метку ${city.name}`
+                      : hidden
+                        ? `Показать метку ${city.name}`
+                        : `Скрыть метку ${city.name}`,
                     onAction: () =>
                       updateCity.mutate(
                         {
@@ -527,7 +513,6 @@ export function LabelsScreen({ teamId: forced }: { teamId?: string | null } = {}
         onClose={() => setEditing(null)}
         onCreate={add}
         onUpdate={edit}
-        onRemove={remove}
       />
     </Screen>
   );
@@ -541,7 +526,6 @@ function LabelSheet({
   onClose,
   onCreate,
   onUpdate,
-  onRemove,
 }: {
   editing: Editing | null;
   /** День недели → имя метки, которая его уже держит. */
@@ -557,7 +541,6 @@ function LabelSheet({
     color: string,
     weekdays: number[],
   ) => void;
-  onRemove: (city: City) => void;
 }) {
   const t = useThemeColors();
   const isEdit = editing?.mode === "edit";
@@ -626,18 +609,18 @@ function LabelSheet({
             disabled={!canSubmit}
             loading={busy}
           />
-          {isEdit ? (
-            <Pressable
-              onPress={() => onRemove(editing.city)}
-              accessibilityRole="button"
-              accessibilityLabel="Удалить метку"
-              className="mt-1 items-center py-3 active:opacity-70"
-            >
-              <Text style={{ fontSize: 16, fontWeight: "500", color: t.danger }}>
-                Удалить метку
-              </Text>
-            </Pressable>
-          ) : null}
+          {/* КНОПКИ «УДАЛИТЬ МЕТКУ» ЗДЕСЬ НЕТ (владелец 2026-08-30: «убираем,
+              удалять будем только смахом вправо»).
+
+              Она к тому же НЕ РАБОТАЛА: `confirmThen` рисуется
+              `ChoiceSheetHost`, а тот показывает СВОЙ `BottomSheet` — второй
+              `Modal`. На iOS окно, поданное пока предыдущее ещё закрывается,
+              не появляется вовсе и об этом не сообщает; кнопка выглядела
+              сломанной. Лечить это закрытием листа перед вопросом было можно,
+              но незачем: удаление уже живёт на кромке свайпа, где список не в
+              `Modal` и подтверждение показывается честно.
+
+              Одно действие — одно место. */}
         </>
       }
     >
@@ -792,10 +775,14 @@ function LabelSheet({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="График недели: в какие дни метка ставится сама"
+          // ПОДНЯТА И ОТСТАВЛЕНА ОТ КНОПКИ (владелец 2026-08-30: «слишком
+          // низко опущена — поднять выше и дать пространство до „Сохранить"»).
+          // Прижатая к футеру, строчка читалась его частью: глаз видел две
+          // кнопки подряд, хотя это приписка к форме и главное действие.
           style={({ pressed }) => ({
             alignSelf: "flex-start",
-            paddingTop: 10,
-            paddingBottom: 4,
+            paddingTop: 2,
+            paddingBottom: 18,
             opacity: pressed ? 0.5 : 1,
           })}
         >
