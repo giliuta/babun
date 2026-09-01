@@ -49,7 +49,6 @@ import {
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
-  isoWeekdayOf,
 } from "@babun/shared/common/utils/date-utils";
 import { X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
@@ -93,11 +92,14 @@ import {
 } from "@/features/calendar/BookSlotSheet";
 import { CalendarNotice } from "@/features/calendar/CalendarNotice";
 import {
-  dayCityKey,
   useDayCities,
   useSetDayCity,
 } from "@/features/calendar/day-cities";
 import { CITY_CLEARED } from "@babun/shared/local/day-cities";
+import {
+  resolveCalendarDayLabel,
+  type DayLabel,
+} from "@/features/calendar/day-label";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -852,46 +854,22 @@ export default function CalendarTab() {
   // сразу» — невидимая настройка, которая красила календарь из другого
   // экрана: день выглядел помеченным, хотя на нём никто ничего не ставил, и
   // снять это можно было только найдя звезду в справочнике.
+  // ПРАВИЛО «КАКАЯ МЕТКА У ДНЯ» ПЕРЕЕХАЛО В `features/calendar/day-label`
+  // (2026-08-31). Оно жило здесь и наружу не выводилось — а форма записи
+  // обязана показать в шапке ТУ ЖЕ метку, что стоит на дне в календаре.
+  // Вторая копия разошлась бы на первой правке, и два экрана заговорили бы о
+  // разных метках одного дня. Порядок ступеней и закон «прошлое не
+  // переписывается настройкой» теперь под одиннадцатью тестами.
   const labelFor = useCallback(
-    (dateYmd: string): { name: string; color: string; tint: boolean } | null => {
-      if (!activeTeamId) return null;
-      const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
-      // Сентинел CITY_CLEARED = «метка явно снята».
-      if (assigned === CITY_CLEARED) return null;
-      // ЯВНАЯ МЕТКА → РАСПИСАНИЕ, И ТОЛЬКО ВПЕРЁД.
-      //
-      // Расписание («по вторникам — Греция») считается ИСКЛЮЧИТЕЛЬНО для дат
-      // сегодня и дальше. Прошедший день показывает то, что на нём
-      // фактически стояло, и меняется только руками — закон канона от
-      // 2026-08-29: «прошлое не трогаем, оно остаётся как в истории».
-      //
-      // Без этой границы смена расписания перекрашивала бы позапрошлый
-      // вторник: вычисляемое значение по определению следует за текущей
-      // настройкой. Здесь оно обрезано датой.
-      const scheduled =
-        assigned == null && dateYmd >= todayYmd
-          ? cities.find(
-              (c) =>
-                c.is_active &&
-                !c.deleted_at &&
-                (c.weekdays ?? []).includes(isoWeekdayOf(dateYmd)),
-            )?.name
-          : undefined;
-      const name = assigned ?? scheduled ?? "";
-      if (!name) return null;
-      // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
-      // метки сливалась с кругом «сегодня» и читалась как второй маркер.
-      const city = cities.find((c) => c.name === name);
-      // ЗАЛИВКА — РЕШЕНИЕ САМОЙ МЕТКИ (владелец 2026-08-30: «не все метки
-      // должны подсвечиваться»). Имя на дате остаётся всегда, красится ли
-      // колонка — спрашиваем у метки. Метки, которой уже нет в справочнике,
-      // верим на слово: имя на дне стоит, красить нечем и незачем.
-      return {
-        name,
-        color: city?.color ?? t.faint,
-        tint: city?.tint_day ?? true,
-      };
-    },
+    (dateYmd: string): DayLabel | null =>
+      resolveCalendarDayLabel({
+        dayCities,
+        cities,
+        teamId: activeTeamId,
+        dateYmd,
+        todayYmd,
+        fallbackColor: t.faint,
+      }),
     [activeTeamId, dayCities, cities, todayYmd, t.faint],
   );
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
