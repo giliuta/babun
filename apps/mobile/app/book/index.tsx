@@ -29,13 +29,11 @@ import {
 } from "lucide-react-native";
 import type {
   Appointment,
-  AppointmentSource,
   AppointmentStatus,
   Discount,
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
 import {
-  APPOINTMENT_SOURCE_LABELS,
 } from "@babun/shared/local/appointments";
 import {
   locationAddressForBooking,
@@ -74,7 +72,6 @@ import { Chip } from "@/components/ui/Chip";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
-import { OptionSheet } from "@/components/ui/OptionSheet";
 import { useToast } from "@/components/ui/Toast";
 import { resolveDayLabel } from "@babun/shared/local/day-cities";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -170,13 +167,10 @@ function TextInput({
   );
 }
 
-// Статусы работы — те же строки, что старый AppointmentSheet.
-const STATUSES: { value: AppointmentStatus; label: string }[] = [
-  { value: "scheduled", label: "Запланировано" },
-  { value: "in_progress", label: "В работе" },
-  { value: "completed", label: "Выполнено" },
-  { value: "cancelled", label: "Отменено" },
-];
+// СПИСКА СТАТУСОВ ЗДЕСЬ БОЛЬШЕ НЕТ (2026-08-30). Руками статус не ставят:
+// он выводится из состояния записи и говорит ЦВЕТОМ — «не хватает данных»,
+// «готова», «денег нет», «закрыто» (решение владельца о светофоре). Само
+// поле `status` живёт как жило: его пишет продукт, а не человек.
 
 const REPEAT_OPTIONS: readonly {
   value: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">;
@@ -198,16 +192,10 @@ const EVENT_REMINDER_OPTIONS = [
   { value: 1440, label: "За день" },
 ] as const;
 
-const SOURCE_OPTIONS: readonly {
-  value: AppointmentSource | "";
-  label: string;
-}[] = [
-  { value: "", label: "Не указан" },
-  ...Object.entries(APPOINTMENT_SOURCE_LABELS).map(([value, label]) => ({
-    value: value as AppointmentSource,
-    label,
-  })),
-];
+// ИСТОЧНИК ЗАЯВКИ УБРАН ИЗ ФОРМЫ (владелец 2026-08-30: «убрать совсем»).
+// Он жил внутри «Дополнительно» и больше нигде не задавался. Фильтр клиентов
+// по источнику остаётся в продукте, но заполнять его теперь нечем — сказано
+// владельцу до удаления; на проде источник стоял у ОДНОЙ записи из тридцати.
 
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
@@ -394,7 +382,6 @@ export default function BookScreen() {
   const [discountValue, setDiscountValue] = useState("");
   const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
-  const [source, setSource] = useState<AppointmentSource | null>(null);
   const [comment, setComment] = useState("");
   // Название события — отдельное состояние от заметки команде: раньше общий
   // `comment` перетекал между режимами Клиент/Событие.
@@ -417,13 +404,11 @@ export default function BookScreen() {
   const { data: payAccounts = [] } = useTeamPaymentAccounts(teamId);
   const [reminderOn, setReminderOn] = useState(false);
   const [showPay, setShowPay] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [teamSheetOpen, setTeamSheetOpen] = useState(false);
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
-  const [sourceSheetOpen, setSourceSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
   const updateClient = useUpdateClientById();
@@ -663,7 +648,6 @@ export default function BookScreen() {
     );
     setDiscountReason(editing.global_discount?.reason ?? null);
     setStatus(editing.status);
-    setSource(editing.source ?? null);
     setReminderOn(editing.reminder_enabled);
     setColorOverride(editing.color_override ?? null);
     setPrepayDraft(
@@ -1173,7 +1157,6 @@ export default function BookScreen() {
       // Предоплата ложится на ту же кассу, что выбрана чипом.
       payment_account_id: prepay > 0 ? payAccountId : null,
       reminder_enabled: reminderOn && Boolean(client?.phone),
-      source,
     };
     // Оплата остатка на месте («приехал — сделал — закрыл»): тот же
     // buildDebtPaidPatch, что тап «Оплачено» на визите — пять полей из
@@ -1427,7 +1410,6 @@ export default function BookScreen() {
         customTotal ||
         discountType != null ||
         status !== "scheduled" ||
-        source != null ||
         reminderOn ||
         prepay > 0 ||
         colorOverride != null ||
@@ -2217,7 +2199,8 @@ export default function BookScreen() {
                 )}
               </SectionCard>
 
-              {/* Заметка команде — после денег, перед «Дополнительно» */}
+              {/* Заметка команде — последняя строка формы: «Дополнительно» под ней
+                  снесено 2026-08-30. */}
               <SectionCard>
                 <View className="px-4 py-3">
                   <TextInput
@@ -2233,137 +2216,16 @@ export default function BookScreen() {
                 </View>
               </SectionCard>
 
-              {/* Дополнительно — скидка/статус/SMS/комментарий */}
-              <Pressable
-                className="mx-3 mt-2 flex-row items-center px-4"
-                style={{
-                  height: 50,
-                  backgroundColor: t.surface,
-                  borderRadius: t.radius.card,
-                  boxShadow: t.cardShadow,
-                }}
-                onPress={() => {
-                  setShowAdvanced((v) => !v);
-                  haptics.tap();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Дополнительные параметры"
-                accessibilityState={{ expanded: showAdvanced }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: "600", color: t.body }}>
-                  Дополнительно
-                </Text>
-                <Text className="ml-2 flex-1" style={{ fontSize: 13, color: t.placeholder }}>
-                  скидка · статус · источник · SMS
-                </Text>
-                <ChevronRight
-                  color={t.chevron}
-                  size={ICON.sm}
-                  style={{ transform: [{ rotate: showAdvanced ? "90deg" : "0deg" }] }}
-                />
-              </Pressable>
+              {/* БЛОК «ДОПОЛНИТЕЛЬНО» СНЕСЁН 2026-08-30 (владелец: «убрать
+                  совсем»). За одной дверью лежали скидка, статус, источник
+                  заявки и SMS клиенту — пять разных вещей, сложенных вместе
+                  не по смыслу, а по признаку «редкое».
 
-              {showAdvanced ? (
-                <SectionCard>
-                  {/* СКИДКА ОТКРЫТА ВСЕМ (2026-08-30). Прежний owner-only замок
-                      «нужен директор» стоял только здесь, а карточка записи
-                      правила скидку без единой проверки роли — то есть правило
-                      обходилось переоткрытием записи (находка Б2). Владелец
-                      решил снять его, а не достроить: разрешения делаются
-                      отдельным заходом вместе со страницей мастера, и тогда
-                      закроются оба конца сразу. */}
-                  <View className="px-4 py-3">
-                    <View className="flex-row items-center">
-                      <Text style={{ fontSize: 14, color: t.sub, flex: 1 }}>Скидка</Text>
-                    </View>
-                    <View className="mt-2 flex-row gap-2">
-                      {([
-                        { v: null, l: "Нет" },
-                        { v: "fixed", l: "€" },
-                        { v: "percent", l: "%" },
-                      ] as const).map((o) => (
-                        <Chip
-                          key={o.l}
-                          label={o.l}
-                          variant="tint"
-                          radio
-                          selected={discountType === o.v}
-                          onPress={() => {
-                            setDiscountType(o.v);
-                            setDiscountReason(null);
-                            loyaltyAppliedRef.current = false;
-                            haptics.tap();
-                          }}
-                        />
-                      ))}
-                      {discountType ? (
-                        <TextInput
-                          keyboardAppearance="light"
-                          accessibilityLabel="Размер скидки"
-                          value={discountValue}
-                          onChangeText={(v) => {
-                            setDiscountValue(v);
-                            setDiscountReason(null);
-                            loyaltyAppliedRef.current = false;
-                          }}
-                          placeholder={discountType === "percent" ? "%" : "€"}
-                          placeholderTextColor={t.placeholder}
-                          keyboardType="decimal-pad"
-                          inputAccessoryViewID={kbdAccessory}
-                          style={{
-                            marginLeft: "auto",
-                            minWidth: 60,
-                            minHeight: 44,
-                            fontSize: 15,
-                            color: t.ink,
-                            textAlign: "right",
-                          }}
-                        />
-                      ) : null}
-                    </View>
-                  </View>
-                  {/* Статус */}
-                  <View
-                    className="flex-row flex-wrap gap-2 px-4 py-3"
-                    style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-                  >
-                    {STATUSES.map((s) => (
-                      <Chip
-                        key={s.value}
-                        label={s.label}
-                        variant="tint"
-                        radio
-                        selected={status === s.value}
-                        onPress={() => {
-                          setStatus(s.value);
-                          haptics.tap();
-                        }}
-                      />
-                    ))}
-                  </View>
-                  <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    <ValueRow
-                      label="Источник заявки"
-                      value={source ? APPOINTMENT_SOURCE_LABELS[source] : "Не указан"}
-                      muted={!source}
-                      onPress={() => setSourceSheetOpen(true)}
-                    />
-                  </View>
-                  <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    <SwitchRow
-                      label="SMS-напоминание клиенту"
-                      hint={
-                        client?.phone
-                          ? "по расписанию SMS компании"
-                          : "у клиента не указан телефон"
-                      }
-                      value={reminderOn}
-                      onChange={setReminderOn}
-                      disabled={!client?.phone && !reminderOn}
-                    />
-                  </View>
-                </SectionCard>
-              ) : null}
+                  Повтор и напоминание переживают снос: у них есть свои двери —
+                  Кабинет → «Повторяющиеся ТО» и напоминание на карточке
+                  клиента. А скидка и источник заявки уходят из продукта: другой
+                  двери у них нет, и фильтр клиентов по источнику останется
+                  пустым. Сказано владельцу до удаления. */}
             </>
           ) : (
             /* ── Событие ── */
@@ -2730,14 +2592,6 @@ export default function BookScreen() {
           else setColorOverride(c);
           haptics.tap();
         }}
-      />
-      <OptionSheet
-        visible={sourceSheetOpen}
-        title="Источник заявки"
-        options={SOURCE_OPTIONS}
-        value={source ?? ""}
-        onPick={(value) => setSource(value || null)}
-        onClose={() => setSourceSheetOpen(false)}
       />
       {Platform.OS === "ios" ? (
         <InputAccessoryView nativeID={KBD_ACCESSORY_ID}>
