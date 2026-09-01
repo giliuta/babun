@@ -67,7 +67,6 @@ import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Chip } from "@/components/ui/Chip";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
@@ -1390,8 +1389,10 @@ export default function BookScreen() {
 
   const dirty = isEdit
     ? editBaselineRef.current != null && editSignature !== editBaselineRef.current
-    : kind !== initialKind ||
-    (kind === "event"
+    // Сравнение вида с исходным ушло вместе с переключателем: менять вид
+    // внутри формы больше нечем, и при создании `kind !== initialKind`
+    // ложно всегда.
+    : (kind === "event"
       ? eventTitle.trim().length > 0 ||
         eventNotes.trim().length > 0 ||
         eventAddress.trim().length > 0 ||
@@ -1683,40 +1684,27 @@ export default function BookScreen() {
           contentContainerStyle={{ paddingBottom: 24 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* форк Клиент / Событие — единственный, живёт на странице */}
-          <View className="mx-3 mt-3">
-            <SegmentedControl
-              options={[
-                { value: "work", label: "Клиент" },
-                { value: "event", label: "Событие" },
-              ]}
-              value={kind}
-              onChange={(v) => {
-                setKind(v);
-                if (v === "event") {
-                  setMasterId(null);
-                } else {
-                  if (allDay) {
-                    const nextStart = "10:00";
-                    setAllDay(false);
-                    setTimeStart(nextStart);
-                    setTimeEnd(
-                      addMinutesHM(
-                        nextStart,
-                        computedDuration > 0 ? computedDuration : slotFallback,
-                      ),
-                    );
-                  }
-                  setDurationTouched(false);
-                  if (teamId == null) {
-                    const fallbackTeam = teams[0]?.id ?? null;
-                    selectTeam(fallbackTeam);
-                  }
-                }
-                haptics.tap();
-              }}
-            />
-          </View>
+          {/* ПЕРЕКЛЮЧАТЕЛЯ «КЛИЕНТ / СОБЫТИЕ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец
+              2026-08-30: «всё будет зависеть от того, что я выберу в начале,
+              когда тапаю на календарь — вылазит иконка, там оно уже всё»).
+
+              Развилка и правда стоит РАНЬШЕ формы: попап слота отдаёт вид
+              вместе со временем (`BookSlotSheet.onPick(kind, slot)`), и он же
+              приезжает сюда параметром маршрута. Держать второй такой же
+              вопрос внутри формы значило спрашивать дважды.
+
+              СОСТОЯНИЕ `kind` ОСТАЁТСЯ, и сносить его нельзя: правку события
+              открывает не параметр, а сама запись — вид выставляет гидрация
+              (`setKind(editing.kind …)`). Выведи `kind` прямо из `params.kind`
+              — и правка события нарисуется формой клиента, а сохранение
+              затрёт событие.
+
+              ЦЕНА, УПЛАЧЕННАЯ ОСОЗНАННО: из трёх холостых дверей — «записей
+              нет», онбординг, пустой календарь — теперь заводится только
+              клиентская запись: они зовут `bookAt()` без вида. Это их
+              естественное значение («создать первую запись»), а дорога к
+              событию остаётся там, где владелец её и назначил, — в попапе
+              слота. */}
 
           {/* Необязательный справочник не загрузился — не блокируем, но честно
               предупреждаем, что часть подсказок недоступна. */}
