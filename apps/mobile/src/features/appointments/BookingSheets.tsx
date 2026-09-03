@@ -79,8 +79,11 @@ export function TeamMasterSheet({
             </Pressable>
           </View>
           <View className="px-4 pt-3">
+            {/* «КОМАНДА», как в заголовке листа и в докете: «бригада» жила
+                только в этой подписи, и одна сущность называлась двумя словами
+                на одном экране. */}
             <Text style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}>
-              БРИГАДА
+              КОМАНДА
             </Text>
             {teams.length > 0 ? (
               <View className="mt-2 flex-row flex-wrap gap-2">
