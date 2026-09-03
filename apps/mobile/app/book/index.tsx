@@ -80,6 +80,7 @@ import { useToast } from "@/components/ui/Toast";
 import { resolveDayLabel } from "@babun/shared/local/day-cities";
 import { useDayCities } from "@/features/calendar/day-cities";
 import { haptics } from "@/lib/haptics";
+import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
@@ -220,6 +221,9 @@ const EMPTY_LOCATIONS: Location[] = [];
 const CHAIN_START_MS = 420;
 
 const KBD_ACCESSORY_ID = "bookKbdDone";
+/** Сколько ждать, пока KAV ужмёт список под выезжающую клавиатуру: раньше
+ *  докрутка «до конца» останавливается на старой, ещё полной высоте. */
+const KEYBOARD_SETTLE_MS = 300;
 const kbdAccessory = Platform.OS === "ios" ? KBD_ACCESSORY_ID : undefined;
 
 const absoluteMinutes = (value: string): number | null => {
@@ -271,6 +275,11 @@ export default function BookScreen() {
   // Пропуск гварда для программного ухода (сохранение / подтверждённое «Закрыть»),
   // чтобы back-свайп-защита не показывала второй Alert поверх нашего.
   const bypassGuardRef = useRef(false);
+  // Прокрутка формы — чтобы поле, получившее фокус в самом низу, показать
+  // над клавиатурой: KAV сжимает список, но к сфокусированному полю сам не
+  // едет, и заметку набирали вслепую.
+  const scrollRef = useRef<ScrollView>(null);
+  const keyboardShown = useKeyboardShown();
   const toast = useToast();
   const { data: dayCities = {} } = useDayCities();
   const params = useLocalSearchParams<{
@@ -1783,14 +1792,24 @@ export default function BookScreen() {
         </View>
       </View>
 
+      {/* KAV МЕРЯЕТ СЕБЯ ОТНОСИТЕЛЬНО РОДИТЕЛЯ, А КЛАВИАТУРУ — В ОКНЕ.
+          `Screen` кладёт верхний safe-area отступ во внешний View, и `layout.y`
+          у KAV начинается ПОД ним: перекрытие с клавиатурой недооценивалось
+          ровно на высоту «острова» (59pt), и кнопка «Создать запись» уезжала
+          под клавиатуру наполовину — поймано на симуляторе 2026-09-03, когда
+          у него отключили аппаратную клавиатуру. `keyboardVerticalOffset` и
+          есть это расстояние от верха окна до View. */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={insets.top}
       >
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
           {/* ПЕРЕКЛЮЧАТЕЛЯ «КЛИЕНТ / СОБЫТИЕ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец
               2026-08-30: «всё будет зависеть от того, что я выберу в начале,
@@ -2370,6 +2389,13 @@ export default function BookScreen() {
                   снесено 2026-08-30. */}
               <SectionCard>
                 <View className="px-4 py-3">
+                  {/* ЗАМЕТКУ НАБИРАЮТ, ВИДЯ ЕЁ. Поле стоит последним, и KAV,
+                      ужимая список под клавиатуру, оставлял его под ней —
+                      текст набирался вслепую (поймано 2026-09-03, когда у
+                      симулятора отключили аппаратную клавиатуру). Панель
+                      «Готово» над клавиатурой у многострочного поля iOS не
+                      показывает (проверено там же), поэтому убирают её
+                      тапом мимо или потянув вниз (`keyboardDismissMode`). */}
                   <TextInput
                     keyboardAppearance="light"
                     accessibilityLabel="Заметка команде"
@@ -2377,6 +2403,14 @@ export default function BookScreen() {
                     onChangeText={setComment}
                     placeholder="Заметка команде — что сделать, взять с собой…"
                     placeholderTextColor={t.placeholder}
+                    // Пока клавиатура выезжает, докручиваем список до конца —
+                    // поле встаёт прямо над ней.
+                    onFocus={() =>
+                      setTimeout(
+                        () => scrollRef.current?.scrollToEnd({ animated: true }),
+                        KEYBOARD_SETTLE_MS,
+                      )
+                    }
                     multiline
                     style={{ fontSize: 15, color: t.ink, minHeight: 44 }}
                   />
@@ -2640,7 +2674,10 @@ export default function BookScreen() {
           style={{
             paddingHorizontal: 14,
             paddingTop: 8,
-            paddingBottom: insets.bottom + 8,
+            // Клавиатура iOS уже включает полосу home-индикатора: с её
+            // отступом под кнопкой висели лишние ~34pt пустоты (тот же
+            // закон, что у футера листов, DS §5).
+            paddingBottom: keyboardShown ? 8 : insets.bottom + 8,
             backgroundColor: groundBg,
             borderTopWidth: 1,
             borderTopColor: headerBorder,
