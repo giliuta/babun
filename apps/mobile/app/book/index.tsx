@@ -2658,14 +2658,20 @@ export default function BookScreen() {
       />
       {/* Добавление объекта — ТОТ ЖЕ лист, что на карточке клиента: один
           диалект и одна дорога записи. Открывается с уже набранным здесь
-          адресом и сразу выбирает добавленный объект для этой записи. */}
+          адресом и сразу выбирает добавленный объект для этой записи.
+
+          АДРЕС ПОДСТАВЛЯЕТСЯ ТОЛЬКО РАЗОВЫЙ — тот, что набрали в поле без
+          объекта. Пока выбран объект, `address` держит ЕГО адрес, и лист
+          открывался с «Karpathou 9» в поле НОВОГО объекта: одно «Готово»
+          заводило клиенту второй такой же дом. Поймано на симуляторе
+          2026-09-03. */}
       {client ? (
         <ObjectSheet
           visible={objectSheet}
           client={client}
           update={updateClientPatch}
           writer={locationWriter}
-          initialTarget={address}
+          initialTarget={locationId ? "" : address}
           onAdded={(added) => {
             setLocationId(added.id);
             setAddress(locationAddressForBooking(added));
