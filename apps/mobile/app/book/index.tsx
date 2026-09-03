@@ -116,6 +116,8 @@ import {
   resolveBookingClientPrefill,
   resolveBookingTeamId,
 } from "@/features/appointments/booking-prefill";
+import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
+import { servicePlan } from "@/features/clients/service-plan";
 import { stashBookingReturn } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
@@ -1909,21 +1911,45 @@ export default function BookScreen() {
                 {client ? (
                   <>
                   <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    {clientLocations.length > 1 ? (
-                      <View className="flex-row flex-wrap gap-2 px-4 pt-3">
-                        {clientLocations.map((l) => (
-                          <Chip
-                            key={l.id}
-                            label={l.label || l.address}
-                            variant="tint"
-                            selected={locationId === l.id}
-                            onPress={() => pickLocation(l.id)}
-                          />
-                        ))}
-                      </View>
-                    ) : null}
+                    {/* ОБЪЕКТЫ — ТЕМИ ЖЕ КАРТОЧКАМИ АДРЕСА, ЧТО НА КАРТОЧКЕ
+                        КЛИЕНТА (владелец 2026-08-31: «блок объекта должен быть
+                        такой же, как в клиентах»).
+
+                        Здесь стояли ЧИПЫ: одно слово в пилюле — ни адреса, ни
+                        срока ТО, ни заметки. Человек выбирал «Дом» и «Дача»
+                        вслепую, а всё, что нужно бригаде («код домофона»,
+                        «пора обслужить»), лежало этажом ниже, в карточке
+                        клиента, куда из записи не ходят.
+
+                        Строка НЕ СКОПИРОВАНА, а взята та же — `ObjectRow`
+                        открыт из блока объектов клиента. Копия разошлась бы с
+                        оригиналом на первой правке, как разошлись две формы
+                        записи, которые мы сейчас сводим. Разница ровно одна:
+                        здесь объект ВЫБИРАЮТ, поэтому у выбранного стоит
+                        галка, а тап не открывает правку. */}
+                    {clientLocations.map((l, i) => (
+                      <ObjectRow
+                        key={l.id}
+                        loc={l}
+                        plan={servicePlan(l, allAppts, date)}
+                        separated={i > 0}
+                        selected={locationId === l.id}
+                        onPress={() => pickLocation(l.id)}
+                      />
+                    ))}
 
                     <View className="px-4 py-3">
+                      {/* АДРЕС ПОКАЗЫВАЕТСЯ, ТОЛЬКО КОГДА ОБЪЕКТ НЕ ВЫБРАН.
+                          Карточка объекта выше уже несёт адрес и свою кнопку
+                          маршрута — с этим полем он стоял на экране ДВАЖДЫ, с
+                          двумя «Маршрут» подряд. Я это и увидел на симуляторе
+                          сразу после того, как поставил карточки: копия
+                          адреса выглядела вторым, другим адресом.
+
+                          Поле остаётся живым для выезда БЕЗ объекта — разовый
+                          адрес по звонку, который в справочник клиента не
+                          заводят. */}
+                      {!locationId ? (
                       <View className="flex-row items-center gap-2">
                         <TextInput
                           keyboardAppearance="light"
@@ -1952,6 +1978,10 @@ export default function BookScreen() {
                           </Text>
                         </Pressable>
                       </View>
+                      ) : null}
+                      {/* «Подъезд, код, этаж» остаётся всегда: это деталь
+                          ЭТОГО визита («ключ у соседей»), а не свойство
+                          объекта. */}
                       <TextInput
                         keyboardAppearance="light"
                         accessibilityLabel="Детали адреса"

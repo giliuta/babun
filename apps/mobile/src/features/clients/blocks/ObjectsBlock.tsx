@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
+import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
@@ -93,16 +94,25 @@ export default function ObjectsBlock({
   );
 }
 
-function ObjectRow({
+// СТРОКА ОБЪЕКТА ОТКРЫТА НАРУЖУ (2026-08-31). Форма записи показывала объекты
+// клиента ЧИПАМИ — одно слово в пилюле, без адреса, без срока ТО, без заметки.
+// Владелец: «блок объекта должен быть такой же, как в клиентах». Не похожий —
+// ТОТ ЖЕ: скопированная карточка адреса разошлась бы с оригиналом на первой же
+// правке, как разошлись две формы записи.
+export function ObjectRow({
   loc,
   plan,
   separated,
+  selected,
   onPress,
 }: {
   loc: Location;
   /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
   plan: ServicePlan | null;
   separated?: boolean;
+  /** Этот объект выбран для записи. На карточке клиента выбора нет — там
+   *  проп не передают, и галка не рисуется. */
+  selected?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -130,7 +140,12 @@ function ObjectRow({
         accessibilityLabel={[loc.label || "Объект", target, note]
           .filter(Boolean)
           .join(", ")}
-        accessibilityHint="Открывает правку объекта"
+        accessibilityHint={
+          selected === undefined ? "Открывает правку объекта" : undefined
+        }
+        accessibilityState={
+          selected === undefined ? undefined : { selected }
+        }
         style={({ pressed }) => ({
           flex: 1,
           flexDirection: "row",
@@ -186,6 +201,12 @@ function ObjectRow({
           ) : null}
         </View>
       </Pressable>
+
+      {/* Галка выбранного — только там, где объект ВЫБИРАЮТ (запись). На
+          карточке клиента выбора нет, и места она не занимает. */}
+      {selected ? (
+        <Check color={t.accent} size={18} strokeWidth={2.5} />
+      ) : null}
 
       {/* Маршрут — отдельное действие над адресом этой строки; шторка выбора
           карты приезжает снизу (chooseOption → канонический лист). */}
