@@ -15,7 +15,11 @@ import {
   type TextProps,
 } from "react-native";
 import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import {
+  useLocalSearchParams,
+  useNavigation,
+  useRouter,
+} from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -112,6 +116,7 @@ import {
   resolveBookingClientPrefill,
   resolveBookingTeamId,
 } from "@/features/appointments/booking-prefill";
+import { stashBookingReturn } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import {
@@ -2579,6 +2584,12 @@ export default function BookScreen() {
       <ClientPicker
         visible={clientPickerOpen}
         onClose={() => setClientPickerOpen(false)}
+        // Уходя за клиентом, оставляем в ящике СЛОТ: карточка клиента живёт
+        // внутри вкладки и уводит из формы совсем, вернуться «назад» некуда.
+        // После сохранения запись откроется заново уже с этим слотом.
+        onCreateClient={() =>
+          stashBookingReturn({ date, timeStart, teamId })
+        }
         clients={clients}
         recentIds={recentClientIds}
         onPick={(pickedClient) => {

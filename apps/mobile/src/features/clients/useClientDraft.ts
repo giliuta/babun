@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
@@ -13,6 +13,10 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
+import {
+  bookingIsWaitingForClient,
+  takeBookingReturn,
+} from "@/features/appointments/pending-client";
 import {
   friendlyCreateError,
   isPhoneTakenError,
@@ -208,6 +212,37 @@ export function useClientDraft(active: boolean) {
         phone_e164: e164,
       });
       haptics.success();
+      // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЗАПИСИ, ВОЗВРАЩАЕТСЯ В ЗАПИСЬ (владелец
+      // 2026-08-31: «нажимаю „Готово" — и оно остаётся на странице клиента, а
+      // должно сразу переходить в саму запись, я ж делаю в первую очередь
+      // запись»).
+      //
+      // Обычный путь — `replace` на карточку созданного — тут был тупиком:
+      // форма записи стояла в стеке ПОД карточкой со своим слотом и временем,
+      // и вперёд из неё дороги не было, только «назад» к пустому клиенту.
+      //
+      // ОТКРЫВАЕМ ЗАПИСЬ ЗАНОВО, А НЕ `back`. Сперва казалось, что хватит
+      // «назад»: форма же стоит в стеке. Проверка на симуляторе показала
+      // обратное — `/clients/new` живёт ВНУТРИ вкладки «Клиенты», а форма
+      // записи это маршрут корневого стека НАД табами, и переход к созданию
+      // уводит из неё совсем: «назад» приводит на календарь.
+      //
+      // Поэтому запись открывается заново — со слотом, который человек выбрал
+      // ДО похода за клиентом, и с самим клиентом. Для него это продолжение,
+      // а не «начни сначала».
+      if (bookingIsWaitingForClient()) {
+        const back = takeBookingReturn();
+        router.replace({
+          pathname: "/book",
+          params: {
+            clientId: created.id,
+            ...(back?.date ? { date: back.date } : {}),
+            ...(back?.timeStart ? { time_start: back.timeStart } : {}),
+            ...(back?.teamId ? { teamId: back.teamId } : {}),
+          },
+        } as Href);
+        return created.id;
+      }
       router.replace(`/clients/${created.id}`);
       // Засов не снимаем: экран уже уехал на карточку созданного клиента, и
       // повторное создание из этого черновика недопустимо.

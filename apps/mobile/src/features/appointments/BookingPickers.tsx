@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   Modal,
   Pressable,
@@ -19,6 +20,7 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
 import { supabase } from "@/lib/supabase";
@@ -67,21 +69,30 @@ const OFF_DAY_WORD: Record<number, string> = {
   7: "воскресеньям",
 };
 
+/** Сколько ждать, пока `Modal` уедет, прежде чем толкать маршрут. Свой, а не
+ *  `SHEET_EXIT_MS` из `BottomSheet`: тот про другой примитив со своей
+ *  пружиной, и связывать их значением значило бы связать и их анимации. */
+const MODAL_EXIT_MS = 260;
+
 export function ClientPicker({
   visible,
   onClose,
+  onCreateClient,
   clients,
   recentIds,
   onPick,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Форма записи кладёт свой слот в ящик перед уходом за клиентом. */
+  onCreateClient: () => void;
   clients: Client[];
   recentIds: string[];
   onPick: (client: Client) => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const reduced = useReduceMotion();
   const tenantId = useTenantId();
   const [q, setQ] = useState("");
@@ -295,6 +306,46 @@ export function ClientPicker({
             </Text>
           ) : null}
         </ScrollView>
+
+        {/* «СОЗДАТЬ КЛИЕНТА» ВНИЗУ И ВСЕГДА (владелец 2026-08-31: «когда я
+            выбираю клиента, внизу кнопку создать клиента, ну и как в
+            клиентах — потому что я могу добавлять клиента и сразу их
+            создавать»).
+
+            Быстрое создание строкой над списком остаётся, но оно условное:
+            появляется, только когда в поиске набрано что-то похожее на имя
+            или телефон. Пустой поиск — и завести клиента было нечем, хотя
+            именно с этого начинается половина заявок: звонит новый человек.
+
+            ВЕДЁТ НА ТУ ЖЕ СТРАНИЦУ, ЧТО И «Добавить клиента» в списке
+            клиентов, — /clients/new. Второй формы создания заводить нельзя:
+            карточка спрашивает адрес, объект, канал связи, и разошедшийся
+            дубль этой анкеты пришлось бы держать в двух местах.
+
+            СНАЧАЛА ЗАКРЫВАЕМ ЛИСТ, ПОТОМ ИДЁМ. Пикер — `Modal`, а маршрут
+            уезжает в стек ПОД ним: push из-под модалки открывает страницу
+            невидимой, за шторкой. Тот же приём и той же задержкой стоит в
+            листе создания счёта. */}
+        <View
+          style={{
+            paddingHorizontal: 20,
+            paddingTop: 8,
+            paddingBottom: Math.max(insets.bottom, 10),
+          }}
+        >
+          <GradientButton
+            label="Создать клиента"
+            onPress={() => {
+              // Кладём СЛОТ в ящик: карточка клиента живёт внутри вкладки
+              // «Клиенты» и уводит из формы совсем — вернуться «назад» некуда.
+              // После сохранения форма откроется заново уже с этим слотом и
+              // новым клиентом.
+              onCreateClient();
+              onClose();
+              setTimeout(() => router.push("/clients/new"), MODAL_EXIT_MS);
+            }}
+          />
+        </View>
       </Screen>
     </Modal>
   );
