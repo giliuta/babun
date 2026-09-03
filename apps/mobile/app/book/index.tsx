@@ -980,9 +980,13 @@ export default function BookScreen() {
   // ТОЛЬКО НА СОЗДАНИИ. У правки клиент и услуги уже выбраны, и всплывший
   // поверх лист был бы помехой, а не помощью.
   //
-  // ОДИН РАЗ ЗА ЖИЗНЬ ЭКРАНА: `ref`, а не состояние. Закрыл лист — цепочка
-  // кончилась и сама не воскреснет; иначе закрытие выглядело бы сломанным.
-  const chainRef = useRef<"idle" | "client" | "done">("idle");
+  // ОДИН РАЗ ЗА ЖИЗНЬ ЭКРАНА, и только вперёд: idle → client → services →
+  // done. Закрыл лист — цепочка кончилась и сама не воскреснет; иначе
+  // закрытие выглядело бы сломанным. Это состояние, а не ref: второе звено
+  // ждёт, пока доедет прайс, а ref эффект не будит.
+  const [chainStep, setChainStep] = useState<
+    "idle" | "client" | "services" | "done"
+  >("idle");
   const pickClient = (c: Client) => {
     // НЕ сбрасываем loyaltyAppliedRef здесь: сброс заставлял эффект принять
     // авто-скидку прошлого клиента за ручную (discountType && !ref → return) и
@@ -1024,11 +1028,9 @@ export default function BookScreen() {
     // 2026-08-31: «когда я выбираю клиента или создаю, сразу появляется
     // страница выбора услуги»). Только на СВЕЖЕЙ записи и ровно один раз:
     // человек, который вернулся сменить клиента у собранной записи, не должен
-    // получать поверх неё лист услуг.
-    if (chainRef.current === "client" && serviceIds.length === 0) {
-      chainRef.current = "done";
-      setServicePickerOpen(true);
-    }
+    // получать поверх неё лист услуг. Само открытие — эффектом ниже: он
+    // знает, доехал ли прайс.
+    if (chainStep === "client") setChainStep("services");
   };
 
   const pickLocation = (id: string) => {
@@ -1290,7 +1292,7 @@ export default function BookScreen() {
   );
 
   useEffect(() => {
-    if (chainRef.current !== "idle") return;
+    if (chainStep !== "idle") return;
     if (isEdit || kind !== "work") return;
     // Ждём, пока справочники доедут: лист поверх скелета показал бы пустоту.
     if (referencesPending) return;
@@ -1311,15 +1313,29 @@ export default function BookScreen() {
       if (clientId) {
         // Клиент уже известен — пришли с карточки клиента или вернулись,
         // заведя нового. Первое звено пройдено, показываем второе.
-        chainRef.current = "done";
-        if (serviceIds.length === 0) setServicePickerOpen(true);
+        setChainStep("services");
         return;
       }
-      chainRef.current = "client";
+      setChainStep("client");
       setClientPickerOpen(true);
     }, CHAIN_START_MS);
     return () => clearTimeout(timer);
-  }, [isEdit, kind, referencesPending, clientId, serviceIds.length]);
+  }, [chainStep, isEdit, kind, referencesPending, clientId]);
+
+  // ВТОРОЕ ЗВЕНО — УСЛУГИ. Ждём прайс: он не в числе базовых справочников,
+  // и лист, открытый до его приезда, показывал честную на вид пустоту
+  // «У команды пока нет услуг». ПУСТОЙ ПРАЙС НЕ ОТКРЫВАЕМ ВОВСЕ: лист, в
+  // котором нечего выбрать, — это экран, который человек только закрывает
+  // (поймано на симуляторе 2026-09-03 у команды без единой услуги). Строка
+  // «Выбрать услугу» на форме остаётся в одном тапе.
+  useEffect(() => {
+    if (chainStep !== "services") return;
+    if (servicesQuery.isPending) return;
+    setChainStep("done");
+    if (serviceIds.length === 0 && teamServices.length > 0) {
+      setServicePickerOpen(true);
+    }
+  }, [chainStep, servicesQuery.isPending, serviceIds.length, teamServices.length]);
 
   const failedOptional = referenceQueries.find(
     ({ query }) =>
