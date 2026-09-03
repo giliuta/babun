@@ -112,8 +112,22 @@ export const ZONE_GROUPS: ZoneGroup[] = [
       { name: "Boise", zone: "America/Boise" },
       { name: "Cambridge Bay", zone: "America/Cambridge_Bay" },
       { name: "Ciudad Juarez", zone: "America/Ciudad_Juarez" },
-      { name: "Edmonton", zone: "America/Edmonton" },
       { name: "Inuvik", zone: "America/Inuvik" },
+    ],
+  },
+  {
+    // АЛЬБЕРТА ОСТАЛАСЬ НА ЛЕТНЕМ ВРЕМЕНИ НАВСЕГДА, и с ноября 2026 Эдмонтон
+    // перестал возвращаться к зимнему вместе с Денвером. Своей группой он
+    // стоит не по важности города, а потому, что ни одна другая зона мира
+    // так себя не ведёт — проверено перебором всех зон ICU.
+    //
+    // Поймал это тест «каждый город группы ведёт себя как её представитель»
+    // в тот день, когда система обновила базу поясов: данные здесь застыли
+    // на момент генерации, а `Intl` живёт вместе с ОС. Ради этого тест и
+    // писался — молча разъехавшийся пояс сдвинул бы человеку сутки.
+    zone: "America/Edmonton",
+    cities: [
+      { name: "Edmonton", zone: "America/Edmonton" },
     ],
   },
   {
