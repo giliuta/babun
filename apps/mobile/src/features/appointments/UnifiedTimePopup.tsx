@@ -39,10 +39,6 @@ const MONTHS_GEN = [
   "января", "февраля", "марта", "апреля", "мая", "июня",
   "июля", "августа", "сентября", "октября", "ноября", "декабря",
 ];
-const MONTHS_NOM = [
-  "январь", "февраль", "март", "апрель", "май", "июнь",
-  "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь",
-];
 const WEEKS_BACK = 26;
 const WEEKS_FWD = 26;
 const ALL_DAY_RANGE = { start: "00:00", end: "23:59" };
@@ -81,12 +77,15 @@ function formatDateRu(dateKey: string): string {
   const [, m, d] = dateKey.split("-").map(Number);
   return `${d} ${MONTHS_GEN[m - 1]}`;
 }
+// «31 августа – 6 сентября»: число с месяцем стоит в родительном падеже,
+// как в подписи даты выше. Именительный («31 АВГУСТ») читался как опечатка
+// (находка Б1 аудита STORY-064).
 function formatWeekRange(monday: Date): string {
   const sunday = addDays(monday, 6);
   if (monday.getMonth() === sunday.getMonth()) {
-    return `${monday.getDate()}–${sunday.getDate()} ${MONTHS_NOM[sunday.getMonth()]}`;
+    return `${monday.getDate()}–${sunday.getDate()} ${MONTHS_GEN[sunday.getMonth()]}`;
   }
-  return `${monday.getDate()} ${MONTHS_NOM[monday.getMonth()]} – ${sunday.getDate()} ${MONTHS_NOM[sunday.getMonth()]}`;
+  return `${monday.getDate()} ${MONTHS_GEN[monday.getMonth()]} – ${sunday.getDate()} ${MONTHS_GEN[sunday.getMonth()]}`;
 }
 
 interface Draft {
