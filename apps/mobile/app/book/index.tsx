@@ -432,6 +432,34 @@ export default function BookScreen() {
   const { data: payAccounts = [] } = useTeamPaymentAccounts(teamId);
   const [reminderOn, setReminderOn] = useState(false);
   const [showPay, setShowPay] = useState(false);
+  // Строку «Оплата» открывают, чтобы НАБРАТЬ сумму: курсор встаёт в поле
+  // сразу, без второго тапа. «Закрыть на месте» открывает тот же блок с
+  // уже подставленной суммой — там клавиатура не нужна.
+  //
+  // ФОКУС — ЧЕРЕЗ REF, А НЕ `autoFocus`: у поля, сфокусированного при
+  // монтировании, iOS не показывает панель «Готово» над цифровой
+  // клавиатурой (проверено на симуляторе 2026-09-03). Заодно карточка
+  // предоплаты подкручивается целиком над клавиатуру — вместе с кассами,
+  // которые выбирают следом за суммой.
+  const [payFocus, setPayFocus] = useState(false);
+  const prepayRef = useRef<NativeTextInput>(null);
+  const payCardY = useRef(0);
+  useEffect(() => {
+    if (!showPay || !payFocus) return;
+    const focusTimer = setTimeout(() => prepayRef.current?.focus(), 60);
+    const scrollTimer = setTimeout(
+      () =>
+        scrollRef.current?.scrollTo({
+          y: Math.max(0, payCardY.current - 8),
+          animated: true,
+        }),
+      60 + KEYBOARD_SETTLE_MS,
+    );
+    return () => {
+      clearTimeout(focusTimer);
+      clearTimeout(scrollTimer);
+    };
+  }, [showPay, payFocus]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
@@ -1119,6 +1147,7 @@ export default function BookScreen() {
     setStatus("completed");
     setPrepayDraft(String(Number(effectiveTotal.toFixed(2))));
     if (!payMethod) setPayMethod("cash");
+    setPayFocus(false);
     setShowPay(true);
     haptics.tap();
   };
@@ -2236,6 +2265,11 @@ export default function BookScreen() {
 
               {/* Оплата — сразу после «Итого»: единая денежная цепочка
                   сумма → предоплата → долг. Свёрнута, не гейтит сейв. */}
+              <View
+                onLayout={(e) => {
+                  payCardY.current = e.nativeEvent.layout.y;
+                }}
+              >
               <SectionCard>
                 {!showPay ? (
                   <>
@@ -2250,6 +2284,7 @@ export default function BookScreen() {
                       }
                       muted={prepay === 0}
                       onPress={() => {
+                        setPayFocus(true);
                         setShowPay(true);
                         haptics.tap();
                       }}
@@ -2305,7 +2340,9 @@ export default function BookScreen() {
                       </Text>
                     </Pressable>
                     <View className="mt-2 flex-row items-center gap-3">
-                      <TextInput
+                      <NativeTextInput
+                        ref={prepayRef}
+                        maxFontSizeMultiplier={1.3}
                         keyboardAppearance="light"
                         accessibilityLabel="Предоплата"
                         value={prepayDraft}
@@ -2313,6 +2350,7 @@ export default function BookScreen() {
                         placeholder="0"
                         placeholderTextColor={t.placeholder}
                         keyboardType="decimal-pad"
+                        selectTextOnFocus
                         inputAccessoryViewID={kbdAccessory}
                         style={{ minHeight: 44, fontSize: 24, fontWeight: "700", color: t.ink, minWidth: 64, fontVariant: ["tabular-nums"] }}
                       />
@@ -2384,6 +2422,7 @@ export default function BookScreen() {
                   </View>
                 )}
               </SectionCard>
+              </View>
 
               {/* Заметка команде — последняя строка формы: «Дополнительно» под ней
                   снесено 2026-08-30. */}
@@ -2819,6 +2858,11 @@ export default function BookScreen() {
           haptics.tap();
         }}
       />
+      {/* ИЗВЕСТНЫЙ ПРЕДЕЛ (2026-09-03, симулятор без аппаратной клавиатуры):
+          панель показывается у «Итого», смонтированного вместе с экраном, и
+          НЕ показывается у поля предоплаты, которое появляется позже, — ни при
+          тапе, ни при фокусе из кода, ни после перемонтирования самой панели.
+          Клавиатуру там убирают тапом мимо или потянув список вниз. */}
       {Platform.OS === "ios" ? (
         <InputAccessoryView nativeID={KBD_ACCESSORY_ID}>
           <View
