@@ -104,19 +104,38 @@ export function ClientPicker({
     () => findQuickClientDuplicate(clients, quickDraft.phone_e164),
     [clients, quickDraft.phone_e164],
   );
+  // ПРИ ПУСТОМ ПОИСКЕ ВИДНЫ ВСЕ, А НЕ ТОЛЬКО НЕДАВНИЕ (владелец 2026-08-31:
+  // «я вроде создал клиента, но он не создался — проверяй это»).
+  //
+  // Клиент создавался исправно. Не показывался: «Недавние» — это те, у кого
+  // УЖЕ БЫЛИ записи, а у новорождённого их нет по определению. Человек заводил
+  // клиента, возвращался и не находил его — вывод «не создался» напрашивался
+  // сам, и он был бы верным при любом другом объяснении.
+  //
+  // Недавние остаются первыми: в девяти случаях из десяти записывают того, кто
+  // уже был. Остальные идут следом по алфавиту — теперь список полон.
+  const recent = useMemo(() => {
+    const byId = new Map(clients.map((c) => [c.id, c]));
+    return recentIds.map((id) => byId.get(id)).filter(Boolean) as Client[];
+  }, [clients, recentIds]);
+
+  const others = useMemo(() => {
+    const seen = new Set(recent.map((c) => c.id));
+    return clients
+      .filter((c) => !seen.has(c.id))
+      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "", "ru"));
+  }, [clients, recent]);
+
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
-    if (!query) {
-      const byId = new Map(clients.map((c) => [c.id, c]));
-      return recentIds.map((id) => byId.get(id)).filter(Boolean) as Client[];
-    }
+    if (!query) return [...recent, ...others];
     return clients.filter(
       (c) =>
         (c.full_name || "").toLowerCase().includes(query) ||
         (digits.length > 0 &&
           (c.phone || "").replace(/\D/g, "").includes(digits)),
     );
-  }, [q, clients, recentIds, digits]);
+  }, [q, clients, recent, others, digits]);
 
   const create = async () => {
     if (!quickDraft.canCreate || createClient.isPending) return;
@@ -223,7 +242,7 @@ export function ClientPicker({
               className="px-5 pb-1.5 pt-4"
               style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}
             >
-              НЕДАВНИЕ
+              {recent.length > 0 ? "НЕДАВНИЕ И ВСЕ ОСТАЛЬНЫЕ" : "ВСЕ КЛИЕНТЫ"}
             </Text>
           ) : null}
           <SectionCard>
@@ -257,11 +276,11 @@ export function ClientPicker({
               ))
             ) : (
               <EmptyState
-                title={q.trim() ? "Клиенты не найдены" : "Недавних клиентов пока нет"}
+                title={q.trim() ? "Клиенты не найдены" : "Клиентов пока нет"}
                 subtitle={
                   q.trim()
                     ? "Проверьте запрос или создайте клиента по введённым данным."
-                    : "Введите имя или телефон в строке поиска."
+                    : "Заведите первого кнопкой внизу."
                 }
               />
             )}
