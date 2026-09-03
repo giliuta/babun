@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { Stepper } from "@/features/appointments/BookingSummary";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
 import { supabase } from "@/lib/supabase";
@@ -34,7 +35,6 @@ import {
   findQuickClientDuplicate,
 } from "@/features/appointments/booking-prefill";
 import { useReduceMotion } from "@/lib/reduce-motion";
-import { InlineServiceCreate } from "@/features/services/InlineServiceCreate";
 import { ColorDot } from "@/components/ui/picker-fields";
 import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
@@ -378,7 +378,9 @@ export function ServicePicker({
   selectedIds,
   teamId,
   date,
+  quantities,
   onToggle,
+  onQtyChange,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -391,6 +393,10 @@ export function ServicePicker({
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
   onToggle: (id: string) => void;
+  /** Сколько каждой услуги уже в записи. Нет ключа — ни одной. */
+  quantities: Record<string, number>;
+  /** Ноль убирает услугу из записи (та же семантика, что у степпера формы). */
+  onQtyChange: (id: string, qty: number) => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -423,13 +429,28 @@ export function ServicePicker({
     ? `Не делаем по ${OFF_DAY_WORD[isoWeekdayOf(date)]}`
     : "";
   // Живой счётчик выбранного — чтобы не закрывать модалку ради проверки.
+  // СУММА СЧИТАЕТСЯ С КОЛИЧЕСТВОМ (2026-08-31). Считалась по базовым ценам
+  // выбранных услуг — пока количество набирали уже в форме, это было верно.
+  // Как только степпер переехал сюда, подвал начал ЗАНИЖАТЬ: две чистки по
+  // €45 и одна заправка за €80 показывались как «€125» вместо €170.
+  // Поймано на симуляторе сразу после переноса степпера.
+  //
+  // Число слева — тоже количество работ, а не число строк прайса: человек
+  // выбрал три работы, а не две.
+  const totalQty = useMemo(
+    () => selectedIds.reduce((n, id) => n + (quantities[id] ?? 1), 0),
+    [selectedIds, quantities],
+  );
   const subtotal = useMemo(
     () =>
       selectedIds.reduce(
-        (sum, id) => sum + (services.find((s) => s.id === id)?.price ?? 0),
+        (sum, id) =>
+          sum +
+          (services.find((s) => s.id === id)?.price ?? 0) *
+            (quantities[id] ?? 1),
         0,
       ),
-    [selectedIds, services],
+    [selectedIds, services, quantities],
   );
 
   return (
@@ -512,6 +533,7 @@ export function ServicePicker({
                     accessibilityRole="checkbox"
                     accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}`}
                     accessibilityState={{ checked: selectedIds.includes(s.id) }}
+                    disabled={on}
                   >
                     <ColorDot value={s.color} size={10} />
                     <View className="ml-3 flex-1">
@@ -529,7 +551,23 @@ export function ServicePicker({
                           : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`}
                       </Text>
                     </View>
-                    {on ? <Check color={t.accent} size={ICON.md} /> : null}
+                    {/* КОЛИЧЕСТВО ПРЯМО ЗДЕСЬ (владелец 2026-08-31: «просто
+                        страница с услугами, где можно выбирать количество»).
+                        Раньше строка умела только «включить/выключить», а
+                        количество набиралось уже в форме — то есть за выбором
+                        всегда следовал второй заход. Тот же степпер, что и в
+                        записи: одна арифметика, один вид, ноль убирает
+                        услугу. */}
+                    {on ? (
+                      <Stepper
+                        qty={quantities[s.id] ?? 1}
+                        unit={s.unit ?? null}
+                        onDec={() => onQtyChange(s.id, (quantities[s.id] ?? 1) - 1)}
+                        onInc={() => onQtyChange(s.id, (quantities[s.id] ?? 1) + 1)}
+                      />
+                    ) : (
+                      <Check color={t.separator} size={ICON.md} />
+                    )}
                   </Pressable>
                 );
               })
@@ -539,20 +577,24 @@ export function ServicePicker({
                 subtitle={
                   q.trim()
                     ? "Измените запрос и попробуйте ещё раз."
-                    : "Заведите первую — она сразу добавится в запись."
+                    : "Прайс команды заводится в Кабинете."
                 }
               />
             )}
           </SectionCard>
-          {/* ПУСТОЙ ПРАЙС — НЕ ТУПИК: услуга заводится прямо здесь и сразу
-              уходит в запись. Поиск с пустым каталогом ничего не ищет, поэтому
-              под него блок не показываем. */}
-          {services.length === 0 && !q.trim() ? (
-            <InlineServiceCreate
-              teamId={teamId}
-              onCreated={(id) => onToggle(id)}
-            />
-          ) : null}
+          {/* СОЗДАНИЯ УСЛУГИ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-08-31: «просто
+              страница с услугами, которые уже заведены в команду, там нет
+              создания ничего»).
+
+              Стояла мини-форма «название + цена» на случай пустого прайса.
+              Она заводила услугу в ОБХОД редактора: без расхода, без
+              лестницы количества, без дней недели и перерыва — то есть
+              создавала заведомо неполную строку прайса, которую потом никто
+              не дозаполнял.
+
+              Пустой прайс при этом НЕ ТУПИК: запись сохраняется и без услуг
+              (`workSelectionValid` проверяет согласованность выбора с
+              командой, а не его непустоту) — проверено перед сносом. */}
         </ScrollView>
 
         {selectedIds.length > 0 ? (
@@ -569,12 +611,12 @@ export function ServicePicker({
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel={`Готово, выбрано услуг: ${selectedIds.length} на ${formatEURExact(subtotal)}`}
+              accessibilityLabel={`Готово, работ: ${totalQty} на ${formatEURExact(subtotal)}`}
               className="items-center justify-center rounded-full"
               style={{ minHeight: 50, backgroundColor: t.accent }}
             >
               <Text style={{ fontSize: 16, fontWeight: "700", color: t.onAccent, fontVariant: ["tabular-nums"] }}>
-                Готово · {selectedIds.length} · {formatEURExact(subtotal)}
+                Готово · {totalQty} · {formatEURExact(subtotal)}
               </Text>
             </Pressable>
           </View>

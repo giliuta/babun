@@ -392,7 +392,6 @@ export default function BookScreen() {
     first(params.locationId) ?? null,
   );
   const [address, setAddress] = useState("");
-  const [addressNote, setAddressNote] = useState("");
   const [customTotal, setCustomTotal] = useState(false);
   const [totalDraft, setTotalDraft] = useState("");
   const [discountType, setDiscountType] = useState<Discount["type"] | null>(
@@ -658,7 +657,6 @@ export default function BookScreen() {
     setMasterId(editing.master_id ?? null);
     setLocationId(editing.location_id ?? null);
     setAddress(editing.address ?? "");
-    setAddressNote(editing.address_note ?? "");
     setCustomTotal(!!editing.custom_total);
     setTotalDraft(String(editing.total_amount ?? 0));
     setDiscountType(editing.global_discount?.type ?? null);
@@ -781,7 +779,6 @@ export default function BookScreen() {
     setClientId(prefill.clientId);
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
-    setAddressNote(prefill.addressNote);
     if (prefill.masterId) setMasterId(prefill.masterId);
     clientPrefillHydrated.current = true;
   }, [isEdit, clients, clientsLoading, params.clientId, params.locationId]);
@@ -1013,7 +1010,6 @@ export default function BookScreen() {
     setClientId(prefill.clientId);
     setLocationId(prefill.locationId);
     setAddress(prefill.address);
-    setAddressNote(prefill.addressNote);
     if (
       prefill.masterId &&
       isMasterAllowedForTeam(
@@ -1040,7 +1036,6 @@ export default function BookScreen() {
     const loc = clientLocations.find((l) => l.id === id);
     if (loc) {
       setAddress(locationAddressForBooking(loc));
-      setAddressNote(loc.note?.trim() ?? "");
     }
     haptics.tap();
   };
@@ -1184,7 +1179,6 @@ export default function BookScreen() {
       status,
       location_id: locationId,
       address: address.trim(),
-      address_note: addressNote.trim(),
       color_override: colorOverride,
       global_discount: globalDiscount,
       discount_amount: discountAmount,
@@ -1482,7 +1476,6 @@ export default function BookScreen() {
         serviceIds.length > 0 ||
         comment.trim().length > 0 ||
         address.trim().length > 0 ||
-        addressNote.trim().length > 0 ||
         customTotal ||
         discountType != null ||
         status !== "scheduled" ||
@@ -1979,18 +1972,25 @@ export default function BookScreen() {
                         </Pressable>
                       </View>
                       ) : null}
-                      {/* «Подъезд, код, этаж» остаётся всегда: это деталь
-                          ЭТОГО визита («ключ у соседей»), а не свойство
-                          объекта. */}
-                      <TextInput
-                        keyboardAppearance="light"
-                        accessibilityLabel="Детали адреса"
-                        value={addressNote}
-                        onChangeText={setAddressNote}
-                        placeholder="Подъезд, код, этаж"
-                        placeholderTextColor={t.placeholder}
-                        style={{ minHeight: 44, fontSize: 13, color: t.sub, paddingVertical: 2, marginTop: 2 }}
-                      />
+                      {/* «ПОДЪЕЗД, КОД, ЭТАЖ» УБРАН СОВСЕМ (владелец
+                          2026-08-31: «зачем вот это, не надо, без этого можно
+                          всё сделать»).
+                          
+                          Поле носило ДВЕ разные вещи под одним именем, и обе
+                          у нас уже есть свои места:
+                            • «код от ворот 1234», «домофон 45» — это свойство
+                              ОБЪЕКТА, оно верно всегда. У объекта есть своя
+                              заметка, и карточка выше её печатает третьей
+                              строкой;
+                            • «сегодня ключ у соседей» — про ЭТУ поездку, для
+                              этого заметка записи.
+                          Третье безымянное поле между ними давало один и тот
+                          же факт записать в трёх местах, а бригаде — гадать,
+                          какое из трёх читать.
+
+                          Колонка `address_note` в базе цела: форма её больше
+                          не шлёт, и обновление частичным патчем прежние
+                          значения не трогает. */}
                     </View>
 
                     {/* ТО оборудования объекта — визит часто из-за него; тап
@@ -2041,8 +2041,12 @@ export default function BookScreen() {
                 )}
               </SectionCard>
 
-              {/* Услуги и сумма — объединённая секция (web parity) */}
-              <SectionCard title="Услуги и сумма">
+              {/* УСЛУГИ. Заголовок был «Услуги и сумма» — владелец
+                  2026-08-31: «убираем, просто ставим услуги». Сумма и так
+                  стоит в блоке строкой «Итого»; называть её ещё и в шапке
+                  значило объявлять два предмета там, где предмет один: набор
+                  работ, у которого есть цена. */}
+              <SectionCard title="Услуги">
                 {serviceIds.length === 0 ? (
                   <>
                     {frequentTeamServices.length > 0 ? (
@@ -2665,7 +2669,6 @@ export default function BookScreen() {
           onAdded={(added) => {
             setLocationId(added.id);
             setAddress(locationAddressForBooking(added));
-            setAddressNote(added.note ?? "");
             toast("Объект сохранён");
           }}
           onClose={() => setObjectSheet(false)}
@@ -2698,6 +2701,10 @@ export default function BookScreen() {
         // уезжает вниз списка под свою подпись.
         date={date}
         onToggle={toggleService}
+        quantities={Object.fromEntries(
+          serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),
+        )}
+        onQtyChange={setQty}
       />
       <TeamMasterSheet
         visible={teamSheetOpen}
