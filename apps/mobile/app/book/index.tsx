@@ -1802,7 +1802,11 @@ export default function BookScreen() {
                 }
                 date={date}
                 timeStart={timeStart}
-                duration={computedDuration > 0 ? computedDuration : slotFallback}
+                // ДЛИТЕЛЬНОСТЬ — ПО КОНЦУ ЗАПИСИ, А НЕ ПО СУММЕ УСЛУГ. Пока
+                // конец растёт сам, это одно и то же число; но конец, заданный
+                // руками в попапе, докет игнорировал и печатал «2 ч 45 мин»
+                // у записи, которая в календаре кончается через час.
+                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
                 accent={identityC}
                 onEditTeam={() => {
@@ -2651,8 +2655,13 @@ export default function BookScreen() {
           setTimeStart(next.timeStart);
           setTimeEnd(next.timeEnd);
           setAllDay(kind === "event" && next.allDay);
-          // Пользователь явно задал конец в попапе — не растим его под услуги.
-          setDurationTouched(true);
+          // Конец перестаёт расти под услуги, только если его ДЛИТЕЛЬНОСТЬ
+          // задали руками. Смена даты или начала — не про длительность:
+          // попап сдвигает конец вместе с началом, и добавленная после
+          // услуга по-прежнему обязана удлинить запись.
+          const before = minutesBetweenHM(timeStart, timeEnd);
+          const after = minutesBetweenHM(next.timeStart, next.timeEnd);
+          if (next.allDay || after !== before) setDurationTouched(true);
         }}
         onClose={() => setWhenOpen(false)}
       />

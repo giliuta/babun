@@ -15,6 +15,7 @@ import {
   MINUTE_STEP,
   TimeWheelPair,
 } from "@/components/ui/TimeWheel";
+import { shiftRangeStart } from "@/features/appointments/time-range";
 
 // Портирован 1:1 из веба (apps/web UnifiedTimePopup + TimeWheels +
 // WheelColumn): один центрированный попап для выбора даты + начала/конца.
@@ -52,10 +53,6 @@ function pad2(n: number): string {
 function parseTime(s: string): [number, number] {
   const [h, m] = s.split(":").map(Number);
   return [Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0];
-}
-function minutesToHHMM(mins: number): string {
-  const c = Math.max(0, Math.min(24 * 60 - 1, mins));
-  return `${pad2(Math.floor(c / 60))}:${pad2(c % 60)}`;
 }
 function dateToKey(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
@@ -175,16 +172,15 @@ export function UnifiedTimePopup({
   const endMinIdx = Math.floor(em / MINUTE_STEP);
   const startTotal = sh * 60 + sm;
 
+  // НАЧАЛО ТЯНЕТ КОНЕЦ ЗА СОБОЙ (2026-09-03). Раньше конец стоял на месте,
+  // пока начало не наезжало на него: сдвинул 13:00→15:00 при конце 16:15 —
+  // и трёхчасовая работа молча стала часом с четвертью. Длительность здесь
+  // не правят — её правит барабан «Конец».
   const commitStart = (hour: number, min: number) => {
-    const nextStartTotal = hour * 60 + min;
-    setDraft((d) => {
-      const [deh, dem] = parseTime(d.timeEnd);
-      const endTotal = deh * 60 + dem;
-      const nextStart = `${pad2(hour)}:${pad2(min)}`;
-      const nextEnd =
-        endTotal <= nextStartTotal ? minutesToHHMM(nextStartTotal + 60) : d.timeEnd;
-      return { ...d, timeStart: nextStart, timeEnd: nextEnd };
-    });
+    setDraft((d) => ({
+      ...d,
+      ...shiftRangeStart(d.timeStart, d.timeEnd, `${pad2(hour)}:${pad2(min)}`),
+    }));
   };
   const commitEnd = (hour: number, min: number) => {
     if (hour * 60 + min <= startTotal) return;
