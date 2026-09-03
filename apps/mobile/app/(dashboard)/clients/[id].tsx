@@ -42,7 +42,7 @@ import {
   View,
 } from "react-native";
 import { Archive, ChevronRight, Phone, RotateCcw } from "lucide-react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
@@ -76,16 +76,27 @@ import { useCurrentRole } from "@/features/settings/tenant";
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
+import { deliverCreatedClient } from "@/features/appointments/pending-client";
 
 export default function ClientDetailScreen() {
   const t = useThemeColors();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const {
+    id,
+    name: prefillName,
+    phone: prefillPhone,
+  } = useLocalSearchParams<{ id: string; name?: string; phone?: string }>();
   const router = useRouter();
+  const pathname = usePathname();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
 
   // «new» → черновик без запросов; иначе обычная карточка с сервера.
   const isDraft = id === "new";
+  // Черновик, открытый ПОВЕРХ записи (`/book/client`): «Готово» отдаёт
+  // клиента записи и уходит «назад», а не на карточку созданного. Режим
+  // читается по маршруту, а не по флагу в памяти: флаг пережил бы уход с
+  // экрана и подставил бы следующего клиента, заведённого уже из списка.
+  const forBooking = isDraft && pathname.startsWith("/book");
   const clientQuery = useClient(isDraft ? "" : id);
   const {
     data: client,
@@ -136,7 +147,11 @@ export default function ClientDetailScreen() {
     onPhoneChange: onDraftPhoneChange,
     onPickContacts,
     save: saveDraft,
-  } = useClientDraft(isDraft);
+  } = useClientDraft(isDraft, {
+    forBooking,
+    name: prefillName,
+    phone: prefillPhone,
+  });
 
   // Единый persist-путь для блоков: черновик — локально, карточка — PATCH.
   const update = async (patch: Partial<Client>): Promise<boolean> => {
@@ -490,13 +505,23 @@ export default function ClientDetailScreen() {
                   onNameChange: (v) => updateDraft({ full_name: v }),
                   onPhoneChange: onDraftPhoneChange,
                   onPickContacts,
+                  // Телефон уже набран в поиске записи — курсор в имя.
+                  focus: prefillPhone && !prefillName ? "name" : "phone",
                   footer: (
                     <ClientDraftNotice
                       duplicate={duplicate}
                       error={createError}
-                      onOpenDuplicate={(duplicateId) =>
-                        router.replace(`/clients/${duplicateId}`)
-                      }
+                      // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть
+                      // тот клиент, ради которого пришли.
+                      openLabel={forBooking ? "Выбрать" : "Открыть"}
+                      onOpenDuplicate={(duplicateId) => {
+                        if (forBooking) {
+                          deliverCreatedClient(duplicateId);
+                          router.back();
+                          return;
+                        }
+                        router.replace(`/clients/${duplicateId}`);
+                      }}
                     />
                   ),
                 }

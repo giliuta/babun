@@ -90,6 +90,9 @@ export interface ClientHeaderDraft {
   onPickContacts?: () => void;
   /** Баннер дедупа / ошибка создания — внутри блока, под номером. */
   footer?: ReactNode;
+  /** Куда встаёт курсор при открытии. По умолчанию — в телефон (ключ
+   *  дедупа); когда телефон уже набран в поиске записи, — в имя. */
+  focus?: "name" | "phone";
 }
 
 interface ClientHeaderProps {
@@ -305,6 +308,7 @@ export default function ClientHeader({
           big
           stacked
           live={!!draft}
+          autoFocus={draft?.focus === "name"}
           // Имя обязательно НЕ только при создании: на сохранённой карточке
           // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
           // поиском, ни глазами в списке. Пустое просто не пишем, строка
@@ -355,7 +359,7 @@ export default function ClientHeader({
           big
           stacked
           live={!!draft}
-          autoFocus={!!draft}
+          autoFocus={!!draft && draft.focus !== "name"}
           // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
           // номера у сохранённого клиента уносило и ключ: клиент становился
           // невидимым для защиты от дублей, и его можно было создать заново.

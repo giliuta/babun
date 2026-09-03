@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   InputAccessoryView,
@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import {
+  useFocusEffect,
   useLocalSearchParams,
   useNavigation,
   useRouter,
@@ -118,7 +119,7 @@ import {
 } from "@/features/appointments/booking-prefill";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { servicePlan } from "@/features/clients/service-plan";
-import { stashBookingReturn } from "@/features/appointments/pending-client";
+import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import {
@@ -1041,6 +1042,29 @@ export default function BookScreen() {
     }
     haptics.tap();
   };
+
+  // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЭТОЙ ЗАПИСИ. Карточка нового клиента открывается
+  // ПОВЕРХ формы (`/book/client`), после «Готово» кладёт id в ящик и уходит
+  // «назад»; форма забирает его, получив фокус. Дальше — тот же `pickClient`,
+  // что и тап по списку: объект, любимый мастер, цепочка услуг. Список
+  // клиентов может ещё ехать после инвалидации — держим id, пока созданный
+  // в нём не появится.
+  const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const id = takeCreatedClient();
+      if (id) setCreatedClientId(id);
+    }, []),
+  );
+  useEffect(() => {
+    if (!createdClientId) return;
+    const created = clients.find((c) => c.id === createdClientId);
+    if (!created) return;
+    setCreatedClientId(null);
+    pickClient(created);
+    // pickClient пересобирается каждый рендер; нужен только клиент.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createdClientId, clients]);
 
   // Объект пишется ТОЛЬКО каноническим листом (ObjectSheet) — тем же, что на
   // карточке клиента. Своя форма здесь собирала массив locations снимком
@@ -2708,12 +2732,6 @@ export default function BookScreen() {
       <ClientPicker
         visible={clientPickerOpen}
         onClose={() => setClientPickerOpen(false)}
-        // Уходя за клиентом, оставляем в ящике СЛОТ: карточка клиента живёт
-        // внутри вкладки и уводит из формы совсем, вернуться «назад» некуда.
-        // После сохранения запись откроется заново уже с этим слотом.
-        onCreateClient={() =>
-          stashBookingReturn({ date, timeStart, teamId })
-        }
         clients={clients}
         recentIds={recentClientIds}
         onPick={(pickedClient) => {

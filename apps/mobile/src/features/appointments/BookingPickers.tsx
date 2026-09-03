@@ -13,7 +13,6 @@ import {
 import { Check, Search, UserRound, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client } from "@babun/shared/local/clients";
-import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { Chip } from "@/components/ui/Chip";
@@ -24,11 +23,6 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { Stepper } from "@/features/appointments/BookingSummary";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useThemeColors } from "@/theme/colors";
-import { supabase } from "@/lib/supabase";
-import { notify } from "@/lib/notify";
-import { useTenantId } from "@/lib/tenant";
-import { useCreateClient } from "@/features/clients/queries";
-import { friendlyCreateError } from "@/features/clients/client-create-errors";
 import type { Service } from "@/features/services/queries";
 import {
   buildQuickClientDraft,
@@ -77,15 +71,12 @@ const MODAL_EXIT_MS = 260;
 export function ClientPicker({
   visible,
   onClose,
-  onCreateClient,
   clients,
   recentIds,
   onPick,
 }: {
   visible: boolean;
   onClose: () => void;
-  /** Форма записи кладёт свой слот в ящик перед уходом за клиентом. */
-  onCreateClient: () => void;
   clients: Client[];
   recentIds: string[];
   onPick: (client: Client) => void;
@@ -94,9 +85,18 @@ export function ClientPicker({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const reduced = useReduceMotion();
-  const tenantId = useTenantId();
   const [q, setQ] = useState("");
-  const createClient = useCreateClient();
+  // ПОИСК НЕ ПОМНИТ ПРОШЛЫЙ ЗАПРОС. Лист остаётся смонтированным между
+  // открытиями, и набранное в нём переживало выбор: следующий поиск
+  // начинался с хвоста предыдущего («ТшлщыТшлщы» на симуляторе 2026-09-03).
+  const close = () => {
+    setQ("");
+    onClose();
+  };
+  const pick = (client: Client) => {
+    setQ("");
+    onPick(client);
+  };
 
   const digits = q.replace(/\D/g, "");
   const quickDraft = useMemo(() => buildQuickClientDraft(q), [q]);
@@ -137,56 +137,48 @@ export function ClientPicker({
     );
   }, [q, clients, recent, others, digits]);
 
-  const create = async () => {
-    if (!quickDraft.canCreate || createClient.isPending) return;
+  // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ ЗАПИСИ
+  // (`/book/client`, 2026-09-03). Здесь стояла вторая дорога: строка над
+  // списком заводила клиента ОДНИМ тапом — с именем без телефона или с
+  // телефоном без имени, — хотя по правилу владельца телефон обязателен и
+  // уникален (2026-07-25), а имя обязательно (2026-07-26). Набранное в
+  // поиске не пропадает: оно уезжает в карточку параметром и уже стоит в
+  // поле, а курсор — в том поле, которого не хватает.
+  //
+  // СНАЧАЛА ЗАКРЫВАЕМ ЛИСТ, ПОТОМ ИДЁМ. Пикер — `Modal`, а маршрут уезжает в
+  // стек ПОД ним: push из-под модалки открывает страницу невидимой, за
+  // шторкой. Тот же приём и той же задержкой стоит в листе создания счёта.
+  const openCreateForm = () => {
     if (duplicate) {
-      onPick(duplicate);
-      setQ("");
+      pick(duplicate);
       return;
     }
-    try {
-      // Кэш может быть холодным/устаревшим: перед реальным insert повторяем
-      // серверный guard тем же repository helper, что экран создания клиента.
-      if (quickDraft.phone_e164 && tenantId) {
-        try {
-          const existing = await findClientByPhoneE164(
-            supabase,
-            quickDraft.phone_e164,
-            tenantId,
-          );
-          if (existing) {
-            onPick(existing);
-            setQ("");
-            return;
-          }
-        } catch {
-          // Offline-first create остаётся доступным; кэш-гвард уже отработал,
-          // а серверную гонку окончательно разрешит sync/replay.
-        }
-      }
-      const c = await createClient.mutateAsync({
-        full_name: quickDraft.full_name,
-        phone: quickDraft.phone,
-        phone_e164: quickDraft.phone_e164,
-      });
-      onPick(c);
-      setQ("");
-    } catch (e) {
-      // Сырой текст Postgres человеку показывать нельзя: быстрое создание
-      // говорит на том же языке, что и полная карточка клиента.
-      notify("Не получилось", friendlyCreateError(e));
-    }
+    const typed = q.trim();
+    const prefill = !typed
+      ? {}
+      : quickDraft.kind === "phone"
+        ? { phone: quickDraft.phone }
+        : { name: quickDraft.full_name };
+    close();
+    setTimeout(
+      () =>
+        router.push({
+          pathname: "/book/client",
+          params: { id: "new", ...prefill },
+        }),
+      MODAL_EXIT_MS,
+    );
   };
 
   return (
-    <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
+    <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={close}>
       <Screen edges={["top"]}>
         <View
           className="flex-row items-center px-3"
           style={{ height: 48, borderBottomWidth: 1, borderBottomColor: t.separator }}
         >
           <Pressable
-            onPress={onClose}
+            onPress={close}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Закрыть выбор клиента"
@@ -250,7 +242,7 @@ export function ClientPicker({
               filtered.map((c, i) => (
                 <Pressable
                   key={c.id}
-                  onPress={() => onPick(c)}
+                  onPress={() => pick(c)}
                   className="flex-row items-center px-4 py-3"
                   style={i > 0 ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
                   accessibilityRole="button"
@@ -286,17 +278,15 @@ export function ClientPicker({
             )}
           </SectionCard>
 
-          {q.trim() && quickDraft.canCreate ? (
+          {/* Набранное и есть будущий клиент: строка несёт его в карточку.
+              Найденный по номеру дубль — не создание, а выбор: два клиента
+              на одном номере невозможны. */}
+          {q.trim() ? (
             <Pressable
-              onPress={create}
-              disabled={createClient.isPending}
+              onPress={openCreateForm}
               className="mx-4 mt-2 flex-row items-center gap-3 rounded-[10px] px-4 py-3.5"
-              style={{
-                backgroundColor: `${t.accent}0d`,
-                opacity: createClient.isPending ? 0.55 : 1,
-              }}
+              style={{ backgroundColor: `${t.accent}0d` }}
               accessibilityRole="button"
-              accessibilityState={{ disabled: createClient.isPending }}
               accessibilityLabel={
                 duplicate
                   ? `Выбрать существующего клиента ${duplicate.full_name || duplicate.phone || q.trim()}`
@@ -310,41 +300,27 @@ export function ClientPicker({
                 <UserRound color={t.accent} size={ICON.xs} />
               </View>
               <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-                {createClient.isPending
-                  ? "Создаём клиента…"
-                  : duplicate
+                {duplicate
                   ? `Выбрать существующего «${
                       duplicate.full_name || duplicate.phone || q.trim()
                     }»`
                   : `Создать клиента «${q.trim()}»`}
               </Text>
             </Pressable>
-          ) : q.trim() && quickDraft.kind === "phone" ? (
-            <Text className="px-5 pt-3" style={{ fontSize: 13, color: t.sub }}>
-              Введите полный номер телефона
-            </Text>
           ) : null}
         </ScrollView>
 
         {/* «СОЗДАТЬ КЛИЕНТА» ВНИЗУ И ВСЕГДА (владелец 2026-08-31: «когда я
             выбираю клиента, внизу кнопку создать клиента, ну и как в
             клиентах — потому что я могу добавлять клиента и сразу их
-            создавать»).
-
-            Быстрое создание строкой над списком остаётся, но оно условное:
-            появляется, только когда в поиске набрано что-то похожее на имя
-            или телефон. Пустой поиск — и завести клиента было нечем, хотя
+            создавать»). Пустой поиск — и завести клиента было нечем, хотя
             именно с этого начинается половина заявок: звонит новый человек.
 
-            ВЕДЁТ НА ТУ ЖЕ СТРАНИЦУ, ЧТО И «Добавить клиента» в списке
-            клиентов, — /clients/new. Второй формы создания заводить нельзя:
-            карточка спрашивает адрес, объект, канал связи, и разошедшийся
-            дубль этой анкеты пришлось бы держать в двух местах.
-
-            СНАЧАЛА ЗАКРЫВАЕМ ЛИСТ, ПОТОМ ИДЁМ. Пикер — `Modal`, а маршрут
-            уезжает в стек ПОД ним: push из-под модалки открывает страницу
-            невидимой, за шторкой. Тот же приём и той же задержкой стоит в
-            листе создания счёта. */}
+            ВЕДЁТ НА ТУ ЖЕ КАРТОЧКУ, ЧТО И «Добавить клиента» в списке
+            клиентов, только открытую поверх записи (`/book/client`). Второй
+            формы создания заводить нельзя: карточка спрашивает адрес, объект,
+            канал связи, и разошедшийся дубль этой анкеты пришлось бы держать
+            в двух местах. Что уже набрано в поиске — уезжает в карточку. */}
         <View
           style={{
             paddingHorizontal: 20,
@@ -352,18 +328,7 @@ export function ClientPicker({
             paddingBottom: Math.max(insets.bottom, 10),
           }}
         >
-          <GradientButton
-            label="Создать клиента"
-            onPress={() => {
-              // Кладём СЛОТ в ящик: карточка клиента живёт внутри вкладки
-              // «Клиенты» и уводит из формы совсем — вернуться «назад» некуда.
-              // После сохранения форма откроется заново уже с этим слотом и
-              // новым клиентом.
-              onCreateClient();
-              onClose();
-              setTimeout(() => router.push("/clients/new"), MODAL_EXIT_MS);
-            }}
-          />
+          <GradientButton label="Создать клиента" onPress={openCreateForm} />
         </View>
       </Screen>
     </Modal>
