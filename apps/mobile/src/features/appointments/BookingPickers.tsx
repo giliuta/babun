@@ -13,7 +13,6 @@ import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -382,7 +381,6 @@ export function ServicePicker({
   visible,
   onClose,
   services,
-  frequent,
   selectedIds,
   date,
   quantities,
@@ -392,7 +390,6 @@ export function ServicePicker({
   visible: boolean;
   onClose: () => void;
   services: Service[];
-  frequent: Service[];
   selectedIds: string[];
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
@@ -503,21 +500,6 @@ export function ServicePicker({
         onClear={() => setQ("")}
       />
 
-      {/* «ЧАСТЫЕ» — короткий путь в ДЛИННОМ прайсе. Когда услуг две-три,
-          пилюли повторяют список, который и так виден целиком. */}
-      {!q && frequent.length > 0 && services.length > frequent.length + 2 ? (
-        <View className="flex-row flex-wrap gap-2" style={{ paddingHorizontal: SIDE, paddingBottom: 10 }}>
-          {frequent.map((s) => (
-            <Chip
-              key={s.id}
-              label={s.name}
-              variant="tint"
-              selected={selectedIds.includes(s.id)}
-              onPress={() => add(s.id)}
-            />
-          ))}
-        </View>
-      ) : null}
 
       <View style={{ paddingHorizontal: SIDE, paddingBottom: 12, gap: 8 }}>
         {filtered.length > 0 ? (

@@ -29,7 +29,6 @@ import {
   ChevronRight,
   MapPin,
   MoreHorizontal,
-  Navigation,
   Palette,
   Phone,
   UserRound,
@@ -95,9 +94,6 @@ import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
-import { directRouteUrl, openDirect, routeTarget } from "@/lib/route-menu";
-import { RouteSheet } from "@/features/clients/RouteSheet";
-import { useEnabledMapServices } from "@/lib/map-services";
 
 import {
   useClients,
@@ -546,17 +542,6 @@ export default function BookScreen() {
     return out;
   }, [allAppts]);
 
-  const frequentServices = useMemo(() => {
-    const freq = new Map<string, number>();
-    for (const a of allAppts)
-      for (const id of a.service_ids) freq.set(id, (freq.get(id) ?? 0) + 1);
-    return [...freq.entries()]
-      .filter(([id]) => catalog.has(id))
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 4)
-      .map(([id]) => catalog.get(id) as Service);
-  }, [allAppts, catalog]);
-
   // Прайс ВЫБРАННОЙ команды: услуга принадлежит ровно одной команде
   // (2026-08-17). Пока команда не выбрана, каталог пуст — см.
   // `isServiceAllowedForTeam`.
@@ -564,14 +549,11 @@ export default function BookScreen() {
     () => services.filter((s) => teamId != null && s.team_id === teamId),
     [services, teamId],
   );
-  const allowedServiceIds = useMemo(
-    () => new Set(teamServices.map((service) => service.id)),
-    [teamServices],
-  );
-  const frequentTeamServices = useMemo(
-    () => frequentServices.filter((service) => allowedServiceIds.has(service.id)),
-    [allowedServiceIds, frequentServices],
-  );
+  // «ЧАСТЫЕ УСЛУГИ» ПИЛЮЛЯМИ СНЕСЕНЫ ЦЕЛИКОМ (владелец 2026-09-04: «что это
+  // за… старый мусор, убирай, чтоб я этого больше не видел»). Пилюли стояли и
+  // в блоке услуг, и в листе выбора: тот же прайс, набранный второй раз
+  // другой вёрсткой, — список услуг открывается одним тапом и говорит цену и
+  // длительность, а пилюля не говорит ничего.
 
   const selectTeam = (nextTeamId: string | null) => {
     const next = reconcileBookingSelection({
@@ -1842,26 +1824,9 @@ export default function BookScreen() {
     : t.separator;
 
   // «Маршрут» — реальное действие (его не было): открыть адрес в картах.
-  // Выбор карты — общий openRouteMenu (тот же шит у строки объекта и на
-  // странице объекта). Присланный клиентом пин (mapUrl) важнее текстового
-  // адреса: на кипрских виллах текстовый адрес часто не прокладывается.
-  // Маршрут — тот же лист со значками, что у строки объекта.
-  const enabledMaps = useEnabledMapServices();
-  const [routeOpen, setRouteOpen] = useState(false);
-  const routeAim = routeTarget(
-    clientLocations.find((l) => l.id === locationId)?.mapUrl,
-    address,
-  );
-  const openRoute = () => {
-    if (!routeAim) return;
-    const direct = directRouteUrl(routeAim, enabledMaps);
-    if (direct) {
-      openDirect(direct);
-      return;
-    }
-    haptics.tap();
-    setRouteOpen(true);
-  };
+  // МАРШРУТ ЖИВЁТ У СТРОКИ ОБЪЕКТА, А НЕ У ФОРМЫ. Свой лист маршрута тут
+  // висел ради поля «Адрес выезда»; поля не стало (владелец 2026-09-04), а
+  // у выбранного объекта кнопка своя — `ObjectRouteButton` внутри строки.
 
   // Запись открыли по ссылке, справочники доехали, а её самой нет: удалили с
   // другого устройства или ссылка протухла. Пустой черновик на этом месте
@@ -2313,85 +2278,41 @@ export default function BookScreen() {
                           accessibilityLabel="Заметка объекта"
                         />
                       </>
-                    ) : (
-                      <>
-                        {/* Объекты есть, но ни один не выбран (снят после
-                            удаления или запись сохранена с разовым адресом):
-                            та же строка-дверь, что «Выбрать клиента». */}
-                        {clientLocations.length > 0 ? (
-                          <Pressable
-                            className="flex-row items-center px-4 py-3.5"
-                            onPress={() => {
-                              setObjectPicker(true);
-                              haptics.tap();
-                            }}
-                            accessibilityRole="button"
-                            accessibilityLabel="Выбрать объект"
-                            accessibilityHint="Открывает список объектов клиента"
-                          >
-                            <View
-                              className="mr-3 items-center justify-center rounded-full"
-                              style={{ width: 34, height: 34, backgroundColor: `${t.accent}14` }}
-                            >
-                              <MapPin color={t.accent} size={ICON.sm} />
-                            </View>
-                            <Text className="flex-1" style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
-                              Выбрать объект
-                            </Text>
-                            <ChevronRight color={t.chevron} size={ICON.sm} />
-                          </Pressable>
-                        ) : null}
-                      <View
-                        className="px-4 py-3"
-                        style={
-                          clientLocations.length > 0
-                            ? { borderTopWidth: 1, borderTopColor: t.separator }
-                            : undefined
-                        }
-                      >
-                        {/* АДРЕС — ПОКА ОБЪЕКТ НЕ ВЫБРАН: разовый выезд по
-                            звонку, который в справочник не заводят, и адрес
-                            записи, сохранённой без объекта. У выбранного
-                            объекта адрес несёт его карточка выше — с этим
-                            полем он стоял на экране дважды.
+                    ) : clientLocations.length > 0 ? (
+                      /* Объекты есть, но ни один не выбран (снят после
+                         удаления или запись сохранена с разовым адресом): та
+                         же строка-дверь, что «Выбрать клиента».
 
-                            «ПОДЪЕЗД, КОД, ЭТАЖ» УБРАН СОВСЕМ (владелец 2026-08-31:
-                            «зачем вот это, не надо»): «код ворот» — свойство
-                            объекта и живёт в его заметке, «сегодня ключ у
-                            соседей» — про эту поездку, для этого заметка
-                            записи. Колонка `address_note` в базе цела: форма её
-                            не шлёт, частичный патч прежнее не трогает. */}
-                        <View className="flex-row items-center gap-2">
-                          <TextInput
-                            keyboardAppearance="light"
-                            accessibilityLabel="Адрес выезда"
-                            value={address}
-                            onChangeText={setAddress}
-                            placeholder="Адрес выезда"
-                            placeholderTextColor={t.placeholder}
-                            style={{ flex: 1, minHeight: 44, fontSize: 15, color: t.ink, paddingVertical: 4 }}
-                          />
-                          <Pressable
-                            onPress={openRoute}
-                            disabled={!address.trim()}
-                            className="flex-row items-center gap-1 rounded-full px-3"
-                            style={{
-                              minHeight: 44,
-                              backgroundColor: address.trim() ? `${t.accent}14` : t.fill,
-                              opacity: address.trim() ? 1 : 0.45,
-                            }}
-                            accessibilityRole="button"
-                            accessibilityLabel="Проложить маршрут до адреса"
-                          >
-                            <Navigation color={t.accent} size={ICON.xs} />
-                            <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-                              Маршрут
-                            </Text>
-                          </Pressable>
+                         ПОЛЯ «АДРЕС ВЫЕЗДА» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец
+                         2026-09-04: «тут должно быть просто в блоке „Добавить
+                         объект“, без адреса выезда и так далее»). Блок
+                         объекта отвечает на один вопрос — КУДА ехать, — и
+                         ответ у него один: объект. Разовый выезд по звонку
+                         заводится тем же объектом, на это есть строка ниже.
+                         Адрес-снимок сохранённой записи цел: состояние
+                         `address` гидрируется и уезжает в патч как было. */
+                      <Pressable
+                        className="flex-row items-center px-4 py-3.5"
+                        onPress={() => {
+                          setObjectPicker(true);
+                          haptics.tap();
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Выбрать объект"
+                        accessibilityHint="Открывает список объектов клиента"
+                      >
+                        <View
+                          className="mr-3 items-center justify-center rounded-full"
+                          style={{ width: 34, height: 34, backgroundColor: `${t.accent}14` }}
+                        >
+                          <MapPin color={t.accent} size={ICON.sm} />
                         </View>
-                      </View>
-                      </>
-                    )}
+                        <Text className="flex-1" style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
+                          Выбрать объект
+                        </Text>
+                        <ChevronRight color={t.chevron} size={ICON.sm} />
+                      </Pressable>
+                    ) : null}
 
                     {/* ПОДСКАЗКА «ПОРА ОБСЛУЖИТЬ ОБОРУДОВАНИЕ» СНЕСЕНА
                         2026-09-04 вместе с самим интервалом обслуживания
@@ -2431,18 +2352,6 @@ export default function BookScreen() {
               <SectionCard title="Услуги">
                 {serviceIds.length === 0 ? (
                   <>
-                    {frequentTeamServices.length > 0 ? (
-                      <View className="flex-row flex-wrap gap-2 px-4 pb-1 pt-1">
-                        {frequentTeamServices.map((s) => (
-                          <Chip
-                            key={s.id}
-                            label={s.name}
-                            variant="tint"
-                            onPress={() => toggleService(s.id)}
-                          />
-                        ))}
-                      </View>
-                    ) : null}
                     <AddRow label="Выбрать услугу" onPress={() => setServicePickerOpen(true)} />
                     <TotalRow
                       total={effectiveTotal}
@@ -2531,25 +2440,6 @@ export default function BookScreen() {
                         </View>
                       );
                     })}
-                    {/* Быстрые частые услуги остаются под списком — вторая
-                        услуга добавляется одним тапом, без модалки. */}
-                    {frequentTeamServices.some((s) => !serviceIds.includes(s.id)) ? (
-                      <View
-                        className="flex-row flex-wrap gap-2 px-4 pb-3 pt-1"
-                        style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-                      >
-                        {frequentTeamServices
-                          .filter((s) => !serviceIds.includes(s.id))
-                          .map((s) => (
-                            <Chip
-                              key={s.id}
-                              label={`+ ${s.name}`}
-                              variant="tint"
-                              onPress={() => toggleService(s.id)}
-                            />
-                          ))}
-                      </View>
-                    ) : null}
                     {/* ИТОГ — ДВЕРЬ, А НЕ ПОЛЕ (владелец 2026-09-04: «когда я
                         открываю „Итого“, открывается шторка, где прописаны
                         каждая услуга, количество их, и там же скидки»).
@@ -3159,7 +3049,6 @@ export default function BookScreen() {
         visible={servicePickerOpen}
         onClose={() => setServicePickerOpen(false)}
         services={teamServices}
-        frequent={frequentTeamServices}
         selectedIds={serviceIds}
         // Каталог знает день записи: услуга, которую по вторникам не делают,
         // уезжает вниз списка под свою подпись.
@@ -3269,11 +3158,6 @@ export default function BookScreen() {
         </InputAccessoryView>
       ) : null}
 
-      <RouteSheet
-        visible={routeOpen}
-        target={routeAim}
-        onClose={() => setRouteOpen(false)}
-      />
     </Screen>
   );
 }
