@@ -29,6 +29,7 @@ import {
   ChevronRight,
   MapPin,
   Navigation,
+  Repeat,
   Palette,
   Phone,
   UserRound,
@@ -1131,6 +1132,18 @@ export default function BookScreen() {
     if (chainStep === "client") setChainStep("services");
   };
 
+  // КАРТОЧКА КЛИЕНТА ПОВЕРХ ЗАПИСИ (владелец 2026-09-04: «при тапе на клиента
+  // должна открываться карточка клиента»). Тот же приём, что у создания
+  // клиента: маршрут корневого стека `/book/client`, а не вкладка «Клиенты»,
+  // — иначе поверх записи ляжет вторая копия табов и «назад» уведёт на
+  // календарь, потеряв набранное. Запись остаётся смонтированной под
+  // карточкой, «назад» возвращает ровно в неё.
+  const openClientCard = () => {
+    if (!clientId) return;
+    haptics.tap();
+    router.push({ pathname: "/book/client", params: { id: clientId } });
+  };
+
   const pickLocation = (id: string) => {
     setLocationId(id);
     const loc = clientLocations.find((l) => l.id === id);
@@ -2059,17 +2072,28 @@ export default function BookScreen() {
                   маршрут одним списком — «кому и куда» считалось одним
                   смыслом. Владелец назвал порядок иначе: клиент → объект →
                   услуга → цена, четыре шага, и каждый свой. */}
+              {/* ТАП ПО КЛИЕНТУ ОТКРЫВАЕТ ЕГО КАРТОЧКУ (владелец 2026-09-04).
+                  Раньше строка вела в выбор клиента, и посмотреть, кому едешь
+                  — телефоны, объекты, историю, долг — из записи было нельзя.
+
+                  СМЕНА КЛИЕНТА НЕ РАСТИТ БЛОК (владелец там же: «кнопка
+                  „Сменить" не нравится, блок не должен увеличиваться, всё
+                  компактно»). Команда в шапке карточки поднимала эйбрау с 29
+                  до 44pt — цель касания примитива, — поэтому её там нет.
+                  Смена живёт кружком-действием в хвосте строки, рядом со
+                  звонком: тот же 32pt `RowActionButton`, что у маршрута
+                  объекта, высоты строке не добавляет. */}
               <SectionCard title="Клиент">
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
                       className="flex-1 flex-row items-center px-4 py-3"
-                      onPress={() => setClientPickerOpen(true)}
+                      onPress={openClientCard}
                       accessibilityRole="button"
                       accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
                         clientHistory ?? client.phone ?? "ещё не обслуживали"
                       }`}
-                      accessibilityHint="Открывает выбор клиента"
+                      accessibilityHint="Открывает карточку клиента"
                     >
                       <View className="flex-1">
                         <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
@@ -2086,8 +2110,29 @@ export default function BookScreen() {
                           {clientHistory ?? client.phone ?? "ещё не обслуживали"}
                         </Text>
                       </View>
-                      {/* шеврон = «тап, чтобы сменить клиента» (было видно только VoiceOver) */}
+                      {/* шеврон = «строка ведёт дальше», к карточке клиента */}
                       <ChevronRight color={t.chevron} size={ICON.sm} />
+                    </Pressable>
+                    {/* «Сменить клиента» — кружок в хвосте строки: действие
+                        НАД значением этой строки, снаружи её нажимаемой
+                        области (иначе VoiceOver склеит их в один элемент). */}
+                    <Pressable
+                      onPress={() => {
+                        setClientPickerOpen(true);
+                        haptics.tap();
+                      }}
+                      className="mr-2 items-center justify-center self-center rounded-full"
+                      style={{ width: 44, height: 44 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Сменить клиента"
+                      accessibilityHint="Открывает поиск по имени или телефону"
+                    >
+                      <View
+                        className="items-center justify-center rounded-full"
+                        style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
+                      >
+                        <Repeat color={t.body} size={ICON.xs} />
+                      </View>
                     </Pressable>
                     {client.phone ? (
                       <Pressable

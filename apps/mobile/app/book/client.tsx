@@ -1,7 +1,12 @@
 import ClientDetailScreen from "../(dashboard)/clients/[id]";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
 
-// НОВЫЙ КЛИЕНТ ИЗ ЗАПИСИ — ПОВЕРХ ЗАПИСИ, А НЕ ВМЕСТО НЕЁ (2026-09-03).
+// КЛИЕНТ ИЗ ЗАПИСИ — ПОВЕРХ ЗАПИСИ, А НЕ ВМЕСТО НЕЁ (2026-09-03).
+//
+// Один маршрут на два входа: `id=new` — заведение клиента ради этой записи,
+// `id=<uuid>` — карточка выбранного клиента (владелец 2026-09-04: «при тапе на
+// клиента должна открываться карточка клиента»). Экран различает их сам, а
+// причина общая — навигационная, см. ниже.
 //
 // Это ТА ЖЕ карточка клиента, что `/clients/new` (владелец 2026-08-31:
 // «как в клиентах» — второй формы создания клиента не бывает), только
@@ -14,13 +19,14 @@ import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBounda
 //
 // Параметр `id=new` включает режим черновика — экран различает создание и
 // карточку по нему, откуда бы его ни открыли; `name` и `phone` заполняют
-// поля тем, что уже набрали в поиске клиента.
+// поля тем, что уже набрали в поиске клиента. Реальный id открывает обычную
+// карточку: смотреть телефоны, объекты, историю и долг того, кому едешь.
 //
 // Тот же гейт способности, что у вкладки «Клиенты» (`clients/_layout.tsx`):
 // заводить клиента из записи может тот же, кто заводит его из списка.
 export default function BookClientScreen() {
   return (
-    <RoleCapabilityBoundary capability="operate-clients" title="Новый клиент">
+    <RoleCapabilityBoundary capability="operate-clients" title="Клиент">
       <ClientDetailScreen />
     </RoleCapabilityBoundary>
   );
