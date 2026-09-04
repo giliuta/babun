@@ -129,10 +129,8 @@ import {
   resolveBookingTeamId,
 } from "@/features/appointments/booking-prefill";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
-import { servicePlan } from "@/features/clients/service-plan";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
-import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import {
   DocketRow,
   MoneyRow,
@@ -689,16 +687,6 @@ export default function BookScreen() {
     ].filter(Boolean) as string[];
     return segs.length > 0 ? segs.join(" · ") : null;
   }, [client, allAppts]);
-
-  // Оборудование объекта → визит в сервисном бизнесе часто ТО-driven:
-  // подсвечиваем просроченное/скорое обслуживание прямо в герое.
-  const serviceDue = useMemo(
-    () => (client ? buildServiceDue(client) : null),
-    [client],
-  );
-  const serviceDueCount = serviceDue
-    ? serviceDue.overdue.length + serviceDue.soon.length
-    : 0;
 
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
@@ -2217,7 +2205,6 @@ export default function BookScreen() {
                       <>
                         <ObjectRow
                           loc={selectedLocation}
-                          plan={servicePlan(selectedLocation, allAppts, date)}
                           showNote={false}
                           onMore={() => {
                             setObjectEdit(true);
@@ -2317,33 +2304,12 @@ export default function BookScreen() {
                       </>
                     )}
 
-                    {/* ТО оборудования объекта — визит часто из-за него; тап
-                        ведёт к выбору услуги (записать обслуживание). */}
-                    {serviceDue && serviceDueCount > 0 ? (
-                      <Pressable
-                        onPress={() => {
-                          setServicePickerOpen(true);
-                          haptics.tap();
-                        }}
-                        className="flex-row items-center gap-2 px-4 py-2.5"
-                        style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          serviceDue.overdue.length > 0
-                            ? `Пора обслужить оборудование: ${serviceDue.overdue.length}`
-                            : `Скоро ТО оборудования: ${serviceDue.soon.length}`
-                        }
-                        accessibilityHint="Открывает выбор услуги"
-                      >
-                        <AlertTriangle color={t.warning} size={ICON.xs} />
-                        <Text style={{ fontSize: 13, color: t.warning, flex: 1 }}>
-                          {serviceDue.overdue.length > 0
-                            ? `Пора обслужить оборудование (${serviceDue.overdue.length})`
-                            : `Скоро ТО оборудования (${serviceDue.soon.length})`}
-                        </Text>
-                        <ChevronRight color={t.chevron} size={ICON.xs} />
-                      </Pressable>
-                    ) : null}
+                    {/* ПОДСКАЗКА «ПОРА ОБСЛУЖИТЬ ОБОРУДОВАНИЕ» СНЕСЕНА
+                        2026-09-04 вместе с самим интервалом обслуживания
+                        (владелец: «сделаем лучше в напоминаниях для клиента»).
+                        Она считалась по технике объекта, а техники в продукте
+                        нет с тех пор, как ушёл словарь кондиционеров: строка
+                        не могла загореться ни у одного клиента. */}
 
                     {/* У клиента без единого объекта выбирать нечего — первый
                         заводится прямо отсюда, листом добавления. */}

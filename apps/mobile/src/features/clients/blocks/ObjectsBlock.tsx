@@ -1,15 +1,12 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MoreHorizontal } from "lucide-react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
 import { AddRow } from "@/components/ui/AddRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { objectTarget } from "@/features/clients/object-address";
-import { servicePlan, type ServicePlan } from "@/features/clients/service-plan";
-import { todayYMD } from "@/features/clients/filter";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
@@ -37,14 +34,11 @@ import { useThemeColors } from "@/theme/colors";
 
 export default function ObjectsBlock({
   client,
-  appointments,
   onOpen,
   onDelete,
   onAdd,
 }: {
   client: Client;
-  /** Визиты клиента — по ним считается, когда объект пора обслужить снова. */
-  appointments: readonly Appointment[];
   /** Открыть лист правки этого объекта. */
   onOpen: (locId: string) => void;
   /** Удалить объект (спрашивает подтверждение сама карточка). */
@@ -76,7 +70,6 @@ export default function ObjectsBlock({
         >
           <ObjectRow
             loc={loc}
-            plan={servicePlan(loc, appointments, todayYMD())}
             separated={i > 0}
             onPress={() => onOpen(loc.id)}
           />
@@ -102,15 +95,12 @@ export default function ObjectsBlock({
 // правке, как разошлись две формы записи.
 export function ObjectRow({
   loc,
-  plan,
   separated,
   onMore,
   showNote = true,
   onPress,
 }: {
   loc: Location;
-  /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
-  plan: ServicePlan | null;
   separated?: boolean;
   /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
    *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
@@ -177,31 +167,16 @@ export function ObjectRow({
           >
             {target || "адрес не указан"}
           </Text>
-          {/* ТРЕТЬЯ СТРОКА ОДНА НА ДВОИХ: заметка и срок обслуживания делят
-              её через «·». Каждому свой этаж — и строка объекта вырастала до
-              четырёх ярусов (~86pt), вдвое выше соседней «Записать», после
-              чего блок переставал читаться списком.
-              Срок идёт первым: он про деньги и сгорает по времени, заметка
-              («код домофона») ждёт у двери и не срочна. */}
-          {plan || note ? (
-            <Text maxFontSizeMultiplier={1.2} numberOfLines={1}>
-              {plan ? (
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: plan.due ? "600" : "400",
-                    color: plan.due ? t.warning : t.sub,
-                  }}
-                >
-                  {plan.text}
-                </Text>
-              ) : null}
-              {plan && note ? (
-                <Text style={{ fontSize: 13, color: t.faint }}>{"  ·  "}</Text>
-              ) : null}
-              {note ? (
-                <Text style={{ fontSize: 13, color: t.sub }}>{note}</Text>
-              ) : null}
+          {/* ТРЕТЬЯ СТРОКА — ЗАМЕТКА («код домофона»). Срок обслуживания делил
+              её через «·», пока у объекта был интервал; сам интервал снесён
+              2026-09-04 (владелец: «сделаем лучше в напоминаниях»). */}
+          {note ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 13, color: t.sub }}
+            >
+              {note}
             </Text>
           ) : null}
         </View>

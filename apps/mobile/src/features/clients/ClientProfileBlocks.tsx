@@ -51,7 +51,6 @@ export function ClientProfileBlocks({
     <>
       <ObjectsBlock
         client={client}
-        appointments={appointments}
         onOpen={(id) => setSheet({ id })}
         onDelete={(loc) => setSheet({ id: loc.id, askDelete: true })}
         onAdd={() => setObjectsOpen(true)}

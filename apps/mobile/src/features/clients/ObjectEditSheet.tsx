@@ -6,7 +6,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { RotateCcw, X } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
@@ -16,14 +15,8 @@ import {
   ActionRow,
   ChoiceRow,
   FieldRow,
-  NavRow,
   RowGroup,
 } from "@/components/ui/card-rows";
-import { PickerSheet } from "@/components/ui/PickerSheet";
-import {
-  intervalLabel,
-  SERVICE_INTERVALS,
-} from "@/features/clients/service-plan";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   addressOrLinkPatch,
@@ -114,7 +107,6 @@ export function ObjectEditSheet({
   /** Что сделать, когда лист полностью уйдёт (см. `onExited`). Хук стоит
    *  ДО `if (!loc) return null`: иначе число хуков плясало между рендерами. */
   const afterExit = useRef<(() => void) | null>(null);
-  const [intervalOpen, setIntervalOpen] = useState(false);
   const [target, setTarget] = useState("");
   const [note, setNote] = useState("");
   useEffect(() => {
@@ -249,16 +241,6 @@ export function ObjectEditSheet({
             }}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
-          <NavRow
-            label="Обслуживание"
-            value={intervalLabel(loc.serviceEveryMonths)}
-            placeholder="разовое"
-            separated
-            onPress={() => {
-              haptics.tap();
-              setIntervalOpen(true);
-            }}
-          />
           <FieldRow
             label="Адрес или ссылка"
             value={target}
@@ -364,35 +346,14 @@ export function ObjectEditSheet({
         </Pressable>
       </View>
 
-      {/* КАК ЧАСТО СЮДА ЕЗДИТЬ. Регулярность — свойство объекта: виллу моют
-          раз в месяц, сплиты чистят раз в полгода. Срок считается от
-          последнего визита, поэтому «дату обслуживания» здесь не спрашивают
-          и её невозможно забыть проставить. */}
-      <PickerSheet
-        visible={intervalOpen}
-        title="Обслуживание объекта"
-        items={[
-          ...SERVICE_INTERVALS.map((i) => ({
-            id: String(i.months),
-            label: i.label,
-            icon: RotateCcw,
-            color: t.accent,
-            onPress: () => patch({ serviceEveryMonths: i.months }),
-          })),
-          ...(loc.serviceEveryMonths
-            ? [
-                {
-                  id: "off",
-                  label: "Разовое",
-                  icon: X,
-                  color: t.danger,
-                  onPress: () => patch({ serviceEveryMonths: undefined }),
-                },
-              ]
-            : []),
-        ]}
-        onClose={() => setIntervalOpen(false)}
-      />
+      {/* «ОБСЛУЖИВАНИЕ» СНЕСЕНО 2026-09-04. Строка спрашивала, как часто сюда
+          ездить («разовое / раз в 2 месяца»), и кормила подпись «Пора
+          обслужить» в строке объекта. Владелец: «для чего это, давай это
+          полностью сотри — мы потом это сделаем лучше в напоминаниях для
+          клиента». Ни один объект интервала так и не получил (проверено
+          запросом: 0 из 16 клиентов), то есть подпись не загоралась ни разу.
+          Колонка в базе цела: частичный патч её не трогает, и будущие
+          напоминания смогут ею воспользоваться. */}
     </BottomSheet>
   );
 }
