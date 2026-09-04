@@ -88,7 +88,7 @@ import { ValueRow } from "@/components/ui/ValueRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { useToast } from "@/components/ui/Toast";
-import { resolveDayLabel } from "@babun/shared/local/day-cities";
+import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -491,8 +491,15 @@ export default function BookScreen() {
   // правка выбранного объекта — кружком «…» в его строке (2026-09-04).
   const [objectPicker, setObjectPicker] = useState(false);
   const [objectEdit, setObjectEdit] = useState(false);
-  // Метка ЭТОЙ записи: null — «как у дня» (владелец 2026-09-04).
+  // МЕТКА ЭТОЙ ЗАПИСИ. Новая запись берёт метку дня СРАЗУ (владелец
+  // 2026-09-04: «метка подставляется туда автоматически, то есть выбирается
+  // по дню, а потом я уже вручную могу выбрать другую именно на запись»), и
+  // с этого момента она принадлежит записи: диспетчер переставит метку дня —
+  // уже назначенные работы своей метки не потеряют. `null` остаётся только у
+  // записей, созданных до этого правила: они по-прежнему читаются как «как у
+  // дня». Флаг `cityTouched` держит руку человека сильнее любого автомата.
   const [city, setCity] = useState<string | null>(null);
+  const [cityTouched, setCityTouched] = useState(false);
   const [labelSheetOpen, setLabelSheetOpen] = useState(false);
   const updateClient = useUpdateClientById();
 
@@ -641,8 +648,39 @@ export default function BookScreen() {
   //
   // МОЛЧИТ, КОГДА МЕТКИ СОВПАЛИ: сообщать «вы записываете клиента туда же,
   // куда и всегда» — это шум, который научит не читать плашки вовсе.
+  const team = teams.find((tm) => tm.id === teamId) ?? null;
   const clientLabel = (client?.city ?? "").trim();
-  const dayLabel = resolveDayLabel(dayCities, teamId, date);
+  // МЕТКА ДНЯ — РОВНО ТА, ЧТО СТОИТ НА ДНЕ В КАЛЕНДАРЕ. Здесь звался
+  // `resolveDayLabel` из shared: он знает только про ЯВНО поставленную метку
+  // и ничего не знает про расписание меток по дням недели. Календарь печатал
+  // на субботе «Лимассол» по расписанию, а запись на ту же субботу
+  // показывала пустую «Метку» — два экрана говорили о разных метках одного
+  // дня, ровно то, ради чего правило и переехало в `features/calendar`.
+  const todayYmd = useMemo(() => {
+    const timeZone = team?.timezone ?? calendarSettings?.timezone;
+    return formatYMD(
+      timeZone ? getCurrentTimeInZone(timeZone) : getCurrentCyprusTime(),
+    );
+  }, [team?.timezone, calendarSettings?.timezone]);
+  const dayLabelResolved = useMemo(
+    () =>
+      resolveCalendarDayLabel({
+        dayCities,
+        cities: teamCities,
+        teamId,
+        dateYmd: date,
+        todayYmd,
+        fallbackColor: t.faint,
+      }),
+    [dayCities, teamCities, teamId, date, todayYmd, t.faint],
+  );
+  const dayLabel = dayLabelResolved?.name ?? null;
+  // Новая запись надевает метку дня сама и меняет её вслед за днём и
+  // командой — пока человек не выбрал метку руками.
+  useEffect(() => {
+    if (isEdit || cityTouched) return;
+    setCity(dayLabel);
+  }, [isEdit, cityTouched, dayLabel]);
   // ЧТО НА САМОМ ДЕЛЕ У ЭТОЙ РАБОТЫ: своя метка сильнее метки дня. Ею же
   // судится расхождение с меткой клиента — иначе продукт спорил бы сам с
   // собой: поставил записи «Пафос» под клиента, а плашка всё равно ругается
@@ -671,7 +709,6 @@ export default function BookScreen() {
       "warn",
     );
   }, [labelClash, clientId, date, toast]);
-  const team = teams.find((tm) => tm.id === teamId) ?? null;
   const slotFallback = team?.default_slot_minutes ?? 30;
 
   // A direct /book open has no calendar date parameter. Resolve that default
@@ -1734,6 +1771,7 @@ export default function BookScreen() {
         reminderOn ||
         prepay > 0 ||
         colorOverride != null ||
+        cityTouched ||
         dateTouchedRef.current ||
         durationTouched ||
         notesDirty);
@@ -3141,7 +3179,10 @@ export default function BookScreen() {
         // 2026-09-04: «открываем метку, там уже автоматически выбрана метка,
         // и можно выбирать другие»).
         value={effectiveLabel}
-        onPick={(next) => setCity(next)}
+        onPick={(next) => {
+          setCityTouched(true);
+          setCity(next);
+        }}
         onClose={() => setLabelSheetOpen(false)}
       />
       <ColorSheet
