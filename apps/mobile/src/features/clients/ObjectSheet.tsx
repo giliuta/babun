@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
-import { AccessibilityInfo, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
@@ -222,67 +229,21 @@ export function ObjectSheet({
     onClose();
   };
 
-  // «Готово» — это «я закончил», а не «выйти без сохранения»: если адрес
-  // набран, объект ДОПИСЫВАЕТСЯ и только потом лист уходит. Иначе кнопка тем
-  // же словом, которым на карточке сохраняют клиента, молча выбрасывала бы
-  // работу. Запись не удалась — остаёмся на месте, причину уже показали.
-  const finish = async () => {
-    if (ready && !(await add())) return;
-    close();
-  };
-
   return (
     <BottomSheet
       padded={false}
       visible={visible}
       onClose={close}
+      // ЗАГОЛОВОК — КАНОНИЧЕСКИЙ, БЕЗ «ГОТОВО» В УГЛУ (владелец 2026-09-04:
+      // «нет такого у нас по архитектуре, что справа „Готово“ — у нас нижняя
+      // кнопка»). Своя шапка 72│центр│72 держала вторую кнопку действия в
+      // углу; действие в листе одно и живёт внизу, а выход — скрим и свайп,
+      // как у всех листов продукта. Набранное при закрытии не теряется: лист
+      // остаётся смонтированным и черновик доживает до следующего открытия.
+      title="Объекты"
       maxHeightRatio={0.92}
       avoidKeyboard
     >
-      {/* Шапка 72│центр│72 — «Объекты» оптически по центру. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          minHeight: 44,
-          paddingHorizontal: 16,
-          paddingTop: 2,
-        }}
-      >
-        <View style={{ width: 72 }} />
-        <View style={{ flex: 1, alignItems: "center" }}>
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-          >
-            Объекты
-          </Text>
-        </View>
-        <View style={{ width: 72, alignItems: "flex-end" }}>
-          <Pressable
-            onPress={() => void finish()}
-            disabled={saving}
-            accessibilityRole="button"
-            accessibilityLabel={ready ? "Готово, добавить объект" : "Готово"}
-            hitSlop={12}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-            >
-              Готово
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
       {/* Тело листа — язык страницы (группы строк на прохладном фоне): лист
           заменяет собой страницу, и строки в нём те же самые. Паддинги только
           через contentContainerStyle — className на ScrollView NativeWind
@@ -343,17 +304,39 @@ export function ObjectSheet({
             // приложении (аудит 2026-07-27). Маршрут живёт у заведённого
             // объекта: в его строке и на его странице.
           />
-          <FieldRow
-            label="Заметка"
-            value={draft.note}
-            placeholder=""
-            addLabel="Добавить"
-            stacked
-            separated
-            multiline
-            live
-            onSave={(v) => setDraft((d) => ({ ...d, note: v }))}
-          />
+        </RowGroup>
+
+        {/* ЗАМЕТКА — ПОЛЕ, А НЕ КНОПКА «ДОБАВИТЬ» (владелец 2026-09-04: «при
+            добавлении объекта заметка должна показываться, как в клиентах и
+            как в объекте, — не кнопка „добавить“, когда я добавляю»). Ровно
+            тот счёт, что он предъявил правке объекта 2026-08-06: строка-
+            действие просила нажать на себя, прежде чем пустить к полю.
+            Подложка с полем пускает сразу, и лист добавления теперь говорит с
+            человеком тем же языком, что лист правки. */}
+        <RowGroup title="Заметка">
+          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+            <TextInput
+              value={draft.note}
+              onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
+              multiline
+              accessibilityLabel="Заметка об объекте"
+              placeholder="Как войти, код, кто встречает…"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              maxFontSizeMultiplier={1.2}
+              style={{
+                minHeight: 44,
+                maxHeight: 120,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: t.radius.input,
+                backgroundColor: t.fill,
+                fontSize: 15,
+                color: t.ink,
+              }}
+            />
+          </View>
         </RowGroup>
       </ScrollView>
 
