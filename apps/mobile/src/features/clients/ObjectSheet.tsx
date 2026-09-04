@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { AccessibilityInfo, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { X } from "lucide-react-native";
@@ -22,6 +22,7 @@ import {
   useFrozenObjectTypes,
 } from "@/features/clients/object-types";
 import { useClients } from "@/features/clients/queries";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -102,15 +103,8 @@ export function ObjectSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  // КУДА ВЕДЁТ ШЕСТЕРЁНКА, РЕШАЕТ МАРШРУТ. Справочник типов живёт во вкладке
-  // «Клиенты», и открытый оттуда из ЗАПИСИ он кладёт поверх неё вторую копию
-  // табов: «назад» приводит на список клиентов, а запись с набранным
-  // исчезает (владелец 2026-09-04). Из записи ведём в её собственный
-  // сиблинг-маршрут — `/book/object-types`, тот же экран.
-  const pathname = usePathname();
-  const typesHref = pathname.startsWith("/book")
-    ? "/book/object-types"
-    : "/clients/object-types";
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const typesHref = useReferenceHref().objectTypes;
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
   const { data: allClients = [] } = useClients();

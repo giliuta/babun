@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { RotateCcw, X } from "lucide-react-native";
-import { usePathname, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -34,6 +34,7 @@ import {
   useFrozenObjectTypes,
 } from "@/features/clients/object-types";
 import { useClients } from "@/features/clients/queries";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -80,15 +81,8 @@ export function ObjectEditSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  // КУДА ВЕДЁТ ШЕСТЕРЁНКА, РЕШАЕТ МАРШРУТ. Справочник типов живёт во вкладке
-  // «Клиенты», и открытый оттуда из ЗАПИСИ он кладёт поверх неё вторую копию
-  // табов: «назад» приводит на список клиентов, а запись с набранным
-  // исчезает (владелец 2026-09-04). Из записи ведём в её собственный
-  // сиблинг-маршрут — `/book/object-types`, тот же экран.
-  const pathname = usePathname();
-  const typesHref = pathname.startsWith("/book")
-    ? "/book/object-types"
-    : "/clients/object-types";
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const typesHref = useReferenceHref().objectTypes;
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
 

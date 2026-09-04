@@ -8,6 +8,7 @@ import {
 } from "@/features/clients/contact-channels";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -41,6 +42,8 @@ export default function PhoneChannelButton({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  // Из записи справочник открывается её сиблингом (см. `useReferenceHref`).
+  const channelsHref = useReferenceHref().channels;
   const [open, setOpen] = useState(false);
   const enabled = useEnabledChannels();
   const country = useDefaultCountry();
@@ -80,7 +83,7 @@ export default function PhoneChannelButton({
         title={number}
         items={items}
         // Страница этого же списка — см. AddContactSheet.
-        onSettings={() => router.push("/clients/channels")}
+        onSettings={() => router.push(channelsHref)}
         settingsLabel="Способы связи"
         onClose={() => setOpen(false)}
       />
