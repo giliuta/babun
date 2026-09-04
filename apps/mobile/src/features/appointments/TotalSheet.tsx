@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ColorDot } from "@/components/ui/picker-fields";
 import { durationLabel } from "@/features/services/format";
+import { parseMoneyInput } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -20,14 +21,20 @@ import type { AppointmentService } from "@babun/shared/local/appointments";
 // снять её было нечем. Считать деньги в узкой строке между услугами и
 // предоплатой неудобно: не видно, из чего сумма сложилась.
 //
-// ЛИСТ ОТВЕЧАЕТ НА ОДИН ВОПРОС — «ИЗ ЧЕГО ЭТИ ДЕНЬГИ»: услуги с количеством,
-// скидка, и итог, который при желании перебивается рукой. Всё остальное
-// (предоплата, способ оплаты) живёт своей секцией на странице: это уже НЕ про
-// цену работы, а про полученные деньги.
+// ЛИСТ ОТВЕЧАЕТ НА ОДИН ВОПРОС — «ИЗ ЧЕГО ЭТИ ДЕНЬГИ»: услуги с количеством и
+// ценой, скидка, и итог. Всё остальное (предоплата, способ оплаты) живёт своей
+// секцией на странице: это уже НЕ про цену работы, а про полученные деньги.
+//
+// ИТОГ НЕ ПРАВЯТ РУКОЙ (владелец 2026-09-04: «сумму „итого“ изменить нельзя —
+// от этого может испортиться сам инвойс; меняется услуга: чистка 135 €, я
+// ставлю 130 €, и тогда меняется итого»). Итог — следствие строк, а не
+// отдельное число: счёт, где сумма не сходится со строками, не объяснить ни
+// клиенту, ни себе. Поэтому правится ЦЕНА УСЛУГИ в этой записи, а «Итого»
+// печатается.
 
 const SIDE = 20;
 
-export type DiscountKind = "none" | "fixed" | "percent";
+export type DiscountKind = "fixed" | "percent";
 
 export function TotalSheet({
   visible,
@@ -36,6 +43,7 @@ export function TotalSheet({
   nameFor,
   colorFor,
   onQtyChange,
+  onPriceChange,
   servicesTotal,
   discountKind,
   discountValue,
@@ -45,8 +53,6 @@ export function TotalSheet({
   onDiscountValueChange,
   total,
   customTotal,
-  totalDraft,
-  onTotalChange,
   onResetTotal,
 }: {
   visible: boolean;
@@ -56,6 +62,8 @@ export function TotalSheet({
   nameFor: (line: AppointmentService) => string;
   colorFor: (line: AppointmentService) => string | null;
   onQtyChange: (serviceId: string, qty: number) => void;
+  /** Цена ОДНОЙ услуги в этой записи. Прайс не трогается: это снимок строки. */
+  onPriceChange: (serviceId: string, price: number) => void;
   servicesTotal: number;
   discountKind: DiscountKind;
   /** Сырой текст поля скидки — разбор живёт у формы. */
@@ -66,13 +74,11 @@ export function TotalSheet({
   onDiscountKindChange: (kind: DiscountKind) => void;
   onDiscountValueChange: (value: string) => void;
   total: number;
+  /** У записи, сохранённой со «своей» суммой: её можно вернуть к расчёту. */
   customTotal: boolean;
-  totalDraft: string;
-  onTotalChange: (value: string) => void;
   onResetTotal: () => void;
 }) {
   const t = useThemeColors();
-  const discounted = discountKind !== "none";
   return (
     <BottomSheet
       visible={visible}
@@ -98,6 +104,7 @@ export function TotalSheet({
                 name={nameFor(line)}
                 color={colorFor(line)}
                 onQtyChange={onQtyChange}
+                onPriceChange={onPriceChange}
               />
             ))}
           </View>
@@ -105,74 +112,46 @@ export function TotalSheet({
           <EmptyState title="Услуги ещё не выбраны" />
         )}
 
-        {/* СКИДКА — ТРЕМЯ КЛАВИШАМИ, КАК НАЛОГ В ОПЕРАЦИИ: сначала ЧЕМ
-            считать, потом сколько. «Без скидки» стоит первой, потому что это
-            обычный день работы, а не исключение. */}
-        <View style={{ gap: 8 }}>
-          <Text
+        {/* СКИДКА — ОДНА СТРОКА, А НЕ ТРИ КЛАВИШИ (владелец 2026-09-04:
+            «не блоками „без скидки“ и проценты или евро — сделай маленький
+            блок, где это сразу всё выбирается, и там всегда будет ноль; а
+            если я напишу скидку, тогда уже выбираю валюту или процент»).
+            Клавиша «Без скидки» называла НОРМУ: обычный день работы объявлялся
+            выбором. Ноль в поле говорит то же самое молча, а переключатель
+            «€ | %» стоит рядом и нужен только тому, кто уже что-то вписал. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            minHeight: 52,
+            paddingLeft: 14,
+            paddingRight: 6,
+            borderRadius: t.radius.input,
+            backgroundColor: t.rowFill,
+          }}
+        >
+          <Text style={{ flex: 1, fontSize: 15, color: t.sub }}>Скидка</Text>
+          <TextInput
+            keyboardAppearance="light"
+            value={discountValue}
+            onChangeText={onDiscountValueChange}
+            selectTextOnFocus
+            keyboardType="decimal-pad"
+            placeholder="0"
+            placeholderTextColor={t.placeholder}
+            accessibilityLabel="Скидка"
             style={{
-              fontSize: 11,
+              minWidth: 56,
+              minHeight: 44,
+              textAlign: "right",
+              fontSize: 17,
               fontWeight: "700",
-              letterSpacing: 1.2,
-              color: t.sub,
-              textTransform: "uppercase",
-            }}
-          >
-            Скидка
-          </Text>
-          <SegmentedControl<DiscountKind>
-            options={[
-              { value: "none", label: "Без скидки" },
-              { value: "fixed", label: "€" },
-              { value: "percent", label: "%" },
-            ]}
-            value={discountKind}
-            onChange={(next) => {
-              haptics.tap();
-              onDiscountKindChange(next);
+              color: t.ink,
+              fontVariant: ["tabular-nums"],
             }}
           />
-          {discounted ? (
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                minHeight: 52,
-                paddingHorizontal: 14,
-                borderRadius: t.radius.input,
-                backgroundColor: t.rowFill,
-              }}
-            >
-              <Text style={{ flex: 1, fontSize: 15, color: t.sub }}>
-                {discountKind === "percent" ? "Процент" : "Сумма"}
-              </Text>
-              <TextInput
-                keyboardAppearance="light"
-                value={discountValue}
-                onChangeText={onDiscountValueChange}
-                selectTextOnFocus
-                keyboardType="decimal-pad"
-                placeholder="0"
-                placeholderTextColor={t.placeholder}
-                accessibilityLabel={
-                  discountKind === "percent" ? "Процент скидки" : "Сумма скидки"
-                }
-                style={{
-                  minWidth: 64,
-                  minHeight: 44,
-                  textAlign: "right",
-                  fontSize: 17,
-                  fontWeight: "700",
-                  color: t.ink,
-                  fontVariant: ["tabular-nums"],
-                }}
-              />
-              <Text style={{ fontSize: 17, fontWeight: "600", color: t.sub }}>
-                {discountKind === "percent" ? "%" : "€"}
-              </Text>
-            </View>
-          ) : null}
+          <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
         </View>
 
         {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — три строки, читаются сверху вниз. */}
@@ -199,6 +178,10 @@ export function TotalSheet({
             <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
               Итого
             </Text>
+            {/* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
+                СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
+                можно, иначе такая запись навсегда осталась бы со своим
+                числом, не сходящимся со строками. */}
             {customTotal ? (
               <Pressable
                 onPress={() => {
@@ -219,33 +202,79 @@ export function TotalSheet({
               </Pressable>
             ) : null}
             <View style={{ flex: 1 }} />
-            {/* СУММУ ПЕРЕБИВАЮТ РУКОЙ ЧАЩЕ, ЧЕМ БЕРУТ ИЗ ПРАЙСА (по базе
-                2026-08-30 — 20 записей из 30), поэтому поле остаётся полем и
-                здесь, рядом с тем, из чего оно сложилось. */}
-            <TextInput
-              keyboardAppearance="light"
-              value={customTotal ? totalDraft : String(Number(total.toFixed(2)))}
-              onChangeText={onTotalChange}
-              selectTextOnFocus
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={t.placeholder}
-              accessibilityLabel="Итоговая сумма записи"
+            <Text
               style={{
-                minWidth: 64,
-                minHeight: 44,
-                textAlign: "right",
                 fontSize: 20,
                 fontWeight: "700",
                 color: t.ink,
                 fontVariant: ["tabular-nums"],
               }}
-            />
-            <Text style={{ fontSize: 17, fontWeight: "600", color: t.sub }}>€</Text>
+            >
+              {formatEURExact(total)}
+            </Text>
           </View>
         </View>
       </View>
     </BottomSheet>
+  );
+}
+
+/** «€ | %» ростом со строку: две клавиши, и обе — про ОДНО поле рядом. */
+function UnitToggle({
+  value,
+  onChange,
+}: {
+  value: DiscountKind;
+  onChange: (next: DiscountKind) => void;
+}) {
+  const t = useThemeColors();
+  const cell = (kind: DiscountKind, label: string) => {
+    const on = value === kind;
+    return (
+      <Pressable
+        key={kind}
+        onPress={() => {
+          haptics.tap();
+          onChange(kind);
+        }}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: on }}
+        accessibilityLabel={kind === "percent" ? "Скидка в процентах" : "Скидка в евро"}
+        style={{
+          minWidth: 36,
+          minHeight: 36,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: t.radius.input - 4,
+          backgroundColor: on ? t.surface : "transparent",
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 15,
+            fontWeight: "700",
+            color: on ? t.ink : t.faint,
+          }}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      style={{
+        flexDirection: "row",
+        gap: 2,
+        padding: 3,
+        borderRadius: t.radius.input,
+        backgroundColor: t.fill,
+      }}
+    >
+      {cell("fixed", "€")}
+      {cell("percent", "%")}
+    </View>
   );
 }
 
@@ -290,14 +319,21 @@ function ServiceLine({
   name,
   color,
   onQtyChange,
+  onPriceChange,
 }: {
   line: AppointmentService;
   name: string;
   color: string | null;
   onQtyChange: (serviceId: string, qty: number) => void;
+  onPriceChange: (serviceId: string, price: number) => void;
 }) {
   const t = useThemeColors();
   const unit = line.unit ? ` ${line.unit}` : "";
+  // ЧЕРНОВИК ЦЕНЫ — СВОЙ У СТРОКИ. Пока набирают «13», строка не должна
+  // превращаться в «€13» и терять то, что человек ещё не дописал; число
+  // уходит в запись на каждый символ, а показывает поле набранное.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? String(Number(line.pricePerUnit.toFixed(2)));
   return (
     <View
       style={{
@@ -319,8 +355,8 @@ function ServiceLine({
           {name}
         </Text>
         <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
-          {formatEURExact(line.pricePerUnit)}
-          {unit ? ` за${unit}` : ""} · {durationLabel(line.duration)}
+          {durationLabel(line.duration)}
+          {line.quantity > 1 ? ` · всего ${formatEURExact(line.totalPrice)}` : ""}
         </Text>
       </View>
       <StepButton
@@ -345,18 +381,33 @@ function ServiceLine({
         label={`Добавить: ${name}`}
         onPress={() => onQtyChange(line.serviceId, line.quantity + 1)}
       />
-      <Text
+      {/* ЦЕНА ЗА ОДНУ — ЕДИНСТВЕННОЕ ЧИСЛО, КОТОРОЕ ЗДЕСЬ ПРАВЯТ (владелец
+          2026-09-04: «чистка 135 €, я ставлю 130 € — и тогда меняется итого»).
+          Прайс при этом не трогается: цена живёт в снимке ЭТОЙ записи. */}
+      <TextInput
+        keyboardAppearance="light"
+        value={shown}
+        onChangeText={(next) => {
+          setDraft(next);
+          onPriceChange(line.serviceId, parseMoneyInput(next));
+        }}
+        onBlur={() => setDraft(null)}
+        selectTextOnFocus
+        keyboardType="decimal-pad"
+        placeholder="0"
+        placeholderTextColor={t.placeholder}
+        accessibilityLabel={`Цена: ${name}${unit ? ` за${unit}` : ""}`}
         style={{
-          minWidth: 58,
+          minWidth: 52,
+          minHeight: 44,
           textAlign: "right",
           fontSize: 15,
           fontWeight: "700",
           color: t.ink,
           fontVariant: ["tabular-nums"],
         }}
-      >
-        {formatEURExact(line.totalPrice)}
-      </Text>
+      />
+      <Text style={{ fontSize: 15, fontWeight: "600", color: t.sub }}>€</Text>
     </View>
   );
 }

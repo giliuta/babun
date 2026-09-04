@@ -138,7 +138,7 @@ import {
   TotalRow,
   WhenRow,
 } from "@/features/appointments/BookingSummary";
-import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
+import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
   ColorSheet,
@@ -926,11 +926,18 @@ export default function BookScreen() {
     [selectedServices, serviceIds, catalog],
   );
 
+  // СКИДКА ЕСТЬ, ЕСЛИ ВПИСАНО ЧИСЛО (владелец 2026-09-04: «там всегда будет
+  // ноль, и не надо блока „без скидки“; а напишу скидку — тогда выбираю
+  // валюту или процент»). Тип — это ЕДИНИЦА вписанного, а не признак
+  // существования: ноль остаётся нулём хоть в евро, хоть в процентах.
   const globalDiscount: Discount | null = useMemo(() => {
-    if (!discountType) return null;
     const value = parseMoneyInput(discountValue);
     if (!value) return null;
-    return { type: discountType, value, reason: discountReason ?? undefined };
+    return {
+      type: discountType ?? "fixed",
+      value,
+      reason: discountReason ?? undefined,
+    };
   }, [discountType, discountValue, discountReason]);
 
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
@@ -975,7 +982,8 @@ export default function BookScreen() {
     if (isEdit) return;
     if (kind !== "work" || !client || !loyalty) return;
     // ручная скидка всегда побеждает; авто-скидка заменяет только себя.
-    if (discountType && !loyaltyAppliedRef.current) return;
+    // Считаем по ВПИСАННОМУ: тип теперь лишь единица измерения.
+    if (parseMoneyInput(discountValue) > 0 && !loyaltyAppliedRef.current) return;
     const visits = allAppts.filter(
       (a) => a.client_id === client.id && a.status === "completed",
     ).length;
@@ -1303,6 +1311,10 @@ export default function BookScreen() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
     haptics.tap();
+  };
+  // ЦЕНА УСЛУГИ В ЭТОЙ ЗАПИСИ. Ноль законен: бывает «сделали бесплатно».
+  const setLinePrice = (id: string, price: number) => {
+    setOverrides((p) => ({ ...p, [id]: { ...p[id], price: Math.max(0, price) } }));
   };
   const setQty = (id: string, qty: number) => {
     if (qty < 1) {
@@ -1753,7 +1765,9 @@ export default function BookScreen() {
         comment.trim().length > 0 ||
         address.trim().length > 0 ||
         customTotal ||
-        discountType != null ||
+        // Скидкой считается ВПИСАННОЕ, а не выбранная валюта: переключить
+        // «€ | %» и ничего не набрать — не значит тронуть запись.
+        parseMoneyInput(discountValue) > 0 ||
         status !== "scheduled" ||
         reminderOn ||
         prepay > 0 ||
@@ -3085,28 +3099,20 @@ export default function BookScreen() {
         }
         colorFor={(line) => catalog.get(line.serviceId)?.color ?? null}
         onQtyChange={setQty}
+        // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
+        // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
+        onPriceChange={setLinePrice}
         servicesTotal={computedTotal}
-        discountKind={discountType ?? "none"}
+        // «Без скидки» больше не выбирают: ноль в поле и есть её отсутствие,
+        // а переключатель говорит только, ЧЕМ считать вписанное.
+        discountKind={discountType ?? "fixed"}
         discountValue={discountValue}
         discountAmount={discountAmount}
         discountReason={discountReason}
-        onDiscountKindChange={(kind: DiscountKind) => {
-          if (kind === "none") {
-            setDiscountType(null);
-            setDiscountValue("");
-            setDiscountReason(null);
-            return;
-          }
-          setDiscountType(kind);
-        }}
+        onDiscountKindChange={setDiscountType}
         onDiscountValueChange={setDiscountValue}
         total={effectiveTotal}
         customTotal={customTotal}
-        totalDraft={totalDraft}
-        onTotalChange={(value) => {
-          setTotalDraft(value);
-          setCustomTotal(true);
-        }}
         onResetTotal={() => setCustomTotal(false)}
       />
       <LabelSheet
