@@ -28,8 +28,14 @@ export default function ClientChannelsScreen() {
   const toggle = useToggleWay();
   const reorder = useReorderWays();
 
+  // ЗВОНОК В СПИСКЕ НЕ СТОИТ (владелец 2026-09-04: «зачем лишний шум
+  // создавать — это можно даже не выбирать, оно идёт как стандарт, вообще
+  // убирается, и всё»). Строка «Позвонить · всегда» была строкой-нельзя:
+  // галка стоит, тап не работает, приписка объясняет, почему. Настройка — это
+  // выбор; звонок по номеру выбором не является и остаётся первым в кнопке
+  // связи сам (`pinned` в наборе), просто больше не занимает строку.
   const items = order
-    .filter(isWayOffered)
+    .filter((id) => isWayOffered(id) && contactWayDef(id)?.optional !== false)
     .map((id) => {
       const def = contactWayDef(id);
       return def
@@ -39,11 +45,6 @@ export default function ClientChannelsScreen() {
             icon: def.icon,
             color: def.color,
             checked: enabled.includes(def.id),
-            // «Позвонить» не отключается и стоит первым: без него кнопка
-            // связи теряет смысл.
-            locked: !def.optional,
-            pinned: !def.optional,
-            lockedNote: "всегда",
             onToggle: () => toggle.mutate(def.id),
           }
         : null;
@@ -53,14 +54,8 @@ export default function ClientChannelsScreen() {
   return (
     <ToggleListScreen
       title="Способы связи"
-      hint="Чем связываться с клиентом"
       sections={[
-        {
-          items,
-          onReorder: (ids) => reorder.mutate(ids as ContactWayId[]),
-          footer:
-            "Появляется кнопкой связи справа от номера и предлагается по плюсу в карточке — в этом же порядке. Уже заполненное поле остаётся на карточке, даже если способ выключен.",
-        },
+        { items, onReorder: (ids) => reorder.mutate(ids as ContactWayId[]) },
       ]}
     />
   );

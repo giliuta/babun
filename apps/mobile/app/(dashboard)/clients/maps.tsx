@@ -40,13 +40,8 @@ export default function ClientMapsScreen() {
   return (
     <ToggleListScreen
       title="Карты для маршрута"
-      hint="Что предлагать по кнопке «Маршрут»"
       sections={[
-        {
-          items,
-          onReorder: (ids) => reorder.mutate(ids as MapService[]),
-          footer: "Если включена одна карта, она откроется сразу — без выбора.",
-        },
+        { items, onReorder: (ids) => reorder.mutate(ids as MapService[]) },
       ]}
     />
   );
