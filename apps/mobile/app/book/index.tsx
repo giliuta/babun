@@ -28,8 +28,8 @@ import {
   Check,
   ChevronRight,
   MapPin,
+  MoreHorizontal,
   Navigation,
-  Repeat,
   Palette,
   Phone,
   UserRound,
@@ -50,6 +50,7 @@ import {
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
+import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
@@ -135,9 +136,9 @@ import { buildServiceDue } from "@babun/shared/local/selectors/service-due";
 import {
   DocketRow,
   MoneyRow,
-  Stepper,
   TotalEditor,
 } from "@/features/appointments/BookingSummary";
+import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
   ColorSheet,
   TeamMasterSheet,
@@ -484,8 +485,10 @@ export default function BookScreen() {
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
-  // Выбор/замена объекта — лист блока «Объект» (владелец 2026-09-03).
+  // Выбор/замена объекта — лист блока «Объект» (владелец 2026-09-03);
+  // правка выбранного объекта — кружком «…» в его строке (2026-09-04).
   const [objectPicker, setObjectPicker] = useState(false);
+  const [objectEdit, setObjectEdit] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -2076,24 +2079,27 @@ export default function BookScreen() {
                   Раньше строка вела в выбор клиента, и посмотреть, кому едешь
                   — телефоны, объекты, историю, долг — из записи было нельзя.
 
-                  СМЕНА КЛИЕНТА НЕ РАСТИТ БЛОК (владелец там же: «кнопка
-                  „Сменить" не нравится, блок не должен увеличиваться, всё
-                  компактно»). Команда в шапке карточки поднимала эйбрау с 29
-                  до 44pt — цель касания примитива, — поэтому её там нет.
-                  Смена живёт кружком-действием в хвосте строки, рядом со
-                  звонком: тот же 32pt `RowActionButton`, что у маршрута
-                  объекта, высоты строке не добавляет. */}
+                  ПОПРАВКА ТОГО ЖЕ ДНЯ, СЛОВАМИ ВЛАДЕЛЬЦА: «при тапе на
+                  клиента открывается ВЫБОР нового клиента, а справа от
+                  телефона значок — три точки, — по нему переход в карточку».
+                  Так строка везде значит одно: тап по выбранному открывает
+                  выбор (клиент, объект, услуга), а всё, что ведёт вглубь,
+                  живёт кружком в хвосте. Стрелки справа больше нет ни у
+                  клиента, ни у объекта. */}
               <SectionCard title="Клиент">
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
                       className="flex-1 flex-row items-center px-4 py-3"
-                      onPress={openClientCard}
+                      onPress={() => {
+                        setClientPickerOpen(true);
+                        haptics.tap();
+                      }}
                       accessibilityRole="button"
                       accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
                         clientHistory ?? client.phone ?? "ещё не обслуживали"
                       }`}
-                      accessibilityHint="Открывает карточку клиента"
+                      accessibilityHint="Открывает выбор клиента"
                     >
                       <View className="flex-1">
                         <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
@@ -2110,29 +2116,6 @@ export default function BookScreen() {
                           {clientHistory ?? client.phone ?? "ещё не обслуживали"}
                         </Text>
                       </View>
-                      {/* шеврон = «строка ведёт дальше», к карточке клиента */}
-                      <ChevronRight color={t.chevron} size={ICON.sm} />
-                    </Pressable>
-                    {/* «Сменить клиента» — кружок в хвосте строки: действие
-                        НАД значением этой строки, снаружи её нажимаемой
-                        области (иначе VoiceOver склеит их в один элемент). */}
-                    <Pressable
-                      onPress={() => {
-                        setClientPickerOpen(true);
-                        haptics.tap();
-                      }}
-                      className="mr-2 items-center justify-center self-center rounded-full"
-                      style={{ width: 44, height: 44 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Сменить клиента"
-                      accessibilityHint="Открывает поиск по имени или телефону"
-                    >
-                      <View
-                        className="items-center justify-center rounded-full"
-                        style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      >
-                        <Repeat color={t.body} size={ICON.xs} />
-                      </View>
                     </Pressable>
                     {client.phone ? (
                       <Pressable
@@ -2148,6 +2131,18 @@ export default function BookScreen() {
                         <Phone color={t.accent} size={ICON.sm} />
                       </Pressable>
                     ) : null}
+                    {/* «…» — карточка клиента: телефоны, объекты, история,
+                        долг. Снаружи нажимаемой области строки, иначе
+                        VoiceOver склеит их в один элемент. */}
+                    <Pressable
+                      onPress={openClientCard}
+                      className="mr-4 items-center justify-center self-center rounded-full"
+                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
+                    >
+                      <MoreHorizontal color={t.body} size={ICON.sm} />
+                    </Pressable>
                   </View>
                 ) : (
                   <Pressable
@@ -2214,8 +2209,11 @@ export default function BookScreen() {
                         <ObjectRow
                           loc={selectedLocation}
                           plan={servicePlan(selectedLocation, allAppts, date)}
-                          chevron
                           showNote={false}
+                          onMore={() => {
+                            setObjectEdit(true);
+                            haptics.tap();
+                          }}
                           onPress={() => {
                             setObjectPicker(true);
                             haptics.tap();
@@ -2437,16 +2435,14 @@ export default function BookScreen() {
                               {durationLabel(line.duration)}
                             </Text>
                           </View>
-                          {/* СТЕППЕР У КАЖДОЙ УСЛУГИ (2026-08-21). Второго,
-                              конкурирующего вида строки — с кнопкой «Убрать»
-                              вместо количества — больше нет: флаг «продаём
-                              целиком» снят, а убрать услугу по-прежнему можно
-                              тем же степпером до нуля. */}
-                          <Stepper
+                          {/* СКОЛЬКО РАЗ ВЗЯЛИ — ОТТИСКОМ «×3» (владелец
+                              2026-09-04, выбрал из четырёх вариантов на
+                              экране сравнения). Стрелок вверх/вниз больше
+                              нет: количество набирают тапами в списке услуг,
+                              который открывает эта же строка. */}
+                          <QtyBadge
                             qty={line.quantity}
                             unit={line.unit ?? svc?.unit ?? null}
-                            onDec={() => setQty(line.serviceId, line.quantity - 1)}
-                            onInc={() => setQty(line.serviceId, line.quantity + 1)}
                           />
                           <Text
                             style={{
@@ -3066,6 +3062,15 @@ export default function BookScreen() {
             onAdd={() => setObjectSheet(true)}
             onClose={() => setObjectPicker(false)}
           />
+          {/* Правка выбранного объекта — тем же листом, что на карточке. */}
+          <ObjectEditSheet
+            visible={objectEdit}
+            client={client}
+            locationId={objectEdit ? locationId : null}
+            writer={locationWriter}
+            onDeleted={forgetLocation}
+            onClose={() => setObjectEdit(false)}
+          />
         </>
       ) : null}
       <ClientPicker
@@ -3084,7 +3089,6 @@ export default function BookScreen() {
         services={teamServices}
         frequent={frequentTeamServices}
         selectedIds={serviceIds}
-        teamId={teamId}
         // Каталог знает день записи: услуга, которую по вторникам не делают,
         // уезжает вниз списка под свою подпись.
         date={date}

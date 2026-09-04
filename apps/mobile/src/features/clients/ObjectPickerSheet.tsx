@@ -61,7 +61,7 @@ export function ObjectPickerSheet({
       visible={visible}
       onClose={onClose}
       title="Объект"
-      maxHeightRatio={0.7}
+      maxHeightRatio={0.5}
       scroll
       onExited={() => {
         const run = afterExit.current;

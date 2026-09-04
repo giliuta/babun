@@ -6,12 +6,7 @@ import {
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-} from "lucide-react-native";
+import { AlertTriangle, ChevronRight } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -36,66 +31,10 @@ function TextInput({
   );
 }
 
-export function Stepper({
-  qty,
-  unit,
-  onDec,
-  onInc,
-}: {
-  qty: number;
-  /** Единица услуги: «4 м» вместо голой четвёрки. `null` — просто число.
-   *  Ради этого единицу и вернули: бригадир, набивая количество, обязан
-   *  видеть, метры это или блоки. */
-  unit?: string | null;
-  onDec: () => void;
-  onInc: () => void;
-}) {
-  const t = useThemeColors();
-  const btn = (
-    direction: "down" | "up",
-    onPress: () => void,
-  ) => (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={
-        direction === "up" ? "Увеличить количество" : "Уменьшить количество"
-      }
-      style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-    >
-      {direction === "up" ? (
-        <ChevronUp color={t.accent} size={18} />
-      ) : (
-        <ChevronDown color={t.accent} size={18} />
-      )}
-    </Pressable>
-  );
-  return (
-    <View
-      className="mr-3 flex-row items-center rounded-[10px]"
-      style={{ backgroundColor: t.fill }}
-      accessibilityLabel={`Количество: ${qty}${unit ? ` ${unit}` : ""}`}
-    >
-      {btn("down", onDec)}
-      <Text
-        numberOfLines={1}
-        style={{
-          minWidth: 24,
-          paddingHorizontal: 2,
-          textAlign: "center",
-          fontSize: 14,
-          fontWeight: "600",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {unit ? `${qty} ${unit}` : qty}
-      </Text>
-      {btn("up", onInc)}
-    </View>
-  );
-}
-
+// СТЕППЕР СО СТРЕЛКАМИ СНЕСЁН 2026-09-04. Количество услуги набирают ТАПАМИ
+// по строке в списке услуг, а сама запись печатает его оттиском «×3»
+// (`QtyBadge`): владелец, сравнив четыре варианта на экране рядом, выбрал
+// этот — «стрелочки вверх-вниз можно сделать красивее и статичнее».
 export function MoneyRow({
   label,
   value,

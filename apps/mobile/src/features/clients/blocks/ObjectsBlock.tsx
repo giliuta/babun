@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { MoreHorizontal } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
@@ -104,7 +104,7 @@ export function ObjectRow({
   loc,
   plan,
   separated,
-  chevron,
+  onMore,
   showNote = true,
   onPress,
 }: {
@@ -112,10 +112,12 @@ export function ObjectRow({
   /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
   plan: ServicePlan | null;
   separated?: boolean;
-  /** Шеврон справа — строка ВЕДЁТ к выбору другого объекта (запись). На
-   *  карточке клиента тап открывает правку, и шеврона нет: он обещал бы
-   *  этаж навигации, которого там не существует. */
-  chevron?: boolean;
+  /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
+   *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
+   *  2026-09-04 — «эти стрелочки убираем, ставим красивую иконку, при тапе на
+   *  неё открывается редактирование объекта». На карточке клиента правку
+   *  открывает сам тап, и кружка там нет. */
+  onMore?: () => void;
   /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
    *  своей плашкой под строкой, и третья строка дублировала бы её. */
   showNote?: boolean;
@@ -147,7 +149,7 @@ export function ObjectRow({
           .filter(Boolean)
           .join(", ")}
         accessibilityHint={
-          chevron ? "Открывает выбор объекта" : "Открывает правку объекта"
+          onMore ? "Открывает выбор объекта" : "Открывает правку объекта"
         }
         style={({ pressed }) => ({
           flex: 1,
@@ -203,11 +205,6 @@ export function ObjectRow({
             </Text>
           ) : null}
         </View>
-        {/* Шеврон — только там, где строка ведёт к выбору (запись), и ВНУТРИ
-            нажимаемой области: значок, обещающий «тап — сменить», не может
-            быть мёртвой зоной. На карточке клиента его нет, и места он не
-            занимает. */}
-        {chevron ? <ChevronRight color={t.chevron} size={ICON.sm} /> : null}
       </Pressable>
 
       {/* Маршрут — отдельное действие над адресом этой строки; шторка выбора
@@ -217,6 +214,27 @@ export function ObjectRow({
         address={loc.address}
         label={loc.label}
       />
+
+      {/* Правка объекта — кружок в хвосте, СНАРУЖИ нажимаемой области строки
+          (иначе VoiceOver склеит их в один элемент). */}
+      {onMore ? (
+        <Pressable
+          onPress={onMore}
+          accessibilityRole="button"
+          accessibilityLabel={`Правка объекта ${loc.label || "Объект"}`}
+          style={({ pressed }) => ({
+            width: 32,
+            height: 32,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 999,
+            backgroundColor: t.rowFill,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <MoreHorizontal color={t.body} size={ICON.sm} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
