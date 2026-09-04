@@ -116,7 +116,6 @@ export function TeamLabelRow({
   label,
   labelColor,
   labelFromDay,
-  accent,
   onEditTeam,
   onEditLabel,
 }: {
@@ -128,106 +127,112 @@ export function TeamLabelRow({
   labelColor?: string | null;
   /** Метка не своя, а взята у дня — читается тише, чтобы отличать. */
   labelFromDay?: boolean;
-  accent: string;
   onEditTeam: () => void;
   onEditLabel: () => void;
 }) {
   const t = useThemeColors();
   return (
-    <View className="mx-4 mt-2">
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "stretch",
-          backgroundColor: t.surface,
-          borderRadius: t.radius.card,
-          boxShadow: t.cardShadow,
-          overflow: "hidden",
-        }}
+    // ДВА ПОЛНОЦЕННЫХ БЛОКА, А НЕ ОДИН СО ШВОМ (владелец 2026-09-04:
+    // «раздели не волосиной между командой и меткой, а раздели полноценные
+    // блоки»). Волосок делил карточку на две половинки одного предмета, а
+    // команда и метка — предметы разные: кто едет и куда. Рядом они стоят
+    // потому, что отвечают на один вопрос и вместе занимают одну строку
+    // экрана.
+    <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
+      <IdentityCard
+        color={teamColor}
+        title={teamName}
+        sub={masterName ?? undefined}
+        onPress={onEditTeam}
+        accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
+        accessibilityHint="Открывает выбор команды и мастера"
+      />
+      <IdentityCard
+        color={label ? (labelColor ?? t.accent) : t.separator}
+        title={label ?? "Метка"}
+        muted={!label}
+        quiet={!!label && !!labelFromDay}
+        onPress={onEditLabel}
+        accessibilityLabel={
+          label
+            ? `Метка: ${label}${labelFromDay ? ", как у дня" : ""}`
+            : "Метка не выбрана"
+        }
+        accessibilityHint="Открывает выбор метки"
+      />
+    </View>
+  );
+}
+
+/** Блок «кто» или «куда»: цветной корешок слева, значение по центру.
+ *  Шеврона нет (владелец 2026-09-04: «убери справа эти стрелочки») — вся
+ *  карточка и есть кнопка, а стрелка отбирала у значения место и тянула
+ *  взгляд к пустому краю. */
+function IdentityCard({
+  color,
+  title,
+  sub,
+  muted,
+  quiet,
+  onPress,
+  accessibilityLabel,
+  accessibilityHint,
+}: {
+  color: string;
+  title: string;
+  sub?: string;
+  /** Значения ещё нет — «Метка» вместо имени метки. */
+  muted?: boolean;
+  /** Значение не своё, а взятое у дня: тише, но на том же месте. */
+  quiet?: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint: string;
+}) {
+  const t = useThemeColors();
+  return (
+    <View
+      style={{
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "stretch",
+        backgroundColor: t.surface,
+        borderRadius: t.radius.card,
+        boxShadow: t.cardShadow,
+        overflow: "hidden",
+      }}
+    >
+      <Spine color={color} />
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => ({
+          flex: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingVertical: 10,
+          paddingHorizontal: 10,
+          backgroundColor: pressed ? t.pressed : "transparent",
+        })}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
       >
-        <Spine color={accent} />
-
-        {/* БЕЗ className: вместе со `style`-функцией он молча съедает её
-            целиком (закон записан в `AddRow`), и `flex: 1` до половинки
-            карточки не доезжает — зона сжимается по содержимому, а текст
-            внутри неё исчезает. Раскладку держим числами здесь же. */}
-        <Pressable
-          onPress={onEditTeam}
-          style={({ pressed }) => ({
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingVertical: 10,
-            paddingLeft: 14,
-            paddingRight: 8,
-            backgroundColor: pressed ? t.pressed : "transparent",
-          })}
-          accessibilityRole="button"
-          accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
-          accessibilityHint="Открывает выбор команды и мастера"
+        <Text
+          numberOfLines={1}
+          style={{
+            fontSize: 15,
+            fontWeight: "600",
+            color: muted ? t.placeholder : quiet ? t.body : t.ink,
+          }}
         >
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: teamColor }} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }} numberOfLines={1}>
-              {teamName}
-            </Text>
-            {masterName ? (
-              <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }} numberOfLines={1}>
-                {masterName}
-              </Text>
-            ) : null}
-          </View>
-          <ChevronRight color={t.chevron} size={ICON.xs} />
-        </Pressable>
-
-        <View style={{ width: 1, marginVertical: 10, backgroundColor: t.separator }} />
-
-        {/* МЕТКА — вторая зона той же карточки: куда именно едут. Взятая у
-            дня читается тише собственной, но стоит на том же месте. */}
-        <Pressable
-          onPress={onEditLabel}
-          style={({ pressed }) => ({
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            paddingVertical: 10,
-            paddingLeft: 10,
-            paddingRight: 12,
-            backgroundColor: pressed ? t.pressed : "transparent",
-          })}
-          accessibilityRole="button"
-          accessibilityLabel={
-            label
-              ? `Метка: ${label}${labelFromDay ? ", как у дня" : ""}`
-              : "Метка не выбрана"
-          }
-          accessibilityHint="Открывает выбор метки"
-        >
-          <View
-            style={{
-              width: 10,
-              height: 10,
-              borderRadius: 5,
-              backgroundColor: label ? labelColor ?? t.accent : t.separator,
-            }}
-          />
-          <View style={{ flex: 1 }}>
-            <Text
-              numberOfLines={1}
-              style={{
-                fontSize: 15,
-                fontWeight: "600",
-                color: label ? (labelFromDay ? t.body : t.ink) : t.placeholder,
-              }}
-            >
-              {label ?? "Метка"}
-            </Text>
-          </View>
-          <ChevronRight color={t.chevron} size={ICON.xs} />
-        </Pressable>
-      </View>
+          {title}
+        </Text>
+        {sub ? (
+          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
+            {sub}
+          </Text>
+        ) : null}
+      </Pressable>
     </View>
   );
 }
@@ -235,18 +240,18 @@ export function TeamLabelRow({
 export function WhenRow({
   date,
   timeStart,
+  timeEnd,
   duration,
   allDay,
   warning,
-  accent,
   onPress,
 }: {
   date: string;
   timeStart: string;
+  timeEnd: string;
   duration: number;
   allDay?: boolean;
   warning?: string | null;
-  accent: string;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -262,29 +267,70 @@ export function WhenRow({
           overflow: "hidden",
         }}
       >
-        <Spine color={accent} />
+        {/* У ВРЕМЕНИ ЦВЕТА НЕТ (владелец 2026-09-04: «убери синенькую плашку
+            с времени, она там не нужна — у времени нет цвета»). Цветной
+            корешок называет ЧЕЙ выезд; час дня ничей, и полоска рядом с ним
+            только притворялась значащей. */}
         <Pressable
           onPress={onPress}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: "row",
             alignItems: "center",
+            justifyContent: "center",
             paddingVertical: 10,
-            paddingLeft: 14,
-            paddingRight: 12,
+            paddingHorizontal: 12,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `${timeStart}, ${durationLabel(duration)}`}`}
+          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `с ${timeStart} до ${timeEnd}, ${durationLabel(duration)}`}`}
           accessibilityHint="Открывает выбор даты и времени"
         >
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, color: t.sub }}>{humanDay(date)}</Text>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink, marginTop: 1 }}>
-              {allDay ? "весь день" : `${timeStart} · ${durationLabel(duration)}`}
+          {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
+              «первое — суббота 19 сентября, потом время, потом длительность;
+              не сверху мелким шрифтом, а красиво всё в строчку, чтоб это
+              нормально анализировалось»). Дата стояла надстрочной подписью
+              12-м кеглем — читалась как служебная пометка, хотя это первое,
+              что спрашивают о записи. Теперь три величины идут слева направо
+              в порядке вопроса «когда»: какой день, во сколько, насколько.
+              Время держит вес: его ищут глазами. */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Text
+              numberOfLines={1}
+              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+            >
+              {humanDay(date)}
             </Text>
+            <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
+            {allDay ? (
+              <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+                весь день
+              </Text>
+            ) : (
+              <>
+                {/* НАЧАЛО И КОНЕЦ, ПОТОМ ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
+                    «поставим начало и конец — 11:00 – 11:30, — а ещё
+                    длительность; так будет ещё круче»). Одно число отвечало
+                    только на «во сколько приезжать»; пара отвечает и на «когда
+                    освободимся», а длительность остаётся третьей величиной —
+                    её считают услуги. */}
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {`${timeStart} – ${timeEnd}`}
+                </Text>
+                <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
+                <Text numberOfLines={1} style={{ fontSize: 14, color: t.sub }}>
+                  {durationLabel(duration)}
+                </Text>
+              </>
+            )}
           </View>
-          <ChevronRight color={t.chevron} size={ICON.sm} />
         </Pressable>
       </View>
 

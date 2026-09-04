@@ -1815,8 +1815,9 @@ export default function BookScreen() {
   const picked = kind === "event" ? eventColor : colorOverride;
   const hasColor = picked != null;
   const accentC = picked ?? t.accent;
-  // Докет всегда несёт реальный смысл: выбранный цвет → цвет команды → кобальт.
-  const identityC = picked ?? team?.color ?? t.accent;
+  // Цвет записи владеет ХРОМОМ экрана; корешки блоков «команда» и «метка»
+  // несут СВОИ цвета — команды и метки, — а не выбранный: блок обязан
+  // говорить о том, что в нём написано.
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
   const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
   const headerBorder = hasColor
@@ -2086,7 +2087,6 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                accent={identityC}
                 onEditTeam={() => {
                   setTeamSheetOpen(true);
                   haptics.tap();
@@ -2102,11 +2102,11 @@ export default function BookScreen() {
               <WhenRow
                 date={date}
                 timeStart={timeStart}
+                timeEnd={timeEnd}
                 // ДЛИТЕЛЬНОСТЬ — ПО КОНЦУ ЗАПИСИ, А НЕ ПО СУММЕ УСЛУГ: конец,
                 // заданный руками, докет иначе игнорировал.
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
-                accent={identityC}
                 onPress={() => {
                   setWhenOpen(true);
                   haptics.tap();
