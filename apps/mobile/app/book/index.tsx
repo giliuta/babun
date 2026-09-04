@@ -66,7 +66,7 @@ import {
 } from "@babun/shared/common/utils/appointment-overlap";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { tierForVisits } from "@babun/shared/local/loyalty";
-import { formatEUR, formatEURExact } from "@babun/shared/common/utils/money";
+import { formatEURExact } from "@babun/shared/common/utils/money";
 import {
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
@@ -131,8 +131,12 @@ import {
   resolveBookingTeamId,
 } from "@/features/appointments/booking-prefill";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
+import {
+  ClientHistoryLine,
+  clientHistoryText,
+} from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
-import { buildStats } from "@babun/shared/local/selectors/client-stats";
+import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import {
   TeamLabelRow,
   TotalRow,
@@ -148,7 +152,6 @@ import {
   ClientPicker,
   ServicePicker,
 } from "@/features/appointments/BookingPickers";
-import { formatShortDateRu, visitsWord } from "@/features/clients/format";
 import {
   addMinutesHM,
   buildServices,
@@ -326,6 +329,12 @@ export default function BookScreen() {
   const allAppts = useMemo(
     () => appointmentsQuery.data ?? [],
     [appointmentsQuery.data],
+  );
+  // ВВОДНАЯ О КАЖДОМ КЛИЕНТЕ — ОДНОЙ КАРТОЙ НА ВЕСЬ СПИСОК. `buildStats` на
+  // строку превратил бы выбор клиента в квадрат по числу записей.
+  const statsById = useMemo(
+    () => buildStatsMap(clientsQuery.data ?? [], allAppts),
+    [clientsQuery.data, allAppts],
   );
   const loyalty = loyaltyQuery.data;
   const calendarSettings = calendarSettingsQuery.data;
@@ -726,18 +735,12 @@ export default function BookScreen() {
     if (next !== date) setDate(next);
   }, [calendarSettings?.timezone, date, params.date, team?.timezone]);
 
-  // Богатая строка истории клиента (web parity: «6 визитов · €600 · был 30 мая»).
-  const clientHistory = useMemo(() => {
-    if (!client) return null;
-    const s = buildStats(client, allAppts);
-    const segs = [
-      s.visits > 0 ? `${s.visits} ${visitsWord(s.visits)}` : null,
-      s.totalSpent > 0 ? formatEUR(s.totalSpent) : null,
-      // Без «был» — не угадываем пол клиента.
-      s.lastVisitDate ? `визит ${formatShortDateRu(s.lastVisitDate)}` : null,
-    ].filter(Boolean) as string[];
-    return segs.length > 0 ? segs.join(" · ") : null;
-  }, [client, allAppts]);
+  // ВВОДНАЯ О КЛИЕНТЕ — ТЕМ ЖЕ ТЕКСТОМ, ЧТО В СПИСКЕ ВЫБОРА. Раньше строка
+  // собиралась здесь своими руками и молчала о ДОЛГЕ — самом важном, что
+  // стоит знать, набирая клиента на работу. Теперь состав один на оба места
+  // (`clientHistoryParts`), и долг идёт первым.
+  const clientStats = client ? statsById.get(client.id) : undefined;
+  const clientHistory = client ? clientHistoryText(client, clientStats) : null;
 
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
@@ -2182,15 +2185,19 @@ export default function BookScreen() {
                         <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
                           {client.full_name || "Без имени"}
                         </Text>
+                        {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь.
+                            Раньше история ВЫТЕСНЯЛА телефон — у постоянного
+                            клиента номер из записи пропадал вовсе. */}
+                        <ClientHistoryLine client={client} stats={clientStats} />
                         <Text
                           style={{
                             fontSize: 13,
-                            color: clientHistory || client.phone ? t.sub : t.placeholder,
+                            color: client.phone ? t.sub : t.placeholder,
                             marginTop: 2,
                           }}
                           numberOfLines={1}
                         >
-                          {clientHistory ?? client.phone ?? "ещё не обслуживали"}
+                          {client.phone ?? "без телефона"}
                         </Text>
                       </View>
                     </Pressable>
@@ -3135,6 +3142,7 @@ export default function BookScreen() {
         </>
       ) : null}
       <ClientPicker
+        statsById={statsById}
         visible={clientPickerOpen}
         onClose={() => setClientPickerOpen(false)}
         onExited={() => {

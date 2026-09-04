@@ -17,6 +17,11 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
+import {
+  ClientHistoryLine,
+  clientHistoryText,
+} from "@/features/clients/history-line";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import { QtyBadge } from "@/features/appointments/QtyBadge";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
@@ -141,6 +146,7 @@ export function ClientPicker({
   onExited,
   clients,
   recentIds,
+  statsById,
   onPick,
 }: {
   visible: boolean;
@@ -152,6 +158,11 @@ export function ClientPicker({
   onExited?: () => void;
   clients: Client[];
   recentIds: string[];
+  /** Долг, визиты, деньги, последний визит — вводная о человеке (владелец
+   *  2026-09-04: «когда я выбираю клиента, там должна быть уже вводная
+   *  информация, как это написано в клиентах»). Считает форма: карта на весь
+   *  список строится один раз, а не по клиенту на строку. */
+  statsById?: Map<string, ClientStats>;
   onPick: (client: Client) => void;
 }) {
   const t = useThemeColors();
@@ -268,7 +279,13 @@ export function ClientPicker({
               key={c.id}
               onPress={() => pick(c)}
               accessibilityRole="button"
-              accessibilityLabel={`${c.full_name || "Без имени"}${c.phone ? `, ${c.phone}` : ""}`}
+              accessibilityLabel={[
+                c.full_name || "Без имени",
+                c.phone,
+                clientHistoryText(c, statsById?.get(c.id)),
+              ]
+                .filter(Boolean)
+                .join(", ")}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
@@ -296,6 +313,7 @@ export function ClientPicker({
                 <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
                   {c.full_name || "Без имени"}
                 </Text>
+                <ClientHistoryLine client={c} stats={statsById?.get(c.id)} size={12} />
                 {c.phone ? (
                   <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
                     {c.phone}
