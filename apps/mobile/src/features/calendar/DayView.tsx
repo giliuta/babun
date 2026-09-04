@@ -151,6 +151,7 @@ function Block({
   endHour,
   stepMinutes,
   colors,
+  offLabelColor,
   label,
   service,
   compact,
@@ -169,6 +170,8 @@ function Block({
   endHour: number;
   stepMinutes: number;
   colors: BlockColors;
+  /** Цвет чужой метки — кольцо вокруг блока. null — блок без кольца. */
+  offLabelColor: string | null;
   label: string;
   service: string | null;
   compact: boolean;
@@ -361,6 +364,10 @@ function Block({
               // 2px breathing gap to the next block (was `height - 2`).
               bottom: 2,
               backgroundColor: colors.fill,
+              // ОКАНТОВКА = «эта работа не там, где весь день». Левый корешок
+              // остаётся за identity записи, кольцо берёт цвет чужой метки.
+              borderColor: offLabelColor ?? "transparent",
+              borderWidth: offLabelColor ? 1.5 : 0,
               borderLeftColor: overdue ? t.warning : colors.stripe,
               borderLeftWidth: 3,
               borderRadius: t.radius.card,
@@ -561,6 +568,7 @@ export function DayColumn({
   clientName,
   serviceLabel,
   teamColorFor,
+  offLabelColorFor,
   isToday,
   todayYmd,
   compact = false,
@@ -586,6 +594,11 @@ export function DayColumn({
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
+  /** Цвет метки САМОЙ записи, когда она отличается от метки дня
+   *  (`resolveOffDayLabel`): блок получает окантовку этим цветом. Владелец
+   *  2026-09-04: «можно подсвечивать другим цветом, когда метка другая».
+   *  null — обычный блок. */
+  offLabelColorFor?: (a: Appointment) => string | null;
   isToday: boolean;
   /** Бизнес-сегодня (YYYY-MM-DD) — просрочка записей и затемнение
    *  прошедших дней. Не задан → оба сигнала выключены. */
@@ -1007,6 +1020,7 @@ export function DayColumn({
               endHour={endHour}
               stepMinutes={Math.max(5, Math.min(60, stepMinutes))}
               colors={blockColors(p.apt)}
+              offLabelColor={offLabelColorFor ? offLabelColorFor(p.apt) : null}
               label={clientName(p.apt) || p.apt.comment || "Запись"}
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
               compact={compact}
@@ -1107,6 +1121,7 @@ export function DayView({
   clientName,
   serviceLabel,
   teamColorFor,
+  offLabelColorFor,
   onEdit,
   onMenu,
   onCreateAt,
@@ -1139,6 +1154,8 @@ export function DayView({
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
+  /** Цвет чужой метки записи — окантовка блока (см. DayColumn). */
+  offLabelColorFor?: (a: Appointment) => string | null;
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
   onMenu?: (a: Appointment) => void;
@@ -1236,6 +1253,7 @@ export function DayView({
                 clientName={clientName}
                 serviceLabel={serviceLabel}
                 teamColorFor={teamColorFor}
+                offLabelColorFor={offLabelColorFor}
                 isToday={d === todayYmd}
                 todayYmd={todayYmd}
                 onEdit={onEdit}

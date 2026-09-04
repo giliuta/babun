@@ -40,6 +40,7 @@ export function WeekView({
   clientName,
   serviceLabel,
   teamColorFor,
+  offLabelColorFor,
   today,
   onEdit,
   onMenu,
@@ -72,6 +73,8 @@ export function WeekView({
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
+  /** Цвет чужой метки записи — окантовка блока (см. DayColumn). */
+  offLabelColorFor?: (a: Appointment) => string | null;
   today: Date;
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие без движения по блоку — контекстное меню записи. */
@@ -185,6 +188,7 @@ export function WeekView({
                     clientName={clientName}
                     serviceLabel={serviceLabel}
                     teamColorFor={teamColorFor}
+                    offLabelColorFor={offLabelColorFor}
                     isToday={sameDay(d, today)}
                     todayYmd={formatYMD(today)}
                     compact

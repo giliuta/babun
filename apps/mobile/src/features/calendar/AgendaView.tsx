@@ -29,6 +29,7 @@ export function AgendaView({
   onEdit,
   onMenu,
   labelFor,
+  offLabelFor,
   onCreateNew,
   showAmounts = true,
   refreshing,
@@ -48,6 +49,10 @@ export function AgendaView({
   /** Метка дня (город) — чип в заголовке дня: единая система дат со
    *  шапками Дня/Недели и точками Месяца. */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** Метка САМОЙ записи, когда она отличается от метки дня
+   *  (`resolveOffDayLabel`). В списке для неё есть место, поэтому она
+   *  называется словом, а не только цветом, как в сетке. */
+  offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
   onCreateNew?: () => void;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
@@ -78,6 +83,7 @@ export function AgendaView({
           section={item}
           header={headerRu(item.title, todayYmd, tomorrowYmd)}
           label={labelFor?.(item.title) ?? null}
+          offLabelFor={offLabelFor}
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
@@ -106,6 +112,7 @@ function DaySection({
   section,
   header,
   label,
+  offLabelFor,
   clientName,
   serviceSummary,
   onEdit,
@@ -116,6 +123,7 @@ function DaySection({
   section: AgendaSection;
   header: string;
   label: { name: string; color: string } | null;
+  offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -226,6 +234,7 @@ function DaySection({
               onPress={() => onEdit(apt)}
               onLongPress={onMenu ? () => onMenu(apt) : undefined}
               showAmounts={showAmounts}
+              offLabel={offLabelFor?.(apt) ?? null}
               t={t}
             />
           </View>
@@ -242,6 +251,7 @@ function AgendaRow({
   onPress,
   onLongPress,
   showAmounts,
+  offLabel,
   t,
 }: {
   apt: Appointment;
@@ -250,6 +260,8 @@ function AgendaRow({
   onPress: () => void;
   onLongPress?: () => void;
   showAmounts: boolean;
+  /** Чужая метка этой работы — стоит рядом со статусом. */
+  offLabel: { name: string; color: string } | null;
   t: ThemeColors;
 }) {
   const statusColor =
@@ -397,16 +409,34 @@ function AgendaRow({
             {serviceSummary}
           </Text>
         ) : null}
-        <Text
-          style={{
-            marginTop: 2,
-            fontSize: 11,
-            color: statusColor,
-            textDecorationLine: cancelled ? "line-through" : "none",
-          }}
-        >
-          {STATUS_LABELS[apt.status]}
-        </Text>
+        <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text
+            style={{
+              fontSize: 11,
+              color: statusColor,
+              textDecorationLine: cancelled ? "line-through" : "none",
+            }}
+          >
+            {STATUS_LABELS[apt.status]}
+          </Text>
+          {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: в списке она называется словом —
+              «весь день Лимассол, а эта работа в Пафосе» читается сразу. */}
+          {offLabel ? (
+            <>
+              <View
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: 3,
+                  backgroundColor: offLabel.color,
+                }}
+              />
+              <Text numberOfLines={1} style={{ fontSize: 11, color: offLabel.color }}>
+                {offLabel.name}
+              </Text>
+            </>
+          ) : null}
+        </View>
       </View>
       {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>

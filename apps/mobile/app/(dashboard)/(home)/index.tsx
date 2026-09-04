@@ -100,6 +100,7 @@ import {
   resolveCalendarDayLabel,
   type DayLabel,
 } from "@/features/calendar/day-label";
+import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -872,6 +873,25 @@ export default function CalendarTab() {
       }),
     [activeTeamId, dayCities, cities, todayYmd, t.faint],
   );
+  // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
+  // другим цветом, когда метка другая, окантовку какую-то»). Правило и его
+  // границы — в `appointment-label.ts`; здесь только связка с меткой дня,
+  // которую календарь уже считает.
+  const offLabelFor = useCallback(
+    (a: Appointment) =>
+      resolveOffDayLabel({
+        city: a.city,
+        dayLabelName: labelFor(a.date)?.name ?? null,
+        cities,
+      }),
+    [labelFor, cities],
+  );
+  // Сетке хватает цвета: в колонке дня словам места нет.
+  const offLabelColorFor = useCallback(
+    (a: Appointment): string | null => offLabelFor(a)?.color ?? null,
+    [offLabelFor],
+  );
+
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
   // DayLabelSheet показывает честное пустое состояние и ведёт в настройки.
   // Иначе новый диспетчер нажимал на дату в ожидании метки, а приложение
@@ -2114,6 +2134,7 @@ export default function CalendarTab() {
           onEdit={openEdit}
           onMenu={openActionMenu}
           labelFor={labelFor}
+          offLabelFor={offLabelFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
@@ -2127,6 +2148,7 @@ export default function CalendarTab() {
               apptsFor={apptsFor}
               today={now}
               labelFor={labelFor}
+              offLabelColorFor={offLabelColorFor}
               onCreateAt={canManageBookings ? createAt : undefined}
               onMenu={openActionMenu}
               onPickDay={pickDay}
@@ -2164,6 +2186,7 @@ export default function CalendarTab() {
               apptsFor={apptsFor}
               todayYmd={todayYmd}
               labelFor={labelFor}
+              offLabelColorFor={offLabelColorFor}
               onDayLabelTap={
                 canManageDayLabels && activeTeamId
                   ? () => {
