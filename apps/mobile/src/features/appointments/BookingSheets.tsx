@@ -164,7 +164,6 @@ export function ColorSheet({
   onPick: (c: string | null) => void;
   isEvent?: boolean;
 }) {
-  const t = useThemeColors();
   return (
     <BottomSheet
       visible={visible}

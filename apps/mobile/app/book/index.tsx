@@ -123,7 +123,7 @@ import {
   paymentMethodForAccountKind,
   type PayMethod,
 } from "@/features/appointments/payment";
-import { UnifiedTimePopup } from "@/features/appointments/UnifiedTimePopup";
+import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
   resolveBookingClientPrefill,
   resolveBookingTeamId,
@@ -2970,7 +2970,7 @@ export default function BookScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      <UnifiedTimePopup
+      <WhenSheet
         open={whenOpen}
         date={date}
         timeStart={timeStart}
