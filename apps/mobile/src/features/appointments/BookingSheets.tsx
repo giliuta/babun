@@ -1,25 +1,34 @@
-import {
-  Modal,
-  Pressable,
-  Text as NativeText,
-  View,
-  type TextProps,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Text as NativeText, Pressable, View, type TextProps } from "react-native";
+import { Check } from "lucide-react-native";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import { useReduceMotion } from "@/lib/reduce-motion";
 
 const EVENT_COLORS = PRESET_COLOR_VALUES;
+/** Боковое поле листов: они идут `padded={false}`, поля ставим сами — одно
+ *  число на строки и на кнопку (закон одного хозяина отступа). */
+const SIDE = 20;
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
     <NativeText maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />
   );
 }
+
+// ОБА ЛИСТА — КАНОНИЧЕСКИЙ `BottomSheet` (владелец 2026-09-04: «справа
+// „Готово" — нет такого у нас по архитектуре: у нас есть нижняя кнопка, и
+// там нажимается „Применить"»; про команду — «выбор команды, оно снизу вверх
+// открывается, всё та же архитектура»).
+//
+// Раньше это были самописные `Modal animationType="slide"` со своей шапкой и
+// «Готово» в её правом углу — ровно то, что DS запрещает: примитив тянет
+// вверх ВЕСЬ серый прямоугольник, а действие листа живёт в футере, вне
+// прокрутки и над home-индикатором.
 
 export function TeamMasterSheet({
   visible,
@@ -41,100 +50,104 @@ export function TeamMasterSheet({
   onPickMaster: (id: string | null) => void;
 }) {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const reduced = useReduceMotion();
   const teamMasters = masters.filter(
     (m) => !teamId || m.team_id === teamId || m.team_id == null,
   );
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType={reduced ? "none" : "slide"}
-      onRequestClose={onClose}
-    >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: t.scrim }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessible={false} />
-        <View
-          style={{
-            backgroundColor: t.canvas,
-            borderTopLeftRadius: t.radius.card,
-            borderTopRightRadius: t.radius.card,
-            paddingBottom: insets.bottom + 12,
-          }}
-        >
-          <View
-            className="flex-row items-center justify-between px-4 py-3"
-            style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>Команда и мастер</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Закрыть выбор команды и мастера"
-              style={{ minHeight: 44, justifyContent: "center" }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>Готово</Text>
-            </Pressable>
-          </View>
-          <View className="px-4 pt-3">
-            {/* «КОМАНДА», как в заголовке листа и в докете: «бригада» жила
-                только в этой подписи, и одна сущность называлась двумя словами
-                на одном экране. */}
-            <Text style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}>
-              КОМАНДА
-            </Text>
-            {teams.length > 0 ? (
-              <View className="mt-2 flex-row flex-wrap gap-2">
-                {teams.map((tm) => (
-                  <Chip
-                    key={tm.id}
-                    label={tm.name}
-                    variant="outline"
-                    color={tm.color ?? t.accent}
-                    selected={teamId === tm.id}
-                    radio
-                    onPress={() => onPickTeam(tm.id)}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View
-                className="mt-2 rounded-[10px] px-4 py-4"
-                style={{ backgroundColor: t.surface }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-                  Команд пока нет
-                </Text>
-                <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
-                  Сначала создайте команду в кабинете, затем вернитесь к заявке.
-                </Text>
-              </View>
-            )}
-          </View>
-          {teamMasters.length > 0 ? (
-            <View className="px-4 pt-4">
-              <Text style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}>
-                МАСТЕР
-              </Text>
-              <View className="mt-2 flex-row flex-wrap gap-2">
-                {teamMasters.map((m) => (
-                  <Chip
-                    key={m.id}
-                    label={m.full_name}
-                    variant="tint"
-                    selected={masterId === m.id}
-                    radio
-                    onPress={() => onPickMaster(masterId === m.id ? null : m.id)}
-                  />
-                ))}
-              </View>
-            </View>
-          ) : null}
+      onClose={onClose}
+      title="Команда"
+      padded={false}
+      scroll
+      maxHeightRatio={0.5}
+      footer={
+        <View style={{ paddingHorizontal: SIDE }}>
+          <Button label="Применить" onPress={onClose} />
         </View>
+      }
+    >
+      {/* СТРОКА КОМАНДЫ — ТОТ ЖЕ ДИАЛЕКТ, ЧТО У ВЫБОРА КЛИЕНТА И ОБЪЕКТА:
+          52pt на подложке, цвет команды точкой слева, галка у выбранной.
+          Пилюли-чипы здесь были единственным местом в продукте, где сущность
+          выбирают лентой, — а выбирают её ровно так же, как клиента. */}
+      <View style={{ paddingHorizontal: SIDE, paddingTop: 4, paddingBottom: 12, gap: 8 }}>
+        {teams.length > 0 ? (
+          teams.map((team) => {
+            const chosen = teamId === team.id;
+            return (
+              <Pressable
+                key={team.id}
+                onPress={() => onPickTeam(team.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: chosen }}
+                accessibilityLabel={`Команда ${team.name}`}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  minHeight: 52,
+                  paddingHorizontal: 14,
+                  borderRadius: t.radius.input,
+                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
+                })}
+              >
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: t.radius.pill,
+                    backgroundColor: team.color ?? t.accent,
+                  }}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
+                >
+                  {team.name}
+                </Text>
+                {chosen ? (
+                  <Check color={t.accent} size={18} strokeWidth={2.4} />
+                ) : null}
+              </Pressable>
+            );
+          })
+        ) : (
+          <View style={{ paddingVertical: 8 }}>
+            <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
+              Команд пока нет
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
+              Сначала создайте команду в кабинете, затем вернитесь к заявке.
+            </Text>
+          </View>
+        )}
       </View>
-    </Modal>
+
+      {/* МАСТЕР — необязательный и редкий выбор (1 запись из 30), поэтому
+          лентой чипов под командой, а не вторым списком строк. */}
+      {teamMasters.length > 0 ? (
+        <View style={{ paddingHorizontal: SIDE, paddingBottom: 12 }}>
+          <Text
+            style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}
+          >
+            МАСТЕР
+          </Text>
+          <View className="mt-2 flex-row flex-wrap gap-2">
+            {teamMasters.map((m) => (
+              <Chip
+                key={m.id}
+                label={m.full_name}
+                variant="tint"
+                selected={masterId === m.id}
+                radio
+                onPress={() => onPickMaster(masterId === m.id ? null : m.id)}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </BottomSheet>
   );
 }
 
@@ -152,69 +165,43 @@ export function ColorSheet({
   isEvent?: boolean;
 }) {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const reduced = useReduceMotion();
-  const entity = isEvent ? "событие" : "запись";
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType={reduced ? "none" : "slide"}
-      onRequestClose={onClose}
-    >
-      {/* Лёгкий скрим (12% вместо 30%): пока выбираешь цвет, вся страница за
-          шитом уже подсвечивается им — и это видно в истинном цвете. */}
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(11,18,32,0.12)" }}>
-        <Pressable style={{ flex: 1 }} onPress={onClose} accessible={false} />
-        <View
-          style={{
-            backgroundColor: t.canvas,
-            borderTopLeftRadius: t.radius.card,
-            borderTopRightRadius: t.radius.card,
-            paddingBottom: insets.bottom + 12,
-          }}
-        >
-          <View
-            className="px-4 py-3"
-            style={{ borderBottomWidth: 1, borderBottomColor: t.separator }}
-          >
-            <View className="flex-row items-center justify-between">
-              <Text style={{ fontSize: 17, fontWeight: "600", color: t.ink }}>
-                {isEvent ? "Цвет события" : "Цвет записи"}
-              </Text>
-              <Pressable
-                onPress={onClose}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Закрыть выбор цвета"
-                style={{ minHeight: 44, justifyContent: "center" }}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>Готово</Text>
-              </Pressable>
-            </View>
-            <Text style={{ fontSize: 13, color: t.sub, marginTop: 2 }}>
-              Цветом отмечаете {entity} в календаре
-            </Text>
-          </View>
-          <View className="px-4 py-4">
-            <View className="mb-3 self-start">
-              <Chip
-                label="По умолчанию"
-                radio
-                variant="tint"
-                selected={value == null}
-                onPress={() => onPick(null)}
-              />
-            </View>
-            <ColorPicker
-              label={null}
-              colors={EVENT_COLORS}
-              value={value}
-              onChange={onPick}
-            />
-          </View>
+      onClose={onClose}
+      title={isEvent ? "Цвет события" : "Цвет записи"}
+      padded={false}
+      footer={
+        <View style={{ paddingHorizontal: SIDE }}>
+          {/* «ПРИМЕНИТЬ» ВНИЗУ, А НЕ «ГОТОВО» В УГЛУ ШАПКИ (владелец
+              2026-09-04). Цвет виден сразу — вся страница за листом уже
+              подсвечена им, — поэтому кнопка только закрывает. */}
+          <Button label="Применить" onPress={onClose} />
         </View>
+      }
+    >
+      <View style={{ paddingHorizontal: SIDE, paddingBottom: 8 }}>
+        <View className="mb-3 self-start">
+          <Chip
+            label="По умолчанию"
+            radio
+            variant="tint"
+            selected={value == null}
+            onPress={() => {
+              haptics.tap();
+              onPick(null);
+            }}
+          />
+        </View>
+        <ColorPicker
+          label={null}
+          colors={EVENT_COLORS}
+          value={value}
+          onChange={onPick}
+        />
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
+
+export default ColorSheet;
