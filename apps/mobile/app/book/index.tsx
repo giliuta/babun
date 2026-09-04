@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
+  MapPin,
   Navigation,
   Palette,
   Phone,
@@ -47,6 +48,10 @@ import {
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
+import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
+import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
+import { ClientNotesSheet } from "@/features/clients/ClientNotesSheet";
+import { NotePlate } from "@/features/appointments/NotePlate";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -467,6 +472,11 @@ export default function BookScreen() {
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
+  // Выбор/замена объекта, правка выбранного (заметка объекта), заметки
+  // клиента — три листа блоков «Клиент» и «Объект» (владелец 2026-09-03).
+  const [objectPicker, setObjectPicker] = useState(false);
+  const [objectEdit, setObjectEdit] = useState(false);
+  const [clientNotesOpen, setClientNotesOpen] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -551,7 +561,46 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
-  const clientLocations = client?.locations ?? [];
+  // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
+  // только инвалидируется, и с полсекунды `client.locations` не знает о новом
+  // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
+  // location_id: null. Держим добавленный при себе, пока сервер его не
+  // отдаст; ключ по клиенту — чужому клиенту он не достанется.
+  const [addedLocation, setAddedLocation] = useState<{
+    clientId: string;
+    loc: Location;
+  } | null>(null);
+  const serverLocations = client?.locations ?? EMPTY_LOCATIONS;
+  const clientLocations = useMemo(() => {
+    if (!client || !addedLocation || addedLocation.clientId !== client.id) {
+      return serverLocations;
+    }
+    return serverLocations.some((l) => l.id === addedLocation.loc.id)
+      ? serverLocations
+      : [...serverLocations, addedLocation.loc];
+  }, [client, serverLocations, addedLocation]);
+  const selectedLocation =
+    clientLocations.find((l) => l.id === locationId) ?? null;
+  // Объект удалили листом правки или убрали «✕» сразу после добавления —
+  // выбор снимается, адрес-снимок пустеет: id удалённого в запись не едет.
+  const forgetLocation = (id: string) => {
+    setAddedLocation((cur) => (cur?.loc.id === id ? null : cur));
+    if (locationId === id) {
+      setLocationId(null);
+      setAddress("");
+    }
+  };
+  // Последняя заметка клиента — в плашку под клиентом. Журнал на карточке
+  // хранит новые первыми, но сортируем по дате: порядок массива — не закон.
+  // Импортированный `comment` (CSV) — та же заметка, показываем, если
+  // журнала ещё нет (как на карточке).
+  const latestClientNote = useMemo(() => {
+    if (!client) return null;
+    const newest = [...(client.notes ?? [])].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    )[0];
+    return newest?.text ?? (client.comment ?? "").trim() ?? null;
+  }, [client]);
 
   // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
   //
@@ -1241,7 +1290,13 @@ export default function BookScreen() {
           : minutesBetweenHM(timeStart, timeEnd),
       comment: comment.trim(),
       status,
-      location_id: locationId,
+      // Объект могли удалить листом правки прямо отсюда: висячий id в новую
+      // запись не пишем, адрес-снимок остаётся. Правку не трогаем — там
+      // пропавший объект законен, адрес держит снимок записи.
+      location_id:
+        isEdit || locationId == null || clientLocations.some((l) => l.id === locationId)
+          ? locationId
+          : null,
       address: address.trim(),
       color_override: colorOverride,
       global_discount: globalDiscount,
@@ -1979,7 +2034,18 @@ export default function BookScreen() {
                     <ChevronRight color={t.chevron} size={ICON.sm} />
                   </Pressable>
                 )}
-
+                {/* ПЛАШКА ЗАМЕТКИ КЛИЕНТА (владелец 2026-09-03: «под клиентом
+                    внизу маленькую плашку заметки»): то, что бригаде надо знать
+                    до выезда и что живёт в клиенте, а не в записи. Тап — тот же
+                    журнал заметок, что на карточке, листом. */}
+                {client ? (
+                  <NotePlate
+                    text={latestClientNote}
+                    subject="клиента"
+                    hint="Открывает заметки клиента"
+                    onPress={() => setClientNotesOpen(true)}
+                  />
+                ) : null}
               </SectionCard>
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
@@ -1994,96 +2060,122 @@ export default function BookScreen() {
                   Верно второе: объект принадлежит клиенту. */}
               <SectionCard title="Объект">
                 {client ? (
-                  <>
                   <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    {/* ОБЪЕКТЫ — ТЕМИ ЖЕ КАРТОЧКАМИ АДРЕСА, ЧТО НА КАРТОЧКЕ
-                        КЛИЕНТА (владелец 2026-08-31: «блок объекта должен быть
-                        такой же, как в клиентах»).
+                    {/* ОБЪЕКТ ВЕДЁТ СЕБЯ КАК КЛИЕНТ (владелец 2026-09-03: «мы
+                        тапаем на клиента — открывается выбор клиента; то же
+                        самое объект: тапаем на объект — идёт замена объекта, и
+                        внизу вылазит „Добавить объект“»). Строки «Добавить
+                        объект» под выбранным больше нет: она стояла бы под
+                        объектом, как не стоит «Добавить клиента» под клиентом.
+                        Добавление живёт в листе выбора — там, куда идут, когда
+                        нужного объекта нет.
 
-                        Здесь стояли ЧИПЫ: одно слово в пилюле — ни адреса, ни
-                        срока ТО, ни заметки. Человек выбирал «Дом» и «Дача»
-                        вслепую, а всё, что нужно бригаде («код домофона»,
-                        «пора обслужить»), лежало этажом ниже, в карточке
-                        клиента, куда из записи не ходят.
-
-                        Строка НЕ СКОПИРОВАНА, а взята та же — `ObjectRow`
-                        открыт из блока объектов клиента. Копия разошлась бы с
-                        оригиналом на первой правке, как разошлись две формы
-                        записи, которые мы сейчас сводим. Разница ровно одна:
-                        здесь объект ВЫБИРАЮТ, поэтому у выбранного стоит
-                        галка, а тап не открывает правку. */}
-                    {clientLocations.map((l, i) => (
-                      <ObjectRow
-                        key={l.id}
-                        loc={l}
-                        plan={servicePlan(l, allAppts, date)}
-                        separated={i > 0}
-                        selected={locationId === l.id}
-                        onPress={() => pickLocation(l.id)}
-                      />
-                    ))}
-
-                    <View className="px-4 py-3">
-                      {/* АДРЕС ПОКАЗЫВАЕТСЯ, ТОЛЬКО КОГДА ОБЪЕКТ НЕ ВЫБРАН.
-                          Карточка объекта выше уже несёт адрес и свою кнопку
-                          маршрута — с этим полем он стоял на экране ДВАЖДЫ, с
-                          двумя «Маршрут» подряд. Я это и увидел на симуляторе
-                          сразу после того, как поставил карточки: копия
-                          адреса выглядела вторым, другим адресом.
-
-                          Поле остаётся живым для выезда БЕЗ объекта — разовый
-                          адрес по звонку, который в справочник клиента не
-                          заводят. */}
-                      {!locationId ? (
-                      <View className="flex-row items-center gap-2">
-                        <TextInput
-                          keyboardAppearance="light"
-                          accessibilityLabel="Адрес выезда"
-                          value={address}
-                          onChangeText={setAddress}
-                          placeholder="Адрес выезда"
-                          placeholderTextColor={t.placeholder}
-                          style={{ flex: 1, minHeight: 44, fontSize: 15, color: t.ink, paddingVertical: 4 }}
-                        />
-                        <Pressable
-                          onPress={openRoute}
-                          disabled={!address.trim()}
-                          className="flex-row items-center gap-1 rounded-full px-3"
-                          style={{
-                            minHeight: 44,
-                            backgroundColor: address.trim() ? `${t.accent}14` : t.fill,
-                            opacity: address.trim() ? 1 : 0.45,
+                        Строка НЕ СКОПИРОВАНА, а взята та же — `ObjectRow` с
+                        карточки клиента (владелец 2026-08-31: «блок объекта
+                        должен быть такой же, как в клиентах»). Разница ровно
+                        одна: здесь объект ВЫБИРАЮТ, поэтому справа шеврон, а
+                        заметка объекта стоит своей плашкой под строкой, а не
+                        третьей строкой. */}
+                    {selectedLocation ? (
+                      <>
+                        <ObjectRow
+                          loc={selectedLocation}
+                          plan={servicePlan(selectedLocation, allAppts, date)}
+                          chevron
+                          showNote={false}
+                          onPress={() => {
+                            setObjectPicker(true);
+                            haptics.tap();
                           }}
-                          accessibilityRole="button"
-                          accessibilityLabel="Проложить маршрут до адреса"
-                        >
-                          <Navigation color={t.accent} size={ICON.xs} />
-                          <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-                            Маршрут
-                          </Text>
-                        </Pressable>
-                      </View>
-                      ) : null}
-                      {/* «ПОДЪЕЗД, КОД, ЭТАЖ» УБРАН СОВСЕМ (владелец
-                          2026-08-31: «зачем вот это, не надо, без этого можно
-                          всё сделать»).
-                          
-                          Поле носило ДВЕ разные вещи под одним именем, и обе
-                          у нас уже есть свои места:
-                            • «код от ворот 1234», «домофон 45» — это свойство
-                              ОБЪЕКТА, оно верно всегда. У объекта есть своя
-                              заметка, и карточка выше её печатает третьей
-                              строкой;
-                            • «сегодня ключ у соседей» — про ЭТУ поездку, для
-                              этого заметка записи.
-                          Третье безымянное поле между ними давало один и тот
-                          же факт записать в трёх местах, а бригаде — гадать,
-                          какое из трёх читать.
+                        />
+                        {/* Заметка объекта — «код ворот», «ключ у соседей»:
+                            правится тем же листом объекта, что на карточке. */}
+                        <NotePlate
+                          text={selectedLocation.note}
+                          subject="объекта"
+                          hint="Открывает правку объекта"
+                          onPress={() => setObjectEdit(true)}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        {/* Объекты есть, но ни один не выбран (снят после
+                            удаления или запись сохранена с разовым адресом):
+                            та же строка-дверь, что «Выбрать клиента». */}
+                        {clientLocations.length > 0 ? (
+                          <Pressable
+                            className="flex-row items-center px-4 py-3.5"
+                            onPress={() => {
+                              setObjectPicker(true);
+                              haptics.tap();
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel="Выбрать объект"
+                            accessibilityHint="Открывает список объектов клиента"
+                          >
+                            <View
+                              className="mr-3 items-center justify-center rounded-full"
+                              style={{ width: 34, height: 34, backgroundColor: `${t.accent}14` }}
+                            >
+                              <MapPin color={t.accent} size={ICON.sm} />
+                            </View>
+                            <Text className="flex-1" style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
+                              Выбрать объект
+                            </Text>
+                            <ChevronRight color={t.chevron} size={ICON.sm} />
+                          </Pressable>
+                        ) : null}
+                      <View
+                        className="px-4 py-3"
+                        style={
+                          clientLocations.length > 0
+                            ? { borderTopWidth: 1, borderTopColor: t.separator }
+                            : undefined
+                        }
+                      >
+                        {/* АДРЕС — ПОКА ОБЪЕКТ НЕ ВЫБРАН: разовый выезд по
+                            звонку, который в справочник не заводят, и адрес
+                            записи, сохранённой без объекта. У выбранного
+                            объекта адрес несёт его карточка выше — с этим
+                            полем он стоял на экране дважды.
 
-                          Колонка `address_note` в базе цела: форма её больше
-                          не шлёт, и обновление частичным патчем прежние
-                          значения не трогает. */}
-                    </View>
+                            «ПОДЪЕЗД, КОД, ЭТАЖ» УБРАН СОВСЕМ (владелец 2026-08-31:
+                            «зачем вот это, не надо»): «код ворот» — свойство
+                            объекта и живёт в его заметке, «сегодня ключ у
+                            соседей» — про эту поездку, для этого заметка
+                            записи. Колонка `address_note` в базе цела: форма её
+                            не шлёт, частичный патч прежнее не трогает. */}
+                        <View className="flex-row items-center gap-2">
+                          <TextInput
+                            keyboardAppearance="light"
+                            accessibilityLabel="Адрес выезда"
+                            value={address}
+                            onChangeText={setAddress}
+                            placeholder="Адрес выезда"
+                            placeholderTextColor={t.placeholder}
+                            style={{ flex: 1, minHeight: 44, fontSize: 15, color: t.ink, paddingVertical: 4 }}
+                          />
+                          <Pressable
+                            onPress={openRoute}
+                            disabled={!address.trim()}
+                            className="flex-row items-center gap-1 rounded-full px-3"
+                            style={{
+                              minHeight: 44,
+                              backgroundColor: address.trim() ? `${t.accent}14` : t.fill,
+                              opacity: address.trim() ? 1 : 0.45,
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel="Проложить маршрут до адреса"
+                          >
+                            <Navigation color={t.accent} size={ICON.xs} />
+                            <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
+                              Маршрут
+                            </Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      </>
+                    )}
 
                     {/* ТО оборудования объекта — визит часто из-за него; тап
                         ведёт к выбору услуги (записать обслуживание). */}
@@ -2113,14 +2205,17 @@ export default function BookScreen() {
                       </Pressable>
                     ) : null}
 
-                    <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                      <AddRow
-                        label="Добавить объект"
-                        onPress={() => setObjectSheet(true)}
-                      />
-                    </View>
+                    {/* У клиента без единого объекта выбирать нечего — первый
+                        заводится прямо отсюда, листом добавления. */}
+                    {clientLocations.length === 0 ? (
+                      <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
+                        <AddRow
+                          label="Добавить объект"
+                          onPress={() => setObjectSheet(true)}
+                        />
+                      </View>
+                    ) : null}
                   </View>
-                  </>
                 ) : (
                   <View className="px-4 py-3">
                     <Text
@@ -2798,12 +2893,46 @@ export default function BookScreen() {
           writer={locationWriter}
           initialTarget={locationId ? "" : address}
           onAdded={(added) => {
+            setAddedLocation({
+              clientId: client.id,
+              loc: { ...added, isPrimary: serverLocations.length === 0 },
+            });
             setLocationId(added.id);
             setAddress(locationAddressForBooking(added));
             toast("Объект сохранён");
           }}
+          onRemoved={forgetLocation}
           onClose={() => setObjectSheet(false)}
         />
+      ) : null}
+      {client ? (
+        <>
+          {/* Выбор/замена объекта; «Добавить объект» в его футере открывает
+              лист добавления, когда этот уже уехал. */}
+          <ObjectPickerSheet
+            visible={objectPicker}
+            locations={clientLocations}
+            selectedId={locationId}
+            onSelect={(loc) => pickLocation(loc.id)}
+            onAdd={() => setObjectSheet(true)}
+            onClose={() => setObjectPicker(false)}
+          />
+          {/* Правка выбранного объекта — тем же листом, что на карточке. */}
+          <ObjectEditSheet
+            visible={objectEdit}
+            client={client}
+            locationId={objectEdit ? locationId : null}
+            writer={locationWriter}
+            onDeleted={forgetLocation}
+            onClose={() => setObjectEdit(false)}
+          />
+          <ClientNotesSheet
+            visible={clientNotesOpen}
+            client={client}
+            update={updateClientPatch}
+            onClose={() => setClientNotesOpen(false)}
+          />
+        </>
       ) : null}
       <ClientPicker
         visible={clientPickerOpen}

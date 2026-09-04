@@ -75,6 +75,7 @@ export function ObjectSheet({
   writer,
   initialTarget,
   onAdded,
+  onRemoved,
   onClose,
 }: {
   visible: boolean;
@@ -94,6 +95,9 @@ export function ObjectSheet({
     mapUrl?: string;
     note?: string;
   }) => void;
+  /** Только что добавленный объект убрали «✕». Экран записи по этому сигналу
+   *  снимает выбор, если выбрал именно его: иначе id висел бы на удалённом. */
+  onRemoved?: (id: string) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -196,7 +200,10 @@ export function ObjectSheet({
     haptics.tap();
     try {
       const ok = await writer.removeLocation(loc.id);
-      if (ok) setAddedIds((cur) => cur.filter((id) => id !== loc.id));
+      if (ok) {
+        setAddedIds((cur) => cur.filter((id) => id !== loc.id));
+        onRemoved?.(loc.id);
+      }
     } finally {
       busy.current = false;
     }

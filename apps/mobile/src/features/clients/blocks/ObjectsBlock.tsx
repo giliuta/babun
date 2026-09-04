@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
@@ -10,6 +10,7 @@ import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { objectTarget } from "@/features/clients/object-address";
 import { servicePlan, type ServicePlan } from "@/features/clients/service-plan";
 import { todayYMD } from "@/features/clients/filter";
+import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
 // ОБЪЕКТЫ на карточке клиента.
@@ -103,21 +104,26 @@ export function ObjectRow({
   loc,
   plan,
   separated,
-  selected,
+  chevron,
+  showNote = true,
   onPress,
 }: {
   loc: Location;
   /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
   plan: ServicePlan | null;
   separated?: boolean;
-  /** Этот объект выбран для записи. На карточке клиента выбора нет — там
-   *  проп не передают, и галка не рисуется. */
-  selected?: boolean;
+  /** Шеврон справа — строка ВЕДЁТ к выбору другого объекта (запись). На
+   *  карточке клиента тап открывает правку, и шеврона нет: он обещал бы
+   *  этаж навигации, которого там не существует. */
+  chevron?: boolean;
+  /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
+   *  своей плашкой под строкой, и третья строка дублировала бы её. */
+  showNote?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
-  const note = (loc.note ?? "").trim();
+  const note = showNote ? (loc.note ?? "").trim() : "";
 
   return (
     <View
@@ -141,10 +147,7 @@ export function ObjectRow({
           .filter(Boolean)
           .join(", ")}
         accessibilityHint={
-          selected === undefined ? "Открывает правку объекта" : undefined
-        }
-        accessibilityState={
-          selected === undefined ? undefined : { selected }
+          chevron ? "Открывает выбор объекта" : "Открывает правку объекта"
         }
         style={({ pressed }) => ({
           flex: 1,
@@ -200,13 +203,12 @@ export function ObjectRow({
             </Text>
           ) : null}
         </View>
+        {/* Шеврон — только там, где строка ведёт к выбору (запись), и ВНУТРИ
+            нажимаемой области: значок, обещающий «тап — сменить», не может
+            быть мёртвой зоной. На карточке клиента его нет, и места он не
+            занимает. */}
+        {chevron ? <ChevronRight color={t.chevron} size={ICON.sm} /> : null}
       </Pressable>
-
-      {/* Галка выбранного — только там, где объект ВЫБИРАЮТ (запись). На
-          карточке клиента выбора нет, и места она не занимает. */}
-      {selected ? (
-        <Check color={t.accent} size={18} strokeWidth={2.5} />
-      ) : null}
 
       {/* Маршрут — отдельное действие над адресом этой строки; шторка выбора
           карты приезжает снизу (chooseOption → канонический лист). */}
