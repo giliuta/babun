@@ -32,6 +32,8 @@ import { useReduceMotion } from "@/lib/reduce-motion";
 import { ColorDot } from "@/components/ui/picker-fields";
 import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
+import { unitPriceFor } from "@/features/appointments/helpers";
+import { round2 } from "@babun/shared/local/finance/appointment-calc";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -406,14 +408,19 @@ export function ServicePicker({
     () => selectedIds.reduce((n, id) => n + (quantities[id] ?? 1), 0),
     [selectedIds, quantities],
   );
+  // ЦЕНА — ПО ЛЕСТНИЦЕ КОЛИЧЕСТВА, КАК В ФОРМЕ. Подвал считал по базовой цене
+  // и обещал «€150», а «Итого» на форме — €135 по опту от трёх: два числа
+  // за одну работу на соседних экранах (поймано 2026-09-04). Та же
+  // `unitPriceFor`, что собирает строки записи.
   const subtotal = useMemo(
     () =>
-      selectedIds.reduce(
-        (sum, id) =>
-          sum +
-          (services.find((s) => s.id === id)?.price ?? 0) *
-            (quantities[id] ?? 1),
-        0,
+      round2(
+        selectedIds.reduce((sum, id) => {
+          const svc = services.find((s) => s.id === id);
+          if (!svc) return sum;
+          const qty = quantities[id] ?? 1;
+          return sum + unitPriceFor(svc, qty) * qty;
+        }, 0),
       ),
     [selectedIds, services, quantities],
   );
@@ -562,28 +569,23 @@ export function ServicePicker({
               командой, а не его непустоту) — проверено перед сносом. */}
         </ScrollView>
 
+        {/* ГЛАВНАЯ КНОПКА — ТОЛЬКО `GradientButton` (DS §5: одна градиентная
+            CTA на весь продукт). Здесь стояла своя плоская пилюля, и владелец
+            2026-09-04 поймал её сразу: «все кнопки выглядят по одному, а там
+            другая». Футер — тот же, что у «Создать клиента» этажом выше. */}
         {selectedIds.length > 0 ? (
           <View
             style={{
-              paddingHorizontal: 14,
+              paddingHorizontal: 20,
               paddingTop: 8,
-              paddingBottom: insets.bottom + 8,
-              backgroundColor: t.canvas,
-              borderTopWidth: 1,
-              borderTopColor: t.separator,
+              paddingBottom: Math.max(insets.bottom, 10),
             }}
           >
-            <Pressable
+            <GradientButton
+              label={`Готово · ${totalQty} · ${formatEURExact(subtotal)}`}
               onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel={`Готово, работ: ${totalQty} на ${formatEURExact(subtotal)}`}
-              className="items-center justify-center rounded-full"
-              style={{ minHeight: 50, backgroundColor: t.accent }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "700", color: t.onAccent, fontVariant: ["tabular-nums"] }}>
-                Готово · {totalQty} · {formatEURExact(subtotal)}
-              </Text>
-            </Pressable>
+              accessibilityHint={`Работ: ${totalQty} на ${formatEURExact(subtotal)}`}
+            />
           </View>
         ) : null}
       </Screen>
