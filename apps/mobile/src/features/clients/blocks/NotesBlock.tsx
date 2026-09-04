@@ -37,12 +37,6 @@ interface NotesBlockProps {
    *  2026-08-06: «документация пусть будет тоже в заметках»). Заметка и
    *  документ — одного рода: это то, что мы ЗНАЕМ о клиенте. */
   footerRow?: ReactNode;
-  /** Капс-ярлык группы. `null` — без ярлыка: лист заметок из записи уже
-   *  назвал себя заголовком, и второе «Заметки» под ним было бы дублем. */
-  title?: string | null;
-  /** Подсказка под пустым журналом. Лист из записи её выключает: туда
-   *  приходят по «Добавить заметку», и объяснять, что такое заметка, незачем. */
-  showHint?: boolean;
 }
 
 /** Стабильная пустая ссылка: `client.notes ?? []` давал новый массив на
@@ -55,8 +49,6 @@ export default function NotesBlock({
   client,
   update,
   footerRow,
-  title = "Заметки",
-  showHint = true,
 }: NotesBlockProps) {
   const t = useThemeColors();
   const [text, setText] = useState("");
@@ -123,7 +115,7 @@ export default function NotesBlock({
   const left = MAX_LEN - text.length;
 
   return (
-    <RowGroup title={title ?? undefined}>
+    <RowGroup title="Заметки">
       {/* КОМПОЗЕР. Поле и отправка — одна подложка: это одно действие, и
           разносить их по этажам блока незачем. */}
       <View style={{ paddingHorizontal: 12, paddingVertical: 10, gap: 6 }}>
@@ -205,7 +197,7 @@ export default function NotesBlock({
         ) : null}
       </View>
 
-      {list.length === 0 && !imported && showHint ? (
+      {list.length === 0 && !imported ? (
         <Text
           maxFontSizeMultiplier={1.2}
           style={{

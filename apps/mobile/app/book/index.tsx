@@ -44,14 +44,16 @@ import {
 import {
   locationAddressForBooking,
   type Client,
+  type ClientNote,
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
-import { ClientNotesSheet } from "@/features/clients/ClientNotesSheet";
-import { NotePlate } from "@/features/appointments/NotePlate";
+import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
+import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { globalDiscountAmount } from "@babun/shared/local/finance/appointment-calc";
 import {
@@ -220,6 +222,7 @@ const EVENT_REMINDER_OPTIONS = [
 
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
+const EMPTY_NOTES: ClientNote[] = [];
 /** Пауза перед первым листом цепочки: столько уезжает попап слота, из
  *  которого сюда пришли. Меньше — и лист подаётся поверх закрывающегося окна,
  *  то есть не появляется вовсе. */
@@ -479,11 +482,8 @@ export default function BookScreen() {
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
-  // Выбор/замена объекта, правка выбранного (заметка объекта), заметки
-  // клиента — три листа блоков «Клиент» и «Объект» (владелец 2026-09-03).
+  // Выбор/замена объекта — лист блока «Объект» (владелец 2026-09-03).
   const [objectPicker, setObjectPicker] = useState(false);
-  const [objectEdit, setObjectEdit] = useState(false);
-  const [clientNotesOpen, setClientNotesOpen] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -597,16 +597,16 @@ export default function BookScreen() {
       setAddress("");
     }
   };
-  // Последняя заметка клиента — в плашку под клиентом. Журнал на карточке
+  // Последняя заметка клиента — в поле под клиентом. Журнал на карточке
   // хранит новые первыми, но сортируем по дате: порядок массива — не закон.
   // Импортированный `comment` (CSV) — та же заметка, показываем, если
   // журнала ещё нет (как на карточке).
   const latestClientNote = useMemo(() => {
-    if (!client) return null;
+    if (!client) return "";
     const newest = [...(client.notes ?? [])].sort((a, b) =>
       b.created_at.localeCompare(a.created_at),
     )[0];
-    return newest?.text ?? (client.comment ?? "").trim() ?? null;
+    return newest?.text ?? (client.comment ?? "").trim();
   }, [client]);
 
   // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
@@ -1182,6 +1182,52 @@ export default function BookScreen() {
     updateClientPatch,
   );
 
+  // ═══ ЗАМЕТКА КЛИЕНТА И ЗАМЕТКА ОБЪЕКТА — ПОЛЯМИ ПРЯМО В ФОРМЕ ═══
+  //
+  // Владелец 2026-09-04: «не надо тапать „добавить заметку“ — мини-блок, куда
+  // можно вписывать сразу, как в самом низу: заметка объекта, заметка
+  // клиента, внизу заметка записи». Это то, что бригаде надо знать до
+  // выезда и что живёт не в записи, а в клиенте («звонить после 18») и в
+  // объекте («код ворот 1234»).
+  //
+  // ЗАМЕТКА КЛИЕНТА — ПОСЛЕДНЯЯ ЗАПИСЬ ЖУРНАЛА. На карточке заметки — датированный
+  // журнал; поле здесь правит его последнюю запись на месте, а пустому
+  // журналу заводит первую. Стёрли поле — последняя запись уходит. Журнал
+  // пишется тем же писателем «свежайший массив + очередь», что и на карточке.
+  const notesWriter = useJsonArrayWriter<ClientNote>(
+    client?.notes ?? EMPTY_NOTES,
+    (next) => updateClientPatch({ notes: next }),
+  );
+  const writeClientNote = (next: string) => {
+    if (!client) return;
+    const importedOnly =
+      (client.notes ?? []).length === 0 && (client.comment ?? "").trim() !== "";
+    void notesWriter.apply((all) => {
+      const head = [...all].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      )[0];
+      if (!next) return head ? all.filter((n) => n.id !== head.id) : all;
+      if (head) return all.map((n) => (n.id === head.id ? { ...n, text: next } : n));
+      return [
+        { id: randomUuid(), text: next, created_at: new Date().toISOString() },
+        ...all,
+      ];
+    });
+    // Импортированная заметка при первой правке переезжает в журнал — как на
+    // карточке, где «✕» у неё чистит `comment`.
+    if (importedOnly) void updateClientPatch({ comment: "" });
+  };
+  const writeObjectNote = (next: string) => {
+    if (!locationId) return;
+    void locationWriter.patchLocation(locationId, { note: next || undefined });
+  };
+  const clientNote = useInlineNote(latestClientNote, writeClientNote, clientId);
+  const objectNote = useInlineNote(
+    selectedLocation?.note ?? "",
+    writeObjectNote,
+    locationId,
+  );
+
   const toggleService = (id: string) => {
     setServiceIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
@@ -1555,6 +1601,10 @@ export default function BookScreen() {
       toast(missingHint, "info");
       return;
     }
+    // Тап по кнопке фокус у поля не отбирает — заметки клиента и объекта
+    // дописываем сами, иначе набранное осталось бы в черновике поля.
+    clientNote.commit();
+    objectNote.commit();
     try {
       if (isEdit && editId) {
         // Правка идёт мимо useBookingSave: тот хук — про РОЖДЕНИЕ заявки и
@@ -2041,16 +2091,13 @@ export default function BookScreen() {
                     <ChevronRight color={t.chevron} size={ICON.sm} />
                   </Pressable>
                 )}
-                {/* ПЛАШКА ЗАМЕТКИ КЛИЕНТА (владелец 2026-09-03: «под клиентом
-                    внизу маленькую плашку заметки»): то, что бригаде надо знать
-                    до выезда и что живёт в клиенте, а не в записи. Тап — тот же
-                    журнал заметок, что на карточке, листом. */}
+                {/* ЗАМЕТКА КЛИЕНТА — мини-блок под клиентом, пишет в клиента
+                    (см. `writeClientNote`). */}
                 {client ? (
-                  <NotePlate
-                    text={latestClientNote}
-                    subject="клиента"
-                    hint="Открывает заметки клиента"
-                    onPress={() => setClientNotesOpen(true)}
+                  <InlineNoteField
+                    note={clientNote}
+                    placeholder="Заметка клиента"
+                    accessibilityLabel="Заметка клиента"
                   />
                 ) : null}
               </SectionCard>
@@ -2095,13 +2142,13 @@ export default function BookScreen() {
                             haptics.tap();
                           }}
                         />
-                        {/* Заметка объекта — «код ворот», «ключ у соседей»:
-                            правится тем же листом объекта, что на карточке. */}
-                        <NotePlate
-                          text={selectedLocation.note}
-                          subject="объекта"
-                          hint="Открывает правку объекта"
-                          onPress={() => setObjectEdit(true)}
+                        {/* ЗАМЕТКА ОБЪЕКТА — «код ворот», «ключ у соседей»:
+                            мини-блок пишет прямо в объект (см. `writeObjectNote`),
+                            третья строка карточки объекта её не дублирует. */}
+                        <InlineNoteField
+                          note={objectNote}
+                          placeholder="Заметка объекта"
+                          accessibilityLabel="Заметка объекта"
                         />
                       </>
                     ) : (
@@ -2526,8 +2573,10 @@ export default function BookScreen() {
               </SectionCard>
               </View>
 
-              {/* Заметка команде — последняя строка формы: «Дополнительно» под ней
-                  снесено 2026-08-30. */}
+              {/* Заметка записи — последняя строка формы: «Дополнительно» под ней
+                  снесено 2026-08-30. Зовётся «заметка записи» (владелец
+                  2026-09-04): под клиентом и объектом стоят их заметки, и
+                  третье поле обязано сказать, чьё оно. */}
               <SectionCard>
                 <View className="px-4 py-3">
                   {/* ЗАМЕТКУ НАБИРАЮТ, ВИДЯ ЕЁ. Поле стоит последним, и KAV,
@@ -2539,10 +2588,10 @@ export default function BookScreen() {
                       тапом мимо или потянув вниз (`keyboardDismissMode`). */}
                   <TextInput
                     keyboardAppearance="light"
-                    accessibilityLabel="Заметка команде"
+                    accessibilityLabel="Заметка записи"
                     value={comment}
                     onChangeText={setComment}
-                    placeholder="Заметка команде — что сделать, взять с собой…"
+                    placeholder="Заметка записи"
                     placeholderTextColor={t.placeholder}
                     // Пока клавиатура выезжает, докручиваем список до конца —
                     // поле встаёт прямо над ней.
@@ -2923,21 +2972,6 @@ export default function BookScreen() {
             onSelect={(loc) => pickLocation(loc.id)}
             onAdd={() => setObjectSheet(true)}
             onClose={() => setObjectPicker(false)}
-          />
-          {/* Правка выбранного объекта — тем же листом, что на карточке. */}
-          <ObjectEditSheet
-            visible={objectEdit}
-            client={client}
-            locationId={objectEdit ? locationId : null}
-            writer={locationWriter}
-            onDeleted={forgetLocation}
-            onClose={() => setObjectEdit(false)}
-          />
-          <ClientNotesSheet
-            visible={clientNotesOpen}
-            client={client}
-            update={updateClientPatch}
-            onClose={() => setClientNotesOpen(false)}
           />
         </>
       ) : null}

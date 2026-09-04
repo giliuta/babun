@@ -61,7 +61,6 @@ export function ObjectEditSheet({
   locationId,
   writer,
   askDelete,
-  onDeleted,
   onClose,
 }: {
   visible: boolean;
@@ -73,9 +72,6 @@ export function ObjectEditSheet({
   writer: LocationWriter;
   /** Открыт свайпом «Удалить» — спрашиваем сразу, форму не показываем. */
   askDelete?: boolean;
-  /** Объект удалён. Экран записи по этому сигналу снимает выбор, если
-   *  выбрал именно его: иначе в запись уехал бы id удалённого объекта. */
-  onDeleted?: (id: string) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -165,7 +161,6 @@ export function ObjectEditSheet({
         if (ok) {
           haptics.warning();
           void writer.removeLocation(target.id);
-          onDeleted?.(target.id);
         } else {
           // Без этого отказ оставлял лист открытым (askDelete рисует null —
           // экран выглядел обычным), а `asked` — взведённым: красная кнопка
