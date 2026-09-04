@@ -4,9 +4,9 @@ import type { Client } from "@babun/shared/local/clients";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import {
   contactFieldDef,
-  useEnabledContactFields,
   type ContactFieldId,
 } from "@/features/clients/contact-fields";
+import { useEnabledContactFields } from "@/features/clients/contact-ways";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { useThemeColors } from "@/theme/colors";
 

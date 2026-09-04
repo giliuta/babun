@@ -32,6 +32,14 @@ export function createEnabledPrefs<T extends string>(opts: {
   pinned?: readonly T[];
   /** Нужен ли хотя бы один включённый пункт (иначе контрол умрёт). */
   requireOne?: boolean;
+  /** ЧТО ЗАПИСАТЬ, ЕСЛИ СВОЕГО ЕЩЁ НЕТ. Зовётся ровно один раз на тенант —
+   *  когда набор объединяет два прежних (см. `contact-ways`) и молча
+   *  потерять уже настроенное нельзя. `null` — переносить нечего, работают
+   *  обычные `defaults`. */
+  migrate?: (tenantId: string | null) => {
+    enabled?: readonly T[];
+    order?: readonly T[];
+  } | null;
 }) {
   const { storageKey, queryKey, all, defaults, requireOne } = opts;
   const pinned = opts.pinned ?? [];
@@ -39,10 +47,26 @@ export function createEnabledPrefs<T extends string>(opts: {
     tenantId ? `${storageKey}:${tenantId}` : storageKey;
   const orderKey = (tenantId: string | null) => `${key(tenantId)}:order`;
 
+  /** Перенос со старых ключей — до первого чтения и только пока своего нет. */
+  const ensureMigrated = (tenantId: string | null) => {
+    if (!opts.migrate) return;
+    try {
+      const storage = getStorage();
+      if (storage.get<string[]>(key(tenantId)) !== undefined) return;
+      const seed = opts.migrate(tenantId);
+      if (!seed) return;
+      if (seed.enabled) storage.set(key(tenantId), [...seed.enabled]);
+      if (seed.order) storage.set(orderKey(tenantId), [...seed.order]);
+    } catch {
+      // Перенос best-effort: без него набор просто встанет на умолчания.
+    }
+  };
+
   /** Полный порядок всех пунктов: закреплённые сверху, затем сохранённый
    *  порядок, затем всё, чего в нём ещё нет (новый способ связи в обновлении
    *  не должен исчезнуть только потому, что порядок сохранён раньше). */
   const readOrder = (tenantId: string | null): T[] => {
+    ensureMigrated(tenantId);
     let saved: T[] = [];
     try {
       const raw = getStorage().get<string[]>(orderKey(tenantId));
@@ -60,6 +84,7 @@ export function createEnabledPrefs<T extends string>(opts: {
 
   /** Включённые — В ПОРЯДКЕ ПОКАЗА. */
   const read = (tenantId: string | null): T[] => {
+    ensureMigrated(tenantId);
     const order = readOrder(tenantId);
     let enabled: T[];
     try {

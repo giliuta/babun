@@ -29,10 +29,9 @@ import {
   useCardFields,
 } from "@/features/clients/card-prefs";
 import {
-  offeredChannels,
-  useEnabledChannels,
-} from "@/features/clients/contact-channels";
-import { useEnabledContactFields } from "@/features/clients/contact-fields";
+  contactWayDef,
+  useEnabledWays,
+} from "@/features/clients/contact-ways";
 import {
   mapServicesSummary,
   useEnabledMapServices,
@@ -65,15 +64,12 @@ export default function ClientsSettingsScreen() {
     [clients, appointmentsForStats],
   );
   const tags = tagsQuery.data ?? [];
-  // Способы связи: у одного бизнеса весь Кипр в WhatsApp, у другого Viber —
-  // лишние каналы только удлиняют мини-лист на карточке.
-  const channels = useEnabledChannels();
   // Карты для маршрута: у кого-то весь навигатор — Google, и Яндекс в листе
   // только удлиняет каждый выезд (владелец 2026-08-02).
   const mapServices = useEnabledMapServices();
-  // Что предлагать в листе «Добавить» на карточке (шестерёнка в самом листе
-  // ведёт сюда). Номер телефона не отключается — он в листе всегда.
-  const contactFields = useEnabledContactFields();
+  // Чем вообще связываются с клиентом — один набор на кнопку у номера и на
+  // плюс в карточке.
+  const enabledWays = useEnabledWays();
 
   // Возврат на список с nonce-параметром — index открывает нужный шит.
   const backToList = (param: "openImport" | "openContacts") =>
@@ -136,12 +132,14 @@ export default function ClientsSettingsScreen() {
             tile={SETTINGS_TILE.green}
             icon={MessageCircle}
             title="Способы связи"
-            // Каналы перечисляем, поля — счётчиком: полный список обоих
-            // наборов в одну строку не влезает и читается как каша.
-            sub={`${offeredChannels()
-              .filter((c) => channels.includes(c.id))
-              .map((c) => c.label)
-              .join(" · ")} · в карточку ${contactFields.length}`}
+            // НАБОР ОДИН, И ПОДПИСЬ ОДНА (владелец 2026-09-04: «зачем „можно
+            // добавить в карточку“ или „у номера“ — немного странно»). Раньше
+            // строка складывала два списка — перечисление каналов и счётчик
+            // полей — и читалась как каша из двух настроек.
+            sub={enabledWays
+              .map((id) => contactWayDef(id)?.label)
+              .filter(Boolean)
+              .join(" · ")}
             onPress={() => router.push("/clients/channels")}
           />
 

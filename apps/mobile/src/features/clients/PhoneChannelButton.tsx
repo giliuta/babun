@@ -4,8 +4,8 @@ import { useRouter } from "expo-router";
 import { MessageCircle } from "lucide-react-native";
 import {
   resolveChannelsForNumber,
-  useEnabledChannels,
 } from "@/features/clients/contact-channels";
+import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { RowActionButton } from "@/components/ui/card-rows";
 import { useDefaultCountry } from "@/features/clients/default-country";
 import { useReferenceHref } from "@/features/clients/reference-href";

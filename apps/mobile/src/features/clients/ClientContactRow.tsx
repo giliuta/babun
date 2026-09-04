@@ -3,8 +3,8 @@ import type { Client, ClientNote } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
 import {
   resolveChannels,
-  useEnabledChannels,
 } from "@/features/clients/contact-channels";
+import { useEnabledChannels } from "@/features/clients/contact-ways";
 import { useMemo, useState } from "react";
 import { Linking } from "react-native";
 import { randomUuid } from "@babun/shared/sync/uuid";

@@ -1,45 +1,37 @@
 import { ToggleListScreen } from "@/components/ui/ToggleListScreen";
 import {
-  channelDef,
-  isChannelOffered,
-  useChannelsOrder,
-  useEnabledChannels,
-  useReorderChannels,
-  useToggleChannel,
-  type ChannelId,
-} from "@/features/clients/contact-channels";
-import {
-  contactFieldDef,
-  useContactFieldsOrder,
-  useEnabledContactFields,
-  useReorderContactFields,
-  useToggleContactField,
-  type ContactFieldId,
-} from "@/features/clients/contact-fields";
+  contactWayDef,
+  isWayOffered,
+  useEnabledWays,
+  useReorderWays,
+  useToggleWay,
+  useWaysOrder,
+  type ContactWayId,
+} from "@/features/clients/contact-ways";
 
-// «СПОСОБЫ СВЯЗИ» — ОДНА страница на оба списка (владелец 2026-08-02: «сделай
-// способ связи и что можно добавить в одну целую страницу — по сути это одно
-// и то же»). Разница между ними только в том, ЧТО с ними делают:
-//   • «У номера» — по чему связываются с уже записанным номером;
-//   • «Можно добавить в карточку» — что вообще заводят клиенту плюсом.
-// Оба набора включаются галкой и перетаскиваются за ручку; порядок в каждом
-// свой и виден там, где список предлагается.
+// «СПОСОБЫ СВЯЗИ» — ОДИН СПИСОК (владелец 2026-09-04: «мы можем это всё в
+// одну настройку пихнуть и совместить — зачем „можно добавить в карточку“ или
+// „у номера“, ну типа немного странно»).
+//
+// Страница держала две секции, и WhatsApp с Telegram стояли в ней ДВАЖДЫ, с
+// двумя галками: внутри продукта это два разных списка — каналы у номера и
+// поля карточки. Различие продукта, а не человека: человек думает «мы
+// работаем в WhatsApp».
+//
+// Теперь галка одна на способ, а что он умеет — сказано подписью строки:
+// «у номера», «в карточке» или обе. Правило и перенос старых настроек живут в
+// `contact-ways`.
 
 export default function ClientChannelsScreen() {
-  const order = useChannelsOrder();
-  const enabled = useEnabledChannels();
-  const toggle = useToggleChannel();
-  const reorder = useReorderChannels();
+  const order = useWaysOrder();
+  const enabled = useEnabledWays();
+  const toggle = useToggleWay();
+  const reorder = useReorderWays();
 
-  const fieldOrder = useContactFieldsOrder();
-  const fieldsEnabled = useEnabledContactFields();
-  const toggleField = useToggleContactField();
-  const reorderFields = useReorderContactFields();
-
-  const channelItems = order
-    .filter(isChannelOffered)
+  const items = order
+    .filter(isWayOffered)
     .map((id) => {
-      const def = channelDef(id);
+      const def = contactWayDef(id);
       return def
         ? {
             id: def.id,
@@ -58,40 +50,16 @@ export default function ClientChannelsScreen() {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
-  const fieldItems = fieldOrder
-    .map((id) => {
-      const def = contactFieldDef(id);
-      return def
-        ? {
-            id: def.id,
-            label: def.label,
-            icon: def.icon,
-            color: def.color,
-            checked: fieldsEnabled.includes(def.id),
-            onToggle: () => toggleField.mutate(def.id),
-          }
-        : null;
-    })
-    .filter((x): x is NonNullable<typeof x> => x !== null);
-
   return (
     <ToggleListScreen
       title="Способы связи"
-      hint="Чем связываться и что заводить клиенту"
+      hint="Чем связываться с клиентом"
       sections={[
         {
-          title: "У номера",
-          items: channelItems,
-          onReorder: (ids) => reorder.mutate(ids as ChannelId[]),
+          items,
+          onReorder: (ids) => reorder.mutate(ids as ContactWayId[]),
           footer:
-            "Появляется по кнопке связи справа от номера — в этом же порядке.",
-        },
-        {
-          title: "Можно добавить в карточку",
-          items: fieldItems,
-          onReorder: (ids) => reorderFields.mutate(ids as ContactFieldId[]),
-          footer:
-            "Предлагается по плюсу в карточке. Номер телефона — всегда, его не отключают. Уже заполненное поле остаётся на карточке, даже если способ выключен.",
+            "Появляется кнопкой связи справа от номера и предлагается по плюсу в карточке — в этом же порядке. Уже заполненное поле остаётся на карточке, даже если способ выключен.",
         },
       ]}
     />
