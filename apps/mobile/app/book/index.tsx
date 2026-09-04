@@ -2135,7 +2135,7 @@ export default function BookScreen() {
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
-                      className="flex-1 flex-row items-center px-4 py-3"
+                      className="flex-1 flex-row items-center px-4 py-2.5"
                       onPress={() => {
                         setClientPickerOpen(true);
                         haptics.tap();
@@ -2625,7 +2625,7 @@ export default function BookScreen() {
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
               <SectionCard>
-                <View className="px-4 py-3">
+                <View className="px-4 py-2.5">
                   {/* ЗАМЕТКУ НАБИРАЮТ, ВИДЯ ЕЁ. Поле стоит последним, и KAV,
                       ужимая список под клавиатуру, оставлял его под ней —
                       текст набирался вслепую (поймано 2026-09-03, когда у
@@ -2649,7 +2649,7 @@ export default function BookScreen() {
                       )
                     }
                     multiline
-                    style={{ fontSize: 15, color: t.ink, minHeight: 44 }}
+                    style={{ fontSize: 15, color: t.ink, minHeight: 36 }}
                   />
                 </View>
               </SectionCard>

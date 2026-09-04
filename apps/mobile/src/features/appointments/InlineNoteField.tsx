@@ -32,7 +32,7 @@ export function InlineNoteField({
       style={{
         marginHorizontal: 12,
         marginTop: 2,
-        marginBottom: 10,
+        marginBottom: 8,
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: t.radius.input,

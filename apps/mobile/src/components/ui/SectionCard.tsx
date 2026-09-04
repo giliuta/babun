@@ -32,7 +32,7 @@ export function SectionCard({
     <View className={`mt-2 ${className}`} style={{ marginHorizontal: GUTTER }}>
       <Card>
         {title ? (
-          <View className="flex-row items-center justify-between px-4 pb-1 pt-3">
+          <View className="flex-row items-center justify-between px-4 pb-0.5 pt-2.5">
             <Text
               accessibilityRole="header"
               // Caption tier (DS §2: 11/700/+0.6 uppercase) — same recipe as
