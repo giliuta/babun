@@ -338,8 +338,15 @@ export default function BookScreen() {
     )
       ? rawReminderId
       : null;
-  const teamsLoading = teamsQuery.isLoading;
-  const clientsLoading = clientsQuery.isLoading;
+  // «ЕЩЁ НЕТ ДАННЫХ», А НЕ «ИДЁТ ЗАПРОС». `isLoading` ложно, пока запрос
+  // выключен (роль ещё не доехала) — и эффекты дефолтов срабатывали по
+  // ПУСТОМУ списку: команда из ссылки «не находилась» и обнулялась, клиент
+  // из диплинка сбрасывался, и цепочка открывала выбор клиента поверх
+  // записи, у которой клиент был назван. Ловилось только на холодном кэше —
+  // после полной перезагрузки бандла (симулятор 2026-09-03). `isPending`
+  // истинно, пока данных нет вовсе, — ровно то, чего эффекты ждут.
+  const teamsLoading = teamsQuery.isPending;
+  const clientsLoading = clientsQuery.isPending;
 
   const catalog = useMemo(
     () => new Map(services.map((s) => [s.id, s])),
