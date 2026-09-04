@@ -133,9 +133,10 @@ import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import {
-  DocketRow,
   MoneyRow,
+  TeamLabelRow,
   TotalEditor,
+  WhenRow,
 } from "@/features/appointments/BookingSummary";
 import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
@@ -2052,7 +2053,10 @@ export default function BookScreen() {
             <>
               {/* Докет «Команда · Когда» — одна спокойная строка вместо пилюли
                   команды и карточки времени с мини-таймлайном */}
-              <DocketRow
+              {/* КТО И КУДА — одной карточкой: команда с мастером и метка
+                  этого выезда (владелец 2026-09-04: «можем совместить команду
+                  и метку в одно, а время поставить блоком ниже»). */}
+              <TeamLabelRow
                 teamName={team?.name ?? "Команда"}
                 teamColor={team?.color ?? t.accent}
                 masterName={
@@ -2060,43 +2064,37 @@ export default function BookScreen() {
                     ? masters.find((m) => m.id === masterId)?.full_name ?? null
                     : null
                 }
-                date={date}
-                timeStart={timeStart}
-                // ДЛИТЕЛЬНОСТЬ — ПО КОНЦУ ЗАПИСИ, А НЕ ПО СУММЕ УСЛУГ. Пока
-                // конец растёт сам, это одно и то же число; но конец, заданный
-                // руками в попапе, докет игнорировал и печатал «2 ч 45 мин»
-                // у записи, которая в календаре кончается через час.
-                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-                warning={workWarning}
+                label={effectiveLabel}
+                labelColor={
+                  teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
+                }
+                labelFromDay={city == null}
                 accent={identityC}
                 onEditTeam={() => {
                   setTeamSheetOpen(true);
                   haptics.tap();
                 }}
-                onEditTime={() => {
-                  setWhenOpen(true);
+                onEditLabel={() => {
+                  setLabelSheetOpen(true);
                   haptics.tap();
                 }}
               />
 
-              {/* МЕТКА ЗАПИСИ — СРАЗУ ПОД ДОКЕТОМ (владелец 2026-09-04):
-                  это про то же, про что команда и время, — где сегодня
-                  работают. «Как у дня» называет метку дня, чтобы было видно,
-                  от чего отступаешь. */}
-              <SectionCard>
-                <ValueRow
-                  label="Метка"
-                  value={
-                    city ??
-                    (dayLabel ? `Как у дня · ${dayLabel}` : "Как у дня")
-                  }
-                  muted={city == null}
-                  onPress={() => {
-                    setLabelSheetOpen(true);
-                    haptics.tap();
-                  }}
-                />
-              </SectionCard>
+              {/* КОГДА — своим блоком ниже; предупреждения о времени живут
+                  здесь же, под ним. */}
+              <WhenRow
+                date={date}
+                timeStart={timeStart}
+                // ДЛИТЕЛЬНОСТЬ — ПО КОНЦУ ЗАПИСИ, А НЕ ПО СУММЕ УСЛУГ: конец,
+                // заданный руками, докет иначе игнорировал.
+                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
+                warning={workWarning}
+                accent={identityC}
+                onPress={() => {
+                  setWhenOpen(true);
+                  haptics.tap();
+                }}
+              />
 
               {/* КЛИЕНТ — ПЕРВЫЙ БЛОК И САМ ПО СЕБЕ (владелец 2026-08-31:
                   «первый блок это выбор клиента… потом второе это объект»).
@@ -3128,9 +3126,11 @@ export default function BookScreen() {
       <LabelSheet
         visible={labelSheetOpen}
         options={teamCities.map((c) => ({ name: c.name, color: c.color ?? t.accent }))}
-        value={city}
-        dayLabel={dayLabel}
-        onPick={setCity}
+        // ВЫБРАНА ТА, ЧТО ДЕЙСТВУЕТ СЕЙЧАС — своя либо взятая у дня (владелец
+        // 2026-09-04: «открываем метку, там уже автоматически выбрана метка,
+        // и можно выбирать другие»).
+        value={effectiveLabel}
+        onPick={(next) => setCity(next)}
         onClose={() => setLabelSheetOpen(false)}
       />
       <ColorSheet

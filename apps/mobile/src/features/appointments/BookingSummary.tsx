@@ -138,35 +138,45 @@ export function TotalEditor({
   );
 }
 
-// «Докет» — одна спокойная строка «Команда · Когда», заменившая отдельную
-// пилюлю команды и карточку «Когда» с мини-таймлайном. Слева команда (тап →
-// выбор команды/мастера), справа дата·время (тап → колесо). Тонкий цветной
-// корешок слева несёт identity записи; под строкой — ОДНА янтарная строка,
-// когда есть предупреждение (пересечение ИЛИ вне графика/перерыв/буфер).
-export function DocketRow({
+// ДВА БЛОКА ВМЕСТО ОДНОГО (владелец 2026-09-04: «мы можем по сути совместить
+// команду и метку в одно, а время поставить блоком ниже — так будет лучше»).
+//
+// Верхний блок отвечает на «КТО и ГДЕ»: команда с мастером и метка этого
+// выезда — две зоны тапа в одной карточке, разделённые волоском. Нижний — на
+// «КОГДА»: дата, начало и длительность во всю ширину, и под ним единственная
+// янтарная строка предупреждения (пересечение, вне графика, буфер).
+//
+// Раньше это была одна строка «команда · когда», а метка стояла третьей
+// карточкой ниже — три разных предмета в трёх местах. Теперь порядок читается
+// сверху вниз: кто едет и куда, когда, к кому, на какой объект.
+
+/** Тонкий цветной корешок — identity записи (цвет команды либо выбранный). */
+function Spine({ color }: { color: string }) {
+  return <View style={{ width: 3, backgroundColor: color }} />;
+}
+
+export function TeamLabelRow({
   teamName,
   teamColor,
   masterName,
-  date,
-  timeStart,
-  duration,
-  allDay,
-  warning,
+  label,
+  labelColor,
+  labelFromDay,
   accent,
   onEditTeam,
-  onEditTime,
+  onEditLabel,
 }: {
   teamName: string;
   teamColor: string;
   masterName?: string | null;
-  date: string;
-  timeStart: string;
-  duration: number;
-  allDay?: boolean;
-  warning?: string | null;
+  /** Метка этого выезда: своя либо унаследованная у дня. */
+  label: string | null;
+  labelColor?: string | null;
+  /** Метка не своя, а взята у дня — читается тише, чтобы отличать. */
+  labelFromDay?: boolean;
   accent: string;
   onEditTeam: () => void;
-  onEditTime: () => void;
+  onEditLabel: () => void;
 }) {
   const t = useThemeColors();
   return (
@@ -181,15 +191,22 @@ export function DocketRow({
           overflow: "hidden",
         }}
       >
-        {/* цветной корешок = identity записи (цвет команды / выбранный цвет) */}
-        <View style={{ width: 3, backgroundColor: accent }} />
+        <Spine color={accent} />
 
-        {/* команда — тап открывает выбор команды и мастера */}
+        {/* БЕЗ className: вместе со `style`-функцией он молча съедает её
+            целиком (закон записан в `AddRow`), и `flex: 1` до половинки
+            карточки не доезжает — зона сжимается по содержимому, а текст
+            внутри неё исчезает. Раскладку держим числами здесь же. */}
         <Pressable
           onPress={onEditTeam}
-          className="flex-row items-center gap-2 py-3 pl-3.5 pr-2"
           style={({ pressed }) => ({
             flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 12,
+            paddingLeft: 14,
+            paddingRight: 8,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
@@ -197,7 +214,7 @@ export function DocketRow({
           accessibilityHint="Открывает выбор команды и мастера"
         >
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: teamColor }} />
-          <View style={{ flexShrink: 1 }}>
+          <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }} numberOfLines={1}>
               {teamName}
             </Text>
@@ -207,29 +224,113 @@ export function DocketRow({
               </Text>
             ) : null}
           </View>
-          {/* шеврон = «тап, чтобы сменить команду/мастера» */}
           <ChevronRight color={t.chevron} size={ICON.xs} />
         </Pressable>
 
-        {/* волосяной разделитель — две независимые зоны тапа в одной строке */}
         <View style={{ width: 1, marginVertical: 10, backgroundColor: t.separator }} />
 
-        {/* когда — тап открывает колесо даты/времени */}
+        {/* МЕТКА — вторая зона той же карточки: куда именно едут. Взятая у
+            дня читается тише собственной, но стоит на том же месте. */}
         <Pressable
-          onPress={onEditTime}
-          className="flex-row items-center py-3 pl-2 pr-3"
-          style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
+          onPress={onEditLabel}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingVertical: 12,
+            paddingLeft: 10,
+            paddingRight: 12,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
+          accessibilityRole="button"
+          accessibilityLabel={
+            label
+              ? `Метка: ${label}${labelFromDay ? ", как у дня" : ""}`
+              : "Метка не выбрана"
+          }
+          accessibilityHint="Открывает выбор метки"
+        >
+          <View
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: label ? labelColor ?? t.accent : t.separator,
+            }}
+          />
+          <View style={{ flex: 1 }}>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: 15,
+                fontWeight: "600",
+                color: label ? (labelFromDay ? t.body : t.ink) : t.placeholder,
+              }}
+            >
+              {label ?? "Метка"}
+            </Text>
+          </View>
+          <ChevronRight color={t.chevron} size={ICON.xs} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+export function WhenRow({
+  date,
+  timeStart,
+  duration,
+  allDay,
+  warning,
+  accent,
+  onPress,
+}: {
+  date: string;
+  timeStart: string;
+  duration: number;
+  allDay?: boolean;
+  warning?: string | null;
+  accent: string;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <View className="mx-4 mt-2">
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "stretch",
+          backgroundColor: t.surface,
+          borderRadius: t.radius.card,
+          boxShadow: t.cardShadow,
+          overflow: "hidden",
+        }}
+      >
+        <Spine color={accent} />
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            paddingVertical: 12,
+            paddingLeft: 14,
+            paddingRight: 12,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
           accessibilityRole="button"
           accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `${timeStart}, ${durationLabel(duration)}`}`}
           accessibilityHint="Открывает выбор даты и времени"
         >
-          <View style={{ alignItems: "flex-end" }}>
+          <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 12, color: t.sub }}>{humanDay(date)}</Text>
             <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink, marginTop: 1 }}>
               {allDay ? "весь день" : `${timeStart} · ${durationLabel(duration)}`}
             </Text>
           </View>
-          <ChevronRight color={t.chevron} size={ICON.sm} style={{ marginLeft: 2 }} />
+          <ChevronRight color={t.chevron} size={ICON.sm} />
         </Pressable>
       </View>
 
