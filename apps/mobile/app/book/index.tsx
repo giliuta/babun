@@ -1087,7 +1087,7 @@ export default function BookScreen() {
   // закрытие выглядело бы сломанным. Это состояние, а не ref: второе звено
   // ждёт, пока доедет прайс, а ref эффект не будит.
   const [chainStep, setChainStep] = useState<
-    "idle" | "client" | "services" | "done"
+    "idle" | "client" | "clientClosing" | "services" | "done"
   >("idle");
   const pickClient = (c: Client) => {
     // НЕ сбрасываем loyaltyAppliedRef здесь: сброс заставлял эффект принять
@@ -1130,9 +1130,18 @@ export default function BookScreen() {
     // 2026-08-31: «когда я выбираю клиента или создаю, сразу появляется
     // страница выбора услуги»). Только на СВЕЖЕЙ записи и ровно один раз:
     // человек, который вернулся сменить клиента у собранной записи, не должен
-    // получать поверх неё лист услуг. Само открытие — эффектом ниже: он
-    // знает, доехал ли прайс.
-    if (chainStep === "client") setChainStep("services");
+    // получать поверх неё лист услуг.
+    //
+    // СНАЧАЛА ЖДЁМ, ПОКА УЙДЁТ ШТОРКА КЛИЕНТА. Обе шторки — окна `Modal`, и
+    // вторая, поданная пока первая ещё уходит, не показывается вовсе: iOS
+    // отвечает «already presenting». Состояние при этом считало лист услуг
+    // открытым, и тап по «Выбрать услугу» ставил то же самое значение —
+    // экран замирал насмерть (владелец 2026-09-04: «после выбора клиента
+    // лагает, не могу нажать выбрать услугу»; ошибка найдена в системном
+    // журнале). Ждём `onExited` — тот же сигнал, что у «Добавить объект».
+    if (chainStep === "client") {
+      setChainStep(clientPickerOpen ? "clientClosing" : "services");
+    }
   };
 
   // КАРТОЧКА КЛИЕНТА ПОВЕРХ ЗАПИСИ (владелец 2026-09-04: «при тапе на клиента
@@ -3076,6 +3085,9 @@ export default function BookScreen() {
       <ClientPicker
         visible={clientPickerOpen}
         onClose={() => setClientPickerOpen(false)}
+        onExited={() => {
+          if (chainStep === "clientClosing") setChainStep("services");
+        }}
         clients={clients}
         recentIds={recentClientIds}
         onPick={(pickedClient) => {

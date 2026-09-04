@@ -138,12 +138,18 @@ function SearchField({
 export function ClientPicker({
   visible,
   onClose,
+  onExited,
   clients,
   recentIds,
   onPick,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Шторка ПОЛНОСТЬЮ ушла и её окно снято. Раньше этого момента другое
+   *  окно — вторая шторка, карточка клиента — открыть нельзя: iOS отвечает
+   *  «already presenting» и не показывает вовсе (см. `BottomSheet.onExited`).
+   *  Цепочка «клиент → услуги» ждёт именно этот сигнал. */
+  onExited?: () => void;
   clients: Client[];
   recentIds: string[];
   onPick: (client: Client) => void;
@@ -228,7 +234,13 @@ export function ClientPicker({
       onExited={() => {
         const run = afterExit.current;
         afterExit.current = null;
-        run?.();
+        // Ушли заводить клиента — цепочке услуг здесь делать нечего:
+        // она продолжится, когда человек вернётся с новым клиентом.
+        if (run) {
+          run();
+          return;
+        }
+        onExited?.();
       }}
       title="Клиент"
       padded={false}
