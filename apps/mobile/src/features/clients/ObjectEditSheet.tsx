@@ -61,6 +61,7 @@ export function ObjectEditSheet({
   locationId,
   writer,
   askDelete,
+  onDeleted,
   onClose,
 }: {
   visible: boolean;
@@ -72,6 +73,9 @@ export function ObjectEditSheet({
   writer: LocationWriter;
   /** Открыт свайпом «Удалить» — спрашиваем сразу, форму не показываем. */
   askDelete?: boolean;
+  /** Объект удалён. Экран записи по этому сигналу снимает выбор, если
+   *  выбрал именно его: иначе в запись уехал бы id удалённого объекта. */
+  onDeleted?: (id: string) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -104,6 +108,9 @@ export function ObjectEditSheet({
   // нему перезаписывал набранный адрес прямо под курсором.
   const asked = useRef(false);
   const confirmDeleteRef = useRef<() => void>(() => {});
+  /** Что сделать, когда лист полностью уйдёт (см. `onExited`). Хук стоит
+   *  ДО `if (!loc) return null`: иначе число хуков плясало между рендерами. */
+  const afterExit = useRef<(() => void) | null>(null);
   const [intervalOpen, setIntervalOpen] = useState(false);
   const [target, setTarget] = useState("");
   const [note, setNote] = useState("");
@@ -148,22 +155,40 @@ export function ObjectEditSheet({
   };
 
   const confirmDelete = () => {
-    void confirmAction("Удалить объект?", {
-      message: objectTarget(loc) || loc.label || "Объект",
-      confirmLabel: "Удалить",
-      destructive: true,
-    }).then((ok) => {
-      if (ok) {
-        haptics.warning();
-        void writer.removeLocation(loc.id);
-      } else {
-        // Без этого отказ оставлял лист открытым (askDelete рисует null —
-        // экран выглядел обычным), а `asked` — взведённым: красная кнопка
-        // «Удалить» на ВСЕХ объектах после одного отказа молчала.
-        asked.current = false;
-      }
-      onClose();
-    });
+    const target = loc;
+    const ask = () =>
+      confirmAction("Удалить объект?", {
+        message: objectTarget(target) || target.label || "Объект",
+        confirmLabel: "Удалить",
+        destructive: true,
+      }).then((ok) => {
+        if (ok) {
+          haptics.warning();
+          void writer.removeLocation(target.id);
+          onDeleted?.(target.id);
+        } else {
+          // Без этого отказ оставлял лист открытым (askDelete рисует null —
+          // экран выглядел обычным), а `asked` — взведённым: красная кнопка
+          // «Удалить» на ВСЕХ объектах после одного отказа молчала.
+          asked.current = false;
+        }
+      });
+    // Со свайпа лист не нарисован (`askDelete` → null): спрашиваем сразу и
+    // закрываем по ответу, как было.
+    if (askDelete) {
+      void ask().then(() => onClose());
+      return;
+    }
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
+    // рисует хост приложения, а лист — отдельное окно `Modal`, и вопрос
+    // честно появлялся ПОД ним: «Удалить объект» из строки листа молчала, и
+    // на карточке, и в записи. Сперва уезжаем — с набранным, как при любом
+    // закрытии, — и спрашиваем, когда окно листа СНЯТО (`onExited`): таймер
+    // по анимации здесь не успевал, iOS отвечал «already presenting».
+    afterExit.current = () => void ask();
+    commitTarget();
+    commitNote();
+    onClose();
   };
   confirmDeleteRef.current = confirmDelete;
 
@@ -181,6 +206,11 @@ export function ObjectEditSheet({
         commitTarget();
         commitNote();
         onClose();
+      }}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
       }}
       avoidKeyboard
     >
