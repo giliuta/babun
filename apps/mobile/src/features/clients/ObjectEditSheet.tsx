@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Pressable,
   ScrollView,
-  Text,
   TextInput,
   View,
 } from "react-native";
@@ -10,6 +8,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
 import { useLastNonNull } from "@/lib/use-last-non-null";
 import {
   ActionRow,
@@ -207,17 +206,9 @@ export function ObjectEditSheet({
         afterExit.current = null;
         run?.();
       }}
+      title="Объект"
       avoidKeyboard
     >
-      <View style={{ alignItems: "center", paddingTop: 8, paddingBottom: 4 }}>
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-        >
-          Объект
-        </Text>
-      </View>
 
       <ScrollView
         style={{ flexShrink: 1 }}
@@ -289,8 +280,13 @@ export function ObjectEditSheet({
           </View>
         </RowGroup>
 
-        <RowGroup>
-          {!loc.isPrimary ? (
+        {/* «УДАЛИТЬ ОБЪЕКТ» СТРОКОЙ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-04:
+            «удалить объект так нельзя — это свайп вправо удалить, как
+            стандартно в архитектуре»). Разрушительное живёт на кромке строки
+            объекта в карточке и там же переспрашивает; `confirmDelete` цел —
+            именно его зовёт свайп, приходя сюда с `askDelete`. */}
+        {!loc.isPrimary ? (
+          <RowGroup>
             <ActionRow
               label="Сделать основным"
               onPress={() => {
@@ -298,14 +294,8 @@ export function ObjectEditSheet({
                 void writer.makePrimary(loc.id);
               }}
             />
-          ) : null}
-          <ActionRow
-            label="Удалить объект"
-            tone="danger"
-            separated={!loc.isPrimary}
-            onPress={confirmDelete}
-          />
-        </RowGroup>
+          </RowGroup>
+        ) : null}
       </ScrollView>
 
       <View
@@ -318,32 +308,19 @@ export function ObjectEditSheet({
           backgroundColor: t.surface,
         }}
       >
-        <Pressable
+        {/* ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ И КАРТОЧКИ — «Применить» (владелец
+            2026-09-04). Кнопка была собрана руками; теперь это канонический
+            `Button`, как в листах метки, команды, цвета и времени. */}
+        <Button
+          label="Применить"
           onPress={() => {
-            // Набранное могло не успеть закоммититься, если «Готово» нажали,
+            // Набранное могло не успеть закоммититься, если кнопку нажали,
             // не уходя с поля.
             commitTarget();
             commitNote();
             onClose();
           }}
-          accessibilityRole="button"
-          accessibilityLabel="Готово"
-          style={({ pressed }) => ({
-            minHeight: 50,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: t.radius.input,
-            backgroundColor: t.accent,
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 17, fontWeight: "600", color: t.onAccent }}
-          >
-            Готово
-          </Text>
-        </Pressable>
+        />
       </View>
 
       {/* «ОБСЛУЖИВАНИЕ» СНЕСЕНО 2026-09-04. Строка спрашивала, как часто сюда
