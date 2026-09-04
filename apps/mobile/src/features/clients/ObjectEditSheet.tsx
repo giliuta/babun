@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { RotateCcw, X } from "lucide-react-native";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -80,6 +80,15 @@ export function ObjectEditSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  // КУДА ВЕДЁТ ШЕСТЕРЁНКА, РЕШАЕТ МАРШРУТ. Справочник типов живёт во вкладке
+  // «Клиенты», и открытый оттуда из ЗАПИСИ он кладёт поверх неё вторую копию
+  // табов: «назад» приводит на список клиентов, а запись с набранным
+  // исчезает (владелец 2026-09-04). Из записи ведём в её собственный
+  // сиблинг-маршрут — `/book/object-types`, тот же экран.
+  const pathname = usePathname();
+  const typesHref = pathname.startsWith("/book")
+    ? "/book/object-types"
+    : "/clients/object-types";
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
 
@@ -242,7 +251,7 @@ export function ObjectEditSheet({
               commitTarget();
               commitNote();
               onClose();
-              router.push("/clients/object-types");
+              router.push(typesHref);
             }}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
