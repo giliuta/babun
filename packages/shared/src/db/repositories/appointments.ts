@@ -86,6 +86,7 @@ export function rowToAppointment(r: Row): Appointment {
       r.service_price_overrides,
     ),
     color_override: r.color_override,
+    city: r.city ?? null,
     prepaid_amount: Number(r.prepaid_amount ?? 0),
     // v-W4 — mirror payment columns. The server income trigger fires on
     // status='completed' AND payment_status='paid'; the mobile «Завершена
@@ -198,6 +199,7 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     is_online_booking: a.is_online_booking,
     consent_given: a.consent_given,
     color_override: a.color_override,
+    city: a.city ?? null,
     reminder_enabled: a.reminder_enabled,
     reminder_offsets: (a.reminder_offsets ?? []) as unknown as Json,
     reminder_template: a.reminder_template,
@@ -273,6 +275,7 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
   if (patch.consent_given !== undefined) out.consent_given = patch.consent_given;
   if (patch.color_override !== undefined)
     out.color_override = patch.color_override;
+  if (patch.city !== undefined) out.city = patch.city;
   if (patch.reminder_enabled !== undefined)
     out.reminder_enabled = patch.reminder_enabled;
   if (patch.reminder_template !== undefined)

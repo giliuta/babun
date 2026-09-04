@@ -483,6 +483,7 @@ function makeServerRow(
     is_online_booking: input.is_online_booking ?? false,
     consent_given: input.consent_given ?? true,
     color_override: input.color_override ?? null,
+    city: input.city ?? null,
     reminder_enabled: input.reminder_enabled ?? false,
     reminder_offsets: (input.reminder_offsets ?? []) as unknown as CachedAppointment["reminder_offsets"],
     reminder_template: input.reminder_template ?? "",
@@ -543,6 +544,7 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.is_online_booking !== undefined) out.is_online_booking = patch.is_online_booking;
   if (patch.consent_given !== undefined) out.consent_given = patch.consent_given;
   if (patch.color_override !== undefined) out.color_override = patch.color_override;
+  if (patch.city !== undefined) out.city = patch.city;
   if (patch.reminder_enabled !== undefined) out.reminder_enabled = patch.reminder_enabled;
   if (patch.reminder_offsets !== undefined) out.reminder_offsets = patch.reminder_offsets as unknown as CachedAppointment["reminder_offsets"];
   if (patch.reminder_template !== undefined) out.reminder_template = patch.reminder_template;

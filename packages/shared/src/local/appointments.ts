@@ -161,6 +161,10 @@ export interface Appointment {
   expenses: AppointmentExpense[]; // расходы по записи (материалы, транспорт и т.п.)
   service_price_overrides: Record<string, number>; // id → per-unit цена, если переопределена
   color_override: string | null; // hex — персональный цвет записи/события (палитра)
+  /** МЕТКА ЭТОЙ ЗАПИСИ (владелец 2026-09-04). `null` — «как у дня»: запись
+   *  берёт метку дня команды и переезжает вместе с ней. Строка — своя метка
+   *  именно этой работы: день в Лимассоле, а последний клиент в Пафосе. */
+  city: string | null;
   prepaid_amount: number; // аванс / предоплата
   payments: Payment[]; // legacy массив платежей — постепенно вытесняется payment-объектом
   /** STORY-002-FINAL: единый объект оплаты. Заполняется при
@@ -352,6 +356,7 @@ export function createBlankAppointment(overrides: Partial<Appointment> = {}): Ap
     expenses: [],
     service_price_overrides: {},
     color_override: null,
+    city: null,
     prepaid_amount: 0,
     payments: [],
     payment: null,

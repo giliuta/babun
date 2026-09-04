@@ -130,6 +130,7 @@ export function useCreateAppointment() {
           clientId: input.client_id,
           teamId: input.team_id,
           date: input.date,
+          city: input.city ?? null,
         });
       }
     },
@@ -243,6 +244,9 @@ export function useUpdateAppointment() {
             clientId: current.client_id,
             teamId: current.team_id,
             date: current.date,
+            // Метка правленой записи — из свежего патча, а не из снимка до
+            // правки: сменил метку записи, клиент запоминает новую.
+            city: patch.city !== undefined ? patch.city : current.city,
           });
         }
       }

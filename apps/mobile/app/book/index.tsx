@@ -52,6 +52,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
+import { LabelSheet } from "@/features/appointments/LabelSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
@@ -106,7 +107,7 @@ import {
   useServices,
   type Service,
 } from "@/features/services/queries";
-import { useMasters, useTeams } from "@/features/reference/queries";
+import { useCities, useMasters, useTeams } from "@/features/reference/queries";
 import { effectiveBuffer } from "@/features/calendar/setting-options";
 import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
@@ -413,6 +414,8 @@ export default function BookScreen() {
     first(params.teamId) ?? null,
   );
   const teamScheduleQuery = useTeamSchedule(teamId ?? undefined);
+  // Метки принадлежат команде — те же, что предлагаются её дню.
+  const { data: teamCities = [] } = useCities({ teamId });
   const [masterId, setMasterId] = useState<string | null>(null);
   const [locationId, setLocationId] = useState<string | null>(
     first(params.locationId) ?? null,
@@ -487,6 +490,9 @@ export default function BookScreen() {
   // правка выбранного объекта — кружком «…» в его строке (2026-09-04).
   const [objectPicker, setObjectPicker] = useState(false);
   const [objectEdit, setObjectEdit] = useState(false);
+  // Метка ЭТОЙ записи: null — «как у дня» (владелец 2026-09-04).
+  const [city, setCity] = useState<string | null>(null);
+  const [labelSheetOpen, setLabelSheetOpen] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -636,12 +642,17 @@ export default function BookScreen() {
   // куда и всегда» — это шум, который научит не читать плашки вовсе.
   const clientLabel = (client?.city ?? "").trim();
   const dayLabel = resolveDayLabel(dayCities, teamId, date);
+  // ЧТО НА САМОМ ДЕЛЕ У ЭТОЙ РАБОТЫ: своя метка сильнее метки дня. Ею же
+  // судится расхождение с меткой клиента — иначе продукт спорил бы сам с
+  // собой: поставил записи «Пафос» под клиента, а плашка всё равно ругается
+  // на «Лимассол» дня.
+  const effectiveLabel = city ?? dayLabel;
   const labelClash = useMemo(
     () =>
-      clientLabel !== "" && dayLabel !== null && dayLabel !== clientLabel
-        ? { client: clientLabel, day: dayLabel }
+      clientLabel !== "" && effectiveLabel !== null && effectiveLabel !== clientLabel
+        ? { client: clientLabel, day: effectiveLabel }
         : null,
-    [clientLabel, dayLabel],
+    [clientLabel, effectiveLabel],
   );
   // Показываем ОДИН раз на пару «клиент + день», а не на каждый рендер:
   // плашка, выезжающая от каждого касания формы, читается как поломка.
@@ -757,6 +768,7 @@ export default function BookScreen() {
     setStatus(editing.status);
     setReminderOn(editing.reminder_enabled);
     setColorOverride(editing.color_override ?? null);
+    setCity(editing.city ?? null);
     setPrepayDraft(
       (editing.prepaid_amount ?? 0) > 0 ? String(editing.prepaid_amount) : "",
     );
@@ -1385,6 +1397,8 @@ export default function BookScreen() {
           : null,
       address: address.trim(),
       color_override: colorOverride,
+      // Метка записи: null — «как у дня», строка — своя.
+      city,
       global_discount: globalDiscount,
       discount_amount: discountAmount,
       prepaid_amount: prepay,
@@ -2064,6 +2078,25 @@ export default function BookScreen() {
                   haptics.tap();
                 }}
               />
+
+              {/* МЕТКА ЗАПИСИ — СРАЗУ ПОД ДОКЕТОМ (владелец 2026-09-04):
+                  это про то же, про что команда и время, — где сегодня
+                  работают. «Как у дня» называет метку дня, чтобы было видно,
+                  от чего отступаешь. */}
+              <SectionCard>
+                <ValueRow
+                  label="Метка"
+                  value={
+                    city ??
+                    (dayLabel ? `Как у дня · ${dayLabel}` : "Как у дня")
+                  }
+                  muted={city == null}
+                  onPress={() => {
+                    setLabelSheetOpen(true);
+                    haptics.tap();
+                  }}
+                />
+              </SectionCard>
 
               {/* КЛИЕНТ — ПЕРВЫЙ БЛОК И САМ ПО СЕБЕ (владелец 2026-08-31:
                   «первый блок это выбор клиента… потом второе это объект»).
@@ -3091,6 +3124,14 @@ export default function BookScreen() {
           setMasterId(id);
           haptics.tap();
         }}
+      />
+      <LabelSheet
+        visible={labelSheetOpen}
+        options={teamCities.map((c) => ({ name: c.name, color: c.color ?? t.accent }))}
+        value={city}
+        dayLabel={dayLabel}
+        onPick={setCity}
+        onClose={() => setLabelSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}

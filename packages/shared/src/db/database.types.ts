@@ -333,6 +333,7 @@ export type Database = {
           address_lng: number | null
           address_note: string
           cancel_reason: string | null
+          city: string | null
           client_id: string | null
           color_override: string | null
           comment: string
@@ -385,6 +386,7 @@ export type Database = {
           address_lng?: number | null
           address_note?: string
           cancel_reason?: string | null
+          city?: string | null
           client_id?: string | null
           color_override?: string | null
           comment?: string
@@ -437,6 +439,7 @@ export type Database = {
           address_lng?: number | null
           address_note?: string
           cancel_reason?: string | null
+          city?: string | null
           client_id?: string | null
           color_override?: string | null
           comment?: string

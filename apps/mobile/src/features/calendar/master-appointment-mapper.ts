@@ -162,6 +162,11 @@ export function masterAppointmentJsonToAppointment(value: Json): Appointment {
     global_discount: null,
     total_duration: numberField(row, "total_duration"),
     color_override: nullableStringField(row, "color_override"),
+    // МЕТКА ЗАПИСИ ЧИТАЕТСЯ МЯГКО. Бригадная проекция — отдельная серверная
+    // функция, и колонка `city` появилась позже неё: пока RPC не обновят,
+    // ключа в ответе просто нет, а строгое чтение роняло бы весь наряд
+    // («Сервер вернул некорректную заявку»). Отсутствует — значит «как у дня».
+    city: typeof row.city === "string" ? row.city : null,
     comment: stringField(row, "comment"),
     address: stringField(row, "address"),
     address_note: stringField(row, "address_note"),
