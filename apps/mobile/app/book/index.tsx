@@ -52,6 +52,7 @@ import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
+import { applyNoteEdit } from "@/features/appointments/client-note-journal";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -601,13 +602,16 @@ export default function BookScreen() {
   // хранит новые первыми, но сортируем по дате: порядок массива — не закон.
   // Импортированный `comment` (CSV) — та же заметка, показываем, если
   // журнала ещё нет (как на карточке).
-  const latestClientNote = useMemo(() => {
-    if (!client) return "";
+  const latestClientNoteEntry = useMemo(() => {
+    if (!client) return null;
     const newest = [...(client.notes ?? [])].sort((a, b) =>
       b.created_at.localeCompare(a.created_at),
     )[0];
-    return newest?.text ?? (client.comment ?? "").trim();
+    if (newest) return { id: newest.id, text: newest.text };
+    const imported = (client.comment ?? "").trim();
+    return imported ? { id: null, text: imported } : null;
   }, [client]);
+  const latestClientNote = latestClientNoteEntry?.text ?? "";
 
   // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
   //
@@ -1180,6 +1184,7 @@ export default function BookScreen() {
   const locationWriter = useLocationWriter(
     client?.locations ?? EMPTY_LOCATIONS,
     updateClientPatch,
+    clientId,
   );
 
   // ═══ ЗАМЕТКА КЛИЕНТА И ЗАМЕТКА ОБЪЕКТА — ПОЛЯМИ ПРЯМО В ФОРМЕ ═══
@@ -1194,36 +1199,51 @@ export default function BookScreen() {
   // журнал; поле здесь правит его последнюю запись на месте, а пустому
   // журналу заводит первую. Стёрли поле — последняя запись уходит. Журнал
   // пишется тем же писателем «свежайший массив + очередь», что и на карточке.
+  // Импортированная заметка (`comment` из CSV) при первой правке переезжает
+  // в журнал — ОДНИМ патчем вместе с журналом, как на карточке чистит её «✕».
+  // Два патча подряд (журнал и отдельно comment) в офлайн-кэше затирали друг
+  // другу колонку (ревью 2026-09-04).
+  const migrateImportedComment =
+    !!client &&
+    (client.notes ?? []).length === 0 &&
+    (client.comment ?? "").trim() !== "";
   const notesWriter = useJsonArrayWriter<ClientNote>(
     client?.notes ?? EMPTY_NOTES,
-    (next) => updateClientPatch({ notes: next }),
+    (next) =>
+      updateClientPatch(
+        migrateImportedComment ? { notes: next, comment: "" } : { notes: next },
+      ),
+    clientId,
   );
-  const writeClientNote = (next: string) => {
+  // Поле привязано к КОНКРЕТНОЙ записи журнала (ключ — её id): стёр — снялась
+  // именно она; набрал заново после стирания — родилась новая, а не
+  // переписалась соседняя. Ключ `null` — записи ещё нет.
+  const writeClientNote = (next: string, boundId: string | null) => {
     if (!client) return;
-    const importedOnly =
-      (client.notes ?? []).length === 0 && (client.comment ?? "").trim() !== "";
+    let createdId: string | null = null;
     void notesWriter.apply((all) => {
-      const head = [...all].sort((a, b) =>
-        b.created_at.localeCompare(a.created_at),
-      )[0];
-      if (!next) return head ? all.filter((n) => n.id !== head.id) : all;
-      if (head) return all.map((n) => (n.id === head.id ? { ...n, text: next } : n));
-      return [
-        { id: randomUuid(), text: next, created_at: new Date().toISOString() },
-        ...all,
-      ];
+      const edited = applyNoteEdit(all, next, boundId, () => ({
+        id: randomUuid(),
+        created_at: new Date().toISOString(),
+      }));
+      createdId = edited.createdId;
+      return edited.notes;
     });
-    // Импортированная заметка при первой правке переезжает в журнал — как на
-    // карточке, где «✕» у неё чистит `comment`.
-    if (importedOnly) void updateClientPatch({ comment: "" });
+    return createdId ?? undefined;
   };
-  const writeObjectNote = (next: string) => {
-    if (!locationId) return;
-    void locationWriter.patchLocation(locationId, { note: next || undefined });
+  const writeObjectNote = (next: string, boundId: string | null) => {
+    if (!boundId) return;
+    void locationWriter.patchLocation(boundId, { note: next || undefined });
   };
-  const clientNote = useInlineNote(latestClientNote, writeClientNote, clientId);
-  const objectNote = useInlineNote(
+  const clientNote = useInlineNote<string | null>(
+    latestClientNote,
+    latestClientNoteEntry?.id ?? null,
+    writeClientNote,
+    clientId,
+  );
+  const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
+    locationId,
     writeObjectNote,
     locationId,
   );
@@ -1646,8 +1666,13 @@ export default function BookScreen() {
     editBaselineRef.current = editSignature;
   }, [isEdit, editSignature]);
 
+  // Заметки клиента и объекта — тоже «введённое»: диалог «Введённое не
+  // сохранится» обязан говорить правду, поэтому их черновики считаются здесь
+  // и выбрасываются по явному «Закрыть» (см. `discardNotes`).
+  const notesDirty = clientNote.dirty || objectNote.dirty;
   const dirty = isEdit
-    ? editBaselineRef.current != null && editSignature !== editBaselineRef.current
+    ? notesDirty ||
+      (editBaselineRef.current != null && editSignature !== editBaselineRef.current)
     // Сравнение вида с исходным ушло вместе с переключателем: менять вид
     // внутри формы больше нечем, и при создании `kind !== initialKind`
     // ложно всегда.
@@ -1673,7 +1698,12 @@ export default function BookScreen() {
         prepay > 0 ||
         colorOverride != null ||
         dateTouchedRef.current ||
-        durationTouched);
+        durationTouched ||
+        notesDirty);
+  const discardNotes = () => {
+    clientNote.discard();
+    objectNote.discard();
+  };
   const confirmDiscard = (onDiscard: () => void) => {
     confirmThen(
       "Закрыть без сохранения?",
@@ -1682,7 +1712,10 @@ export default function BookScreen() {
         confirmLabel: "Закрыть",
         destructive: true,
       },
-      onDiscard,
+      () => {
+        discardNotes();
+        onDiscard();
+      },
     );
   };
   const requestClose = () => {
@@ -2098,6 +2131,7 @@ export default function BookScreen() {
                     note={clientNote}
                     placeholder="Заметка клиента"
                     accessibilityLabel="Заметка клиента"
+                    maxLength={500}
                   />
                 ) : null}
               </SectionCard>

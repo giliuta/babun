@@ -15,10 +15,16 @@ export function InlineNoteField({
   note,
   placeholder,
   accessibilityLabel,
+  maxLength,
 }: {
-  note: ReturnType<typeof useInlineNote>;
+  note: Pick<
+    ReturnType<typeof useInlineNote<unknown>>,
+    "draft" | "setDraft" | "onFocus" | "onBlur"
+  >;
   placeholder: string;
   accessibilityLabel: string;
+  /** Тот же предел, что у композера на карточке (500 у заметки клиента). */
+  maxLength?: number;
 }) {
   const t = useThemeColors();
   return (
@@ -44,6 +50,7 @@ export function InlineNoteField({
         placeholderTextColor={t.placeholder}
         selectionColor={t.accent}
         multiline
+        maxLength={maxLength}
         maxFontSizeMultiplier={1.3}
         style={{
           minHeight: 18,
