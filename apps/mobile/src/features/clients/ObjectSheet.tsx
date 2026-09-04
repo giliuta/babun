@@ -9,19 +9,16 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
-import type { Client, Location } from "@babun/shared/local/clients";
+import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
   ChoiceRow,
   FieldRow,
-  RowActionButton,
   RowGroup,
 } from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   addressOrLinkPatch,
-  objectTarget,
 } from "@/features/clients/object-address";
 import {
   defaultObjectType,
@@ -64,7 +61,6 @@ import { useThemeColors } from "@/theme/colors";
 
 /** Стабильная пустая ссылка: новый литерал в пропе писателя пересобирал бы
  *  его на каждый рендер. */
-const EMPTY_LOCATIONS: Location[] = [];
 
 interface Draft {
   label: string;
@@ -83,7 +79,6 @@ export function ObjectSheet({
   writer,
   initialTarget,
   onAdded,
-  onRemoved,
   onClose,
 }: {
   visible: boolean;
@@ -105,7 +100,6 @@ export function ObjectSheet({
   }) => void;
   /** Только что добавленный объект убрали «✕». Экран записи по этому сигналу
    *  снимает выбор, если выбрал именно его: иначе id висел бы на удалённом. */
-  onRemoved?: (id: string) => void;
   onClose: () => void;
 }) {
   const t = useThemeColors();
@@ -121,10 +115,6 @@ export function ObjectSheet({
   const [saving, setSaving] = useState(false);
   /** Идёт запись (добавление или отмена) — синхронно, в отличие от `saving`. */
   const busy = useRef(false);
-  // Добавленные в ЭТОМ листе — только их можно отменить одним тапом.
-  const [addedIds, setAddedIds] = useState<string[]>([]);
-
-  const objects = client.locations ?? EMPTY_LOCATIONS;
 
   // Предзаполнение — РОВНО ОДИН РАЗ на открытие и только в пустой черновик:
   // лист остаётся смонтированным, и без засова подстановка перетирала бы то,
@@ -180,16 +170,16 @@ export function ObjectSheet({
         return false;
       }
       haptics.success();
-      setAddedIds((cur) => [...cur, id]);
       onAdded?.({ id, label: snapObjectType(type, typeOptions), address, mapUrl, note: draft.note.trim() || undefined });
-      // Форма пустеет, но ВЫБРАННЫЙ ТИП остаётся: три виллы подряд не должны
-      // требовать трёх тапов по чипу, а предзаполнение от основного объекта
-      // возвращало «Дом». Клавиатура тоже остаётся — следующий адрес набирают
-      // сразу, кнопка живёт в футере и фокус не отбирает.
+      // ДОБАВИЛ — ЛИСТ УХОДИТ (владелец 2026-09-04: «когда я добавил объект,
+      // он уже должен закрываться и перекидывать на саму запись»). Раньше лист
+      // оставался открытым под следующий объект, а добавленный уезжал в
+      // список «Уже есть» — экран отвечал на действие не тем, чего от него
+      // ждали: работа сделана, а лист стоит. Второй объект заводят вторым
+      // открытием, как и всё остальное в продукте.
       setDraft((d) => ({ ...EMPTY_DRAFT, label: d.label }));
-      // Анонс — не в тот же кадр: у сфокусированной кнопки прямо сейчас
-      // меняется состояние на «выключена», и VoiceOver перебивает сам себя
-      // (тот же приём, что в листе фильтров).
+      // Анонс — не в тот же кадр: лист уже уходит, и VoiceOver перебивал бы
+      // сам себя (тот же приём, что в листе фильтров).
       setTimeout(
         () =>
           AccessibilityInfo.announceForAccessibility(
@@ -197,6 +187,7 @@ export function ObjectSheet({
           ),
         350,
       );
+      close();
       return true;
     } finally {
       busy.current = false;
@@ -204,28 +195,11 @@ export function ObjectSheet({
     }
   };
 
-  const undo = async (loc: Location) => {
-    if (busy.current) return;
-    busy.current = true;
-    haptics.tap();
-    try {
-      const ok = await writer.removeLocation(loc.id);
-      if (ok) {
-        setAddedIds((cur) => cur.filter((id) => id !== loc.id));
-        onRemoved?.(loc.id);
-      }
-    } finally {
-      busy.current = false;
-    }
-  };
-
   // Закрытие скримом или свайпом НЕ выбрасывает набранное: спросить там
   // нечего, а правило карточки — «набранное не теряем молча». Черновик
   // доживёт до следующего открытия (лист остаётся смонтированным), так что
-  // работа продолжится с того же места. Сбрасываем только окно отмены: убрать
-  // одним тапом можно то, что добавил ТОЛЬКО ЧТО.
+  // работа продолжится с того же места.
   const close = () => {
-    setAddedIds([]);
     onClose();
   };
 
@@ -253,21 +227,14 @@ export function ObjectSheet({
         contentContainerStyle={{ paddingBottom: 12 }}
         keyboardShouldPersistTaps="handled"
       >
-        {objects.length > 0 ? (
-          <RowGroup title={`Уже есть · ${objects.length}`}>
-            {objects.map((loc, i) => (
-              <ObjectListRow
-                key={loc.id}
-                label={loc.label || "Объект"}
-                target={objectTarget(loc) || "адрес не указан"}
-                muted={!objectTarget(loc)}
-                separated={i > 0}
-                onUndo={addedIds.includes(loc.id) ? () => void undo(loc) : undefined}
-              />
-            ))}
-          </RowGroup>
-        ) : null}
-
+        {/* СПИСКА «УЖЕ ЕСТЬ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-04: «зачем мне
+            этот мини-блок — добавил объект, он уехал вверх „уже есть“, а лист
+            по сути не закрылся»). Он держался на том, что лист оставался
+            открытым под следующий объект, и на крестике отмены — а крестик
+            вдобавок спорил с законом свайпа: удаляют смахиванием, а не
+            кнопкой в строке. Лист теперь уходит сразу после добавления, и
+            показывать в нём чужие строки незачем: заведённые объекты видно
+            там, откуда лист открыли. */}
         <RowGroup title="Новый объект">
           <ChoiceRow
             label="Тип объекта"
@@ -388,65 +355,3 @@ export function ObjectSheet({
 /** Строка уже заведённого объекта: тип и «куда ехать». Двери в объект здесь
  *  нет намеренно (шеврон обещал бы страницу) — только отмена своего же
  *  добавления. */
-function ObjectListRow({
-  label,
-  target,
-  muted,
-  separated,
-  onUndo,
-}: {
-  label: string;
-  target: string;
-  muted?: boolean;
-  separated?: boolean;
-  onUndo?: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-      }}
-    >
-      {/* Тип и «куда ехать» — ОДИН элемент для VoiceOver: двумя текстами
-          связь между ними теряется, а свайпов до формы становится вдвое
-          больше. Кнопка отмены остаётся СНАРУЖИ (иначе склеится со строкой). */}
-      <View
-        accessible
-        accessibilityLabel={`${label}: ${target}`}
-        style={{ flex: 1 }}
-      >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {label}
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ fontSize: 13, color: muted ? t.faint : t.sub }}
-        >
-          {target}
-        </Text>
-      </View>
-      {onUndo ? (
-        <RowActionButton
-          icon={X}
-          color={t.danger}
-          label={`Убрать объект ${label}`}
-          hint="Отменяет только что добавленный объект"
-          onPress={onUndo}
-        />
-      ) : null}
-    </View>
-  );
-}

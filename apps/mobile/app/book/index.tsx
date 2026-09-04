@@ -3004,7 +3004,6 @@ export default function BookScreen() {
             setAddress(locationAddressForBooking(added));
             toast("Объект сохранён");
           }}
-          onRemoved={forgetLocation}
           onClose={() => setObjectSheet(false)}
         />
       ) : null}
