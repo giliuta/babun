@@ -1688,11 +1688,20 @@ export default function BookScreen() {
   const editSignature = isEdit ? JSON.stringify(buildPatch()) : "";
   const editBaselineRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isEdit || !editHydrated.current || editBaselineRef.current != null) {
+    // ФЛАГ СОСТОЯНИЯ, А НЕ REF — ТА ЖЕ ПРИЧИНА, ЧТО У `hydrated` ВЫШЕ.
+    // `editHydrated` выставляется синхронно внутри гидрации, поэтому этот
+    // эффект отрабатывал в ТОМ ЖЕ коммите и снимал «как было» с ПУСТОЙ формы:
+    // сегодняшняя дата, 10:00, ни клиента, ни услуг. Дальше запись ложилась в
+    // состояние, подпись расходилась со снимком — и всякая открытая запись
+    // считалась изменённой. «Отмена» спрашивала «Закрыть без сохранения?» у
+    // того, кто ничего не трогал, то есть диалог врал ровно там, где обязан
+    // говорить правду. `hydrated` переключается со следующим рендером — когда
+    // значения записи УЖЕ в состоянии.
+    if (!isEdit || !hydrated || editBaselineRef.current != null) {
       return;
     }
     editBaselineRef.current = editSignature;
-  }, [isEdit, editSignature]);
+  }, [isEdit, hydrated, editSignature]);
 
   // Заметки клиента и объекта — тоже «введённое»: диалог «Введённое не
   // сохранится» обязан говорить правду, поэтому их черновики считаются здесь
