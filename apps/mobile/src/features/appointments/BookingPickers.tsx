@@ -8,7 +8,7 @@ import {
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import { Check, Search, UserRound, X } from "lucide-react-native";
+import { Search, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
@@ -546,9 +546,7 @@ export function ServicePicker({
                     unit={s.unit ?? null}
                     onPress={() => onQtyChange(s.id, (qty ?? 1) - 1)}
                   />
-                ) : (
-                  <Check color={t.separator} size={ICON.md} />
-                )}
+                ) : null}
               </Pressable>
             );
           })
