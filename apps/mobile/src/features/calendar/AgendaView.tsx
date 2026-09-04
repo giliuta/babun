@@ -7,6 +7,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
 // Agenda («Список») — web AgendaView parity: chronological feed of upcoming
@@ -61,6 +62,7 @@ export function AgendaView({
 }) {
   const t = useThemeColors();
   return (
+    <View style={{ flex: 1 }}>
     <FlatList
       style={{ flex: 1 }}
       data={sections}
@@ -97,14 +99,22 @@ export function AgendaView({
           fill
           title="Записей не запланировано"
           subtitle={`Ближайшие ${horizonDays} дней пусты`}
-          action={
-            onCreateNew
-              ? { label: "Создать запись", onPress: onCreateNew }
-              : undefined
-          }
         />
       }
     />
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ, КАК ВЕЗДЕ (владелец 2026-09-04: «кнопка
+          должна быть в нашу архитектуру; внизу должна быть просто „Создать
+          запись“… это только на странице списка»). Пилюля посередине пустого
+          экрана была своей кнопкой в своём месте и жила только в пустоте — с
+          первой же записью создавать из списка становилось нечем. В сетке
+          такой кнопки нет и не нужно: там запись заводят тапом по слоту, а в
+          ленте слотов нет. */}
+      {onCreateNew ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 }}>
+          <GradientButton label="Создать запись" onPress={onCreateNew} />
+        </View>
+      ) : null}
+    </View>
   );
 }
 
