@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   Pressable,
   Text,
   View,
@@ -77,13 +75,6 @@ function formatDateRu(dateKey: string): string {
 // «31 августа – 6 сентября»: число с месяцем стоит в родительном падеже,
 // как в подписи даты выше. Именительный («31 АВГУСТ») читался как опечатка
 // (находка Б1 аудита STORY-064).
-function formatWeekRange(monday: Date): string {
-  const sunday = addDays(monday, 6);
-  if (monday.getMonth() === sunday.getMonth()) {
-    return `${monday.getDate()}–${sunday.getDate()} ${MONTHS_GEN[sunday.getMonth()]}`;
-  }
-  return `${monday.getDate()} ${MONTHS_GEN[monday.getMonth()]} – ${sunday.getDate()} ${MONTHS_GEN[sunday.getMonth()]}`;
-}
 
 interface Draft {
   date: string;
@@ -120,7 +111,7 @@ export function WhenSheet({
     allDay: allowAllDay && allDay,
   });
   const [anchorKey, setAnchorKey] = useState(date);
-  const [pageIndex, setPageIndex] = useState(WEEKS_BACK);
+
   const [pageWidth, setPageWidth] = useState(0);
   const preAllDayRef = useRef<{ start: string; end: string } | null>(null);
   const listRef = useRef<FlatList>(null);
@@ -130,7 +121,6 @@ export function WhenSheet({
     const effectiveAllDay = allowAllDay && allDay;
     setDraft({ date, timeStart, timeEnd, allDay: effectiveAllDay });
     setAnchorKey(date);
-    setPageIndex(WEEKS_BACK);
     preAllDayRef.current = effectiveAllDay ? null : { start: timeStart, end: timeEnd };
   }, [open, date, timeStart, timeEnd, allDay, allowAllDay]);
 
@@ -192,9 +182,9 @@ export function WhenSheet({
     });
   };
 
-  const rangeLabel = formatWeekRange(
-    weeks[Math.max(0, Math.min(weeks.length - 1, pageIndex))].monday,
-  );
+  // ПОДПИСИ «14–20 СЕНТЯБРЯ» ПОД ПОЛОСОЙ БОЛЬШЕ НЕТ: месяц называет заголовок
+  // листа, а числа стоят в самих клетках — строка повторяла и то и другое, и
+  // стоила высоты.
 
   return (
     <BottomSheet
@@ -215,7 +205,11 @@ export function WhenSheet({
         </View>
       }
     >
-      <View style={{ paddingHorizontal: 20, gap: 12 }}>
+      {/* ПЛОТНО, В ОДИН ЭКРАН (владелец 2026-09-04: «сделай более компактно
+          время, чтоб оно всё помещалось по сути в одну страничку»). Полоса
+          дат, сегмент и барабаны — три предмета; воздух между ними считаем
+          скупо, иначе лист лезет под кнопку. */}
+      <View style={{ paddingHorizontal: 20, gap: 10 }}>
         {/* ПОЛОСА НЕДЕЛЬ. Свайпается по неделям, тап выбирает день —
             дата и время правятся в одном месте. */}
         <View>
@@ -230,9 +224,6 @@ export function WhenSheet({
                 keyExtractor={(w) => w.monday.toISOString()}
                 initialScrollIndex={WEEKS_BACK}
                 getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
-                onMomentumScrollEnd={(e: NativeSyntheticEvent<NativeScrollEvent>) =>
-                  setPageIndex(Math.round(e.nativeEvent.contentOffset.x / pageWidth))
-                }
                 renderItem={({ item: w }: { item: (typeof weeks)[number] }) => (
                   <View style={{ width: pageWidth, flexDirection: "row" }}>
                     {w.days.map((d) => {
@@ -245,7 +236,7 @@ export function WhenSheet({
                             accessibilityLabel={`${d.weekday}, ${formatDateRu(d.key)}${d.isToday ? ", сегодня" : ""}`}
                             accessibilityState={{ selected: active }}
                             style={({ pressed }) => ({
-                              height: 58,
+                              height: 46,
                               borderRadius: t.radius.card,
                               alignItems: "center",
                               justifyContent: "center",
@@ -279,9 +270,9 @@ export function WhenSheet({
                             <Text
                               maxFontSizeMultiplier={1.2}
                               style={{
-                                fontSize: 19,
+                                fontSize: 17,
                                 fontWeight: "700",
-                                lineHeight: 20,
+                                lineHeight: 18,
                                 fontVariant: ["tabular-nums"],
                                 color: active ? "#fff" : d.isToday ? t.accent : t.ink,
                               }}
@@ -296,16 +287,9 @@ export function WhenSheet({
                 )}
               />
             ) : (
-              <View style={{ height: 58 }} />
+              <View style={{ height: 46 }} />
             )}
           </View>
-          <Text
-            className="mt-2 text-center"
-            maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 11, fontWeight: "700", color: t.sub, letterSpacing: 0.5 }}
-          >
-            {rangeLabel.toUpperCase()}
-          </Text>
         </View>
 
         {/* ОДИН ТУМБЛЕР — «ВЕСЬ ДЕНЬ», и только у события: у работы весь день
