@@ -459,10 +459,13 @@ export function ServicePicker({
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
           <GradientButton
+            // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ (владелец 2026-09-04: «сведи к
+            // одному слову»). Метка, команда, цвет и время говорят
+            // «Применить» — услуги говорят то же.
             label={
               selectedIds.length > 0
-                ? `Готово · ${totalQty} · ${formatEURExact(subtotal)}`
-                : "Готово"
+                ? `Применить · ${totalQty} · ${formatEURExact(subtotal)}`
+                : "Применить"
             }
             onPress={close}
             accessibilityHint={
