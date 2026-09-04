@@ -4,9 +4,9 @@ import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { ReorderList } from "@/components/ui/ReorderList";
+import { GUTTER } from "@/components/ui/tokens";
 import { RowCaption } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -65,6 +65,7 @@ function ToggleRow({ item }: { item: ToggleListItem }) {
         gap: 12,
         height: ROW_H,
         paddingLeft: 16,
+        paddingRight: 4,
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
@@ -126,10 +127,21 @@ function Section({
   return (
     <>
       {section.title ? <SectionEyebrow>{section.title}</SectionEyebrow> : null}
-      <SectionCard>
+      {/* КАЖДЫЙ ПУНКТ — СВОЯ КАРТОЧКА, А НЕ СТРОКА ОБЩЕГО ПОЛОТНА (владелец
+          2026-09-04 про «Карты для маршрута»: «должно быть такой же
+          архитектуры, как услуга или метка; разделитель должен быть не
+          волосина, а нормальный разделитель, как и везде»). Тот же счёт он
+          предъявил услугам 29 августа и меткам 30-го — теперь правило дошло и
+          до страниц-наборов, последнего места со швами внутри карточки.
+          Дело не только во вкусе: волосяной шов рвётся под пальцем. У строки,
+          которую тянут, фон уезжает, у соседней остаётся — и линия повисает
+          между ними ничьей. `spaced`-строка сама себе поверхность, и разделять
+          их нечем: они и так раздельные. */}
+      <View style={{ marginHorizontal: GUTTER, marginTop: 8 }}>
         <ReorderList
           items={items}
           rowHeight={ROW_H}
+          spaced
           labelFor={(item) => item.label}
           rangeFor={(index) =>
             onReorder && !items[index].pinned
@@ -141,7 +153,7 @@ function Section({
         >
           {(item) => <ToggleRow item={item} />}
         </ReorderList>
-      </SectionCard>
+      </View>
       {section.footer ? <RowCaption text={section.footer} /> : null}
     </>
   );
