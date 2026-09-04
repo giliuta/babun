@@ -1,9 +1,7 @@
 import {
   Pressable,
   Text as NativeText,
-  TextInput as NativeTextInput,
   View,
-  type TextInputProps,
   type TextProps,
 } from "react-native";
 import { AlertTriangle, ChevronRight } from "lucide-react-native";
@@ -11,6 +9,7 @@ import { AlertTriangle, ChevronRight } from "lucide-react-native";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
+import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/features/services/format";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
@@ -19,75 +18,47 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   );
 }
 
-function TextInput({
-  maxFontSizeMultiplier = 1.3,
-  ...props
-}: TextInputProps) {
-  return (
-    <NativeTextInput
-      maxFontSizeMultiplier={maxFontSizeMultiplier}
-      {...props}
-    />
-  );
-}
-
 // СТЕППЕР СО СТРЕЛКАМИ СНЕСЁН 2026-09-04. Количество услуги набирают ТАПАМИ
 // по строке в списке услуг, а сама запись печатает его оттиском «×3»
 // (`QtyBadge`): владелец, сравнив четыре варианта на экране рядом, выбрал
 // этот — «стрелочки вверх-вниз можно сделать красивее и статичнее».
-export function MoneyRow({
-  label,
-  value,
-  color,
-  strong,
-  top,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  strong?: boolean;
-  top?: boolean;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row items-center px-4 py-3"
-      style={top ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
-    >
-      <Text style={{ fontSize: 14, color: strong ? t.ink : t.sub, fontWeight: strong ? "600" : "400", flex: 1 }}>
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: strong ? "700" : "400",
-          color: color ?? t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
 
-export function TotalEditor({
-  value,
+// ИТОГ — СТРОКА-ДВЕРЬ В ЛИСТ ДЕНЕГ (владелец 2026-09-04: «когда я открываю
+// „Итого“, открывается снизу вверх шторка, где прописаны каждая услуга,
+// количество их, и там уже можно редактировать… там же можно делать скидки»).
+//
+// Раньше это было поле прямо в строке: сумму правили между списком услуг и
+// предоплатой, а из чего она сложилась — видно не было, и скидку поставить
+// было нечем. Поле переехало в лист вместе с услугами и скидкой; здесь
+// осталась строка того же диалекта, что клиент, объект и время.
+export function TotalRow({
+  total,
   custom,
-  onChange,
-  onReset,
-  accessoryId,
+  discountAmount,
+  discountReason,
+  onPress,
 }: {
-  value: string;
+  total: number;
+  /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
   custom: boolean;
-  onChange: (value: string) => void;
-  onReset: () => void;
-  accessoryId?: string;
+  discountAmount: number;
+  discountReason: string | null;
+  onPress: () => void;
 }) {
   const t = useThemeColors();
+  const note =
+    discountAmount > 0
+      ? `Скидка${discountReason ? ` · ${discountReason}` : ""} −${formatEURExact(discountAmount)}`
+      : custom
+        ? "Сумма вписана рукой"
+        : null;
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Итого ${formatEURExact(total)}${note ? `, ${note}` : ""}`}
+      accessibilityHint="Открывает услуги, количество и скидку"
+      style={({ pressed }) => ({
         minHeight: 56,
         flexDirection: "row",
         alignItems: "center",
@@ -95,46 +66,29 @@ export function TotalEditor({
         paddingHorizontal: 16,
         borderTopWidth: 1,
         borderTopColor: t.separator,
-      }}
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
     >
-      <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}>
-        Итого
-      </Text>
-      {custom ? (
-        <Pressable
-          onPress={onReset}
-          accessibilityRole="button"
-          accessibilityLabel="Вернуть сумму по услугам"
-          style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-            По услугам
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>Итого</Text>
+        {note ? (
+          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
+            {note}
           </Text>
-        </Pressable>
-      ) : null}
-      <TextInput
-        keyboardAppearance="light"
-        value={value}
-        onChangeText={onChange}
-        selectTextOnFocus
-        keyboardType="decimal-pad"
-        inputAccessoryViewID={accessoryId}
-        placeholder="0"
-        placeholderTextColor={t.placeholder}
-        accessibilityLabel="Итоговая сумма записи"
+        ) : null}
+      </View>
+      <Text
         style={{
-          minWidth: 58,
-          minHeight: 44,
-          paddingVertical: 8,
-          textAlign: "right",
           fontSize: 17,
           fontWeight: "700",
           color: t.ink,
           fontVariant: ["tabular-nums"],
         }}
-      />
-      <Text style={{ fontSize: 17, fontWeight: "600", color: t.sub }}>€</Text>
-    </View>
+      >
+        {formatEURExact(total)}
+      </Text>
+      <ChevronRight color={t.chevron} size={ICON.sm} />
+    </Pressable>
   );
 }
 

@@ -87,6 +87,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
+import { ColorDot } from "@/components/ui/picker-fields";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -133,11 +134,11 @@ import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
 import {
-  MoneyRow,
   TeamLabelRow,
-  TotalEditor,
+  TotalRow,
   WhenRow,
 } from "@/features/appointments/BookingSummary";
+import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
 import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
   ColorSheet,
@@ -501,6 +502,7 @@ export default function BookScreen() {
   const [city, setCity] = useState<string | null>(null);
   const [cityTouched, setCityTouched] = useState(false);
   const [labelSheetOpen, setLabelSheetOpen] = useState(false);
+  const [totalSheetOpen, setTotalSheetOpen] = useState(false);
   const updateClient = useUpdateClientById();
 
   // ── умные дефолты из истории (как старый шит) ──
@@ -2435,15 +2437,15 @@ export default function BookScreen() {
                       </View>
                     ) : null}
                     <AddRow label="Выбрать услугу" onPress={() => setServicePickerOpen(true)} />
-                    <TotalEditor
-                      value={totalDraft}
+                    <TotalRow
+                      total={effectiveTotal}
                       custom={customTotal}
-                      onChange={(value) => {
-                        setTotalDraft(value);
-                        setCustomTotal(true);
+                      discountAmount={discountAmount}
+                      discountReason={discountReason}
+                      onPress={() => {
+                        setTotalSheetOpen(true);
+                        haptics.tap();
                       }}
-                      onReset={() => setCustomTotal(false)}
-                      accessoryId={kbdAccessory}
                     />
                   </>
                 ) : (
@@ -2484,7 +2486,14 @@ export default function BookScreen() {
                           accessibilityLabel={`${lineName}, ${durationLabel(line.duration)}, ${formatEURExact(line.totalPrice)}`}
                           accessibilityHint="Открывает выбор услуг"
                         >
-                          <View className="flex-1 pr-2">
+                          {/* ЦВЕТ УСЛУГИ СТОИТ И ЗДЕСЬ (владелец 2026-09-04:
+                              «цвет услуги должен быть также в услуге»): в
+                              списке выбора он есть, а в самой записи услуги
+                              стояли безымянными строками. Точки выстроены
+                              столбиком — список читается сверху вниз одним
+                              взглядом. */}
+                          <ColorDot value={svc?.color ?? null} size={10} />
+                          <View className="flex-1 pl-2.5 pr-2">
                             <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
                             <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
                               {durationLabel(line.duration)}
@@ -2534,23 +2543,20 @@ export default function BookScreen() {
                           ))}
                       </View>
                     ) : null}
-                    {discountAmount > 0 ? (
-                      <MoneyRow
-                        label={`Скидка${discountReason ? ` · ${discountReason}` : ""}`}
-                        value={`−${formatEURExact(discountAmount)}`}
-                        color={t.success}
-                        top
-                      />
-                    ) : null}
-                    <TotalEditor
-                      value={totalDraft}
+                    {/* ИТОГ — ДВЕРЬ, А НЕ ПОЛЕ (владелец 2026-09-04: «когда я
+                        открываю „Итого“, открывается шторка, где прописаны
+                        каждая услуга, количество их, и там же скидки»).
+                        Скидка называется прямо в строке: видно, почему сумма
+                        меньше суммы услуг. */}
+                    <TotalRow
+                      total={effectiveTotal}
                       custom={customTotal}
-                      onChange={(value) => {
-                        setTotalDraft(value);
-                        setCustomTotal(true);
+                      discountAmount={discountAmount}
+                      discountReason={discountReason}
+                      onPress={() => {
+                        setTotalSheetOpen(true);
+                        haptics.tap();
                       }}
-                      onReset={() => setCustomTotal(false)}
-                      accessoryId={kbdAccessory}
                     />
                   </>
                 )}
@@ -3171,6 +3177,41 @@ export default function BookScreen() {
           setMasterId(id);
           haptics.tap();
         }}
+      />
+      {/* ДЕНЬГИ ЗАПИСИ — ОДНИМ ЛИСТОМ: услуги с количеством, скидка в евро
+          или процентах, итог. Открывается строкой «Итого». */}
+      <TotalSheet
+        visible={totalSheetOpen}
+        onClose={() => setTotalSheetOpen(false)}
+        lines={selectedServices}
+        nameFor={(line) =>
+          line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена"
+        }
+        colorFor={(line) => catalog.get(line.serviceId)?.color ?? null}
+        onQtyChange={setQty}
+        servicesTotal={computedTotal}
+        discountKind={discountType ?? "none"}
+        discountValue={discountValue}
+        discountAmount={discountAmount}
+        discountReason={discountReason}
+        onDiscountKindChange={(kind: DiscountKind) => {
+          if (kind === "none") {
+            setDiscountType(null);
+            setDiscountValue("");
+            setDiscountReason(null);
+            return;
+          }
+          setDiscountType(kind);
+        }}
+        onDiscountValueChange={setDiscountValue}
+        total={effectiveTotal}
+        customTotal={customTotal}
+        totalDraft={totalDraft}
+        onTotalChange={(value) => {
+          setTotalDraft(value);
+          setCustomTotal(true);
+        }}
+        onResetTotal={() => setCustomTotal(false)}
       />
       <LabelSheet
         visible={labelSheetOpen}
