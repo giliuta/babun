@@ -2333,7 +2333,25 @@ export default function BookScreen() {
                           key={line.serviceId}
                           style={{ borderTopWidth: 1, borderTopColor: t.separator }}
                         >
-                        <View className="flex-row items-center px-4 py-2.5">
+                        {/* ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (владелец
+                            2026-09-04: «„Добавить услугу“ убираем; тапаю по
+                            выбранной услуге — открывается список»). Та же
+                            грамматика, что у клиента и объекта: строка выбранного
+                            и есть дверь к выбору. Степпер и цена внутри строки
+                            ловят свои касания сами. */}
+                        <Pressable
+                          className="flex-row items-center px-4 py-2.5"
+                          onPress={() => {
+                            setServicePickerOpen(true);
+                            haptics.tap();
+                          }}
+                          style={({ pressed }) => ({
+                            backgroundColor: pressed ? t.pressed : "transparent",
+                          })}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${lineName}, ${durationLabel(line.duration)}, ${formatEURExact(line.totalPrice)}`}
+                          accessibilityHint="Открывает выбор услуг"
+                        >
                           <View className="flex-1 pr-2">
                             <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
                             <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
@@ -2363,14 +2381,10 @@ export default function BookScreen() {
                           >
                             {formatEURExact(line.totalPrice)}
                           </Text>
-                        </View>
-
+                        </Pressable>
                         </View>
                       );
                     })}
-                    <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                      <AddRow label="Добавить услугу" onPress={() => setServicePickerOpen(true)} />
-                    </View>
                     {/* Быстрые частые услуги остаются под списком — вторая
                         услуга добавляется одним тапом, без модалки. */}
                     {frequentTeamServices.some((s) => !serviceIds.includes(s.id)) ? (
