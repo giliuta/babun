@@ -90,6 +90,19 @@ export const PRESET_COLORS: ColorPreset[] = [
 
 export const PRESET_COLOR_VALUES: string[] = PRESET_COLORS.map((c) => c.value);
 
+/** ИМЯ ЦВЕТА СЛОВОМ — для строк настройки, которые сегодня показывают цвет
+ *  только кружком. Бледный кружок на белой карточке виден плохо (Ванильный к
+ *  белому — 1.14 : 1), и настоящий читатель значения — это слово рядом.
+ *  Регистр не важен: умолчания записаны заглавными, а из пикера цвет приходит
+ *  как в справочнике. `null` — «не красить», цвет вне набора — «Свой». */
+export function colorName(hex: string | null | undefined): string {
+  if (!hex) return "Не красить";
+  const needle = hex.trim().toLowerCase();
+  return (
+    PRESET_COLORS.find((c) => c.value.toLowerCase() === needle)?.name ?? "Свой"
+  );
+}
+
 /**
  * РАБОЧАЯ ТРИНАДЦАТКА — не для показа, а для АВТОМАТА: цвет по умолчанию в
  * форме и «дай следующий свободный» при создании команды или категории.
