@@ -4,7 +4,8 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { AlertTriangle, ChevronRight } from "lucide-react-native";
+import { AlertTriangle, ChevronRight, MapPin, Users } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -104,10 +105,6 @@ export function TotalRow({
 // карточкой ниже — три разных предмета в трёх местах. Теперь порядок читается
 // сверху вниз: кто едет и куда, когда, к кому, на какой объект.
 
-/** Тонкий цветной корешок — identity записи (цвет команды либо выбранный). */
-function Spine({ color }: { color: string }) {
-  return <View style={{ width: 3, backgroundColor: color }} />;
-}
 
 export function TeamLabelRow({
   teamName,
@@ -140,6 +137,7 @@ export function TeamLabelRow({
     // экрана.
     <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
       <IdentityCard
+        icon={Users}
         color={teamColor}
         title={teamName}
         sub={masterName ?? undefined}
@@ -148,7 +146,8 @@ export function TeamLabelRow({
         accessibilityHint="Открывает выбор команды и мастера"
       />
       <IdentityCard
-        color={label ? (labelColor ?? t.accent) : t.separator}
+        icon={MapPin}
+        color={label ? (labelColor ?? t.accent) : t.faint}
         title={label ?? "Метка"}
         muted={!label}
         quiet={!!label && !!labelFromDay}
@@ -164,11 +163,20 @@ export function TeamLabelRow({
   );
 }
 
-/** Блок «кто» или «куда»: цветной корешок слева, значение по центру.
+/** Блок «кто» или «куда»: кружок со значком в цвете сущности и значение рядом.
+ *
+ *  ЦВЕТ ПЕРЕЕХАЛ ИЗ КОРЕШКА В КРУЖОК (владелец 2026-09-04: «вроде неплохо, но
+ *  что-то оно как-то отпугивает»). Отпугивала именно полоска: яркая вертикаль,
+ *  прижатая к левому краю маленькой карточки, читается как маркер тревоги —
+ *  такими в списках метят «ошибка» и «непрочитанное», — и была самым громким
+ *  пятном страницы. Тот же цвет в кружке под значком звучит спокойно и говорит
+ *  ровно то же; тем же приёмом набраны строки в листе метки, который владелец
+ *  уже одобрил.
+ *
  *  Шеврона нет (владелец 2026-09-04: «убери справа эти стрелочки») — вся
- *  карточка и есть кнопка, а стрелка отбирала у значения место и тянула
- *  взгляд к пустому краю. */
+ *  карточка и есть кнопка. */
 function IdentityCard({
+  icon: Icon,
   color,
   title,
   sub,
@@ -178,6 +186,7 @@ function IdentityCard({
   accessibilityLabel,
   accessibilityHint,
 }: {
+  icon: LucideIcon;
   color: string;
   title: string;
   sub?: string;
@@ -191,32 +200,37 @@ function IdentityCard({
 }) {
   const t = useThemeColors();
   return (
-    <View
-      style={{
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
         flex: 1,
         flexDirection: "row",
-        alignItems: "stretch",
-        backgroundColor: t.surface,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 9,
+        paddingHorizontal: 10,
         borderRadius: t.radius.card,
+        backgroundColor: pressed ? t.pressed : t.surface,
         boxShadow: t.cardShadow,
-        overflow: "hidden",
-      }}
+      })}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
     >
-      <Spine color={color} />
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => ({
-          flex: 1,
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          paddingVertical: 10,
-          paddingHorizontal: 10,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityHint={accessibilityHint}
+          backgroundColor: `${color}1f`,
+        }}
       >
+        <Icon color={color} size={15} strokeWidth={2.2} />
+      </View>
+      <View style={{ flexShrink: 1 }}>
         <Text
           numberOfLines={1}
           style={{
@@ -228,12 +242,12 @@ function IdentityCard({
           {title}
         </Text>
         {sub ? (
-          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
+          <Text numberOfLines={1} style={{ fontSize: 12, color: t.sub, marginTop: 1 }}>
             {sub}
           </Text>
         ) : null}
-      </Pressable>
-    </View>
+      </View>
+    </Pressable>
   );
 }
 
@@ -324,10 +338,22 @@ export function WhenRow({
                 >
                   {`${timeStart} – ${timeEnd}`}
                 </Text>
-                <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
-                <Text numberOfLines={1} style={{ fontSize: 14, color: t.sub }}>
-                  {durationLabel(duration)}
-                </Text>
+                {/* ДЛИТЕЛЬНОСТЬ — ТИХОЙ ПИЛЮЛЕЙ: третья величина в строке
+                    спорила с первыми двумя одинаковым весом, а она СЛЕДСТВИЕ
+                    начала и конца. Серая подложка отделяет её от времени лучше
+                    точки и делает строку ритмичной, а не сплошной. */}
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: t.radius.pill,
+                    backgroundColor: t.fill,
+                  }}
+                >
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    {durationLabel(duration)}
+                  </Text>
+                </View>
               </>
             )}
           </View>
