@@ -97,6 +97,7 @@ import {
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
+  recordFilled,
   resolveRecordColor,
   type ColorSituation,
 } from "@/features/appointments/record-color";
@@ -1868,11 +1869,14 @@ export default function BookScreen() {
     kind === "work"
       ? resolveRecordColor({
           override: picked,
-          filled: {
-            client: clientId != null,
-            object: locationId != null,
-            services: serviceIds.length > 0,
-          },
+          filled: recordFilled({
+            client_id: clientId,
+            location_id: locationId,
+            address,
+            service_ids: serviceIds,
+            custom_total: customTotal,
+            total_amount: effectiveTotal,
+          }),
           base:
             autoColorRule === "label"
               ? teamCities.find((c) => c.name === effectiveLabel)?.color ??

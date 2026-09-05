@@ -108,6 +108,7 @@ import {
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
+  recordFilled,
   resolveRecordColor,
   type ColorSituation,
 } from "@/features/appointments/record-color";
@@ -917,11 +918,7 @@ export default function CalendarTab() {
       if (a.kind !== "work") return base;
       return resolveRecordColor({
         override: a.color_override,
-        filled: {
-          client: !!a.client_id,
-          object: !!a.location_id,
-          services: (a.service_ids?.length ?? 0) > 0,
-        },
+        filled: recordFilled(a),
         base,
         palette: situationPalette,
         active: activeSituations,

@@ -35,6 +35,37 @@ export const COLOR_SITUATIONS: ColorSituationDef[] = [
   { id: "noServices", label: "Нет услуг", hint: "не сказано, что делаем" },
 ];
 
+/** ЧТО СЧИТАЕТСЯ ЗАПОЛНЕННЫМ — ОДНО МЕСТО НА ПРОДУКТ. Сетка и форма собирали
+ *  это по отдельности, а закон говорит: один выезд выглядит одинаково там, где
+ *  его заводят, и там, где на него смотрят.
+ *
+ *  Правила шире, чем «есть ссылка»:
+ *  — ОБЪЕКТ закрыт и вписанным адресом: разовый выезд по звонку в справочник
+ *    не заводят, и красить его дырой значит врать;
+ *  — УСЛУГИ закрыты снимком строк или вписанной рукой суммой: по базе работ
+ *    без каталожной услуги 9 из 27, а сумма вписана рукой в 20 записях из 30 —
+ *    без этого треть книги загорелась бы «дырой» на готовых записях. */
+export function recordFilled(apt: {
+  client_id?: string | null;
+  location_id?: string | null;
+  address?: string | null;
+  service_ids?: unknown[] | null;
+  services?: unknown[] | null;
+  custom_total?: boolean | null;
+  total_amount?: number | string | null;
+}): { client: boolean; object: boolean; services: boolean } {
+  return {
+    client: !!apt.client_id,
+    object:
+      !!apt.location_id || (apt.address ?? "").trim().length >= 3,
+    services:
+      (apt.service_ids?.length ?? 0) > 0 ||
+      (apt.services?.length ?? 0) > 0 ||
+      !!apt.custom_total ||
+      Number(apt.total_amount ?? 0) > 0,
+  };
+}
+
 export interface RecordColorInput {
   /** Цвет, выбранный руками у этой записи. Сильнее любого правила. */
   override?: string | null;
@@ -48,6 +79,28 @@ export interface RecordColorInput {
   active?: readonly ColorSituation[];
   /** Когда не сказало ничто: кобальт продукта. */
   fallback: string;
+}
+
+/** Какая именно дыра красит запись — чтобы назвать её СЛОВОМ там, где есть
+ *  место (лента, озвучка). Цвет один на три ситуации различает их слишком
+ *  слабо для дальтоника: ΔE заливок «нет объекта» и «нет услуг» при
+ *  дейтеранопии — 4.1, и никакой оттенок этого не закроет. */
+export function resolveRecordSituation(
+  input: Pick<RecordColorInput, "override" | "filled" | "palette" | "active">,
+): ColorSituation | null {
+  if ((input.override ?? "").trim()) return null;
+  const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
+  const missing: Record<ColorSituation, boolean> = {
+    noClient: !input.filled.client,
+    noObject: !input.filled.object,
+    noServices: !input.filled.services,
+  };
+  for (const def of COLOR_SITUATIONS) {
+    if (!active.includes(def.id)) continue;
+    if (!missing[def.id]) continue;
+    if ((input.palette[def.id] ?? "").trim()) return def.id;
+  }
+  return null;
 }
 
 export function resolveRecordColor(input: RecordColorInput): string {
