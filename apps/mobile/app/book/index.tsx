@@ -1829,9 +1829,11 @@ export default function BookScreen() {
   const picked = kind === "event" ? eventColor : colorOverride;
   const hasColor = picked != null;
   const accentC = picked ?? t.accent;
-  // Цвет записи владеет ХРОМОМ экрана; корешки блоков «команда» и «метка»
-  // несут СВОИ цвета — команды и метки, — а не выбранный: блок обязан
-  // говорить о том, что в нём написано.
+  // ЦВЕТ ЗАПИСИ — ВЫБРАННЫЙ ЛИБО ДЕЙСТВУЮЩИЙ (владелец 2026-09-05: «выбрал
+  // „Автоматически“ — подсвечивается тем цветом, который сейчас стоит в
+  // автоматическом режиме»). Автоматический режим = цвет команды: это её
+  // выезд. Им подсвечены карточки шапки и хром экрана.
+  const identityC = picked ?? team?.color ?? t.accent;
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
   const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
   const headerBorder = hasColor
@@ -2101,6 +2103,7 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
+                identity={identityC}
                 onEditTeam={() => {
                   setTeamSheetOpen(true);
                   haptics.tap();
@@ -2121,6 +2124,7 @@ export default function BookScreen() {
                 // заданный руками, докет иначе игнорировал.
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
+                identity={identityC}
                 onPress={() => {
                   setWhenOpen(true);
                   haptics.tap();

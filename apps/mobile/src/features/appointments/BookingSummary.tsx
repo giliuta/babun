@@ -12,6 +12,7 @@ import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/features/services/format";
+import { tintOver } from "@/components/ui/color-contrast";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -93,6 +94,14 @@ export function TotalRow({
   );
 }
 
+// ЦВЕТ ЗАПИСИ ПОДСВЕЧИВАЕТ ВСЮ ШАПКУ (владелец 2026-09-05: «хочу, чтоб блок
+// автоматически подсвечивался этим цветом; выбрал „Автоматически“ — значит
+// тем, который сейчас действует»). Раньше выбранный цвет жил только в хроме
+// экрана и в кнопке — самой записи он не касался, и «Цвет» читался как
+// настройка неизвестно чего. Теперь три карточки шапки — это и есть цвет
+// записи: у неё он всегда есть, выбранный руками или взятый у команды.
+const TINT = 0.1;
+
 // ДВА БЛОКА ВМЕСТО ОДНОГО (владелец 2026-09-04: «мы можем по сути совместить
 // команду и метку в одно, а время поставить блоком ниже — так будет лучше»).
 //
@@ -113,6 +122,7 @@ export function TeamLabelRow({
   label,
   labelColor,
   labelFromDay,
+  identity,
   onEditTeam,
   onEditLabel,
 }: {
@@ -124,6 +134,8 @@ export function TeamLabelRow({
   labelColor?: string | null;
   /** Метка не своя, а взята у дня — читается тише, чтобы отличать. */
   labelFromDay?: boolean;
+  /** Цвет ЗАПИСИ: выбранный руками либо тот, что действует автоматически. */
+  identity: string;
   onEditTeam: () => void;
   onEditLabel: () => void;
 }) {
@@ -139,6 +151,7 @@ export function TeamLabelRow({
       <IdentityCard
         icon={Users}
         color={teamColor}
+        tint={identity}
         title={teamName}
         sub={masterName ?? undefined}
         onPress={onEditTeam}
@@ -148,6 +161,7 @@ export function TeamLabelRow({
       <IdentityCard
         icon={MapPin}
         color={label ? (labelColor ?? t.accent) : t.faint}
+        tint={identity}
         title={label ?? "Метка"}
         muted={!label}
         quiet={!!label && !!labelFromDay}
@@ -178,6 +192,7 @@ export function TeamLabelRow({
 function IdentityCard({
   icon: Icon,
   color,
+  tint,
   title,
   sub,
   muted,
@@ -188,6 +203,8 @@ function IdentityCard({
 }: {
   icon: LucideIcon;
   color: string;
+  /** Цвет записи: им подсвечена вся карточка. */
+  tint: string;
   title: string;
   sub?: string;
   /** Значения ещё нет — «Метка» вместо имени метки. */
@@ -199,6 +216,7 @@ function IdentityCard({
   accessibilityHint: string;
 }) {
   const t = useThemeColors();
+  const bg = tintOver(tint, t.surface, TINT);
   return (
     <Pressable
       onPress={onPress}
@@ -211,7 +229,7 @@ function IdentityCard({
         paddingVertical: 9,
         paddingHorizontal: 10,
         borderRadius: t.radius.card,
-        backgroundColor: pressed ? t.pressed : t.surface,
+        backgroundColor: pressed ? tintOver(tint, t.surface, TINT * 2.2) : bg,
         boxShadow: t.cardShadow,
       })}
       accessibilityRole="button"
@@ -258,6 +276,7 @@ export function WhenRow({
   duration,
   allDay,
   warning,
+  identity,
   onPress,
 }: {
   date: string;
@@ -266,6 +285,8 @@ export function WhenRow({
   duration: number;
   allDay?: boolean;
   warning?: string | null;
+  /** Цвет записи: им подсвечена карточка, как у команды и метки. */
+  identity: string;
   onPress: () => void;
 }) {
   const t = useThemeColors();
@@ -275,13 +296,13 @@ export function WhenRow({
         style={{
           flexDirection: "row",
           alignItems: "stretch",
-          backgroundColor: t.surface,
+          backgroundColor: tintOver(identity, t.surface, TINT),
           borderRadius: t.radius.card,
           boxShadow: t.cardShadow,
           overflow: "hidden",
         }}
       >
-        {/* У ВРЕМЕНИ ЦВЕТА НЕТ (владелец 2026-09-04: «убери синенькую плашку
+        {/* У ВРЕМЕНИ НЕТ СВОЕГО ЦВЕТА (владелец 2026-09-04: «убери синенькую плашку
             с времени, она там не нужна — у времени нет цвета»). Цветной
             корешок называет ЧЕЙ выезд; час дня ничей, и полоска рядом с ним
             только притворялась значащей. */}
@@ -294,7 +315,9 @@ export function WhenRow({
             justifyContent: "center",
             paddingVertical: 10,
             paddingHorizontal: 12,
-            backgroundColor: pressed ? t.pressed : "transparent",
+            backgroundColor: pressed
+              ? tintOver(identity, t.surface, TINT * 2.2)
+              : "transparent",
           })}
           accessibilityRole="button"
           accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `с ${timeStart} до ${timeEnd}, ${durationLabel(duration)}`}`}
