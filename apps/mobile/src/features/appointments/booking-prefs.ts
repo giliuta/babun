@@ -2,6 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
+import {
+  COLOR_SITUATIONS,
+  type ColorSituation,
+} from "@/features/appointments/record-color";
 
 // КАК ВЫГЛЯДИТ ЗАПИСЬ У ЭТОГО БИЗНЕСА (владелец 2026-09-05: «давай сделаем
 // страницу, назовём её „Запись“, и там можно будет полноценно редактировать
@@ -109,5 +113,78 @@ export function useSetAutoColorRule() {
     },
     onSuccess: (rule) =>
       qc.setQueryData(["booking-auto-color", tenantId], rule),
+  });
+}
+
+// ЦВЕТОВАЯ ПАЛИТРА ЗАПИСИ — «ЧЕГО НЕ ХВАТАЕТ» (владелец 2026-09-05: «ещё один
+// блок — цветовая палитра; если нет клиента, тогда цвет такой-то, тапаю, могу
+// выбрать любой; если нет объекта — такой-то… чтобы человек один раз настроил,
+// и всё»).
+//
+// Правило разрешения живёт в `record-color` под тестами; здесь только хранение
+// выбранных цветов. Умолчания сочные и разные: серый — «даже неизвестно, кому
+// едем», оранжевый — «неизвестно куда», жёлтый — «неизвестно что делаем».
+// Дырам полагается бросаться в глаза, иначе сигнала нет.
+
+const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
+  noClient: "#8E8E93",
+  noObject: "#FF9500",
+  noServices: "#FFCC00",
+};
+
+const PALETTE_KEY = "babun-booking-palette";
+const paletteKey = (tenantId: string | null) =>
+  tenantId ? `${PALETTE_KEY}:${tenantId}` : PALETTE_KEY;
+
+export type SituationPalette = Record<ColorSituation, string | null>;
+
+function readPalette(tenantId: string | null): SituationPalette {
+  const out = { ...SITUATION_DEFAULTS } as SituationPalette;
+  try {
+    const raw = getStorage().get<Record<string, string | null>>(
+      paletteKey(tenantId),
+    );
+    if (raw && typeof raw === "object") {
+      for (const def of COLOR_SITUATIONS) {
+        // `null` — «не красить»; отсутствие ключа — умолчание.
+        if (def.id in raw) out[def.id] = raw[def.id] ?? null;
+      }
+    }
+  } catch {
+    // Хранилище ещё не поднялось — работаем на умолчаниях.
+  }
+  return out;
+}
+
+export function useSituationPalette(): SituationPalette {
+  const tenantId = useTenantId();
+  const { data } = useQuery({
+    queryKey: ["booking-palette", tenantId],
+    queryFn: () => readPalette(tenantId),
+    initialData: () => readPalette(tenantId),
+    staleTime: Infinity,
+  });
+  return data;
+}
+
+export function useSetSituationColor() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  return useMutation<
+    SituationPalette,
+    Error,
+    { situation: ColorSituation; color: string | null }
+  >({
+    networkMode: "always",
+    mutationFn: async ({ situation, color }) => {
+      const next = { ...readPalette(tenantId), [situation]: color };
+      try {
+        getStorage().set(paletteKey(tenantId), next);
+      } catch {
+        // Запись best-effort.
+      }
+      return next;
+    },
+    onSuccess: (next) => qc.setQueryData(["booking-palette", tenantId], next),
   });
 }

@@ -101,7 +101,16 @@ import {
   type DayLabel,
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
-import { useAutoColorRule } from "@/features/appointments/booking-prefs";
+import {
+  useAutoColorRule,
+  useBookingBlocks,
+  useSituationPalette,
+} from "@/features/appointments/booking-prefs";
+import {
+  COLOR_SITUATIONS,
+  resolveRecordColor,
+  type ColorSituation,
+} from "@/features/appointments/record-color";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -817,6 +826,17 @@ export default function CalendarTab() {
   // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
   // показывал «Лимассол» столько раз, сколько в компании команд.
   const autoColorRule = useAutoColorRule();
+  const situationPalette = useSituationPalette();
+  // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
+  // мастера объекта нет вовсе.
+  const bookingBlocks = useBookingBlocks();
+  const activeSituations = useMemo<ColorSituation[]>(
+    () =>
+      COLOR_SITUATIONS.map((s) => s.id).filter(
+        (id) => id !== "noObject" || bookingBlocks.includes("object"),
+      ),
+    [bookingBlocks],
+  );
   const citiesQuery = useCities({ teamId: activeTeamId });
   const dayCitiesQuery = useDayCities();
   const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
@@ -880,16 +900,43 @@ export default function CalendarTab() {
   // дня: блок без цвета хуже блока «не той» окраски.
   const teamColorFor = useCallback(
     (a: Appointment) => {
-      if (autoColorRule === "label") {
-        const name = (a.city ?? "").trim() || labelFor(a.date)?.name;
-        const own = name
-          ? cities.find((c) => c.name === name)?.color ?? null
-          : null;
-        if (own) return own;
-      }
-      return a.team_id ? teamColor.get(a.team_id) ?? null : null;
+      const base =
+        autoColorRule === "label"
+          ? (() => {
+              const name = (a.city ?? "").trim() || labelFor(a.date)?.name;
+              return name
+                ? cities.find((c) => c.name === name)?.color ?? null
+                : null;
+            })() ?? (a.team_id ? teamColor.get(a.team_id) ?? null : null)
+          : a.team_id
+            ? teamColor.get(a.team_id) ?? null
+            : null;
+      // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
+      // палитра «чего не хватает» к нему не применяется — иначе обед в
+      // календаре горел бы «нет клиента».
+      if (a.kind !== "work") return base;
+      return resolveRecordColor({
+        override: a.color_override,
+        filled: {
+          client: !!a.client_id,
+          object: !!a.location_id,
+          services: (a.service_ids?.length ?? 0) > 0,
+        },
+        base,
+        palette: situationPalette,
+        active: activeSituations,
+        fallback: t.accent,
+      });
     },
-    [autoColorRule, cities, labelFor, teamColor],
+    [
+      autoColorRule,
+      cities,
+      labelFor,
+      teamColor,
+      situationPalette,
+      activeSituations,
+      t.accent,
+    ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
   // другим цветом, когда метка другая, окантовку какую-то»). Правило и его

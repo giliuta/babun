@@ -93,7 +93,13 @@ import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useSituationPalette,
 } from "@/features/appointments/booking-prefs";
+import {
+  COLOR_SITUATIONS,
+  resolveRecordColor,
+  type ColorSituation,
+} from "@/features/appointments/record-color";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmThen } from "@/lib/confirm";
@@ -304,8 +310,17 @@ export default function BookScreen() {
   const showLabelBlock = blocks.includes("label");
   const showPayment = blocks.includes("payment");
   const showNote = blocks.includes("note");
-  // Чем красить запись, когда цвет не выбирали руками.
+  // Чем красить запись, когда цвет не выбирали руками, и какими цветами
+  // говорить о незаполненном (Кабинет → «Запись»).
   const autoColorRule = useAutoColorRule();
+  const situationPalette = useSituationPalette();
+  const activeSituations = useMemo<ColorSituation[]>(
+    () =>
+      COLOR_SITUATIONS.map((s) => s.id).filter(
+        (id) => id !== "noObject" || showObject,
+      ),
+    [showObject],
+  );
   const params = useLocalSearchParams<{
     date?: string;
     time_start?: string;
@@ -1846,13 +1861,29 @@ export default function BookScreen() {
   // „Автоматически“ — подсвечивается тем цветом, который сейчас стоит в
   // автоматическом режиме»). Автоматический режим = цвет команды: это её
   // выезд. Им подсвечены карточки шапки и хром экрана.
+  // ЦВЕТ ЗАПИСИ — ОДНО ПРАВИЛО С КАЛЕНДАРЁМ (`record-color`): рука человека,
+  // потом первая незакрытая дыра из палитры, потом «обычный» цвет по
+  // настройке. Форма обязана показывать ровно то, что покажет сетка.
   const identityC =
-    picked ??
-    (autoColorRule === "label"
-      ? teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
-      : null) ??
-    team?.color ??
-    t.accent;
+    kind === "work"
+      ? resolveRecordColor({
+          override: picked,
+          filled: {
+            client: clientId != null,
+            object: locationId != null,
+            services: serviceIds.length > 0,
+          },
+          base:
+            autoColorRule === "label"
+              ? teamCities.find((c) => c.name === effectiveLabel)?.color ??
+                team?.color ??
+                null
+              : team?.color ?? null,
+          palette: situationPalette,
+          active: activeSituations,
+          fallback: t.accent,
+        })
+      : picked ?? team?.color ?? t.accent;
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
   const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
   const headerBorder = hasColor

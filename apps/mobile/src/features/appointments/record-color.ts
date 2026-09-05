@@ -1,0 +1,72 @@
+// КАКОГО ЦВЕТА ЭТА ЗАПИСЬ — ОДНО ПРАВИЛО НА ПРОДУКТ.
+//
+// Владелец 2026-09-05: «хочу, чтоб в настройках была цветовая палитра: если
+// нет клиента — тогда цвет такой-то, тапаю, могу выбрать любой; если нет
+// объекта — тогда цвет такой-то… чтобы человек один раз настроил, и всё».
+//
+// Цвет записи перестал быть украшением: он ОТВЕЧАЕТ НА ВОПРОС «чего этой
+// работе не хватает». В календаре день читается одним взглядом — вот эти
+// три блока серые, значит в них не выбраны услуги, и до выезда их надо
+// дозаполнить; остальные в цвете команды, значит с ними всё в порядке.
+//
+// ПОРЯДОК ЖЁСТКИЙ, И ОН ЖЕ ПОРЯДОК ВАЖНОСТИ: сперва рука человека (выбранный
+// цвет — это его решение, спорить с ним нельзя), потом первая незакрытая
+// дыра сверху вниз, и только потом «обычный» цвет — команды или метки, как
+// настроено. Ситуация без своего цвета пропускается: выключить сигнал должно
+// быть так же просто, как включить.
+//
+// Ситуации проверяются ТОЛЬКО те, что вообще есть у этого бизнеса: у мастера
+// маникюра блок объекта выключен (Кабинет → «Запись»), и «нет объекта» для
+// него не дыра, а норма.
+
+export type ColorSituation = "noClient" | "noObject" | "noServices";
+
+export interface ColorSituationDef {
+  id: ColorSituation;
+  label: string;
+  /** Что именно не заполнено — подпись строки в настройке. */
+  hint: string;
+}
+
+/** Порядок здесь и есть порядок разрешения конфликтов. */
+export const COLOR_SITUATIONS: ColorSituationDef[] = [
+  { id: "noClient", label: "Нет клиента", hint: "не сказано, кому едем" },
+  { id: "noObject", label: "Нет объекта", hint: "не сказано, куда едем" },
+  { id: "noServices", label: "Нет услуг", hint: "не сказано, что делаем" },
+];
+
+export interface RecordColorInput {
+  /** Цвет, выбранный руками у этой записи. Сильнее любого правила. */
+  override?: string | null;
+  /** Что в записи заполнено. */
+  filled: { client: boolean; object: boolean; services: boolean };
+  /** Цвет «обычной» записи: команды или метки — по настройке. */
+  base?: string | null;
+  /** Настроенные цвета ситуаций; `null` — ситуация не красит. */
+  palette: Partial<Record<ColorSituation, string | null>>;
+  /** Ситуации, которые проверяем. Не задано — все. */
+  active?: readonly ColorSituation[];
+  /** Когда не сказало ничто: кобальт продукта. */
+  fallback: string;
+}
+
+export function resolveRecordColor(input: RecordColorInput): string {
+  const own = (input.override ?? "").trim();
+  if (own) return own;
+
+  const active = input.active ?? COLOR_SITUATIONS.map((s) => s.id);
+  const missing: Record<ColorSituation, boolean> = {
+    noClient: !input.filled.client,
+    noObject: !input.filled.object,
+    noServices: !input.filled.services,
+  };
+  for (const def of COLOR_SITUATIONS) {
+    if (!active.includes(def.id)) continue;
+    if (!missing[def.id]) continue;
+    const color = (input.palette[def.id] ?? "").trim();
+    if (color) return color;
+  }
+
+  const base = (input.base ?? "").trim();
+  return base || input.fallback;
+}

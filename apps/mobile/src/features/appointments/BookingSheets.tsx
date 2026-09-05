@@ -157,18 +157,24 @@ export function ColorSheet({
   value,
   onPick,
   isEvent,
+  title,
+  autoLabel,
 }: {
   visible: boolean;
   onClose: () => void;
   value: string | null;
   onPick: (c: string | null) => void;
   isEvent?: boolean;
+  /** Своё имя листа: тот же выбор служит палитре в настройках записи. */
+  title?: string;
+  /** Что значит «без цвета» у этого вызова. По умолчанию — «Автоматически». */
+  autoLabel?: string;
 }) {
   return (
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title={isEvent ? "Цвет события" : "Цвет записи"}
+      title={title ?? (isEvent ? "Цвет события" : "Цвет записи")}
       padded={false}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
@@ -188,7 +194,7 @@ export function ColorSheet({
             умолчанию»: без выбора цвет берётся у команды сам. */}
         <View className="mb-3 self-center">
           <Chip
-            label="Автоматически"
+            label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
             selected={value == null}
