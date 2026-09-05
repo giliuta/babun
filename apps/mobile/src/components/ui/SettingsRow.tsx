@@ -42,6 +42,7 @@ export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 
 export function SettingsRow({
   tile = "neutral",
+  swatch,
   icon: Icon,
   title,
   sub,
@@ -60,6 +61,13 @@ export function SettingsRow({
    *  чернилами, без диска. По умолчанию нейтральная — цвет заводится
    *  осознанно, а не забывается. */
   tile?: string | "neutral";
+  /** ОБРАЗЕЦ ЦВЕТА ВМЕСТО ПЛИТКИ СО ЗНАЧКОМ: строка настройки, у которой
+   *  значение — сам цвет. Белый глиф на бледном цвете нечитаем (на Ванильном
+   *  1.14 : 1), поэтому диск рисуется пустым, а значение НАЗЫВАЕТСЯ СЛОВОМ в
+   *  `sub` — оно и есть настоящий читатель. Волосяная обводка спасает бледный
+   *  цвет от растворения в белой карточке лишь отчасти (2.00 : 1) — это
+   *  известный предел, а не закрытый вопрос. */
+  swatch?: string | null;
   icon: IconType;
   title: string;
   /** Текущее значение настройки / состояние счёта, не описание кнопки. */
@@ -107,7 +115,18 @@ export function SettingsRow({
   const lines = stacked ? 2 : 1;
   const scale = stacked ? 1.6 : 1.2;
 
-  const tileNode = neutral ? (
+  const tileNode = swatch !== undefined ? (
+    <View
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: t.radius.pill,
+        backgroundColor: swatch ?? "transparent",
+        borderWidth: 1,
+        borderColor: swatch ? t.separatorStrong : t.separator,
+      }}
+    />
+  ) : neutral ? (
     // Голый глиф в боксе 20×28: та же высота, что у цветной плитки, поэтому
     // ритм строки и вертикальное выравнивание с текстом не разъезжаются.
     <View style={{ width: 20, height: 28, alignItems: "center", justifyContent: "center" }}>

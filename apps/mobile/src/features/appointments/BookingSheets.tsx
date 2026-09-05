@@ -159,6 +159,7 @@ export function ColorSheet({
   isEvent,
   title,
   autoLabel,
+  allowNone = true,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -169,6 +170,9 @@ export function ColorSheet({
   title?: string;
   /** Что значит «без цвета» у этого вызова. По умолчанию — «Автоматически». */
   autoLabel?: string;
+  /** Можно ли остаться без цвета. У запасного цвета записи нельзя: он и есть
+   *  последняя ступень правила, и «ничего» на его месте — дыра. */
+  allowNone?: boolean;
 }) {
   return (
     <BottomSheet
@@ -192,6 +196,7 @@ export function ColorSheet({
             прямо посередине; а внизу можно выбирать уже любой цвет, и он
             будет уже не автоматически»). Слово честнее прежнего «По
             умолчанию»: без выбора цвет берётся у команды сам. */}
+        {allowNone ? (
         <View className="mb-3 self-center">
           <Chip
             label={autoLabel ?? "Автоматически"}
@@ -204,6 +209,7 @@ export function ColorSheet({
             }}
           />
         </View>
+        ) : null}
         <ColorPicker
           label={null}
           colors={EVENT_COLORS}
