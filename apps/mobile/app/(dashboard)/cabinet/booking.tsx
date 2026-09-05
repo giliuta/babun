@@ -1,14 +1,17 @@
-import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Fragment, useState } from "react";
+import { ScrollView } from "react-native";
+import { useRouter } from "expo-router";
+import { LayoutList, Palette } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
-import { ValueRow } from "@/components/ui/ValueRow";
+import { SettingsRow } from "@/components/ui/SettingsRow";
+import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { chooseValue } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
+import { colorName } from "@babun/shared/common/utils/colors";
 import { ColorSheet } from "@/features/appointments/BookingSheets";
 import {
   COLOR_SITUATIONS,
@@ -19,35 +22,38 @@ import {
   BOOKING_BLOCKS,
   useAutoColorRule,
   useBookingBlocks,
+  useFallbackColor,
   useSetAutoColorRule,
+  useSetFallbackColor,
   useSetSituationColor,
   useSituationPalette,
-  useToggleBookingBlock,
   type AutoColorRule,
 } from "@/features/appointments/booking-prefs";
 
-// «ЗАПИСЬ» — НАСТРОЙКА САМОЙ ФОРМЫ (владелец 2026-09-05: «давай сделаем
-// страницу, назовём её „Запись“, и там уже можно будет полноценно
-// редактировать цветовую гамму и включать те блоки, которые нужны: допустим,
-// для бьюти-мастеров объект не нужен»).
+// «ЗАПИСЬ» — НАСТРОЙКА САМОЙ ФОРМЫ И ЦВЕТА ЗАПИСИ (владелец 2026-09-05: «в
+// настройках цветовая палитра: если нет клиента — тогда цвет такой-то, тапаю,
+// могу выбрать любой… чтобы человек один раз настроил, и всё»).
 //
-// Форма записи одна на продукт, а бизнесы разные. До сих пор продукт решал за
-// всех: у мастера маникюра в каждой записи стоял блок «Объект», который он
-// никогда не заполнял, — и всё равно листал мимо него.
+// Три секции и шесть строк. Блоки формы уехали своей страницей: четыре
+// тумблера здесь переполняли экран, а обещание «всё видно сразу» дороже одной
+// лишней двери.
 //
 // Что нельзя выключить — клиент, время, команда, услуги с итогом — здесь не
 // показано вовсе: строка-нельзя не настройка (тот же закон, что снял
 // «Позвонить · всегда» со «Способов связи»).
 
+type ColorTarget = ColorSituation | "fallback";
+
 export default function BookingSettingsScreen() {
-  const t = useThemeColors();
-  const enabled = useBookingBlocks();
-  const toggle = useToggleBookingBlock();
+  const router = useRouter();
+  const blocks = useBookingBlocks();
   const rule = useAutoColorRule();
   const setRule = useSetAutoColorRule();
   const palette = useSituationPalette();
   const setSituationColor = useSetSituationColor();
-  const [editing, setEditing] = useState<ColorSituation | null>(null);
+  const fallback = useFallbackColor();
+  const setFallback = useSetFallbackColor();
+  const [editing, setEditing] = useState<ColorTarget | null>(null);
 
   const ruleLabel =
     AUTO_COLOR_RULES.find((r) => r.id === rule)?.label ?? "Цвет команды";
@@ -55,11 +61,36 @@ export default function BookingSettingsScreen() {
   const pickRule = async () => {
     haptics.tap();
     const picked = await chooseValue<AutoColorRule>(
-      "Цвет записи автоматически",
+      "Обычный цвет записи",
       AUTO_COLOR_RULES.map((r) => ({ value: r.id, label: r.label })),
     );
     if (picked?.value) setRule.mutate(picked.value);
   };
+
+  const openColor = (target: ColorTarget) => {
+    haptics.tap();
+    setEditing(target);
+  };
+
+  const editingColor =
+    editing === "fallback"
+      ? fallback
+      : editing
+        ? palette[editing] ?? null
+        : null;
+
+  // Ситуация про выключенный блок не показывается: у бьюти-мастера объекта нет
+  // вовсе, и «нет объекта» для него не дыра, а норма.
+  const situations = COLOR_SITUATIONS.filter(
+    (s) => s.id !== "noObject" || blocks.includes("object"),
+  );
+
+  const blocksSub =
+    blocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : BOOKING_BLOCKS.filter((b) => blocks.includes(b.id))
+          .map((b) => b.label)
+          .join(" · ") || "ни одного";
 
   return (
     <Screen>
@@ -69,91 +100,74 @@ export default function BookingSettingsScreen() {
         <SectionCard>
           {/* Правило называется вслух и живёт в одном месте: календарь и форма
               красят запись одинаково, потому что спрашивают его. */}
-          <ValueRow label="Автоматически" value={ruleLabel} onPress={pickRule} />
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={Palette}
+            title="Обычный цвет"
+            sub={ruleLabel}
+            onPress={pickRule}
+          />
+          <Divider inset={56} />
+          <SettingsRow
+            swatch={fallback}
+            icon={Palette}
+            title="Если цвета нет"
+            sub={colorName(fallback)}
+            onPress={() => openColor("fallback")}
+          />
         </SectionCard>
 
-        {/* ЦВЕТОВАЯ ПАЛИТРА — «ЧЕГО НЕ ХВАТАЕТ» (владелец 2026-09-05: «если
-            нет клиента, тогда цвет такой-то, тапаю — могу выбрать любой; если
-            нет объекта — такой-то»). Цвет записи перестал быть украшением: в
-            календаре день читается одним взглядом, и незакрытая дыра видна
-            прежде, чем бригада выехала. Порядок строк — порядок важности:
-            первая незакрытая сверху и красит. */}
-        <SectionEyebrow>Цветовая палитра</SectionEyebrow>
+        {/* ЧЕГО НЕ ХВАТАЕТ — цвет отвечает на вопрос, а не украшает. Порядок
+            строк и есть порядок важности: первая незакрытая сверху и красит.
+            Секция читается правилом и служит календарю легендой. */}
+        <SectionEyebrow>Чего не хватает</SectionEyebrow>
         <SectionCard>
-          {COLOR_SITUATIONS.map((situation, i) => {
-            const color = palette[situation.id];
-            return (
-              <Pressable
-                key={situation.id}
-                onPress={() => {
-                  haptics.tap();
-                  setEditing(situation.id);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`${situation.label}: ${color ? "свой цвет" : "не красит"}`}
-                accessibilityHint="Открывает выбор цвета"
-                style={({ pressed }) => ({
-                  minHeight: 56,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  paddingHorizontal: 16,
-                  borderTopWidth: i > 0 ? 1 : 0,
-                  borderTopColor: t.separator,
-                  backgroundColor: pressed ? t.pressed : "transparent",
-                })}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-                    {situation.label}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                    {situation.hint}
-                  </Text>
-                </View>
-                {color ? (
-                  <View
-                    style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      backgroundColor: color,
-                    }}
-                  />
-                ) : (
-                  <Text style={{ fontSize: 13, color: t.placeholder }}>
-                    не красит
-                  </Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </SectionCard>
-
-        <SectionEyebrow>Блоки</SectionEyebrow>
-        <SectionCard>
-          {BOOKING_BLOCKS.map((block) => (
-            <SwitchRow
-              key={block.id}
-              label={block.label}
-              hint={block.hint}
-              value={enabled.includes(block.id)}
-              onChange={() => toggle.mutate(block.id)}
-            />
+          {situations.map((situation, i) => (
+            <Fragment key={situation.id}>
+              {i > 0 ? <Divider inset={56} /> : null}
+              <SettingsRow
+                swatch={palette[situation.id] ?? null}
+                icon={Palette}
+                title={situation.label}
+                sub={colorName(palette[situation.id])}
+                onPress={() => openColor(situation.id)}
+              />
+            </Fragment>
           ))}
+        </SectionCard>
+
+        <SectionEyebrow>Форма</SectionEyebrow>
+        <SectionCard>
+          <SettingsRow
+            tile={SETTINGS_TILE.indigo}
+            icon={LayoutList}
+            title="Блоки формы"
+            sub={blocksSub}
+            onPress={() => router.push("/cabinet/booking-blocks")}
+          />
         </SectionCard>
       </ScrollView>
 
       <ColorSheet
         visible={editing != null}
         onClose={() => setEditing(null)}
-        title={COLOR_SITUATIONS.find((s) => s.id === editing)?.label}
+        title={
+          editing === "fallback"
+            ? "Если цвета нет"
+            : COLOR_SITUATIONS.find((s) => s.id === editing)?.label
+        }
         // «Не красить» вместо «Автоматически»: у ситуации нет автомата — есть
-        // отказ от сигнала, и тогда красит следующее правило.
+        // отказ от сигнала, и тогда красит следующее правило. У запасного
+        // цвета отказаться нельзя: он последняя ступень.
         autoLabel="Не красить"
-        value={editing ? palette[editing] ?? null : null}
+        allowNone={editing !== "fallback"}
+        value={editingColor}
         onPick={(color) => {
           if (!editing) return;
+          if (editing === "fallback") {
+            if (color) setFallback.mutate(color);
+            return;
+          }
           setSituationColor.mutate({ situation: editing, color });
         }}
       />

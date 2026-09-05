@@ -51,6 +51,12 @@ import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import {
+  AUTO_COLOR_RULES,
+  BOOKING_BLOCKS,
+  useAutoColorRule,
+  useBookingBlocks,
+} from "@/features/appointments/booking-prefs";
 import { Divider } from "@/components/ui/Divider";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -236,6 +242,19 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
 export default function CabinetHome() {
   const t = useThemeColors();
   const { data: role } = useCurrentRole();
+  // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
+  // которая молчит о своём состоянии, заставляет открывать её, чтобы
+  // вспомнить, что в ней стоит.
+  const bookingBlocks = useBookingBlocks();
+  const bookingRule = useAutoColorRule();
+  const bookingDesc = [
+    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
+    bookingBlocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
+          .map((b) => b.label)
+          .join(" · ") || "ни одного блока",
+  ].join(" · ");
   const owner = role === "owner";
   const dispatcher = role === "dispatcher";
   const master = role === "master";
@@ -452,7 +471,7 @@ export default function CabinetHome() {
             icon={CalendarCheck}
             tone={TILE.blue}
             title="Запись"
-            desc="Блоки формы и цвет записи"
+            desc={bookingDesc}
             href="/cabinet/booking"
           />
           <Divider inset={58} />

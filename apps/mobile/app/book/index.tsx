@@ -93,6 +93,7 @@ import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
@@ -315,6 +316,7 @@ export default function BookScreen() {
   // говорить о незаполненном (Кабинет → «Запись»).
   const autoColorRule = useAutoColorRule();
   const situationPalette = useSituationPalette();
+  const fallbackColor = useFallbackColor();
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
       COLOR_SITUATIONS.map((s) => s.id).filter(
@@ -1885,7 +1887,7 @@ export default function BookScreen() {
               : team?.color ?? null,
           palette: situationPalette,
           active: activeSituations,
-          fallback: t.accent,
+          fallback: fallbackColor,
         })
       : picked ?? team?.color ?? t.accent;
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;

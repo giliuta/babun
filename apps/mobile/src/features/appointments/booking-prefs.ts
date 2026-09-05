@@ -51,7 +51,6 @@ const blocks = createEnabledPrefs<BookingBlockId>({
 
 /** Включённые блоки формы записи, в порядке показа. */
 export const useBookingBlocks = blocks.use;
-export const useBookingBlocksOrder = blocks.useOrder;
 export const useToggleBookingBlock = blocks.useToggle;
 
 // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ (владелец 2026-09-05: «разберём
@@ -165,6 +164,54 @@ export function useSituationPalette(): SituationPalette {
     staleTime: Infinity,
   });
   return data;
+}
+
+// ЗАПАСНОЙ ЦВЕТ — ПОСЛЕДНЯЯ СТУПЕНЬ ПРАВИЛА. Он виден редко: и команда, и
+// метка получают цвет автоматом при создании, — но «ничего» на его месте
+// означало бы блок без цвета, поэтому «Не красить» здесь запрещено.
+// Умолчание — Сапфировый из палитры, а не кобальт продукта: кобальта в
+// справочнике нет, строка настройки не смогла бы назвать его словом.
+const FALLBACK_KEY = "babun-booking-fallback-color";
+const fallbackKey = (tenantId: string | null) =>
+  tenantId ? `${FALLBACK_KEY}:${tenantId}` : FALLBACK_KEY;
+const FALLBACK_DEFAULT = "#005BD3";
+
+function readFallback(tenantId: string | null): string {
+  try {
+    const v = getStorage().get<string>(fallbackKey(tenantId));
+    return typeof v === "string" && v.trim() ? v : FALLBACK_DEFAULT;
+  } catch {
+    return FALLBACK_DEFAULT;
+  }
+}
+
+export function useFallbackColor(): string {
+  const tenantId = useTenantId();
+  const { data } = useQuery({
+    queryKey: ["booking-fallback-color", tenantId],
+    queryFn: () => readFallback(tenantId),
+    initialData: () => readFallback(tenantId),
+    staleTime: Infinity,
+  });
+  return data;
+}
+
+export function useSetFallbackColor() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  return useMutation<string, Error, string>({
+    networkMode: "always",
+    mutationFn: async (color) => {
+      try {
+        getStorage().set(fallbackKey(tenantId), color);
+      } catch {
+        // Запись best-effort.
+      }
+      return color;
+    },
+    onSuccess: (color) =>
+      qc.setQueryData(["booking-fallback-color", tenantId], color),
+  });
 }
 
 export function useSetSituationColor() {

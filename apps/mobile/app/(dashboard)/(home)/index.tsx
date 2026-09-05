@@ -104,6 +104,7 @@ import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
@@ -829,6 +830,7 @@ export default function CalendarTab() {
   // показывал «Лимассол» столько раз, сколько в компании команд.
   const autoColorRule = useAutoColorRule();
   const situationPalette = useSituationPalette();
+  const fallbackColor = useFallbackColor();
   // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
   // мастера объекта нет вовсе.
   const bookingBlocks = useBookingBlocks();
@@ -923,7 +925,7 @@ export default function CalendarTab() {
         base,
         palette: situationPalette,
         active: activeSituations,
-        fallback: t.accent,
+        fallback: fallbackColor,
       });
     },
     [
@@ -933,7 +935,7 @@ export default function CalendarTab() {
       teamColor,
       situationPalette,
       activeSituations,
-      t.accent,
+      fallbackColor,
     ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
