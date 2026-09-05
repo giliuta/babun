@@ -7,6 +7,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { edgeColor } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -31,6 +32,8 @@ export function AgendaView({
   onMenu,
   labelFor,
   offLabelFor,
+  hueFor,
+  situationFor,
   onCreateNew,
   showAmounts = true,
   refreshing,
@@ -54,6 +57,9 @@ export function AgendaView({
    *  (`resolveOffDayLabel`). В списке для неё есть место, поэтому она
    *  называется словом, а не только цветом, как в сетке. */
   offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
+  /** Цвет записи и её ситуация — те же, что в сетке (`record-color`). */
+  hueFor?: (a: Appointment) => string;
+  situationFor?: (a: Appointment) => string | null;
   onCreateNew?: () => void;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
@@ -86,6 +92,8 @@ export function AgendaView({
           header={headerRu(item.title, todayYmd, tomorrowYmd)}
           label={labelFor?.(item.title) ?? null}
           offLabelFor={offLabelFor}
+          hueFor={hueFor}
+          situationFor={situationFor}
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
@@ -123,6 +131,8 @@ function DaySection({
   header,
   label,
   offLabelFor,
+  hueFor,
+  situationFor,
   clientName,
   serviceSummary,
   onEdit,
@@ -134,6 +144,8 @@ function DaySection({
   header: string;
   label: { name: string; color: string } | null;
   offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
+  hueFor?: (a: Appointment) => string;
+  situationFor?: (a: Appointment) => string | null;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -245,6 +257,8 @@ function DaySection({
               onLongPress={onMenu ? () => onMenu(apt) : undefined}
               showAmounts={showAmounts}
               offLabel={offLabelFor?.(apt) ?? null}
+              hue={hueFor?.(apt) ?? t.accent}
+              situation={situationFor?.(apt) ?? null}
               t={t}
             />
           </View>
@@ -262,6 +276,8 @@ function AgendaRow({
   onLongPress,
   showAmounts,
   offLabel,
+  hue,
+  situation,
   t,
 }: {
   apt: Appointment;
@@ -272,16 +288,22 @@ function AgendaRow({
   showAmounts: boolean;
   /** Чужая метка этой работы — стоит рядом со статусом. */
   offLabel: { name: string; color: string } | null;
+  /** Цвет записи — тот же, что красит блок в сетке. */
+  hue: string;
+  /** Чего не хватает записи, словом. Единственный нецветовой канал ситуации:
+   *  ΔE заливок «нет объекта» и «нет услуг» при дейтеранопии — 4.1, и лента
+   *  служит сетке легендой. */
+  situation: string | null;
   t: ThemeColors;
 }) {
+  // ЦВЕТ СТАТУСА В ЛЕНТЕ БОЛЬШЕ НЕ СВОЙ: третья копия правды расходилась с
+  // сеткой (там «в работе» — янтарь, здесь был кобальт).
   const statusColor =
     apt.status === "completed"
       ? t.success
       : apt.status === "cancelled"
         ? t.faint
-        : apt.status === "in_progress"
-          ? t.accent
-          : t.sub;
+        : t.sub;
   const cancelled = apt.status === "cancelled";
 
   // Событие — свой шаблон (web design-keeper #6): title из comment,
@@ -307,15 +329,18 @@ function AgendaRow({
           minHeight: 64,
         }}
       >
+        {/* КРУЖОК ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
+            отвергнутый корешок, только в ленте. Заливка и кант — как у блока
+            в сетке, чтобы лента и сетка говорили одним языком. */}
         <View
           style={{
-            position: "absolute",
-            left: 0,
-            top: 8,
-            bottom: 8,
-            width: 3,
+            width: 28,
+            height: 28,
             borderRadius: 999,
-            backgroundColor: apt.color_override || t.warning,
+            alignSelf: "center",
+            backgroundColor: `${hue}2e`,
+            borderWidth: 1,
+            borderColor: edgeColor(hue),
           }}
         />
         <View style={{ width: 64, paddingLeft: 8 }}>
@@ -431,6 +456,11 @@ function AgendaRow({
           </Text>
           {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: в списке она называется словом —
               «весь день Лимассол, а эта работа в Пафосе» читается сразу. */}
+          {situation ? (
+            <Text numberOfLines={1} style={{ fontSize: 11, color: t.body }}>
+              · {situation}
+            </Text>
+          ) : null}
           {offLabel ? (
             <>
               <View

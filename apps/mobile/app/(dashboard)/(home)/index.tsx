@@ -110,6 +110,7 @@ import {
   COLOR_SITUATIONS,
   recordFilled,
   resolveRecordColor,
+  resolveRecordSituation,
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { MonthView } from "@/features/calendar/MonthView";
@@ -948,6 +949,25 @@ export default function CalendarTab() {
       }),
     [labelFor, cities],
   );
+  // ЛЕНТА НАЗЫВАЕТ ДЫРУ СЛОВОМ. Она служит сетке легендой: цвет один на три
+  // ситуации различает их слишком слабо для дальтоника, а в списке есть место
+  // для слова.
+  const situationFor = useCallback(
+    (a: Appointment): string | null => {
+      if (a.kind !== "work") return null;
+      const id = resolveRecordSituation({
+        override: a.color_override,
+        filled: recordFilled(a),
+        palette: situationPalette,
+        active: activeSituations,
+      });
+      return id
+        ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
+        : null;
+    },
+    [situationPalette, activeSituations],
+  );
+
   // Сетке хватает цвета: в колонке дня словам места нет.
   const offLabelColorFor = useCallback(
     (a: Appointment): string | null => offLabelFor(a)?.color ?? null,
@@ -2197,6 +2217,8 @@ export default function CalendarTab() {
           onMenu={openActionMenu}
           labelFor={labelFor}
           offLabelFor={offLabelFor}
+          hueFor={(a) => teamColorFor(a) ?? t.accent}
+          situationFor={situationFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
