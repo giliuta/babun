@@ -90,6 +90,10 @@ import { ColorDot } from "@/components/ui/picker-fields";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
+import {
+  useAutoColorRule,
+  useBookingBlocks,
+} from "@/features/appointments/booking-prefs";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmThen } from "@/lib/confirm";
@@ -293,6 +297,15 @@ export default function BookScreen() {
   const keyboardShown = useKeyboardShown();
   const toast = useToast();
   const { data: dayCities = {} } = useDayCities();
+  // КАКИЕ БЛОКИ НУЖНЫ ЭТОМУ БИЗНЕСУ (Кабинет → «Запись», владелец 2026-09-05:
+  // «для бьюти-мастеров объект не нужен — можем вообще его убрать»).
+  const blocks = useBookingBlocks();
+  const showObject = blocks.includes("object");
+  const showLabelBlock = blocks.includes("label");
+  const showPayment = blocks.includes("payment");
+  const showNote = blocks.includes("note");
+  // Чем красить запись, когда цвет не выбирали руками.
+  const autoColorRule = useAutoColorRule();
   const params = useLocalSearchParams<{
     date?: string;
     time_start?: string;
@@ -1833,7 +1846,13 @@ export default function BookScreen() {
   // „Автоматически“ — подсвечивается тем цветом, который сейчас стоит в
   // автоматическом режиме»). Автоматический режим = цвет команды: это её
   // выезд. Им подсвечены карточки шапки и хром экрана.
-  const identityC = picked ?? team?.color ?? t.accent;
+  const identityC =
+    picked ??
+    (autoColorRule === "label"
+      ? teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
+      : null) ??
+    team?.color ??
+    t.accent;
   const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
   const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
   const headerBorder = hasColor
@@ -2104,6 +2123,7 @@ export default function BookScreen() {
                 }
                 labelFromDay={city == null}
                 identity={identityC}
+                showLabel={showLabelBlock}
                 onEditTeam={() => {
                   setTeamSheetOpen(true);
                   haptics.tap();
@@ -2253,6 +2273,7 @@ export default function BookScreen() {
                   сперва «можно добавить объект без клиента», потом — «объект
                   есть, а клиента нет, это очень странно, не та архитектура».
                   Верно второе: объект принадлежит клиенту. */}
+              {showObject ? (
               <SectionCard title="Объект">
                 {client ? (
                   // БЕЗ ВЕРХНЕГО ВОЛОСКА: он шёл сразу под заголовком «ОБЪЕКТ»
@@ -2361,6 +2382,8 @@ export default function BookScreen() {
                   </View>
                 )}
               </SectionCard>
+
+              ) : null}
 
               {/* УСЛУГИ. Заголовок был «Услуги и сумма» — владелец
                   2026-08-31: «убираем, просто ставим услуги». Сумма и так
@@ -2478,7 +2501,10 @@ export default function BookScreen() {
               </SectionCard>
 
               {/* Оплата — сразу после «Итого»: единая денежная цепочка
-                  сумма → предоплата → долг. Свёрнута, не гейтит сейв. */}
+                  сумма → предоплата → долг. Свёрнута, не гейтит сейв.
+                  Выключается в Кабинет → «Запись»: не всякий бизнес берёт
+                  предоплату. */}
+              {showPayment ? (
               <View
                 onLayout={(e) => {
                   payCardY.current = e.nativeEvent.layout.y;
@@ -2637,11 +2663,13 @@ export default function BookScreen() {
                 )}
               </SectionCard>
               </View>
+              ) : null}
 
               {/* Заметка записи — последняя строка формы: «Дополнительно» под ней
                   снесено 2026-08-30. Зовётся «заметка записи» (владелец
                   2026-09-04): под клиентом и объектом стоят их заметки, и
                   третье поле обязано сказать, чьё оно. */}
+              {showNote ? (
               <SectionCard>
                 <View className="px-4 py-2.5">
                   {/* ЗАМЕТКУ НАБИРАЮТ, ВИДЯ ЕЁ. Поле стоит последним, и KAV,
@@ -2671,6 +2699,7 @@ export default function BookScreen() {
                   />
                 </View>
               </SectionCard>
+              ) : null}
 
               {/* БЛОК «ДОПОЛНИТЕЛЬНО» СНЕСЁН 2026-08-30 (владелец: «убрать
                   совсем»). За одной дверью лежали скидка, статус, источник

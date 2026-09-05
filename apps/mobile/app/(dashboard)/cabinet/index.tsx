@@ -18,6 +18,7 @@ import { useRouter, type Href } from "expo-router";
 import {
   BarChart3,
   BookUser,
+  CalendarCheck,
   Boxes,
   CalendarCheck2,
   CalendarClock,
@@ -443,6 +444,16 @@ export default function CabinetHome() {
             title="Клиенты"
             desc="Что показывать, сортировка, импорт"
             href={"/clients/settings" as Href}
+          />
+          <Divider inset={58} />
+          {/* Настройка САМОЙ формы записи: какие блоки нужны этому бизнесу и
+              чем красить запись автоматически (владелец 2026-09-05). */}
+          <MenuRow
+            icon={CalendarCheck}
+            tone={TILE.blue}
+            title="Запись"
+            desc="Блоки формы и цвет записи"
+            href="/cabinet/booking"
           />
           <Divider inset={58} />
           <MenuRow

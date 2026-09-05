@@ -101,6 +101,7 @@ import {
   type DayLabel,
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
+import { useAutoColorRule } from "@/features/appointments/booking-prefs";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
@@ -809,15 +810,13 @@ export default function CalendarTab() {
     }
     return m;
   }, [teams]);
-  const teamColorFor = useCallback(
-    (a: Appointment) => (a.team_id ? teamColor.get(a.team_id) ?? null : null),
-    [teamColor],
-  );
+
 
   // ─── Метки дней (web parity: city pill в шапке дня) ─────────────────
   // МЕТКИ АКТИВНОГО КАЛЕНДАРЯ, а не всего тенанта. С 2026-08-29 метка
   // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
   // показывал «Лимассол» столько раз, сколько в компании команд.
+  const autoColorRule = useAutoColorRule();
   const citiesQuery = useCities({ teamId: activeTeamId });
   const dayCitiesQuery = useDayCities();
   const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
@@ -872,6 +871,25 @@ export default function CalendarTab() {
         fallbackColor: t.faint,
       }),
     [activeTeamId, dayCities, cities, todayYmd, t.faint],
+  );
+
+  // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ — ПО ПРАВИЛУ ИЗ НАСТРОЙКИ (Кабинет →
+  // «Запись», владелец 2026-09-05). Форма записи спрашивает то же правило:
+  // иначе один и тот же выезд был бы одного цвета в форме и другого в сетке.
+  // «Цвет метки» падает на цвет команды, когда метки нет ни у записи, ни у
+  // дня: блок без цвета хуже блока «не той» окраски.
+  const teamColorFor = useCallback(
+    (a: Appointment) => {
+      if (autoColorRule === "label") {
+        const name = (a.city ?? "").trim() || labelFor(a.date)?.name;
+        const own = name
+          ? cities.find((c) => c.name === name)?.color ?? null
+          : null;
+        if (own) return own;
+      }
+      return a.team_id ? teamColor.get(a.team_id) ?? null : null;
+    },
+    [autoColorRule, cities, labelFor, teamColor],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
   // другим цветом, когда метка другая, окантовку какую-то»). Правило и его

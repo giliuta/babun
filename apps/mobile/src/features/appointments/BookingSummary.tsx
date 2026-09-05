@@ -123,6 +123,7 @@ export function TeamLabelRow({
   labelColor,
   labelFromDay,
   identity,
+  showLabel,
   onEditTeam,
   onEditLabel,
 }: {
@@ -136,6 +137,8 @@ export function TeamLabelRow({
   labelFromDay?: boolean;
   /** Цвет ЗАПИСИ: выбранный руками либо тот, что действует автоматически. */
   identity: string;
+  /** Бизнес не пользуется метками — тогда команда занимает всю строку. */
+  showLabel: boolean;
   onEditTeam: () => void;
   onEditLabel: () => void;
 }) {
@@ -158,6 +161,7 @@ export function TeamLabelRow({
         accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
         accessibilityHint="Открывает выбор команды и мастера"
       />
+      {showLabel ? (
       <IdentityCard
         icon={MapPin}
         color={label ? (labelColor ?? t.accent) : t.faint}
@@ -173,6 +177,7 @@ export function TeamLabelRow({
         }
         accessibilityHint="Открывает выбор метки"
       />
+      ) : null}
     </View>
   );
 }
