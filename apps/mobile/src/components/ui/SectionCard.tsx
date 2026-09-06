@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -19,7 +20,10 @@ export function SectionCard({
   children,
 }: {
   title?: string;
-  action?: { label: string; onPress: () => void };
+  /** Действие в шапке. С `icon` — маленький кружок со значком вместо надписи
+   *  (владелец 2026-09-06: «„Файлы“, справа плюсик»); `label` остаётся для
+   *  VoiceOver. */
+  action?: { label: string; onPress: () => void; icon?: LucideIcon };
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -47,7 +51,25 @@ export function SectionCard({
             >
               {title}
             </Text>
-            {action ? (
+            {action?.icon ? (
+              <Pressable
+                onPress={action.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={action.label}
+                hitSlop={10}
+                style={({ pressed }) => ({
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: `${t.accent}14`,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <action.icon color={t.accent} size={15} strokeWidth={2.4} />
+              </Pressable>
+            ) : action ? (
               <Pressable
                 onPress={action.onPress}
                 accessibilityRole="button"
