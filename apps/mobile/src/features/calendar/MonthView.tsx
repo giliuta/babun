@@ -13,6 +13,11 @@ import {
   weekdayIndex,
   weekdayLabels,
 } from "@/features/calendar/week";
+import { countOverdue } from "@/features/calendar/overdue";
+import {
+  edgeColor,
+  readableTextOnColor,
+} from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
 
 const ymd = (d: Date) =>
@@ -45,6 +50,7 @@ export const MonthView = memo(function MonthView({
   teamId,
   todayYmd,
   labelFor,
+  holeFor,
   onPickDay,
   onPickLabelDay,
   showFinance = true,
@@ -65,6 +71,10 @@ export const MonthView = memo(function MonthView({
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** Дыра дня — «чего этой работе не хватает», агрегатом на день: первая
+   *  незакрытая ситуация по `COLOR_SITUATIONS`. Месяц говорит «сюда надо
+   *  зайти»; имя дыры остаётся ленте и озвучке. */
+  holeFor?: (dateYmd: string) => { name: string; color: string } | null;
   /** Долгий тап по дню — провалиться в Неделю этого дня (тап без меток —
    *  тоже, см. onPickLabelDay). */
   onPickDay: (d: Date) => void;
@@ -121,7 +131,6 @@ export const MonthView = memo(function MonthView({
 
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());
-  const accentTint = `${t.accent}1f`;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.surface }}>
@@ -162,6 +171,24 @@ export const MonthView = memo(function MonthView({
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
               const label = inMonth ? labelFor?.(key) ?? null : null;
+              // ГРОМКО — ТОЛЬКО СЕГОДНЯ И ВПЕРЁД: в прошлом дозаполнять уже
+              // нечего, а половина месяца в тёмных пилюлях убила бы сигнал
+              // частотой. Гейта `inMonth` здесь НЕТ (в отличие от метки):
+              // хвостовые дни чужого месяца — настоящие дни, и счётчик с
+              // деньгами на них не гасится.
+              const hole = count > 0 && key >= todayStr ? holeFor?.(key) ?? null : null;
+              const pill = hole ? edgeColor(hole.color) : null;
+              // СКОЛЬКО РАБОТ НЕ ЗАКРЫТО. В сетке просрочка говорит толщиной
+              // канта — каналом СРАВНИТЕЛЬНЫМ: на сплошь просроченной прошлой
+              // неделе все канты одинаково толстые, и «сколько висит» по ним
+              // не прочесть. Это деньги, и ответ обязан жить там, где он не
+              // зависит от плотности, — на уровне дня.
+              //
+              // `nowMinutes` не передаётся СОЗНАТЕЛЬНО: чип месяца отвечает за
+              // долги ПРОШЛОГО, сегодняшнюю работу ещё закрывают, и мигать на
+              // ней с высоты месяца нечего. Плюс месяц не перерисовывается раз
+              // в минуту — три страницы по 42 клетки.
+              const unclosed = countOverdue(byDay.get(key) ?? [], todayStr, null);
               return (
                 <Pressable
                   key={key}
@@ -171,7 +198,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
@@ -219,17 +246,51 @@ export const MonthView = memo(function MonthView({
                         />
                       ) : null}
                     </View>
+                    {/* ОДИН ЧИП, ЧЕТЫРЕ ГРОМКОСТИ, И НИКАКОГО ВТОРОГО. Пусто —
+                        чипа нет; обычный день — тихая цифра чернилами без
+                        подложки; день с незакрытой дырой сегодня или впереди —
+                        плотная пилюля цвета худшей дыры с белой цифрой;
+                        прошедший день с незакрытыми работами — ЯНТАРНЫЙ КАНТ
+                        вокруг той же цифры.
+
+                        Второй чип рядом сюда не влезает физически: клетка
+                        56pt, внутри 48pt, а число дня с точкой метки и два
+                        чипа занимают 65 — обрезка съедала бы счётчик. Один чип
+                        с кантом занимает 42.
+
+                        Цифра ВСЕГДА одна и та же — сколько записей в дне;
+                        меняется только оправа. Кант отвечает «сюда надо
+                        вернуться», а сколько именно висит, называет озвучка и
+                        сам день. Пилюля и кант не встречаются: пилюля живёт
+                        сегодня и вперёд, кант — только в прошлом.
+
+                        Перепад держится не на тоне: тихая цифра занимает около
+                        одной двенадцатой чернил громкой, плюс инверсия, плюс
+                        контур. Сигнал жив в чёрно-белом и при любом
+                        дальтонизме. Кобальтового чипа в месяце больше нет:
+                        кобальт остаётся за «сегодня» и за прибылью. */}
                     {count > 0 ? (
                       <View
                         className="rounded-full px-1.5"
-                        style={{ backgroundColor: accentTint }}
+                        style={{
+                          backgroundColor: pill ?? "transparent",
+                          borderWidth: !pill && unclosed > 0 ? 1 : 0,
+                          borderColor: t.warning,
+                        }}
                       >
                         <Text
+                          maxFontSizeMultiplier={1.3}
                           style={{
                             fontSize: 10,
                             fontWeight: "700",
-                            lineHeight: 16,
-                            color: t.accent,
+                            lineHeight: !pill && unclosed > 0 ? 14 : 16,
+                            color: pill
+                              ? readableTextOnColor(pill, t.ink, t.onAccent)
+                              : unclosed > 0
+                                ? t.warning
+                                : inMonth
+                                  ? t.sub
+                                  : t.faint,
                           }}
                         >
                           {count}

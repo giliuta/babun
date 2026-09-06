@@ -28,7 +28,6 @@ import {
   ChevronRight,
   MapPin,
   MoreHorizontal,
-  Palette,
   Phone,
   UserRound,
 } from "lucide-react-native";
@@ -65,6 +64,7 @@ import {
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { formatEURExact } from "@babun/shared/common/utils/money";
+import { colorName } from "@babun/shared/common/utils/colors";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -87,11 +87,14 @@ import { useDayCities } from "@/features/calendar/day-cities";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
+  recordFilled,
   resolveRecordColor,
+  serviceBaseColor,
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { haptics } from "@/lib/haptics";
@@ -303,6 +306,7 @@ export default function BookScreen() {
   // говорить о незаполненном (Кабинет → «Запись»).
   const autoColorRule = useAutoColorRule();
   const situationPalette = useSituationPalette();
+  const fallbackColor = useFallbackColor();
   const activeSituations = useMemo<ColorSituation[]>(
     () =>
       COLOR_SITUATIONS.map((s) => s.id).filter(
@@ -388,6 +392,14 @@ export default function BookScreen() {
   const { data: allServices = [] } = useAllServices();
   const nameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
+    [allServices],
+  );
+  // Цвет — по тому же ПОЛНОМУ справочнику, а не по живому каталогу: правка
+  // старой записи с убранной из прайса услугой красила бы форму одним цветом,
+  // а сетку другим, — ровно та тихая ложь, о которой предупреждает соседний
+  // комментарий.
+  const serviceColorById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.color])),
     [allServices],
   );
 
@@ -1768,45 +1780,69 @@ export default function BookScreen() {
       : "Новая запись";
 
   // ── identity-цвет записи → живая подсветка всего экрана ──
-  // Выбранный цвет — это цвет ЭТОЙ записи (тот же, что станет блоком в
-  // календаре). Он владеет только ХРОМОМ (подложка, шапка-halo, градиент CTA,
-  // корешок докета); семантические токены (зелёный/красный/янтарь) и белые
-  // карточки не трогает. Без выбора — hasColor=false и экран идентичен прежнему.
+  // Цвет записи — тот же, что станет блоком в календаре. Он владеет только
+  // ХРОМОМ (подложка, шапка-halo, градиент CTA, образец в углу); семантические
+  // токены (зелёный/красный/янтарь) и белые карточки не трогает.
   const picked = kind === "event" ? eventColor : colorOverride;
+  /** Цвет выбран РУКОЙ — для озвучки и для листа выбора, не для покраски. */
   const hasColor = picked != null;
-  const accentC = picked ?? t.accent;
-  // ЦВЕТ ЗАПИСИ — ВЫБРАННЫЙ ЛИБО ДЕЙСТВУЮЩИЙ (владелец 2026-09-05: «выбрал
-  // „Автоматически“ — подсвечивается тем цветом, который сейчас стоит в
-  // автоматическом режиме»). Автоматический режим = цвет команды: это её
-  // выезд. Им подсвечены карточки шапки и хром экрана.
   // ЦВЕТ ЗАПИСИ — ОДНО ПРАВИЛО С КАЛЕНДАРЁМ (`record-color`): рука человека,
   // потом первая незакрытая дыра из палитры, потом «обычный» цвет по
   // настройке. Форма обязана показывать ровно то, что покажет сетка.
-  const identityC =
+  //
+  // Считается ДВАЖДЫ и по одному правилу: с выбранным цветом — это цвет
+  // записи, и им красится всё; без него — цвет, который ДЕЙСТВОВАЛ БЫ, и его
+  // показывает кнопка «Автоматически» в листе. Иначе выбор идёт вслепую:
+  // слово обещает, что цвет подставят, и умалчивает какой.
+  const identityFor = (override: string | null) =>
     kind === "work"
       ? resolveRecordColor({
-          override: picked,
-          filled: {
-            client: clientId != null,
-            object: locationId != null,
-            services: serviceIds.length > 0,
-          },
+          override,
+          filled: recordFilled({
+            client_id: clientId,
+            location_id: locationId,
+            address,
+            service_ids: serviceIds,
+            custom_total: customTotal,
+            total_amount: effectiveTotal,
+          }),
           base:
             autoColorRule === "label"
               ? teamCities.find((c) => c.name === effectiveLabel)?.color ??
                 team?.color ??
                 null
-              : team?.color ?? null,
+              : autoColorRule === "service"
+                ? // Источник — живой черновик, поэтому шапка перекрашивается
+                  // прямо в момент выбора услуги, а кнопка «Автоматически» в
+                  // листе цвета показывает то, что встанет в сетке.
+                  serviceBaseColor(
+                    { service_ids: serviceIds },
+                    (id) => serviceColorById.get(id),
+                  ) ??
+                  team?.color ??
+                  null
+                : team?.color ?? null,
           palette: situationPalette,
           active: activeSituations,
-          fallback: t.accent,
+          fallback: fallbackColor,
         })
-      : picked ?? team?.color ?? t.accent;
-  const groundBg = hasColor ? tintOver(accentC, t.canvas, 0.06) : t.canvas;
-  const headerBg = hasColor ? tintOver(accentC, t.canvas, 0.1) : t.canvas;
-  const headerBorder = hasColor
-    ? tintOver(accentC, t.canvas, 0.28)
-    : t.separator;
+      : override ?? team?.color ?? t.accent;
+  const identityC = identityFor(picked);
+  /** Что подставится, если руками не выбирать. */
+  const identityAuto = identityFor(null);
+  // ЭКРАН КРАСИТСЯ ДЕЙСТВУЮЩИМ ЦВЕТОМ, А НЕ ТОЛЬКО ВЫБРАННЫМ РУКОЙ (владелец
+  // 2026-09-05: «если я выбираю „Автоматически“ — значит подсвечивается именно
+  // тем цветом, который сейчас стоит в автоматическом режиме»).
+  //
+  // Раньше карточки шапки брали `identityC` — полное правило записи, — а
+  // подложка, шапка, halo, градиент кнопки и образец в углу брали «только
+  // выбранный руками». Запись без клиента выходила серой в трёх карточках и
+  // кобальтовой во всём остальном: один предмет двух цветов. Правило одно, и
+  // цвет у записи есть ВСЕГДА — выбранный, ситуационный, командный или
+  // запасной, — поэтому и гасить подсветку не от чего.
+  const groundBg = tintOver(identityC, t.canvas, 0.06);
+  const headerBg = tintOver(identityC, t.canvas, 0.1);
+  const headerBorder = tintOver(identityC, t.canvas, 0.28);
 
   // «Маршрут» — реальное действие (его не было): открыть адрес в картах.
   // МАРШРУТ ЖИВЁТ У СТРОКИ ОБЪЕКТА, А НЕ У ФОРМЫ. Свой лист маршрута тут
@@ -1937,7 +1973,7 @@ export default function BookScreen() {
           borderBottomColor: headerBorder,
         }}
       >
-        {hasColor ? <Halo color={accentC} intensity={0.16} /> : null}
+        <Halo color={identityC} intensity={0.16} />
         <View className="flex-row items-center px-3" style={{ height: 48 }}>
           <Pressable
             onPress={requestClose}
@@ -1970,24 +2006,25 @@ export default function BookScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${
                 kind === "event" ? "Цвет события" : "Цвет записи"
-              }: ${hasColor ? "выбран" : "по умолчанию"}`}
+              }: ${colorName(identityC)}${hasColor ? "" : ", автоматически"}`}
               accessibilityHint="Открывает выбор цвета — им подсвечивается вся запись"
             >
-              {hasColor ? (
-                <View
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: t.radius.card,
-                    backgroundColor: accentC,
-                    borderWidth: 2,
-                    borderColor: t.surface,
-                    boxShadow: `0px 1px 4px ${accentC}66`,
-                  }}
-                />
-              ) : (
-                <Palette color={t.sub} size={ICON.sm} />
-              )}
+              {/* ОБРАЗЕЦ ПОКАЗЫВАЕТ ДЕЙСТВУЮЩИЙ ЦВЕТ, А НЕ ФАКТ ВЫБОРА. Здесь
+                  рисовалась иконка палитры, пока цвет не выбран руками, — то
+                  есть кнопка «Цвет» молчала именно тогда, когда цвет было
+                  интереснее всего увидеть: у записи без клиента он серый, у
+                  выезда без объекта — оранжевый, и это и есть ответ. */}
+              <View
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: t.radius.card,
+                  backgroundColor: identityC,
+                  borderWidth: 2,
+                  borderColor: t.surface,
+                  boxShadow: `0px 1px 4px ${identityC}66`,
+                }}
+              />
               <Text style={{ fontSize: 11, fontWeight: "600", color: t.faint, marginTop: 1 }}>
                 Цвет
               </Text>
@@ -2800,7 +2837,7 @@ export default function BookScreen() {
           onPress={save}
           disabled={!canSave || bookingBusy}
           loading={bookingBusy}
-          tint={hasColor ? accentC : undefined}
+          tint={identityC}
         />
         </View>
       </KeyboardAvoidingView>
@@ -2970,6 +3007,7 @@ export default function BookScreen() {
         visible={colorSheetOpen}
         onClose={() => setColorSheetOpen(false)}
         isEvent={kind === "event"}
+        autoColor={identityAuto}
         value={kind === "event" ? eventColor : colorOverride}
         onPick={(c) => {
           if (kind === "event") setEventColor(c);

@@ -30,15 +30,18 @@ export type BookingBlockId = "object" | "label" | "payment" | "note";
 export interface BookingBlockDef {
   id: BookingBlockId;
   label: string;
-  /** Что исчезнет с формы, если выключить. Показывается подписью строки. */
-  hint: string;
 }
 
+// ПОДПИСЕЙ У СТРОК НЕТ, И ПОЛЯ ПОД НИХ ТОЖЕ (владелец 2026-09-04: «эти
+// подсказки просто ненужные»). Здесь лежало поле `hint` с текстами «куда
+// ехать», «предоплата и долг» — оно не доезжало до экрана ни разу:
+// `ToggleListScreen` подписи не рисует по прямому отказу владельца. Мёртвое
+// поле опаснее пустого: следующий читатель поверит, что подпись где-то есть.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
-  { id: "object", label: "Объект", hint: "куда ехать" },
-  { id: "label", label: "Метка", hint: "город или район выезда" },
-  { id: "payment", label: "Оплата", hint: "счета команды, предоплата, инвойс" },
-  { id: "note", label: "Заметка записи", hint: "что помнить об этой работе" },
+  { id: "object", label: "Объект" },
+  { id: "label", label: "Метка" },
+  { id: "payment", label: "Оплата" },
+  { id: "note", label: "Заметка записи" },
 ];
 
 const blocks = createEnabledPrefs<BookingBlockId>({
@@ -51,7 +54,6 @@ const blocks = createEnabledPrefs<BookingBlockId>({
 
 /** Включённые блоки формы записи, в порядке показа. */
 export const useBookingBlocks = blocks.use;
-export const useBookingBlocksOrder = blocks.useOrder;
 export const useToggleBookingBlock = blocks.useToggle;
 
 // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ (владелец 2026-09-05: «разберём
@@ -60,15 +62,18 @@ export const useToggleBookingBlock = blocks.useToggle;
 //
 // «Автоматически» значит «не выбирали руками», и до сих пор оно молча
 // означало цвет КОМАНДЫ. Для одной фирмы это правда — цвет говорит, чья
-// бригада; для другой важнее, КУДА едут, и тогда день читается по меткам.
-// Правило теперь называется вслух и живёт в одном месте: календарь и форма
-// красят запись одинаково, потому что спрашивают его.
+// бригада; для другой важнее, КУДА едут, и тогда день читается по меткам; а
+// для третьей — ЧТО делают, и тогда день читается по услугам: цвет берёт
+// первая услуга записи, та самая, что напечатана третьей строкой блока.
+// Правило называется вслух и живёт в одном месте: календарь и форма красят
+// запись одинаково, потому что спрашивают его.
 
-export type AutoColorRule = "team" | "label";
+export type AutoColorRule = "team" | "label" | "service";
 
 export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "team", label: "Цвет команды" },
   { id: "label", label: "Цвет метки" },
+  { id: "service", label: "Цвет услуги" },
 ];
 
 const RULE_KEY = "babun-booking-auto-color";
@@ -77,8 +82,14 @@ const ruleKey = (tenantId: string | null) =>
 
 function readRule(tenantId: string | null): AutoColorRule {
   try {
+    // БЕЛЫЙ СПИСОК, А НЕ СРАВНЕНИЕ С ОДНИМ ЗНАЧЕНИЕМ. Пока здесь стояло
+    // `v === "label" ? "label" : "team"`, любое новое правило записывалось бы,
+    // но читалось как «Цвет команды» — и дефект выглядел бы как «настройка не
+    // сохраняется», причём только после перезапуска приложения.
     const v = getStorage().get<string>(ruleKey(tenantId));
-    return v === "label" ? "label" : "team";
+    return AUTO_COLOR_RULES.some((r) => r.id === v)
+      ? (v as AutoColorRule)
+      : "team";
   } catch {
     return "team";
   }
@@ -165,6 +176,54 @@ export function useSituationPalette(): SituationPalette {
     staleTime: Infinity,
   });
   return data;
+}
+
+// ЗАПАСНОЙ ЦВЕТ — ПОСЛЕДНЯЯ СТУПЕНЬ ПРАВИЛА. Он виден редко: и команда, и
+// метка получают цвет автоматом при создании, — но «ничего» на его месте
+// означало бы блок без цвета, поэтому «Не красить» здесь запрещено.
+// Умолчание — Сапфировый из палитры, а не кобальт продукта: кобальта в
+// справочнике нет, строка настройки не смогла бы назвать его словом.
+const FALLBACK_KEY = "babun-booking-fallback-color";
+const fallbackKey = (tenantId: string | null) =>
+  tenantId ? `${FALLBACK_KEY}:${tenantId}` : FALLBACK_KEY;
+const FALLBACK_DEFAULT = "#005BD3";
+
+function readFallback(tenantId: string | null): string {
+  try {
+    const v = getStorage().get<string>(fallbackKey(tenantId));
+    return typeof v === "string" && v.trim() ? v : FALLBACK_DEFAULT;
+  } catch {
+    return FALLBACK_DEFAULT;
+  }
+}
+
+export function useFallbackColor(): string {
+  const tenantId = useTenantId();
+  const { data } = useQuery({
+    queryKey: ["booking-fallback-color", tenantId],
+    queryFn: () => readFallback(tenantId),
+    initialData: () => readFallback(tenantId),
+    staleTime: Infinity,
+  });
+  return data;
+}
+
+export function useSetFallbackColor() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  return useMutation<string, Error, string>({
+    networkMode: "always",
+    mutationFn: async (color) => {
+      try {
+        getStorage().set(fallbackKey(tenantId), color);
+      } catch {
+        // Запись best-effort.
+      }
+      return color;
+    },
+    onSuccess: (color) =>
+      qc.setQueryData(["booking-fallback-color", tenantId], color),
+  });
 }
 
 export function useSetSituationColor() {

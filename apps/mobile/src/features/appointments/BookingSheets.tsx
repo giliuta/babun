@@ -1,6 +1,10 @@
 import { Text as NativeText, Pressable, View, type TextProps } from "react-native";
 import { Check } from "lucide-react-native";
-import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
+import {
+  PRESET_COLOR_VALUES,
+  colorName,
+} from "@babun/shared/common/utils/colors";
+import { edgeColor } from "@/components/ui/color-contrast";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -159,6 +163,8 @@ export function ColorSheet({
   isEvent,
   title,
   autoLabel,
+  autoColor,
+  allowNone = true,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -169,6 +175,13 @@ export function ColorSheet({
   title?: string;
   /** Что значит «без цвета» у этого вызова. По умолчанию — «Автоматически». */
   autoLabel?: string;
+  /** Цвет, который ДЕЙСТВУЕТ, пока не выбран свой: им и красится образец на
+   *  кнопке «Автоматически». Без него человек выбирает вслепую между словом и
+   *  палитрой, хотя ответ у продукта уже есть. */
+  autoColor?: string | null;
+  /** Можно ли остаться без цвета. У запасного цвета записи нельзя: он и есть
+   *  последняя ступень правила, и «ничего» на его месте — дыра. */
+  allowNone?: boolean;
 }) {
   return (
     <BottomSheet
@@ -192,11 +205,45 @@ export function ColorSheet({
             прямо посередине; а внизу можно выбирать уже любой цвет, и он
             будет уже не автоматически»). Слово честнее прежнего «По
             умолчанию»: без выбора цвет берётся у команды сам. */}
+        {allowNone ? (
         <View className="mb-3 self-center">
           <Chip
             label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
+            // КАНТ, А НЕ СЫРОЙ ПИГМЕНТ: пилюля красит им свою рамку и тинт, а
+            // Ванильный #FFF0BC в полную силу даёт к белому листу 1.14 : 1 —
+            // выбранное состояние на бледном цвете просто исчезало бы.
+            // Кружок рядом остаётся сырым: в нём цвет ВЫБИРАЮТ.
+            color={autoColor ? edgeColor(autoColor) : undefined}
+            // ОБРАЗЕЦ ДЕЙСТВУЮЩЕГО ЦВЕТА ПРЯМО НА КНОПКЕ (владелец 2026-09-05:
+            // «выбрал „Автоматически“ — значит подсвечивается тем цветом,
+            // который сейчас стоит в автоматическом режиме»). Слово говорило,
+            // что цвет выберут за тебя, и умалчивало какой; кружок отвечает.
+            // Что именно подставится, решает правило записи целиком: сперва
+            // незакрытая дыра, и только потом «обычный» цвет — команды, метки
+            // или первой услуги, как настроено.
+            icon={
+              autoColor ? (
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: autoColor,
+                    // Волосяной кант тем же затемнением: без него бледный цвет
+                    // растворяется в подложке пилюли и кружка не видно.
+                    borderWidth: 1,
+                    borderColor: edgeColor(autoColor),
+                  }}
+                />
+              ) : undefined
+            }
+            accessibilityLabel={
+              autoColor
+                ? `${autoLabel ?? "Автоматически"}: ${colorName(autoColor)}`
+                : undefined
+            }
             selected={value == null}
             onPress={() => {
               haptics.tap();
@@ -204,6 +251,7 @@ export function ColorSheet({
             }}
           />
         </View>
+        ) : null}
         <ColorPicker
           label={null}
           colors={EVENT_COLORS}

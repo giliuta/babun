@@ -101,14 +101,20 @@ import {
   type DayLabel,
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
+import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
   useBookingBlocks,
+  useFallbackColor,
   useSituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
+  appointmentSituation,
+  recordFilled,
   resolveRecordColor,
+  serviceBaseColor,
+  worstSituation,
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { MonthView } from "@/features/calendar/MonthView";
@@ -760,13 +766,39 @@ export default function CalendarTab() {
     () => new Map(clients.map((c) => [c.id, c.full_name])),
     [clients],
   );
+  // Адрес клиента — тоже картой: `addressFor` зовут на КАЖДЫЙ блок сетки, а в
+  // неделе их полторы сотни. Линейный поиск по всем клиентам на каждый блок
+  // стоил бы кадра на большой базе.
+  const addressById = useMemo(
+    () => new Map(clients.map((c) => [c.id, c.address])),
+    [clients],
+  );
   const clientName = (a: Appointment) =>
     a.client_id ? nameById.get(a.client_id) ?? "" : "";
+  // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
+  // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
+  // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
+  // клиентский адрес для него — единственная правда.
+  const addressFor = useCallback(
+    (a: Appointment) => {
+      const own = (a.address ?? "").trim();
+      if (own) return own;
+      const client = a.client_id ? addressById.get(a.client_id) : null;
+      return (client ?? "").trim() || null;
+    },
+    [addressById],
+  );
 
   // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;
   // `services` выше остаётся про живой каталог (онбординг спрашивает им,
   // заведён ли прайс вообще).
   const { data: allServices = [] } = useAllServices();
+  // ЦВЕТ УСЛУГИ ЧИТАЕТСЯ ПО ПОЛНОМУ СПРАВОЧНИКУ, как и имя: услуга, убранная
+  // из прайса, обязана продолжать красить прошлые дни.
+  const serviceColorById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.color])),
+    [allServices],
+  );
   const serviceNameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
     [allServices],
@@ -827,6 +859,7 @@ export default function CalendarTab() {
   // показывал «Лимассол» столько раз, сколько в компании команд.
   const autoColorRule = useAutoColorRule();
   const situationPalette = useSituationPalette();
+  const fallbackColor = useFallbackColor();
   // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
   // мастера объекта нет вовсе.
   const bookingBlocks = useBookingBlocks();
@@ -900,6 +933,9 @@ export default function CalendarTab() {
   // дня: блок без цвета хуже блока «не той» окраски.
   const teamColorFor = useCallback(
     (a: Appointment) => {
+      // Цвет команды — общая последняя ступень для всех трёх правил: блок без
+      // цвета хуже блока «не той» окраски.
+      const teamBase = a.team_id ? teamColor.get(a.team_id) ?? null : null;
       const base =
         autoColorRule === "label"
           ? (() => {
@@ -907,25 +943,21 @@ export default function CalendarTab() {
               return name
                 ? cities.find((c) => c.name === name)?.color ?? null
                 : null;
-            })() ?? (a.team_id ? teamColor.get(a.team_id) ?? null : null)
-          : a.team_id
-            ? teamColor.get(a.team_id) ?? null
-            : null;
+            })() ?? teamBase
+          : autoColorRule === "service"
+            ? serviceBaseColor(a, (id) => serviceColorById.get(id)) ?? teamBase
+            : teamBase;
       // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
       // палитра «чего не хватает» к нему не применяется — иначе обед в
       // календаре горел бы «нет клиента».
       if (a.kind !== "work") return base;
       return resolveRecordColor({
         override: a.color_override,
-        filled: {
-          client: !!a.client_id,
-          object: !!a.location_id,
-          services: (a.service_ids?.length ?? 0) > 0,
-        },
+        filled: recordFilled(a),
         base,
         palette: situationPalette,
         active: activeSituations,
-        fallback: t.accent,
+        fallback: fallbackColor,
       });
     },
     [
@@ -933,9 +965,10 @@ export default function CalendarTab() {
       cities,
       labelFor,
       teamColor,
+      serviceColorById,
       situationPalette,
       activeSituations,
-      t.accent,
+      fallbackColor,
     ],
   );
   // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
@@ -951,6 +984,31 @@ export default function CalendarTab() {
       }),
     [labelFor, cities],
   );
+  // ЛЕНТА НАЗЫВАЕТ ДЫРУ СЛОВОМ. Она служит сетке легендой: цвет один на три
+  // ситуации различает их слишком слабо для дальтоника, а в списке есть место
+  // для слова.
+  const situationFor = useCallback(
+    (a: Appointment): string | null => {
+      const id = appointmentSituation(a, {
+        palette: situationPalette,
+        active: activeSituations,
+      });
+      return id
+        ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
+        : null;
+    },
+    [situationPalette, activeSituations],
+  );
+
+  // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной
+  // канта — каналом СРАВНИТЕЛЬНЫМ: на сплошь просроченной прошлой неделе все
+  // канты одинаково толстые, и «сколько висит» по ним не прочесть. В списке
+  // для слова есть место.
+  const overdueFor = useCallback(
+    (a: Appointment) => isOverdue(a, todayYmd, nowMinutes),
+    [todayYmd, nowMinutes],
+  );
+
   // Сетке хватает цвета: в колонке дня словам места нет.
   const offLabelColorFor = useCallback(
     (a: Appointment): string | null => offLabelFor(a)?.color ?? null,
@@ -1046,6 +1104,53 @@ export default function CalendarTab() {
   const visibleAppts = useMemo(
     () => expandedAppts.filter(byTeam),
     [expandedAppts, byTeam],
+  );
+
+  // ДЫРА ДНЯ ДЛЯ МЕСЯЦА — один проход на весь пейджер (три страницы месяца
+  // живут одновременно). Считается по ВИДИМОМУ набору, тому же, что даёт
+  // счётчик: денежный набор сюда подставлять нельзя, они намеренно расходятся
+  // по «Скрывать отменённые». В остальных видах не считаем вовсе.
+  const holeByDay = useMemo(() => {
+    const out = new Map<string, { name: string; color: string }>();
+    if (mode !== "month") return out;
+    const byDate = new Map<string, (ColorSituation | null)[]>();
+    for (const a of visibleAppts) {
+      const arr = byDate.get(a.date) ?? [];
+      arr.push(
+        appointmentSituation(a, {
+          palette: situationPalette,
+          active: activeSituations,
+        }),
+      );
+      byDate.set(a.date, arr);
+    }
+    for (const [date, list] of byDate) {
+      const worst = worstSituation(list);
+      const color = worst ? (situationPalette[worst] ?? "").trim() : "";
+      if (!worst || !color) continue;
+      out.set(date, {
+        name: COLOR_SITUATIONS.find((s) => s.id === worst)?.label ?? "",
+        color,
+      });
+    }
+    return out;
+  }, [mode, visibleAppts, situationPalette, activeSituations]);
+  const holeFor = useCallback(
+    (dateYmd: string) => holeByDay.get(dateYmd) ?? null,
+    [holeByDay],
+  );
+  // Стрелка прямо в пропе делала `memo` месяца мёртвым: свежая функция на
+  // каждый рендер родителя перерисовывала все три страницы пейджера, и
+  // стабильность `holeFor` ничего не защищала.
+  const onPickLabelDayMonth = useMemo(
+    () =>
+      canManageDayLabels && activeTeamId
+        ? (dateYmd: string) => {
+            haptics.tap();
+            setCityPickerYmd(dateYmd);
+          }
+        : undefined,
+    [canManageDayLabels, activeTeamId],
   );
 
   // Денежный набор: «Скрывать отменённые» — визуальная настройка сетки и
@@ -1955,6 +2060,7 @@ export default function CalendarTab() {
   const gridProps = {
     clientName,
     serviceLabel,
+    addressFor,
     teamColorFor,
     onEdit: openEdit,
     onReschedule: canManageBookings ? reschedule : undefined,
@@ -2200,6 +2306,13 @@ export default function CalendarTab() {
           onMenu={openActionMenu}
           labelFor={labelFor}
           offLabelFor={offLabelFor}
+          // ВЫБРАННЫЙ РУКОЙ ЦВЕТ СИЛЬНЕЕ ПРАВИЛА — так же, как в сетке
+          // (`useBlockColors` спрашивает `color_override` первым). Без этого
+          // событие с выбранным цветом красилось в сетке выбранным, а в ленте
+          // цветом команды: один предмет двух цветов.
+          hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
+          situationFor={situationFor}
+          overdueFor={overdueFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
@@ -2290,15 +2403,9 @@ export default function CalendarTab() {
                   todayYmd={todayYmd}
                   showFinance={canViewCompanyFinance}
                   labelFor={labelFor}
+                  holeFor={holeFor}
                   onPickDay={openWeekFromMonth}
-                  onPickLabelDay={
-                    canManageDayLabels && activeTeamId
-                      ? (ymd) => {
-                          haptics.tap();
-                          setCityPickerYmd(ymd);
-                        }
-                      : undefined
-                  }
+                  onPickLabelDay={onPickLabelDayMonth}
                 />
               )}
             />

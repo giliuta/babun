@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { RecordMark } from "./RecordMark";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -42,6 +43,7 @@ export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 
 export function SettingsRow({
   tile = "neutral",
+  swatch,
   icon: Icon,
   title,
   sub,
@@ -60,7 +62,17 @@ export function SettingsRow({
    *  чернилами, без диска. По умолчанию нейтральная — цвет заводится
    *  осознанно, а не забывается. */
   tile?: string | "neutral";
-  icon: IconType;
+  /** ЦВЕТ ЗАПИСИ КАК ЗНАЧЕНИЕ СТРОКИ. Рисуется НЕ кружком пигмента, а
+   *  миниатюрой блока календаря (`RecordMark`): заливка 18 % и кант в полную
+   *  силу. Кружок врал — он показывал единственный канал, которого в календаре
+   *  нет ни разу (сырой цвет на 100 %), и прятал оба, которые там есть; на
+   *  Ванильном #FFF0BC он давал к белой карточке 1.14 : 1, то есть образца
+   *  попросту не было видно. Кант держит 4.74 : 1 в худшем случае палитры —
+   *  «известный предел 2.00 : 1» закрыт. Читателем ПИГМЕНТА остаётся имя цвета
+   *  в `sub`: на 18 % «Оранжевый» и «Медный» — одно пятно. При `swatch` значок
+   *  не рисуется, поэтому `icon` в таких строках не передают. */
+  swatch?: string | null;
+  icon?: IconType;
   title: string;
   /** Текущее значение настройки / состояние счёта, не описание кнопки. */
   sub?: string;
@@ -107,15 +119,19 @@ export function SettingsRow({
   const lines = stacked ? 2 : 1;
   const scale = stacked ? 1.6 : 1.2;
 
-  const tileNode = neutral ? (
+  const tileNode = swatch !== undefined ? (
+    <RecordMark hue={swatch} />
+  ) : neutral ? (
     // Голый глиф в боксе 20×28: та же высота, что у цветной плитки, поэтому
     // ритм строки и вертикальное выравнивание с текстом не разъезжаются.
     <View style={{ width: 20, height: 28, alignItems: "center", justifyContent: "center" }}>
-      <Icon
-        color={t.ink}
-        size={NEUTRAL_GLYPH.size}
-        strokeWidth={NEUTRAL_GLYPH.strokeWidth}
-      />
+      {Icon ? (
+        <Icon
+          color={t.ink}
+          size={NEUTRAL_GLYPH.size}
+          strokeWidth={NEUTRAL_GLYPH.strokeWidth}
+        />
+      ) : null}
     </View>
   ) : (
     <View
@@ -129,7 +145,7 @@ export function SettingsRow({
         backgroundColor: tile,
       }}
     >
-      <Icon color={t.onAccent} size={16} strokeWidth={2} />
+      {Icon ? <Icon color={t.onAccent} size={16} strokeWidth={2} /> : null}
     </View>
   );
 

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
+  interpolateColor,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -15,13 +16,36 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import { AlertTriangle, Check } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
-import { missingAddress, useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
+import {
+  blockEdge,
+  CANCELLED_BORDER,
+  CANCELLED_EDGE,
+  useBlockColors,
+  type BlockColors,
+} from "@/features/calendar/status-colors";
+import { isOverdue } from "@/features/calendar/overdue";
+import {
+  chipOverflowW,
+  chipPad,
+  chipTextW,
+  chipsThatFit,
+  rowsThatFit,
+  textRows,
+  CHIP_GAP,
+  TEXT_MIN_W,
+} from "@/features/calendar/block-geometry";
+import {
+  BLOCK_FILL,
+  deepen,
+  fillRgba,
+  markColor,
+} from "@/components/ui/color-contrast";
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
@@ -60,10 +84,6 @@ const DEFAULT_STEP = 30;
 // Пятиминутная точность никуда не делась: она в поле времени самой записи
 // (`UnifiedTimePopup`), где её выставляют осознанно, а не пальцем по сетке.
 const TAP_STEP = 30;
-// All-day events render as thin strips on the left edge of the column
-// (web DayColumn v496) instead of joining the overlap layout.
-const ALL_DAY_W = 8;
-const ALL_DAY_GAP = 2;
 // Получасовая волосяная линия В КОЛОНКЕ появляется, когда час достаточно
 // высок, чтобы она читалась, а не сливалась в шум. Порог по КОММИЧЕННОМУ
 // hourH — как и текст-фит блоков, линия догоняет зум на отпускании.
@@ -142,10 +162,202 @@ function MinuteBand({
   );
 }
 
+/** Минимальная высота карточки: обвязка 9pt + одна строка текста. Ниже —
+ *  блок без текста, только заливка, кант и знаки. */
+const MIN_H = (lineH: number) => 9 + lineH;
+
+// ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
+//
+// Событие «весь день» — это ЗАПИСЬ (у неё статус, меню, отмена), но у неё нет
+// «своей» высоты на оси времени: она либо врёт про час, либо закрывает сутки.
+// Единственное честное место — полоса НАД осью, и так делают все календари.
+//
+// До этого они рисовались вертикальными полосками 8pt у левой кромки колонки —
+// последним уцелевшим корешком в продукте (владелец 2026-09-05: «когда слева
+// только полосочка — это полная хрень»). У полоски не было ни имени, ни намёка
+// на него, и она отжимала таймированные блоки вправо.
+//
+// Внутрь колонки чип класть нельзя технически: вся геометрия `DayColumn` —
+// проценты от анимируемой высоты, и узел фиксированной высоты ломает инвариант,
+// пересчитывая layout на каждом кадре щипка.
+export const allDayOf = (appts: readonly Appointment[]): Appointment[] =>
+  appts.filter((a) => a.event_all_day === true);
+
+export const hasAllDay = (appts: readonly Appointment[]): boolean =>
+  appts.some((a) => a.event_all_day === true);
+
+/** Высота полосы: минимальный блок продукта в одну строку плюс дыхание, но не
+ *  меньше 36pt. Тридцать шесть — не про текст, а про ПАЛЕЦ: чип с запасом
+ *  касания 4pt даёт мишень 44pt, как требует закон продукта. Растить дальше
+ *  нельзя — полоса стоит между шапкой и сеткой и каждую точку отнимает у
+ *  первого видимого часа. */
+export function useAllDayBandH(): number {
+  const { fontScale } = useWindowDimensions();
+  return Math.max(36, MIN_H(Math.ceil(16 * Math.min(fontScale, 1.3))) + 4);
+}
+
+export function AllDayRow({
+  appointments,
+  clientName,
+  teamColorFor,
+  onEdit,
+  onMenu,
+  onOverflow,
+}: {
+  /** УЖЕ отфильтрованные события «весь день» этого дня (`allDayOf`). */
+  appointments: Appointment[];
+  clientName: (a: Appointment) => string;
+  teamColorFor?: (a: Appointment) => string | null;
+  onEdit: (a: Appointment) => void;
+  onMenu?: (a: Appointment) => void;
+  /** Куда ведёт «+N». БЕЗ ЭТОГО ПРОПА СПРЯТАННЫЕ СОБЫТИЯ НЕДОСТИЖИМЫ: в
+   *  колонке недели помещается ровно один чип, и второй отпуск открыть было бы
+   *  нечем — прежние полоски хотя бы все были кликабельны. Неделя передаёт сюда
+   *  «открыть этот день»: в Дне колонка вмещает девять чипов. */
+  onOverflow?: () => void;
+}) {
+  const t = useThemeColors();
+  const blockColors = useBlockColors(teamColorFor);
+  const { fontScale } = useWindowDimensions();
+  const lineH = Math.ceil(16 * Math.min(fontScale, 1.3));
+  const [cellW, setCellW] = useState(0);
+
+  // ПРАВИЛО ОСТАНОВКИ. Чипы делят ширину поровну, но их число ограничено снизу
+  // читаемой шириной: в колонке недели (~49pt) помещается РОВНО ОДИН чип, и
+  // пять отпусков пяти мастеров дают один чип с именем и счётчиком «+4», а не
+  // пять безымянных плашек по 7pt.
+  //
+  // РЕЗЕРВ ПОД «+N» УЧИТЫВАЕТСЯ ДО РЕШЕНИЯ, А НЕ ПОСЛЕ. Это ровно та ошибка,
+  // которую продукт уже ловил у блока записи: там `markReserve` вычитался из
+  // ширины ПОСЛЕ того, как решено «имя влезает», и просроченный блок недели
+  // оставался немым. Здесь она повторялась в чипе: у последнего чипа со
+  // счётчиком отнимается ещё и резерв, а гейт числа чипов об этом не знал.
+  const shown = chipsThatFit(cellW, appointments.length);
+  const overflow = appointments.length - shown;
+  const chipW = shown > 0 ? (cellW - CHIP_GAP * (shown - 1)) / shown : 0;
+
+  return (
+    <View
+      // Линия сетки слева — та же, что у колонки: полоса читается продолжением
+      // сетки, а не отдельной плитой.
+      onLayout={(e) => setCellW(e.nativeEvent.layout.width - 1)}
+      style={{
+        flex: 1,
+        flexDirection: "row",
+        gap: CHIP_GAP,
+        paddingVertical: 2,
+        borderLeftWidth: 1,
+        borderLeftColor: `${t.ink}33`,
+        backgroundColor: t.surface,
+      }}
+    >
+      {cellW > 0
+        ? appointments.slice(0, shown).map((a, i) => {
+            const c = blockColors(a);
+            const cancelled = a.status === "cancelled";
+            const completed = a.status === "completed";
+            const reserve =
+              overflow > 0 && i === shown - 1 ? chipOverflowW(overflow) : 0;
+            const pad = chipPad(chipW);
+            const textW = chipTextW(chipW, reserve);
+            const name = clientName(a) || a.comment || "Событие";
+            const fill = (alpha: number) =>
+              fillRgba(cancelled ? t.ink : c.hue, alpha);
+            return (
+              <Pressable
+                key={a.id}
+                onPress={() => onEdit(a)}
+                onLongPress={onMenu ? () => onMenu(a) : undefined}
+                delayLongPress={350}
+                // 36pt полосы плюс 4pt запаса с каждой стороны — мишень 44pt,
+                // как требует закон продукта. Наружу больше не растим: снизу
+                // сразу первый час сетки, и лишние точки крали бы у него тап
+                // «создать запись».
+                hitSlop={{ top: 4, bottom: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Весь день, ${name}${
+                  reserve > 0 ? `, ещё ${overflow}` : ""
+                }`}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minWidth: 0,
+                  justifyContent: "center",
+                  paddingHorizontal: pad,
+                  borderWidth: 1,
+                  borderColor: cancelled ? CANCELLED_EDGE : c.edge,
+                  borderStyle: cancelled ? CANCELLED_BORDER : "solid",
+                  borderRadius: t.radius.card,
+                  borderCurve: "continuous",
+                  overflow: "hidden",
+                  backgroundColor: pressed
+                    ? fill(cancelled ? 0.2 : completed ? 0.2588 : 0.4)
+                    : fill(cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL),
+                })}
+              >
+                {/* УГЛОВЫХ ЗНАКОВ У ЧИПА НЕТ СОЗНАТЕЛЬНО: «просрочено» к
+                    событию неприменимо по построению, а галка «выполнено» на
+                    25pt высоты рядом с текстом — тот самый шум. Выполненное
+                    событие гаснет заливкой, как блок. */}
+                {textW >= TEXT_MIN_W ? (
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      color: t.ink,
+                      fontSize: 13,
+                      lineHeight: lineH,
+                      fontWeight: "700",
+                      marginRight: reserve,
+                      textDecorationLine: cancelled ? "line-through" : "none",
+                    }}
+                  >
+                    {name}
+                  </Text>
+                ) : null}
+                {reserve > 0 ? (
+                  // «+N» — СВОЯ ДВЕРЬ, а не подпись. Тап по чипу открывает
+                  // ПЕРВОЕ событие, и без отдельной мишени остальные были бы
+                  // недостижимы вовсе. Мишень узкая по ширине, но во всю высоту
+                  // полосы и с запасом наружу.
+                  <Pressable
+                    onPress={onOverflow}
+                    disabled={!onOverflow}
+                    hitSlop={{ top: 4, bottom: 4, right: 4, left: 2 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ещё ${overflow} на весь день`}
+                    style={{
+                      position: "absolute",
+                      right: pad,
+                      top: 0,
+                      bottom: 0,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: onOverflow ? t.accent : t.body,
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {`+${overflow}`}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            );
+          })
+        : null}
+    </View>
+  );
+}
+
 function Block({
   placed,
   hourH,
-  laneX,
   laneW,
   startHour,
   endHour,
@@ -154,7 +366,8 @@ function Block({
   offLabelColor,
   label,
   service,
-  compact,
+  address,
+  lineH,
   overdue = false,
   onEdit,
   onMenu,
@@ -164,19 +377,27 @@ function Block({
   /** Committed pixels-per-hour — px math (drag snap, text fit) only;
    *  the on-screen geometry is percent-based and zoom-independent. */
   hourH: number;
-  laneX: number;
   laneW: number;
   startHour: number;
   endHour: number;
   stepMinutes: number;
   colors: BlockColors;
-  /** Цвет чужой метки — кольцо вокруг блока. null — блок без кольца. */
+  /** Цвет чужой метки: точка в правом нижнем углу, затемнённая против
+   *  ЗАЛИВКИ блока. null — метка своя. */
   offLabelColor: string | null;
+  /** Высота строки текста при текущем системном шрифте. Считается ОДИН раз в
+   *  колонке: `useWindowDimensions` внутри каждого из полутора сотен блоков
+   *  недели стоил бы кадра. */
+  lineH: number;
   label: string;
   service: string | null;
-  compact: boolean;
-  /** Запланирована, а время уже прошло — незакрытая работа: полоска и
-   *  время предупреждающим цветом (недополученные деньги). */
+  /** Куда ехать: снимок адреса записи, иначе адрес клиента. null — адреса
+   *  нет, и тогда оранжевый блок «нет объекта» называет дыру пустотой. */
+  address: string | null;
+  /** Запланирована, а время уже прошло — незакрытая работа, то есть
+   *  недополученные деньги. Сигнал ОДИН: кант вдвое толще (2pt против 1). Ни
+   *  своего цвета, ни углового знака у просрочки нет — кант остаётся цветом
+   *  записи, а почему именно так, объяснено в `status-colors`. */
   overdue?: boolean;
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
@@ -189,7 +410,8 @@ function Block({
   const { apt, startMin, endMin, colIndex, colCount } = placed;
   const ty = useSharedValue(0);
   const active = useSharedValue(0);
-  const pressed = useSharedValue(1);
+  /** 0 — покой, 1 — под пальцем. Гонит заливку и лёгкое сжатие. */
+  const press = useSharedValue(0);
 
   const winStart = startHour * 60;
   const winEnd = endHour * 60;
@@ -200,13 +422,78 @@ function Block({
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
   const colW = laneW / colCount;
-  const left = laneX + colIndex * colW + 1;
+  const left = colIndex * colW + 1;
   const width = colW - GAP;
   const cancelled = apt.status === "cancelled";
   const completed = apt.status === "completed";
-  // «Нет адреса» показываем только будущим: у просроченных приоритет —
-  // оранжевое «!» незакрытой работы (web: past побеждает no_address).
-  const noAddress = !overdue && missingAddress(apt);
+  // ═══ ГЕОМЕТРИЯ И ЦВЕТ БЛОКА ═══
+  // Всё считается арифметикой от ширины и высоты, а не флагом «компактный»:
+  // блок недели и блок дня — один и тот же блок при разной ширине.
+  const cardH = Math.max(MIN_H(lineH), ((visEnd - visStart) / 60) * hourH) - 2;
+  const pad = width >= 96 ? 6 : 4;
+  // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
+  // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
+  // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
+  // 8.7 % → 17.0 %, день 330pt 5.1 % → 10.2 %. То есть канал работает ровно
+  // там, где знака нет (markSize 0 при ширине < 40), и слабеет там, где есть
+  // текст. Геометрия не меняется ни при дейтеранопии, ни при перекраске
+  // палитры владельцем — в отличие от любого оттенка.
+  const bw = overdue ? 2 : 1;
+  const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
+  // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
+  // Пока его резервировала и она, просроченный блок недели на экране 393pt
+  // давал textW 22.3 при гейте 24 — то есть был НЕМЫМ, без имени клиента.
+  const markReserve = markSize > 0 && completed ? markSize + 4 : 0;
+  // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
+  // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
+  const textW = width - 2 * pad - 2 - markReserve;
+  // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
+  // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
+  // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH.
+  const rowsFit = rowsThatFit(cardH, lineH);
+  // СТРОКА ЛИБО НАРИСОВАНА ЦЕЛИКОМ, ЛИБО ЕЁ НЕТ. Прежняя формула
+  // `floor((cardH − 9) / lineH) + 1` пускала строку, когда до неё не хватало
+  // почти целой: получасовая запись при обычном зуме (высота 28) получала две
+  // строки на место под одну, и время рисовалось разрезанным пополам обрезкой
+  // карточки. Половина цифры хуже отсутствующей цифры, а время у записи и без
+  // того названо рельсом слева и позицией блока — потому имя и стоит первым.
+  // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
+  // всегда, как было.
+  const lines = textRows(cardH, lineH);
+  // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
+  // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
+  // зелёный знак, а не плотность заливки.
+  // ЧЕТВЁРТАЯ СТУПЕНЬ — АДРЕС. «Кто» отвечает имя, «что» — услуга, «когда» —
+  // рельс и высота блока; «куда» не сказано нигде, ни в одном виде календаря,
+  // а у выездной бригады это второй вопрос после времени. Гейт ширины тот же,
+  // что у услуги: в Неделе (textW ≈ 36) и в Дне с тремя наложениями решает
+  // арифметика, а не флаг вида. Когда услуги нет, адрес занимает её строку, а
+  // не требует лишней высоты на пустом месте.
+  const showService = lines >= 3 && textW >= 120 && !!service;
+  const showAddress =
+    !!address && textW >= 120 && rowsFit >= (showService ? 4 : 3);
+  // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
+  // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
+  // адрес, и на карточке, где последней осталась услуга (или время), её хвост
+  // заезжал под точку.
+  const dotReserve =
+    offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
+  const lastRow = showAddress
+    ? "address"
+    : showService
+      ? "service"
+      : lines >= 2
+        ? "time"
+        : "name";
+
+  // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
+  const edge = blockEdge(colors, apt.status);
+  // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
+  // рисуется ВСЕГДА: текста нет при textW < 24 (наложение в Неделе даёт 11),
+  // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
+  // просрочкой; свободен ровно стиль линии. Зачёркивание имени, которым отмена
+  // говорила до сих пор, живёт только там, где имя влезает.
+  const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
 
   const commit = (translationY: number) => {
     if (!onReschedule) {
@@ -281,10 +568,10 @@ function Block({
   // maxDuration(250) оставлял мёртвое окно 250–300 мс без реакции.
   const tap = Gesture.Tap()
     .onBegin(() => {
-      pressed.value = withTiming(0.7, { duration: 60 });
+      press.value = withTiming(1, { duration: 90 });
     })
     .onFinalize(() => {
-      pressed.value = withTiming(1, { duration: 150 });
+      press.value = withTiming(0, { duration: 150 });
     })
     .onEnd(() => runOnJS(onEdit)(apt));
   // A crew member still gets the useful long-press actions (next status,
@@ -303,28 +590,51 @@ function Block({
   // The wrapper owns position + stacking (zIndex must live among siblings);
   // the card owns the drag transform + shadow, so the wrapper's percent
   // geometry stays untouched by the gesture springs.
+  // ТЕНЬ ПЕРЕТАСКИВАНИЯ — НА ОБЁРТКЕ. На карточке она рисовалась под
+  // `overflow: "hidden"` и не была видна ни разу.
   const wrapperStyle = useAnimatedStyle(() => ({
     zIndex: active.value > 0 ? 20 : 1,
-  }));
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: ty.value }, { scale: 1 + active.value * 0.03 }],
-    opacity: pressed.value,
     shadowColor: "#000",
     shadowOpacity: active.value * 0.25,
     shadowRadius: active.value * 8,
     shadowOffset: { width: 0, height: 3 },
   }));
+  // ОТКЛИК — ЗАЛИВКОЙ И МАСШТАБОМ, А НЕ ПРОЗРАЧНОСТЬЮ. Прежний `opacity`
+  // гасил и текст, и заставлял iOS рисовать слой offscreen на 21 колонке; к
+  // тому же он перетирал `opacity: 0.55` отменённой, то есть тот сигнал не
+  // работал вовсе. Заливка под пальцем — 40 %: имя и время на ней читаются
+  // (измерено, 5.81 : 1 и 4.85 : 1 в худшем цвете палитры).
+  const fillIdle = fillRgba(
+    cancelled ? t.ink : colors.hue,
+    cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL,
+  );
+  const fillPressed = fillRgba(
+    cancelled ? t.ink : colors.hue,
+    cancelled ? 0.2 : completed ? 0.2588 : 0.4,
+  );
+  // У ОТМЕНЁННОЙ ЗАЛИВКА НЕ АНИМИРУЕТСЯ. Разомкнутый кант выбивает вью из
+  // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
+  // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
+  // отменённую и не открывают так часто, чтобы платить за это кадрами.
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: ty.value },
+      { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
+    ],
+    backgroundColor: cancelled
+      ? fillIdle
+      : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
+  }));
 
-  // Committed-zoom px height (same formula the card renders to via percents;
-  // the min-clamp cancels out) — drives how many text lines fit.
-  const tall = ((visEnd - visStart) / 60) * hourH - 2 > 34;
 
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}`}
+        // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
+        // высота, и гейты вёрстки для неё не существуют.
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -361,86 +671,150 @@ function Block({
               top: 0,
               left: 0,
               right: 0,
-              // 2px breathing gap to the next block (was `height - 2`).
+              // 2pt дыхания до следующего блока.
               bottom: 2,
-              backgroundColor: colors.fill,
-              // ОКАНТОВКА = «эта работа не там, где весь день». Левый корешок
-              // остаётся за identity записи, кольцо берёт цвет чужой метки.
-              borderColor: offLabelColor ?? "transparent",
-              borderWidth: offLabelColor ? 1.5 : 0,
-              borderLeftColor: overdue ? t.warning : colors.stripe,
-              borderLeftWidth: 3,
+              // КАНТ ПО ВСЕМУ ПЕРИМЕТРУ ВМЕСТО ЛЕВОГО КОРЕШКА (владелец
+              // 2026-09-05: «когда слева только полосочка — это полная
+              // хрень»). Заливка отвечает за группировку, кант — за
+              // категорию: при 18 % оттенки различаются слишком слабо, чтобы
+              // называть ими сущности, а кант в полную силу разводит те же
+              // пары даже при дальтонизме.
+              borderWidth: bw,
+              borderColor: edge,
+              borderStyle: edgeStyle,
+              // Кант входит в бокс-модель RN: без компенсации толстый кант
+              // просрочки съедал бы строку текста.
+              paddingHorizontal: pad - (bw - 1),
+              paddingVertical: 2 - (bw - 1),
               borderRadius: t.radius.card,
-              paddingHorizontal: compact ? 3 : 6,
-              paddingVertical: 2,
+              borderCurve: "continuous",
               overflow: "hidden",
-              opacity: cancelled ? 0.55 : 1,
             },
             cardStyle,
           ]}
         >
-          <View
-            style={{ position: "absolute", top: 0, left: 3, right: 0, height: 1, backgroundColor: t.highlight }}
-          />
-          {/* maxFontSizeMultiplier: крупный системный шрифт не должен
-              выталкивать время/клиента из узкого блока (numberOfLines
-              срезал бы САМУ информацию). */}
-          <Text
-            style={{
-              color: overdue ? t.warning : t.sub,
-              fontSize: compact ? 9 : 11,
-              fontWeight: overdue ? "700" : "600",
-            }}
-            className="tabular-nums"
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.3}
-          >
-            {overdue && !compact ? `! ${apt.time_start}` : apt.time_start}
-          </Text>
-          <Text
-            style={{
-              color: t.ink,
-              fontSize: compact ? 9 : 11,
-              fontWeight: "700",
-              textDecorationLine: cancelled ? "line-through" : "none",
-            }}
-            numberOfLines={tall ? 2 : 1}
-            maxFontSizeMultiplier={1.3}
-          >
-            {label}
-          </Text>
-          {tall && !compact && service ? (
+          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
+              что время уже названо рельсом слева и позицией блока, а имя не
+              выводится ниоткуда. Кегль 13 — типографический пол продукта;
+              девятка, которой неделя набиралась раньше, была нечитаема.
+              Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
+              при щипке глаз не должен терять якорь. */}
+          {lines >= 1 && textW >= 24 ? (
             <Text
-              style={{ color: t.sub, fontSize: 11 }}
+              style={{
+                color: t.ink,
+                fontSize: 13,
+                lineHeight: lineH,
+                fontWeight: "700",
+                marginRight: Math.max(
+                  markReserve,
+                  lastRow === "name" ? dotReserve : 0,
+                ),
+                textDecorationLine: cancelled ? "line-through" : "none",
+              }}
+              numberOfLines={1}
+              ellipsizeMode={textW < 96 ? "clip" : "tail"}
+              maxFontSizeMultiplier={1.3}
+            >
+              {label}
+            </Text>
+          ) : null}
+          {lines >= 2 && textW >= 24 ? (
+            <Text
+              style={{
+                color: t.body,
+                fontSize: 13,
+                lineHeight: lineH,
+                fontWeight: overdue ? "700" : "500",
+                marginRight: lastRow === "time" ? dotReserve : 0,
+                fontVariant: ["tabular-nums"],
+              }}
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
+            </Text>
+          ) : null}
+          {showService ? (
+            <Text
+              style={{
+                color: t.body,
+                fontSize: 13,
+                lineHeight: lineH,
+                marginRight: lastRow === "service" ? dotReserve : 0,
+              }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
               {service}
             </Text>
           ) : null}
-          {completed && !compact ? (
+          {showAddress ? (
+            <Text
+              style={{
+                color: t.body,
+                fontSize: 13,
+                lineHeight: lineH,
+                marginRight: dotReserve,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              maxFontSizeMultiplier={1.3}
+            >
+              {address}
+            </Text>
+          ) : null}
+
+          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: зелёный круг — работа закрыта.
+              Просрочка знака не носит, и причина не в экономии места:
+              markColor(t.warning) = #835400 и markColor(t.success) = #076b48
+              дают друг к другу 1.01 : 1 — на колонке недели, где глиф не
+              рисуется, «выполнено» и «просрочено» были двумя одинаково
+              светлыми кружками, неразличимыми ни для кого. Убрав один из двух,
+              делаем знак односмысленным. Глиф рисуется только на широком
+              блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
+              держит 21 колонку. */}
+          {markSize > 0 && completed ? (
             <View
               style={{
                 position: "absolute",
-                top: 3,
-                right: 3,
-                height: 15,
-                width: 15,
-                borderRadius: t.radius.card,
-                backgroundColor: t.success,
+                top: 2,
+                right: 2,
+                width: markSize,
+                height: markSize,
+                borderRadius: 999,
+                backgroundColor: markColor(t.success),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Check color={t.onAccent} size={10} strokeWidth={3} />
+              {markSize >= 14 ? (
+                <Check color={t.onAccent} size={10} strokeWidth={3} />
+              ) : null}
             </View>
           ) : null}
-          {noAddress && !compact ? (
-            // Веб-паритет (AppointmentBlock: AlertTriangle при no_address):
-            // куда ехать — неизвестно. Тихий красный значок, без заливки.
-            <View style={{ position: "absolute", top: 3, right: 3 }}>
-              <AlertTriangle color={t.danger} size={11} strokeWidth={2.5} />
-            </View>
+
+          {/* ЧУЖАЯ МЕТКА — точка в нижнем углу: периметр занят цветом самой
+              записи. Цвет точки затемняется против ЕЁ заливки, а не против
+              сетки: точка лежит на чужом цвете.
+
+              `colors.fill` — НЕПРОЗРАЧНЫЙ композит (см. `BlockColors.fill`).
+              Пока здесь лежала строка с альфой, `deepen` мерил контраст об
+              отброшенную альфу, то есть о полный цвет записи, и топил метку
+              вдвое глубже нужного: зелёная на кобальтовой выходила почти
+              чёрной. */}
+          {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
+            <View
+              style={{
+                position: "absolute",
+                bottom: 2,
+                right: 2,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: deepen(offLabelColor, [colors.fill]),
+              }}
+            />
           ) : null}
         </Animated.View>
       </Animated.View>
@@ -553,7 +927,7 @@ export function TimeRail({
 }
 
 // One day lane: gridlines, off-hours wash, past-wash, empty-slot tap,
-// positioned blocks, all-day strips, now-line.
+// positioned blocks, now-line.
 // Reused by both DayView (1 column) and WeekView (N columns).
 //
 // Structure: the hour grid is a column of FLEX cells (one per hour) that
@@ -567,6 +941,7 @@ export function DayColumn({
   appointments,
   clientName,
   serviceLabel,
+  addressFor,
   teamColorFor,
   offLabelColorFor,
   isToday,
@@ -593,11 +968,14 @@ export function DayColumn({
   appointments: Appointment[];
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
+  /** Куда ехать — четвёртая строка блока: снимок адреса записи, иначе адрес
+   *  клиента. null — не показывать. */
+  addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет метки САМОЙ записи, когда она отличается от метки дня
-   *  (`resolveOffDayLabel`): блок получает окантовку этим цветом. Владелец
-   *  2026-09-04: «можно подсвечивать другим цветом, когда метка другая».
-   *  null — обычный блок. */
+   *  (`resolveOffDayLabel`): блок получает ТОЧКУ этим цветом в нижнем углу —
+   *  периметр занят цветом самой записи. Владелец 2026-09-04: «можно
+   *  подсвечивать другим цветом, когда метка другая». null — обычный блок. */
   offLabelColorFor?: (a: Appointment) => string | null;
   isToday: boolean;
   /** Бизнес-сегодня (YYYY-MM-DD) — просрочка записей и затемнение
@@ -647,6 +1025,10 @@ export function DayColumn({
   const blockColors = useBlockColors(teamColorFor);
   const [laneW, setLaneW] = useState(0);
   const { fontScale } = useWindowDimensions();
+  // ВЫСОТА СТРОКИ СЧИТАЕТСЯ ОДИН РАЗ НА КОЛОНКУ. Крупный системный шрифт
+  // поднимает и строку, и минимальную высоту блока; читать это в каждом из
+  // полутора сотен блоков недели — лишний проход по всем.
+  const lineH = Math.ceil(16 * Math.min(fontScale, 1.3));
 
   const hours = useMemo(() => {
     const out: number[] = [];
@@ -657,12 +1039,6 @@ export function DayColumn({
   const winEndMin = endHour * 60;
   const totalMin = winEndMin - winStartMin;
 
-  // v496 web parity — all-day events are thin strips on the left edge,
-  // excluded from the overlap layout so timed events keep full width.
-  const allDay = useMemo(
-    () => appointments.filter((a) => a.event_all_day === true),
-    [appointments],
-  );
   const placements = useMemo(
     () =>
       layoutDay(appointments.filter((a) => a.event_all_day !== true)).filter(
@@ -670,10 +1046,6 @@ export function DayColumn({
       ),
     [appointments, winStartMin, winEndMin],
   );
-  const reservedW =
-    allDay.length > 0
-      ? allDay.length * ALL_DAY_W + (allDay.length - 1) * ALL_DAY_GAP + 4
-      : 0;
 
   const nowMin =
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
@@ -960,8 +1332,8 @@ export function DayColumn({
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
           appointment; rendered before the blocks so colour cards sit on top
-          (web DayColumn.tsx:558-580, cancelled skipped). Placements already
-          exclude all-day strips and carry the parsed endMin. */}
+          (cancelled skipped). Placements already exclude all-day events — те
+          живут чипами в полосе НАД сеткой — and carry the parsed endMin. */}
       {bufferMinutes > 0
         ? placements.map((p) => {
             if (p.apt.status === "cancelled") return null;
@@ -981,65 +1353,15 @@ export function DayColumn({
           })
         : null}
 
-      {allDay.map((a, idx) => {
-        const c = blockColors(a);
-        return (
-          <Pressable
-            key={a.id}
-            onPress={() => onEdit(a)}
-            // То же контекстное меню, что у таймированных блоков.
-            onLongPress={onMenu ? () => onMenu(a) : undefined}
-            // Полоска 8pt — визуально тонкая, но тап-мишень расширена до
-            // ~24pt (аудит: было фактически некликабельно).
-            hitSlop={{ left: 6, right: 10, top: 4, bottom: 4 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Весь день, ${clientName(a) || a.comment || "Событие"}`}
-            style={{
-              position: "absolute",
-              top: 1,
-              bottom: 1,
-              left: idx * (ALL_DAY_W + ALL_DAY_GAP),
-              width: ALL_DAY_W,
-              borderRadius: 4,
-              backgroundColor: c.stripe,
-              opacity: a.status === "cancelled" ? 0.4 : 0.85,
-            }}
-          />
-        );
-      })}
-
-      {laneW > 0
-        ? placements.map((p) => (
-            <Block
-              key={p.apt.id}
-              placed={p}
-              hourH={hourH}
-              laneX={reservedW}
-              laneW={Math.max(laneW - reservedW, 0)}
-              startHour={startHour}
-              endHour={endHour}
-              stepMinutes={Math.max(5, Math.min(60, stepMinutes))}
-              colors={blockColors(p.apt)}
-              offLabelColor={offLabelColorFor ? offLabelColorFor(p.apt) : null}
-              label={clientName(p.apt) || p.apt.comment || "Запись"}
-              service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
-              compact={compact}
-              onMenu={onMenu}
-              overdue={
-                todayYmd != null &&
-                p.apt.status === "scheduled" &&
-                p.apt.kind === "work" &&
-                (dateYmd < todayYmd ||
-                  (isToday && nowMinutes != null && p.endMin < nowMinutes))
-              }
-              onEdit={onEdit}
-              onReschedule={
-                canReschedule?.(p.apt) === false ? undefined : onReschedule
-              }
-            />
-          ))
-        : null}
-
+      {/* ЛИНИЯ «СЕЙЧАС» ЛЕЖИТ ПОД ЗАПИСЯМИ, А НЕ ПОВЕРХ НИХ. Сверху она
+          перечёркивала карточку ровно по строке времени — а зачёркивание в
+          этом продукте уже занято и означает ОТМЕНЁННУЮ запись: работа, которая
+          идёт прямо сейчас, выглядела снятой. Ничего при этом не теряется: где
+          мы во времени, говорит красная капсула на рельсе часов — она живёт вне
+          колонки и никогда ничем не закрыта, — а в пустых местах колонки линия
+          видна как прежде. Рельс отвечает за время, сетка — за записи.
+          `zIndex` блока на это не влиял: у обёртки он приходит анимированным
+          стилем и до первого кадра не применяется. */}
       {nowMin != null ? (
         <View
           pointerEvents="none"
@@ -1056,6 +1378,33 @@ export function DayColumn({
           <View style={{ height: 1.5, flex: 1, backgroundColor: t.danger, opacity: 0.85 }} />
         </View>
       ) : null}
+
+      {laneW > 0
+        ? placements.map((p) => (
+            <Block
+              key={p.apt.id}
+              placed={p}
+              hourH={hourH}
+              laneW={laneW}
+              startHour={startHour}
+              endHour={endHour}
+              stepMinutes={Math.max(5, Math.min(60, stepMinutes))}
+              colors={blockColors(p.apt)}
+              offLabelColor={offLabelColorFor ? offLabelColorFor(p.apt) : null}
+              label={clientName(p.apt) || p.apt.comment || "Запись"}
+              service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
+              address={addressFor ? addressFor(p.apt) : null}
+              lineH={lineH}
+              onMenu={onMenu}
+              overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
+              onEdit={onEdit}
+              onReschedule={
+                canReschedule?.(p.apt) === false ? undefined : onReschedule
+              }
+            />
+          ))
+        : null}
+
     </View>
   );
 }
@@ -1120,6 +1469,7 @@ export function DayView({
   todayYmd,
   clientName,
   serviceLabel,
+  addressFor,
   teamColorFor,
   offLabelColorFor,
   onEdit,
@@ -1153,6 +1503,9 @@ export function DayView({
   todayYmd: string;
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
+  /** Куда ехать — четвёртая строка блока: снимок адреса записи, иначе адрес
+   *  клиента. null — не показывать. */
+  addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет чужой метки записи — окантовка блока (см. DayColumn). */
   offLabelColorFor?: (a: Appointment) => string | null;
@@ -1197,6 +1550,12 @@ export function DayView({
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
   const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
+  const bandH = useAllDayBandH();
+  // Условие по ВСЕМ трём страницам пейджера: иначе чип выскакивал бы уже после
+  // доводки свайпа, а высота полосы менялась бы под пальцем.
+  const showBand = ([-1, 0, 1] as const).some((off) =>
+    hasAllDay(apptsFor(dateAt(off))),
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -1229,6 +1588,32 @@ export function DayView({
           }}
         />
       </View>
+      {showBand ? (
+        <View
+          style={{
+            flexDirection: "row",
+            borderBottomWidth: 1,
+            borderBottomColor: `${t.ink}1a`,
+          }}
+        >
+          {/* Рельс слева пустой: подпись «Весь день» — ровно тот шум, который
+              из продукта убирают, и 13pt в 48pt рельса не влезает. */}
+          <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
+          <PagedStrip
+            pager={pager}
+            style={{ height: bandH }}
+            renderPage={(off) => (
+              <AllDayRow
+                appointments={allDayOf(apptsFor(dateAt(off)))}
+                clientName={clientName}
+                teamColorFor={teamColorFor}
+                onEdit={onEdit}
+                onMenu={onMenu}
+              />
+            )}
+          />
+        </View>
+      ) : null}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
         onZoom={onZoom}
@@ -1252,6 +1637,7 @@ export function DayView({
                 appointments={apptsFor(d)}
                 clientName={clientName}
                 serviceLabel={serviceLabel}
+                addressFor={addressFor}
                 teamColorFor={teamColorFor}
                 offLabelColorFor={offLabelColorFor}
                 isToday={d === todayYmd}

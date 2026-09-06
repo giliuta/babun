@@ -9,7 +9,13 @@ function parseHex(value: string): RGB | null {
       Number.parseInt(short[3] + short[3], 16),
     ];
   }
-  const full = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(
+  // ВОСЬМИЗНАЧНЫЙ HEX ПОНИМАЕТСЯ ТОЖЕ. Календарь красит блок строками вида
+  // `${hue}2e` — то есть цветом с альфой, — и без этой ветки собственные
+  // помощники продукта не могли измерить то, что рисуют: `parseHex` возвращал
+  // null, `contrastRatio` — 1, а тест на контраст заливки был бы зелёным
+  // впустую. Альфа отбрасывается: контраст меряется по КОМПОЗИТУ, который
+  // собирает `tintOver`, а не по прозрачному цвету.
+  const full = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})(?:[0-9a-f]{2})?$/i.exec(
     value,
   );
   if (!full) return null;
@@ -19,6 +25,7 @@ function parseHex(value: string): RGB | null {
     Number.parseInt(full[3], 16),
   ];
 }
+
 
 function linear(channel: number): number {
   const normalized = channel / 255;
@@ -127,6 +134,99 @@ export function tintOver(hue: string, base: string, alpha: number): string {
   const baseRgb = parseHex(base);
   if (!hueRgb || !baseRgb) return base;
   return toHex(composite(hueRgb, baseRgb, alpha));
+}
+
+// ═══ ЦВЕТ ЗАПИСИ НА СЕТКЕ КАЛЕНДАРЯ ═══
+//
+// Блок записи — это заливка цветом на 18 % и кант тем же цветом в полную силу
+// (DESIGN-SYSTEM: «цвет записи отвечает на вопрос, а не украшает»). Сырой цвет
+// палитры кантом не годится: Ванильный #FFF0BC даёт к подложке сетки 1.37 : 1 —
+// канта попросту не видно. Поэтому цвет ЗАТЕМНЯЕТСЯ ровно настолько, чтобы
+// взять порог 3 : 1, и ни на шаг больше: выбранный оттенок обязан остаться
+// узнаваемым.
+
+/** Распознаётся ли строка как цвет. Нужен гейтам: цвет, пришедший из токена
+ *  с прозрачностью, нельзя ни затемнить, ни залить. */
+export function parseHexOk(value: string): boolean {
+  return parseHex(value) != null;
+}
+
+/** Худшая реальная подложка блока: белый лист → плёнка метки дня 5 % →
+ *  нерабочие часы 12 % → затемнение прошлого 5 %. Пороги меряются об неё, а не
+ *  о белый: гейт по белому был бы зелёным в CI и врал на экране. */
+export const GRID_WORST = "#cfced5";
+
+/** ЗАЛИВКА БЛОКА ЗАПИСИ — ОДНО ЧИСЛО НА ПРОДУКТ. Сетка, лента и образец в
+ *  настройке обязаны говорить одной альфой: три копии восемнадцати процентов
+ *  (число здесь, хвост `2e` в ленте, литерал в сетке) разошлись бы на первой
+ *  же правке тонирования, и образец начал бы врать тише, чем врал. */
+export const BLOCK_FILL = 0.1804;
+
+/** Кант отменённой записи: она теряет цвет записи и говорит нейтралью. Живёт
+ *  рядом с `edgeColor`, а не в календаре: этим кантом красят сетка, лента И
+ *  образец в настройке, а `components/ui` не имеет права тянуть из `features`. */
+export const CANCELLED_EDGE = "#5e6169";
+
+/** РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Закон и его обоснование — там же, где
+ *  им пользуется сетка (`features/calendar/status-colors`). */
+export const CANCELLED_BORDER = "dashed" as const;
+
+/** Заливка блока: тот же цвет на 18 % поверх подложки. */
+export function fillOver(hue: string, backdrop: string = GRID_WORST): string {
+  return tintOver(hue, backdrop, BLOCK_FILL);
+}
+
+const deepenCache = new Map<string, string>();
+
+/** Затемнить цвет к чёрному, пока он не возьмёт `target` ко ВСЕМ подложкам.
+ *  Шаг 0.04, потолок 0.72 — дальше цвет перестаёт быть собой. */
+export function deepen(
+  hue: string,
+  backdrops: readonly string[],
+  target = 3,
+): string {
+  const key = `${hue}|${backdrops.join(",")}|${target}`;
+  const cached = deepenCache.get(key);
+  if (cached) return cached;
+  const rgb = parseHex(hue);
+  if (!rgb) {
+    deepenCache.set(key, hue);
+    return hue;
+  }
+  let out = toHex(rgb);
+  for (let d = 0; d <= 0.72; d += 0.04) {
+    const candidate = toHex(
+      rgb.map((c) => Math.round(c * (1 - d))) as unknown as RGB,
+    );
+    if (backdrops.every((b) => contrastRatio(candidate, b) >= target)) {
+      out = candidate;
+      break;
+    }
+    out = candidate;
+  }
+  deepenCache.set(key, out);
+  return out;
+}
+
+/** Кант блока: цвет записи, взявший 3 : 1 и к подложке сетки, и к своей
+ *  заливке. Кант — единственный канал КАТЕГОРИИ: заливка на 18 % различает
+ *  оттенки слишком слабо (максимум попарного ΔE по палитре — 6.7). */
+export function edgeColor(hue: string): string {
+  return deepen(hue, [GRID_WORST, fillOver(hue)]);
+}
+
+/** Цвет углового знака (галка «выполнено»): семантический токен,
+ *  затемнённый против самой тёмной заливки палитры. */
+export function markColor(token: string): string {
+  return deepen(token, [GRID_WORST, fillOver("#4B1D82")]);
+}
+
+/** `rgba()`-строка для анимации заливки: восьмизначный hex Reanimated
+ *  разбирает не везде, а `interpolateColor` по rgba работает всегда. */
+export function fillRgba(hue: string, alpha: number): string {
+  const rgb = parseHex(hue);
+  if (!rgb) return `rgba(0,0,0,${alpha})`;
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 
 export interface CtaGradient {

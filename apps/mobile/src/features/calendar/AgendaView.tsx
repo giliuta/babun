@@ -7,6 +7,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RecordMark } from "@/components/ui/RecordMark";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -31,6 +32,9 @@ export function AgendaView({
   onMenu,
   labelFor,
   offLabelFor,
+  hueFor,
+  situationFor,
+  overdueFor,
   onCreateNew,
   showAmounts = true,
   refreshing,
@@ -54,6 +58,14 @@ export function AgendaView({
    *  (`resolveOffDayLabel`). В списке для неё есть место, поэтому она
    *  называется словом, а не только цветом, как в сетке. */
   offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
+  /** Цвет записи и её ситуация — те же, что в сетке (`record-color`). */
+  hueFor?: (a: Appointment) => string;
+  situationFor?: (a: Appointment) => string | null;
+  /** Работа не закрыта: время прошло, статус остался «запланирована».
+   *  В сетке это кант вдвое толще — канал СРАВНИТЕЛЬНЫЙ, и на сплошь
+   *  просроченной прошлой неделе он однороден. Слово живёт здесь: лента
+   *  служит сетке легендой, как уже служит для ситуаций. */
+  overdueFor?: (a: Appointment) => boolean;
   onCreateNew?: () => void;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
@@ -86,6 +98,9 @@ export function AgendaView({
           header={headerRu(item.title, todayYmd, tomorrowYmd)}
           label={labelFor?.(item.title) ?? null}
           offLabelFor={offLabelFor}
+          hueFor={hueFor}
+          situationFor={situationFor}
+          overdueFor={overdueFor}
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
@@ -123,6 +138,9 @@ function DaySection({
   header,
   label,
   offLabelFor,
+  hueFor,
+  situationFor,
+  overdueFor,
   clientName,
   serviceSummary,
   onEdit,
@@ -134,6 +152,9 @@ function DaySection({
   header: string;
   label: { name: string; color: string } | null;
   offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
+  hueFor?: (a: Appointment) => string;
+  situationFor?: (a: Appointment) => string | null;
+  overdueFor?: (a: Appointment) => boolean;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -245,6 +266,9 @@ function DaySection({
               onLongPress={onMenu ? () => onMenu(apt) : undefined}
               showAmounts={showAmounts}
               offLabel={offLabelFor?.(apt) ?? null}
+              hue={hueFor?.(apt) ?? t.accent}
+              situation={situationFor?.(apt) ?? null}
+              overdue={overdueFor?.(apt) ?? false}
               t={t}
             />
           </View>
@@ -262,6 +286,9 @@ function AgendaRow({
   onLongPress,
   showAmounts,
   offLabel,
+  hue,
+  situation,
+  overdue,
   t,
 }: {
   apt: Appointment;
@@ -272,21 +299,30 @@ function AgendaRow({
   showAmounts: boolean;
   /** Чужая метка этой работы — стоит рядом со статусом. */
   offLabel: { name: string; color: string } | null;
+  /** Цвет записи — тот же, что красит блок в сетке. */
+  hue: string;
+  /** Чего не хватает записи, словом. Единственный нецветовой канал ситуации:
+   *  ΔE заливок «нет объекта» и «нет услуг» при дейтеранопии — 4.1, и лента
+   *  служит сетке легендой. */
+  situation: string | null;
+  /** Работа не закрыта: время прошло, статус остался «запланирована».
+   *  В сетке это кант вдвое толще; здесь — слово. */
+  overdue: boolean;
   t: ThemeColors;
 }) {
+  // ЦВЕТ СТАТУСА В ЛЕНТЕ БОЛЬШЕ НЕ СВОЙ: третья копия правды расходилась с
+  // сеткой (там «в работе» — янтарь, здесь был кобальт).
   const statusColor =
     apt.status === "completed"
       ? t.success
       : apt.status === "cancelled"
         ? t.faint
-        : apt.status === "in_progress"
-          ? t.accent
-          : t.sub;
+        : t.sub;
   const cancelled = apt.status === "cancelled";
 
-  // Событие — свой шаблон (web design-keeper #6): title из comment,
-  // цветная полоска слева, превью заметок — иначе событие выглядело как
-  // «битая запись» (Без клиента / €0).
+  // Событие — свой шаблон (web design-keeper #6): title из comment, знак
+  // записи слева, превью заметок — иначе событие выглядело как «битая запись»
+  // (Без клиента / €0).
   if (apt.kind === "event" || apt.kind === "personal") {
     const title = apt.comment?.trim() || "Событие";
     const address = apt.address?.trim();
@@ -298,7 +334,7 @@ function AgendaRow({
         delayLongPress={350}
         className="active:opacity-60"
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${apt.time_start}–${apt.time_end}`}
+        accessibilityLabel={`${title}, ${apt.event_all_day ? "весь день" : `${apt.time_start}–${apt.time_end}`}`}
         style={{
           flexDirection: "row",
           gap: 12,
@@ -307,30 +343,40 @@ function AgendaRow({
           minHeight: 64,
         }}
       >
-        <View
-          style={{
-            position: "absolute",
-            left: 0,
-            top: 8,
-            bottom: 8,
-            width: 3,
-            borderRadius: 999,
-            backgroundColor: apt.color_override || t.warning,
-          }}
-        />
-        <View style={{ width: 64, paddingLeft: 8 }}>
-          <Text
-            className="tabular-nums"
-            style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
-          >
-            {apt.time_start}
-          </Text>
-          <Text
-            className="tabular-nums"
-            style={{ marginTop: 2, fontSize: 11, color: t.faint }}
-          >
-            {apt.time_end}
-          </Text>
+        {/* ЗНАК ЗАПИСИ ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
+            отвергнутый корешок, только в ленте. Компонент общий с образцом в
+            настройке — лента и сетка обязаны говорить одним языком. */}
+        <RecordMark hue={hue} cancelled={cancelled} />
+        {/* Ширина 56 — ТА ЖЕ, что у строки работы: обе строки лежат в одной
+            карточке дня, и время в них обязано стоять в одной колонке. */}
+        <View style={{ width: 56 }}>
+          {/* У СОБЫТИЯ «ВЕСЬ ДЕНЬ» ВРЕМЕНИ НЕТ. Лента печатала служебные 00:00
+              и 23:59 как настоящее время — то же враньё, что и полоска в
+              сетке, только словами. Слово уже живёт в продукте (наряд
+              мастера), нового словаря не заводим. */}
+          {apt.event_all_day === true ? (
+            <Text
+              numberOfLines={2}
+              style={{ fontSize: 12, fontWeight: "600", color: t.ink }}
+            >
+              Весь день
+            </Text>
+          ) : (
+            <>
+              <Text
+                className="tabular-nums"
+                style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+              >
+                {apt.time_start}
+              </Text>
+              <Text
+                className="tabular-nums"
+                style={{ marginTop: 2, fontSize: 11, color: t.faint }}
+              >
+                {apt.time_end}
+              </Text>
+            </>
+          )}
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
@@ -380,7 +426,9 @@ function AgendaRow({
       delayLongPress={350}
       className="active:opacity-60"
       accessibilityRole="button"
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${formatEUR(total)}`}
+      // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
+      // имя дыры видны глазу и обязаны быть слышны.
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
@@ -390,7 +438,8 @@ function AgendaRow({
         minHeight: 64,
       }}
     >
-      <View style={{ width: 64 }}>
+      <RecordMark hue={hue} cancelled={cancelled} />
+      <View style={{ width: 56 }}>
         <Text
           className="tabular-nums"
           style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
@@ -419,6 +468,10 @@ function AgendaRow({
             {serviceSummary}
           </Text>
         ) : null}
+        {/* Строка статуса умеет ужиматься: слов в ней стало больше («не
+            закрыта», ситуация, чужая метка), и без сжатия она выталкивала
+            сумму справа за кромку карточки. Статус не жмётся — он короткий
+            и называет главное. */}
         <View style={{ marginTop: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text
             style={{
@@ -429,8 +482,31 @@ function AgendaRow({
           >
             {STATUS_LABELS[apt.status]}
           </Text>
-          {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: в списке она называется словом —
-              «весь день Лимассол, а эта работа в Пафосе» читается сразу. */}
+          {/* НЕ ЗАКРЫТА — СЛОВОМ. Толщина канта в сетке отвечает на «эта ли
+              висит», но не на «сколько их»: в прошлой неделе просрочено почти
+              всё, и все канты становятся 2pt. */}
+          {overdue ? (
+            <Text
+              numberOfLines={1}
+              style={{ flexShrink: 1, fontSize: 11, color: t.warning }}
+            >
+              · не закрыта
+            </Text>
+          ) : null}
+          {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
+              слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
+              услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
+              лента служит сетке легендой. */}
+          {situation ? (
+            <Text
+              numberOfLines={1}
+              style={{ flexShrink: 1, fontSize: 11, color: t.body }}
+            >
+              · {situation}
+            </Text>
+          ) : null}
+          {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: «весь день Лимассол, а эта работа
+              в Пафосе» — в сетке это точка в углу блока, здесь имя. */}
           {offLabel ? (
             <>
               <View
@@ -441,7 +517,10 @@ function AgendaRow({
                   backgroundColor: offLabel.color,
                 }}
               />
-              <Text numberOfLines={1} style={{ fontSize: 11, color: offLabel.color }}>
+              <Text
+                numberOfLines={1}
+                style={{ flexShrink: 1, fontSize: 11, color: offLabel.color }}
+              >
                 {offLabel.name}
               </Text>
             </>
