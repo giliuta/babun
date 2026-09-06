@@ -1105,6 +1105,32 @@ export function DayColumn({
         );
       })}
 
+      {/* ЛИНИЯ «СЕЙЧАС» ЛЕЖИТ ПОД ЗАПИСЯМИ, А НЕ ПОВЕРХ НИХ. Сверху она
+          перечёркивала карточку ровно по строке времени — а зачёркивание в
+          этом продукте уже занято и означает ОТМЕНЁННУЮ запись: идущая прямо
+          сейчас работа выглядела снятой. Ничего при этом не теряется: где мы
+          во времени, говорит красная капсула на рельсе часов, которая живёт
+          вне колонки и никогда ничем не закрыта, а в пустых местах колонки
+          линия видна как прежде. Рельс отвечает за время, сетка — за записи.
+          `zIndex` блока на это не влиял: у обёртки он приходит анимированным
+          стилем и до первого кадра не применяется. */}
+      {nowMin != null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: pct(nowMin, totalMin),
+            left: -4,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View style={{ height: 9, width: 9, borderRadius: 5, backgroundColor: t.danger }} />
+          <View style={{ height: 1.5, flex: 1, backgroundColor: t.danger, opacity: 0.85 }} />
+        </View>
+      ) : null}
+
       {laneW > 0
         ? placements.map((p) => (
             <Block
@@ -1137,22 +1163,6 @@ export function DayColumn({
           ))
         : null}
 
-      {nowMin != null ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: pct(nowMin, totalMin),
-            left: -4,
-            right: 0,
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <View style={{ height: 9, width: 9, borderRadius: 5, backgroundColor: t.danger }} />
-          <View style={{ height: 1.5, flex: 1, backgroundColor: t.danger, opacity: 0.85 }} />
-        </View>
-      ) : null}
     </View>
   );
 }
