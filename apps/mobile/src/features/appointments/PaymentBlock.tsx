@@ -45,7 +45,7 @@ import {
   InvoiceRow,
   ModeIconButton,
   NoAccountsNotice,
-  PaymentBlockHeader,
+  PaymentStateRow,
   PaymentTile,
   TILE_GAP,
   useTileWidth,
@@ -298,8 +298,12 @@ export function PaymentBlock({
   const showAmountField = amountMode && outstanding > 0;
 
   return (
-    <SectionCard>
-      <PaymentBlockHeader
+    <SectionCard
+      title="Оплата"
+      onSettings={() => router.push("/accounts" as Href)}
+      settingsLabel="Настройки счетов"
+    >
+      <PaymentStateRow
         caption={caption?.text}
         captionColor={captionColor}
         captionTone={caption && caption.tone !== "neutral" ? "money" : "neutral"}

@@ -20,6 +20,7 @@ import {
   useLocalSearchParams,
   useNavigation,
   useRouter,
+  type Href,
 } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -2155,7 +2156,11 @@ export default function BookScreen() {
                   выбор (клиент, объект, услуга), а всё, что ведёт вглубь,
                   живёт кружком в хвосте. Стрелки справа больше нет ни у
                   клиента, ни у объекта. */}
-              <SectionCard title="Клиент">
+              <SectionCard
+                title="Клиент"
+                onSettings={() => router.push("/clients/settings" as Href)}
+                settingsLabel="Настройки клиентов"
+              >
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
@@ -2260,7 +2265,11 @@ export default function BookScreen() {
                   есть, а клиента нет, это очень странно, не та архитектура».
                   Верно второе: объект принадлежит клиенту. */}
               {showObject ? (
-              <SectionCard title="Объект">
+              <SectionCard
+                title="Объект"
+                onSettings={() => router.push("/cabinet/object-types" as Href)}
+                settingsLabel="Настройки объектов"
+              >
                 {client ? (
                   // БЕЗ ВЕРХНЕГО ВОЛОСКА: он шёл сразу под заголовком «ОБЪЕКТ»
                   // и читался как чужая линия — у карточки клиента её нет.
@@ -2376,7 +2385,11 @@ export default function BookScreen() {
                   стоит в блоке строкой «Итого»; называть её ещё и в шапке
                   значило объявлять два предмета там, где предмет один: набор
                   работ, у которого есть цена. */}
-              <SectionCard title="Услуги">
+              <SectionCard
+                title="Услуги"
+                onSettings={() => router.push("/cabinet/services" as Href)}
+                settingsLabel="Каталог услуг"
+              >
                 {serviceIds.length === 0 ? (
                   <>
                     <AddRow label="Выбрать услугу" onPress={() => setServicePickerOpen(true)} />

@@ -148,11 +148,10 @@ export function ModeIconButton({
   );
 }
 
-/** Шапка блока как у соседних карточек формы: малая надпись «ОПЛАТА» с
- *  иконками режимов справа, тонкая линия, и крупной строкой — состояние денег
- *  («Долг €135», «Оплачено»), если оно есть (владелец 2026-09-06: «слово
- *  „Оплата“ — как у „Услуги“, а вместо него — долг и маленькая чёрточка»). */
-export function PaymentBlockHeader({
+/** Строка состояния денег под малой надписью карточки: слева «Долг €135» /
+ *  «Оплачено», справа иконки режимов (владелец 2026-09-06: «долг на строчке,
+ *  справа вот эти, а „Оплата“ — как у „Услуг“, без пропуска»). */
+export function PaymentStateRow({
   caption,
   captionColor,
   captionTone = "neutral",
@@ -166,45 +165,27 @@ export function PaymentBlockHeader({
 }) {
   const t = useThemeColors();
   return (
-    <View>
-      <View
-        className="flex-row items-center justify-between"
-        style={{ paddingHorizontal: 16, paddingTop: 4, minHeight: 36 }}
+    <View
+      className="flex-row items-center justify-between"
+      style={{ paddingHorizontal: 16, minHeight: 36, gap: 8 }}
+    >
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+        style={{
+          flex: 1,
+          fontSize: captionTone === "money" ? 17 : 15,
+          fontWeight: captionTone === "money" ? "600" : "500",
+          color: captionColor ?? t.sub,
+          fontVariant: ["tabular-nums"],
+        }}
       >
-        <Text
-          accessibilityRole="header"
-          style={{
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.6,
-            textTransform: "uppercase",
-            color: t.faint,
-          }}
-        >
-          Оплата
-        </Text>
-        {right ? (
-          <View className="flex-row items-center" style={{ gap: 4 }}>
-            {right}
-          </View>
-        ) : null}
-      </View>
-      <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 16 }} />
-      {caption ? (
-        <Text
-          numberOfLines={1}
-          maxFontSizeMultiplier={1.3}
-          style={{
-            paddingHorizontal: 16,
-            paddingTop: 10,
-            fontSize: captionTone === "money" ? 17 : 15,
-            fontWeight: captionTone === "money" ? "600" : "500",
-            color: captionColor ?? t.sub,
-            fontVariant: ["tabular-nums"],
-          }}
-        >
-          {caption}
-        </Text>
+        {caption ?? ""}
+      </Text>
+      {right ? (
+        <View className="flex-row items-center" style={{ gap: 4 }}>
+          {right}
+        </View>
       ) : null}
     </View>
   );
