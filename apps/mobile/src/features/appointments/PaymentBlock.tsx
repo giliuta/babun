@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { Clock, FileText } from "lucide-react-native";
+import { FileText, Split } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import type {
   Appointment,
@@ -9,8 +9,7 @@ import type {
 } from "@babun/shared/local/appointments";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import { randomUuid } from "@babun/shared/sync";
-import { formatEURExact } from "@babun/shared/common/utils/money";
-import { MoneyField } from "@/components/ui/MoneyField";
+import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
@@ -42,22 +41,25 @@ import {
 } from "./payment-draft";
 import { useCancelPayment, useRecordPayment } from "./payment-mutations";
 import {
+  AmountRow,
   InvoiceRow,
   ModeIconButton,
   NoAccountsNotice,
   PaymentBlockHeader,
   PaymentTile,
-  QuietLink,
   TILE_GAP,
   useTileWidth,
 } from "./PaymentTiles";
 
 // БЛОК «ОПЛАТА» (STORY-065). Тап по счёту — деньги получены и записаны СРАЗУ
-// (владелец 2026-09-06: без черновика); визит закрывается, если начался. До
-// начала визита деньги принимает только режим «Предоплата» или инвойс.
-// Ошибочный платёж снимает тап по зелёной плитке или «Снять» в тосте —
-// сервер пишет сторно «деньги не поступили», не возврат. Деньги ждут кнопки
-// только у новой записи: выбранный счёт уходит вместе с «Создать запись».
+// (владелец 2026-09-06: без черновика); визит закрывается, если начался.
+// ОДНА кнопка суммы (стрелки врозь — «распределение», владелец) и для предоплаты, и для части: «это одна и та же
+// функция — какая разница, столько-то или столько-то» (владелец). До начала
+// визита без неё плитки погашены — любые деньги до визита это предоплата;
+// после начала введённая сумма — часть, остаток остаётся долгом или уходит на
+// вторую плитку. Ошибочный платёж снимает тап по зелёной плитке или «Снять» в
+// тосте — сервер пишет сторно «деньги не поступили», не возврат. Деньги ждут
+// кнопки только у новой записи: счёт уходит вместе с «Создать запись».
 
 export interface PendingPayment {
   accountId: string;
@@ -102,7 +104,6 @@ export function PaymentBlock({
   const record = useRecordPayment();
   const cancel = useCancelPayment();
   const invoicesQuery = useInvoices();
-  const [mode, setMode] = useState<"pay" | "prepay">("pay");
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -149,11 +150,12 @@ export function PaymentBlock({
   }, [rows]);
   const unattributed = rows.filter((row) => !row.accountId);
   const busy = record.isPending || cancel.isPending;
-  const kindForTap: PaymentKind = mode === "prepay" ? "prepayment" : "settlement";
-  const amountCents =
-    partText != null ? amountCentsFromInput(partText) : outstanding;
+  const amountMode = partText != null;
+  // Вид платежа выводится из времени, а не выбирается: до начала — предоплата.
+  const kindForTap: PaymentKind = started ? "settlement" : "prepayment";
+  const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && (started || mode === "prepay");
+  const acceptsMoney = outstanding > 0 && (started || amountMode);
 
   const runCancel = (
     appointmentId: string,
@@ -179,9 +181,9 @@ export function PaymentBlock({
 
   const handleTileTap = (account: PaymentAccountOption) => {
     if (outstanding <= 0 || busy) return;
-    if (!started && mode !== "prepay") {
+    if (!started && !amountMode) {
       haptics.warning();
-      toast("Визит ещё не начался — нажмите «Предоплата» или «Инвойс»", "info");
+      toast("Визит ещё не начался — предоплата через кнопку суммы или инвойс", "info");
       return;
     }
     if (problem === "exceeds") {
@@ -215,7 +217,6 @@ export function PaymentBlock({
           haptics.success();
           onAppointmentChanged(fresh);
           setPartText(null);
-          setMode("pay");
           toast(
             `${kind === "prepayment" ? "Предоплата" : "Оплачено"} ${formatEURExact(amount)} · ${account.name}`,
             "success",
@@ -253,15 +254,11 @@ export function PaymentBlock({
     runCancel(appointment.id, row.id, account.name, row.amount);
   };
 
-  const handlePrepayToggle = () => {
+  // Поле открывается ПУСТЫМ: вся сумма — это тап по плитке без поля, а сюда
+  // приходят за другой суммой, и стирать подставленный итог было бы лишним.
+  const handleAmountToggle = () => {
     haptics.tap();
-    if (mode === "prepay") {
-      setMode("pay");
-      setPartText(null);
-      return;
-    }
-    setMode("prepay");
-    setPartText(outstanding > 0 ? String(outstanding / 100) : "");
+    setPartText(amountMode ? null : "");
   };
 
   const handleInvoice = () => {
@@ -286,7 +283,7 @@ export function PaymentBlock({
     visitCompleted: appointment?.status === "completed",
     outstanding,
     rowsCount: rows.length,
-    prepayMode: mode === "prepay",
+    amountMode,
     started,
     hasPending: Boolean(pending),
     outstandingLabel: formatEURExact(outstanding / 100),
@@ -294,9 +291,7 @@ export function PaymentBlock({
   const captionColor =
     caption?.tone === "success" ? t.success : caption?.tone === "danger" ? t.danger : undefined;
 
-  const showAmountField = partText != null && outstanding > 0;
-  const showPartLink =
-    accounts.length > 0 && started && outstanding > 0 && mode === "pay" && !busy;
+  const showAmountField = amountMode && outstanding > 0;
 
   return (
     <SectionCard>
@@ -306,7 +301,7 @@ export function PaymentBlock({
         right={
           teamId ? (
             <>
-              <ModeIconButton icon={Clock} label="Предоплата" active={mode === "prepay"} onPress={handlePrepayToggle} />
+              <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
               <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
             </>
           ) : null
@@ -331,17 +326,19 @@ export function PaymentBlock({
         </Text>
       ))}
       {showAmountField ? (
-        <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
-          <MoneyField
-            label={mode === "prepay" ? "Предоплата" : "Сумма"}
-            value={partText ?? ""}
-            onChangeText={setPartText}
-            currency={currency}
-            hint={problem ? undefined : `после оплаты останется ${formatEURExact((outstanding - amountCents) / 100)}`}
-            error={problem === "exceeds" ? "Больше остатка" : null}
-            autoFocus
-          />
-        </View>
+        <AmountRow
+          symbol={moneySymbol(currency)}
+          value={partText ?? ""}
+          onChangeText={setPartText}
+          hint={
+            problem === "exceeds"
+              ? "Больше остатка"
+              : problem === "empty"
+                ? `Остаток ${formatEURExact(outstanding / 100)}`
+                : `Останется ${formatEURExact((outstanding - amountCents) / 100)}`
+          }
+          hintTone={problem === "exceeds" ? "danger" : "neutral"}
+        />
       ) : null}
       {!teamId ? null : accountsLoading ? null : accounts.length === 0 ? (
         <NoAccountsNotice canCreate={canCreateAccount} onCreate={() => setCreateOpen(true)} />
@@ -362,6 +359,7 @@ export function PaymentBlock({
                 icon={accountIcon(account)}
                 label={account.name}
                 color={account.color ?? t.ink}
+                tint={account.color}
                 width={tileWidth}
                 state={state}
                 amount={isPaid ? formatEURExact(paid) : undefined}
@@ -379,15 +377,6 @@ export function PaymentBlock({
           })}
         </View>
       )}
-      {showPartLink ? (
-        <QuietLink
-          label={partText == null ? "Внести часть" : "Вся сумма"}
-          onPress={() => {
-            haptics.tap();
-            setPartText(partText == null ? String(outstanding / 100) : null);
-          }}
-        />
-      ) : null}
       <AccountCreateSheet
         visible={createOpen}
         onClose={() => setCreateOpen(false)}

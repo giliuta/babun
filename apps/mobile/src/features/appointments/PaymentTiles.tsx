@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Check, ChevronRight, FileText } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { AddRow } from "@/components/ui/AddRow";
@@ -27,6 +27,7 @@ export function PaymentTile({
   icon: Icon,
   label,
   color,
+  tint,
   width,
   state,
   amount,
@@ -38,6 +39,9 @@ export function PaymentTile({
   label: string;
   /** Цвет глифа в покое — цвет счёта из финансов либо чернила. */
   color: string;
+  /** Цвет счёта для заливки плитки (владелец 2026-09-06: «подсвечивать
+   *  блок, как указано в счёте»); null — нейтральная заливка `fill`. */
+  tint?: string | null;
   width: number;
   state: PaymentTileState;
   /** Полученная на этот счёт сумма (только для `paid`). */
@@ -64,7 +68,9 @@ export function PaymentTile({
           ? `${t.success}1f`
           : pending
             ? `${t.accent}14`
-            : t.fill,
+            : tint
+              ? `${tint}1a`
+              : t.fill,
         borderWidth: paid || pending ? 1 : 0,
         borderColor: paid ? t.success : t.accent,
         alignItems: "center",
@@ -263,6 +269,85 @@ export function NoAccountsNotice({
       ) : (
         <View style={{ height: 12 }} />
       )}
+    </View>
+  );
+}
+
+/** Компактная строка суммы: «€ [сумма]» слева, остаток или ошибка справа.
+ *  Без ярлыка и без крупных цифр (владелец 2026-09-06: «коротко, компактно,
+ *  премиально»). */
+export function AmountRow({
+  symbol,
+  value,
+  onChangeText,
+  hint,
+  hintTone = "neutral",
+}: {
+  symbol: string;
+  value: string;
+  onChangeText: (next: string) => void;
+  hint: string;
+  hintTone?: "neutral" | "danger";
+}) {
+  const t = useThemeColors();
+  return (
+    <View
+      className="flex-row items-center"
+      style={{ paddingHorizontal: 16, paddingTop: 6, gap: 12 }}
+    >
+      <View
+        className="flex-row items-center"
+        style={{
+          flex: 1,
+          height: 40,
+          borderRadius: t.radius.input,
+          borderCurve: "continuous",
+          backgroundColor: t.fill,
+          paddingHorizontal: 12,
+          gap: 6,
+        }}
+      >
+        <Text
+          accessible={false}
+          maxFontSizeMultiplier={1.2}
+          style={{ fontSize: 15, fontWeight: "600", color: t.faint }}
+        >
+          {symbol}
+        </Text>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          autoFocus
+          keyboardType="decimal-pad"
+          placeholder="Сумма"
+          placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
+          keyboardAppearance="light"
+          accessibilityLabel="Сумма"
+          maxFontSizeMultiplier={1.2}
+          style={{
+            flex: 1,
+            padding: 0,
+            fontSize: 17,
+            fontWeight: "600",
+            color: t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        />
+      </View>
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{
+          flexShrink: 0,
+          fontSize: 13,
+          fontWeight: "600",
+          color: hintTone === "danger" ? t.danger : t.sub,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {hint}
+      </Text>
     </View>
   );
 }

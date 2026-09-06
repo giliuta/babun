@@ -160,39 +160,39 @@ export function closesVisit(
 
 export type CaptionTone = "neutral" | "success" | "danger";
 
-/** Подпись под заголовком блока — одно предложение о состоянии денег. */
+/** Подпись под заголовком блока — одно-два слова и число, без объяснений
+ *  (владелец 2026-09-06: «если есть остаток — пишем просто остаток»). */
 export function blockCaption(input: {
   hasTeam: boolean;
   hasAppointment: boolean;
   visitCompleted: boolean;
   outstanding: number;
   rowsCount: number;
-  prepayMode: boolean;
+  /** Открыто поле суммы — подпись не нужна, всё говорит само поле. */
+  amountMode: boolean;
   started: boolean;
   hasPending: boolean;
   outstandingLabel: string;
 }): { text: string; tone: CaptionTone } | null {
-  if (!input.hasTeam) return { text: "Сначала выберите команду", tone: "neutral" };
+  if (!input.hasTeam) return { text: "Выберите команду", tone: "neutral" };
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {
-      text: input.visitCompleted ? "Оплачено полностью · визит закрыт" : "Оплачено заранее",
+      text: input.visitCompleted ? "Оплачено" : "Оплачено заранее",
       tone: "success",
     };
   }
-  if (input.prepayMode) return { text: "Предоплата — сумма и счёт", tone: "neutral" };
-  // Визит закрыт, а денег нет (или их сняли) — это долг, и блок так и говорит,
-  // не дожидаясь «Должников» (владелец 2026-09-06: «переводится в долг»).
+  if (input.amountMode) return null;
   if (input.hasAppointment && input.visitCompleted && input.outstanding > 0) {
-    return { text: `Долг ${input.outstandingLabel} · визит закрыт`, tone: "danger" };
+    return { text: `Долг ${input.outstandingLabel}`, tone: "danger" };
   }
   if (!input.started && input.outstanding > 0) {
-    return { text: "До начала визита — предоплата или инвойс", tone: "neutral" };
+    return { text: "До визита: предоплата или инвойс", tone: "neutral" };
   }
   if (input.hasAppointment && input.rowsCount > 0 && input.outstanding > 0) {
     return { text: `Остаток ${input.outstandingLabel}`, tone: "danger" };
   }
   if (!input.hasAppointment && input.hasPending) {
-    return { text: "Запишется при создании записи", tone: "neutral" };
+    return { text: "Запишется при создании", tone: "neutral" };
   }
   return null;
 }

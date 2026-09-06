@@ -156,25 +156,23 @@ describe("blockCaption", () => {
     visitCompleted: false,
     outstanding: 13500,
     rowsCount: 0,
-    prepayMode: false,
+    amountMode: false,
     started: true,
     hasPending: false,
     outstandingLabel: "€135",
   };
   test("team first, then paid states win over everything", () => {
-    assert.deepEqual(blockCaption({ ...base, hasTeam: false }), { text: "Сначала выберите команду", tone: "neutral" });
-    assert.deepEqual(blockCaption({ ...base, outstanding: 0, rowsCount: 2, visitCompleted: true }), { text: "Оплачено полностью · визит закрыт", tone: "success" });
+    assert.deepEqual(blockCaption({ ...base, hasTeam: false }), { text: "Выберите команду", tone: "neutral" });
+    assert.deepEqual(blockCaption({ ...base, outstanding: 0, rowsCount: 2, visitCompleted: true }), { text: "Оплачено", tone: "success" });
     assert.deepEqual(blockCaption({ ...base, outstanding: 0, rowsCount: 1, started: false }), { text: "Оплачено заранее", tone: "success" });
   });
-  test("prepay mode, not started, remaining debt, pending draft", () => {
-    assert.equal(blockCaption({ ...base, prepayMode: true })?.text, "Предоплата — сумма и счёт");
-    assert.equal(blockCaption({ ...base, started: false })?.text, "До начала визита — предоплата или инвойс");
+  test("amount field open needs no caption; not started, remaining, debt, pending", () => {
+    assert.equal(blockCaption({ ...base, amountMode: true }), null);
+    assert.equal(blockCaption({ ...base, amountMode: true, started: false }), null);
+    assert.equal(blockCaption({ ...base, started: false })?.text, "До визита: предоплата или инвойс");
     assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "danger" });
-    assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании записи");
+    assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "danger" });
+    assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");
     assert.equal(blockCaption(base), null);
-  });
-  test("a closed visit with money outstanding is a debt", () => {
-    assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135 · визит закрыт", tone: "danger" });
-    assert.deepEqual(blockCaption({ ...base, visitCompleted: true, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Долг €35 · визит закрыт", tone: "danger" });
   });
 });
