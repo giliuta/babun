@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Plus } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -20,17 +19,7 @@ export function SectionCard({
   children,
 }: {
   title?: string;
-  /** Действие в шапке. `icon: "add"` — маленький кружок с плюсом вместо
-   *  надписи; `label` остаётся для VoiceOver.
-   *
-   *  ЕДИНСТВЕННЫЙ ПЛЮС В ПРОДУКТЕ. Универсальный плюсик для создания снят
-   *  политикой (`ui-policy-contract`: строки добавления говорят словами —
-   *  «Добавить номер», «Создать счёт»). Владелец 2026-09-06 попросил его
-   *  обратно ровно в одном месте — в шапке блока «Файлы»: «маленькая шапка
-   *  „Файлы“, справа плюсик; нажимаю — вылазит лист». Поэтому значок не
-   *  передаётся снаружи, а выбирается токеном здесь: второго плюса без
-   *  слова владельца не появится. */
-  action?: { label: string; onPress: () => void; icon?: "add" };
+  action?: { label: string; onPress: () => void };
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -58,25 +47,7 @@ export function SectionCard({
             >
               {title}
             </Text>
-            {action?.icon ? (
-              <Pressable
-                onPress={action.onPress}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                hitSlop={10}
-                style={({ pressed }) => ({
-                  width: 26,
-                  height: 26,
-                  borderRadius: 13,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: `${t.accent}14`,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Plus color={t.accent} size={15} strokeWidth={2.4} />
-              </Pressable>
-            ) : action ? (
+            {action ? (
               <Pressable
                 onPress={action.onPress}
                 accessibilityRole="button"

@@ -4,6 +4,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, FileText, Images, Trash2 } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
+import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
@@ -32,15 +33,16 @@ import {
 } from "./appointment-photos";
 import { TILE_GAP, useTileWidth } from "./PaymentTiles";
 
-// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). Владелец 2026-09-06: «маленькая шапка
-// „Файлы“, справа плюсик; нажимаю — вылазит лист: сделать фотографию, выбрать
-// из галереи, добавить файл, отсканировать документ; выбрал — оно добавляется
-// вниз, и всё». Ниже плитки 3 в ряд: фото записи и документы (они лежат во
-// вложениях КЛИЕНТА с меткой этой записи — владелец 2026-08-03: «все чеки, все
-// инвойсы — всё в одном месте»). Строки состояния и счётчиков нет: плитки
+// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). Плитки 3 в ряд — фото записи и документы
+// (они лежат во вложениях КЛИЕНТА с меткой этой записи — владелец 2026-08-03:
+// «все чеки, все инвойсы — всё в одном месте»), под ними строка «Добавить»,
+// как «Добавить объект» (владелец 2026-09-06: «плюсик справа не нравится —
+// полноценную кнопку, как у объектов внизу»). Подпись — просто «Добавить»:
+// «файлы — это файл, а фотография называется по-другому». Строка открывает
+// лист: сделать фото, выбрать из галереи, выбрать файл; сканер встанет
+// четвёртым с нативным модулем. Строки состояния и счётчиков нет: плитки
 // говорят сами. Удаление — корзинка в углу плитки (владелец: «сейчас я не
-// знаю, как удалить фотографию из файлов»); удержание плитки — тот же лист,
-// быстрый путь для тех, кто знает.
+// знаю, как удалить фотографию из файлов»); удержание — тот же лист.
 //
 // Камера снимает и грузит СРАЗУ, без разметки «до/после» (владелец
 // 2026-09-06: «„до“ — не надо, это будет немного неправильно; просто чтобы
@@ -183,7 +185,7 @@ export function AppointmentFilesBlock({
         {
           onSuccess: (count) => {
             haptics.success();
-            toast(count === 1 ? "Документ приложен" : `Приложено документов: ${count}`, "success");
+            toast(count === 1 ? "Файл добавлен" : `Добавлено файлов: ${count}`, "success");
           },
         },
       );
@@ -224,7 +226,7 @@ export function AppointmentFilesBlock({
     { id: "camera", label: "Сделать фото", icon: Camera, color: t.accent, onPress: () => void shoot() },
     { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pick() },
     ...(clientId
-      ? [{ id: "file", label: "Добавить файл", icon: FileText, color: t.accent, onPress: () => void pickDocument() }]
+      ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickDocument() }]
       : []),
   ];
 
@@ -264,14 +266,7 @@ export function AppointmentFilesBlock({
 
   return (
     <>
-      <SectionCard
-        title="Файлы"
-        action={
-          canUpload
-            ? { label: "Добавить файл", icon: "add", onPress: () => { haptics.tap(); setMenuOpen(true); } }
-            : undefined
-        }
-      >
+      <SectionCard title="Файлы">
         {photos.length > 0 || docs.length > 0 || busy ? (
           <View
             className="flex-row flex-wrap"
@@ -326,14 +321,24 @@ export function AppointmentFilesBlock({
               </View>
             ) : null}
           </View>
-        ) : (
+        ) : null}
+        {canUpload ? (
+          <AddRow
+            label="Добавить"
+            separated={photos.length > 0 || docs.length > 0 || busy}
+            onPress={() => {
+              haptics.tap();
+              setMenuOpen(true);
+            }}
+          />
+        ) : photos.length === 0 && docs.length === 0 ? (
           <View style={{ height: 10 }} />
-        )}
+        ) : null}
       </SectionCard>
 
       <PickerSheet
         visible={menuOpen}
-        title="Добавить файл"
+        title="Добавить"
         items={menu.map((item) => ({
           ...item,
           onPress: () => {
