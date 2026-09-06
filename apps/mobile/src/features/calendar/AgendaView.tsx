@@ -35,6 +35,7 @@ export function AgendaView({
   offLabelFor,
   hueFor,
   situationFor,
+  overdueFor,
   onCreateNew,
   showAmounts = true,
   refreshing,
@@ -61,6 +62,11 @@ export function AgendaView({
   /** Цвет записи и её ситуация — те же, что в сетке (`record-color`). */
   hueFor?: (a: Appointment) => string;
   situationFor?: (a: Appointment) => string | null;
+  /** Работа не закрыта: время прошло, статус остался «запланирована».
+   *  В сетке это кант вдвое толще — канал СРАВНИТЕЛЬНЫЙ, и на сплошь
+   *  просроченной прошлой неделе он однороден. Слово живёт здесь: лента
+   *  служит сетке легендой, как уже служит для ситуаций. */
+  overdueFor?: (a: Appointment) => boolean;
   onCreateNew?: () => void;
   /** Master/brigadier sees job logistics, never company/customer money. */
   showAmounts?: boolean;
@@ -95,6 +101,7 @@ export function AgendaView({
           offLabelFor={offLabelFor}
           hueFor={hueFor}
           situationFor={situationFor}
+          overdueFor={overdueFor}
           clientName={clientName}
           serviceSummary={serviceSummary}
           onEdit={onEdit}
@@ -134,6 +141,7 @@ function DaySection({
   offLabelFor,
   hueFor,
   situationFor,
+  overdueFor,
   clientName,
   serviceSummary,
   onEdit,
@@ -147,6 +155,7 @@ function DaySection({
   offLabelFor?: (a: Appointment) => { name: string; color: string } | null;
   hueFor?: (a: Appointment) => string;
   situationFor?: (a: Appointment) => string | null;
+  overdueFor?: (a: Appointment) => boolean;
   clientName: (a: Appointment) => string;
   serviceSummary: (a: Appointment) => string;
   onEdit: (a: Appointment) => void;
@@ -260,6 +269,7 @@ function DaySection({
               offLabel={offLabelFor?.(apt) ?? null}
               hue={hueFor?.(apt) ?? t.accent}
               situation={situationFor?.(apt) ?? null}
+              overdue={overdueFor?.(apt) ?? false}
               t={t}
             />
           </View>
@@ -314,6 +324,7 @@ function AgendaRow({
   offLabel,
   hue,
   situation,
+  overdue,
   t,
 }: {
   apt: Appointment;
@@ -330,6 +341,9 @@ function AgendaRow({
    *  ΔE заливок «нет объекта» и «нет услуг» при дейтеранопии — 4.1, и лента
    *  служит сетке легендой. */
   situation: string | null;
+  /** Работа не закрыта: время прошло, статус остался «запланирована».
+   *  В сетке это кант вдвое толще; здесь — слово. */
+  overdue: boolean;
   t: ThemeColors;
 }) {
   // ЦВЕТ СТАТУСА В ЛЕНТЕ БОЛЬШЕ НЕ СВОЙ: третья копия правды расходилась с
@@ -480,6 +494,14 @@ function AgendaRow({
           >
             {STATUS_LABELS[apt.status]}
           </Text>
+          {/* НЕ ЗАКРЫТА — СЛОВОМ. Толщина канта в сетке отвечает на «эта ли
+              висит», но не на «сколько их»: в прошлой неделе просрочено почти
+              всё, и все канты становятся 2pt. */}
+          {overdue ? (
+            <Text numberOfLines={1} style={{ fontSize: 11, color: t.warning }}>
+              · не закрыта
+            </Text>
+          ) : null}
           {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
               слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
               услуг» при дейтеранопии — 4.1), а в списке есть место для слова:

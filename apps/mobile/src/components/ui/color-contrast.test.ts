@@ -99,14 +99,14 @@ describe("цвет записи на сетке календаря", () => {
     }
   });
 
-  test("угловые знаки видны на самой тёмной и самой светлой заливке", () => {
-    const darkest = fillOver("#4B1D82");
-    const lightest = fillOver("#FFF0BC");
-    for (const token of ["#087a52", "#955f00"]) {
-      const mark = markColor(token);
-      assert.ok(contrastRatio(mark, darkest) >= 3, `знак ${mark} на тёмной`);
-      assert.ok(contrastRatio(mark, lightest) >= 3, `знак ${mark} на светлой`);
-    }
+  test("угловой знак «выполнено» виден на самой тёмной и самой светлой заливке", () => {
+    // Знак в углу теперь один: янтарного знака просрочки нет, и это не
+    // экономия — markColor(#955f00) и markColor(#087a52) давали друг к другу
+    // 1.01 : 1, то есть в узкой колонке, где глиф не рисуется, «выполнено» и
+    // «просрочено» были одним и тем же кружком.
+    const mark = markColor("#087a52");
+    assert.ok(contrastRatio(mark, fillOver("#4B1D82")) >= 3, `знак ${mark} на тёмной`);
+    assert.ok(contrastRatio(mark, fillOver("#FFF0BC")) >= 3, `знак ${mark} на светлой`);
   });
 
   test("deepen кэширует и возвращает вход, если это не цвет", () => {

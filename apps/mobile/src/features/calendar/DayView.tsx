@@ -16,17 +16,19 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from "react-native-reanimated";
-import { AlertTriangle, Check } from "lucide-react-native";
+import { Check } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import {
+  blockEdge,
   CANCELLED_EDGE,
   useBlockColors,
   type BlockColors,
 } from "@/features/calendar/status-colors";
+import { isOverdue } from "@/features/calendar/overdue";
 import {
   deepen,
   fillRgba,
@@ -227,18 +229,29 @@ function Block({
   // блок недели и блок дня — один и тот же блок при разной ширине.
   const cardH = Math.max(MIN_H(lineH), ((visEnd - visStart) / 60) * hourH) - 2;
   const pad = width >= 96 ? 6 : 4;
+  // ТОЛЩИНА — ВЕСЬ СИГНАЛ ПРОСРОЧКИ, И ЭТО ЕДИНСТВЕННЫЙ КАНАЛ, КОТОРЫЙ
+  // УСИЛИВАЕТСЯ ПРИ СУЖЕНИИ. Кант 1 → 2pt меняет долю канта в площади плитки:
+  // 21pt (две наложенные записи в Неделе) 13.6 % → 26.4 %, неделя 46pt
+  // 8.7 % → 17.0 %, день 330pt 5.1 % → 10.2 %. То есть канал работает ровно
+  // там, где знака нет (markSize 0 при ширине < 40), и слабеет там, где есть
+  // текст. Геометрия не меняется ни при дейтеранопии, ни при перекраске
+  // палитры владельцем — в отличие от любого оттенка.
   const bw = overdue ? 2 : 1;
   const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
-  const markReserve = markSize > 0 && (overdue || completed) ? markSize + 4 : 0;
-  const textW = width - 2 * pad - 2 * bw - markReserve;
+  // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
+  // Пока его резервировала и она, просроченный блок недели на экране 393pt
+  // давал textW 22.3 при гейте 24 — то есть был НЕМЫМ, без имени клиента.
+  const markReserve = markSize > 0 && completed ? markSize + 4 : 0;
+  // Внутренняя ширина НЕ зависит от толщины канта: компенсация паддинга ниже
+  // (`pad - (bw - 1)`) гасит лишний кант ровно, поэтому вычитаем 2, а не 2·bw.
+  const textW = width - 2 * pad - 2 - markReserve;
   // Строка помещается, если под неё есть 9pt обвязки и её высота.
   const lines = Math.min(3, Math.floor((cardH - 9) / lineH) + 1);
   // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
   // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
   // зелёный знак, а не плотность заливки.
-  const edge = cancelled ? CANCELLED_EDGE : overdue ? t.warning : colors.edge;
-  // «Нет адреса» показываем только будущим: у просроченных приоритет —
-  // оранжевое «!» незакрытой работы (web: past побеждает no_address).
+  // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
+  const edge = blockEdge(colors, apt.status);
 
   const commit = (translationY: number) => {
     if (!onReschedule) {
@@ -375,7 +388,7 @@ function Block({
       <Animated.View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}`}
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -479,12 +492,16 @@ function Block({
             </Text>
           ) : null}
 
-          {/* УГЛОВЫЕ ЗНАКИ — нецветовой канал состояния. Просрочка носит его
-              ВСЕГДА: в узком блоке текста нет вовсе, и без знака она была бы
-              чистым оттенком, неотличимым от оранжевой ситуации при
-              дальтонизме. Глиф рисуется только на широком блоке: SVG монтирует
-              отдельное дерево на каждый знак, а неделя держит 21 колонку. */}
-          {markSize > 0 && (overdue || completed) ? (
+          {/* УГЛОВОЙ ЗНАК ОДИН И ОДНОЗНАЧНЫЙ: зелёный круг — работа закрыта.
+              Просрочка знака не носит, и причина не в экономии места:
+              markColor(t.warning) = #835400 и markColor(t.success) = #076b48
+              дают друг к другу 1.01 : 1 — на колонке недели, где глиф не
+              рисуется, «выполнено» и «просрочено» были двумя одинаково
+              светлыми кружками, неразличимыми ни для кого. Убрав один из двух,
+              делаем знак односмысленным. Глиф рисуется только на широком
+              блоке: SVG монтирует отдельное дерево на каждый знак, а неделя
+              держит 21 колонку. */}
+          {markSize > 0 && completed ? (
             <View
               style={{
                 position: "absolute",
@@ -493,19 +510,13 @@ function Block({
                 width: markSize,
                 height: markSize,
                 borderRadius: 999,
-                backgroundColor: overdue
-                  ? markColor(t.warning)
-                  : markColor(t.success),
+                backgroundColor: markColor(t.success),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               {markSize >= 14 ? (
-                overdue ? (
-                  <AlertTriangle color={t.onAccent} size={9} strokeWidth={2.6} />
-                ) : (
-                  <Check color={t.onAccent} size={10} strokeWidth={3} />
-                )
+                <Check color={t.onAccent} size={10} strokeWidth={3} />
               ) : null}
             </View>
           ) : null}
@@ -519,7 +530,7 @@ function Block({
               отброшенную альфу, то есть о полный цвет записи, и топил метку
               вдвое глубже нужного: зелёная на кобальтовой выходила почти
               чёрной. */}
-          {offLabelColor && markSize > 0 && cardH >= (overdue || completed ? 30 : 20) ? (
+          {offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? (
             <View
               style={{
                 position: "absolute",
@@ -1148,13 +1159,7 @@ export function DayColumn({
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
               lineH={lineH}
               onMenu={onMenu}
-              overdue={
-                todayYmd != null &&
-                p.apt.status === "scheduled" &&
-                p.apt.kind === "work" &&
-                (dateYmd < todayYmd ||
-                  (isToday && nowMinutes != null && p.endMin < nowMinutes))
-              }
+              overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
               onEdit={onEdit}
               onReschedule={
                 canReschedule?.(p.apt) === false ? undefined : onReschedule

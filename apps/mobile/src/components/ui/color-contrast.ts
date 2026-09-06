@@ -200,8 +200,8 @@ export function edgeColor(hue: string): string {
   return deepen(hue, [GRID_WORST, fillOver(hue)]);
 }
 
-/** Цвет углового знака (галка «выполнено», треугольник «просрочено»):
- *  семантический токен, затемнённый против самой тёмной заливки палитры. */
+/** Цвет углового знака (галка «выполнено»): семантический токен,
+ *  затемнённый против самой тёмной заливки палитры. */
 export function markColor(token: string): string {
   return deepen(token, [GRID_WORST, fillOver("#4B1D82")]);
 }

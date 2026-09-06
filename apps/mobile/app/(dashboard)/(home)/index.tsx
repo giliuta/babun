@@ -101,6 +101,7 @@ import {
   type DayLabel,
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
+import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
   useBookingBlocks,
@@ -968,6 +969,15 @@ export default function CalendarTab() {
         : null;
     },
     [situationPalette, activeSituations],
+  );
+
+  // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной
+  // канта — каналом СРАВНИТЕЛЬНЫМ: на сплошь просроченной прошлой неделе все
+  // канты одинаково толстые, и «сколько висит» по ним не прочесть. В списке
+  // для слова есть место.
+  const overdueFor = useCallback(
+    (a: Appointment) => isOverdue(a, todayYmd, nowMinutes),
+    [todayYmd, nowMinutes],
   );
 
   // Сетке хватает цвета: в колонке дня словам места нет.
@@ -2221,6 +2231,7 @@ export default function CalendarTab() {
           offLabelFor={offLabelFor}
           hueFor={(a) => teamColorFor(a) ?? t.accent}
           situationFor={situationFor}
+          overdueFor={overdueFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}

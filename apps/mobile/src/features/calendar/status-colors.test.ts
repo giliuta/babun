@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { blockColorsFor } from "./status-colors";
+import { blockColorsFor, blockEdge, CANCELLED_EDGE } from "./status-colors";
 import {
   contrastRatio,
   deepen,
@@ -37,6 +37,24 @@ describe("цвета блока записи", () => {
 
   test("один объект на цвет: React.memo полутора сотен блоков недели", () => {
     assert.equal(blockColorsFor("#FF9500"), blockColorsFor("#FF9500"));
+  });
+
+  test("кант забирает только отменённая", () => {
+    // Кант — единственный надёжный канал КАТЕГОРИИ (заливка при 18 % даёт по
+    // палитре максимум попарного ΔE 6.7). Право забрать его есть ровно у
+    // одного состояния; просрочка своё право потеряла — при протанопии её
+    // янтарь и оранжевое «нет объекта» дают ΔE 0.0.
+    for (const preset of PRESET_COLORS) {
+      const c = blockColorsFor(preset.value);
+      for (const status of ["scheduled", "in_progress", "completed"] as const) {
+        assert.equal(
+          blockEdge(c, status),
+          c.edge,
+          `${preset.name}/${status} отнял кант у цвета записи`,
+        );
+      }
+      assert.equal(blockEdge(c, "cancelled"), CANCELLED_EDGE);
+    }
   });
 
   test("точка чужой метки видна на заливке любого цвета записи", () => {
