@@ -30,15 +30,18 @@ export type BookingBlockId = "object" | "label" | "payment" | "note";
 export interface BookingBlockDef {
   id: BookingBlockId;
   label: string;
-  /** Что исчезнет с формы, если выключить. Показывается подписью строки. */
-  hint: string;
 }
 
+// ПОДПИСЕЙ У СТРОК НЕТ, И ПОЛЯ ПОД НИХ ТОЖЕ (владелец 2026-09-04: «эти
+// подсказки просто ненужные»). Здесь лежало поле `hint` с текстами «куда
+// ехать», «предоплата и долг» — оно не доезжало до экрана ни разу:
+// `ToggleListScreen` подписи не рисует по прямому отказу владельца. Мёртвое
+// поле опаснее пустого: следующий читатель поверит, что подпись где-то есть.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
-  { id: "object", label: "Объект", hint: "куда ехать" },
-  { id: "label", label: "Метка", hint: "город или район выезда" },
-  { id: "payment", label: "Оплата", hint: "предоплата и долг" },
-  { id: "note", label: "Заметка записи", hint: "что помнить об этой работе" },
+  { id: "object", label: "Объект" },
+  { id: "label", label: "Метка" },
+  { id: "payment", label: "Оплата" },
+  { id: "note", label: "Заметка записи" },
 ];
 
 const blocks = createEnabledPrefs<BookingBlockId>({
