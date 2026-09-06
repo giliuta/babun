@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Image, Linking, Pressable, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Images, Plus, Trash2 } from "lucide-react-native";
+import { Camera, FileText, Images, Trash2 } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -268,7 +268,7 @@ export function AppointmentFilesBlock({
         title="Файлы"
         action={
           canUpload
-            ? { label: "Добавить файл", icon: Plus, onPress: () => { haptics.tap(); setMenuOpen(true); } }
+            ? { label: "Добавить файл", icon: "add", onPress: () => { haptics.tap(); setMenuOpen(true); } }
             : undefined
         }
       >

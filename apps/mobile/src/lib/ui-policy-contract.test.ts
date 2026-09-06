@@ -89,8 +89,13 @@ describe("mobile UI product policy", () => {
       .map((path) => ({ path, source: readFileSync(path, "utf8") }));
     const plusImport =
       /import\s*{[^}]*\b(?:Plus|PlusCircle|CirclePlus|SquarePlus)\b[^}]*}\s*from\s*["']lucide-react-native["']/s;
+    // ЕДИНСТВЕННОЕ ИСКЛЮЧЕНИЕ — шапка `SectionCard` (владелец 2026-09-06:
+    // «маленькая шапка „Файлы“, справа плюсик»). Значок там выбирается
+    // токеном `icon: "add"`, снаружи `Plus` не передать — второго плюса без
+    // слова владельца не появится.
+    const allowed = new Set([resolve(here, "../components/ui/SectionCard.tsx")]);
     const offenders = entries
-      .filter(({ source }) => plusImport.test(source))
+      .filter(({ path, source }) => !allowed.has(path) && plusImport.test(source))
       .map(({ path }) => path);
     const addRow = readFileSync(
       resolve(here, "../components/ui/AddRow.tsx"),

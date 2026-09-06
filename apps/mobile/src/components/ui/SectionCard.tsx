@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { LucideIcon } from "lucide-react-native";
+import { Plus } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -20,10 +20,17 @@ export function SectionCard({
   children,
 }: {
   title?: string;
-  /** Действие в шапке. С `icon` — маленький кружок со значком вместо надписи
-   *  (владелец 2026-09-06: «„Файлы“, справа плюсик»); `label` остаётся для
-   *  VoiceOver. */
-  action?: { label: string; onPress: () => void; icon?: LucideIcon };
+  /** Действие в шапке. `icon: "add"` — маленький кружок с плюсом вместо
+   *  надписи; `label` остаётся для VoiceOver.
+   *
+   *  ЕДИНСТВЕННЫЙ ПЛЮС В ПРОДУКТЕ. Универсальный плюсик для создания снят
+   *  политикой (`ui-policy-contract`: строки добавления говорят словами —
+   *  «Добавить номер», «Создать счёт»). Владелец 2026-09-06 попросил его
+   *  обратно ровно в одном месте — в шапке блока «Файлы»: «маленькая шапка
+   *  „Файлы“, справа плюсик; нажимаю — вылазит лист». Поэтому значок не
+   *  передаётся снаружи, а выбирается токеном здесь: второго плюса без
+   *  слова владельца не появится. */
+  action?: { label: string; onPress: () => void; icon?: "add" };
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -67,7 +74,7 @@ export function SectionCard({
                   opacity: pressed ? 0.6 : 1,
                 })}
               >
-                <action.icon color={t.accent} size={15} strokeWidth={2.4} />
+                <Plus color={t.accent} size={15} strokeWidth={2.4} />
               </Pressable>
             ) : action ? (
               <Pressable
