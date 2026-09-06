@@ -22,7 +22,11 @@ import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { formatYMD, pad2, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
-import { useBlockColors, type BlockColors } from "@/features/calendar/status-colors";
+import {
+  CANCELLED_EDGE,
+  useBlockColors,
+  type BlockColors,
+} from "@/features/calendar/status-colors";
 import {
   deepen,
   fillRgba,
@@ -147,9 +151,6 @@ function MinuteBand({
     </View>
   );
 }
-
-/** Кант отменённой записи: она теряет цвет записи и говорит нейтралью. */
-const CANCELLED_EDGE = "#5e6169";
 
 /** Минимальная высота карточки: обвязка 9pt + одна строка текста. Ниже —
  *  блок без текста, только заливка, кант и знаки. */

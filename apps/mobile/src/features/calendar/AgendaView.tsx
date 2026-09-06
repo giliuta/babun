@@ -8,6 +8,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { edgeColor } from "@/components/ui/color-contrast";
+import { CANCELLED_EDGE } from "@/features/calendar/status-colors";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -268,6 +269,41 @@ function DaySection({
   );
 }
 
+/** КРУЖОК ЦВЕТА ЗАПИСИ — тот же язык, что у блока в сетке: заливка 18 % и
+ *  кант в полную силу. Не корешок: владелец 2026-09-05 отверг полоску слева
+ *  везде, и лента — не исключение.
+ *
+ *  Стоит в ОБЕИХ ветках строки. Раньше его получало только событие, а у
+ *  работы `hueFor` вычислялся, приезжал в строку и не использовался: цвет,
+ *  который отвечает «чего этой работе не хватает», в списке не показывался
+ *  вовсе — притом что список служит сетке легендой и называет ту же дыру
+ *  словом. */
+function RecordDot({
+  hue,
+  cancelled,
+  t,
+}: {
+  hue: string;
+  cancelled: boolean;
+  t: ThemeColors;
+}) {
+  return (
+    <View
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: 999,
+        alignSelf: "center",
+        // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ, как и её блок в сетке: она никуда не
+        // едет и не имеет права занимать слот палитры.
+        backgroundColor: cancelled ? `${t.ink}14` : `${hue}2e`,
+        borderWidth: 1,
+        borderColor: cancelled ? CANCELLED_EDGE : edgeColor(hue),
+      }}
+    />
+  );
+}
+
 function AgendaRow({
   apt,
   clientName,
@@ -330,19 +366,8 @@ function AgendaRow({
         }}
       >
         {/* КРУЖОК ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
-            отвергнутый корешок, только в ленте. Заливка и кант — как у блока
-            в сетке, чтобы лента и сетка говорили одним языком. */}
-        <View
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            alignSelf: "center",
-            backgroundColor: `${hue}2e`,
-            borderWidth: 1,
-            borderColor: edgeColor(hue),
-          }}
-        />
+            отвергнутый корешок, только в ленте. */}
+        <RecordDot hue={hue} cancelled={cancelled} t={t} />
         <View style={{ width: 64, paddingLeft: 8 }}>
           <Text
             className="tabular-nums"
@@ -415,7 +440,8 @@ function AgendaRow({
         minHeight: 64,
       }}
     >
-      <View style={{ width: 64 }}>
+      <RecordDot hue={hue} cancelled={cancelled} t={t} />
+      <View style={{ width: 56 }}>
         <Text
           className="tabular-nums"
           style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
@@ -454,13 +480,17 @@ function AgendaRow({
           >
             {STATUS_LABELS[apt.status]}
           </Text>
-          {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: в списке она называется словом —
-              «весь день Лимассол, а эта работа в Пафосе» читается сразу. */}
+          {/* ЧЕГО НЕ ХВАТАЕТ — СЛОВОМ. Цвет один на три ситуации различает их
+              слишком слабо для дальтоника (ΔE заливок «нет объекта» и «нет
+              услуг» при дейтеранопии — 4.1), а в списке есть место для слова:
+              лента служит сетке легендой. */}
           {situation ? (
             <Text numberOfLines={1} style={{ fontSize: 11, color: t.body }}>
               · {situation}
             </Text>
           ) : null}
+          {/* МЕТКА, ОТЛИЧНАЯ ОТ МЕТКИ ДНЯ: «весь день Лимассол, а эта работа
+              в Пафосе» — в сетке это точка в углу блока, здесь имя. */}
           {offLabel ? (
             <>
               <View
