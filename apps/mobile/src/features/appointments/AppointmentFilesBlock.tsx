@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Image, Linking, Pressable, Text, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Images, Trash2 } from "lucide-react-native";
+import { Camera, FileText, Images, ScanLine, Trash2 } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
@@ -23,6 +23,7 @@ import {
 } from "@/features/clients/card-attachments";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { docTitle } from "./appointment-files";
+import { pagesToPdf, scanDocumentPages, scannerAvailable } from "./document-scanner";
 import {
   MAX_APPOINTMENT_PHOTOS,
   RetryableAppointmentPhotoUploadError,
@@ -213,6 +214,24 @@ export function AppointmentFilesBlock({
     }
   };
 
+  /** Скан: VisionKit → страницы → один PDF → документ записи. */
+  const scanDocument = async () => {
+    if (!clientId || busy) return;
+    try {
+      const pages = await scanDocumentPages();
+      if (!pages) return;
+      const pdf = await pagesToPdf(pages);
+      uploadDoc.mutate([{ uri: pdf.uri, fileName: pdf.fileName, mimeType: "application/pdf" }], {
+        onSuccess: () => {
+          haptics.success();
+          toast(pages.length === 1 ? "Скан добавлен" : `Скан добавлен: ${pages.length} стр.`, "success");
+        },
+      });
+    } catch (error) {
+      notify("Не удалось отсканировать", error instanceof Error ? error.message : "Попробуйте ещё раз.");
+    }
+  };
+
   const holdDoc = async (doc: ClientAttachment) => {
     haptics.tap();
     const index = await chooseOption(doc.filename, [{ label: "Удалить", destructive: true }]);
@@ -220,13 +239,15 @@ export function AppointmentFilesBlock({
     removeDoc.mutate(doc, { onSuccess: () => toast("Документ удалён", "info") });
   };
 
-  // Сканер документов встанет сюда четвёртым пунктом вместе с нативным
-  // модулем (этап 2): мёртвых пунктов в листе не держим.
   const menu: PickerSheetItem[] = [
     { id: "camera", label: "Сделать фото", icon: Camera, color: t.accent, onPress: () => void shoot() },
     { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pick() },
     ...(clientId
       ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickDocument() }]
+      : []),
+    // Только там, где нативный сканер собран (см. document-scanner.ts).
+    ...(clientId && scannerAvailable()
+      ? [{ id: "scan", label: "Отсканировать документ", icon: ScanLine, color: t.accent, onPress: () => void scanDocument() }]
       : []),
   ];
 
