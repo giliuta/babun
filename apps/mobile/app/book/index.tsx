@@ -2108,7 +2108,6 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                identity={identityC}
                 showLabel={showLabelBlock}
                 onEditTeam={() => {
                   setTeamSheetOpen(true);
@@ -2130,7 +2129,6 @@ export default function BookScreen() {
                 // заданный руками, докет иначе игнорировал.
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
-                identity={identityC}
                 onPress={() => {
                   setWhenOpen(true);
                   haptics.tap();
