@@ -120,7 +120,6 @@ import {
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { startOfWeek } from "@/features/calendar/week";
 import {
@@ -1192,12 +1191,6 @@ export default function CalendarTab() {
     (ymd: string) => apptsByDate.get(ymd) ?? [],
     [apptsByDate],
   );
-  // Записи бизнес-СЕГОДНЯ (не просматриваемого дня) — вечерний баннер долгов.
-  const todayAppts = useMemo(
-    () => apptsByDate.get(todayYmd) ?? [],
-    [apptsByDate, todayYmd],
-  );
-
   const weekDays = useMemo(() => {
     const first = startOfWeek(day);
     return Array.from({ length: 7 }, (_, i) => addDays(first, i));
@@ -2440,18 +2433,9 @@ export default function CalendarTab() {
         )
       ) : null}
 
-      {/* Вечерний контроль денег: после 18:00 выполненные СЕГОДНЯ с долгом
-          (web EndOfDayBanner) — плавающая карточка над футером. CTA ведёт
-          в «Закрыть день» (web parity) — экран ровно этих записей;
-          /cabinet/unclosed показывал только просроченные «Запланирован». */}
-      {canViewCompanyFinance ? (
-        <EndOfDayBanner
-          appointments={todayAppts}
-          todayYmd={todayYmd}
-          nowHour={now.getHours()}
-          onOpenUnpaid={() => router.push("/cabinet/close-day")}
-        />
-      ) : null}
+      {/* ПЛАШКИ «N без оплаты · закройте до конца дня» БОЛЬШЕ НЕТ (владелец
+          2026-09-06: «это ненужная штука — и так всё видно»): долг стоит
+          янтарём в самой строке, а незакрытые — в «Закрыть день». */}
 
       {/* Разбор финансов дня — тап по футеру Доход/Расход. */}
       {canViewCompanyFinance ? (
