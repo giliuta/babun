@@ -2047,6 +2047,12 @@ export default function BookScreen() {
         keyboardVerticalOffset={insets.top}
       >
         <ScrollView
+          // СКРОЛЛ УПИРАЕТСЯ В КРАЙ БЛОКОВ, А НЕ ТЯНЕТСЯ (владелец 2026-09-06:
+          // «должно фиксироваться чётко на конце блока — а не можно поднимать
+          // сколько угодно»). Резинка iOS у формы ничего не значит: тянуть
+          // для обновления здесь нечего.
+          bounces={false}
+          overScrollMode="never"
           ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24 }}
