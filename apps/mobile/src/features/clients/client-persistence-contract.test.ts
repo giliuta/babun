@@ -61,7 +61,7 @@ describe("client native persistence contract", () => {
     // черновика, кнопка оставалась серой, «Готово» молча выбрасывало работу
     // (регресс 2026-07-27, найден прогоном персонажей).
     const addressRow = sheet.slice(
-      sheet.indexOf('label="Адрес или ссылка"'),
+      sheet.indexOf('label="Адрес"'),
       sheet.indexOf('label="Заметка"'),
     );
     assert.match(addressRow, /\n\s+live\n/);

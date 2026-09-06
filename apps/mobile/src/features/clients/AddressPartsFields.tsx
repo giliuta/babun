@@ -2,26 +2,36 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { FieldRow } from "@/components/ui/card-rows";
-import { ICON } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// УТОЧНЕНИЕ АДРЕСА — «МИНИ-ДОП» ПОД ГЛАВНОЙ СТРОКОЙ (владелец 2026-09-06:
+// ТОЧНЫЙ АДРЕС — «МИНИ-ДОП» ПОД ГЛАВНОЙ СТРОКОЙ (владелец 2026-09-06:
 // «основное — это адрес или ссылка на карту; уточнение можно раскрыть и
-// свернуть обратно»). Главная строка «Адрес или ссылка» живёт в листе и стоит
-// всегда; здесь — переключатель и поля уточнения: комплекс, подъезд · этаж ·
-// квартира одной строкой, город, индекс и ссылка на карту (пин, когда главная
-// строка — текст). Улицы и дома среди полей НЕТ — это и есть главная строка.
+// свернуть обратно»; слово «уточнение» владелец отверг — канцелярит).
+// Главная строка «Адрес или ссылка на карту» живёт в листе и стоит первой;
+// здесь — переключатель «Точный адрес» и его поля: комплекс; подъезд · этаж ·
+// квартира; город · индекс; ссылка на карту (только когда главная строка —
+// текст: ссылку в главной строке пин дублировал бы). Улицы и дома среди
+// полей НЕТ — это и есть главная строка.
 //
-// Свёрнутое уточнение не молчит: в строке переключателя стоит его содержимое
-// («Sunny Court · подъезд 2 · эт. 3 · кв. 5»), чтобы не раскрывать ради
-// проверки. Все поля `live`: черновик держит лист, а когда писать — решает он.
+// Свёрнутая строка не молчит: справа стоит её содержимое («Sunny Court ·
+// подъезд 2 · эт. 3 · кв. 5»), обрезанное с НАЧАЛА — хвост «эт. 3 · кв. 5»
+// мастеру нужнее названия комплекса. Все поля `live`: черновик держит лист.
+
+export const ADDRESS_DETAILS_LABEL = "Точный адрес";
 
 const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "entrance", label: "Подъезд" },
   { key: "floor", label: "Этаж" },
   { key: "apartment", label: "Квартира" },
 ];
+
+/** Волосяной разделитель между полями одной строки: без него три подписи
+ *  висят в воздухе и не читаются как три поля. */
+function Hairline() {
+  const t = useThemeColors();
+  return <View style={{ width: 1, backgroundColor: t.separator }} />;
+}
 
 export function AddressDetailsToggle({
   open,
@@ -43,7 +53,9 @@ export function AddressDetailsToggle({
       }}
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
-      accessibilityLabel={summary ? `Уточнение: ${summary}` : "Уточнение"}
+      accessibilityLabel={
+        summary ? `${ADDRESS_DETAILS_LABEL}: ${summary}` : ADDRESS_DETAILS_LABEL
+      }
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -55,17 +67,27 @@ export function AddressDetailsToggle({
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 16, color: t.ink }}>
-        Уточнение
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+      >
+        {ADDRESS_DETAILS_LABEL}
       </Text>
       <Text
         maxFontSizeMultiplier={1.2}
         numberOfLines={1}
-        style={{ flex: 1, textAlign: "right", fontSize: 15, color: t.sub }}
+        ellipsizeMode="head"
+        style={{
+          flex: 1,
+          textAlign: "right",
+          fontSize: 15,
+          fontWeight: "500",
+          color: t.ink,
+        }}
       >
         {open ? "" : summary}
       </Text>
-      <Chevron color={t.faint} size={ICON.sm} strokeWidth={2.2} />
+      <Chevron color={t.chevron} size={17} strokeWidth={2.2} />
     </Pressable>
   );
 }
@@ -77,8 +99,9 @@ export function AddressDetailsFields({
   pin,
   onPinChange,
   onPinEditEnd,
+  showPin,
 }: {
-  /** Уточнение — части без улицы (см. withoutStreet). */
+  /** Точный адрес — части без улицы (см. withoutStreet). */
   parts: AddressParts;
   onChange: (next: AddressParts) => void;
   /** Уход с любого поля — момент записи у правки объекта. */
@@ -87,6 +110,8 @@ export function AddressDetailsFields({
   pin: string;
   onPinChange: (next: string) => void;
   onPinEditEnd?: () => void;
+  /** Поле пина показывают, только когда главная строка — текст. */
+  showPin: boolean;
 }) {
   const set = (key: keyof AddressParts) => (value: string) =>
     onChange({ ...parts, [key]: value });
@@ -103,55 +128,67 @@ export function AddressDetailsFields({
         onEditEnd={onEditEnd}
       />
       <View style={{ flexDirection: "row" }}>
-        {SHORT.map((field) => (
-          <View key={field.key} style={{ flex: 1 }}>
-            <FieldRow
-              label={field.label}
-              value={parts[field.key] ?? ""}
-              placeholder=""
-              stacked
-              separated
-              live
-              onSave={set(field.key)}
-              onEditEnd={onEditEnd}
-            />
+        {SHORT.map((field, i) => (
+          <View key={field.key} style={{ flex: 1, flexDirection: "row" }}>
+            {i > 0 ? <Hairline /> : null}
+            <View style={{ flex: 1 }}>
+              <FieldRow
+                label={field.label}
+                value={parts[field.key] ?? ""}
+                placeholder=""
+                stacked
+                separated
+                live
+                onSave={set(field.key)}
+                onEditEnd={onEditEnd}
+              />
+            </View>
           </View>
         ))}
       </View>
-      <FieldRow
-        label="Город"
-        value={parts.city ?? ""}
-        placeholder=""
-        stacked
-        separated
-        live
-        autoCapitalize="words"
-        onSave={set("city")}
-        onEditEnd={onEditEnd}
-      />
-      <FieldRow
-        label="Индекс"
-        value={parts.zip ?? ""}
-        placeholder=""
-        stacked
-        separated
-        live
-        keyboardType="numbers-and-punctuation"
-        onSave={set("zip")}
-        onEditEnd={onEditEnd}
-      />
-      <FieldRow
-        label="Ссылка на карту"
-        value={pin}
-        placeholder=""
-        stacked
-        separated
-        live
-        keyboardType="url"
-        autoCapitalize="none"
-        onSave={onPinChange}
-        onEditEnd={onPinEditEnd}
-      />
+      <View style={{ flexDirection: "row" }}>
+        <View style={{ flex: 2 }}>
+          <FieldRow
+            label="Город"
+            value={parts.city ?? ""}
+            placeholder=""
+            stacked
+            separated
+            live
+            autoCapitalize="words"
+            onSave={set("city")}
+            onEditEnd={onEditEnd}
+          />
+        </View>
+        <Hairline />
+        <View style={{ flex: 1 }}>
+          <FieldRow
+            label="Индекс"
+            value={parts.zip ?? ""}
+            placeholder=""
+            stacked
+            separated
+            live
+            keyboardType="numbers-and-punctuation"
+            onSave={set("zip")}
+            onEditEnd={onEditEnd}
+          />
+        </View>
+      </View>
+      {showPin ? (
+        <FieldRow
+          label="Ссылка на карту"
+          value={pin}
+          placeholder=""
+          stacked
+          separated
+          live
+          keyboardType="url"
+          autoCapitalize="none"
+          onSave={onPinChange}
+          onEditEnd={onPinEditEnd}
+        />
+      ) : null}
     </>
   );
 }

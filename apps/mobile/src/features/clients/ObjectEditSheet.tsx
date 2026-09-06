@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ScrollView,
-  TextInput,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -22,6 +21,7 @@ import {
   AddressDetailsToggle,
 } from "@/features/clients/AddressPartsFields";
 import { objectTarget, primaryLine } from "@/features/clients/object-address";
+import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
 import {
   snapObjectType,
@@ -224,8 +224,24 @@ export function ObjectEditSheet({
         keyboardShouldPersistTaps="handled"
       >
         <RowGroup>
+          {/* АДРЕС — ПЕРВЫМ, без подписи сверху (дизайн-ревью 2026-09-06):
+              плейсхолдер и есть подпись. */}
+          <FieldRow
+            label="Адрес"
+            hideLabel
+            big
+            value={target}
+            placeholder="Адрес или ссылка на карту"
+            stacked
+            multiline
+            live
+            onSave={(v) => setTarget(v)}
+            // Разбор «адрес или ссылка» — на уходе со строки: делать это на
+            // каждый символ значило бы подменять набираемый текст.
+            onEditEnd={commitTarget}
+          />
           <ChoiceRow
-            label="Тип объекта"
+            separated
             options={typeOptions}
             value={loc.label}
             // Шестерёнка ведёт в настройки типов и ЗАКРЫВАЕТ лист: страница
@@ -239,22 +255,9 @@ export function ObjectEditSheet({
             }}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
-          <FieldRow
-            label="Адрес или ссылка"
-            value={target}
-            placeholder=""
-            stacked
-            separated
-            multiline
-            live
-            onSave={(v) => setTarget(v)}
-            // Разбор «адрес или ссылка» — на уходе со строки: делать это на
-            // каждый символ значило бы подменять набираемый текст.
-            onEditEnd={commitTarget}
-          />
-          {/* УТОЧНЕНИЕ — «мини-доп» под главной строкой (владелец 2026-09-06):
-              раскрывается и сворачивается обратно; свёрнутое показывает, что
-              в нём есть. Пустые части снимаются на записи сами. */}
+          {/* ТОЧНЫЙ АДРЕС — «мини-доп» под главной строкой: раскрывается и
+              сворачивается обратно; свёрнутая строка показывает, что в ней
+              есть. Пустые части снимаются на записи сами. */}
           <AddressDetailsToggle
             open={address.open}
             summary={address.summary}
@@ -268,42 +271,25 @@ export function ObjectEditSheet({
               pin={address.pin}
               onPinChange={address.setPin}
               onPinEditEnd={commitTarget}
+              showPin={!isLikelyUrl(target.trim())}
             />
           ) : null}
+          {/* ЗАМЕТКА — последняя строка той же карточки (объект один —
+              карточка одна). Пишется на уходе с поля и на закрытии листа. */}
+          <FieldRow
+            label="Заметка"
+            hideLabel
+            value={note}
+            placeholder="Как войти, код"
+            stacked
+            separated
+            multiline
+            live
+            onSave={setNote}
+            onEditEnd={commitNote}
+          />
         </RowGroup>
 
-        {/* ЗАМЕТКА ОБЪЕКТА — КОМПОЗЕР, как заметки клиента (владелец
-            2026-08-06: «этот плюсик „добавить" надо изменить — как у нас уже
-            существуют заметки»). Строка-действие «+ Добавить» просила нажать
-            на себя, прежде чем пустить к полю; подложка с полем пускает
-            сразу. Кнопки отправки здесь нет: заметка одна, она не
-            добавляется в список, а правится и сохраняется на уходе. */}
-        <RowGroup title="Заметка">
-          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              onBlur={commitNote}
-              multiline
-              accessibilityLabel="Заметка об объекте"
-              placeholder="Как войти, код, кто встречает…"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              style={{
-                minHeight: 44,
-                maxHeight: 120,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: t.radius.input,
-                backgroundColor: t.fill,
-                fontSize: 15,
-                color: t.ink,
-              }}
-            />
-          </View>
-        </RowGroup>
 
         {/* «УДАЛИТЬ ОБЪЕКТ» СТРОКОЙ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-04:
             «удалить объект так нельзя — это свайп вправо удалить, как

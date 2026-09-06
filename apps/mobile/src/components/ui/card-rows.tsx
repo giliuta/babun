@@ -898,7 +898,7 @@ export function ChoiceRow({
         borderTopColor: t.separator,
       }}
     >
-      {label || onSettings ? (
+      {label ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <Text
             maxFontSizeMultiplier={1.2}
@@ -937,6 +937,7 @@ export function ChoiceRow({
         style={{
           flexDirection: "row",
           flexWrap: "wrap",
+          alignItems: "center",
           rowGap: 14,
           columnGap: 6,
         }}
@@ -952,6 +953,25 @@ export function ChoiceRow({
             onPress={() => onSelect(option)}
           />
         ))}
+        {/* БЕЗ ЯРЛЫКА шестерёнка живёт В РЯДУ ЧИПОВ, а не отдельной строкой
+            над ними: строка ради одной иконки — пустой этаж карточки
+            (владелец 2026-09-06: «этот блок мне не нравится, как выглядит»).
+            Тише чипов (sub), чтобы не спорить с выбором. */}
+        {!label && onSettings ? (
+          <Pressable
+            onPress={onSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Настроить список"
+            hitSlop={{ top: 14, bottom: 14, left: 8, right: 12 }}
+            style={({ pressed }) => ({
+              marginLeft: "auto",
+              paddingHorizontal: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Settings2 color={t.sub} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
