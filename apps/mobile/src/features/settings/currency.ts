@@ -12,7 +12,7 @@ import { useTenant } from "./tenant";
  *  перерисовывался вместе с профилем тенанта. */
 export function useCurrency(): MoneyCurrency {
   const code = useTenant().data?.currency;
-  return isMoneyCurrency(code) ? (code.toUpperCase() as MoneyCurrency) : DEFAULT_CURRENCY;
+  return isMoneyCurrency(code) ? code.toUpperCase() : DEFAULT_CURRENCY;
 }
 
 export function useMoney() {

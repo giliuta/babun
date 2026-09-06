@@ -10,7 +10,7 @@ import {
   Tags,
   Trash2,
   Users,
-  Coins,
+  Banknote,
 } from "lucide-react-native";
 import { getStorage } from "@babun/shared/storage";
 import {
@@ -49,10 +49,10 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
-import { chooseOption } from "@/lib/choose";
 import { useCurrentRole, useUpdateTenant } from "@/features/settings/tenant";
 import { useCurrency } from "@/features/settings/currency";
-import { CURRENCIES, moneyName, moneySymbol } from "@babun/shared/common/utils/money";
+import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
+import { CurrencySheet } from "@/features/settings/CurrencySheet";
 import { TeamScheduleSheet } from "@/features/calendar/TeamScheduleSheet";
 import { confirmThen } from "@/lib/confirm";
 import { useToast } from "@/components/ui/Toast";
@@ -157,7 +157,7 @@ export default function CalendarSettingsScreen() {
   // когда работает команда, отвечает её ГРАФИК — он правится листом снизу.
   // Колонки `work_start_hour/work_end_hour` живы и остаются фолбэком сетки для
   // команды без строки расписания — стандарт 06:00–20:00.
-  const [picker, setPicker] = useState<"view" | "tz" | null>(null);
+  const [picker, setPicker] = useState<"view" | "tz" | "currency" | null>(null);
   // Валюта — настройка ТЕНАНТА (одна на бизнес: `tenants.currency`), но
   // выбирается здесь, рядом с часовым поясом (владелец 2026-09-06: «добавь в
   // настройки календаря раздел „валюта“… примерно то же понятие, что часовой
@@ -165,23 +165,21 @@ export default function CalendarSettingsScreen() {
   const currency = useCurrency();
   const updateTenant = useUpdateTenant();
   const isOwner = useCurrentRole().data === "owner";
-  const pickCurrency = async () => {
-    if (!isOwner) {
-      toast("Валюту меняет владелец", "info");
-      return;
-    }
-    const index = await chooseOption(
-      "Валюта",
-      CURRENCIES.map((c) => ({ label: `${c.symbol} ${c.name} · ${c.code}` })),
-    );
-    const next = index == null ? null : CURRENCIES[index];
-    if (!next || next.code === currency) return;
+  const applyCurrency = (code: string) => {
+    if (code === currency) return;
     updateTenant.mutate(
-      { currency: next.code },
+      { currency: code },
       {
-        onSuccess: () => toast(`Валюта: ${next.symbol} ${next.name}`, "success"),
-        onError: (error) =>
-          toast(error instanceof Error ? error.message : "Не удалось сменить валюту", "error"),
+        onSuccess: () => toast(`Валюта: ${moneySymbol(code)} ${moneyName(code)}`, "success"),
+        onError: (error) => {
+          const message = error instanceof Error ? error.message : "";
+          toast(
+            /currency_check|check constraint/i.test(message)
+              ? "База пока принимает пять валют — нужна миграция"
+              : message || "Не удалось сменить валюту",
+            "error",
+          );
+        },
       },
     );
   };
@@ -402,10 +400,16 @@ export default function CalendarSettingsScreen() {
             <SectionCard>
               <SettingsRow
                 tile="neutral"
-                icon={Coins}
+                icon={Banknote}
                 title="Валюта"
-                sub={`${moneySymbol(currency)} · ${moneyName(currency)} · ${currency}`}
-                onPress={() => void pickCurrency()}
+                sub={`${moneyName(currency)} · ${moneySymbol(currency)} · ${currency}`}
+                onPress={() => {
+                  if (!isOwner) {
+                    toast("Валюту меняет владелец", "info");
+                    return;
+                  }
+                  setPicker("currency");
+                }}
               />
             </SectionCard>
             {/* «Длительности записи» здесь больше нет (владелец 2026-08-16):
@@ -704,6 +708,12 @@ export default function CalendarSettingsScreen() {
             calendar_window_end: formatHm({ hour: v.end, minute: v.endMinute }),
           })
         }
+      />
+      <CurrencySheet
+        visible={picker === "currency"}
+        onClose={() => setPicker(null)}
+        value={currency}
+        onApply={applyCurrency}
       />
       <TimezoneSheet
         visible={picker === "tz"}
