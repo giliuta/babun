@@ -1,3 +1,4 @@
+import { money } from "@babun/shared/common/utils/money";
 import { useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -105,8 +106,8 @@ const SAMPLE_VARS: Record<string, string> = {
   Master: "Y&D",
   Service: "x4 A/C Чистка",
   Address: "Лимассол",
-  Price: "€80",
-  Amount: "€80",
+  Price: money(80),
+  Amount: money(80),
   Company: "Babun",
   CancelUrl: "babun.app/c/abc",
 };
