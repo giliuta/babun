@@ -173,4 +173,8 @@ describe("blockCaption", () => {
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании записи");
     assert.equal(blockCaption(base), null);
   });
+  test("a closed visit with money outstanding is a debt", () => {
+    assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135 · визит закрыт", tone: "danger" });
+    assert.deepEqual(blockCaption({ ...base, visitCompleted: true, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Долг €35 · визит закрыт", tone: "danger" });
+  });
 });

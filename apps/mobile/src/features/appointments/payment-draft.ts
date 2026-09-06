@@ -180,6 +180,11 @@ export function blockCaption(input: {
     };
   }
   if (input.prepayMode) return { text: "Предоплата — сумма и счёт", tone: "neutral" };
+  // Визит закрыт, а денег нет (или их сняли) — это долг, и блок так и говорит,
+  // не дожидаясь «Должников» (владелец 2026-09-06: «переводится в долг»).
+  if (input.hasAppointment && input.visitCompleted && input.outstanding > 0) {
+    return { text: `Долг ${input.outstandingLabel} · визит закрыт`, tone: "danger" };
+  }
   if (!input.started && input.outstanding > 0) {
     return { text: "До начала визита — предоплата или инвойс", tone: "neutral" };
   }
