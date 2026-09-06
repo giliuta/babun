@@ -1,17 +1,21 @@
-import { View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
 import { FieldRow } from "@/components/ui/card-rows";
+import { ICON } from "@/components/ui/tokens";
+import { haptics } from "@/lib/haptics";
+import { useThemeColors } from "@/theme/colors";
 
-// ПОЛЯ УТОЧНЕНИЯ АДРЕСА — ОДНИ НА ДОБАВЛЕНИЕ И ПРАВКУ ОБЪЕКТА (владелец
-// 2026-09-06: «полноценно прописать город, улицу, дом, подъезд, квартиру,
-// индекс — как на доставке»). Порядок — как заполняют: сперва «где» (улица и
-// дом, комплекс), потом «куда внутри» (подъезд · этаж · квартира одной
-// строкой — три коротких числа не заслуживают трёх строк по 60pt), потом
-// город и индекс. Ссылка на карту — последней: пин у объекта с частями живёт
-// здесь, а не в строке «адрес или ссылка», которой в этом режиме нет.
+// УТОЧНЕНИЕ АДРЕСА — «МИНИ-ДОП» ПОД ГЛАВНОЙ СТРОКОЙ (владелец 2026-09-06:
+// «основное — это адрес или ссылка на карту; уточнение можно раскрыть и
+// свернуть обратно»). Главная строка «Адрес или ссылка» живёт в листе и стоит
+// всегда; здесь — переключатель и поля уточнения: комплекс, подъезд · этаж ·
+// квартира одной строкой, город, индекс и ссылка на карту (пин, когда главная
+// строка — текст). Улицы и дома среди полей НЕТ — это и есть главная строка.
 //
-// Все поля `live`: черновик держит лист, а когда писать — решает он сам
-// (правка — на уходе с поля, добавление — по кнопке).
+// Свёрнутое уточнение не молчит: в строке переключателя стоит его содержимое
+// («Sunny Court · подъезд 2 · эт. 3 · кв. 5»), чтобы не раскрывать ради
+// проверки. Все поля `live`: черновик держит лист, а когда писать — решает он.
 
 const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "entrance", label: "Подъезд" },
@@ -19,7 +23,54 @@ const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "apartment", label: "Квартира" },
 ];
 
-export function AddressPartsFields({
+export function AddressDetailsToggle({
+  open,
+  summary,
+  onToggle,
+}: {
+  open: boolean;
+  /** Что уже заполнено — подпись свёрнутой строки (см. composeDetails). */
+  summary: string;
+  onToggle: () => void;
+}) {
+  const t = useThemeColors();
+  const Chevron = open ? ChevronUp : ChevronDown;
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onToggle();
+      }}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={summary ? `Уточнение: ${summary}` : "Уточнение"}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        minHeight: 48,
+        paddingHorizontal: 16,
+        gap: 12,
+        borderTopWidth: 1,
+        borderTopColor: t.separator,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+    >
+      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 16, color: t.ink }}>
+        Уточнение
+      </Text>
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{ flex: 1, textAlign: "right", fontSize: 15, color: t.sub }}
+      >
+        {open ? "" : summary}
+      </Text>
+      <Chevron color={t.faint} size={ICON.sm} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
+export function AddressDetailsFields({
   parts,
   onChange,
   onEditEnd,
@@ -27,9 +78,10 @@ export function AddressPartsFields({
   onPinChange,
   onPinEditEnd,
 }: {
+  /** Уточнение — части без улицы (см. withoutStreet). */
   parts: AddressParts;
   onChange: (next: AddressParts) => void;
-  /** Уход с любого поля частей — момент записи у правки объекта. */
+  /** Уход с любого поля — момент записи у правки объекта. */
   onEditEnd?: () => void;
   /** Ссылка на карту (пин) — сырой ввод; проверяет вызывающая сторона. */
   pin: string;
@@ -40,15 +92,6 @@ export function AddressPartsFields({
     onChange({ ...parts, [key]: value });
   return (
     <>
-      <FieldRow
-        label="Улица и дом"
-        value={parts.street ?? ""}
-        placeholder=""
-        stacked
-        live
-        onSave={set("street")}
-        onEditEnd={onEditEnd}
-      />
       <FieldRow
         label="Комплекс"
         value={parts.complex ?? ""}

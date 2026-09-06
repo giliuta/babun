@@ -165,3 +165,86 @@ export function sameAddressParts(
 ): boolean {
   return JSON.stringify(cleanAddressParts(a) ?? null) === JSON.stringify(cleanAddressParts(b) ?? null);
 }
+
+// ─── ГЛАВНАЯ СТРОКА И УТОЧНЕНИЕ (владелец 2026-09-06) ───────────────────────
+// «Основное — это адрес или ссылка на карту; уточнение можно раскрыть и
+// свернуть обратно — мини-доп». Главная строка объекта — улица и дом ЛИБО
+// ссылка; уточнение — остальные части (комплекс, подъезд/этаж/квартира,
+// город, индекс) и отдельный пин, когда главная строка — текст.
+
+/** Части без «улицы и дома» — то, что живёт в уточнении. */
+export function withoutStreet(
+  parts: AddressParts | null | undefined,
+): AddressParts {
+  const clean = cleanAddressParts(parts);
+  if (!clean) return {};
+  const { street: _street, ...rest } = clean;
+  return rest;
+}
+
+/** Подпись свёрнутого уточнения: «Sunny Court · подъезд 2 · эт. 3 · кв. 5 ·
+ *  Лимасол 4000». Пусто — уточнения нет. */
+export function composeDetails(parts: AddressParts | null | undefined): string {
+  const clean = cleanAddressParts(parts);
+  if (!clean) return "";
+  const out: string[] = [];
+  if (clean.complex) out.push(clean.complex);
+  if (clean.entrance) out.push(`подъезд ${clean.entrance}`);
+  if (clean.floor) out.push(`эт. ${clean.floor}`);
+  if (clean.apartment) out.push(`кв. ${clean.apartment}`);
+  const place = [clean.city, clean.zip].filter(Boolean).join(" ");
+  if (place) out.push(place);
+  return out.join(" · ");
+}
+
+/** Что показать в главной строке: у объекта с частями — улица и дом (без них
+ *  пин), у прежнего — адрес или ссылка целиком. */
+export function primaryLine(
+  loc:
+    | { address?: string | null; mapUrl?: string | null; addressParts?: AddressParts | null }
+    | null
+    | undefined,
+): string {
+  if (!loc) return "";
+  if (hasAddressPlace(loc.addressParts)) {
+    return (loc.addressParts?.street ?? "").trim() || (loc.mapUrl ?? "").trim();
+  }
+  return objectTarget(loc);
+}
+
+/**
+ * Патч объекта из главной строки и уточнения — одним местом для добавления и
+ * правки. Строка-ссылка уходит в пин, строка-текст — в «улица и дом»; части
+ * с «где» собирают `address`, без него работает прежний разбор одной строки.
+ * Пин из уточнения главнее ссылки в строке; не-ссылка в поле пина не пишется
+ * — прежний пин остаётся (поле вернётся к нему при следующем открытии).
+ */
+export function objectPlacePatch(
+  line: string,
+  details: AddressParts,
+  pin: string,
+  prev: { address?: string | null; mapUrl?: string | null } = {},
+): { address: string; mapUrl?: string; addressParts?: AddressParts } {
+  const value = (line ?? "").replace(/\s*[\n\r]+\s*/g, " ").trim();
+  const lineIsUrl = isLikelyUrl(value);
+  const pinValue = pin.trim();
+  const pinUrl = isLikelyUrl(pinValue) ? pinValue : undefined;
+  const keptPin = pinValue && !pinUrl ? (prev.mapUrl ?? "").trim() || undefined : undefined;
+  const parts = cleanAddressParts({
+    ...details,
+    street: lineIsUrl ? undefined : value || undefined,
+  });
+  if (parts && hasAddressPlace(parts)) {
+    return {
+      address: composeAddress(parts),
+      addressParts: parts,
+      mapUrl: pinUrl ?? keptPin ?? (lineIsUrl ? value : undefined),
+    };
+  }
+  const base = addressOrLinkPatch(value, prev);
+  return {
+    address: base.address,
+    mapUrl: pinUrl ?? keptPin ?? base.mapUrl,
+    addressParts: parts,
+  };
+}

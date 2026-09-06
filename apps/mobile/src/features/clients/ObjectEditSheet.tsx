@@ -17,11 +17,11 @@ import {
   RowGroup,
 } from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
-import { AddressPartsFields } from "@/features/clients/AddressPartsFields";
 import {
-  addressOrLinkPatch,
-  objectTarget,
-} from "@/features/clients/object-address";
+  AddressDetailsFields,
+  AddressDetailsToggle,
+} from "@/features/clients/AddressPartsFields";
+import { objectTarget, primaryLine } from "@/features/clients/object-address";
 import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
 import {
   snapObjectType,
@@ -113,7 +113,7 @@ export function ObjectEditSheet({
   useEffect(() => {
     if (!visible || !locationId) return;
     const current = locations.find((l) => l.id === locationId);
-    setTarget(current ? objectTarget(current) : "");
+    setTarget(current ? primaryLine(current) : "");
     setNote(current?.note ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только на открытии
   }, [visible, locationId]);
@@ -141,10 +141,8 @@ export function ObjectEditSheet({
   /** Разбор «адрес или ссылка» с оглядкой на ПРЕЖНЕЕ значение: без него
    *  присланный клиентом пин стирался при любой правке адреса — и даже от
    *  простого «Готово», ничего не трогая. */
-  const commitTarget = () => {
-    if (objectTarget(loc) === target.trim()) return;
-    patch(addressOrLinkPatch(target, { address: loc.address, mapUrl: loc.mapUrl }));
-  };
+  /** Место пишется целиком — главная строка + уточнение (см. хук). */
+  const commitTarget = () => address.commit(target);
 
   /** Заметка пишется на уходе с поля и на закрытии листа — как строки
    *  карточки. Пустая стирает прежнюю. */
@@ -156,12 +154,7 @@ export function ObjectEditSheet({
 
   /** Всё, что могло не успеть записаться, — одной точкой. */
   const commitAll = () => {
-    if (address.partsOpen) {
-      address.commitParts();
-      address.commitPin();
-    } else {
-      commitTarget();
-    }
+    commitTarget();
     commitNote();
   };
 
@@ -246,40 +239,38 @@ export function ObjectEditSheet({
             }}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
-          {address.partsOpen ? null : (
-            <FieldRow
-              label="Адрес или ссылка"
-              value={target}
-              placeholder=""
-              stacked
-              separated
-              multiline
-              live
-              onSave={(v) => setTarget(v)}
-              // Разбор «адрес или ссылка» — на уходе со строки: делать это на
-              // каждый символ значило бы подменять набираемый текст.
+          <FieldRow
+            label="Адрес или ссылка"
+            value={target}
+            placeholder=""
+            stacked
+            separated
+            multiline
+            live
+            onSave={(v) => setTarget(v)}
+            // Разбор «адрес или ссылка» — на уходе со строки: делать это на
+            // каждый символ значило бы подменять набираемый текст.
+            onEditEnd={commitTarget}
+          />
+          {/* УТОЧНЕНИЕ — «мини-доп» под главной строкой (владелец 2026-09-06):
+              раскрывается и сворачивается обратно; свёрнутое показывает, что
+              в нём есть. Пустые части снимаются на записи сами. */}
+          <AddressDetailsToggle
+            open={address.open}
+            summary={address.summary}
+            onToggle={address.toggle}
+          />
+          {address.open ? (
+            <AddressDetailsFields
+              parts={address.details}
+              onChange={address.setDetails}
               onEditEnd={commitTarget}
-            />
-          )}
-          {/* УТОЧНЕНИЕ АДРЕСА (владелец 2026-09-06): поля «как на доставке».
-              Назад не сворачивается: пустые части снимаются на записи сами. */}
-          {address.partsOpen ? null : (
-            <ActionRow label="Уточнить адрес" separated onPress={() => address.openParts(target)} />
-          )}
-        </RowGroup>
-
-        {address.partsOpen ? (
-          <RowGroup title="Адрес">
-            <AddressPartsFields
-              parts={address.parts}
-              onChange={address.setParts}
-              onEditEnd={address.commitParts}
               pin={address.pin}
               onPinChange={address.setPin}
-              onPinEditEnd={address.commitPin}
+              onPinEditEnd={commitTarget}
             />
-          </RowGroup>
-        ) : null}
+          ) : null}
+        </RowGroup>
 
         {/* ЗАМЕТКА ОБЪЕКТА — КОМПОЗЕР, как заметки клиента (владелец
             2026-08-06: «этот плюсик „добавить" надо изменить — как у нас уже

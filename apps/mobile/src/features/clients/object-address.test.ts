@@ -10,6 +10,10 @@ import {
   partsFromLine,
   routeAddress,
   sameAddressParts,
+  composeDetails,
+  objectPlacePatch,
+  primaryLine,
+  withoutStreet,
 } from "./object-address";
 
 describe("objectTarget", () => {
@@ -175,5 +179,68 @@ describe("partsFromLine / sameAddressParts", () => {
     assert.equal(sameAddressParts({ street: " A " }, { street: "A" }), true);
     assert.equal(sameAddressParts({ street: "A" }, { street: "B" }), false);
     assert.equal(sameAddressParts({ street: " " }, undefined), true);
+  });
+});
+
+// Главная строка + уточнение (владелец 2026-09-06): улица и дом либо ссылка
+// сверху, остальное — под сворачиваемым «Уточнением».
+describe("главная строка и уточнение", () => {
+  const details = { complex: "Sunny Court", entrance: "2", floor: "3", apartment: "5", city: "Лимасол", zip: "4000" };
+
+  test("подпись свёрнутого уточнения — без улицы", () => {
+    assert.equal(
+      composeDetails({ ...details, street: "Makariou 12" }),
+      "Sunny Court · подъезд 2 · эт. 3 · кв. 5 · Лимасол 4000",
+    );
+    assert.equal(composeDetails({}), "");
+  });
+
+  test("withoutStreet оставляет только уточнение", () => {
+    assert.deepEqual(withoutStreet({ street: "Makariou 12", floor: " 3 " }), { floor: "3" });
+  });
+
+  test("главная строка: улица у объекта с частями, иначе адрес или пин", () => {
+    assert.equal(primaryLine({ addressParts: { street: "Makariou 12", city: "Лимасол" } }), "Makariou 12");
+    assert.equal(primaryLine({ addressParts: { city: "Лимасол" }, mapUrl: "https://maps.app.goo.gl/x" }), "https://maps.app.goo.gl/x");
+    assert.equal(primaryLine({ address: "Ул. 5", mapUrl: "https://maps.app.goo.gl/x" }), "Ул. 5");
+  });
+
+  test("строка-текст + уточнение → собранный адрес и части", () => {
+    const patch = objectPlacePatch("Makariou 12", details, "");
+    assert.equal(patch.address, "Makariou 12, Sunny Court, подъезд 2, эт. 3, кв. 5, Лимасол 4000");
+    assert.equal(patch.addressParts?.street, "Makariou 12");
+    assert.equal(patch.mapUrl, undefined);
+  });
+
+  test("строка-ссылка + уточнение → пин из строки, улицы нет", () => {
+    const patch = objectPlacePatch("https://maps.app.goo.gl/x", { city: "Лимасол" }, "");
+    assert.equal(patch.mapUrl, "https://maps.app.goo.gl/x");
+    assert.equal(patch.addressParts?.street, undefined);
+    assert.equal(patch.address, "Лимасол");
+  });
+
+  test("строка-текст без уточнения — это «улица и дом»", () => {
+    assert.deepEqual(objectPlacePatch("Ул. 5, Лимассол", {}, ""), {
+      address: "Ул. 5, Лимассол",
+      addressParts: { street: "Ул. 5, Лимассол" },
+      mapUrl: undefined,
+    });
+  });
+
+  test("строка-ссылка без уточнения — прежний разбор одной строки", () => {
+    const patch = objectPlacePatch("https://maps.app.goo.gl/x", {}, "", { address: "Старый адрес" });
+    assert.equal(patch.mapUrl, "https://maps.app.goo.gl/x");
+    assert.equal(patch.address, "Старый адрес");
+    assert.equal(patch.addressParts, undefined);
+  });
+
+  test("не-ссылка в поле пина не стирает прежний пин", () => {
+    const patch = objectPlacePatch("Makariou 12", {}, "abc", { mapUrl: "https://maps.app.goo.gl/x" });
+    assert.equal(patch.mapUrl, "https://maps.app.goo.gl/x");
+  });
+
+  test("пин из уточнения главнее ссылки в строке", () => {
+    const patch = objectPlacePatch("https://a.example/1", { city: "Пафос" }, "https://b.example/2");
+    assert.equal(patch.mapUrl, "https://b.example/2");
   });
 });
