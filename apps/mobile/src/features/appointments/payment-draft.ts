@@ -157,3 +157,37 @@ export function closesVisit(
   if (apt.status === "completed" || apt.status === "cancelled") return false;
   return visitStarted(apt, now);
 }
+
+export type CaptionTone = "neutral" | "success" | "danger";
+
+/** Подпись под заголовком блока — одно предложение о состоянии денег. */
+export function blockCaption(input: {
+  hasTeam: boolean;
+  hasAppointment: boolean;
+  visitCompleted: boolean;
+  outstanding: number;
+  rowsCount: number;
+  prepayMode: boolean;
+  started: boolean;
+  hasPending: boolean;
+  outstandingLabel: string;
+}): { text: string; tone: CaptionTone } | null {
+  if (!input.hasTeam) return { text: "Сначала выберите команду", tone: "neutral" };
+  if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
+    return {
+      text: input.visitCompleted ? "Оплачено полностью · визит закрыт" : "Оплачено заранее",
+      tone: "success",
+    };
+  }
+  if (input.prepayMode) return { text: "Предоплата — сумма и счёт", tone: "neutral" };
+  if (!input.started && input.outstanding > 0) {
+    return { text: "До начала визита — предоплата или инвойс", tone: "neutral" };
+  }
+  if (input.hasAppointment && input.rowsCount > 0 && input.outstanding > 0) {
+    return { text: `Остаток ${input.outstandingLabel}`, tone: "danger" };
+  }
+  if (!input.hasAppointment && input.hasPending) {
+    return { text: "Запишется при создании записи", tone: "neutral" };
+  }
+  return null;
+}

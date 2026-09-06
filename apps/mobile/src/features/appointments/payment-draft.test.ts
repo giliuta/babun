@@ -7,6 +7,7 @@ import {
 import {
   amountCentsFromInput,
   amountProblem,
+  blockCaption,
   closesVisit,
   outstandingCents,
   paymentRows,
@@ -145,5 +146,31 @@ describe("closesVisit", () => {
   test("a future visit or an already closed one is left alone", () => {
     assert.equal(closesVisit({ date: "2026-09-07", time_start: "11:00", status: "scheduled" }, "settlement", NOW), false);
     assert.equal(closesVisit({ date: "2026-09-06", time_start: "11:00", status: "completed" }, "settlement", NOW), false);
+  });
+});
+
+describe("blockCaption", () => {
+  const base = {
+    hasTeam: true,
+    hasAppointment: true,
+    visitCompleted: false,
+    outstanding: 13500,
+    rowsCount: 0,
+    prepayMode: false,
+    started: true,
+    hasPending: false,
+    outstandingLabel: "€135",
+  };
+  test("team first, then paid states win over everything", () => {
+    assert.deepEqual(blockCaption({ ...base, hasTeam: false }), { text: "Сначала выберите команду", tone: "neutral" });
+    assert.deepEqual(blockCaption({ ...base, outstanding: 0, rowsCount: 2, visitCompleted: true }), { text: "Оплачено полностью · визит закрыт", tone: "success" });
+    assert.deepEqual(blockCaption({ ...base, outstanding: 0, rowsCount: 1, started: false }), { text: "Оплачено заранее", tone: "success" });
+  });
+  test("prepay mode, not started, remaining debt, pending draft", () => {
+    assert.equal(blockCaption({ ...base, prepayMode: true })?.text, "Предоплата — сумма и счёт");
+    assert.equal(blockCaption({ ...base, started: false })?.text, "До начала визита — предоплата или инвойс");
+    assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "danger" });
+    assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании записи");
+    assert.equal(blockCaption(base), null);
   });
 });
