@@ -122,6 +122,7 @@ import {
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
+import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
@@ -2545,6 +2546,17 @@ export default function BookScreen() {
                   />
                 </View>
               </SectionCard>
+              ) : null}
+
+              {/* ФАЙЛЫ ЗАПИСИ (STORY-070): фото, документы; у сохранённой
+                  записи — файлам нужен её id. К отменённой не добавляют. */}
+              {editing ? (
+                <AppointmentFilesBlock
+                  appointmentId={editing.id}
+                  clientId={editing.client_id}
+                  locationId={editing.location_id}
+                  canUpload={status !== "cancelled"}
+                />
               ) : null}
 
               {/* БЛОК «ДОПОЛНИТЕЛЬНО» СНЕСЁН 2026-08-30 (владелец: «убрать

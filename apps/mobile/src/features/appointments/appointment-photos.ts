@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deletePhoto,
   listPhotosForAppointment,
+  updatePhotoKind,
   uploadPhoto,
   type AppointmentPhotoRecord,
   type PhotoKind,
@@ -154,6 +155,18 @@ export function useDeleteAppointmentPhoto(appointmentId: string) {
         (current) => current?.filter((photo) => photo.id !== removed.id) ?? [],
       );
     },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) }),
+    meta: { errorHandled: true },
+  });
+}
+
+export function useUpdateAppointmentPhotoKind(appointmentId: string) {
+  const tenantId = useTenantId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, kind }: { id: string; kind: PhotoKind }) =>
+      updatePhotoKind(supabase, { id, kind }),
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) }),
     meta: { errorHandled: true },

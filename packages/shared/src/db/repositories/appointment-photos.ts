@@ -223,3 +223,16 @@ export async function deletePhoto(
     // ignore — janitor sweeps later
   }
 }
+
+/** Вид фото («до», «после», «просто фото») меняют уже после съёмки: тап по
+ *  камере снимает сразу, а размечают потом удержанием плитки (STORY-070). */
+export async function updatePhotoKind(
+  supabase: DbSupabase,
+  args: { id: string; kind: PhotoKind },
+): Promise<void> {
+  const { error } = await supabase
+    .from("appointment_photos")
+    .update({ kind: args.kind })
+    .eq("id", args.id);
+  if (error) throw new Error(error.message);
+}
