@@ -6,11 +6,18 @@ import {
   CalendarRange,
   Globe,
   Briefcase,
+  Palette,
   Tags,
   Trash2,
   Users,
 } from "lucide-react-native";
 import { getStorage } from "@babun/shared/storage";
+import {
+  AUTO_COLOR_RULES,
+  BOOKING_BLOCKS,
+  useAutoColorRule,
+  useBookingBlocks,
+} from "@/features/appointments/booking-prefs";
 import {
   DEFAULT_CALENDAR_SETTINGS,
   type CalendarSettings,
@@ -118,6 +125,19 @@ function CalendarIdentityCard({
 export default function CalendarSettingsScreen() {
   const t = useThemeColors();
   const router = useRouter();
+  // ПОДПИСЬ СТРОКИ «ЗАПИСЬ» — ТА ЖЕ, ЧТО В КАБИНЕТЕ: строка настройки обязана
+  // говорить своё состояние, иначе её открывают, чтобы вспомнить, что в ней
+  // стоит. Два места печатают одно и то же и обязаны не разойтись.
+  const bookingBlocks = useBookingBlocks();
+  const bookingRule = useAutoColorRule();
+  const bookingSub = [
+    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
+    bookingBlocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
+          .map((b) => b.label)
+          .join(" · ") || "ни одного блока",
+  ].join(" · ");
   const params = useLocalSearchParams<{ team?: string }>();
   const settingsQuery = useCalendarSettings();
   const settings = settingsQuery.data;
@@ -382,6 +402,26 @@ export default function CalendarSettingsScreen() {
           </>
         ) : null}
 
+
+        {/* КАК ВЫГЛЯДИТ И ЧТО СПРАШИВАЕТ ЗАПИСЬ (владелец 2026-09-06: «когда я
+            перехожу на шестерёнку в календаре, почему там нет страницы
+            записи»). Шестерёнка настраивает ТО, НА ЧТО СМОТРИШЬ, а цвет блока
+            и набор блоков формы — это ровно оно; держать их только в Кабинете
+            значило отправлять человека в другую вкладку за настройкой того,
+            что у него сейчас перед глазами.
+            Стоит ПЕРЕД справочниками: сперва решают, как запись выглядит и о
+            чём спрашивает, и только потом наполняют её услугами и метками.
+            Настройка одна на фирму, а не на команду, — поэтому команду сюда,
+            в отличие от «Услуг» и «Меток», не передаём. */}
+        <SectionCard>
+          <SettingsRow
+            tile={SETTINGS_TILE.blue}
+            icon={Palette}
+            title="Запись"
+            sub={bookingSub}
+            onPress={() => router.push("/calendar/booking" as Href)}
+          />
+        </SectionCard>
 
         {/* СПРАВОЧНИКИ КАЛЕНДАРЯ. Метки переехали сюда из настроек клиентов
             (владелец 2026-08-02: «метки мы не делаем в клиентах — метки

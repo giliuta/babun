@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { LayoutList, Palette } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -46,6 +46,14 @@ type ColorTarget = ColorSituation | "fallback";
 
 export default function BookingSettingsScreen() {
   const router = useRouter();
+  // ДВЕРЬ «БЛОКИ ФОРМЫ» ОСТАЁТСЯ В ТОМ СТЕКЕ, ГДЕ ЕЁ ОТКРЫЛИ. Эта страница
+  // живёт под двумя адресами — /cabinet/booking и /calendar/booking, — и
+  // жёсткий push в Кабинет уводил бы человека из календаря посреди настройки
+  // (тот же закон навигации, по которому заведены двери «Услуг» и «Меток»).
+  const pathname = usePathname();
+  const blocksHref = pathname.includes("/calendar/")
+    ? "/calendar/booking-blocks"
+    : "/cabinet/booking-blocks";
   const blocks = useBookingBlocks();
   const rule = useAutoColorRule();
   const setRule = useSetAutoColorRule();
@@ -141,7 +149,7 @@ export default function BookingSettingsScreen() {
             icon={LayoutList}
             title="Блоки формы"
             sub={blocksSub}
-            onPress={() => router.push("/cabinet/booking-blocks")}
+            onPress={() => router.push(blocksHref as never)}
           />
         </SectionCard>
       </ScrollView>
