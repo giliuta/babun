@@ -25,11 +25,22 @@ import {
 // Настройка МЕСТНАЯ (MMKV) и по тенанту, как способы связи и карты: это
 // привычка ЭТОГО телефона и ЭТОЙ фирмы, а мастер работает на две.
 
-export type BookingBlockId = "object" | "label" | "payment" | "note";
+export type BookingBlockId =
+  | "team"
+  | "label"
+  | "when"
+  | "client"
+  | "object"
+  | "services"
+  | "payment"
+  | "note"
+  | "files";
 
 export interface BookingBlockDef {
   id: BookingBlockId;
   label: string;
+  /** Без этого блока записи нет — в настройках стоит всегда включённым. */
+  pinned?: boolean;
 }
 
 // ПОДПИСЕЙ У СТРОК НЕТ, И ПОЛЯ ПОД НИХ ТОЖЕ (владелец 2026-09-04: «эти
@@ -37,11 +48,19 @@ export interface BookingBlockDef {
 // ехать», «предоплата и долг» — оно не доезжало до экрана ни разу:
 // `ToggleListScreen` подписи не рисует по прямому отказу владельца. Мёртвое
 // поле опаснее пустого: следующий читатель поверит, что подпись где-то есть.
+// ВСЕ БЛОКИ СТРАНИЦЫ, В ПОРЯДКЕ СТРАНИЦЫ (владелец 2026-09-06: «в настройках
+// добавь блок команда, метка, время, клиент, объект, услуга, оплата, заметка,
+// файл»). Команда, время, клиент и услуги закреплены: без них записи нет.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
-  { id: "object", label: "Объект" },
+  { id: "team", label: "Команда", pinned: true },
   { id: "label", label: "Метка" },
+  { id: "when", label: "Время", pinned: true },
+  { id: "client", label: "Клиент", pinned: true },
+  { id: "object", label: "Объект" },
+  { id: "services", label: "Услуги", pinned: true },
   { id: "payment", label: "Оплата" },
-  { id: "note", label: "Заметка записи" },
+  { id: "note", label: "Заметка" },
+  { id: "files", label: "Файлы" },
 ];
 
 const blocks = createEnabledPrefs<BookingBlockId>({
@@ -50,6 +69,10 @@ const blocks = createEnabledPrefs<BookingBlockId>({
   all: BOOKING_BLOCKS.map((b) => b.id),
   // По умолчанию включено всё: продукт не решает за бизнес, чего ему не надо.
   defaults: BOOKING_BLOCKS.map((b) => b.id),
+  pinned: BOOKING_BLOCKS.filter((b) => b.pinned).map((b) => b.id),
+  // До 2026-09-06 набор знал только эти четыре; «Файлы» у старых устройств
+  // иначе стартовали бы выключенными.
+  legacyIds: ["object", "label", "payment", "note"],
 });
 
 /** Включённые блоки формы записи, в порядке показа. */

@@ -32,6 +32,12 @@ export function createEnabledPrefs<T extends string>(opts: {
   pinned?: readonly T[];
   /** Нужен ли хотя бы один включённый пункт (иначе контрол умрёт). */
   requireOne?: boolean;
+  /** Пункты, которые СУЩЕСТВОВАЛИ до того, как набор начал помнить, что он
+   *  знает (`:known`). У устройства со старым сохранённым списком новый
+   *  пункт из `defaults` иначе оказался бы выключенным молча — так 2026-09-06
+   *  «Файлы» пропали бы у владельца. Не указано — считается, что старых
+   *  списков с неполным набором нет. */
+  legacyIds?: readonly T[];
   /** ЧТО ЗАПИСАТЬ, ЕСЛИ СВОЕГО ЕЩЁ НЕТ. Зовётся ровно один раз на тенант —
    *  когда набор объединяет два прежних (см. `contact-ways`) и молча
    *  потерять уже настроенное нельзя. `null` — переносить нечего, работают
@@ -46,6 +52,15 @@ export function createEnabledPrefs<T extends string>(opts: {
   const key = (tenantId: string | null) =>
     tenantId ? `${storageKey}:${tenantId}` : storageKey;
   const orderKey = (tenantId: string | null) => `${key(tenantId)}:order`;
+  /** Какие пункты набор знал, когда список писали в последний раз. */
+  const knownKey = (tenantId: string | null) => `${key(tenantId)}:known`;
+  const rememberKnown = (tenantId: string | null) => {
+    try {
+      getStorage().set(knownKey(tenantId), [...all]);
+    } catch {
+      // Запись best-effort.
+    }
+  };
 
   /** Перенос со старых ключей — до первого чтения и только пока своего нет. */
   const ensureMigrated = (tenantId: string | null) => {
@@ -96,8 +111,19 @@ export function createEnabledPrefs<T extends string>(opts: {
     } catch {
       enabled = [...defaults];
     }
+    // Пункт, которого набор ещё не знал, когда список сохраняли, — не
+    // «выключен», а «не существовал»: включаем его, если он в `defaults`.
+    let known: T[] | null = null;
+    try {
+      const raw = getStorage().get<string[]>(knownKey(tenantId));
+      known = Array.isArray(raw) ? (raw as T[]) : null;
+    } catch {
+      known = null;
+    }
+    const baseline = known ?? opts.legacyIds ?? all;
+    const introduced = defaults.filter((id) => !baseline.includes(id));
     // Закреплённое включено всегда, чем бы ни было записано раньше.
-    const withPinned = [...new Set([...pinned, ...enabled])];
+    const withPinned = [...new Set([...pinned, ...enabled, ...introduced])];
     return order.filter((id) => withPinned.includes(id));
   };
 
@@ -156,6 +182,7 @@ export function createEnabledPrefs<T extends string>(opts: {
           } catch {
             // Запись best-effort.
           }
+          rememberKnown(tenantId);
           return ordered;
         },
         onSuccess: (next) => qc.setQueryData([queryKey, tenantId], next),

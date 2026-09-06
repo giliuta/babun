@@ -30,7 +30,11 @@ export default function BookingBlocksScreen() {
             label: block.label,
             icon: CircleDot,
             color: t.accent,
-            checked: enabled.includes(block.id),
+            checked: block.pinned ? true : enabled.includes(block.id),
+            // Без команды, времени, клиента и услуг записи нет — эти строки
+            // показывают состав страницы, но не выключаются.
+            locked: block.pinned,
+            lockedNote: block.pinned ? "всегда" : undefined,
             onToggle: () => toggle.mutate(block.id),
           })),
         },
