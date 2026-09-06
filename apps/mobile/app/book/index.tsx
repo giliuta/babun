@@ -25,7 +25,6 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
-  Check,
   ChevronRight,
   MapPin,
   MoreHorizontal,
@@ -67,10 +66,6 @@ import { tierForVisits } from "@babun/shared/local/loyalty";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
-  PAYMENT_METHOD_LABEL,
-  PAYMENT_METHODS,
-} from "@babun/shared/local/finance/transaction";
-import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
@@ -83,7 +78,6 @@ import { tintOver } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Chip } from "@/components/ui/Chip";
-import { ValueRow } from "@/components/ui/ValueRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { ColorDot } from "@/components/ui/picker-fields";
@@ -128,12 +122,8 @@ import {
   useLoyalty,
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
-import { useTeamPaymentAccounts } from "@/features/appointments/payment-accounts";
-import {
-  buildDebtPaidPatch,
-  paymentMethodForAccountKind,
-  type PayMethod,
-} from "@/features/appointments/payment";
+import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
+import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
   resolveBookingClientPrefill,
@@ -248,7 +238,6 @@ const KBD_ACCESSORY_ID = "bookKbdDone";
 /** Сколько ждать, пока KAV ужмёт список под выезжающую клавиатуру: раньше
  *  докрутка «до конца» останавливается на старой, ещё полной высоте. */
 const KEYBOARD_SETTLE_MS = 300;
-const kbdAccessory = Platform.OS === "ios" ? KBD_ACCESSORY_ID : undefined;
 
 const absoluteMinutes = (value: string): number | null => {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value);
@@ -490,42 +479,11 @@ export default function BookScreen() {
   );
   const [repeat, setRepeat] = useState<PersonalEventRepeat>({ kind: "none" });
   const [allDay, setAllDay] = useState(false);
-  const [prepayDraft, setPrepayDraft] = useState("");
-  const [payMethod, setPayMethod] = useState<PayMethod | null>(null);
-  // Куда кладут деньги. Как в карточке записи: тапают кассу, способ
-  // выводится из её вида. Без счёта сервер угадывает — и промахивается.
-  const [payAccountId, setPayAccountId] = useState<string | null>(null);
-  const { data: payAccounts = [] } = useTeamPaymentAccounts(teamId);
+  // Деньги новой записи: счёт выбран, запишется после «Создать запись».
+  // У существующей записи блок пишет оплату сам и сразу (STORY-065).
+  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  const recordPayment = useRecordPayment();
   const [reminderOn, setReminderOn] = useState(false);
-  const [showPay, setShowPay] = useState(false);
-  // Строку «Оплата» открывают, чтобы НАБРАТЬ сумму: курсор встаёт в поле
-  // сразу, без второго тапа. «Закрыть на месте» открывает тот же блок с
-  // уже подставленной суммой — там клавиатура не нужна.
-  //
-  // ФОКУС — ЧЕРЕЗ REF, А НЕ `autoFocus`: у поля, сфокусированного при
-  // монтировании, iOS не показывает панель «Готово» над цифровой
-  // клавиатурой (проверено на симуляторе 2026-09-03). Заодно карточка
-  // предоплаты подкручивается целиком над клавиатуру — вместе с кассами,
-  // которые выбирают следом за суммой.
-  const [payFocus, setPayFocus] = useState(false);
-  const prepayRef = useRef<NativeTextInput>(null);
-  const payCardY = useRef(0);
-  useEffect(() => {
-    if (!showPay || !payFocus) return;
-    const focusTimer = setTimeout(() => prepayRef.current?.focus(), 60);
-    const scrollTimer = setTimeout(
-      () =>
-        scrollRef.current?.scrollTo({
-          y: Math.max(0, payCardY.current - 8),
-          animated: true,
-        }),
-      60 + KEYBOARD_SETTLE_MS,
-    );
-    return () => {
-      clearTimeout(focusTimer);
-      clearTimeout(scrollTimer);
-    };
-  }, [showPay, payFocus]);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
@@ -834,11 +792,6 @@ export default function BookScreen() {
     setReminderOn(editing.reminder_enabled);
     setColorOverride(editing.color_override ?? null);
     setCity(editing.city ?? null);
-    setPrepayDraft(
-      (editing.prepaid_amount ?? 0) > 0 ? String(editing.prepaid_amount) : "",
-    );
-    setPayMethod(editing.payment_method ?? null);
-    setPayAccountId(editing.payment_account_id ?? null);
     if (editing.kind === "work") {
       setComment(editing.comment ?? "");
     } else {
@@ -985,9 +938,6 @@ export default function BookScreen() {
   const effectiveTotal = customTotal
     ? parseMoneyInput(totalDraft)
     : automaticTotal;
-  const prepay = parseMoneyInput(prepayDraft);
-  const prepayExceedsTotal = prepay > effectiveTotal;
-  const debtAfter = Math.max(0, effectiveTotal - prepay);
 
   // Keep the editable total in sync with catalog pricing until the operator
   // explicitly changes it. A manual amount then stays stable while services
@@ -1364,18 +1314,6 @@ export default function BookScreen() {
     setOverrides((p) => ({ ...p, [id]: { ...p[id], qty } }));
   };
 
-  // «Закрыть на месте» — главное действие полевого сервиса (приехал-сделал-
-  // закрыл): статус Выполнено + полная оплата сейчас + способ (по умолчанию
-  // нал). Раньше это было 4–5 тапов по двум свёрнутым секциям.
-  const closeOnSite = () => {
-    setStatus("completed");
-    setPrepayDraft(String(Number(effectiveTotal.toFixed(2))));
-    if (!payMethod) setPayMethod("cash");
-    setPayFocus(false);
-    setShowPay(true);
-    haptics.tap();
-  };
-
   const applyEventType = (id: string) => {
     const preset = eventTypes.find((candidate) => candidate.id === id);
     if (!preset) return;
@@ -1478,38 +1416,8 @@ export default function BookScreen() {
       city,
       global_discount: globalDiscount,
       discount_amount: discountAmount,
-      prepaid_amount: prepay,
-      // Предоплата — уже полученные деньги, поэтому способ должен жить на
-      // самой записи независимо от её статуса. Раньше он записывался только
-      // при completed: запланированная заявка с авансом теряла «нал/карта»,
-      // а полностью предоплаченная затем могла упасть в серверном резолвере
-      // с payment_method=null.
-      payment_method: prepay > 0 ? (payMethod ?? undefined) : undefined,
-      // Предоплата ложится на ту же кассу, что выбрана чипом.
-      payment_account_id: prepay > 0 ? payAccountId : null,
       reminder_enabled: reminderOn && Boolean(client?.phone),
     };
-    // Оплата остатка на месте («приехал — сделал — закрыл»): тот же
-    // buildDebtPaidPatch, что тап «Оплачено» на визите — пять полей из
-    // одного места, а не по одному.
-    if (status === "completed" && payMethod && debtAfter > 0) {
-      Object.assign(
-        patch,
-        buildDebtPaidPatch(null, {
-          method: payMethod,
-          amount: debtAfter,
-          accountId: payAccountId,
-        }),
-      );
-    } else if (prepay > 0 && debtAfter === 0) {
-      // A fully prepaid visit is paid as soon as the money is received,
-      // including when the work itself is still scheduled. There is no
-      // balance payment to append to the ledger; this status keeps invoices,
-      // debt surfaces and the server receipt journal on the same truth.
-      patch.payment_status = "paid";
-      patch.payment_method = payMethod ?? undefined;
-      patch.paid_amount = 0;
-    }
     return patch;
   };
 
@@ -1641,9 +1549,7 @@ export default function BookScreen() {
     !referencesPending &&
     (kind === "event"
       ? eventTitle.trim().length > 0 && (teamId == null || hasValidTeam)
-      : !prepayExceedsTotal &&
-        (prepay <= 0 || payMethod != null) &&
-        clientId != null &&
+      : clientId != null &&
         hasValidTeam &&
         workSelectionValid);
   const bookingBusy = booking.isPending || updateMut.isPending;
@@ -1668,10 +1574,6 @@ export default function BookScreen() {
         ? "Выберите команду"
       : !workSelectionValid
         ? "Проверьте услуги и мастера для этой команды"
-      : prepayExceedsTotal
-        ? "Предоплата больше итоговой суммы"
-      : prepay > 0 && payMethod == null
-        ? "Выберите способ предоплаты"
         : "Проверьте услуги и мастера для этой команды";
 
   // accessibilityLiveRegion — Android-only. На iOS-приложении причина под CTA,
@@ -1738,7 +1640,7 @@ export default function BookScreen() {
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
-        await booking.save({
+        const created = await booking.save({
           patch: buildPatch(),
           kind,
           reminderId,
@@ -1746,6 +1648,22 @@ export default function BookScreen() {
           timezone:
             team?.timezone ?? calendarSettings?.timezone ?? "Europe/Nicosia",
         });
+        if (pendingPayment && created.kind === "work") {
+          // Деньги новой записи ждали её id — уходят тем же событием, что
+          // тап по счёту у существующей записи (STORY-065).
+          try {
+            await recordPayment.mutateAsync({
+              appointmentId: created.id,
+              accountId: pendingPayment.accountId,
+              amount: pendingPayment.amount,
+              requestId: randomUuid(),
+              kind: pendingPayment.kind,
+              closeVisit: pendingPayment.kind === "settlement",
+            });
+          } catch (e) {
+            notify("Запись создана, оплата не записана", (e as Error).message);
+          }
+        }
       }
       leaveBook();
     } catch (e) {
@@ -1810,7 +1728,7 @@ export default function BookScreen() {
         parseMoneyInput(discountValue) > 0 ||
         status !== "scheduled" ||
         reminderOn ||
-        prepay > 0 ||
+        pendingPayment != null ||
         colorOverride != null ||
         cityTouched ||
         dateTouchedRef.current ||
@@ -2568,169 +2486,25 @@ export default function BookScreen() {
                 )}
               </SectionCard>
 
-              {/* Оплата — сразу после «Итого»: единая денежная цепочка
-                  сумма → предоплата → долг. Свёрнута, не гейтит сейв.
-                  Выключается в Кабинет → «Запись»: не всякий бизнес берёт
-                  предоплату. */}
+              {/* Оплата — сразу после «Итого»: плитки счетов команды, тап
+                  пишет деньги сразу (STORY-065). Выключается в Кабинет →
+                  «Запись»: не всякий бизнес принимает деньги в записи. */}
               {showPayment ? (
-              <View
-                onLayout={(e) => {
-                  payCardY.current = e.nativeEvent.layout.y;
-                }}
-              >
-              <SectionCard>
-                {!showPay ? (
-                  <>
-                    <ValueRow
-                      label="Оплата"
-                      value={
-                        prepay <= 0
-                          ? "Без предоплаты"
-                          : debtAfter === 0 && effectiveTotal > 0
-                            ? `Оплачено · ${formatEURExact(prepay)}`
-                            : `${formatEURExact(prepay)} · долг ${formatEURExact(debtAfter)}`
-                      }
-                      muted={prepay === 0}
-                      onPress={() => {
-                        setPayFocus(true);
-                        setShowPay(true);
-                        haptics.tap();
-                      }}
-                    />
-                    {/* приехал-сделал-закрыл: один тап вместо копания по секциям */}
-                    {status !== "completed" && effectiveTotal > 0 ? (
-                      <Pressable
-                        onPress={closeOnSite}
-                        className="flex-row items-center gap-2 px-4"
-                        style={({ pressed }) => ({
-                          minHeight: 48,
-                          borderTopWidth: 1,
-                          borderTopColor: t.separator,
-                          backgroundColor: pressed ? t.pressed : "transparent",
-                        })}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Закрыть на месте, оплачено ${formatEURExact(effectiveTotal)}`}
-                      >
-                        <View
-                          className="items-center justify-center rounded-full"
-                          style={{ width: 26, height: 26, backgroundColor: `${t.success}1f` }}
-                        >
-                          <Check color={t.success} size={ICON.xs} />
-                        </View>
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: t.success, flex: 1 }}>
-                          Закрыть на месте
-                        </Text>
-                        <Text style={{ fontSize: 14, color: t.sub, fontVariant: ["tabular-nums"] }}>
-                          {formatEURExact(effectiveTotal)}
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </>
-                ) : (
-                  <View className="px-4 py-3">
-                    <Pressable
-                      onPress={() => {
-                        setShowPay(false);
-                        haptics.tap();
-                      }}
-                      className="flex-row items-center justify-between"
-                      style={{ minHeight: 24 }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Свернуть предоплату"
-                    >
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}>
-                        {prepay > 0 && debtAfter === 0 && effectiveTotal > 0
-                          ? "ОПЛАЧЕНО ПОЛНОСТЬЮ"
-                          : "ПРЕДОПЛАТА"}
-                      </Text>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-                        Свернуть
-                      </Text>
-                    </Pressable>
-                    <View className="mt-2 flex-row items-center gap-3">
-                      <NativeTextInput
-                        ref={prepayRef}
-                        maxFontSizeMultiplier={1.3}
-                        keyboardAppearance="light"
-                        accessibilityLabel="Предоплата"
-                        value={prepayDraft}
-                        onChangeText={setPrepayDraft}
-                        placeholder="0"
-                        placeholderTextColor={t.placeholder}
-                        keyboardType="decimal-pad"
-                        selectTextOnFocus
-                        inputAccessoryViewID={kbdAccessory}
-                        style={{ minHeight: 44, fontSize: 24, fontWeight: "700", color: t.ink, minWidth: 64, fontVariant: ["tabular-nums"] }}
-                      />
-                      <Text style={{ fontSize: 20, color: t.sub }}>€</Text>
-                    </View>
-                    {/* КАССА, А НЕ СПОСОБ. Тот же выбор, что в карточке
-                        записи: счета этой команды плюс подключённые общие.
-                        Счетов нет вовсе — откат на четыре способа, приём
-                        денег не блокируем никогда. */}
-                    <View className="mt-3 flex-row flex-wrap gap-2">
-                      {payAccounts.length > 0
-                        ? payAccounts.map((acc) => (
-                            <Chip
-                              key={acc.id}
-                              label={acc.name}
-                              variant="tint"
-                              radio
-                              selected={payAccountId === acc.id}
-                              onPress={() => {
-                                const off = payAccountId === acc.id;
-                                setPayAccountId(off ? null : acc.id);
-                                setPayMethod(
-                                  off ? null : paymentMethodForAccountKind(acc.kind),
-                                );
-                                haptics.tap();
-                              }}
-                            />
-                          ))
-                        : PAYMENT_METHODS.map(
-                            (method) => (
-                              <Chip
-                                key={method}
-                                label={PAYMENT_METHOD_LABEL[method]}
-                                variant="tint"
-                                radio
-                                selected={payMethod === method}
-                                onPress={() => {
-                                  setPayMethod(payMethod === method ? null : method);
-                                  haptics.tap();
-                                }}
-                              />
-                            ),
-                          )}
-                    </View>
-                    {prepay > 0 && effectiveTotal > 0 ? (
-                      <Text style={{ fontSize: 13, color: t.sub, marginTop: 10 }}>
-                        Останется долг{" "}
-                        <Text style={{ color: t.danger, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
-                          {formatEURExact(debtAfter)}
-                        </Text>
-                      </Text>
-                    ) : null}
-                    {prepay > 0 && !payMethod && !prepayExceedsTotal ? (
-                      <Text
-                        accessibilityRole="alert"
-                        style={{ fontSize: 13, color: t.danger, marginTop: 8 }}
-                      >
-                        Выберите способ предоплаты
-                      </Text>
-                    ) : null}
-                    {prepayExceedsTotal ? (
-                      <Text
-                        accessibilityRole="alert"
-                        style={{ fontSize: 13, color: t.danger, marginTop: 8 }}
-                      >
-                        Предоплата не может быть больше итоговой суммы
-                      </Text>
-                    ) : null}
-                  </View>
-                )}
-              </SectionCard>
-              </View>
+                <PaymentBlock
+                  appointment={editing}
+                  teamId={teamId}
+                  totalDraft={effectiveTotal}
+                  visit={{ date, timeStart, status }}
+                  pending={pendingPayment}
+                  onPendingChange={setPendingPayment}
+                  onAppointmentChanged={(fresh) => {
+                    // Сервер закрыл визит вместе с оплатой — форма обязана
+                    // знать об этом, иначе «Сохранить» вернул бы старый статус,
+                    // а «Отмена» спросила бы про несохранённые изменения.
+                    setStatus(fresh.status);
+                    editBaselineRef.current = null;
+                  }}
+                />
               ) : null}
 
               {/* Заметка записи — последняя строка формы: «Дополнительно» под ней
