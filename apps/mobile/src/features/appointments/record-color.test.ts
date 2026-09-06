@@ -4,6 +4,7 @@ import {
   recordFilled,
   resolveRecordColor,
   resolveRecordSituation,
+  serviceBaseColor,
 } from "./record-color";
 
 const FULL = { client: true, object: true, services: true };
@@ -175,6 +176,60 @@ describe("resolveRecordSituation", () => {
         palette: { noClient: null },
       }),
       null,
+    );
+  });
+});
+
+describe("serviceBaseColor", () => {
+  const colorOf = (map: Record<string, string>) => (id: string) => map[id];
+
+  test("первая услуга выигрывает у второй", () => {
+    // Порядок услуг — порядок нажатий, и он же порядок, в котором услуги
+    // напечатаны на блоке: «почему запись зелёная» видно, не открывая её.
+    assert.equal(
+      serviceBaseColor(
+        { service_ids: ["a", "b"] },
+        colorOf({ a: "#34C759", b: "#FF9500" }),
+      ),
+      "#34C759",
+    );
+  });
+
+  test("строка без цвета пропускается к следующей", () => {
+    // Стёртая насовсем услуга живёт в снимке именем, а цвета у неё нет:
+    // падать из-за неё в цвет команды значило бы «правило не работает».
+    assert.equal(
+      serviceBaseColor({ service_ids: ["a", "b"] }, colorOf({ b: "#FF9500" })),
+      "#FF9500",
+    );
+    assert.equal(
+      serviceBaseColor({ service_ids: ["a"] }, colorOf({ a: "   " })),
+      null,
+    );
+  });
+
+  test("пустой список даёт null — упадём в цвет команды", () => {
+    assert.equal(serviceBaseColor({ service_ids: [] }, colorOf({})), null);
+    assert.equal(serviceBaseColor({}, colorOf({})), null);
+  });
+
+  test("снимок читается, только когда service_ids пуст", () => {
+    // Бригадная проекция отдаёт `services: []` при заполненном `service_ids` —
+    // снимок первым источником молча гасил бы цвет в наряде мастера.
+    const colors = colorOf({ a: "#34C759", b: "#FF9500" });
+    assert.equal(
+      serviceBaseColor(
+        { service_ids: ["a"], services: [{ serviceId: "b" }] },
+        colors,
+      ),
+      "#34C759",
+    );
+    assert.equal(
+      serviceBaseColor(
+        { service_ids: [], services: [{ serviceId: "b" }] },
+        colors,
+      ),
+      "#FF9500",
     );
   });
 });

@@ -76,11 +76,15 @@ import {
 // использует. Ориентир в длинном прайсе даёт не коробка, а порядок, который
 // человек задаёт сам — перетаскиванием (`position`).
 //
-// ЦВЕТА У УСЛУГИ БОЛЬШЕ НЕТ. Полоса 4×36 слева красила поле, которое не читает
-// ни одна поверхность: блок в календаре берёт цвет записи, команды и статуса
-// (`status-colors.ts`), инвойс цвет услуги не открывает вовсе. Подпись «Цвет
-// на календаре» была прямой неправдой. Колонка в базе жива ради легаси-веба,
-// продукт её не пишет.
+// ЦВЕТ У УСЛУГИ ЕСТЬ, И ЕГО ЧИТАЕТ КАЛЕНДАРЬ. Точка слева от имени — та же, что
+// у метки и у команды (`NameColorField`), и она же становится цветом записи,
+// когда в Кабинете → «Запись» выбран «Обычный цвет: Цвет услуги» (запись берёт
+// цвет своей первой услуги). Второго места, где спрашивают цвет услуги, в
+// продукте быть не должно.
+//
+// Прежний комментарий утверждал, что колонка мертва и «продукт её не пишет», —
+// это была неправда уже тогда: экран её писал, рисовал точкой и показывал в
+// каталоге выбора при записи. Читателя не хватало ровно одного.
 //
 // Экран переиспользуется в двух местах (не дублируем CRUD):
 //  · глобальный /cabinet/services — весь прайс,
@@ -197,6 +201,14 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
       ...mine.filter((s) => !s.is_active),
     ];
   }, [everyService, activeTeamId]);
+  /** Цвета, уже занятые в прайсе ЭТОЙ команды: новая услуга садится на первый
+   *  свободный из цикла — тот же приём, которым красится новый календарь. Без
+   *  него весь прайс сидит на одном Голубом, и правило «цвет по услуге» в день
+   *  включения выглядит сломанным. */
+  const usedColors = useMemo(
+    () => services.map((s) => s.color).filter(Boolean),
+    [services],
+  );
   /** Убранные услуги ЭТОЙ команды — полный справочник минус живой. */
 
   const alertError = (e: unknown) =>
@@ -571,6 +583,7 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 
       <ServiceSheet
         editing={editing}
+        usedColors={usedColors}
         lockedTeamId={activeTeamId ?? undefined}
         busy={busy}
         onClose={() => setEditing(null)}
@@ -588,12 +601,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 // метках 2026-08-17.
 function ServiceSheet({
   editing,
+  usedColors,
   lockedTeamId,
   busy,
   onClose,
   onSave,
 }: {
   editing: ServiceEditing | null;
+  /** Цвета, занятые в этом прайсе, — чтобы новая услуга не села на чужой. */
+  usedColors?: readonly string[];
   /** Per-team-контекст: новая услуга сразу привязана к этой команде. */
   lockedTeamId?: string;
   busy: boolean;
@@ -728,7 +744,15 @@ function ServiceSheet({
     setBaseErrors({});
     // Владелец: у правки — свой, у дубля — тот же, у новой из хаба команды —
     // эта команда, иначе первая в списке. Услуга без команды не существует.
-    setColor(from?.color || PRESET_COLOR_CYCLE[0].value);
+    //
+    // ЦВЕТ: у правки свой, у дубля цвет источника, у НОВОЙ — первый свободный
+    // в этом прайсе. Пока здесь стоял `PRESET_COLOR_CYCLE[0]`, весь прайс
+    // садился на один Голубой, и день читался бы одним оттенком.
+    const used = new Set(usedColors ?? []);
+    const nextFree =
+      PRESET_COLOR_CYCLE.find((c) => !used.has(c.value))?.value ??
+      PRESET_COLOR_CYCLE[0].value;
+    setColor(from?.color || nextFree);
     setDescription(from?.description ?? "");
     setHasDescription(!!from?.description?.trim());
     setBufferAfter(String(from?.buffer_after_min ?? 0));

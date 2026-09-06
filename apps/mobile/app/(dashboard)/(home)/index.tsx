@@ -112,6 +112,7 @@ import {
   COLOR_SITUATIONS,
   recordFilled,
   resolveRecordColor,
+  serviceBaseColor,
   resolveRecordSituation,
   type ColorSituation,
 } from "@/features/appointments/record-color";
@@ -784,6 +785,12 @@ export default function CalendarTab() {
   // `services` выше остаётся про живой каталог (онбординг спрашивает им,
   // заведён ли прайс вообще).
   const { data: allServices = [] } = useAllServices();
+  // ЦВЕТ УСЛУГИ ЧИТАЕТСЯ ПО ПОЛНОМУ СПРАВОЧНИКУ, как и имя: услуга, убранная
+  // из прайса, обязана продолжать красить прошлые дни.
+  const serviceColorById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.color])),
+    [allServices],
+  );
   const serviceNameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
     [allServices],
@@ -918,6 +925,9 @@ export default function CalendarTab() {
   // дня: блок без цвета хуже блока «не той» окраски.
   const teamColorFor = useCallback(
     (a: Appointment) => {
+      // Цвет команды — общая последняя ступень для всех трёх правил: блок без
+      // цвета хуже блока «не той» окраски.
+      const teamBase = a.team_id ? teamColor.get(a.team_id) ?? null : null;
       const base =
         autoColorRule === "label"
           ? (() => {
@@ -925,10 +935,10 @@ export default function CalendarTab() {
               return name
                 ? cities.find((c) => c.name === name)?.color ?? null
                 : null;
-            })() ?? (a.team_id ? teamColor.get(a.team_id) ?? null : null)
-          : a.team_id
-            ? teamColor.get(a.team_id) ?? null
-            : null;
+            })() ?? teamBase
+          : autoColorRule === "service"
+            ? serviceBaseColor(a, (id) => serviceColorById.get(id)) ?? teamBase
+            : teamBase;
       // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
       // палитра «чего не хватает» к нему не применяется — иначе обед в
       // календаре горел бы «нет клиента».
@@ -947,6 +957,7 @@ export default function CalendarTab() {
       cities,
       labelFor,
       teamColor,
+      serviceColorById,
       situationPalette,
       activeSituations,
       fallbackColor,

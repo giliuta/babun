@@ -100,6 +100,7 @@ import {
   COLOR_SITUATIONS,
   recordFilled,
   resolveRecordColor,
+  serviceBaseColor,
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { haptics } from "@/lib/haptics";
@@ -402,6 +403,14 @@ export default function BookScreen() {
   const { data: allServices = [] } = useAllServices();
   const nameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
+    [allServices],
+  );
+  // Цвет — по тому же ПОЛНОМУ справочнику, а не по живому каталогу: правка
+  // старой записи с убранной из прайса услугой красила бы форму одним цветом,
+  // а сетку другим, — ровно та тихая ложь, о которой предупреждает соседний
+  // комментарий.
+  const serviceColorById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.color])),
     [allServices],
   );
 
@@ -1884,7 +1893,17 @@ export default function BookScreen() {
               ? teamCities.find((c) => c.name === effectiveLabel)?.color ??
                 team?.color ??
                 null
-              : team?.color ?? null,
+              : autoColorRule === "service"
+                ? // Источник — живой черновик, поэтому шапка перекрашивается
+                  // прямо в момент выбора услуги, а кнопка «Автоматически» в
+                  // листе цвета показывает то, что встанет в сетке.
+                  serviceBaseColor(
+                    { service_ids: serviceIds },
+                    (id) => serviceColorById.get(id),
+                  ) ??
+                  team?.color ??
+                  null
+                : team?.color ?? null,
           palette: situationPalette,
           active: activeSituations,
           fallback: fallbackColor,

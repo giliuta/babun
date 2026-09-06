@@ -62,15 +62,18 @@ export const useToggleBookingBlock = blocks.useToggle;
 //
 // «Автоматически» значит «не выбирали руками», и до сих пор оно молча
 // означало цвет КОМАНДЫ. Для одной фирмы это правда — цвет говорит, чья
-// бригада; для другой важнее, КУДА едут, и тогда день читается по меткам.
-// Правило теперь называется вслух и живёт в одном месте: календарь и форма
-// красят запись одинаково, потому что спрашивают его.
+// бригада; для другой важнее, КУДА едут, и тогда день читается по меткам; а
+// для третьей — ЧТО делают, и тогда день читается по услугам: цвет берёт
+// первая услуга записи, та самая, что напечатана третьей строкой блока.
+// Правило называется вслух и живёт в одном месте: календарь и форма красят
+// запись одинаково, потому что спрашивают его.
 
-export type AutoColorRule = "team" | "label";
+export type AutoColorRule = "team" | "label" | "service";
 
 export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "team", label: "Цвет команды" },
   { id: "label", label: "Цвет метки" },
+  { id: "service", label: "Цвет услуги" },
 ];
 
 const RULE_KEY = "babun-booking-auto-color";
@@ -79,8 +82,14 @@ const ruleKey = (tenantId: string | null) =>
 
 function readRule(tenantId: string | null): AutoColorRule {
   try {
+    // БЕЛЫЙ СПИСОК, А НЕ СРАВНЕНИЕ С ОДНИМ ЗНАЧЕНИЕМ. Пока здесь стояло
+    // `v === "label" ? "label" : "team"`, любое новое правило записывалось бы,
+    // но читалось как «Цвет команды» — и дефект выглядел бы как «настройка не
+    // сохраняется», причём только после перезапуска приложения.
     const v = getStorage().get<string>(ruleKey(tenantId));
-    return v === "label" ? "label" : "team";
+    return AUTO_COLOR_RULES.some((r) => r.id === v)
+      ? (v as AutoColorRule)
+      : "team";
   } catch {
     return "team";
   }
