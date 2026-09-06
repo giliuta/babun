@@ -7,6 +7,7 @@ import { ColorDot } from "@/components/ui/picker-fields";
 import { durationLabel } from "@/features/services/format";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
+import { useMoney } from "@/features/settings/currency";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import type { AppointmentService } from "@babun/shared/local/appointments";
@@ -219,7 +220,10 @@ export function TotalSheet({
   );
 }
 
-/** «€ | %» ростом со строку: две клавиши, и обе — про ОДНО поле рядом. */
+/** ОДНА КЛАВИША, А НЕ ДВЕ (владелец 2026-09-06: «евро и проценты — это не
+ *  выбор: нажал на евро — стало проценты, нажал на проценты — стало обратно,
+ *  причём не евро, а валюта из настроек»). Клавиша показывает текущую единицу
+ *  и переворачивается тапом. */
 function UnitToggle({
   value,
   onChange,
@@ -228,53 +232,33 @@ function UnitToggle({
   onChange: (next: DiscountKind) => void;
 }) {
   const t = useThemeColors();
-  const cell = (kind: DiscountKind, label: string) => {
-    const on = value === kind;
-    return (
-      <Pressable
-        key={kind}
-        onPress={() => {
-          haptics.tap();
-          onChange(kind);
-        }}
-        accessibilityRole="radio"
-        accessibilityState={{ selected: on }}
-        accessibilityLabel={kind === "percent" ? "Скидка в процентах" : "Скидка в евро"}
-        style={{
-          minWidth: 36,
-          minHeight: 36,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: t.radius.input - 4,
-          backgroundColor: on ? t.surface : "transparent",
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: "700",
-            color: on ? t.ink : t.faint,
-          }}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    );
-  };
+  const { symbol } = useMoney();
+  const percent = value === "percent";
   return (
-    <View
-      accessibilityRole="radiogroup"
-      style={{
-        flexDirection: "row",
-        gap: 2,
-        padding: 3,
-        borderRadius: t.radius.input,
-        backgroundColor: t.fill,
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onChange(percent ? "fixed" : "percent");
       }}
+      accessibilityRole="button"
+      accessibilityLabel={percent ? "Скидка в процентах" : "Скидка в валюте"}
+      accessibilityHint={percent ? "Переключить на сумму" : "Переключить на проценты"}
+      style={({ pressed }) => ({
+        minWidth: 44,
+        minHeight: 36,
+        paddingHorizontal: 10,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: t.radius.input,
+        backgroundColor: t.surface,
+        boxShadow: t.cardShadow,
+        opacity: pressed ? 0.6 : 1,
+      })}
     >
-      {cell("fixed", "€")}
-      {cell("percent", "%")}
-    </View>
+      <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+        {percent ? "%" : symbol}
+      </Text>
+    </Pressable>
   );
 }
 
