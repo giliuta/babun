@@ -774,8 +774,11 @@ export default function CalendarTab() {
     () => new Map(clients.map((c) => [c.id, c.address])),
     [clients],
   );
+  // СОБЫТИЕ НАЗЫВАЕТСЯ СВОИМ ТИПОМ и с клиентом тоже (форма события 2026-09-06:
+  // клиент у события необязателен): имя человека идёт второй строкой блока
+  // (см. serviceLabel), а не вместо «Обед».
   const clientName = (a: Appointment) =>
-    a.client_id ? nameById.get(a.client_id) ?? "" : "";
+    a.client_id && !isCalendarEvent(a) ? nameById.get(a.client_id) ?? "" : "";
   // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
   // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
   // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
@@ -841,8 +844,17 @@ export default function CalendarTab() {
     [serviceNameById],
   );
   const serviceLabel = useCallback(
-    (a: Appointment) => serviceSummaryFor(a) || a.comment || null,
-    [serviceSummaryFor],
+    (a: Appointment) => {
+      if (isCalendarEvent(a)) {
+        // Заголовок блока уже печатает тип события — третья строка не
+        // повторяет слово, а называет клиента или первую строку заметки.
+        const who = a.client_id ? nameById.get(a.client_id) ?? "" : "";
+        const note = (a.event_notes ?? "").trim().split("\n")[0]?.trim() ?? "";
+        return who || note || null;
+      }
+      return serviceSummaryFor(a) || a.comment || null;
+    },
+    [serviceSummaryFor, nameById],
   );
 
   const teamColor = useMemo(() => {
