@@ -2306,7 +2306,11 @@ export default function CalendarTab() {
           onMenu={openActionMenu}
           labelFor={labelFor}
           offLabelFor={offLabelFor}
-          hueFor={(a) => teamColorFor(a) ?? t.accent}
+          // ВЫБРАННЫЙ РУКОЙ ЦВЕТ СИЛЬНЕЕ ПРАВИЛА — так же, как в сетке
+          // (`useBlockColors` спрашивает `color_override` первым). Без этого
+          // событие с выбранным цветом красилось в сетке выбранным, а в ленте
+          // цветом команды: один предмет двух цветов.
+          hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
           situationFor={situationFor}
           overdueFor={overdueFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}

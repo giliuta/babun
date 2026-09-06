@@ -474,6 +474,19 @@ function Block({
   const showService = lines >= 3 && textW >= 120 && !!service;
   const showAddress =
     !!address && textW >= 120 && rowsFit >= (showService ? 4 : 3);
+  // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
+  // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
+  // адрес, и на карточке, где последней осталась услуга (или время), её хвост
+  // заезжал под точку.
+  const dotReserve =
+    offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
+  const lastRow = showAddress
+    ? "address"
+    : showService
+      ? "service"
+      : lines >= 2
+        ? "time"
+        : "name";
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status);
@@ -601,16 +614,18 @@ function Block({
     cancelled ? t.ink : colors.hue,
     cancelled ? 0.2 : completed ? 0.2588 : 0.4,
   );
+  // У ОТМЕНЁННОЙ ЗАЛИВКА НЕ АНИМИРУЕТСЯ. Разомкнутый кант выбивает вью из
+  // быстрого пути отрисовки, и смена фона заставляла бы iOS перерисовывать
+  // картинку канта каждый кадр нажатия. Отклик у неё остаётся масштабом —
+  // отменённую и не открывают так часто, чтобы платить за это кадрами.
   const cardStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: ty.value },
       { scale: (1 + active.value * 0.03) * (1 - press.value * 0.03) },
     ],
-    backgroundColor: interpolateColor(
-      press.value,
-      [0, 1],
-      [fillIdle, fillPressed],
-    ),
+    backgroundColor: cancelled
+      ? fillIdle
+      : interpolateColor(press.value, [0, 1], [fillIdle, fillPressed]),
   }));
 
 
@@ -693,7 +708,10 @@ function Block({
                 fontSize: 13,
                 lineHeight: lineH,
                 fontWeight: "700",
-                marginRight: markReserve,
+                marginRight: Math.max(
+                  markReserve,
+                  lastRow === "name" ? dotReserve : 0,
+                ),
                 textDecorationLine: cancelled ? "line-through" : "none",
               }}
               numberOfLines={1}
@@ -710,6 +728,7 @@ function Block({
                 fontSize: 13,
                 lineHeight: lineH,
                 fontWeight: overdue ? "700" : "500",
+                marginRight: lastRow === "time" ? dotReserve : 0,
                 fontVariant: ["tabular-nums"],
               }}
               numberOfLines={1}
@@ -720,7 +739,12 @@ function Block({
           ) : null}
           {showService ? (
             <Text
-              style={{ color: t.body, fontSize: 13, lineHeight: lineH }}
+              style={{
+                color: t.body,
+                fontSize: 13,
+                lineHeight: lineH,
+                marginRight: lastRow === "service" ? dotReserve : 0,
+              }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
@@ -733,10 +757,7 @@ function Block({
                 color: t.body,
                 fontSize: 13,
                 lineHeight: lineH,
-                // Точка чужой метки лежит абсолютно в правом нижнем углу.
-                // Последняя строка обязана её обойти, иначе на карточке ровно
-                // в четыре строки хвост адреса заезжает под точку.
-                marginRight: offLabelColor ? 12 : 0,
+                marginRight: dotReserve,
               }}
               numberOfLines={1}
               ellipsizeMode="tail"

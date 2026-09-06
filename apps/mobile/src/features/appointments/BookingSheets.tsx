@@ -4,6 +4,7 @@ import {
   PRESET_COLOR_VALUES,
   colorName,
 } from "@babun/shared/common/utils/colors";
+import { edgeColor } from "@/components/ui/color-contrast";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -210,7 +211,11 @@ export function ColorSheet({
             label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
-            color={autoColor ?? undefined}
+            // КАНТ, А НЕ СЫРОЙ ПИГМЕНТ: пилюля красит им свою рамку и тинт, а
+            // Ванильный #FFF0BC в полную силу даёт к белому листу 1.14 : 1 —
+            // выбранное состояние на бледном цвете просто исчезало бы.
+            // Кружок рядом остаётся сырым: в нём цвет ВЫБИРАЮТ.
+            color={autoColor ? edgeColor(autoColor) : undefined}
             // ОБРАЗЕЦ ДЕЙСТВУЮЩЕГО ЦВЕТА ПРЯМО НА КНОПКЕ (владелец 2026-09-05:
             // «выбрал „Автоматически“ — значит подсвечивается тем цветом,
             // который сейчас стоит в автоматическом режиме»). Слово говорило,
@@ -226,6 +231,10 @@ export function ColorSheet({
                     height: 10,
                     borderRadius: 5,
                     backgroundColor: autoColor,
+                    // Волосяной кант тем же затемнением: без него бледный цвет
+                    // растворяется в подложке пилюли и кружка не видно.
+                    borderWidth: 1,
+                    borderColor: edgeColor(autoColor),
                   }}
                 />
               ) : undefined

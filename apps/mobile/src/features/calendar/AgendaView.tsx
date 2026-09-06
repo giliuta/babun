@@ -426,7 +426,9 @@ function AgendaRow({
       delayLongPress={350}
       className="active:opacity-60"
       accessibilityRole="button"
-      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${formatEUR(total)}`}
+      // Озвучка называет ВСЁ, что напечатано в строке: статус, «не закрыта» и
+      // имя дыры видны глазу и обязаны быть слышны.
+      accessibilityLabel={`${clientName || apt.comment || "Без клиента"}, ${apt.time_start}–${apt.time_end}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${situation ? `, ${situation.toLowerCase()}` : ""}${offLabel ? `, метка ${offLabel.name}` : ""}, ${formatEUR(total)}`}
       style={{
         flexDirection: "row",
         alignItems: "flex-start",
