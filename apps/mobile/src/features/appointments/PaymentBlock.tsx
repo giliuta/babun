@@ -289,15 +289,20 @@ export function PaymentBlock({
     outstandingLabel: formatEURExact(outstanding / 100),
   });
   const captionColor =
-    caption?.tone === "success" ? t.success : caption?.tone === "danger" ? t.danger : undefined;
+    caption?.tone === "success"
+      ? t.success
+      : caption?.tone === "warning"
+        ? t.warning
+        : undefined;
 
   const showAmountField = amountMode && outstanding > 0;
 
   return (
     <SectionCard>
       <PaymentBlockHeader
-        sub={caption?.text}
-        subColor={captionColor}
+        caption={caption?.text}
+        captionColor={captionColor}
+        captionTone={caption && caption.tone !== "neutral" ? "money" : "neutral"}
         right={
           teamId ? (
             <>

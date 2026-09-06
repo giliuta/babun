@@ -158,7 +158,9 @@ export function closesVisit(
   return visitStarted(apt, now);
 }
 
-export type CaptionTone = "neutral" | "success" | "danger";
+/** `warning` — долг и остаток: янтарь, как у долгов в финансах и карточке
+ *  клиента (владелец 2026-09-06: «долг жёлтым или оранжевым, это правило»). */
+export type CaptionTone = "neutral" | "success" | "warning";
 
 /** Подпись под заголовком блока — одно-два слова и число, без объяснений
  *  (владелец 2026-09-06: «если есть остаток — пишем просто остаток»). */
@@ -183,13 +185,13 @@ export function blockCaption(input: {
   }
   if (input.amountMode) return null;
   if (input.hasAppointment && input.visitCompleted && input.outstanding > 0) {
-    return { text: `Долг ${input.outstandingLabel}`, tone: "danger" };
+    return { text: `Долг ${input.outstandingLabel}`, tone: "warning" };
   }
   if (!input.started && input.outstanding > 0) {
     return { text: "До визита: предоплата или инвойс", tone: "neutral" };
   }
   if (input.hasAppointment && input.rowsCount > 0 && input.outstanding > 0) {
-    return { text: `Остаток ${input.outstandingLabel}`, tone: "danger" };
+    return { text: `Остаток ${input.outstandingLabel}`, tone: "warning" };
   }
   if (!input.hasAppointment && input.hasPending) {
     return { text: "Запишется при создании", tone: "neutral" };

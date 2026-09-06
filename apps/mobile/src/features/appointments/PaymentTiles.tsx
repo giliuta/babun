@@ -148,26 +148,38 @@ export function ModeIconButton({
   );
 }
 
-/** Шапка блока: «Оплата», подпись состояния, иконки режимов справа. */
+/** Шапка блока как у соседних карточек формы: малая надпись «ОПЛАТА» с
+ *  иконками режимов справа, тонкая линия, и крупной строкой — состояние денег
+ *  («Долг €135», «Оплачено»), если оно есть (владелец 2026-09-06: «слово
+ *  „Оплата“ — как у „Услуги“, а вместо него — долг и маленькая чёрточка»). */
 export function PaymentBlockHeader({
-  sub,
-  subColor,
+  caption,
+  captionColor,
+  captionTone = "neutral",
   right,
 }: {
-  sub?: string;
-  subColor?: string;
+  caption?: string;
+  captionColor?: string;
+  /** Денежное состояние печатается крупно, подсказка — тише. */
+  captionTone?: "neutral" | "money";
   right?: ReactNode;
 }) {
   const t = useThemeColors();
   return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 6 }}>
+    <View>
       <View
         className="flex-row items-center justify-between"
-        style={{ minHeight: 36 }}
+        style={{ paddingHorizontal: 16, paddingTop: 4, minHeight: 36 }}
       >
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
+          style={{
+            fontSize: 11,
+            fontWeight: "700",
+            letterSpacing: 0.6,
+            textTransform: "uppercase",
+            color: t.faint,
+          }}
         >
           Оплата
         </Text>
@@ -177,12 +189,21 @@ export function PaymentBlockHeader({
           </View>
         ) : null}
       </View>
-      {sub ? (
+      <View style={{ height: 1, backgroundColor: t.separator, marginLeft: 16 }} />
+      {caption ? (
         <Text
+          numberOfLines={1}
           maxFontSizeMultiplier={1.3}
-          style={{ fontSize: 13, color: subColor ?? t.sub, marginTop: -2 }}
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            fontSize: captionTone === "money" ? 17 : 15,
+            fontWeight: captionTone === "money" ? "600" : "500",
+            color: captionColor ?? t.sub,
+            fontVariant: ["tabular-nums"],
+          }}
         >
-          {sub}
+          {caption}
         </Text>
       ) : null}
     </View>

@@ -170,8 +170,8 @@ describe("blockCaption", () => {
     assert.equal(blockCaption({ ...base, amountMode: true }), null);
     assert.equal(blockCaption({ ...base, amountMode: true, started: false }), null);
     assert.equal(blockCaption({ ...base, started: false })?.text, "До визита: предоплата или инвойс");
-    assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "danger" });
-    assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "danger" });
+    assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "warning" });
+    assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");
     assert.equal(blockCaption(base), null);
   });
