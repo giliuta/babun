@@ -74,10 +74,6 @@ const DEFAULT_STEP = 30;
 // Пятиминутная точность никуда не делась: она в поле времени самой записи
 // (`UnifiedTimePopup`), где её выставляют осознанно, а не пальцем по сетке.
 const TAP_STEP = 30;
-// All-day events render as thin strips on the left edge of the column
-// (web DayColumn v496) instead of joining the overlap layout.
-const ALL_DAY_W = 8;
-const ALL_DAY_GAP = 2;
 // Получасовая волосяная линия В КОЛОНКЕ появляется, когда час достаточно
 // высок, чтобы она читалась, а не сливалась в шум. Порог по КОММИЧЕННОМУ
 // hourH — как и текст-фит блоков, линия догоняет зум на отпускании.
@@ -160,10 +156,184 @@ function MinuteBand({
  *  блок без текста, только заливка, кант и знаки. */
 const MIN_H = (lineH: number) => 9 + lineH;
 
+// ═══ СОБЫТИЯ «ВЕСЬ ДЕНЬ» — ЧИПЫ В ЗАКРЕПЛЁННОЙ ПОЛОСЕ НАД СЕТКОЙ ═══
+//
+// Событие «весь день» — это ЗАПИСЬ (у неё статус, меню, отмена), но у неё нет
+// «своей» высоты на оси времени: она либо врёт про час, либо закрывает сутки.
+// Единственное честное место — полоса НАД осью, и так делают все календари.
+//
+// До этого они рисовались вертикальными полосками 8pt у левой кромки колонки —
+// последним уцелевшим корешком в продукте (владелец 2026-09-05: «когда слева
+// только полосочка — это полная хрень»). У полоски не было ни имени, ни намёка
+// на него, и она отжимала таймированные блоки вправо.
+//
+// Внутрь колонки чип класть нельзя технически: вся геометрия `DayColumn` —
+// проценты от анимируемой высоты, и узел фиксированной высоты ломает инвариант,
+// пересчитывая layout на каждом кадре щипка.
+const CHIP_GAP = 2;
+/** Минимальная ширина чипа: паддинг 4 + кант 1 с двух сторон + порог текста 24.
+ *  Уже неё чип превращается в безымянный цветной прямоугольник — ровно тот
+ *  корешок, ради устранения которого правка и затевается. */
+const CHIP_MIN_W = 34;
+/** Резерв справа под «+N» — тот же приём, что `markReserve` у блока. */
+const CHIP_OVERFLOW_W = 14;
+
+export const allDayOf = (appts: readonly Appointment[]): Appointment[] =>
+  appts.filter((a) => a.event_all_day === true);
+
+export const hasAllDay = (appts: readonly Appointment[]): boolean =>
+  appts.some((a) => a.event_all_day === true);
+
+/** Высота полосы = минимальный блок продукта в одну строку плюс 2pt дыхания
+ *  сверху и снизу: чип и есть блок в один текст. */
+export function useAllDayBandH(): number {
+  const { fontScale } = useWindowDimensions();
+  return MIN_H(Math.ceil(16 * Math.min(fontScale, 1.3))) + 4;
+}
+
+export function AllDayRow({
+  appointments,
+  clientName,
+  teamColorFor,
+  onEdit,
+  onMenu,
+}: {
+  /** УЖЕ отфильтрованные события «весь день» этого дня (`allDayOf`). */
+  appointments: Appointment[];
+  clientName: (a: Appointment) => string;
+  teamColorFor?: (a: Appointment) => string | null;
+  onEdit: (a: Appointment) => void;
+  onMenu?: (a: Appointment) => void;
+}) {
+  const t = useThemeColors();
+  const blockColors = useBlockColors(teamColorFor);
+  const { fontScale } = useWindowDimensions();
+  const lineH = Math.ceil(16 * Math.min(fontScale, 1.3));
+  const [cellW, setCellW] = useState(0);
+
+  // ПРАВИЛО ОСТАНОВКИ. Чипы делят ширину поровну, но их число ограничено снизу
+  // читаемой шириной: в колонке недели (~49pt) помещается РОВНО ОДИН чип, и
+  // пять отпусков пяти мастеров дают один чип с именем и счётчиком «+4», а не
+  // пять безымянных плашек по 7pt.
+  const n = Math.max(
+    1,
+    Math.floor((cellW + CHIP_GAP) / (CHIP_MIN_W + CHIP_GAP)),
+  );
+  const shown = Math.min(appointments.length, n);
+  const overflow = appointments.length - shown;
+  const chipW = shown > 0 ? (cellW - CHIP_GAP * (shown - 1)) / shown : 0;
+
+  return (
+    <View
+      // Линия сетки слева — та же, что у колонки: полоса читается продолжением
+      // сетки, а не отдельной плитой.
+      onLayout={(e) => setCellW(e.nativeEvent.layout.width - 1)}
+      style={{
+        flex: 1,
+        flexDirection: "row",
+        gap: CHIP_GAP,
+        paddingVertical: 2,
+        borderLeftWidth: 1,
+        borderLeftColor: `${t.ink}33`,
+        backgroundColor: t.surface,
+      }}
+    >
+      {cellW > 0
+        ? appointments.slice(0, shown).map((a, i) => {
+            const c = blockColors(a);
+            const cancelled = a.status === "cancelled";
+            const completed = a.status === "completed";
+            const reserve = overflow > 0 && i === shown - 1 ? CHIP_OVERFLOW_W : 0;
+            const pad = chipW >= 96 ? 6 : 4;
+            const textW = chipW - 2 * pad - 2 - reserve;
+            const name = clientName(a) || a.comment || "Событие";
+            const fill = (alpha: number) =>
+              fillRgba(cancelled ? t.ink : c.hue, alpha);
+            return (
+              <Pressable
+                key={a.id}
+                onPress={() => onEdit(a)}
+                onLongPress={onMenu ? () => onMenu(a) : undefined}
+                delayLongPress={350}
+                // Полоса рисуется с обрезкой — мишень наружу iOS отрежет; 2pt
+                // внутрь дают её во всю высоту полосы.
+                hitSlop={{ top: 2, bottom: 2 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Весь день, ${name}${
+                  reserve > 0 ? `, ещё ${overflow}` : ""
+                }`}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minWidth: 0,
+                  justifyContent: "center",
+                  paddingHorizontal: pad,
+                  borderWidth: 1,
+                  borderColor: cancelled ? CANCELLED_EDGE : c.edge,
+                  borderStyle: cancelled ? CANCELLED_BORDER : "solid",
+                  borderRadius: t.radius.card,
+                  borderCurve: "continuous",
+                  overflow: "hidden",
+                  backgroundColor: pressed
+                    ? fill(cancelled ? 0.2 : completed ? 0.2588 : 0.4)
+                    : fill(cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL),
+                })}
+              >
+                {/* УГЛОВЫХ ЗНАКОВ У ЧИПА НЕТ СОЗНАТЕЛЬНО: «просрочено» к
+                    событию неприменимо по построению, а галка «выполнено» на
+                    25pt высоты рядом с текстом — тот самый шум. Выполненное
+                    событие гаснет заливкой, как блок. */}
+                {textW >= 24 ? (
+                  <Text
+                    numberOfLines={1}
+                    ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      color: t.ink,
+                      fontSize: 13,
+                      lineHeight: lineH,
+                      fontWeight: "700",
+                      marginRight: reserve,
+                      textDecorationLine: cancelled ? "line-through" : "none",
+                    }}
+                  >
+                    {name}
+                  </Text>
+                ) : null}
+                {reserve > 0 ? (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      right: pad,
+                      top: 0,
+                      bottom: 0,
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: "700",
+                        color: t.body,
+                        fontVariant: ["tabular-nums"],
+                      }}
+                    >
+                      {`+${overflow}`}
+                    </Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          })
+        : null}
+    </View>
+  );
+}
+
 function Block({
   placed,
   hourH,
-  laneX,
   laneW,
   startHour,
   endHour,
@@ -183,7 +353,6 @@ function Block({
   /** Committed pixels-per-hour — px math (drag snap, text fit) only;
    *  the on-screen geometry is percent-based and zoom-independent. */
   hourH: number;
-  laneX: number;
   laneW: number;
   startHour: number;
   endHour: number;
@@ -226,7 +395,7 @@ function Block({
   const visStart = Math.max(startMin, winStart);
   const visEnd = Math.min(endMin, winEnd);
   const colW = laneW / colCount;
-  const left = laneX + colIndex * colW + 1;
+  const left = colIndex * colW + 1;
   const width = colW - GAP;
   const cancelled = apt.status === "cancelled";
   const completed = apt.status === "completed";
@@ -706,7 +875,7 @@ export function TimeRail({
 }
 
 // One day lane: gridlines, off-hours wash, past-wash, empty-slot tap,
-// positioned blocks, all-day strips, now-line.
+// positioned blocks, now-line.
 // Reused by both DayView (1 column) and WeekView (N columns).
 //
 // Structure: the hour grid is a column of FLEX cells (one per hour) that
@@ -818,12 +987,6 @@ export function DayColumn({
   const winEndMin = endHour * 60;
   const totalMin = winEndMin - winStartMin;
 
-  // v496 web parity — all-day events are thin strips on the left edge,
-  // excluded from the overlap layout so timed events keep full width.
-  const allDay = useMemo(
-    () => appointments.filter((a) => a.event_all_day === true),
-    [appointments],
-  );
   const placements = useMemo(
     () =>
       layoutDay(appointments.filter((a) => a.event_all_day !== true)).filter(
@@ -831,10 +994,6 @@ export function DayColumn({
       ),
     [appointments, winStartMin, winEndMin],
   );
-  const reservedW =
-    allDay.length > 0
-      ? allDay.length * ALL_DAY_W + (allDay.length - 1) * ALL_DAY_GAP + 4
-      : 0;
 
   const nowMin =
     isToday && nowMinutes != null && nowMinutes >= winStartMin && nowMinutes <= winEndMin
@@ -1142,47 +1301,13 @@ export function DayColumn({
           })
         : null}
 
-      {allDay.map((a, idx) => {
-        const c = blockColors(a);
-        return (
-          <Pressable
-            key={a.id}
-            onPress={() => onEdit(a)}
-            // То же контекстное меню, что у таймированных блоков.
-            onLongPress={onMenu ? () => onMenu(a) : undefined}
-            // Полоска 8pt — визуально тонкая, но тап-мишень расширена до
-            // ~24pt (аудит: было фактически некликабельно).
-            hitSlop={{ left: 6, right: 10, top: 4, bottom: 4 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Весь день, ${clientName(a) || a.comment || "Событие"}`}
-            style={{
-              position: "absolute",
-              top: 1,
-              bottom: 1,
-              left: idx * (ALL_DAY_W + ALL_DAY_GAP),
-              width: ALL_DAY_W,
-              borderRadius: 4,
-              // ОТМЕНУ ЗДЕСЬ НЕСЁТ ПУСТОТА, А НЕ ОТТЕНОК И НЕ ПУНКТИР. Тот же
-              // закон «работы не будет», выраженный по размеру: при ширине 8pt
-              // и просвете 6pt две штриховые линии рядом дают сор, а «пусто
-              // против налито» на полосе высотой в колонку читается чисто.
-              // Кант входит в бокс-модель RN — полоска остаётся ровно 8pt.
-              backgroundColor:
-                a.status === "cancelled" ? "transparent" : c.edge,
-              borderWidth: a.status === "cancelled" ? 1 : 0,
-              borderColor: CANCELLED_EDGE,
-            }}
-          />
-        );
-      })}
-
       {/* ЛИНИЯ «СЕЙЧАС» ЛЕЖИТ ПОД ЗАПИСЯМИ, А НЕ ПОВЕРХ НИХ. Сверху она
           перечёркивала карточку ровно по строке времени — а зачёркивание в
-          этом продукте уже занято и означает ОТМЕНЁННУЮ запись: идущая прямо
-          сейчас работа выглядела снятой. Ничего при этом не теряется: где мы
-          во времени, говорит красная капсула на рельсе часов, которая живёт
-          вне колонки и никогда ничем не закрыта, а в пустых местах колонки
-          линия видна как прежде. Рельс отвечает за время, сетка — за записи.
+          этом продукте уже занято и означает ОТМЕНЁННУЮ запись: работа, которая
+          идёт прямо сейчас, выглядела снятой. Ничего при этом не теряется: где
+          мы во времени, говорит красная капсула на рельсе часов — она живёт вне
+          колонки и никогда ничем не закрыта, — а в пустых местах колонки линия
+          видна как прежде. Рельс отвечает за время, сетка — за записи.
           `zIndex` блока на это не влиял: у обёртки он приходит анимированным
           стилем и до первого кадра не применяется. */}
       {nowMin != null ? (
@@ -1208,8 +1333,7 @@ export function DayColumn({
               key={p.apt.id}
               placed={p}
               hourH={hourH}
-              laneX={reservedW}
-              laneW={Math.max(laneW - reservedW, 0)}
+              laneW={laneW}
               startHour={startHour}
               endHour={endHour}
               stepMinutes={Math.max(5, Math.min(60, stepMinutes))}
@@ -1374,6 +1498,12 @@ export function DayView({
   const t = useThemeColors();
   const pager = usePeriodPager({ periodKey: dateYmd, onCommit: onCommitPage });
   const dateAt = (off: -1 | 0 | 1) => addDaysYmd(dateYmd, off);
+  const bandH = useAllDayBandH();
+  // Условие по ВСЕМ трём страницам пейджера: иначе чип выскакивал бы уже после
+  // доводки свайпа, а высота полосы менялась бы под пальцем.
+  const showBand = ([-1, 0, 1] as const).some((off) =>
+    hasAllDay(apptsFor(dateAt(off))),
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -1406,6 +1536,32 @@ export function DayView({
           }}
         />
       </View>
+      {showBand ? (
+        <View
+          style={{
+            flexDirection: "row",
+            borderBottomWidth: 1,
+            borderBottomColor: `${t.ink}1a`,
+          }}
+        >
+          {/* Рельс слева пустой: подпись «Весь день» — ровно тот шум, который
+              из продукта убирают, и 13pt в 48pt рельса не влезает. */}
+          <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
+          <PagedStrip
+            pager={pager}
+            style={{ height: bandH }}
+            renderPage={(off) => (
+              <AllDayRow
+                appointments={allDayOf(apptsFor(dateAt(off)))}
+                clientName={clientName}
+                teamColorFor={teamColorFor}
+                onEdit={onEdit}
+                onMenu={onMenu}
+              />
+            )}
+          />
+        </View>
+      ) : null}
       <ZoomableTimeGrid
         hourHSv={hourHSv}
         onZoom={onZoom}

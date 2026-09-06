@@ -4,8 +4,12 @@ import type { Appointment } from "@babun/shared/local/appointments";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import {
+  AllDayRow,
+  allDayOf,
   DayColumn,
+  hasAllDay,
   TimeRail,
+  useAllDayBandH,
   RAIL_W,
   HEADER_H,
   type WorkBand,
@@ -131,6 +135,13 @@ export function WeekView({
     onCommit: onCommitPage,
   });
   const weekAt = (off: -1 | 0 | 1) => days.map((d) => addDays(d, off * 7));
+  const bandH = useAllDayBandH();
+  // Условие по ВСЕМ трём страницам пейджера: иначе полоса появлялась бы уже
+  // после доводки свайпа и меняла высоту сетки под пальцем. Двадцать один
+  // вызов `apptsFor` стоит нуля — это лукап по Map.
+  const showBand = ([-1, 0, 1] as const).some((off) =>
+    weekAt(off).some((d) => hasAllDay(apptsFor(formatYMD(d)))),
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -161,6 +172,41 @@ export function WeekView({
           )}
         />
       </View>
+
+      {/* СОБЫТИЯ «ВЕСЬ ДЕНЬ» — чипы в закреплённой полосе, тот же пейджер, что
+          у шапок и колонок: полоса обязана ехать с ними в локстепе. */}
+      {showBand ? (
+        <View
+          style={{
+            flexDirection: "row",
+            borderBottomWidth: 1,
+            borderBottomColor: `${t.ink}1a`,
+          }}
+        >
+          <View style={{ width: RAIL_W, backgroundColor: t.surface }} />
+          <PagedStrip
+            pager={pager}
+            style={{ height: bandH }}
+            renderPage={(off) => (
+              <View style={{ flex: 1, flexDirection: "row" }}>
+                {weekAt(off).map((d) => {
+                  const ymd = formatYMD(d);
+                  return (
+                    <AllDayRow
+                      key={ymd}
+                      appointments={allDayOf(apptsFor(ymd))}
+                      clientName={clientName}
+                      teamColorFor={teamColorFor}
+                      onEdit={onEdit}
+                      onMenu={onMenu}
+                    />
+                  );
+                })}
+              </View>
+            )}
+          />
+        </View>
+      ) : null}
 
       {/* grid */}
       <ZoomableTimeGrid

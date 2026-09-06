@@ -334,7 +334,7 @@ function AgendaRow({
         delayLongPress={350}
         className="active:opacity-60"
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${apt.time_start}–${apt.time_end}`}
+        accessibilityLabel={`${title}, ${apt.event_all_day ? "весь день" : `${apt.time_start}–${apt.time_end}`}`}
         style={{
           flexDirection: "row",
           gap: 12,
@@ -348,18 +348,33 @@ function AgendaRow({
             настройке — лента и сетка обязаны говорить одним языком. */}
         <RecordMark hue={hue} cancelled={cancelled} />
         <View style={{ width: 64, paddingLeft: 8 }}>
-          <Text
-            className="tabular-nums"
-            style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
-          >
-            {apt.time_start}
-          </Text>
-          <Text
-            className="tabular-nums"
-            style={{ marginTop: 2, fontSize: 11, color: t.faint }}
-          >
-            {apt.time_end}
-          </Text>
+          {/* У СОБЫТИЯ «ВЕСЬ ДЕНЬ» ВРЕМЕНИ НЕТ. Лента печатала служебные 00:00
+              и 23:59 как настоящее время — то же враньё, что и полоска в
+              сетке, только словами. Слово уже живёт в продукте (наряд
+              мастера), нового словаря не заводим. */}
+          {apt.event_all_day === true ? (
+            <Text
+              numberOfLines={2}
+              style={{ fontSize: 12, fontWeight: "600", color: t.ink }}
+            >
+              Весь день
+            </Text>
+          ) : (
+            <>
+              <Text
+                className="tabular-nums"
+                style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+              >
+                {apt.time_start}
+              </Text>
+              <Text
+                className="tabular-nums"
+                style={{ marginTop: 2, fontSize: 11, color: t.faint }}
+              >
+                {apt.time_end}
+              </Text>
+            </>
+          )}
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text
