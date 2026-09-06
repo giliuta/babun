@@ -51,6 +51,10 @@ export interface BookingBlockDef {
 // ВСЕ БЛОКИ СТРАНИЦЫ, В ПОРЯДКЕ СТРАНИЦЫ (владелец 2026-09-06: «в настройках
 // добавь блок команда, метка, время, клиент, объект, услуга, оплата, заметка,
 // файл»). Команда, время, клиент и услуги закреплены: без них записи нет.
+// «Файлы» закреплены тоже (владелец 2026-09-06: «мне нужен блок файла, чтоб
+// он был всегда — страница создаётся, и он остаётся»): на устройстве, где
+// список блоков сохранили раньше, чем блок появился, он молча стоял
+// выключенным, и у новой записи файлов не было.
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "team", label: "Команда", pinned: true },
   { id: "label", label: "Метка" },
@@ -60,7 +64,7 @@ export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "services", label: "Услуги", pinned: true },
   { id: "payment", label: "Оплата" },
   { id: "note", label: "Заметка" },
-  { id: "files", label: "Файлы" },
+  { id: "files", label: "Файлы", pinned: true },
 ];
 
 const blocks = createEnabledPrefs<BookingBlockId>({
