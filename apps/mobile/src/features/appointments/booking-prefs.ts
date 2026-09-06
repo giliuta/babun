@@ -37,7 +37,7 @@ export interface BookingBlockDef {
 export const BOOKING_BLOCKS: BookingBlockDef[] = [
   { id: "object", label: "Объект", hint: "куда ехать" },
   { id: "label", label: "Метка", hint: "город или район выезда" },
-  { id: "payment", label: "Оплата", hint: "предоплата и долг" },
+  { id: "payment", label: "Оплата", hint: "счета команды, предоплата, инвойс" },
   { id: "note", label: "Заметка записи", hint: "что помнить об этой работе" },
 ];
 
