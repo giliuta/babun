@@ -1,6 +1,9 @@
 import { Text as NativeText, Pressable, View, type TextProps } from "react-native";
 import { Check } from "lucide-react-native";
-import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
+import {
+  PRESET_COLOR_VALUES,
+  colorName,
+} from "@babun/shared/common/utils/colors";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -159,6 +162,7 @@ export function ColorSheet({
   isEvent,
   title,
   autoLabel,
+  autoColor,
   allowNone = true,
 }: {
   visible: boolean;
@@ -170,6 +174,10 @@ export function ColorSheet({
   title?: string;
   /** Что значит «без цвета» у этого вызова. По умолчанию — «Автоматически». */
   autoLabel?: string;
+  /** Цвет, который ДЕЙСТВУЕТ, пока не выбран свой: им и красится образец на
+   *  кнопке «Автоматически». Без него человек выбирает вслепую между словом и
+   *  палитрой, хотя ответ у продукта уже есть. */
+  autoColor?: string | null;
   /** Можно ли остаться без цвета. У запасного цвета записи нельзя: он и есть
    *  последняя ступень правила, и «ничего» на его месте — дыра. */
   allowNone?: boolean;
@@ -202,6 +210,28 @@ export function ColorSheet({
             label={autoLabel ?? "Автоматически"}
             radio
             variant="tint"
+            color={autoColor ?? undefined}
+            // ОБРАЗЕЦ ДЕЙСТВУЮЩЕГО ЦВЕТА ПРЯМО НА КНОПКЕ (владелец 2026-09-05:
+            // «выбрал „Автоматически“ — значит подсвечивается тем цветом,
+            // который сейчас стоит в автоматическом режиме»). Слово говорило,
+            // что цвет выберут за тебя, и умалчивало какой; кружок отвечает.
+            icon={
+              autoColor ? (
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: autoColor,
+                  }}
+                />
+              ) : undefined
+            }
+            accessibilityLabel={
+              autoColor
+                ? `${autoLabel ?? "Автоматически"}: ${colorName(autoColor)}`
+                : undefined
+            }
             selected={value == null}
             onPress={() => {
               haptics.tap();
