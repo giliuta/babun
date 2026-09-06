@@ -390,7 +390,6 @@ export default function ClientRow({
             number={client.phone}
             telegramUsername={client.telegram_username}
             label={client.full_name || undefined}
-            size={44}
           />
         </View>
       ) : null}

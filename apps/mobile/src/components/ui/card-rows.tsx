@@ -745,21 +745,24 @@ export function NavRow({
  *  2026-07-26: «с правой стороны нажимаешь кнопку и выбираешь, что делать».
  *
  *  32pt кружок: меньше цели касания 44pt по кругу, поэтому hitSlop
- *  добирает остальное — иначе палец бьёт по строке и уводит со экрана. */
+ *  добирает остальное — иначе палец бьёт по строке и уводит со экрана.
+ *
+ *  РАЗМЕР ОДИН НА ПРОДУКТ (владелец 2026-09-06: «зачем ты делаешь два разных
+ *  размера — если иконка смотрится в одном, делай в одном; иконка вызова
+ *  везде одинаковая во всей системе»). Список клиентов держал ту же кнопку
+ *  44-й, карточка записи рисовала звонок своим 44-м кружком — рядом с 32-м
+ *  «…» это читалось как две разные вещи. */
 export function RowActionButton({
   icon: Icon,
   color,
   label,
   hint,
-  size = 32,
   onPress,
 }: {
   icon: LucideIcon;
   color: string;
   label: string;
   hint?: string;
-  /** Диаметр кружка. 32 — хвост строки, 44 — строка списка клиентов. */
-  size?: number;
   onPress: () => void;
 }) {
   return (
@@ -770,8 +773,8 @@ export function RowActionButton({
       accessibilityHint={hint}
       hitSlop={8}
       style={({ pressed }) => ({
-        width: size,
-        height: size,
+        width: 32,
+        height: 32,
         // Круг: w === h. Круг не может стать прямоугольником — это
         // геометрическое исключение из закона одного радиуса.
         borderRadius: 999,
@@ -781,7 +784,7 @@ export function RowActionButton({
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Icon color={color} size={size >= 40 ? 18 : 16} strokeWidth={2.2} />
+      <Icon color={color} size={16} strokeWidth={2.2} />
     </Pressable>
   );
 }

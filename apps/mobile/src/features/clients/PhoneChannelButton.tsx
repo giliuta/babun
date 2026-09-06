@@ -30,15 +30,12 @@ export default function PhoneChannelButton({
   number,
   telegramUsername,
   label,
-  size,
 }: {
   number: string;
   /** @username клиента — только у основного номера. */
   telegramUsername?: string | null;
   /** Для озвучки: «Связаться · Жена». */
   label?: string;
-  /** Диаметр кружка: 32 в хвосте строки карточки, 44 в списке клиентов. */
-  size?: number;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -70,7 +67,6 @@ export default function PhoneChannelButton({
       <RowActionButton
         icon={MessageCircle}
         color={t.success}
-        size={size}
         label={label ? `Связаться · ${label}` : "Связаться"}
         hint="Выбор способа связи с этим номером"
         onPress={() => {

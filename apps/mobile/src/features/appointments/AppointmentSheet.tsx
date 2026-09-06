@@ -71,6 +71,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { RowActionButton } from "@/components/ui/card-rows";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ValueRow } from "@/components/ui/ValueRow";
@@ -1409,19 +1410,18 @@ export function AppointmentSheet({
                   ) : null}
                 </Pressable>
                 {client?.phone ? (
-                  <Pressable
-                    onPress={() =>
-                      void Linking.openURL(
-                        `tel:${client.phone!.replace(/[^+\d]/g, "")}`,
-                      )
-                    }
-                    accessibilityRole="button"
-                    accessibilityLabel={`Позвонить: ${client.phone}`}
-                    className="mr-3 h-11 w-11 items-center justify-center self-center rounded-full active:opacity-70"
-                    style={{ backgroundColor: `${t.accent}14` }}
-                  >
-                    <Phone color={t.accent} size={ICON.sm} />
-                  </Pressable>
+                  <View className="mr-3 self-center">
+                    <RowActionButton
+                      icon={Phone}
+                      color={t.accent}
+                      label={`Позвонить: ${client.phone}`}
+                      onPress={() =>
+                        void Linking.openURL(
+                          `tel:${client.phone!.replace(/[^+\d]/g, "")}`,
+                        )
+                      }
+                    />
+                  </View>
                 ) : null}
               </View>
             </SectionCard>
