@@ -177,7 +177,9 @@ describe("blockCaption", () => {
     assert.deepEqual(blockCaption({ ...base, rowsCount: 1, outstanding: 3500, outstandingLabel: "€35" }), { text: "Остаток €35", tone: "warning" });
     assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");
-    assert.equal(blockCaption(base), null);
+    assert.deepEqual(blockCaption(base), { text: "К оплате €135", tone: "neutral" });
+    assert.deepEqual(blockCaption({ ...base, hasAppointment: false }), { text: "К оплате €135", tone: "neutral" });
+    assert.equal(blockCaption({ ...base, outstanding: 0, rowsCount: 0 }), null);
   });
 });
 

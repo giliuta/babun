@@ -209,6 +209,12 @@ export function blockCaption(input: {
   if (!input.hasAppointment && input.hasPending) {
     return { text: "Запишется при создании", tone: "neutral" };
   }
+  // Визит идёт или запись ещё не создана, денег нет: строка называет сумму,
+  // а не молчит (аудит 2026-09-06: пустая строка над плитками читалась как
+  // недогрузившийся блок).
+  if (input.outstanding > 0) {
+    return { text: `К оплате ${input.outstandingLabel}`, tone: "neutral" };
+  }
   return null;
 }
 

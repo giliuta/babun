@@ -28,6 +28,7 @@ import {
   MapPin,
   MoreHorizontal,
   UserRound,
+  Briefcase,
 } from "lucide-react-native";
 import type {
   Appointment,
@@ -123,6 +124,7 @@ import {
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
+import { ChooseRow } from "@/components/ui/ChooseRow";
 import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
@@ -2220,24 +2222,12 @@ export default function BookScreen() {
                     </Pressable>
                   </View>
                 ) : (
-                  <Pressable
-                    className="flex-row items-center px-4 py-3.5"
+                  <ChooseRow
+                    icon={UserRound}
+                    label="Выбрать клиента"
+                    hint="Открывает поиск по имени или телефону"
                     onPress={() => setClientPickerOpen(true)}
-                    accessibilityRole="button"
-                    accessibilityLabel="Выбрать клиента"
-                    accessibilityHint="Открывает поиск по имени или телефону"
-                  >
-                    <View
-                      className="mr-3 items-center justify-center rounded-full"
-                      style={{ width: 34, height: 34, backgroundColor: `${t.accent}14` }}
-                    >
-                      <UserRound color={t.accent} size={ICON.sm} />
-                    </View>
-                    <Text className="flex-1" style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
-                      Выбрать клиента
-                    </Text>
-                    <ChevronRight color={t.chevron} size={ICON.sm} />
-                  </Pressable>
+                  />
                 )}
                 {/* ЗАМЕТКА КЛИЕНТА — мини-блок под клиентом, пишет в клиента
                     (см. `writeClientNote`). */}
@@ -2318,27 +2308,15 @@ export default function BookScreen() {
                          заводится тем же объектом, на это есть строка ниже.
                          Адрес-снимок сохранённой записи цел: состояние
                          `address` гидрируется и уезжает в патч как было. */
-                      <Pressable
-                        className="flex-row items-center px-4 py-3.5"
+                      <ChooseRow
+                        icon={MapPin}
+                        label="Выбрать объект"
+                        hint="Открывает список объектов клиента"
                         onPress={() => {
                           setObjectPicker(true);
                           haptics.tap();
                         }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Выбрать объект"
-                        accessibilityHint="Открывает список объектов клиента"
-                      >
-                        <View
-                          className="mr-3 items-center justify-center rounded-full"
-                          style={{ width: 34, height: 34, backgroundColor: `${t.accent}14` }}
-                        >
-                          <MapPin color={t.accent} size={ICON.sm} />
-                        </View>
-                        <Text className="flex-1" style={{ fontSize: 17, fontWeight: "600", color: t.accent }}>
-                          Выбрать объект
-                        </Text>
-                        <ChevronRight color={t.chevron} size={ICON.sm} />
-                      </Pressable>
+                      />
                     ) : null}
 
                     {/* ПОДСКАЗКА «ПОРА ОБСЛУЖИТЬ ОБОРУДОВАНИЕ» СНЕСЕНА
@@ -2381,7 +2359,15 @@ export default function BookScreen() {
               <SectionCard title="Услуги">
                 {serviceIds.length === 0 ? (
                   <>
-                    <AddRow label="Выбрать услугу" onPress={() => setServicePickerOpen(true)} />
+                    {/* ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА И ОБЪЕКТА (аудит 2026-09-06):
+                        три пустых состояния формы отвечают на один вопрос и
+                        выглядят одинаково. */}
+                    <ChooseRow
+                      icon={Briefcase}
+                      label="Выбрать услугу"
+                      hint="Открывает список услуг"
+                      onPress={() => setServicePickerOpen(true)}
+                    />
                     <TotalRow
                       total={effectiveTotal}
                       custom={customTotal}
@@ -2395,7 +2381,7 @@ export default function BookScreen() {
                   </>
                 ) : (
                   <>
-                    {selectedServices.map((line) => {
+                    {selectedServices.map((line, index) => {
                       // СТРОКА ЖИВЁТ БЕЗ КАТАЛОГА. Раньше здесь стоял
                       // `catalog.get(id) ?? return null`, и у сохранённой
                       // записи строки просто исчезали с экрана, когда услугу
@@ -2410,7 +2396,9 @@ export default function BookScreen() {
                       return (
                         <View
                           key={line.serviceId}
-                          style={{ borderTopWidth: 1, borderTopColor: t.separator }}
+                          // Волосок — МЕЖДУ строками, не под шапкой «УСЛУГИ»:
+                          // у остальных карточек под надписью линии нет.
+                          style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
                         >
                         {/* ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (владелец
                             2026-09-04: «„Добавить услугу“ убираем; тапаю по
@@ -2518,33 +2506,26 @@ export default function BookScreen() {
               // такой же блок, как под объектом или клиентом, с таким же
               // названием»). Надпись «Заметка» — та же малая шапка.
               <SectionCard title="Заметка">
-                <View className="px-4 pb-2.5 pt-1">
-                  {/* ЗАМЕТКУ НАБИРАЮТ, ВИДЯ ЕЁ. Поле стоит последним, и KAV,
-                      ужимая список под клавиатуру, оставлял его под ней —
-                      текст набирался вслепую (поймано 2026-09-03, когда у
-                      симулятора отключили аппаратную клавиатуру). Панель
-                      «Готово» над клавиатурой у многострочного поля iOS не
-                      показывает (проверено там же), поэтому убирают её
-                      тапом мимо или потянув вниз (`keyboardDismissMode`). */}
-                  <TextInput
-                    keyboardAppearance="light"
-                    accessibilityLabel="Заметка записи"
-                    value={comment}
-                    onChangeText={setComment}
-                    placeholder="Детали, пожелания, что взять с собой"
-                    placeholderTextColor={t.placeholder}
-                    // Пока клавиатура выезжает, докручиваем список до конца —
-                    // поле встаёт прямо над ней.
-                    onFocus={() =>
+                {/* ТО ЖЕ ПОЛЕ, ЧТО ЗАМЕТКИ КЛИЕНТА И ОБЪЕКТА (аудит 2026-09-06):
+                    три заметки формы были набраны тремя способами — здесь
+                    голый ввод 15pt, там плашки 13pt на подложке. Одна
+                    заметка — одно поле. Скролл докручивается к полю при
+                    фокусе: оно последнее, и KAV оставлял его под клавиатурой
+                    (поймано 2026-09-03). */}
+                <InlineNoteField
+                  note={{
+                    draft: comment,
+                    setDraft: setComment,
+                    onFocus: () =>
                       setTimeout(
                         () => scrollRef.current?.scrollToEnd({ animated: true }),
                         KEYBOARD_SETTLE_MS,
-                      )
-                    }
-                    multiline
-                    style={{ fontSize: 15, color: t.ink, minHeight: 36 }}
-                  />
-                </View>
+                      ),
+                    onBlur: () => {},
+                  }}
+                  placeholder="Детали, пожелания, что взять с собой"
+                  accessibilityLabel="Заметка записи"
+                />
               </SectionCard>
               ) : null}
 
