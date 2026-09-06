@@ -122,6 +122,7 @@ import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { ModePlaque } from "@/features/calendar/ModePlaque";
 import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
+import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
   reconcileEventAppointmentReminders,
@@ -361,7 +362,7 @@ export default function CalendarTab() {
           }
           toast(warn ? `Перенесено. ${warn}` : `Перенесено на ${newStart}`);
         },
-        onError: () => toast("Не удалось перенести"),
+        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести"),
       },
     );
   };
@@ -1386,7 +1387,8 @@ export default function CalendarTab() {
                 },
           );
         },
-        onError: () => toast("Не удалось изменить статус", "error"),
+        onError: (e) =>
+          toast(serverReason(e) ?? "Не удалось изменить статус", "error"),
       },
     );
   };
@@ -1421,7 +1423,8 @@ export default function CalendarTab() {
             },
           );
         },
-        onError: () => toast("Не удалось изменить запись", "error"),
+        onError: (e) =>
+          toast(serverReason(e) ?? "Не удалось изменить запись", "error"),
       },
     );
   };
@@ -1472,7 +1475,7 @@ export default function CalendarTab() {
           haptics.warning();
           toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
         },
-        onError: () => toast("Не удалось удалить", "error"),
+        onError: (e) => toast(serverReason(e) ?? "Не удалось удалить", "error"),
       });
     });
   };
@@ -1499,7 +1502,7 @@ export default function CalendarTab() {
         // Открываем копию на правку сразу — на странице записи.
         router.push(`/book?appointmentId=${copy.id}` as Href);
       },
-      onError: () => toast("Не удалось скопировать", "error"),
+      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
     });
   };
 
@@ -2024,12 +2027,13 @@ export default function CalendarTab() {
                 { id: apt.id, patch: prev },
                 {
                   onSuccess: () => syncReminders(apt),
-                  onError: () => toast("Не удалось вернуть запись", "error"),
+                  onError: (e) =>
+                    toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
                 },
               ),
           });
         },
-        onError: () => toast("Не удалось перенести", "error"),
+        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести", "error"),
       },
     );
   };
