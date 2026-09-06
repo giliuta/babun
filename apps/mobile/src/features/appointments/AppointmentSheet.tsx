@@ -54,6 +54,7 @@ import { useRouter, type Href } from "expo-router";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { AppointmentDocuments } from "@/features/documents/AppointmentDocuments";
 import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
+import { CANCEL_REASONS } from "@/features/appointments/cancel-reasons";
 import { tierForVisits } from "@babun/shared/local/loyalty";
 import { locationAddressForBooking } from "@babun/shared/local/clients";
 import { formatEUR, formatEURExact } from "@babun/shared/common/utils/money";
@@ -116,14 +117,6 @@ import {
   type ServiceOverride,
 } from "./helpers";
 
-const CANCEL_REASONS = [
-  "Клиент перенёс",
-  "Клиент отменил",
-  "Погода",
-  "Не дозвонились",
-  "Нет доступа",
-  "Дубль",
-];
 
 const STATUSES: { value: AppointmentStatus; label: string }[] = [
   { value: "scheduled", label: "Запланировано" },
