@@ -6,12 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Linking,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { Linking, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -26,15 +21,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  duplicateAppointment,
-  getDebtAmount,
-} from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  PAYMENT_METHOD_LABEL,
-  PAYMENT_METHODS,
-} from "@babun/shared/local/finance/transaction";
+import { duplicateAppointment } from "@babun/shared/local/appointments";
 import {
   isColdOfflineCacheMissError,
   randomUuid,
@@ -50,15 +37,19 @@ import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
-import { X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
+import {
+  addMinutesHM,
+  formatYMD,
+  humanDay,
+  minutesBetweenHM,
+  parseYMD,
+} from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
-import { buildDebtPaidPatch } from "@/features/appointments/payment";
 import {
   DayView,
   type FreeSlotRange,
@@ -129,7 +120,8 @@ import {
 } from "@/features/calendar/window";
 import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
-import { RescheduleSheet } from "@/features/calendar/RescheduleSheet";
+import { ModePlaque } from "@/features/calendar/ModePlaque";
+import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
 import {
   cancelAppointmentReminders,
   reconcileEventAppointmentReminders,
@@ -149,7 +141,6 @@ import { useAppointments } from "@/features/calendar/queries";
 import {
   useCreateAppointment,
   useDeleteAppointment,
-  useUndoAppointmentPayment,
   useUpdateAppointment,
 } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
@@ -263,7 +254,6 @@ export default function CalendarTab() {
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
   const updateAppt = useUpdateAppointment();
-  const undoPayment = useUndoAppointmentPayment();
   const createTeam = useCreateTeam();
   const toast = useToast();
   const t = useThemeColors();
@@ -291,6 +281,15 @@ export default function CalendarTab() {
   // Контрол ленты отражает ЖЕСТ: раньше он питался от isRefetching, то есть
   // выезжал сам при каждом возврате на календарь.
   const pull = usePullRefresh(onRefresh);
+
+  /** Часовой пояс записи: её команды, иначе бизнеса. Дата и время записи —
+   *  «настенные» поля бизнеса, а не устройства диспетчера. */
+  const appointmentTimeZone = (apt: Appointment): string =>
+    (apt.team_id
+      ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
+      : null) ??
+    calSettings?.timezone ??
+    "Europe/Nicosia";
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (!canMutateAppointment(apt)) {
@@ -355,11 +354,7 @@ export default function CalendarTab() {
           if (isCalendarEvent(apt)) {
             void syncEventAppointmentReminders(
               { ...apt, time_start: newStart, time_end: newEnd },
-              (apt.team_id
-                ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
-                : null) ??
-                calSettings?.timezone ??
-                "Europe/Nicosia",
+              appointmentTimeZone(apt),
             );
           } else {
             void cancelAppointmentReminders(apt.id);
@@ -456,9 +451,15 @@ export default function CalendarTab() {
     params.pickReminder,
     router,
   ]);
-  // Уход с календаря снимает вопрос «когда?»: он задан один раз.
+  // Уход с календаря снимает вопросы «когда?» и «куда?»: они заданы один раз.
   useFocusEffect(
-    useCallback(() => () => setPick(null), []),
+    useCallback(
+      () => () => {
+        setPick(null);
+        setMoving(null);
+      },
+      [],
+    ),
   );
 
   // Вид и команда переживают перезапуск (MMKV): владелец двух команд в
@@ -522,10 +523,14 @@ export default function CalendarTab() {
     setOnboardingDismissed(true);
   };
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
-  // «Перенести» из контекстного меню — запись в шите переноса (null = закрыт).
-  const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(
-    null,
-  );
+  // РЕЖИМ ПЕРЕНОСА — запись, для которой сетка показывает зелёные кубики
+  // (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются зелёные,
+  // куда можно перевести по всей таблице»). null = обычный календарь.
+  const [moving, setMoving] = useState<Appointment | null>(null);
+  // Без блока «Оплата» (Кабинет → «Запись») визит закрывать нечем: статус на
+  // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
+  // меню долгого нажатия, — денег она не пишет.
+  const paymentBlockOn = useBookingBlocks().includes("payment");
 
   // Чипы календаря: активные команды плюс архивные, за которыми осталась
   // работа. Порядок сохраняем — архивные уходят в хвост.
@@ -1386,23 +1391,26 @@ export default function CalendarTab() {
     );
   };
 
-  const cancelToggle = (apt: Appointment) => {
-    const to = apt.status === "cancelled" ? "scheduled" : "cancelled";
-    const prev = apt.status;
+  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
+   *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
+   *  «Восстановить». */
+  const setCancelled = (apt: Appointment, reason: string | null) => {
+    const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
+    const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
     updateAppt.mutate(
-      { id: apt.id, patch: { status: to } },
+      { id: apt.id, patch: { status: to, cancel_reason: reason } },
       {
         onSuccess: () => {
           haptics.success();
           if (to === "cancelled") void cancelAppointmentReminders(apt.id);
           toast(
-            to === "cancelled" ? "Запись отменена" : "Запись восстановлена",
+            to === "cancelled" ? "Визит отменён" : "Запись восстановлена",
             "info",
             {
               label: "Отменить",
               onPress: () =>
                 updateAppt.mutate(
-                  { id: apt.id, patch: { status: prev } },
+                  { id: apt.id, patch: prev },
                   {
                     // Без колбэка откат падал молча: options-level onError
                     // хука гасит глобальный алерт MutationCache.
@@ -1416,6 +1424,19 @@ export default function CalendarTab() {
         onError: () => toast("Не удалось изменить запись", "error"),
       },
     );
+  };
+
+  /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
+   *  отмена без причины в отчёте дня читается как «забыли». */
+  const cancelWithReason = (apt: Appointment) => {
+    void chooseOption(
+      "Причина отмены",
+      CANCEL_REASONS.map((label) => ({ label })),
+      { haptic: false },
+    ).then((i) => {
+      const reason = i === null ? undefined : CANCEL_REASONS[i];
+      if (reason) setCancelled(apt, reason);
+    });
   };
 
   const deleteAppointmentConfirmed = (apt: Appointment) => {
@@ -1456,52 +1477,19 @@ export default function CalendarTab() {
     });
   };
 
-  // Быстрая оплата ОСТАТКА из контекстного меню — тот же полный платёжный
-  // патч, что у карточки записи (buildDebtPaidPatch): пять зеркальных полей
-  // сразу, иначе payment_status оставался "unpaid" (income в финансах не
-  // создавался), а сумма брала полный total_amount, считая предоплату
-  // второй раз. «Перевод» не предлагается: способ должны понимать все три
-  // платёжных енума модели (см. payment.ts) — тот же выбор, что в шите.
-  const openPaymentMenu = (apt: Appointment) => {
-    const debt = getDebtAmount(apt);
-    const methods = PAYMENT_METHODS;
-    void chooseOption(
-      `Оплата ${formatEUR(debt)}`,
-      methods.map((m) => ({ label: PAYMENT_METHOD_LABEL[m] })),
-      { haptic: false },
-    ).then((i) => {
-      const method = i === null ? undefined : methods[i];
-      if (!method) return;
-      updateAppt.mutate(
-        {
-          id: apt.id,
-          patch: {
-            ...buildDebtPaidPatch(apt, { method, amount: debt }),
-            status: "completed",
-          },
-        },
-        {
-          onSuccess: () => {
-            haptics.success();
-            toast(`Оплата ${formatEUR(debt)} принята`, "success", {
-              label: "Отменить",
-              onPress: () =>
-                undoPayment.mutate(apt.id, {
-                  onSuccess: () => toast("Оплата отменена", "success"),
-                  onError: (error) =>
-                    toast(error.message || "Не удалось отменить оплату", "error"),
-                }),
-            });
-          },
-          onError: (error) =>
-            toast(
-              error.message.replace(/^updateAppointment:\s*/, "") ||
-                "Не удалось отметить оплату",
-              "error",
-            ),
-        },
-      );
-    });
+
+  /** «Перенести» из меню — в режим зелёных кубиков. Список и Месяц кубиков не
+   *  рисуют, поэтому переезжаем в Неделю этой записи; выйти — крестиком на
+   *  плашке, сменой команды или уходом с экрана. */
+  const startMove = (apt: Appointment) => {
+    setPick(null);
+    setNotice(null);
+    setMoving(apt);
+    if (mode !== "week" && mode !== "day") {
+      setMode("week");
+      rememberView({ mode: "week" });
+    }
+    setDay(startOfDay(parseYMD(apt.date)));
   };
 
   const copyAppointment = (apt: Appointment) => {
@@ -1520,12 +1508,6 @@ export default function CalendarTab() {
   // resolve them in the assigned brigade timezone (global business timezone
   // as fallback), never in the timezone of the dispatcher's current device.
   const openReminderMenu = (apt: Appointment) => {
-    const appointmentTimeZone =
-      (apt.team_id
-        ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
-        : null) ??
-      calSettings?.timezone ??
-      "Europe/Nicosia";
     const presets: {
       label: string;
       timing: AppointmentReminderTiming;
@@ -1547,7 +1529,7 @@ export default function CalendarTab() {
         when = appointmentReminderInstant(
           apt,
           preset.timing,
-          appointmentTimeZone,
+          appointmentTimeZone(apt),
         );
       } catch {
         toast("Не удалось определить время напоминания", "error");
@@ -1601,13 +1583,12 @@ export default function CalendarTab() {
     const mutable = canMutateAppointment(apt);
 
     type Item = { label: string; run: () => void; destructive?: boolean };
-    const items: Item[] = [
-      {
+    const items: Item[] = [];
+    if (isCrew) {
+      items.push({
         label: event ? "Открыть событие" : "Открыть заявку",
         run: () => openEdit(apt),
-      },
-    ];
-    if (isCrew) {
+      });
       // Мастер может двигать статус только вперёд на один шаг. Это ровно
       // совпадает с серверной политикой и не оставляет кнопок, которые после
       // тапа всё равно закончатся отказом. Team events are read-only.
@@ -1620,71 +1601,66 @@ export default function CalendarTab() {
           });
         }
       }
-    } else if (!event) {
-      // Оплата уместна, пока есть остаток — в т.ч. у «Выполнена» и «В работе»
-      // (раньше пункт видели только «Запланирован», а долги висят как раз на
-      // выполненных).
-      if (
-        apt.kind === "work" &&
-        apt.status !== "cancelled" &&
-        getDebtAmount(apt) > 0
-      )
-        items.push({ label: "Отметить оплату", run: () => openPaymentMenu(apt) });
-      if (apt.status !== "completed")
-        items.push({ label: "Выполнена", run: () => quickStatus(apt, "completed") });
-      if (apt.status !== "in_progress")
-        items.push({ label: "В работе", run: () => quickStatus(apt, "in_progress") });
-      if (apt.status !== "scheduled" && apt.status !== "cancelled")
+      // Локальное напоминание доступно и для командного события в режиме
+      // просмотра: это настройка устройства, она не изменяет чужую запись.
+      if (apt.status !== "cancelled" && apt.date >= todayYmd)
+        items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
+      if (phone)
         items.push({
-          label: "Вернуть в план",
-          run: () => quickStatus(apt, "scheduled"),
+          label: "Позвонить",
+          run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
         });
-      // Перенос отменённой бессмыслен — сначала «Восстановить».
-      if (apt.status !== "cancelled")
-        items.push({ label: "Перенести", run: () => setReschedulingApt(apt) });
-    } else if (mutable) {
-      // У событий нет рабочего lifecycle «В работу / Выполнена / Отменена».
-      // Автор может перенести/удалить seed; другой оператор получает только
-      // просмотр и копирование — ровно как creator-only RLS.
-      items.push({ label: "Перенести", run: () => setReschedulingApt(apt) });
-    }
-    // Локальное напоминание доступно и для командного события в режиме
-    // просмотра: это настройка устройства, она не изменяет чужую запись.
-    if (apt.status !== "cancelled" && apt.date >= todayYmd)
-      items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
-    if (phone)
-      items.push({
-        label: "Позвонить",
-        run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
-      });
-    if (address)
-      items.push({
-        label: "Маршрут",
-        run: () =>
-          Linking.openURL(
-            `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-          ),
-      });
-    if (!isCrew) {
+      if (address)
+        items.push({
+          label: "Маршрут",
+          run: () =>
+            Linking.openURL(
+              `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
+            ),
+        });
+    } else {
+      // МИНИ-МЕНЮ ДИСПЕТЧЕРА — ЧЕТЫРЕ ДЕЙСТВИЯ (владелец 2026-09-06: «долгое
+      // нажатие открывает перенести — кубики зелёные, куда можно перевести по
+      // всей таблице; потом копировать; потом отменить, удалить»). «Открыть»,
+      // оплата, статусы, звонок и маршрут отсюда ушли: тап открывает запись,
+      // деньги и статус живут в её блоке «Оплата», звонок и маршрут — в шапке.
+      // Перенос отменённой бессмыслен — сначала «Восстановить»; «весь день»
+      // кубиками не ставится — дату ему меняют на странице записи.
+      if (
+        apt.status !== "cancelled" &&
+        apt.event_all_day !== true &&
+        (!event || mutable)
+      )
+        items.push({ label: "Перенести", run: () => startMove(apt) });
       items.push({ label: "Копировать", run: () => copyAppointment(apt) });
       if (!event) {
-        items.push({
-          label: apt.status === "cancelled" ? "Восстановить" : "Отменить запись",
-          run: () => cancelToggle(apt),
-        });
+        if (!paymentBlockOn && apt.status !== "cancelled")
+          items.push(
+            apt.status === "completed"
+              ? {
+                  label: "Вернуть в план",
+                  run: () => quickStatus(apt, "scheduled"),
+                }
+              : { label: "Выполнена", run: () => quickStatus(apt, "completed") },
+          );
+        items.push(
+          apt.status === "cancelled"
+            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+        );
       }
-      if (mutable) {
+      if (mutable)
         items.push({
           // Явный null-чек: у одиночного события event_repeat = null, и
           // «undefined !== "none"» обещал бы удаление несуществующей серии.
-          label:
-            event && apt.event_repeat && apt.event_repeat.kind !== "none"
+          label: event
+            ? apt.event_repeat && apt.event_repeat.kind !== "none"
               ? "Удалить серию"
-              : "Удалить",
+              : "Удалить событие"
+            : "Удалить запись",
           destructive: true,
           run: () => deleteAppointmentConfirmed(apt),
         });
-      }
     }
 
     void chooseOption(
@@ -1889,8 +1865,13 @@ export default function CalendarTab() {
 
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
   // остаётся прежним, без зелени.
+  // Окно переноса — длительность записи; у записи без длительности — шаг.
+  const moveWindowMin = moving
+    ? minutesBetweenHM(moving.time_start, moving.time_end) ||
+      (activeTeam?.default_slot_minutes ?? 30)
+    : 0;
   const freeSlotsFor = useMemo(() => {
-    if (!pickClientId) return undefined;
+    if (!pickClientId && !moving) return undefined;
     // Считаем каждую дату ОДИН раз: пейджер держит три страницы, и в Неделе
     // резолвер зовётся 21 раз за рендер — без кэша это тысячи проходов по
     // записям на каждый тик «сейчас» и на каждый свайп.
@@ -1926,6 +1907,9 @@ export default function CalendarTab() {
         stepMinutes: step,
         bufferMinutes,
         nowMinutes: dateYmd === todayYmd ? nowMinutes ?? null : null,
+        // Перенос: окно = длительность записи, её собственное время свободно.
+        durationMinutes: moving ? moveWindowMin : undefined,
+        ignoreId: moving?.id ?? null,
       }).map((slot) => ({
         startMin: slot.startMin,
         endMin: slot.startMin + step,
@@ -1933,6 +1917,8 @@ export default function CalendarTab() {
     }
   }, [
     pickClientId,
+    moving,
+    moveWindowMin,
     apptsFor,
     activeTeamId,
     workBandFor,
@@ -1964,14 +1950,14 @@ export default function CalendarTab() {
     return nowMinutes != null && startMin < nowMinutes;
   };
 
-  /** В режиме подбора запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
+  /** В режимах подбора и переноса запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
    *  у команды свободно»; тап мимо неё (обед, нерабочий час, щель между
    *  визитами) уходил в форму молча — и обещание оказывалось краской. */
   const rejectOutsideFreeSlots = (
     dateYmd: string,
     timeStart: string,
   ): boolean => {
-    if (!pickClientId) return false;
+    if (!freeSlotsFor) return false;
     const [h, m] = timeStart.split(":").map(Number);
     const startMin = (h || 0) * 60 + (m || 0);
     if ((freeSlotsFor?.(dateYmd) ?? []).some((s) => s.startMin === startMin)) {
@@ -2003,8 +1989,58 @@ export default function CalendarTab() {
     });
   };
 
+  /** Тап по кубику в режиме переноса: запись уезжает туда целиком, длительность
+   *  прежняя; напоминания события переезжают следом, напоминание о визите
+   *  снимается (оно целилось в старое время). Откат — из тоста. */
+  const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
+    setMoving(null);
+    if (apt.date === dateYmd && apt.time_start === timeStart) return;
+    const prev = {
+      date: apt.date,
+      time_start: apt.time_start,
+      time_end: apt.time_end,
+    };
+    const next = {
+      date: dateYmd,
+      time_start: timeStart,
+      time_end: addMinutesHM(timeStart, moveWindowMin),
+    };
+    const tz = appointmentTimeZone(apt);
+    const syncReminders = (placed: Appointment) => {
+      if (isCalendarEvent(placed)) void syncEventAppointmentReminders(placed, tz);
+      else void cancelAppointmentReminders(placed.id);
+    };
+    updateAppt.mutate(
+      { id: apt.id, patch: next },
+      {
+        onSuccess: () => {
+          haptics.success();
+          syncReminders({ ...apt, ...next });
+          toast(`Перенесено: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+            label: "Отменить",
+            onPress: () =>
+              updateAppt.mutate(
+                { id: apt.id, patch: prev },
+                {
+                  onSuccess: () => syncReminders(apt),
+                  onError: () => toast("Не удалось вернуть запись", "error"),
+                },
+              ),
+          });
+        },
+        onError: () => toast("Не удалось перенести", "error"),
+      },
+    );
+  };
+
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
+    // Режим переноса: тап по кубику — переезд записи, не новая запись.
+    if (moving) {
+      moveToSlot(moving, dateYmd, timeStart);
+      return;
+    }
     // Кнопка на плашке зовёт ровно тот же путь, минуя проверки: на них уже
     // ответили тапом по кнопке.
     const open = () => {
@@ -2191,63 +2227,32 @@ export default function CalendarTab() {
       ) : null}
       </View>
 
-      {/* ПЛАШКА ПОДБОРА — «кого записываем». Пока она висит, свободное время
-          подсвечено зелёным, а тап по сетке ведёт сразу в форму записи.
-          Крестик выходит из режима, оставляя календарь там же, где стоите. */}
+      {/* ПЛАШКА РЕЖИМА — «кого записываем» или «что переносим». Пока она
+          висит, свободное время подсвечено зелёным, а тап по кубику ведёт в
+          форму записи либо переставляет запись. */}
       {pickClientId ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            marginHorizontal: 12,
-            marginTop: 8,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: t.radius.input,
-            backgroundColor: `${t.success}1f`,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-            >
-              {`Записать: ${pickClientName || "клиент"}`}
-            </Text>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 13, color: t.sub }}
-            >
-              {`Выберите зелёное время · ${activeTeam?.default_slot_minutes ?? 30} мин`}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              setPick(null);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Отменить выбор времени"
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: 32,
-              height: 32,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            <X color={t.sub} size={18} strokeWidth={2.4} />
-          </Pressable>
-        </View>
+        <ModePlaque
+          title={`Записать: ${pickClientName || "клиент"}`}
+          subtitle={`Выберите зелёное время · ${activeTeam?.default_slot_minutes ?? 30} мин`}
+          exitLabel="Отменить выбор времени"
+          onExit={() => setPick(null)}
+        />
+      ) : moving ? (
+        <ModePlaque
+          title={`Перенести: ${clientName(moving) || moving.comment || "Запись"}`}
+          subtitle={`Выберите зелёное время · ${moveWindowMin} мин`}
+          exitLabel="Отменить перенос"
+          onExit={() => setMoving(null)}
+        />
       ) : null}
 
       <ScopeChips
         items={calendarTeams}
         activeId={activeTeamId}
         onSelect={(id) => {
+          // Смена команды выходит из переноса: зелень другой команды обещала
+          // бы её свободное время чужой записи.
+          setMoving(null);
           setTeamChoice(id);
           rememberView({ teamId: id });
         }}
@@ -2571,16 +2576,6 @@ export default function CalendarTab() {
         }}
       />
 
-      {/* «Перенести» из контекстного меню — дата + время одним шитом,
-          длительность сохраняется. */}
-      <RescheduleSheet
-        appointment={isCrew || calendarLoading || calendarError ? null : reschedulingApt}
-        appointments={visibleAppts}
-        workBandFor={workBandFor}
-        bufferMinutes={bufferMinutes}
-        timeZone={timezone ?? "Europe/Nicosia"}
-        onClose={() => setReschedulingApt(null)}
-      />
     </Screen>
   );
 }

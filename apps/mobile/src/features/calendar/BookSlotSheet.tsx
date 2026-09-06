@@ -228,7 +228,7 @@ export function BookSlotSheet({
                     top: PAD,
                     height: ITEM_H,
                     borderRadius: t.radius.input,
-                    // Тот же материал, что фон warning-карточки RescheduleSheet.
+                    // Материал warning-карточки: белый + 12% предупреждения.
                     backgroundColor: `${t.warning}14`,
                   },
                   bandStyle,

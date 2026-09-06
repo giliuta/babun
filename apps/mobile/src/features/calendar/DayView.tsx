@@ -1273,7 +1273,7 @@ export function DayColumn({
               onCreateAt ? () => onCreateAt(dateYmd, time) : undefined
             }
             accessibilityRole="button"
-            accessibilityLabel={`Свободно в ${time} — записать`}
+            accessibilityLabel={`Свободно в ${time}`}
             style={{
               position: "absolute",
               left: 2,
