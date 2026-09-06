@@ -4,7 +4,6 @@ import {
   InputAccessoryView,
   Keyboard,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -28,7 +27,6 @@ import {
   ChevronRight,
   MapPin,
   MoreHorizontal,
-  Phone,
   UserRound,
 } from "lucide-react-native";
 import type {
@@ -77,7 +75,7 @@ import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { RowActionButton } from "@/components/ui/card-rows";
+import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { Chip } from "@/components/ui/Chip";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
@@ -2196,18 +2194,14 @@ export default function BookScreen() {
                       </View>
                     </Pressable>
                     {client.phone ? (
-                      // Та же 32pt кнопка, что у маршрута объекта и у «…»:
-                      // один размер у всех действий в хвосте (владелец
-                      // 2026-09-06: «иконка вызова везде одинаковая»).
+                      // Та же кнопка, что у номера в карточке и в списке: тап
+                      // звонит, удержание — способы связи; 32pt, как маршрут
+                      // и «…» (владелец 2026-09-06).
                       <View className="mr-4 self-center">
-                        <RowActionButton
-                          icon={Phone}
-                          color={t.accent}
-                          label={`Позвонить клиенту ${client.full_name || "без имени"}`}
-                          onPress={() => {
-                            const digits = client.phone.replace(/[^\d+]/g, "");
-                            if (digits) void Linking.openURL(`tel:${digits}`);
-                          }}
+                        <PhoneChannelButton
+                          number={client.phone}
+                          telegramUsername={client.telegram_username}
+                          label={client.full_name || undefined}
                         />
                       </View>
                     ) : null}

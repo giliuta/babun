@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Linking } from "react-native";
 import { useRouter } from "expo-router";
-import { MessageCircle } from "lucide-react-native";
+import { Phone } from "lucide-react-native";
 import {
   resolveChannelsForNumber,
 } from "@/features/clients/contact-channels";
@@ -13,18 +13,21 @@ import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// КНОПКА СВЯЗИ У КОНКРЕТНОГО НОМЕРА (владелец 2026-07-26: «с правой
-// стороны нажимаешь кнопку и выбираешь, что делать — WhatsApp, Telegram;
-// и если добавляю новый номер, кнопка появляется чётко на этот номер»).
+// КНОПКА У КОНКРЕТНОГО НОМЕРА: ТАП ЗВОНИТ, УДЕРЖАНИЕ — СПОСОБЫ СВЯЗИ.
 //
-// Канал — свойство НОМЕРА, а не клиента: у мужа WhatsApp, у жены Viber, и
-// звонить надо ровно на тот номер, у которого нажали. Поэтому кнопка живёт
-// в хвосте каждой строки-номера и знает только свой номер.
+// Владелец 2026-09-06: «когда тапаю на телефончик, показывается, как
+// связаться, и потом я уже выбираю… лучше по-другому: один раз нажму — оно
+// позвонит, а если задержу — откроются способы связи». До этого (2026-08-06)
+// тап открывал лист, а звонок стоял в нём первым пунктом — то есть самое
+// частое действие стоило двух тапов. Теперь оно стоит одного, а лист с
+// WhatsApp, Telegram и SMS никуда не делся — он за удержанием и, для
+// VoiceOver, за действием ротора «Способы связи».
 //
-// Лист — ТОТ ЖЕ, что у «Добавить» (владелец 2026-08-02: «сделай всё то же
-// самое, как добавить, красивый дизайн»): значок канала слева, шестерёнка в
-// углу ведёт в настройки, где эти способы включают тумблерами. Системное
-// меню «что сделать» ни того, ни другого не умело.
+// Канал — свойство НОМЕРА, а не клиента (владелец 2026-07-26): у мужа
+// WhatsApp, у жены Viber, и звонить надо ровно на тот номер, у которого
+// нажали. Поэтому кнопка живёт в хвосте каждой строки-номера и знает только
+// свой номер. Лист — ТОТ ЖЕ, что у «Добавить» (владелец 2026-08-02):
+// значок канала слева, шестерёнка в углу ведёт в настройки способов связи.
 
 export default function PhoneChannelButton({
   number,
@@ -62,16 +65,26 @@ export default function PhoneChannelButton({
     onPress: () => void Linking.openURL(c.url),
   }));
 
+  // Звонок отключить нельзя (`optional: false`), так что у разобранного
+  // номера он есть всегда; запасной путь — первый канал списка.
+  const call = channels.find((c) => c.id === "call") ?? channels[0];
+  const openChannels = () => {
+    haptics.tap();
+    setOpen(true);
+  };
+
   return (
     <>
       <RowActionButton
-        icon={MessageCircle}
+        icon={Phone}
         color={t.success}
-        label={label ? `Связаться · ${label}` : "Связаться"}
-        hint="Выбор способа связи с этим номером"
-        onPress={() => {
-          haptics.tap();
-          setOpen(true);
+        label={label ? `Позвонить · ${label}` : "Позвонить"}
+        hint="Удерживайте, чтобы выбрать способ связи"
+        onPress={() => void Linking.openURL(call.url)}
+        onLongPress={openChannels}
+        accessibilityActions={[{ name: "channels", label: "Способы связи" }]}
+        onAccessibilityAction={(name) => {
+          if (name === "channels") openChannels();
         }}
       />
       <PickerSheet

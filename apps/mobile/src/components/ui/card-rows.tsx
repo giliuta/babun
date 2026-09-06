@@ -758,19 +758,35 @@ export function RowActionButton({
   label,
   hint,
   onPress,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   icon: LucideIcon;
   color: string;
   label: string;
   hint?: string;
   onPress: () => void;
+  /** Второе действие удержанием (кнопка звонка: тап звонит, удержание —
+   *  способы связи). Удержание незаметно VoiceOver — дублируй его действием
+   *  ротора через `accessibilityActions`. */
+  onLongPress?: () => void;
+  accessibilityActions?: readonly { name: string; label: string }[];
+  onAccessibilityAction?: (name: string) => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={
+        onAccessibilityAction
+          ? (e) => onAccessibilityAction(e.nativeEvent.actionName)
+          : undefined
+      }
       hitSlop={8}
       style={({ pressed }) => ({
         width: 32,

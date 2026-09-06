@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -20,7 +19,6 @@ import {
   ChevronLeft,
   ChevronUp,
   Clock,
-  Phone,
   Repeat,
   Search,
   X,
@@ -71,7 +69,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { PRESET_COLOR_VALUES } from "@babun/shared/common/utils/colors";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { RowActionButton } from "@/components/ui/card-rows";
+import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { OptionSheet } from "@/components/ui/OptionSheet";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ValueRow } from "@/components/ui/ValueRow";
@@ -1411,15 +1409,10 @@ export function AppointmentSheet({
                 </Pressable>
                 {client?.phone ? (
                   <View className="mr-3 self-center">
-                    <RowActionButton
-                      icon={Phone}
-                      color={t.accent}
-                      label={`Позвонить: ${client.phone}`}
-                      onPress={() =>
-                        void Linking.openURL(
-                          `tel:${client.phone!.replace(/[^+\d]/g, "")}`,
-                        )
-                      }
+                    <PhoneChannelButton
+                      number={client.phone}
+                      telegramUsername={client.telegram_username}
+                      label={client.full_name || undefined}
                     />
                   </View>
                 ) : null}
