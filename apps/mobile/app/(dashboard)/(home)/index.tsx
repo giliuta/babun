@@ -766,6 +766,13 @@ export default function CalendarTab() {
     () => new Map(clients.map((c) => [c.id, c.full_name])),
     [clients],
   );
+  // Адрес клиента — тоже картой: `addressFor` зовут на КАЖДЫЙ блок сетки, а в
+  // неделе их полторы сотни. Линейный поиск по всем клиентам на каждый блок
+  // стоил бы кадра на большой базе.
+  const addressById = useMemo(
+    () => new Map(clients.map((c) => [c.id, c.address])),
+    [clients],
+  );
   const clientName = (a: Appointment) =>
     a.client_id ? nameById.get(a.client_id) ?? "" : "";
   // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
@@ -776,10 +783,10 @@ export default function CalendarTab() {
     (a: Appointment) => {
       const own = (a.address ?? "").trim();
       if (own) return own;
-      const client = a.client_id ? clients.find((c) => c.id === a.client_id) : null;
-      return (client?.address ?? "").trim() || null;
+      const client = a.client_id ? addressById.get(a.client_id) : null;
+      return (client ?? "").trim() || null;
     },
-    [clients],
+    [addressById],
   );
 
   // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;

@@ -199,6 +199,9 @@ export function WeekView({
                       teamColorFor={teamColorFor}
                       onEdit={onEdit}
                       onMenu={onMenu}
+                      // В колонке недели помещается ровно один чип: «+N» ведёт
+                      // в День, где их влезает девять.
+                      onOverflow={() => onPickDay(d)}
                     />
                   );
                 })}

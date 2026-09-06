@@ -175,7 +175,14 @@ const CHIP_GAP = 2;
  *  Уже неё чип превращается в безымянный цветной прямоугольник — ровно тот
  *  корешок, ради устранения которого правка и затевается. */
 const CHIP_MIN_W = 34;
-/** Резерв справа под «+N» — тот же приём, что `markReserve` у блока. */
+/** Резерв справа под «+N» — тот же приём, что `markReserve` у блока.
+ *
+ *  ГДЕ ПРАВИЛО ОСТАНОВКИ ВСЁ-ТАКИ СТОПОРИТСЯ, И ЭТО ИЗМЕРЕНО. Колонка недели
+ *  на экране 393pt даёт чипу textW 24.3 при пороге 24 — имя влезает впритык;
+ *  на 375pt (SE, mini) остаётся 21.7, и при ДВУХ и более событиях «весь день»
+ *  чип печатает только «+N». Это не пустая плашка — это подписанная дверь,
+ *  которая ведёт в День, где помещается девять чипов, — но имени в ней нет, и
+ *  притворяться, что есть, не нужно. Имя в этом случае живёт в озвучке. */
 const CHIP_OVERFLOW_W = 14;
 
 export const allDayOf = (appts: readonly Appointment[]): Appointment[] =>
@@ -184,11 +191,14 @@ export const allDayOf = (appts: readonly Appointment[]): Appointment[] =>
 export const hasAllDay = (appts: readonly Appointment[]): boolean =>
   appts.some((a) => a.event_all_day === true);
 
-/** Высота полосы = минимальный блок продукта в одну строку плюс 2pt дыхания
- *  сверху и снизу: чип и есть блок в один текст. */
+/** Высота полосы: минимальный блок продукта в одну строку плюс дыхание, но не
+ *  меньше 36pt. Тридцать шесть — не про текст, а про ПАЛЕЦ: чип с запасом
+ *  касания 4pt даёт мишень 44pt, как требует закон продукта. Растить дальше
+ *  нельзя — полоса стоит между шапкой и сеткой и каждую точку отнимает у
+ *  первого видимого часа. */
 export function useAllDayBandH(): number {
   const { fontScale } = useWindowDimensions();
-  return MIN_H(Math.ceil(16 * Math.min(fontScale, 1.3))) + 4;
+  return Math.max(36, MIN_H(Math.ceil(16 * Math.min(fontScale, 1.3))) + 4);
 }
 
 export function AllDayRow({
@@ -197,6 +207,7 @@ export function AllDayRow({
   teamColorFor,
   onEdit,
   onMenu,
+  onOverflow,
 }: {
   /** УЖЕ отфильтрованные события «весь день» этого дня (`allDayOf`). */
   appointments: Appointment[];
@@ -204,6 +215,11 @@ export function AllDayRow({
   teamColorFor?: (a: Appointment) => string | null;
   onEdit: (a: Appointment) => void;
   onMenu?: (a: Appointment) => void;
+  /** Куда ведёт «+N». БЕЗ ЭТОГО ПРОПА СПРЯТАННЫЕ СОБЫТИЯ НЕДОСТИЖИМЫ: в
+   *  колонке недели помещается ровно один чип, и второй отпуск открыть было бы
+   *  нечем — прежние полоски хотя бы все были кликабельны. Неделя передаёт сюда
+   *  «открыть этот день»: в Дне колонка вмещает девять чипов. */
+  onOverflow?: () => void;
 }) {
   const t = useThemeColors();
   const blockColors = useBlockColors(teamColorFor);
@@ -255,9 +271,11 @@ export function AllDayRow({
                 onPress={() => onEdit(a)}
                 onLongPress={onMenu ? () => onMenu(a) : undefined}
                 delayLongPress={350}
-                // Полоса рисуется с обрезкой — мишень наружу iOS отрежет; 2pt
-                // внутрь дают её во всю высоту полосы.
-                hitSlop={{ top: 2, bottom: 2 }}
+                // 36pt полосы плюс 4pt запаса с каждой стороны — мишень 44pt,
+                // как требует закон продукта. Наружу больше не растим: снизу
+                // сразу первый час сетки, и лишние точки крали бы у него тап
+                // «создать запись».
+                hitSlop={{ top: 4, bottom: 4 }}
                 accessibilityRole="button"
                 accessibilityLabel={`Весь день, ${name}${
                   reserve > 0 ? `, ещё ${overflow}` : ""
@@ -300,8 +318,16 @@ export function AllDayRow({
                   </Text>
                 ) : null}
                 {reserve > 0 ? (
-                  <View
-                    pointerEvents="none"
+                  // «+N» — СВОЯ ДВЕРЬ, а не подпись. Тап по чипу открывает
+                  // ПЕРВОЕ событие, и без отдельной мишени остальные были бы
+                  // недостижимы вовсе. Мишень узкая по ширине, но во всю высоту
+                  // полосы и с запасом наружу.
+                  <Pressable
+                    onPress={onOverflow}
+                    disabled={!onOverflow}
+                    hitSlop={{ top: 4, bottom: 4, right: 4, left: 2 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ещё ${overflow} на весь день`}
                     style={{
                       position: "absolute",
                       right: pad,
@@ -315,13 +341,13 @@ export function AllDayRow({
                       style={{
                         fontSize: 11,
                         fontWeight: "700",
-                        color: t.body,
+                        color: onOverflow ? t.accent : t.body,
                         fontVariant: ["tabular-nums"],
                       }}
                     >
                       {`+${overflow}`}
                     </Text>
-                  </View>
+                  </Pressable>
                 ) : null}
               </Pressable>
             );
@@ -358,7 +384,8 @@ function Block({
   endHour: number;
   stepMinutes: number;
   colors: BlockColors;
-  /** Цвет чужой метки: точка в правом нижнем углу. null — метка своя. */
+  /** Цвет чужой метки: точка в правом нижнем углу, затемнённая против
+   *  ЗАЛИВКИ блока. null — метка своя. */
   offLabelColor: string | null;
   /** Высота строки текста при текущем системном шрифте. Считается ОДИН раз в
    *  колонке: `useWindowDimensions` внутри каждого из полутора сотен блоков
@@ -369,8 +396,10 @@ function Block({
   /** Куда ехать: снимок адреса записи, иначе адрес клиента. null — адреса
    *  нет, и тогда оранжевый блок «нет объекта» называет дыру пустотой. */
   address: string | null;
-  /** Запланирована, а время уже прошло — незакрытая работа: полоска и
-   *  время предупреждающим цветом (недополученные деньги). */
+  /** Запланирована, а время уже прошло — незакрытая работа, то есть
+   *  недополученные деньги. Сигнал ОДИН: кант вдвое толще (2pt против 1). Ни
+   *  своего цвета, ни углового знака у просрочки нет — кант остаётся цветом
+   *  записи, а почему именно так, объяснено в `status-colors`. */
   overdue?: boolean;
   onEdit: (a: Appointment) => void;
   /** Долгое нажатие БЕЗ движения — контекстное меню (web ActionMenuModal);
@@ -425,9 +454,13 @@ function Block({
   // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
   // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
   // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH. Формула
-  // `lines` выше оптимистична — пускает строку на 3pt раньше; историческое
-  // поведение первых трёх ступеней не трогаем, но НОВУЮ пускаем только по
-  // честному порогу: обрезанный кантом адрес хуже отсутствующего.
+  //
+  // Формула `lines` выше СИЛЬНО оптимистична: она пускает первую строку уже при
+  // cardH ≥ 9, тогда как строка требует 22 — это не запас в три точки, а почти
+  // целая строка. Историческое поведение первых трёх ступеней намеренно не
+  // трогаем (получасовая запись на низком зуме печатает имя, обрезанное по
+  // высоте, — так было всегда), но НОВУЮ ступень пускаем только по честному
+  // порогу: обрезанный кантом адрес хуже отсутствующего.
   const rowsFit = Math.floor((cardH - 6) / lineH);
   // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
   // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
@@ -921,9 +954,9 @@ export function DayColumn({
   addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет метки САМОЙ записи, когда она отличается от метки дня
-   *  (`resolveOffDayLabel`): блок получает окантовку этим цветом. Владелец
-   *  2026-09-04: «можно подсвечивать другим цветом, когда метка другая».
-   *  null — обычный блок. */
+   *  (`resolveOffDayLabel`): блок получает ТОЧКУ этим цветом в нижнем углу —
+   *  периметр занят цветом самой записи. Владелец 2026-09-04: «можно
+   *  подсвечивать другим цветом, когда метка другая». null — обычный блок. */
   offLabelColorFor?: (a: Appointment) => string | null;
   isToday: boolean;
   /** Бизнес-сегодня (YYYY-MM-DD) — просрочка записей и затемнение
@@ -1280,8 +1313,8 @@ export function DayColumn({
 
       {/* Buffer bands — «забронировано под дорогу/уборку» after each live
           appointment; rendered before the blocks so colour cards sit on top
-          (web DayColumn.tsx:558-580, cancelled skipped). Placements already
-          exclude all-day strips and carry the parsed endMin. */}
+          (cancelled skipped). Placements already exclude all-day events — те
+          живут чипами в полосе НАД сеткой — and carry the parsed endMin. */}
       {bufferMinutes > 0
         ? placements.map((p) => {
             if (p.apt.status === "cancelled") return null;
