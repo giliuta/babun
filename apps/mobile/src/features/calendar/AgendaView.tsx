@@ -7,7 +7,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { RecordMark } from "@/components/ui/RecordMark";
+import { BLOCK_FILL, fillRgba } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -319,6 +319,13 @@ function AgendaRow({
         ? t.faint
         : t.sub;
   const cancelled = apt.status === "cancelled";
+  // ЦВЕТ ЗАПИСИ ЗАЛИВАЕТ ВСЮ СТРОКУ, а не квадратик слева (владелец
+  // 2026-09-06: «зачем мне слева цветовой квадратик — весь блок должен
+  // подсвечиваться»). Рецепт тот же, что у блока в сетке: заливка BLOCK_FILL,
+  // выполненная тише, отменённая теряет цвет.
+  const rowFill = cancelled
+    ? `${t.ink}14`
+    : fillRgba(hue, apt.status === "completed" ? 0.102 : BLOCK_FILL);
 
   // Событие — свой шаблон (web design-keeper #6): title из comment, знак
   // записи слева, превью заметок — иначе событие выглядело как «битая запись»
@@ -341,12 +348,9 @@ function AgendaRow({
           paddingHorizontal: 16,
           paddingVertical: 12,
           minHeight: 64,
+          backgroundColor: rowFill,
         }}
       >
-        {/* ЗНАК ЗАПИСИ ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
-            отвергнутый корешок, только в ленте. Компонент общий с образцом в
-            настройке — лента и сетка обязаны говорить одним языком. */}
-        <RecordMark hue={hue} cancelled={cancelled} />
         {/* Ширина 56 — ТА ЖЕ, что у строки работы: обе строки лежат в одной
             карточке дня, и время в них обязано стоять в одной колонке. */}
         <View style={{ width: 56 }}>
@@ -436,9 +440,9 @@ function AgendaRow({
         paddingHorizontal: 16,
         paddingVertical: 12,
         minHeight: 64,
+        backgroundColor: rowFill,
       }}
     >
-      <RecordMark hue={hue} cancelled={cancelled} />
       <View style={{ width: 56 }}>
         <Text
           className="tabular-nums"
@@ -538,7 +542,9 @@ function AgendaRow({
           {debt > 0 ? (
             <Text
               className="tabular-nums"
-              style={{ marginTop: 2, fontSize: 11, color: t.danger }}
+              // Долг — янтарь, как в финансах и в записи (владелец: «если долг,
+              // то оранжевым»); красный в продукте — только «не вышло».
+              style={{ marginTop: 2, fontSize: 11, color: t.warning }}
             >
               {formatEUR(debt)} к оплате
             </Text>
