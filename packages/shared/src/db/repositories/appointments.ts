@@ -104,6 +104,7 @@ export function rowToAppointment(r: Row): Appointment {
         ? undefined
         : Number(r.paid_amount),
     payments: asArray<Payment>(r.payments),
+    prepayments: asArray<Payment>(r.prepayments),
     payment: (r.payment ?? null) as AppointmentPayment | null,
     services: asArray<AppointmentService>(r.services),
     global_discount: (r.global_discount ?? null) as Discount | null,

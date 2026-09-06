@@ -492,6 +492,7 @@ function makeServerRow(
     service_price_overrides: (input.service_price_overrides ?? {}) as unknown as CachedAppointment["service_price_overrides"],
     expenses: (input.expenses ?? []) as unknown as CachedAppointment["expenses"],
     payments: (input.payments ?? []) as unknown as CachedAppointment["payments"],
+    prepayments: (input.prepayments ?? []) as unknown as CachedAppointment["prepayments"],
     payment: (input.payment ?? null) as CachedAppointment["payment"],
     global_discount: (input.global_discount ?? null) as CachedAppointment["global_discount"],
     total_duration: input.total_duration ?? 0,
@@ -553,6 +554,7 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.service_price_overrides !== undefined) out.service_price_overrides = patch.service_price_overrides as unknown as CachedAppointment["service_price_overrides"];
   if (patch.expenses !== undefined) out.expenses = patch.expenses as unknown as CachedAppointment["expenses"];
   if (patch.payments !== undefined) out.payments = patch.payments as unknown as CachedAppointment["payments"];
+  if (patch.prepayments !== undefined) out.prepayments = patch.prepayments as unknown as CachedAppointment["prepayments"];
   if (patch.payment !== undefined) out.payment = patch.payment as CachedAppointment["payment"];
   if (patch.global_discount !== undefined) out.global_discount = patch.global_discount as CachedAppointment["global_discount"];
   if (patch.total_duration !== undefined) out.total_duration = patch.total_duration;
