@@ -102,6 +102,9 @@ export function DebtorsList({
             firstName: (client?.full_name || "").trim().split(/\s+/)[0] ?? "",
             owed: getDebtAmount(a),
             date: a.date,
+            // Не закрыта — время прошло, статус остался «запланирована»:
+            // долг ли это, команда ещё не сказала (STORY-067).
+            unclosed: a.status !== "completed",
           };
         })
         .filter((r) => r.owed > 0)
@@ -200,7 +203,7 @@ export function DebtorsList({
         />
       ) : (
         <Card style={{ marginHorizontal: GUTTER }}>
-          {rows.map((r, i) => (
+          {[...rows].sort((a, b) => Number(a.unclosed) - Number(b.unclosed)).map((r, i, sorted) => (
             <View
               key={r.id}
               className="min-h-11 flex-row items-stretch"
@@ -210,6 +213,19 @@ export function DebtorsList({
                   : undefined
               }
             >
+              {/* ГРУППА «НЕ ЗАКРЫТЫ» (STORY-067): сначала выполненные с долгом,
+                  ниже — прошедшие, по которым команда не отчиталась. Подпись
+                  один раз, перед первой такой строкой. */}
+              {r.unclosed && (i === 0 || !sorted[i - 1].unclosed) ? (
+                <View
+                  pointerEvents="none"
+                  style={{ position: "absolute", top: 4, left: 16 }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.6, color: t.warning }}>
+                    НЕ ЗАКРЫТЫ
+                  </Text>
+                </View>
+              ) : null}
               <Pressable
                 onPress={() => openAppointment(r)}
                 onLongPress={
