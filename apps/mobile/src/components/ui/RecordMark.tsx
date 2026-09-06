@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { View } from "react-native";
 import {
   BLOCK_FILL,
@@ -35,21 +36,30 @@ export function RecordMark({
   hue,
   cancelled = false,
   size = 28,
+  full = false,
+  children,
 }: {
   /** Цвет записи. `null` — «не красить»: пустой контур волосяной линией. */
   hue: string | null;
   cancelled?: boolean;
   size?: number;
+  /** Во всю ширину родителя — образец в натуральную величину, с текстом
+   *  внутри. Тот же рецепт, только большой: настройка обязана показывать
+   *  ровно то, что нарисует сетка. */
+  full?: boolean;
+  children?: ReactNode;
 }) {
   const t = useThemeColors();
   return (
     <View
       style={{
-        width: size,
+        width: full ? undefined : size,
         height: size,
+        justifyContent: "center",
+        paddingHorizontal: full ? 10 : 0,
         // Строка ленты выровнена по верху, строка настроек — по центру: без
         // этого знак уехал бы к кромке.
-        alignSelf: "center",
+        alignSelf: full ? "stretch" : "center",
         borderRadius: t.radius.card,
         borderCurve: "continuous",
         // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ, как и её блок в сетке.
@@ -66,7 +76,9 @@ export function RecordMark({
             : t.separator,
         borderStyle: cancelled ? CANCELLED_BORDER : "solid",
       }}
-    />
+    >
+      {children}
+    </View>
   );
 }
 
