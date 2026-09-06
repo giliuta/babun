@@ -1,5 +1,5 @@
 import { Image, Pressable, Text, View } from "react-native";
-import { FileText, Play, Trash2 } from "lucide-react-native";
+import { FileText, Play, Trash2, type LucideIcon } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { Spinner } from "@/components/ui/Spinner";
 import { formatBytes, type ClientAttachment } from "@/features/clients/card-attachments";
@@ -149,5 +149,44 @@ export function UploadingTile({ size }: { size: number }) {
     <View style={[tile, { alignItems: "center", justifyContent: "center" }]}>
       <Spinner size={22} label="Загрузка" />
     </View>
+  );
+}
+
+/** Документ, который выписал сам продукт — инвойс, чек: открывается своим
+ *  экраном, корзинки нет (его не удаляют, его аннулируют там, где выписали).
+ *  Владелец 2026-09-06: «то, что мы генерируем, автоматически закидывается в
+ *  файлы, и там чётко написано, что это и за что». */
+export function GeneratedDocTile({
+  icon: Icon,
+  title,
+  subtitle,
+  size,
+  onOpen,
+}: {
+  icon: LucideIcon;
+  title: string;
+  subtitle: string;
+  size: number;
+  onOpen: () => void;
+}) {
+  const t = useThemeColors();
+  const tile = useTile(size);
+  return (
+    <Pressable
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${subtitle}`}
+      style={({ pressed }) => [tile, { opacity: pressed ? 0.6 : 1, padding: 10, justifyContent: "space-between" }]}
+    >
+      <Icon color={t.accent} size={22} strokeWidth={2} />
+      <View>
+        <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} style={{ fontSize: 11, color: t.sub, marginTop: 2 }}>
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
   );
 }

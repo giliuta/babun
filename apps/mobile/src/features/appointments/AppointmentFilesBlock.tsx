@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Linking, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Images, ScanLine } from "lucide-react-native";
+import { Camera, FileText, Images, Receipt, ScanLine } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
@@ -21,7 +22,11 @@ import {
 } from "@/features/clients/card-attachments";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { isVideoPath } from "./appointment-files";
-import { DocTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
+import { DocTile, GeneratedDocTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
+import { formatEURExact } from "@babun/shared/common/utils/money";
+import { formatShortDateRu } from "@/features/clients/format";
+import { useReceipts } from "@/features/documents/receipts-queries";
+import { useInvoices } from "@/features/invoices/queries";
 import { pagesToPdf, scanDocumentPages, scannerAvailable } from "./document-scanner";
 import {
   MAX_APPOINTMENT_PHOTOS,
@@ -43,6 +48,11 @@ import { TILE_GAP, useTileWidth } from "./PaymentTiles";
 // четвёртым с нативным модулем. Строки состояния и счётчиков нет: плитки
 // говорят сами. Удаление — корзинка в углу плитки (владелец: «сейчас я не
 // знаю, как удалить фотографию из файлов»); удержание — тот же лист.
+//
+// ДОКУМЕНТЫ, КОТОРЫЕ ВЫПИСАЛ САМ ПРОДУКТ, — ТОЖЕ ЗДЕСЬ (STORY-070, этап 3;
+// владелец: «выставляю инвойс — оно автоматически под запись закидывается в
+// файлы, не в оплату, и там чётко написано, что это и за что»): инвойс и чеки
+// записи стоят плитками рядом с фото и открываются своими экранами.
 //
 // Камера снимает и грузит СРАЗУ, без разметки «до/после» (владелец
 // 2026-09-06: «„до“ — не надо, это будет немного неправильно; просто чтобы
@@ -76,6 +86,20 @@ export function AppointmentFilesBlock({
   const removeDoc = useDeleteAttachment(clientId ?? "");
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const router = useRouter();
+  const invoicesQuery = useInvoices();
+  const receiptsQuery = useReceipts({ appointmentId });
+  const invoices = useMemo(
+    () =>
+      (invoicesQuery.data ?? []).filter(
+        (inv) => inv.appointment_id === appointmentId && inv.status !== "void" && inv.status !== "cancelled",
+      ),
+    [invoicesQuery.data, appointmentId],
+  );
+  const receipts = useMemo(
+    () => (receiptsQuery.data ?? []).filter((r) => r.status !== "void"),
+    [receiptsQuery.data],
+  );
 
   const photos = photosQuery.data ?? EMPTY_PHOTOS;
   const docs = useMemo(
@@ -273,7 +297,7 @@ export function AppointmentFilesBlock({
   return (
     <>
       <SectionCard title="Файлы">
-        {photos.length > 0 || docs.length > 0 || busy ? (
+        {photos.length > 0 || docs.length > 0 || invoices.length > 0 || receipts.length > 0 || busy ? (
           <View
             className="flex-row flex-wrap"
             style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: TILE_GAP }}
@@ -300,19 +324,44 @@ export function AppointmentFilesBlock({
                 onDelete={() => void holdDoc(doc)}
               />
             ))}
+            {invoices.map((inv) => (
+              <GeneratedDocTile
+                key={inv.id}
+                icon={FileText}
+                title={`Инвойс ${inv.number}`}
+                subtitle={`${formatEURExact(inv.total)} · ${inv.status === "paid" ? "оплачен" : "ждёт оплаты"}`}
+                size={tileWidth}
+                onOpen={() => router.push(`/invoices/${inv.id}` as Href)}
+              />
+            ))}
+            {receipts.map((r) => (
+              <GeneratedDocTile
+                key={r.id}
+                icon={Receipt}
+                title={`Чек ${r.number}`}
+                subtitle={`${formatEURExact(r.amount)} · ${formatShortDateRu(r.issued_on)}`}
+                size={tileWidth}
+                // Экрана одного чека нет — лента чеков клиента, где он и стоит.
+                onOpen={() =>
+                  router.push(
+                    (clientId ? { pathname: "/documents/receipts", params: { clientId } } : "/documents/receipts") as Href,
+                  )
+                }
+              />
+            ))}
             {busy ? <UploadingTile size={tileWidth} /> : null}
           </View>
         ) : null}
         {canUpload ? (
           <AddRow
             label="Добавить"
-            separated={photos.length > 0 || docs.length > 0 || busy}
+            separated={photos.length > 0 || docs.length > 0 || invoices.length > 0 || receipts.length > 0 || busy}
             onPress={() => {
               haptics.tap();
               setMenuOpen(true);
             }}
           />
-        ) : photos.length === 0 && docs.length === 0 ? (
+        ) : photos.length === 0 && docs.length === 0 && invoices.length === 0 && receipts.length === 0 ? (
           <View style={{ height: 10 }} />
         ) : null}
       </SectionCard>
