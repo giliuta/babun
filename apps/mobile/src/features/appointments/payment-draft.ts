@@ -5,7 +5,9 @@
 import type { Appointment, Payment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
 import { appointmentDebtCents } from "@babun/shared/local/finance/appointment-calc";
-import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
+import { formatShortDateRu } from "@/features/clients/format";
+import { formatHM, formatYMD, humanDay } from "./helpers";
 
 export type PaymentKind = "settlement" | "prepayment";
 
@@ -145,6 +147,17 @@ export function paymentRows(apt: Appointment): PaymentRow[] {
 }
 
 /**
+ * Что значит тап по плитке, на которой уже лежат деньги. С ОТКРЫТЫМ полем
+ * суммы — добавить на тот же счёт: 50 наличными, потом ещё 50 наличными —
+ * одна плитка «Наличные €100», а не два предмета (владелец 2026-09-06: «оно
+ * не должно снимать, оно должно плюсануть; даже если первое было в прошлом»).
+ * Без поля — снять один из платежей этого счёта.
+ */
+export function paidTileIntent(amountMode: boolean): "add" | "cancel" {
+  return amountMode ? "add" : "cancel";
+}
+
+/**
  * Закрывать ли визит этим платежом: оплата после начала визита закрывает
  * его, даже частичная — работа сделана, остаток становится долгом.
  */
@@ -197,4 +210,43 @@ export function blockCaption(input: {
     return { text: "Запишется при создании", tone: "neutral" };
   }
   return null;
+}
+
+/** «14:20» сегодня, «5 сен, 12:00» раньше: два платежа одного счёта в листе
+ *  снятия должны различаться и днём, не только минутой. */
+export function paidAtLabel(iso: string, todayYmd: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const ymd = formatYMD(at);
+  return ymd === todayYmd ? formatHM(at) : `${formatShortDateRu(ymd)}, ${formatHM(at)}`;
+}
+
+/** Тост после записи денег. На счёте уже лежало — «+€50 · Наличные · всего
+ *  €100»: владелец видит, что это плюс к тому же счёту, а не второй предмет. */
+export function recordedToast(input: {
+  kind: PaymentKind;
+  amount: number;
+  already: number;
+  accountName: string;
+}): string {
+  const { kind, amount, already, accountName } = input;
+  if (already > 0) {
+    return `+${formatEURExact(amount)} · ${accountName} · всего ${formatEURExact(already + amount)}`;
+  }
+  return `${kind === "prepayment" ? "Предоплата" : "Оплачено"} ${formatEURExact(amount)} · ${accountName}`;
+}
+
+/** Подзаголовок строки инвойса: состояние · сумма. */
+export function invoiceSubtitle(inv: {
+  status: string;
+  due_on: string | null;
+  total: number;
+}): string {
+  const state =
+    inv.status === "paid"
+      ? "Оплачен"
+      : inv.due_on
+        ? `Ждёт оплаты до ${humanDay(inv.due_on)}`
+        : "Ждёт оплаты";
+  return `${state} · ${formatEURExact(inv.total)}`;
 }

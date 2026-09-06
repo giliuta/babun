@@ -9,8 +9,12 @@ import {
   amountProblem,
   blockCaption,
   closesVisit,
+  invoiceSubtitle,
   outstandingCents,
+  paidAtLabel,
+  paidTileIntent,
   paymentRows,
+  recordedToast,
   visitStarted,
 } from "./payment-draft";
 
@@ -174,5 +178,32 @@ describe("blockCaption", () => {
     assert.deepEqual(blockCaption({ ...base, visitCompleted: true }), { text: "Долг €135", tone: "warning" });
     assert.equal(blockCaption({ ...base, hasAppointment: false, hasPending: true })?.text, "Запишется при создании");
     assert.equal(blockCaption(base), null);
+  });
+});
+
+describe("paidTileIntent", () => {
+  test("open amount field adds to the same account, closed one cancels", () => {
+    assert.equal(paidTileIntent(true), "add");
+    assert.equal(paidTileIntent(false), "cancel");
+  });
+});
+
+describe("labels", () => {
+  test("paidAtLabel: time only today, short day otherwise, empty on garbage", () => {
+    const today = new Date(2026, 8, 6, 14, 20);
+    const todayYmd = "2026-09-06";
+    assert.equal(paidAtLabel(today.toISOString(), todayYmd), "14:20");
+    assert.equal(paidAtLabel(new Date(2026, 8, 5, 12, 0).toISOString(), todayYmd), "5 сен, 12:00");
+    assert.equal(paidAtLabel("nope", todayYmd), "");
+  });
+  test("recordedToast: plus wording once the account already holds money", () => {
+    assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 0, accountName: "Наличные" }), "Оплачено €50 · Наличные");
+    assert.equal(recordedToast({ kind: "prepayment", amount: 50, already: 0, accountName: "Карта" }), "Предоплата €50 · Карта");
+    assert.equal(recordedToast({ kind: "settlement", amount: 50, already: 50, accountName: "Наличные" }), "+€50 · Наличные · всего €100");
+  });
+  test("invoiceSubtitle", () => {
+    assert.equal(invoiceSubtitle({ status: "paid", due_on: "2026-09-10", total: 135 }), "Оплачен · €135");
+    assert.equal(invoiceSubtitle({ status: "issued", due_on: null, total: 135 }), "Ждёт оплаты · €135");
+    assert.match(invoiceSubtitle({ status: "issued", due_on: "2026-09-10", total: 135 }), /^Ждёт оплаты до .*10 сентября · €135$/);
   });
 });

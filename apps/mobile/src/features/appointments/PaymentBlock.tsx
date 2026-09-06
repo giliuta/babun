@@ -23,7 +23,6 @@ import { useInvoices } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { useBusinessNow } from "./business-now";
-import { formatHM, humanDay } from "./helpers";
 import {
   useTeamPaymentAccounts,
   type PaymentAccountOption,
@@ -33,8 +32,12 @@ import {
   amountProblem,
   blockCaption,
   closesVisit,
+  invoiceSubtitle,
   outstandingCents,
+  paidAtLabel,
+  paidTileIntent,
   paymentRows,
+  recordedToast,
   visitStarted,
   type PaymentKind,
   type PaymentRow,
@@ -56,9 +59,11 @@ import {
 // функция — какая разница, столько-то или столько-то» (владелец). До начала
 // визита без неё плитки погашены — любые деньги до визита это предоплата;
 // после начала введённая сумма — часть, остаток остаётся долгом или уходит на
-// вторую плитку. Ошибочный платёж снимает тап по зелёной плитке или «Снять» в
-// тосте — сервер пишет сторно «деньги не поступили», не возврат. Деньги ждут
-// кнопки только у новой записи: счёт уходит вместе с «Создать запись».
+// вторую плитку. Зелёная плитка при ОТКРЫТОМ поле прибавляет на тот же счёт
+// (владелец: «оно должно плюсануть, а не снимать»): плитка одна на счёт, с
+// суммой всех его платежей. Ошибочный платёж снимает тап по зелёной плитке без
+// поля или «Снять» в тосте — сервер пишет сторно «деньги не поступили», не
+// возврат. Деньги ждут кнопки только у новой записи: уходят с «Создать запись».
 
 export interface PendingPayment {
   accountId: string;
@@ -203,6 +208,7 @@ export function PaymentBlock({
       haptics.tap();
       return;
     }
+    const already = (rowsByAccount.get(account.id) ?? []).reduce((sum, row) => sum + row.amount, 0);
     const requestId = randomUuid();
     const closeVisit = closesVisit(
       { date: visit.date, time_start: visit.timeStart, status: appointment.status },
@@ -217,7 +223,7 @@ export function PaymentBlock({
           onAppointmentChanged(fresh);
           setPartText(null);
           toast(
-            `${kind === "prepayment" ? "Предоплата" : "Оплачено"} ${formatEURExact(amount)} · ${account.name}`,
+            recordedToast({ kind, amount, already, accountName: account.name }),
             "success",
             { label: "Снять", onPress: () => runCancel(fresh.id, requestId, account.name, amount) },
           );
@@ -242,7 +248,7 @@ export function PaymentBlock({
     const index = await chooseOption(
       `${account.name}: деньги не поступили?`,
       cancellable.map((row) => ({
-        label: `Снять ${formatEURExact(row.amount)}${row.kind === "prepayment" ? " · предоплата" : ""}${row.paidAt ? ` · ${formatHM(new Date(row.paidAt))}` : ""}`,
+        label: `Снять ${formatEURExact(row.amount)}${row.kind === "prepayment" ? " · предоплата" : ""}${row.paidAt ? ` · ${paidAtLabel(row.paidAt, businessNow().ymd)}` : ""}`,
         destructive: true,
       })),
       { message: "Платёж уйдёт из записи, в финансах будет сторно. Это не возврат клиенту." },
@@ -256,6 +262,10 @@ export function PaymentBlock({
   // Поле открывается ПУСТЫМ: вся сумма — это тап по плитке без поля, а сюда
   // приходят за другой суммой, и стирать подставленный итог было бы лишним.
   const handleAmountToggle = () => {
+    if (outstanding <= 0 && !amountMode) {
+      haptics.warning();
+      return;
+    }
     haptics.tap();
     setPartText(amountMode ? null : "");
   };
@@ -330,13 +340,7 @@ export function PaymentBlock({
       {invoice ? (
         <InvoiceRow
           number={invoice.number}
-          subtitle={`${
-            invoice.status === "paid"
-              ? "Оплачен"
-              : invoice.due_on
-                ? `Ждёт оплаты до ${humanDay(invoice.due_on)}`
-                : "Ждёт оплаты"
-          } · ${formatEURExact(invoice.total)}`}
+          subtitle={invoiceSubtitle(invoice)}
           onPress={handleInvoice}
         />
       ) : null}
@@ -370,11 +374,13 @@ export function PaymentBlock({
                 amount={isPaid ? formatEURExact(paid) : undefined}
                 disabled={busy}
                 onPress={() =>
-                  isPaid ? void handlePaidTileTap(account, accountRowsForTile) : handleTileTap(account)
+                  isPaid && paidTileIntent(amountMode) === "cancel"
+                    ? void handlePaidTileTap(account, accountRowsForTile)
+                    : handleTileTap(account)
                 }
                 accessibilityLabel={
                   isPaid
-                    ? `${account.name}, получено ${formatEURExact(paid)}, снять`
+                    ? `${account.name}, получено ${formatEURExact(paid)}, ${amountMode ? `добавить ${formatEURExact(amountCents / 100)}` : "снять"}`
                     : `${account.name}, ${kindForTap === "prepayment" ? "предоплата" : "оплачено"} ${formatEURExact(amountCents / 100)}`
                 }
               />
