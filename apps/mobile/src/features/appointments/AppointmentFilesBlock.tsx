@@ -25,6 +25,8 @@ import { useReceipts } from "@/features/documents/receipts-queries";
 import { useInvoices } from "@/features/invoices/queries";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
+import { useBusinessNow } from "./business-now";
+import { invoiceOverdue } from "./payment-draft";
 import { DocTile, GeneratedDocTile, PendingTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
 import {
   MAX_APPOINTMENT_PHOTOS,
@@ -77,6 +79,7 @@ export function AppointmentFilesBlock({
   const toast = useToast();
   const router = useRouter();
   const tileWidth = useTileWidth(3);
+  const businessNow = useBusinessNow();
   const saved = appointmentId != null;
   const photosQuery = useAppointmentPhotos(appointmentId ?? "");
   const upload = useUploadAppointmentPhotos(appointmentId ?? "");
@@ -235,7 +238,9 @@ export function AppointmentFilesBlock({
                 key={inv.id}
                 icon={FileText}
                 title={`Инвойс ${inv.number}`}
-                subtitle={`${formatEURExact(inv.total)} · ${inv.status === "paid" ? "оплачен" : "ждёт оплаты"}`}
+                subtitle={`${formatEURExact(inv.total)} · ${
+                  inv.status === "paid" ? "оплачен" : invoiceOverdue(inv, businessNow().ymd) ? "просрочен" : "ждёт оплаты"
+                }`}
                 size={tileWidth}
                 onOpen={() => router.push(`/invoices/${inv.id}` as Href)}
               />

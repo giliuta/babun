@@ -242,17 +242,26 @@ export function recordedToast(input: {
   return `${kind === "prepayment" ? "Предоплата" : "Оплачено"} ${formatEURExact(amount)} · ${accountName}`;
 }
 
-/** Подзаголовок строки инвойса: состояние · сумма. */
-export function invoiceSubtitle(inv: {
-  status: string;
-  due_on: string | null;
-  total: number;
-}): string {
+/** Подзаголовок строки инвойса: состояние · сумма. Срок прошёл — «Просрочен
+ *  с …» (STORY-067: просрочка инвойса по due_on). */
+export function invoiceSubtitle(
+  inv: { status: string; due_on: string | null; total: number },
+  todayYmd?: string,
+): string {
+  const today = todayYmd ?? formatYMD(new Date());
+  const overdue = inv.status === "issued" && !!inv.due_on && inv.due_on < today;
   const state =
     inv.status === "paid"
       ? "Оплачен"
-      : inv.due_on
-        ? `Ждёт оплаты до ${humanDay(inv.due_on)}`
-        : "Ждёт оплаты";
+      : overdue
+        ? `Просрочен с ${humanDay(inv.due_on as string)}`
+        : inv.due_on
+          ? `Ждёт оплаты до ${humanDay(inv.due_on)}`
+          : "Ждёт оплаты";
   return `${state} · ${formatEURExact(inv.total)}`;
+}
+
+/** Инвойс просрочен: выписан, срок назначен и прошёл. */
+export function invoiceOverdue(inv: { status: string; due_on: string | null }, todayYmd: string): boolean {
+  return inv.status === "issued" && !!inv.due_on && inv.due_on < todayYmd;
 }
