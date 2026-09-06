@@ -2443,7 +2443,6 @@ export default function BookScreen() {
                           <QtyBadge
                             qty={line.quantity}
                             unit={line.unit ?? svc?.unit ?? null}
-                            tone="quiet"
                           />
                           <Text
                             style={{
