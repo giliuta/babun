@@ -2841,7 +2841,10 @@ export default function BookScreen() {
           </Text>
         ) : null}
         {/* Дата · время · сумма уже названы в докете и «Итого» — CTA их не
-            дублирует; градиент носит выбранный цвет записи. */}
+            дублирует. ЦВЕТ КНОПКИ — СИСТЕМНЫЙ, НЕ ЦВЕТ ЗАПИСИ (владелец
+            2026-09-06: «кнопка не должна менять цвет, она должна оставаться
+            единой в стиле нашей системы»): оранжевая запись давала бурую
+            кнопку, и главное действие экрана переставало быть узнаваемым. */}
         <GradientButton
           label={
             isEdit
@@ -2853,7 +2856,6 @@ export default function BookScreen() {
           onPress={save}
           disabled={!canSave || bookingBusy}
           loading={bookingBusy}
-          tint={identityC}
         />
         </View>
       </KeyboardAvoidingView>
