@@ -298,11 +298,7 @@ export function PaymentBlock({
   const showAmountField = amountMode && outstanding > 0;
 
   return (
-    <SectionCard
-      title="Оплата"
-      onSettings={() => router.push("/accounts" as Href)}
-      settingsLabel="Настройки счетов"
-    >
+    <SectionCard title="Оплата">
       <PaymentStateRow
         caption={caption?.text}
         captionColor={captionColor}

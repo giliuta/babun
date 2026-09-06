@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Settings } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -14,8 +13,6 @@ import { useThemeColors } from "@/theme/colors";
 export function SectionCard({
   title,
   action,
-  onSettings,
-  settingsLabel,
   padded,
   className = "",
   eyebrowColor,
@@ -23,12 +20,6 @@ export function SectionCard({
 }: {
   title?: string;
   action?: { label: string; onPress: () => void };
-  /** Миниатюрная шестерёнка справа от малой надписи — дверь в настройки того,
-   *  что лежит в карточке (владелец 2026-09-06: «маленькую иконку настроек,
-   *  чтоб перекидывала»): у «Услуг» — каталог, у «Оплаты» — счета. */
-  onSettings?: () => void;
-  /** Озвучка шестерёнки: «Настройки услуг». Обязательна вместе с onSettings. */
-  settingsLabel?: string;
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -71,24 +62,6 @@ export function SectionCard({
                 <Text style={{ fontSize: 14, fontWeight: "500", color: t.accent }}>
                   {action.label}
                 </Text>
-              </Pressable>
-            ) : onSettings ? (
-              <Pressable
-                onPress={onSettings}
-                accessibilityRole="button"
-                accessibilityLabel={settingsLabel ?? `Настройки: ${title}`}
-                hitSlop={10}
-                // Ряд малой надписи остаётся прежней высоты: цель 44pt даёт
-                // hitSlop, а не сам бокс шестерёнки.
-                style={({ pressed }) => ({
-                  minHeight: 20,
-                  minWidth: 20,
-                  alignItems: "flex-end",
-                  justifyContent: "center",
-                  opacity: pressed ? 0.5 : 1,
-                })}
-              >
-                <Settings size={15} strokeWidth={2} color={t.faint} />
               </Pressable>
             ) : null}
           </View>
