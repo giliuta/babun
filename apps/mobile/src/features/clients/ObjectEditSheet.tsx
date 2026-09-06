@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -274,20 +275,37 @@ export function ObjectEditSheet({
               showPin={!isLikelyUrl(target.trim())}
             />
           ) : null}
-          {/* ЗАМЕТКА — последняя строка той же карточки (объект один —
-              карточка одна). Пишется на уходе с поля и на закрытии листа. */}
-          <FieldRow
-            label="Заметка"
-            hideLabel
-            value={note}
-            placeholder="Как войти, код"
-            stacked
-            separated
-            multiline
-            live
-            onSave={setNote}
-            onEditEnd={commitNote}
-          />
+        </RowGroup>
+
+        {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
+            «мне нравились старые заметки»). Тот же вид, что у заметок на
+            странице записи; поле открыто сразу, без кнопки «добавить»
+            (владелец 2026-09-04). Пишется на уходе с поля и на закрытии. */}
+        <RowGroup title="Заметка">
+          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+            <TextInput
+              value={note}
+              onChangeText={setNote}
+              onBlur={commitNote}
+              multiline
+              accessibilityLabel="Заметка об объекте"
+              placeholder="Как войти, код, кто встречает…"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              maxFontSizeMultiplier={1.2}
+              style={{
+                minHeight: 44,
+                maxHeight: 120,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: t.radius.input,
+                backgroundColor: t.fill,
+                fontSize: 15,
+                color: t.ink,
+              }}
+            />
+          </View>
         </RowGroup>
 
 

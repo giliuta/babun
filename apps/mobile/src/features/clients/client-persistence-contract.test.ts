@@ -62,7 +62,7 @@ describe("client native persistence contract", () => {
     // (регресс 2026-07-27, найден прогоном персонажей).
     const addressRow = sheet.slice(
       sheet.indexOf('label="Адрес"'),
-      sheet.indexOf('label="Заметка"'),
+      sheet.indexOf("<AddressDetailsToggle"),
     );
     assert.match(addressRow, /\n\s+live\n/);
     const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));

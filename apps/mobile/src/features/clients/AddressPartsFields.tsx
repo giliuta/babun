@@ -1,7 +1,7 @@
-import { Pressable, Text, View } from "react-native";
+import { useRef } from "react";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
-import { FieldRow } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -23,15 +23,8 @@ export const ADDRESS_DETAILS_LABEL = "Точный адрес";
 const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "entrance", label: "Подъезд" },
   { key: "floor", label: "Этаж" },
-  { key: "apartment", label: "Квартира" },
+  { key: "apartment", label: "Кв." },
 ];
-
-/** Волосяной разделитель между полями одной строки: без него три подписи
- *  висят в воздухе и не читаются как три поля. */
-function Hairline() {
-  const t = useThemeColors();
-  return <View style={{ width: 1, backgroundColor: t.separator }} />;
-}
 
 export function AddressDetailsToggle({
   open,
@@ -115,80 +108,131 @@ export function AddressDetailsFields({
 }) {
   const set = (key: keyof AddressParts) => (value: string) =>
     onChange({ ...parts, [key]: value });
+  // ПОЛЯ-ПОДЛОЖКИ, А НЕ ТАБЛИЦА (владелец 2026-09-07: «ну такое, можно
+  // сделать лучше; мне нравились старые заметки»). Сетка из строк с подписями
+  // и линиями между ячейками читалась ведомостью; подложка с подсказкой внутри
+  // — тот же язык, что у заметок записи и объекта, и три коротких поля встают
+  // в одну строку высотой 40 вместо 60.
   return (
-    <>
-      <FieldRow
+    <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 12, gap: 8 }}>
+      <DetailBox
         label="Комплекс"
         value={parts.complex ?? ""}
-        placeholder=""
-        stacked
-        separated
-        live
-        onSave={set("complex")}
+        autoCapitalize="words"
+        onChange={set("complex")}
         onEditEnd={onEditEnd}
       />
-      <View style={{ flexDirection: "row" }}>
-        {SHORT.map((field, i) => (
-          <View key={field.key} style={{ flex: 1, flexDirection: "row" }}>
-            {i > 0 ? <Hairline /> : null}
-            <View style={{ flex: 1 }}>
-              <FieldRow
-                label={field.label}
-                value={parts[field.key] ?? ""}
-                placeholder=""
-                stacked
-                separated
-                live
-                onSave={set(field.key)}
-                onEditEnd={onEditEnd}
-              />
-            </View>
-          </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {SHORT.map((field) => (
+          <DetailBox
+            key={field.key}
+            label={field.label}
+            value={parts[field.key] ?? ""}
+            onChange={set(field.key)}
+            onEditEnd={onEditEnd}
+          />
         ))}
       </View>
-      <View style={{ flexDirection: "row" }}>
+      <View style={{ flexDirection: "row", gap: 8 }}>
         <View style={{ flex: 2 }}>
-          <FieldRow
+          <DetailBox
             label="Город"
             value={parts.city ?? ""}
-            placeholder=""
-            stacked
-            separated
-            live
             autoCapitalize="words"
-            onSave={set("city")}
+            onChange={set("city")}
             onEditEnd={onEditEnd}
           />
         </View>
-        <Hairline />
         <View style={{ flex: 1 }}>
-          <FieldRow
+          <DetailBox
             label="Индекс"
             value={parts.zip ?? ""}
-            placeholder=""
-            stacked
-            separated
-            live
             keyboardType="numbers-and-punctuation"
-            onSave={set("zip")}
+            onChange={set("zip")}
             onEditEnd={onEditEnd}
           />
         </View>
       </View>
       {showPin ? (
-        <FieldRow
+        <DetailBox
           label="Ссылка на карту"
           value={pin}
-          placeholder=""
-          stacked
-          separated
-          live
           keyboardType="url"
           autoCapitalize="none"
-          onSave={onPinChange}
+          onChange={onPinChange}
           onEditEnd={onPinEditEnd}
         />
       ) : null}
-    </>
+    </View>
+  );
+}
+
+/** Поле точного адреса: подложка, в которой ПОДПИСЬ СТОИТ ВСЕГДА — серая
+ *  слева, значение рядом («Этаж 3», «Кв. 5»). Подсказка-плейсхолдер исчезала
+ *  вместе с первой цифрой, и «3» с «5» в соседних полях становились
+ *  неотличимы. Тап по всей подложке ставит курсор. Данные, а не проза:
+ *  автозамена выключена, иначе «12А» уезжало как «12 А». */
+function DetailBox({
+  label,
+  value,
+  keyboardType,
+  autoCapitalize,
+  onChange,
+  onEditEnd,
+}: {
+  label: string;
+  value: string;
+  keyboardType?: "numbers-and-punctuation" | "url";
+  autoCapitalize?: "none" | "words";
+  onChange: (next: string) => void;
+  onEditEnd?: () => void;
+}) {
+  const t = useThemeColors();
+  const input = useRef<TextInput>(null);
+  return (
+    <Pressable
+      onPress={() => input.current?.focus()}
+      accessible={false}
+      style={{
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        minHeight: 40,
+        paddingHorizontal: 12,
+        borderRadius: t.radius.input,
+        backgroundColor: t.fill,
+      }}
+    >
+      <Text
+        maxFontSizeMultiplier={1.2}
+        numberOfLines={1}
+        style={{ fontSize: 15, color: t.sub }}
+      >
+        {label}
+      </Text>
+      <TextInput
+        ref={input}
+        value={value}
+        onChangeText={onChange}
+        onBlur={onEditEnd}
+        accessibilityLabel={label}
+        selectionColor={t.accent}
+        keyboardAppearance="light"
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize ?? "sentences"}
+        autoCorrect={false}
+        spellCheck={false}
+        maxFontSizeMultiplier={1.2}
+        style={{
+          flex: 1,
+          minWidth: 24,
+          paddingVertical: 9,
+          padding: 0,
+          fontSize: 15,
+          color: t.ink,
+        }}
+      />
+    </Pressable>
   );
 }

@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -313,21 +314,36 @@ export function ObjectSheet({
               showPin={!isLikelyUrl(draft.target.trim())}
             />
           ) : null}
-          {/* ЗАМЕТКА — ПОСЛЕДНЯЯ СТРОКА ТОЙ ЖЕ КАРТОЧКИ: объект один — карточка
-              одна. Отдельная карточка с капсом и подложкой-в-подложке была
-              единственной такой на листе (дизайн-ревью 2026-09-06). Поле
-              открыто сразу, без кнопки «добавить» (владелец 2026-09-04). */}
-          <FieldRow
-            label="Заметка"
-            hideLabel
-            value={draft.note}
-            placeholder="Как войти, код"
-            stacked
-            separated
-            multiline
-            live
-            onSave={(v) => setDraft((d) => ({ ...d, note: v }))}
-          />
+        </RowGroup>
+
+        {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
+            «мне нравились старые заметки»). Тот же вид, что у заметок на
+            странице записи; поле открыто сразу, без кнопки «добавить»
+            (владелец 2026-09-04). */}
+        <RowGroup title="Заметка">
+          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+            <TextInput
+              value={draft.note}
+              onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
+              multiline
+              accessibilityLabel="Заметка об объекте"
+              placeholder="Как войти, код, кто встречает…"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              maxFontSizeMultiplier={1.2}
+              style={{
+                minHeight: 44,
+                maxHeight: 120,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: t.radius.input,
+                backgroundColor: t.fill,
+                fontSize: 15,
+                color: t.ink,
+              }}
+            />
+          </View>
         </RowGroup>
 
       </ScrollView>
