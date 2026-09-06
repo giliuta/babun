@@ -1,7 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import {
+  CURRENCIES,
   exactMoneyAmountToCents,
   formatEURExact,
+  getDefaultCurrency,
+  isMoneyCurrency,
+  moneyName,
+  setDefaultCurrency,
   formatMoneyForInput,
   formatSignedMoneyExact,
   MAX_MONEY_CENTS,
@@ -99,5 +104,29 @@ describe("money input value", () => {
     expect(formatMoneyForInput(1234.5)).toBe("1234,50");
     expect(formatMoneyForInput(0)).toBe("0,00");
     expect(formatMoneyForInput(-12.3)).toBe("−12,30");
+  });
+});
+
+describe("валюта тенанта — реестр", () => {
+  it("formatEUR* и money() без кода печатают валюту из реестра", () => {
+    setDefaultCurrency("USD");
+    expect(getDefaultCurrency()).toBe("USD");
+    expect(money(1234.5)).toBe("$1\u00a0234,50");
+    expect(formatEURExact(7)).toBe("$7");
+    setDefaultCurrency("eur");
+    expect(formatEURExact(7)).toBe("€7");
+  });
+  it("незнакомый или пустой код — евро", () => {
+    setDefaultCurrency("PLN");
+    expect(getDefaultCurrency()).toBe("EUR");
+    setDefaultCurrency(null);
+    expect(getDefaultCurrency()).toBe("EUR");
+  });
+  it("словарь: пять кодов, имена по-русски", () => {
+    expect(CURRENCIES.map((c) => c.code)).toEqual(["EUR", "USD", "GBP", "UAH", "RUB"]);
+    expect(isMoneyCurrency("gbp")).toBe(true);
+    expect(isMoneyCurrency("PLN")).toBe(false);
+    expect(moneyName("UAH")).toBe("Гривна");
+    expect(moneyName("PLN")).toBe("PLN");
   });
 });

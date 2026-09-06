@@ -34,6 +34,42 @@ const CURRENCY_SYMBOL: Record<MoneyCurrency, string> = {
   GBP: "£",
 };
 
+/** Словарь для выбора валюты в настройках: код, символ, имя по-русски. */
+export const CURRENCIES: readonly { code: MoneyCurrency; symbol: string; name: string }[] = [
+  { code: "EUR", symbol: "€", name: "Евро" },
+  { code: "USD", symbol: "$", name: "Доллар США" },
+  { code: "GBP", symbol: "£", name: "Фунт стерлингов" },
+  { code: "UAH", symbol: "₴", name: "Гривна" },
+  { code: "RUB", symbol: "₽", name: "Рубль" },
+];
+
+export function isMoneyCurrency(code: string | null | undefined): code is MoneyCurrency {
+  return CURRENCIES.some((c) => c.code === (code ?? "").trim().toUpperCase());
+}
+
+/** «Евро», «Доллар США»; незнакомый код — как есть. */
+export function moneyName(code: string | null | undefined): string {
+  const upper = (code ?? "").trim().toUpperCase();
+  return CURRENCIES.find((c) => c.code === upper)?.name ?? (upper || "Евро");
+}
+
+// ВАЛЮТА ТЕНАНТА — ОДНА НА ПРОЦЕСС (2026-09-06). Владелец: «выбираю валюту в
+// настройках календаря, и она меняет финансы и так далее». `formatEUR` и
+// `formatEURExact` зовутся из ~180 мест, и у большинства нет доступа к тенанту
+// (чистые модули, SMS, экспорт). Поэтому валюта живёт реестром: `useTenant`
+// выставляет её при каждой загрузке профиля, а все форматтеры без явного кода
+// читают отсюда. До первой загрузки — евро, как и было.
+let currentCurrency: MoneyCurrency = DEFAULT_CURRENCY;
+
+export function setDefaultCurrency(code: string | null | undefined): void {
+  const upper = (code ?? "").trim().toUpperCase();
+  currentCurrency = isMoneyCurrency(upper) ? (upper as MoneyCurrency) : DEFAULT_CURRENCY;
+}
+
+export function getDefaultCurrency(): MoneyCurrency {
+  return currentCurrency;
+}
+
 /**
  * Символ валюты тенанта — для префикса суммы в полях ввода и заголовках.
  *
@@ -68,7 +104,7 @@ export function moneySign(amount: number): -1 | 0 | 1 {
 /** Сумма в валюте тенанта: «€1 234,50», «₴0», «−$310». */
 export function money(
   value: number,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string = currentCurrency,
 ): string {
   if (!Number.isFinite(value)) return "—";
   const symbol = moneySymbol(currency);
@@ -87,7 +123,7 @@ export function money(
  *  («Пришло за август»). Ноль движением не является и знака не получает. */
 export function formatSignedMoneyExact(
   amount: number,
-  currency: string = DEFAULT_CURRENCY,
+  currency: string = currentCurrency,
 ): string {
   if (!Number.isFinite(amount)) return "—";
   const sign = moneySign(amount);
@@ -185,14 +221,15 @@ export function exactMoneyAmountToCents(
   return cents;
 }
 
-/** Округлённая до целых сумма: сводки и заголовки, где копейки — шум. */
+/** Округлённая до целых сумма: сводки и заголовки, где копейки — шум.
+ *  Имя историческое: печатает ВАЛЮТУ ТЕНАНТА из реестра (`setDefaultCurrency`),
+ *  а не евро. */
 export function formatEUR(amount: number): string {
   return money(Math.round(amount));
 }
 
-/** Сумма с копейками: остатки, лента операций, инвойсы. Историческое имя —
- *  зовётся из 59 мест и переезжает на `money(value, currency)` по мере того,
- *  как до экрана доходит валюта тенанта. */
+/** Сумма с копейками: остатки, лента операций, инвойсы. Имя историческое —
+ *  валюта берётся из реестра тенанта, см. `formatEUR`. */
 export function formatEURExact(amount: number): string {
   return money(amount);
 }
