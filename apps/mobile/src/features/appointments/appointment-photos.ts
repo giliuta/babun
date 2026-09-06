@@ -9,8 +9,14 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
-export const MAX_APPOINTMENT_PHOTOS = 5;
+// 20 файлов на запись (было 5). Владелец 2026-09-06: «фото-видео фиксация» —
+// пять снимков «до/после» на объект с тремя кондиционерами не хватало; число
+// уточнить с владельцем.
+export const MAX_APPOINTMENT_PHOTOS = 20;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+// Видео — до 50 МБ (лимит бакета, миграция 20260906210000): короткий ролик с
+// телефона; длинные пусть жмут камерой.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const PHOTO_URL_STALE_TIME = 50 * 60 * 1000;
 
 export interface PickedAppointmentPhoto {
@@ -18,6 +24,8 @@ export interface PickedAppointmentPhoto {
   fileName?: string | null;
   mimeType?: string;
   fileSize?: number;
+  /** Что сказал пикер: у видео с iPhone mimeType бывает пустым. */
+  mediaType?: "image" | "video";
 }
 
 export interface UploadAppointmentPhotosInput {
@@ -45,9 +53,15 @@ function key(tenantId: string | null, appointmentId: string) {
 
 function inferMime(asset: PickedAppointmentPhoto): string {
   const reported = asset.mimeType?.toLowerCase();
+  const source = `${asset.fileName ?? ""} ${asset.uri}`.toLowerCase();
+  // Видео: mp4 и quicktime (.mov с iPhone) — ровно то, что принимает бакет.
+  if (reported === "video/mp4" || /\.(mp4|m4v)(\?|$)/.test(source)) return "video/mp4";
+  if (reported === "video/quicktime" || /\.mov(\?|$)/.test(source)) return "video/quicktime";
+  if (reported?.startsWith("video/") || (asset.mediaType === "video" && !reported)) {
+    throw new Error("Формат видео не поддерживается. Нужен MP4 или MOV.");
+  }
   if (reported === "image/jpeg" || reported === "image/jpg") return "image/jpeg";
   if (reported === "image/png" || reported === "image/webp") return reported;
-  const source = `${asset.fileName ?? ""} ${asset.uri}`.toLowerCase();
   if (source.includes(".png")) return "image/png";
   if (source.includes(".webp")) return "image/webp";
   if (reported?.startsWith("image/")) {
@@ -56,22 +70,32 @@ function inferMime(asset: PickedAppointmentPhoto): string {
   return "image/jpeg";
 }
 
-function defaultName(asset: PickedAppointmentPhoto, mime: string): string {
-  if (asset.fileName) return asset.fileName;
-  const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
-  return `photo.${ext}`;
+function isVideoMime(mime: string): boolean {
+  return mime.startsWith("video/");
 }
 
-async function assetBytes(asset: PickedAppointmentPhoto): Promise<ArrayBuffer> {
-  if ((asset.fileSize ?? 0) > MAX_PHOTO_BYTES) {
-    throw new Error("Фото больше 5 МБ. Выберите изображение меньшего размера.");
-  }
+function defaultName(asset: PickedAppointmentPhoto, mime: string): string {
+  if (asset.fileName) return asset.fileName;
+  const ext =
+    mime === "video/mp4" ? "mp4"
+    : mime === "video/quicktime" ? "mov"
+    : mime === "image/png" ? "png"
+    : mime === "image/webp" ? "webp"
+    : "jpg";
+  return `${isVideoMime(mime) ? "video" : "photo"}.${ext}`;
+}
+
+async function assetBytes(asset: PickedAppointmentPhoto, mime: string): Promise<ArrayBuffer> {
+  const video = isVideoMime(mime);
+  const limit = video ? MAX_VIDEO_BYTES : MAX_PHOTO_BYTES;
+  const tooBig = video
+    ? "Видео больше 50 МБ. Снимите короче или сожмите."
+    : "Фото больше 5 МБ. Выберите изображение меньшего размера.";
+  if ((asset.fileSize ?? 0) > limit) throw new Error(tooBig);
   const response = await fetch(asset.uri);
   const bytes = await response.arrayBuffer();
-  if (bytes.byteLength === 0) throw new Error("Не удалось прочитать выбранное фото.");
-  if (bytes.byteLength > MAX_PHOTO_BYTES) {
-    throw new Error("Фото больше 5 МБ. Выберите изображение меньшего размера.");
-  }
+  if (bytes.byteLength === 0) throw new Error(video ? "Не удалось прочитать видео." : "Не удалось прочитать выбранное фото.");
+  if (bytes.byteLength > limit) throw new Error(tooBig);
   return bytes;
 }
 
@@ -107,13 +131,13 @@ export function useUploadAppointmentPhotos(appointmentId: string) {
         );
       }
       const remaining = MAX_APPOINTMENT_PHOTOS - current.length;
-      if (remaining <= 0) throw new Error("На заявку уже добавлено 5 фото.");
+      if (remaining <= 0) throw new Error(`На записи уже ${MAX_APPOINTMENT_PHOTOS} файлов.`);
       const selected = assets.slice(0, remaining);
       const uploaded: AppointmentPhotoRecord[] = [];
       for (let index = 0; index < selected.length; index += 1) {
         const asset = selected[index];
         const mime = inferMime(asset);
-        const bytes = await assetBytes(asset);
+        const bytes = await assetBytes(asset, mime);
         try {
           uploaded.push(await uploadPhoto(supabase, {
             tenantId,

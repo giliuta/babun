@@ -1,20 +1,18 @@
 import { useMemo, useState } from "react";
-import { Image, Linking, Pressable, Text, View } from "react-native";
+import { Linking, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { Camera, FileText, Images, ScanLine, Trash2 } from "lucide-react-native";
+import { Camera, FileText, Images, ScanLine } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
-  formatBytes,
   getSignedUrl,
   useClientAttachments,
   useDeleteAttachment,
@@ -22,7 +20,8 @@ import {
   type ClientAttachment,
 } from "@/features/clients/card-attachments";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
-import { docTitle } from "./appointment-files";
+import { isVideoPath } from "./appointment-files";
+import { DocTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
 import { pagesToPdf, scanDocumentPages, scannerAvailable } from "./document-scanner";
 import {
   MAX_APPOINTMENT_PHOTOS,
@@ -91,7 +90,13 @@ export function AppointmentFilesBlock({
     upload.mutate(input, {
       onSuccess: (items) => {
         haptics.success();
-        toast(items.length === 1 ? "Фото добавлено" : `Добавлено фото: ${items.length}`, "success");
+        const videos = items.filter((item) => isVideoPath(item.storage_path)).length;
+        toast(
+          items.length === 1
+            ? videos ? "Видео добавлено" : "Фото добавлено"
+            : `Добавлено файлов: ${items.length}`,
+          "success",
+        );
       },
       onError: (error) => {
         haptics.error();
@@ -113,6 +118,7 @@ export function AppointmentFilesBlock({
         fileName: asset.fileName,
         mimeType: asset.mimeType,
         fileSize: asset.fileSize,
+        mediaType: asset.type === "video" ? "video" : "image",
       })),
       kind: "other",
       locationId,
@@ -137,7 +143,12 @@ export function AppointmentFilesBlock({
         notify("Нет доступа к камере", "Разрешите камеру: Настройки → Babun → Камера.");
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.75 });
+      // Камера снимает и фото, и видео (владелец: «фото-видео фиксация»).
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images", "videos"],
+        quality: 0.75,
+        videoMaxDuration: 60,
+      });
       if (!result.canceled) uploadAssets(result.assets);
     } catch (error) {
       notify("Не удалось открыть камеру", error instanceof Error ? error.message : "Попробуйте ещё раз.");
@@ -153,7 +164,7 @@ export function AppointmentFilesBlock({
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
+        mediaTypes: ["images", "videos"],
         allowsMultipleSelection: true,
         selectionLimit: remaining,
         quality: 0.75,
@@ -198,7 +209,7 @@ export function AppointmentFilesBlock({
   /** Удержание фото — только удаление, лист и есть подтверждение. */
   const holdPhoto = async (photo: AppointmentPhotoRecord) => {
     haptics.tap();
-    const index = await chooseOption("Фото", [{ label: "Удалить", destructive: true }]);
+    const index = await chooseOption(isVideoPath(photo.storage_path) ? "Видео" : "Фото", [{ label: "Удалить", destructive: true }]);
     if (index !== 0) return;
     remove.mutate(photo, {
       onSuccess: () => toast("Фото удалено", "info"),
@@ -206,9 +217,17 @@ export function AppointmentFilesBlock({
     });
   };
 
+  const openUrl = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Не удалось открыть файл", "error");
+    }
+  };
+
   const openDoc = async (doc: ClientAttachment) => {
     try {
-      await Linking.openURL(await getSignedUrl(doc));
+      await openUrl(await getSignedUrl(doc));
     } catch (error) {
       toast(error instanceof Error ? error.message : "Не удалось открыть документ", "error");
     }
@@ -240,7 +259,7 @@ export function AppointmentFilesBlock({
   };
 
   const menu: PickerSheetItem[] = [
-    { id: "camera", label: "Сделать фото", icon: Camera, color: t.accent, onPress: () => void shoot() },
+    { id: "camera", label: "Снять фото или видео", icon: Camera, color: t.accent, onPress: () => void shoot() },
     { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pick() },
     ...(clientId
       ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickDocument() }]
@@ -251,40 +270,6 @@ export function AppointmentFilesBlock({
       : []),
   ];
 
-  /** Корзинка в углу плитки: та же, что у старого блока, только меньше. */
-  const trash = (label: string, onPress: () => void, disabled: boolean) => (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({
-        position: "absolute",
-        top: 4,
-        right: 4,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: `${t.ink}8c`,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <Trash2 color="#ffffff" size={12} strokeWidth={2.4} />
-    </Pressable>
-  );
-
-  const tile = {
-    width: tileWidth,
-    height: tileWidth,
-    borderRadius: t.radius.card,
-    borderCurve: "continuous" as const,
-    overflow: "hidden" as const,
-    backgroundColor: t.fill,
-  };
-
   return (
     <>
       <SectionCard title="Файлы">
@@ -293,54 +278,29 @@ export function AppointmentFilesBlock({
             className="flex-row flex-wrap"
             style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: TILE_GAP }}
           >
-            {photos.map((photo) => {
-              const deleting = remove.isPending && remove.variables?.id === photo.id;
-              return (
-                <Pressable
-                  key={photo.id}
-                  onPress={() => setViewer(photo)}
-                  onLongPress={() => void holdPhoto(photo)}
-                  disabled={deleting}
-                  accessibilityRole="imagebutton"
-                  accessibilityLabel="Фото записи"
-                  style={({ pressed }) => [tile, { opacity: pressed || deleting ? 0.6 : 1 }]}
-                >
-                  <Image source={{ uri: photo.url }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
-                  {trash("Удалить фото", () => void holdPhoto(photo), deleting)}
-                  {deleting ? (
-                    <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-                      <Spinner size={20} label="Удаляем фото" />
-                    </View>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-            {docs.map((doc) => (
-              <Pressable
-                key={doc.id}
-                onPress={() => void openDoc(doc)}
-                onLongPress={() => void holdDoc(doc)}
-                accessibilityRole="button"
-                accessibilityLabel={`Документ ${doc.filename}`}
-                style={({ pressed }) => [tile, { opacity: pressed ? 0.6 : 1, padding: 10, justifyContent: "space-between" }]}
-              >
-                <FileText color={t.accent} size={22} strokeWidth={2} />
-                {trash(`Удалить документ ${doc.filename}`, () => void holdDoc(doc), removeDoc.isPending)}
-                <View>
-                  <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
-                    {docTitle(doc.filename)}
-                  </Text>
-                  <Text numberOfLines={1} style={{ fontSize: 11, color: t.sub, marginTop: 2 }}>
-                    {formatBytes(doc.size_bytes)}
-                  </Text>
-                </View>
-              </Pressable>
+            {photos.map((photo) => (
+              <PhotoTile
+                key={photo.id}
+                photo={photo}
+                size={tileWidth}
+                deleting={remove.isPending && remove.variables?.id === photo.id}
+                // Видео — системным проигрывателем по подписанной ссылке:
+                // кадра-превью и встроенного плеера пока нет (STORY-070).
+                onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
+                onDelete={() => void holdPhoto(photo)}
+              />
             ))}
-            {busy ? (
-              <View style={[tile, { alignItems: "center", justifyContent: "center" }]}>
-                <Spinner size={22} label="Загрузка" />
-              </View>
-            ) : null}
+            {docs.map((doc) => (
+              <DocTile
+                key={doc.id}
+                doc={doc}
+                size={tileWidth}
+                deleting={removeDoc.isPending}
+                onOpen={() => void openDoc(doc)}
+                onDelete={() => void holdDoc(doc)}
+              />
+            ))}
+            {busy ? <UploadingTile size={tileWidth} /> : null}
           </View>
         ) : null}
         {canUpload ? (

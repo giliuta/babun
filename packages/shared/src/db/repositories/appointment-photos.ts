@@ -115,6 +115,10 @@ function pickExt(contentType: string | undefined, fileName?: string): string {
     if (contentType === "image/jpeg") return "jpg";
     if (contentType === "image/png") return "png";
     if (contentType === "image/webp") return "webp";
+    // Видео (STORY-070, этап 2б): тот же бакет и та же таблица, тип виден по
+    // расширению пути.
+    if (contentType === "video/mp4") return "mp4";
+    if (contentType === "video/quicktime") return "mov";
   }
   if (fileName) {
     const m = /\.([a-z0-9]+)$/i.exec(fileName);
