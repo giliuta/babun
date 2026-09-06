@@ -41,7 +41,6 @@ import {
 } from "./payment-draft";
 import { useCancelPayment, useRecordPayment } from "./payment-mutations";
 import {
-  AmountRow,
   InvoiceRow,
   ModeIconButton,
   NoAccountsNotice,
@@ -303,6 +302,22 @@ export function PaymentBlock({
         caption={caption?.text}
         captionColor={captionColor}
         captionTone={caption && caption.tone !== "neutral" ? "money" : "neutral"}
+        amount={
+          showAmountField
+            ? {
+                symbol: moneySymbol(currency),
+                value: partText ?? "",
+                onChangeText: setPartText,
+                hint:
+                  problem === "exceeds"
+                    ? "Больше остатка"
+                    : problem === "empty"
+                      ? `Остаток ${formatEURExact(outstanding / 100)}`
+                      : `Останется ${formatEURExact((outstanding - amountCents) / 100)}`,
+                hintTone: problem === "exceeds" ? "danger" : "neutral",
+              }
+            : undefined
+        }
         right={
           teamId ? (
             <>
@@ -330,21 +345,6 @@ export function PaymentBlock({
           {row.kind === "prepayment" ? "Предоплата" : "Оплачено"} {formatEURExact(row.amount)} · счёт определён автоматически
         </Text>
       ))}
-      {showAmountField ? (
-        <AmountRow
-          symbol={moneySymbol(currency)}
-          value={partText ?? ""}
-          onChangeText={setPartText}
-          hint={
-            problem === "exceeds"
-              ? "Больше остатка"
-              : problem === "empty"
-                ? `Остаток ${formatEURExact(outstanding / 100)}`
-                : `Останется ${formatEURExact((outstanding - amountCents) / 100)}`
-          }
-          hintTone={problem === "exceeds" ? "danger" : "neutral"}
-        />
-      ) : null}
       {!teamId ? null : accountsLoading ? null : accounts.length === 0 ? (
         <NoAccountsNotice canCreate={canCreateAccount} onCreate={() => setCreateOpen(true)} />
       ) : (
