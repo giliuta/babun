@@ -13,6 +13,7 @@ import {
   weekdayIndex,
   weekdayLabels,
 } from "@/features/calendar/week";
+import { countOverdue } from "@/features/calendar/overdue";
 import {
   edgeColor,
   readableTextOnColor,
@@ -177,6 +178,17 @@ export const MonthView = memo(function MonthView({
               // деньгами на них не гасится.
               const hole = count > 0 && key >= todayStr ? holeFor?.(key) ?? null : null;
               const pill = hole ? edgeColor(hole.color) : null;
+              // СКОЛЬКО РАБОТ НЕ ЗАКРЫТО. В сетке просрочка говорит толщиной
+              // канта — каналом СРАВНИТЕЛЬНЫМ: на сплошь просроченной прошлой
+              // неделе все канты одинаково толстые, и «сколько висит» по ним
+              // не прочесть. Это деньги, и ответ обязан жить там, где он не
+              // зависит от плотности, — на уровне дня.
+              //
+              // `nowMinutes` не передаётся СОЗНАТЕЛЬНО: чип месяца отвечает за
+              // долги ПРОШЛОГО, сегодняшнюю работу ещё закрывают, и мигать на
+              // ней с высоты месяца нечего. Плюс месяц не перерисовывается раз
+              // в минуту — три страницы по 42 клетки.
+              const unclosed = countOverdue(byDay.get(key) ?? [], todayStr, null);
               return (
                 <Pressable
                   key={key}
@@ -186,7 +198,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${unclosed > 0 ? `, не закрыто: ${unclosed}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
@@ -234,6 +246,30 @@ export const MonthView = memo(function MonthView({
                         />
                       ) : null}
                     </View>
+                    <View className="flex-row items-center" style={{ gap: 3 }}>
+                    {/* НЕ ЗАКРЫТО — ПОЛЫЙ ЧИП, а записи — залитый или тихий.
+                        Разводит их не только цвет: заливка ↔ обводка плюс
+                        порядок (полый всегда слева) — нецветовые каналы. Чип
+                        записей не двигается: он остаётся крайним справа, и для
+                        дней без долгов вид клетки не меняется ни на пиксель. */}
+                    {unclosed > 0 ? (
+                      <View
+                        className="rounded-full px-1.5"
+                        style={{ borderWidth: 1, borderColor: t.warning }}
+                      >
+                        <Text
+                          maxFontSizeMultiplier={1.3}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "700",
+                            lineHeight: 14,
+                            color: t.warning,
+                          }}
+                        >
+                          {unclosed}
+                        </Text>
+                      </View>
+                    ) : null}
                     {/* ЧИП СЧЁТЧИКА ГОВОРИТ ТРЕМЯ ГРОМКОСТЯМИ, а нового
                         элемента в клетке не заводится. Пусто — чипа нет;
                         обычный день — тихая цифра чернилами без подложки; день
@@ -266,6 +302,7 @@ export const MonthView = memo(function MonthView({
                         </Text>
                       </View>
                     ) : null}
+                    </View>
                   </View>
                   {totals?.hasAny ? (
                     <View className="mt-0.5 w-full">
