@@ -57,7 +57,6 @@ import { LoadingBar } from "@/components/ui/LoadingBar";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
-import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
 import { buildDebtPaidPatch } from "@/features/appointments/payment";
 import {
@@ -512,7 +511,6 @@ export default function CalendarTab() {
   const rememberViewRef = useRef(rememberView);
   rememberViewRef.current = rememberView;
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
   // once data appears).
@@ -523,7 +521,6 @@ export default function CalendarTab() {
     getStorage().set(ONBOARDING_DISMISSED_KEY, true);
     setOnboardingDismissed(true);
   };
-  const [editing, setEditing] = useState<Appointment | null>(null);
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
   // «Перенести» из контекстного меню — запись в шите переноса (null = закрыт).
   const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(
@@ -688,11 +685,10 @@ export default function CalendarTab() {
               : params.from?.startsWith("account:")
                 ? `/accounts/${params.from.slice("account:".length)}`
                 : null;
+        // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
+        // старый лист правки здесь больше не открывается.
         if (isCrew || !canMutateAppointment(target)) setCrewViewing(target);
-        else {
-          setEditing(target);
-          setSheetOpen(true);
-        }
+        else router.push(`/book?appointmentId=${target.id}` as Href);
       } else {
         toast("Заявка не найдена или больше недоступна");
       }
@@ -1512,9 +1508,8 @@ export default function CalendarTab() {
     const copy = { ...duplicateAppointment(apt), id: randomUuid() };
     createAppt.mutate(copy, {
       onSuccess: () => {
-        // Открываем копию на правку сразу — web parity (page.tsx:1786).
-        setEditing(copy);
-        setSheetOpen(true);
+        // Открываем копию на правку сразу — на странице записи.
+        router.push(`/book?appointmentId=${copy.id}` as Href);
       },
       onError: () => toast("Не удалось скопировать", "error"),
     });
@@ -2566,18 +2561,8 @@ export default function CalendarTab() {
         onClose={() => setMiniCalOpen(false)}
       />
 
-      {/* AppointmentSheet теперь только РЕДАКТИРУЕТ существующую запись —
-          создание живёт на отдельном экране /book (тап по слоту, агенда,
-          «Записать» с карточки). Поэтому нет ни defaults, ни пре-попапа. */}
-      <AppointmentSheet
-        visible={sheetOpen && !isCrew && !calendarLoading && !calendarError}
-        onClose={() => {
-          setSheetOpen(false);
-          returnHome();
-        }}
-        appointment={editing}
-      />
-
+      {/* Старого листа правки здесь больше нет (STORY-064, 2026-09-06): владелец
+          и диспетчер правят запись на странице /book; лист бригады остался. */}
       <CrewAppointmentSheet
         appointment={calendarLoading || calendarError ? null : crewViewing}
         onClose={() => {

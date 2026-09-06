@@ -28,7 +28,7 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
-import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
+import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { humanDay } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
@@ -322,13 +322,14 @@ export function CrewAppointmentSheet({
             </Text>
           </SectionCard>
 
-          <AppointmentPhotos
-            appointmentId={appointment.id}
-            locationId={appointment.location_id}
-            consentGiven={appointment.consent_given}
-            canUpload={status !== "cancelled"}
-            canDelete={false}
-          />
+          <AppointmentFilesBlock
+                appointmentId={appointment.id}
+                clientId={null}
+                locationId={appointment.location_id}
+                canUpload={status !== "cancelled"}
+                pending={[]}
+                onPendingChange={() => {}}
+              />
 
           <SectionCard title="Заметка команды" padded>
             <TextInput

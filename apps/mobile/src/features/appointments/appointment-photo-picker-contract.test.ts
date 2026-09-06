@@ -5,7 +5,7 @@ import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const appointmentSource = readFileSync(
-  resolve(dirname(fileURLToPath(import.meta.url)), "AppointmentPhotos.tsx"),
+  resolve(dirname(fileURLToPath(import.meta.url)), "use-file-pickers.ts"),
   "utf8",
 );
 const clientSource = readFileSync(
