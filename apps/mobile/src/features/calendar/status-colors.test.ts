@@ -5,6 +5,8 @@ import {
   contrastRatio,
   deepen,
   fillOver,
+  tintOver,
+  GRID_WORST,
 } from "@/components/ui/color-contrast";
 import { PRESET_COLORS } from "@babun/shared/common/utils/colors";
 
@@ -55,6 +57,16 @@ describe("цвета блока записи", () => {
       }
       assert.equal(blockEdge(c, "cancelled"), CANCELLED_EDGE);
     }
+  });
+
+  test("кант отменённой держит 3 : 1 — пунктир убирает половину чернил", () => {
+    // Разомкнутый кант — единственный канал отмены на узком блоке, где нет ни
+    // имени, ни углового знака. Штрих съедает примерно половину чернил, значит
+    // оставшаяся половина обязана держать порог и к сетке, и к своей заливке.
+    assert.ok(contrastRatio(CANCELLED_EDGE, GRID_WORST) >= 3);
+    assert.ok(
+      contrastRatio(CANCELLED_EDGE, tintOver("#0b1220", GRID_WORST, 0.0784)) >= 3,
+    );
   });
 
   test("точка чужой метки видна на заливке любого цвета записи", () => {

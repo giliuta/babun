@@ -8,7 +8,10 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { edgeColor } from "@/components/ui/color-contrast";
-import { CANCELLED_EDGE } from "@/features/calendar/status-colors";
+import {
+  CANCELLED_BORDER,
+  CANCELLED_EDGE,
+} from "@/features/calendar/status-colors";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -309,6 +312,10 @@ function RecordDot({
         backgroundColor: cancelled ? `${t.ink}14` : `${hue}2e`,
         borderWidth: 1,
         borderColor: cancelled ? CANCELLED_EDGE : edgeColor(hue),
+        // Тот же закон, что в сетке: разомкнутый контур — работы не будет.
+        // Периметр кружка ≈ 88pt при шаге штриха 6pt — около четырнадцати
+        // штрихов, читается уверенно.
+        borderStyle: cancelled ? CANCELLED_BORDER : "solid",
       }}
     />
   );

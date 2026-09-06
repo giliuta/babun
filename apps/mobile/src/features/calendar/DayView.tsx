@@ -24,6 +24,7 @@ import { useThemeColors } from "@/theme/colors";
 import { layoutDay, type PlacedAppt } from "@/features/calendar/layout";
 import {
   blockEdge,
+  CANCELLED_BORDER,
   CANCELLED_EDGE,
   useBlockColors,
   type BlockColors,
@@ -252,6 +253,12 @@ function Block({
   // зелёный знак, а не плотность заливки.
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status);
+  // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
+  // рисуется ВСЕГДА: текста нет при textW < 24 (наложение в Неделе даёт 11),
+  // углового знака нет при ширине < 40. Цвет канта занят категорией, толщина —
+  // просрочкой; свободен ровно стиль линии. Зачёркивание имени, которым отмена
+  // говорила до сих пор, живёт только там, где имя влезает.
+  const edgeStyle = cancelled ? CANCELLED_BORDER : "solid";
 
   const commit = (translationY: number) => {
     if (!onReschedule) {
@@ -435,6 +442,7 @@ function Block({
               // пары даже при дальтонизме.
               borderWidth: bw,
               borderColor: edge,
+              borderStyle: edgeStyle,
               // Кант входит в бокс-модель RN: без компенсации толстый кант
               // просрочки съедал бы строку текста.
               paddingHorizontal: pad - (bw - 1),
@@ -1106,11 +1114,15 @@ export function DayColumn({
               left: idx * (ALL_DAY_W + ALL_DAY_GAP),
               width: ALL_DAY_W,
               borderRadius: 4,
-              // Полоска «весь день» — тот же кант, в полную силу: при 0.85
-              // она спорила с блоками, а отмену несёт нейтральный цвет, а не
-              // прозрачность.
+              // ОТМЕНУ ЗДЕСЬ НЕСЁТ ПУСТОТА, А НЕ ОТТЕНОК И НЕ ПУНКТИР. Тот же
+              // закон «работы не будет», выраженный по размеру: при ширине 8pt
+              // и просвете 6pt две штриховые линии рядом дают сор, а «пусто
+              // против налито» на полосе высотой в колонку читается чисто.
+              // Кант входит в бокс-модель RN — полоска остаётся ровно 8pt.
               backgroundColor:
-                a.status === "cancelled" ? CANCELLED_EDGE : c.edge,
+                a.status === "cancelled" ? "transparent" : c.edge,
+              borderWidth: a.status === "cancelled" ? 1 : 0,
+              borderColor: CANCELLED_EDGE,
             }}
           />
         );
