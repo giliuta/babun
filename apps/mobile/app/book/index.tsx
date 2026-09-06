@@ -13,21 +13,23 @@ import {
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import {
   useFocusEffect,
   useLocalSearchParams,
   useNavigation,
   useRouter,
+  type Href,
 } from "expo-router";
 import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
-  ChevronRight,
   MapPin,
   MoreHorizontal,
   UserRound,
+  Users,
+  Tag,
+  X,
   Briefcase,
 } from "lucide-react-native";
 import type {
@@ -77,8 +79,6 @@ import { tintOver } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
-import { Chip } from "@/components/ui/Chip";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { AddRow } from "@/components/ui/AddRow";
 import { ColorDot } from "@/components/ui/picker-fields";
 import { useToast } from "@/components/ui/Toast";
@@ -125,6 +125,9 @@ import {
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { ChooseRow } from "@/components/ui/ChooseRow";
+import { FieldRow } from "@/components/ui/card-rows";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { uploadPendingFiles, type PendingFile } from "@/features/appointments/pending-files";
 import { useTenantId } from "@/lib/tenant";
 import { useQueryClient } from "@tanstack/react-query";
@@ -160,7 +163,6 @@ import {
   addMinutesHM,
   buildServices,
   formatYMD,
-  humanDay,
   minutesBetweenHM,
   parseYMD,
   parseMoneyInput,
@@ -197,26 +199,6 @@ function TextInput({
 // он выводится из состояния записи и говорит ЦВЕТОМ — «не хватает данных»,
 // «готова», «денег нет», «закрыто» (решение владельца о светофоре). Само
 // поле `status` живёт как жило: его пишет продукт, а не человек.
-
-const REPEAT_OPTIONS: readonly {
-  value: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">;
-  label: string;
-}[] = [
-  { value: "none", label: "Не повторять" },
-  { value: "daily", label: "Ежедневно" },
-  { value: "weekdays", label: "По будням" },
-  { value: "weekly", label: "Каждую неделю" },
-  { value: "biweekly", label: "Каждые 2 недели" },
-  { value: "monthly", label: "Каждый месяц" },
-  { value: "yearly", label: "Каждый год" },
-];
-
-const EVENT_REMINDER_OPTIONS = [
-  { value: null, label: "Нет" },
-  { value: 15, label: "За 15 мин" },
-  { value: 60, label: "За 1 час" },
-  { value: 1440, label: "За день" },
-] as const;
 
 // ИСТОЧНИК ЗАЯВКИ УБРАН ИЗ ЭТОГО ЭКРАНА (владелец 2026-08-30: «убрать
 // совсем»). Он жил внутри «Дополнительно».
@@ -498,6 +480,9 @@ export default function BookScreen() {
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [teamSheetOpen, setTeamSheetOpen] = useState(false);
+  // Событие: команда («Личное» + команды) и тип — листами выбора.
+  const [eventTeamSheetOpen, setEventTeamSheetOpen] = useState(false);
+  const [eventTypeSheetOpen, setEventTypeSheetOpen] = useState(false);
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
@@ -808,7 +793,9 @@ export default function BookScreen() {
       setEventTitle(editing.comment ?? "");
       setEventColor(editing.color_override ?? null);
       setEventNotes(editing.event_notes ?? "");
-      setEventAddress(editing.address ?? "");
+      // Одна строка «адрес или ссылка»: у прежнего события с одним пином
+      // поле показывает пин, а не пустоту.
+      setEventAddress(editing.address || editing.event_url || "");
       setEventUrl(editing.event_url ?? "");
       setEventReminderOffset(
         editing.event_push_enabled
@@ -1194,6 +1181,9 @@ export default function BookScreen() {
     const loc = clientLocations.find((l) => l.id === id);
     if (loc) {
       setAddress(locationAddressForBooking(loc));
+      // У события объект клиента — подсказка адресу: строка заполняется
+      // адресом объекта, но остаётся адресом ЭТОГО события.
+      if (kind === "event") setEventAddress(locationAddressForBooking(loc));
     }
     haptics.tap();
   };
@@ -1324,53 +1314,59 @@ export default function BookScreen() {
     setOverrides((p) => ({ ...p, [id]: { ...p[id], qty } }));
   };
 
+  // СОБЫТИЕ НАЗЫВАЕТСЯ ТИПОМ (владелец 2026-09-06: «первое — команда, второе
+  // — метка [тип события], третье — время, четвёртое — клиент, пятое —
+  // объект; услуги не ставим; внизу заметка, и всё»; на вопрос о названии —
+  // «убрать»). Прежнее событие с вольным названием его не теряет: пока тип не
+  // выбран, в плитке стоит это название, и оно же уезжает в патч.
+  const eventType = eventTypeId
+    ? eventTypes.find((candidate) => candidate.id === eventTypeId) ?? null
+    : null;
+  const eventTypeLabel = eventType?.label ?? (eventTitle.trim() || null);
+  // Прежнее событие, чьё название совпадает с типом, узнаёт свой тип само.
+  useEffect(() => {
+    if (kind !== "event" || eventTypeId || !eventTitle.trim()) return;
+    const match = eventTypes.find(
+      (candidate) =>
+        candidate.label.trim().toLowerCase() === eventTitle.trim().toLowerCase(),
+    );
+    if (match) setEventTypeId(match.id);
+  }, [kind, eventTypes, eventTitle, eventTypeId]);
+
   const applyEventType = (id: string) => {
     const preset = eventTypes.find((candidate) => candidate.id === id);
     if (!preset) return;
     setEventTypeId(preset.id);
-    // Не затираем уже введённое название — подставляем метку типа только в
-    // пустое поле (раньше тап по типу после ввода терял текст).
-    if (!eventTitle.trim()) setEventTitle(preset.label);
+    setEventTitle(preset.label);
     setEventColor(preset.color);
-    setAllDay(preset.allDay);
-    if (preset.allDay) {
-      setTimeStart("00:00");
-      setTimeEnd("23:59");
-    } else {
-      const start = allDay || timeStart === "00:00" ? "10:00" : timeStart;
-      setTimeStart(start);
-      setTimeEnd(addMinutesHM(start, preset.defaultDuration));
-    }
+    // «Весь день», повтор и напоминание с формы сняты (владелец 2026-09-06:
+    // «убрать совсем»): длительность типа ставит конец от того же начала.
+    const start = timeStart === "00:00" ? "10:00" : timeStart;
+    setTimeStart(start);
+    setTimeEnd(addMinutesHM(start, preset.defaultDuration));
     setDurationTouched(true);
     haptics.tap();
-  };
-
-  const repeatUntil = repeat.kind === "none" ? undefined : repeat.until;
-  const setRepeatKind = (
-    nextKind: Exclude<PersonalEventRepeat["kind"], "custom_weekdays">,
-  ) => {
-    if (nextKind === "none") {
-      setRepeat({ kind: "none" });
-      return;
-    }
-    setRepeat({
-      kind: nextKind,
-      ...(repeatUntil ? { until: repeatUntil } : {}),
-    } as PersonalEventRepeat);
   };
 
   // ── сохранение (тот же контракт, что старый шит) ──
   const buildPatch = (): Partial<Appointment> => {
     if (kind === "event") {
+      // Одна строка «адрес или ссылка»: ссылка — в event_url, текст — в
+      // address. Адрес события — его собственный, не объект из базы
+      // (владелец 2026-09-06: «просто адрес, фиксируется только на событии»).
+      const place = eventAddress.trim();
+      const placeIsUrl = isLikelyUrl(place);
       return {
         kind: "event",
         date,
         time_start: timeStart,
         time_end: timeEnd,
+        // «Весь день», повтор и напоминание с формы сняты; у прежних событий
+        // их значения не трогаем — они уезжают как загрузились.
         event_all_day: allDay,
         event_repeat: repeat,
         event_notes: eventNotes.trim(),
-        event_url: eventUrl.trim(),
+        event_url: placeIsUrl ? place : eventUrl.trim(),
         event_push_enabled: eventReminderOffset != null,
         event_push_offsets:
           eventReminderOffset == null ? [] : [eventReminderOffset],
@@ -1380,11 +1376,13 @@ export default function BookScreen() {
         // creator through RLS. A hidden stale work-master must not leak in.
         master_id: null,
         status: "scheduled",
-        comment: eventTitle.trim(),
-        address: eventAddress.trim(),
+        comment: (eventType?.label ?? eventTitle.trim()) || "Событие",
+        address: placeIsUrl ? "" : place,
         color_override: eventColor,
-        client_id: null,
-        location_id: null,
+        // Клиент и объект у события необязательны и независимы; объект без
+        // клиента не бывает — без клиента остаётся только адрес.
+        client_id: clientId,
+        location_id: clientId ? locationId : null,
         service_ids: [],
         services: [],
         total_amount: 0,
@@ -1558,7 +1556,7 @@ export default function BookScreen() {
     !failedReference &&
     !referencesPending &&
     (kind === "event"
-      ? eventTitle.trim().length > 0 && (teamId == null || hasValidTeam)
+      ? teamId == null || hasValidTeam
       : clientId != null &&
         hasValidTeam &&
         workSelectionValid);
@@ -1572,9 +1570,7 @@ export default function BookScreen() {
     : timeEnd <= timeStart
       ? "Время окончания должно быть позже начала"
     : kind === "event"
-      ? eventTitle.trim().length === 0
-        ? "Введите название события"
-        : "Выберите доступный календарь"
+      ? "Выберите доступный календарь"
       : // Порядок = естественный порядок заполнения: сначала называем самое
         // раннее незаполненное (клиент → команда → услуги), и только потом
         // ошибки оплаты — иначе предоплата-ошибка маскирует «Выберите клиента».
@@ -2595,230 +2591,162 @@ export default function BookScreen() {
           ) : (
             /* ── Событие ── */
             <>
-              <SectionCard title="Название">
-                <TextInput
-                  keyboardAppearance="light"
-                  accessibilityLabel="Название события"
-                  value={eventTitle}
-                  onChangeText={setEventTitle}
-                  placeholder="Обед, встреча, перерыв…"
-                  placeholderTextColor={t.placeholder}
-                  autoFocus
-                  className="min-h-11 px-4 pb-3 pt-1"
-                  style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-                />
-              </SectionCard>
+              {/* ТА ЖЕ ЛЕСТНИЦА, ЧТО У ЗАПИСИ (владелец 2026-09-06): команда и
+                  тип одной строкой, время, клиент, объект, заметка. Без услуг
+                  и оплаты, без названия («событие называется типом»), без
+                  «весь день», повтора и напоминания («убрать совсем»).
+                  «Личное» — событие без команды, как и было. */}
+              <TeamLabelRow
+                teamName={teamId == null ? "Личное" : team?.name ?? "Команда"}
+                teamColor={teamId == null ? t.accent : team?.color ?? t.accent}
+                label={eventTypeLabel}
+                labelColor={eventType?.color ?? null}
+                labelIcon={Tag}
+                labelPlaceholder="Тип"
+                showLabel
+                onEditTeam={() => {
+                  setEventTeamSheetOpen(true);
+                  haptics.tap();
+                }}
+                onEditLabel={() => {
+                  setEventTypeSheetOpen(true);
+                  haptics.tap();
+                }}
+              />
 
-              {eventTypes.length > 0 ? (
-                <SectionCard title="Тип события">
-                  <View className="flex-row flex-wrap gap-2 px-4 py-3">
-                    {eventTypes.map((eventType) => (
-                      <Chip
-                        key={eventType.id}
-                        label={eventType.label}
-                        variant="tint"
-                        color={eventType.color}
-                        selected={eventTypeId === eventType.id}
-                        radio
-                        onPress={() => applyEventType(eventType.id)}
-                      />
-                    ))}
-                  </View>
-                </SectionCard>
-              ) : null}
+              <WhenRow
+                date={date}
+                timeStart={timeStart}
+                timeEnd={timeEnd}
+                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
+                warning={null}
+                onPress={() => {
+                  setWhenOpen(true);
+                  haptics.tap();
+                }}
+              />
 
-              <SectionCard title="Когда">
-                <Pressable
-                  onPress={() => {
-                    setWhenOpen(true);
-                    haptics.tap();
-                  }}
-                  className="flex-row items-center px-4 py-3"
-                  style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Дата и время: ${humanDay(date)}, ${
-                    allDay ? "весь день" : `${timeStart}–${timeEnd}`
-                  }`}
-                  accessibilityHint="Открывает выбор даты и времени"
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                      {humanDay(date)}
-                      {allDay ? "" : ` · ${timeStart}`}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: t.sub, marginTop: 2 }}>
-                      {allDay ? "весь день" : `до ${timeEnd}`}
-                    </Text>
-                  </View>
-                  <ChevronRight color={t.chevron} size={ICON.sm} />
-                </Pressable>
-                <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                  <SwitchRow
-                    label="Весь день"
-                    value={allDay}
-                    onChange={(on) => {
-                      setAllDay(on);
-                      if (on) {
-                        setTimeStart("00:00");
-                        setTimeEnd("23:59");
-                      } else {
-                        const start = timeStart === "00:00" ? "10:00" : timeStart;
-                        setTimeStart(start);
-                        setTimeEnd(addMinutesHM(start, 60));
-                      }
-                      setDurationTouched(true);
-                      haptics.tap();
-                    }}
-                  />
-                </View>
-              </SectionCard>
-
-              <SectionCard>
-                <View className="flex-row flex-wrap gap-2 px-4 py-3">
-                  <Chip
-                    label="Личное"
-                    variant="outline"
-                    color={t.accent}
-                    selected={teamId == null}
-                    radio
-                    onPress={() => {
-                      selectTeam(null);
-                      haptics.tap();
-                    }}
-                  />
-                  {teams.map((tm) => (
-                    <Chip
-                      key={tm.id}
-                      label={tm.name}
-                      variant="outline"
-                      color={tm.color ?? t.accent}
-                      selected={teamId === tm.id}
+              {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
+                  у выбранного есть «убрать» — лист выбора пустого варианта не
+                  предлагает. */}
+              <SectionCard title="Клиент">
+                {client ? (
+                  <View className="flex-row items-center">
+                    <Pressable
+                      className="flex-1 flex-row items-center px-4 py-2.5"
                       onPress={() => {
-                        selectTeam(tm.id);
+                        setClientPickerOpen(true);
+                        haptics.tap();
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}`}
+                      accessibilityHint="Открывает выбор клиента"
+                    >
+                      <View className="flex-1">
+                        <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
+                          {client.full_name || "Без имени"}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            color: client.phone ? t.sub : t.placeholder,
+                            marginTop: 2,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {client.phone ?? "без телефона"}
+                        </Text>
+                      </View>
+                    </Pressable>
+                    {client.phone ? (
+                      <View className="mr-2 self-center">
+                        <PhoneChannelButton
+                          number={client.phone}
+                          telegramUsername={client.telegram_username}
+                          label={client.full_name || undefined}
+                        />
+                      </View>
+                    ) : null}
+                    <Pressable
+                      onPress={openClientCard}
+                      className="mr-2 items-center justify-center self-center rounded-full"
+                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
+                    >
+                      <MoreHorizontal color={t.body} size={ICON.sm} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => {
+                        setClientId(null);
+                        setLocationId(null);
+                        haptics.tap();
+                      }}
+                      className="mr-4 items-center justify-center self-center rounded-full"
+                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Убрать клиента"
+                    >
+                      <X color={t.body} size={ICON.sm} />
+                    </Pressable>
+                  </View>
+                ) : (
+                  <ChooseRow
+                    icon={UserRound}
+                    label="Выбрать клиента"
+                    hint="Открывает поиск по имени или телефону"
+                    onPress={() => setClientPickerOpen(true)}
+                  />
+                )}
+              </SectionCard>
+
+              {/* ОБЪЕКТ — АДРЕС СОБЫТИЯ (владелец 2026-09-06: «просто адрес,
+                  не из базы; фиксируется только на этом событии»). Объект
+                  клиента — подсказка: строка ниже подставляет его адрес. */}
+              <SectionCard title="Объект">
+                <FieldRow
+                  label="Адрес"
+                  hideLabel
+                  value={eventAddress}
+                  placeholder="Адрес или ссылка на карту"
+                  stacked
+                  multiline
+                  live
+                  onSave={setEventAddress}
+                />
+                {client && clientLocations.length > 0 ? (
+                  <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
+                    <ChooseRow
+                      icon={MapPin}
+                      label="Объект клиента"
+                      hint="Подставляет адрес объекта клиента"
+                      onPress={() => {
+                        setObjectPicker(true);
                         haptics.tap();
                       }}
                     />
-                  ))}
-                </View>
+                  </View>
+                ) : null}
               </SectionCard>
 
-              <SectionCard title="Подробности">
+              {/* ЗАМЕТКА — БОЛЬШАЯ, ПОСЛЕДНЕЙ. */}
+              <SectionCard title="Заметка">
                 <TextInput
                   keyboardAppearance="light"
-                  accessibilityLabel="Заметка к событию"
+                  accessibilityLabel="Заметка события"
                   value={eventNotes}
                   onChangeText={setEventNotes}
                   placeholder="Заметка"
                   placeholderTextColor={t.placeholder}
                   multiline
                   className="px-4 py-3"
-                  style={{ minHeight: 56, fontSize: 15, color: t.ink }}
+                  style={{
+                    minHeight: 120,
+                    fontSize: 15,
+                    color: t.ink,
+                    textAlignVertical: "top",
+                  }}
                 />
-                <View style={{ height: 1, marginLeft: 16, backgroundColor: t.separator }} />
-                <TextInput
-                  keyboardAppearance="light"
-                  accessibilityLabel="Место или адрес события"
-                  value={eventAddress}
-                  onChangeText={setEventAddress}
-                  placeholder="Место или адрес"
-                  placeholderTextColor={t.placeholder}
-                  className="px-4 py-3"
-                  style={{ minHeight: 48, fontSize: 15, color: t.ink }}
-                />
-                <View style={{ height: 1, marginLeft: 16, backgroundColor: t.separator }} />
-                <TextInput
-                  keyboardAppearance="light"
-                  accessibilityLabel="Ссылка события"
-                  value={eventUrl}
-                  onChangeText={setEventUrl}
-                  placeholder="Ссылка"
-                  placeholderTextColor={t.placeholder}
-                  keyboardType="url"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  className="px-4 py-3"
-                  style={{ minHeight: 48, fontSize: 15, color: t.ink }}
-                />
-              </SectionCard>
-
-              <SectionCard title="Напоминание">
-                <View className="flex-row flex-wrap gap-2 px-4 py-3">
-                  {EVENT_REMINDER_OPTIONS.map((option) => (
-                    <Chip
-                      key={option.label}
-                      label={option.label}
-                      variant="tint"
-                      selected={eventReminderOffset === option.value}
-                      radio
-                      onPress={() => {
-                        setEventReminderOffset(option.value);
-                        haptics.tap();
-                      }}
-                    />
-                  ))}
-                </View>
-                {repeat.kind !== "none" && eventReminderOffset != null ? (
-                  <Text style={{ paddingHorizontal: 16, paddingBottom: 12, fontSize: 13, color: t.sub }}>
-                    Напоминание будет повторяться вместе с событием
-                  </Text>
-                ) : null}
-              </SectionCard>
-
-              {/* Цвет события задаётся тем же swatch в шапке, что и у записи —
-                  один контрол на оба режима, живая подсветка экрана. */}
-              <SectionCard title="Повтор">
-                <View className="flex-row flex-wrap gap-2 px-4 py-3">
-                  {REPEAT_OPTIONS.map((option) => (
-                    <Chip
-                      key={option.value}
-                      label={option.label}
-                      variant="tint"
-                      selected={repeat.kind === option.value}
-                      radio
-                      onPress={() => {
-                        setRepeatKind(option.value);
-                        haptics.tap();
-                      }}
-                    />
-                  ))}
-                </View>
-                {repeat.kind !== "none" ? (
-                  <View
-                    className="flex-row items-center justify-between px-4 py-2"
-                    style={{ borderTopWidth: 1, borderTopColor: t.separator }}
-                  >
-                    <View className="flex-1 pr-3">
-                      <Text style={{ fontSize: 15, color: t.ink }}>Завершить повтор</Text>
-                      <Text style={{ fontSize: 13, color: t.sub, marginTop: 2 }}>
-                        {repeatUntil ? humanDay(repeatUntil) : "Без даты окончания"}
-                      </Text>
-                    </View>
-                    {repeatUntil ? (
-                      <Pressable
-                        onPress={() => setRepeat({ ...repeat, until: undefined })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Убрать дату окончания повтора"
-                        style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: t.accent }}>
-                          Без даты
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                    <DateTimeInput
-                      themeVariant="light"
-                      value={parseYMD(repeatUntil ?? date)}
-                      minimumDate={parseYMD(date)}
-                      mode="date"
-                      display="compact"
-                      onChange={(_, picked) => {
-                        if (picked) {
-                          setRepeat({ ...repeat, until: formatYMD(picked) });
-                        }
-                      }}
-                    />
-                  </View>
-                ) : null}
               </SectionCard>
             </>
           )}
@@ -2880,7 +2808,8 @@ export default function BookScreen() {
         timeStart={timeStart}
         timeEnd={timeEnd}
         allDay={allDay}
-        allowAllDay={kind === "event"}
+        // «Весь день» снят с формы события (владелец 2026-09-06).
+        allowAllDay={false}
         // Шаг минут здесь больше не передают: пятиминутка — закон продукта
         // (`MINUTE_STEP`, DS §5), и попап знает его сам. Почему это НЕ
         // «Длительность записи» тенанта — записано в шапке попапа.
@@ -2889,7 +2818,7 @@ export default function BookScreen() {
           setDate(next.date);
           setTimeStart(next.timeStart);
           setTimeEnd(next.timeEnd);
-          setAllDay(kind === "event" && next.allDay);
+          setAllDay(false);
           // Конец перестаёт расти под услуги, только если его ДЛИТЕЛЬНОСТЬ
           // задали руками. Смена даты или начала — не про длительность:
           // попап сдвигает конец вместе с началом, и добавленная после
@@ -3034,6 +2963,55 @@ export default function BookScreen() {
           setCity(next);
         }}
         onClose={() => setLabelSheetOpen(false)}
+      />
+      {/* Команда события: «Личное» + команды; тип события — словарь Кабинета
+          (шестерёнка ведёт на его страницу). Лист закрывается тапом сам. */}
+      <PickerSheet
+        visible={eventTeamSheetOpen}
+        title="Команда"
+        items={[
+          {
+            id: "personal",
+            label: "Личное",
+            icon: UserRound,
+            color: t.accent,
+            onPress: () => {
+              selectTeam(null);
+              setEventTeamSheetOpen(false);
+            },
+          },
+          ...teams.map((tm) => ({
+            id: tm.id,
+            label: tm.name,
+            icon: Users,
+            color: tm.color ?? t.accent,
+            onPress: () => {
+              selectTeam(tm.id);
+              setEventTeamSheetOpen(false);
+            },
+          })),
+        ]}
+        onClose={() => setEventTeamSheetOpen(false)}
+      />
+      <PickerSheet
+        visible={eventTypeSheetOpen}
+        title="Тип события"
+        items={eventTypes.map((preset) => ({
+          id: preset.id,
+          label: preset.label,
+          icon: Tag,
+          color: preset.color,
+          onPress: () => {
+            applyEventType(preset.id);
+            setEventTypeSheetOpen(false);
+          },
+        }))}
+        onSettings={() => {
+          setEventTypeSheetOpen(false);
+          router.push("/cabinet/event-types" as Href);
+        }}
+        settingsLabel="Настроить типы событий"
+        onClose={() => setEventTypeSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}

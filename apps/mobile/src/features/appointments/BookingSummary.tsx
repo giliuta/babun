@@ -123,6 +123,8 @@ export function TeamLabelRow({
   labelColor,
   labelFromDay,
   showLabel,
+  labelIcon,
+  labelPlaceholder,
   onEditTeam,
   onEditLabel,
 }: {
@@ -136,6 +138,9 @@ export function TeamLabelRow({
   labelFromDay?: boolean;
   /** Бизнес не пользуется метками — тогда команда занимает всю строку. */
   showLabel: boolean;
+  /** У события в этой плитке стоит ТИП (значок и слово другие). */
+  labelIcon?: LucideIcon;
+  labelPlaceholder?: string;
   onEditTeam: () => void;
   onEditLabel: () => void;
 }) {
@@ -159,18 +164,18 @@ export function TeamLabelRow({
       />
       {showLabel ? (
       <IdentityCard
-        icon={MapPin}
+        icon={labelIcon ?? MapPin}
         color={label ? (labelColor ?? t.accent) : t.faint}
-        title={label ?? "Метка"}
+        title={label ?? labelPlaceholder ?? "Метка"}
         muted={!label}
         quiet={!!label && !!labelFromDay}
         onPress={onEditLabel}
         accessibilityLabel={
           label
-            ? `Метка: ${label}${labelFromDay ? ", как у дня" : ""}`
-            : "Метка не выбрана"
+            ? `${labelPlaceholder ?? "Метка"}: ${label}${labelFromDay ? ", как у дня" : ""}`
+            : `${labelPlaceholder ?? "Метка"} не выбран${labelPlaceholder ? "" : "а"}`
         }
-        accessibilityHint="Открывает выбор метки"
+        accessibilityHint={`Открывает выбор: ${(labelPlaceholder ?? "метка").toLowerCase()}`}
       />
       ) : null}
     </View>
