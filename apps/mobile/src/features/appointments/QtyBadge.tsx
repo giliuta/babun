@@ -18,14 +18,21 @@ export function QtyBadge({
   qty,
   unit,
   onPress,
+  tone = "stamp",
 }: {
   qty: number;
   unit?: string | null;
   /** Тап убавляет. Без него бейдж — просто подпись (форма записи). */
   onPress?: () => void;
+  /** `stamp` — чернильный оттиск выбранного (список услуг). `quiet` —
+   *  подложка `fill` и чернильная цифра: на странице записи бейдж лишь
+   *  называет число, и чёрное пятно там было громче итога (аудит
+   *  2026-09-06, владелец согласился со всеми волнами). */
+  tone?: "stamp" | "quiet";
 }) {
   const t = useThemeColors();
   const label = unit ? `${qty} ${unit}` : `×${qty}`;
+  const quiet = tone === "quiet";
   const body = (
     <View
       className="items-center justify-center rounded-[10px]"
@@ -33,7 +40,7 @@ export function QtyBadge({
         minWidth: 40,
         height: 28,
         paddingHorizontal: 8,
-        backgroundColor: t.ink,
+        backgroundColor: quiet ? t.fill : t.ink,
       }}
     >
       <Text
@@ -41,7 +48,7 @@ export function QtyBadge({
         style={{
           fontSize: 14,
           fontWeight: "700",
-          color: t.onAccent,
+          color: quiet ? t.ink : t.onAccent,
           fontVariant: ["tabular-nums"],
         }}
       >

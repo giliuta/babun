@@ -2016,20 +2016,22 @@ export default function BookScreen() {
                   есть кнопка «Цвет» молчала именно тогда, когда цвет было
                   интереснее всего увидеть: у записи без клиента он серый, у
                   выезда без объекта — оранжевый, и это и есть ответ. */}
+              {/* БЕЗ ПОДПИСИ «Цвет» (аудит 2026-09-06): единственная подписанная
+                  кнопка шапки во всём продукте спорила с «Отмена» и заголовком.
+                  Образец крупнее — 28pt, — чтобы читаться как кнопка; имя для
+                  VoiceOver — в accessibilityLabel. */}
               <View
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 28,
+                  height: 28,
                   borderRadius: t.radius.card,
+                  borderCurve: "continuous",
                   backgroundColor: identityC,
                   borderWidth: 2,
                   borderColor: t.surface,
                   boxShadow: `0px 1px 4px ${identityC}66`,
                 }}
               />
-              <Text style={{ fontSize: 11, fontWeight: "600", color: t.faint, marginTop: 1 }}>
-                Цвет
-              </Text>
             </Pressable>
           </View>
         </View>
@@ -2440,6 +2442,7 @@ export default function BookScreen() {
                           <QtyBadge
                             qty={line.quantity}
                             unit={line.unit ?? svc?.unit ?? null}
+                            tone="quiet"
                           />
                           <Text
                             style={{

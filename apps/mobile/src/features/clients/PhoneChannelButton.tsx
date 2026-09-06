@@ -77,7 +77,10 @@ export default function PhoneChannelButton({
     <>
       <RowActionButton
         icon={Phone}
-        color={t.success}
+        // Акцент, как у маршрута и всех действий в хвосте строки (аудит
+        // 2026-09-06): зелёный звонок рядом с синим маршрутом читался как
+        // два разных предмета.
+        color={t.accent}
         label={label ? `Позвонить · ${label}` : "Позвонить"}
         hint="Удерживайте, чтобы выбрать способ связи"
         onPress={() => void Linking.openURL(call.url)}
