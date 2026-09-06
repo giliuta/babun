@@ -766,6 +766,19 @@ export default function CalendarTab() {
   );
   const clientName = (a: Appointment) =>
     a.client_id ? nameById.get(a.client_id) ?? "" : "";
+  // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
+  // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
+  // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
+  // клиентский адрес для него — единственная правда.
+  const addressFor = useCallback(
+    (a: Appointment) => {
+      const own = (a.address ?? "").trim();
+      if (own) return own;
+      const client = a.client_id ? clients.find((c) => c.id === a.client_id) : null;
+      return (client?.address ?? "").trim() || null;
+    },
+    [clients],
+  );
 
   // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;
   // `services` выше остаётся про живой каталог (онбординг спрашивает им,
@@ -1984,6 +1997,7 @@ export default function CalendarTab() {
   const gridProps = {
     clientName,
     serviceLabel,
+    addressFor,
     teamColorFor,
     onEdit: openEdit,
     onReschedule: canManageBookings ? reschedule : undefined,

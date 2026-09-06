@@ -172,6 +172,7 @@ function Block({
   offLabelColor,
   label,
   service,
+  address,
   lineH,
   overdue = false,
   onEdit,
@@ -196,6 +197,9 @@ function Block({
   lineH: number;
   label: string;
   service: string | null;
+  /** Куда ехать: снимок адреса записи, иначе адрес клиента. null — адреса
+   *  нет, и тогда оранжевый блок «нет объекта» называет дыру пустотой. */
+  address: string | null;
   /** Запланирована, а время уже прошло — незакрытая работа: полоска и
    *  время предупреждающим цветом (недополученные деньги). */
   overdue?: boolean;
@@ -249,9 +253,26 @@ function Block({
   const textW = width - 2 * pad - 2 - markReserve;
   // Строка помещается, если под неё есть 9pt обвязки и её высота.
   const lines = Math.min(3, Math.floor((cardH - 9) / lineH) + 1);
+  // ЧЕСТНЫЙ СЧЁТЧИК СТРОК. Обвязка карточки постоянна и равна 6pt: кант сверху
+  // и снизу плюс вертикальный паддинг (при bw 1 это 2+4, при bw 2 — 4+2).
+  // Значит n строк ФИЗИЧЕСКИ помещаются при cardH ≥ 6 + n·lineH. Формула
+  // `lines` выше оптимистична — пускает строку на 3pt раньше; историческое
+  // поведение первых трёх ступеней не трогаем, но НОВУЮ пускаем только по
+  // честному порогу: обрезанный кантом адрес хуже отсутствующего.
+  const rowsFit = Math.floor((cardH - 6) / lineH);
   // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
   // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
   // зелёный знак, а не плотность заливки.
+  // ЧЕТВЁРТАЯ СТУПЕНЬ — АДРЕС. «Кто» отвечает имя, «что» — услуга, «когда» —
+  // рельс и высота блока; «куда» не сказано нигде, ни в одном виде календаря,
+  // а у выездной бригады это второй вопрос после времени. Гейт ширины тот же,
+  // что у услуги: в Неделе (textW ≈ 36) и в Дне с тремя наложениями решает
+  // арифметика, а не флаг вида. Когда услуги нет, адрес занимает её строку, а
+  // не требует лишней высоты на пустом месте.
+  const showService = lines >= 3 && textW >= 120 && !!service;
+  const showAddress =
+    !!address && textW >= 120 && rowsFit >= (showService ? 4 : 3);
+
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status);
   // РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Кант — единственный слой блока, который
@@ -396,7 +417,9 @@ function Block({
       <Animated.View
         accessible
         accessibilityRole="button"
-        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}`}
+        // Адрес читается ВСЕГДА: озвучке недоступны ни ширина блока, ни его
+        // высота, и гейты вёрстки для неё не существуют.
+        accessibilityLabel={`${apt.time_start}–${apt.time_end}, ${label}, ${STATUS_LABELS[apt.status]}${overdue ? ", не закрыта" : ""}${address ? `, ${address}` : ""}`}
         accessibilityActions={
           onReschedule
             ? [
@@ -455,10 +478,12 @@ function Block({
             cardStyle,
           ]}
         >
-          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга. Имя первым, потому
+          {/* ЛЕСТНИЦА СОДЕРЖИМОГО: имя → время → услуга → адрес. Имя первым, потому
               что время уже названо рельсом слева и позицией блока, а имя не
               выводится ниоткуда. Кегль 13 — типографический пол продукта;
-              девятка, которой неделя набиралась раньше, была нечитаема. */}
+              девятка, которой неделя набиралась раньше, была нечитаема.
+              Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
+              при щипке глаз не должен терять якорь. */}
           {lines >= 1 && textW >= 24 ? (
             <Text
               style={{
@@ -491,13 +516,31 @@ function Block({
               {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
             </Text>
           ) : null}
-          {lines >= 3 && textW >= 120 && service ? (
+          {showService ? (
             <Text
               style={{ color: t.body, fontSize: 13, lineHeight: lineH }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
               {service}
+            </Text>
+          ) : null}
+          {showAddress ? (
+            <Text
+              style={{
+                color: t.body,
+                fontSize: 13,
+                lineHeight: lineH,
+                // Точка чужой метки лежит абсолютно в правом нижнем углу.
+                // Последняя строка обязана её обойти, иначе на карточке ровно
+                // в четыре строки хвост адреса заезжает под точку.
+                marginRight: offLabelColor ? 12 : 0,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              maxFontSizeMultiplier={1.3}
+            >
+              {address}
             </Text>
           ) : null}
 
@@ -677,6 +720,7 @@ export function DayColumn({
   appointments,
   clientName,
   serviceLabel,
+  addressFor,
   teamColorFor,
   offLabelColorFor,
   isToday,
@@ -703,6 +747,9 @@ export function DayColumn({
   appointments: Appointment[];
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
+  /** Куда ехать — четвёртая строка блока: снимок адреса записи, иначе адрес
+   *  клиента. null — не показывать. */
+  addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет метки САМОЙ записи, когда она отличается от метки дня
    *  (`resolveOffDayLabel`): блок получает окантовку этим цветом. Владелец
@@ -1170,6 +1217,7 @@ export function DayColumn({
               offLabelColor={offLabelColorFor ? offLabelColorFor(p.apt) : null}
               label={clientName(p.apt) || p.apt.comment || "Запись"}
               service={serviceLabel ? serviceLabel(p.apt) : p.apt.comment || null}
+              address={addressFor ? addressFor(p.apt) : null}
               lineH={lineH}
               onMenu={onMenu}
               overdue={isOverdue(p.apt, todayYmd, isToday ? nowMinutes : null)}
@@ -1245,6 +1293,7 @@ export function DayView({
   todayYmd,
   clientName,
   serviceLabel,
+  addressFor,
   teamColorFor,
   offLabelColorFor,
   onEdit,
@@ -1278,6 +1327,9 @@ export function DayView({
   todayYmd: string;
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
+  /** Куда ехать — четвёртая строка блока: снимок адреса записи, иначе адрес
+   *  клиента. null — не показывать. */
+  addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет чужой метки записи — окантовка блока (см. DayColumn). */
   offLabelColorFor?: (a: Appointment) => string | null;
@@ -1377,6 +1429,7 @@ export function DayView({
                 appointments={apptsFor(d)}
                 clientName={clientName}
                 serviceLabel={serviceLabel}
+                addressFor={addressFor}
                 teamColorFor={teamColorFor}
                 offLabelColorFor={offLabelColorFor}
                 isToday={d === todayYmd}

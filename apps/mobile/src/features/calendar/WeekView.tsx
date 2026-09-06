@@ -39,6 +39,7 @@ export function WeekView({
   apptsFor,
   clientName,
   serviceLabel,
+  addressFor,
   teamColorFor,
   offLabelColorFor,
   today,
@@ -72,6 +73,9 @@ export function WeekView({
   apptsFor: (dateYmd: string) => Appointment[];
   clientName: (a: Appointment) => string;
   serviceLabel?: (a: Appointment) => string | null;
+  /** Куда ехать — четвёртая строка блока: снимок адреса записи, иначе адрес
+   *  клиента. null — не показывать. */
+  addressFor?: (a: Appointment) => string | null;
   teamColorFor?: (a: Appointment) => string | null;
   /** Цвет чужой метки записи — окантовка блока (см. DayColumn). */
   offLabelColorFor?: (a: Appointment) => string | null;
@@ -187,6 +191,7 @@ export function WeekView({
                     appointments={apptsFor(ymd)}
                     clientName={clientName}
                     serviceLabel={serviceLabel}
+                    addressFor={addressFor}
                     teamColorFor={teamColorFor}
                     offLabelColorFor={offLabelColorFor}
                     isToday={sameDay(d, today)}
