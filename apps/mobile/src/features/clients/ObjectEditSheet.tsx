@@ -17,10 +17,12 @@ import {
   RowGroup,
 } from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
+import { AddressPartsFields } from "@/features/clients/AddressPartsFields";
 import {
   addressOrLinkPatch,
   objectTarget,
 } from "@/features/clients/object-address";
+import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
 import {
   snapObjectType,
   useFrozenObjectTypes,
@@ -115,6 +117,10 @@ export function ObjectEditSheet({
     setNote(current?.note ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- только на открытии
   }, [visible, locationId]);
+  // Уточнение адреса «как на доставке» — см. useAddressPartsEdit.
+  const address = useAddressPartsEdit(visible, locationId, locations, loc, (id, p) =>
+    void writer.patchLocation(id, p),
+  );
 
   // Свайп «Удалить»: спрашиваем один раз на открытие. Alert живёт в эффекте —
   // из render его звать нельзя (он выполняется и при повторных рендерах).
@@ -146,6 +152,17 @@ export function ObjectEditSheet({
     const value = note.trim();
     if ((loc.note ?? "") === value) return;
     patch({ note: value || undefined });
+  };
+
+  /** Всё, что могло не успеть записаться, — одной точкой. */
+  const commitAll = () => {
+    if (address.partsOpen) {
+      address.commitParts();
+      address.commitPin();
+    } else {
+      commitTarget();
+    }
+    commitNote();
   };
 
   const confirmDelete = () => {
@@ -180,8 +197,7 @@ export function ObjectEditSheet({
     // закрытии, — и спрашиваем, когда окно листа СНЯТО (`onExited`): таймер
     // по анимации здесь не успевал, iOS отвечал «already presenting».
     afterExit.current = () => void ask();
-    commitTarget();
-    commitNote();
+    commitAll();
     onClose();
   };
   confirmDeleteRef.current = confirmDelete;
@@ -197,8 +213,7 @@ export function ObjectEditSheet({
       // адрес пропадал вместе с листом (onEditEnd при размонтировании не
       // приходит, а live-строки коммит на размонтировании пропускает).
       onClose={() => {
-        commitTarget();
-        commitNote();
+        commitAll();
         onClose();
       }}
       onExited={() => {
@@ -225,27 +240,46 @@ export function ObjectEditSheet({
             // же уход со строки, как скрим: без коммита набранный адрес
             // пропадал по дороге в настройки.
             onSettings={() => {
-              commitTarget();
-              commitNote();
+              commitAll();
               onClose();
               router.push(typesHref);
             }}
             onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
           />
-          <FieldRow
-            label="Адрес или ссылка"
-            value={target}
-            placeholder=""
-            stacked
-            separated
-            multiline
-            live
-            onSave={(v) => setTarget(v)}
-            // Разбор «адрес или ссылка» — на уходе со строки: делать это на
-            // каждый символ значило бы подменять набираемый текст.
-            onEditEnd={commitTarget}
-          />
+          {address.partsOpen ? null : (
+            <FieldRow
+              label="Адрес или ссылка"
+              value={target}
+              placeholder=""
+              stacked
+              separated
+              multiline
+              live
+              onSave={(v) => setTarget(v)}
+              // Разбор «адрес или ссылка» — на уходе со строки: делать это на
+              // каждый символ значило бы подменять набираемый текст.
+              onEditEnd={commitTarget}
+            />
+          )}
+          {/* УТОЧНЕНИЕ АДРЕСА (владелец 2026-09-06): поля «как на доставке».
+              Назад не сворачивается: пустые части снимаются на записи сами. */}
+          {address.partsOpen ? null : (
+            <ActionRow label="Уточнить адрес" separated onPress={() => address.openParts(target)} />
+          )}
         </RowGroup>
+
+        {address.partsOpen ? (
+          <RowGroup title="Адрес">
+            <AddressPartsFields
+              parts={address.parts}
+              onChange={address.setParts}
+              onEditEnd={address.commitParts}
+              pin={address.pin}
+              onPinChange={address.setPin}
+              onPinEditEnd={address.commitPin}
+            />
+          </RowGroup>
+        ) : null}
 
         {/* ЗАМЕТКА ОБЪЕКТА — КОМПОЗЕР, как заметки клиента (владелец
             2026-08-06: «этот плюсик „добавить" надо изменить — как у нас уже
@@ -316,8 +350,7 @@ export function ObjectEditSheet({
           onPress={() => {
             // Набранное могло не успеть закоммититься, если кнопку нажали,
             // не уходя с поля.
-            commitTarget();
-            commitNote();
+            commitAll();
             onClose();
           }}
         />

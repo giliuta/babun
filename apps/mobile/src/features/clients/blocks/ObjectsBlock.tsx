@@ -6,7 +6,7 @@ import { RowGroup } from "@/components/ui/card-rows";
 import { AddRow } from "@/components/ui/AddRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
-import { objectTarget } from "@/features/clients/object-address";
+import { objectTarget, routeAddress } from "@/features/clients/object-address";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
@@ -186,7 +186,9 @@ export function ObjectRow({
           карты приезжает снизу (chooseOption → канонический лист). */}
       <ObjectRouteButton
         mapUrl={loc.mapUrl}
-        address={loc.address}
+        // Объект с частями едет по геокодируемой части адреса: подъезд, этаж и
+        // квартира карте только мешают.
+        address={routeAddress(loc)}
         label={loc.label}
       />
 

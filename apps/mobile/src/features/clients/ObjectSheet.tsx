@@ -9,16 +9,22 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { Client } from "@babun/shared/local/clients";
+import type { AddressParts, Client } from "@babun/shared/local/clients";
+import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
+  ActionRow,
   ChoiceRow,
   FieldRow,
   RowGroup,
 } from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
+import { AddressPartsFields } from "@/features/clients/AddressPartsFields";
 import {
   addressOrLinkPatch,
+  addressPartsPatch,
+  hasAddressPlace,
+  partsFromLine,
 } from "@/features/clients/object-address";
 import {
   defaultObjectType,
@@ -67,10 +73,14 @@ interface Draft {
   /** Сырой ввод «адрес или ссылка». Разбор на address/mapUrl — при добавлении:
    *  разбирать на каждый символ значило бы подменять набираемый текст. */
   target: string;
+  /** Уточнение адреса (2026-09-06): части и пин вместо `target`, пока открыто. */
+  parts: AddressParts;
+  partsOpen: boolean;
+  pin: string;
   note: string;
 }
 
-const EMPTY_DRAFT: Draft = { label: "", target: "", note: "" };
+const EMPTY_DRAFT: Draft = { label: "", target: "", parts: {}, partsOpen: false, pin: "", note: "" };
 
 export function ObjectSheet({
   visible,
@@ -148,7 +158,14 @@ export function ObjectSheet({
 
   // Объект существует, когда есть адрес ИЛИ ссылка: метка одна ничего не
   // значит, а по адресу или пину команда доедет.
-  const ready = draft.target.trim().length > 0;
+  const ready = draft.partsOpen
+    ? hasAddressPlace(draft.parts)
+    : draft.target.trim().length > 0;
+
+  const openParts = () => {
+    haptics.tap();
+    setDraft((d) => ({ ...d, partsOpen: true, ...partsFromLine(d.parts, d.target, d.pin) }));
+  };
 
   const add = async (): Promise<boolean> => {
     // Засов СИНХРОННЫЙ: между тапом и появлением saving есть кадр, в котором
@@ -157,13 +174,18 @@ export function ObjectSheet({
     busy.current = true;
     setSaving(true);
     try {
-      const { address, mapUrl } = addressOrLinkPatch(draft.target);
+      const pinValue = draft.pin.trim();
+      const fromParts = addressPartsPatch(draft.parts);
+      const { address, mapUrl, addressParts } = draft.partsOpen
+        ? { address: fromParts.address ?? "", mapUrl: isLikelyUrl(pinValue) ? pinValue : undefined, addressParts: fromParts.addressParts }
+        : { ...addressOrLinkPatch(draft.target), addressParts: undefined };
       const id = await writer.addLocation({
         label: snapObjectType(type, typeOptions),
         address,
         mapUrl,
+        addressParts,
         note: draft.note.trim() || undefined,
-        });
+      });
       if (!id) {
         // Причину показал useUpdateClient — набранное НЕ выбрасываем.
         haptics.error();
@@ -250,28 +272,45 @@ export function ObjectSheet({
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))
             }
           />
-          <FieldRow
-            label="Адрес или ссылка"
-            value={draft.target}
-            placeholder=""
-            stacked
-            separated
-            multiline
-            // live ОБЯЗАТЕЛЕН: кнопка «Добавить объект» живёт в футере, вне
-            // прокрутки, и фокус у поля НЕ снимает. Без записи на каждый
-            // символ она читала бы пустой черновик — кнопка оставалась серой,
-            // а «Готово» закрывало лист, молча выбросив набранный адрес.
-            // (Регресс 2026-07-27: проп снесло вместе с live у строки типа.)
-            live
-            onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
-            // Кнопки маршрута здесь НЕТ намеренно: (1) ехать некуда — объект
-            // ещё не заведён; (2) выбор карты — это лист поверх листа, а
-            // системный хост выбора живёт в корне и под нашим листом
-            // невидим — тап по кнопке вешал ВСЕ последующие выборы в
-            // приложении (аудит 2026-07-27). Маршрут живёт у заведённого
-            // объекта: в его строке и на его странице.
-          />
+          {draft.partsOpen ? null : (
+            <FieldRow
+              label="Адрес или ссылка"
+              value={draft.target}
+              placeholder=""
+              stacked
+              separated
+              multiline
+              // live ОБЯЗАТЕЛЕН: кнопка «Добавить объект» живёт в футере, вне
+              // прокрутки, и фокус у поля НЕ снимает. Без записи на каждый
+              // символ она читала бы пустой черновик — кнопка оставалась серой,
+              // а «Готово» закрывало лист, молча выбросив набранный адрес.
+              // (Регресс 2026-07-27: проп снесло вместе с live у строки типа.)
+              live
+              onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
+              // Кнопки маршрута здесь НЕТ намеренно: (1) ехать некуда — объект
+              // ещё не заведён; (2) выбор карты — это лист поверх листа, а
+              // системный хост выбора живёт в корне и под нашим листом
+              // невидим — тап по кнопке вешал ВСЕ последующие выборы в
+              // приложении (аудит 2026-07-27). Маршрут живёт у заведённого
+              // объекта: в его строке и на его странице.
+            />
+          )}
+          {/* УТОЧНЕНИЕ АДРЕСА (владелец 2026-09-06) — те же поля, что в правке. */}
+          {draft.partsOpen ? null : (
+            <ActionRow label="Уточнить адрес" separated onPress={openParts} />
+          )}
         </RowGroup>
+
+        {draft.partsOpen ? (
+          <RowGroup title="Адрес">
+            <AddressPartsFields
+              parts={draft.parts}
+              onChange={(parts) => setDraft((d) => ({ ...d, parts }))}
+              pin={draft.pin}
+              onPinChange={(pin) => setDraft((d) => ({ ...d, pin }))}
+            />
+          </RowGroup>
+        ) : null}
 
         {/* ЗАМЕТКА — ПОЛЕ, А НЕ КНОПКА «ДОБАВИТЬ» (владелец 2026-09-04: «при
             добавлении объекта заметка должна показываться, как в клиентах и
