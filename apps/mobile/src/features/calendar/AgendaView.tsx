@@ -542,11 +542,20 @@ function AgendaRow({
           {debt > 0 ? (
             <Text
               className="tabular-nums"
-              // Долг — янтарь, как в финансах и в записи (владелец: «если долг,
-              // то оранжевым»); красный в продукте — только «не вышло».
-              style={{ marginTop: 2, fontSize: 11, color: t.warning }}
+              // ДОЛГ — ТОЛЬКО ПОСЛЕ ВИЗИТА (STORY-067): пока визит впереди,
+              // неоплаченная сумма — просто «к оплате», серым; выполненный или
+              // просроченный без денег — «долг», янтарём, как в финансах и в
+              // записи (владелец: «если долг, то оранжевым»). Красный в
+              // продукте — только «не вышло».
+              style={{
+                marginTop: 2,
+                fontSize: 11,
+                color: apt.status === "completed" || overdue ? t.warning : t.sub,
+              }}
             >
-              {formatEUR(debt)} к оплате
+              {apt.status === "completed" || overdue
+                ? `долг ${formatEUR(debt)}`
+                : `${formatEUR(debt)} к оплате`}
             </Text>
           ) : null}
         </View>
