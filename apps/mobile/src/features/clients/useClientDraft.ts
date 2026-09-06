@@ -19,16 +19,6 @@ import {
   isPhoneTakenError,
 } from "@/features/clients/client-create-errors";
 
-// expo-contacts can be absent in an older dev build. A guarded require keeps
-// every route bootable; the native picker simply stays hidden until rebuild.
-let Contacts: typeof import("expo-contacts") | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Contacts = require("expo-contacts");
-} catch {
-  Contacts = null;
-}
-
 export interface ClientDraftOptions {
   /** Черновик открыт ПОВЕРХ записи (`/book/client`): после «Готово» клиент
    *  отдаётся записи и экран уходит «назад», а не на карточку созданного. */
@@ -88,27 +78,6 @@ export function useClientDraft(
     }));
     setDuplicate(null);
     setCreateError(null);
-  };
-
-  const pickFromContacts = async () => {
-    if (!Contacts) return;
-    try {
-      const contact = await Contacts.presentContactPickerAsync();
-      if (!contact) return;
-      const rawPhone = contact.phoneNumbers?.[0]?.number ?? "";
-      const name =
-        contact.name ||
-        [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-      setDraft((current) => ({
-        ...current,
-        full_name: name || current.full_name,
-        phone: rawPhone ? formatPhoneAsYouType(rawPhone, country) : current.phone,
-      }));
-      setDuplicate(null);
-      setCreateError(null);
-    } catch {
-      // Dismissed or unavailable. Manual input remains available.
-    }
   };
 
   /** Поиск клиента по каноническому номеру. Сеть — авторитет, но при её
@@ -282,7 +251,6 @@ export function useClientDraft(
     canSave,
     isSaving: create.isPending,
     onPhoneChange,
-    onPickContacts: Contacts ? pickFromContacts : undefined,
     save,
   };
 }

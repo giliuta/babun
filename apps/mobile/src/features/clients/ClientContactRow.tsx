@@ -28,7 +28,7 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { clientDebt, todayYMD } from "@/features/clients/filter";
 import { lastVisitTarget } from "@/features/clients/repeat-visit";
 import { useServices } from "@/features/services/queries";
-import { NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
+import { NavRow, RowGroup } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 
 const EMPTY_NOTES: ClientNote[] = [];
@@ -134,19 +134,22 @@ export default function ClientContactRow({
       ...all,
     ]);
 
+  // ЧЕРНОВИК БЕЗ МЁРТВЫХ СТРОК (владелец 2026-09-06: «всё как-то более
+  // компактно»). Пригашенная «Записать» с подписью «можно после сохранения»
+  // занимала карточку и подпись ради тапа, который ничего не делал; записать
+  // человека можно сразу после «Готово» — с той же карточки.
+  if (draft) return null;
+
   return (
     <>
       <RowGroup>
         <NavRow
           label="Записать"
-          dimmed={draft}
           onPress={() =>
-            draft
-              ? undefined
-              : guardedBook(client, {
-                  locationId: primaryLocationId,
-                  teamId: stats?.lastTeamId ?? null,
-                })
+            guardedBook(client, {
+              locationId: primaryLocationId,
+              teamId: stats?.lastTeamId ?? null,
+            })
           }
         />
         {/* КАК В ПРОШЛЫЙ РАЗ — самая частая работа сервиса: тот же адрес,
@@ -230,9 +233,6 @@ export default function ClientContactRow({
         }))}
         onClose={() => setDebtOpen(false)}
       />
-      {/* Не скрываем строку в черновике: владелец требует видеть страницу
-          целиком. Но и мёртвого тапа не оставляем — говорим, когда включится. */}
-      {draft ? <RowCaption text="Записать можно после сохранения." /> : null}
     </>
   );
 }

@@ -86,8 +86,6 @@ export interface ClientHeaderDraft {
   onNameChange: (v: string) => void;
   /** Живой ввод номера: AsYouType + сброс дедупа (владеет композер). */
   onPhoneChange: (v: string) => void;
-  /** Нативный пикер контакта; undefined на билдах без модуля. */
-  onPickContacts?: () => void;
   /** Баннер дедупа / ошибка создания — внутри блока, под номером. */
   footer?: ReactNode;
   /** Куда встаёт курсор при открытии. По умолчанию — в телефон (ключ
@@ -558,13 +556,6 @@ export default function ClientHeader({
           onClose={() => setAddOpen(false)}
         />
 
-        {draft?.onPickContacts ? (
-          <AddRow
-            label="Заполнить из контактов"
-            separated
-            onPress={draft.onPickContacts}
-          />
-        ) : null}
       </RowGroup>
 
       {/* МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-

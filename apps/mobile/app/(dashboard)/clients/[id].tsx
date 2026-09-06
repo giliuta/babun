@@ -145,7 +145,6 @@ export default function ClientDetailScreen() {
     canSave,
     isSaving,
     onPhoneChange: onDraftPhoneChange,
-    onPickContacts,
     save: saveDraft,
   } = useClientDraft(isDraft, {
     forBooking,
@@ -504,7 +503,6 @@ export default function ClientDetailScreen() {
                   valid: e164 !== null,
                   onNameChange: (v) => updateDraft({ full_name: v }),
                   onPhoneChange: onDraftPhoneChange,
-                  onPickContacts,
                   // Телефон уже набран в поиске записи — курсор в имя.
                   focus: prefillPhone && !prefillName ? "name" : "phone",
                   footer: (
