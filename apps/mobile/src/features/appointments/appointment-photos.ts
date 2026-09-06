@@ -111,52 +111,64 @@ export function useAppointmentPhotos(appointmentId: string) {
   });
 }
 
+/** Загрузка партии — и из мутации блока, и после создания записи (файлы
+ *  новой записи ждали её id, как ждала оплата). */
+export async function uploadAppointmentAssets(args: {
+  tenantId: string;
+  appointmentId: string;
+  input: UploadAppointmentPhotosInput;
+}): Promise<AppointmentPhotoRecord[]> {
+  const { tenantId, appointmentId } = args;
+  const { assets, kind, locationId } = args.input;
+  let current: AppointmentPhotoRecord[];
+  try {
+    current = await listPhotosForAppointment(supabase, appointmentId);
+  } catch (error) {
+    throw new RetryableAppointmentPhotoUploadError(
+      error instanceof Error ? error.message : "Не удалось проверить фотографии.",
+      { assets, kind, locationId },
+    );
+  }
+  const remaining = MAX_APPOINTMENT_PHOTOS - current.length;
+  if (remaining <= 0) throw new Error(`На записи уже ${MAX_APPOINTMENT_PHOTOS} файлов.`);
+  const selected = assets.slice(0, remaining);
+  const uploaded: AppointmentPhotoRecord[] = [];
+  for (let index = 0; index < selected.length; index += 1) {
+    const asset = selected[index];
+    const mime = inferMime(asset);
+    const bytes = await assetBytes(asset, mime);
+    try {
+      uploaded.push(await uploadPhoto(supabase, {
+        tenantId,
+        appointmentId,
+        file: bytes,
+        fileName: defaultName(asset, mime),
+        contentType: mime,
+        kind,
+        locationId: locationId ?? null,
+        takenAt: new Date().toISOString(),
+      }));
+    } catch (error) {
+      throw new RetryableAppointmentPhotoUploadError(
+        error instanceof Error ? error.message : "Не удалось загрузить фото.",
+        { assets: selected.slice(index), kind, locationId },
+      );
+    }
+  }
+  return uploaded;
+}
+
+export function photosQueryKey(tenantId: string | null, appointmentId: string) {
+  return key(tenantId, appointmentId);
+}
+
 export function useUploadAppointmentPhotos(appointmentId: string) {
   const tenantId = useTenantId();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      assets,
-      kind,
-      locationId,
-    }: UploadAppointmentPhotosInput): Promise<AppointmentPhotoRecord[]> => {
+    mutationFn: async (input: UploadAppointmentPhotosInput): Promise<AppointmentPhotoRecord[]> => {
       if (!tenantId) throw new Error("Нет активной организации");
-      let current: AppointmentPhotoRecord[];
-      try {
-        current = await listPhotosForAppointment(supabase, appointmentId);
-      } catch (error) {
-        throw new RetryableAppointmentPhotoUploadError(
-          error instanceof Error ? error.message : "Не удалось проверить фотографии.",
-          { assets, kind, locationId },
-        );
-      }
-      const remaining = MAX_APPOINTMENT_PHOTOS - current.length;
-      if (remaining <= 0) throw new Error(`На записи уже ${MAX_APPOINTMENT_PHOTOS} файлов.`);
-      const selected = assets.slice(0, remaining);
-      const uploaded: AppointmentPhotoRecord[] = [];
-      for (let index = 0; index < selected.length; index += 1) {
-        const asset = selected[index];
-        const mime = inferMime(asset);
-        const bytes = await assetBytes(asset, mime);
-        try {
-          uploaded.push(await uploadPhoto(supabase, {
-            tenantId,
-            appointmentId,
-            file: bytes,
-            fileName: defaultName(asset, mime),
-            contentType: mime,
-            kind,
-            locationId: locationId ?? null,
-            takenAt: new Date().toISOString(),
-          }));
-        } catch (error) {
-          throw new RetryableAppointmentPhotoUploadError(
-            error instanceof Error ? error.message : "Не удалось загрузить фото.",
-            { assets: selected.slice(index), kind, locationId },
-          );
-        }
-      }
-      return uploaded;
+      return uploadAppointmentAssets({ tenantId, appointmentId, input });
     },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: key(tenantId, appointmentId) }),

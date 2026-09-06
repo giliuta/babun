@@ -1,17 +1,16 @@
 import { useMemo, useState } from "react";
 import { Linking, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import * as DocumentPicker from "expo-document-picker";
-import * as ImagePicker from "expo-image-picker";
 import { Camera, FileText, Images, Receipt, ScanLine } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
+import { formatEURExact } from "@babun/shared/common/utils/money";
+import { randomUuid } from "@babun/shared/sync";
 import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import {
   getSignedUrl,
@@ -19,54 +18,51 @@ import {
   useDeleteAttachment,
   useUploadAttachments,
   type ClientAttachment,
+  type PickedFile,
 } from "@/features/clients/card-attachments";
-import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
-import { isVideoPath } from "./appointment-files";
-import { DocTile, GeneratedDocTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
-import { formatEURExact } from "@babun/shared/common/utils/money";
 import { formatShortDateRu } from "@/features/clients/format";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useInvoices } from "@/features/invoices/queries";
-import { pagesToPdf, scanDocumentPages, scannerAvailable } from "./document-scanner";
+import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
+import { isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
+import { DocTile, GeneratedDocTile, PendingTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
 import {
   MAX_APPOINTMENT_PHOTOS,
   RetryableAppointmentPhotoUploadError,
   useAppointmentPhotos,
   useDeleteAppointmentPhoto,
   useUploadAppointmentPhotos,
+  type PickedAppointmentPhoto,
   type UploadAppointmentPhotosInput,
 } from "./appointment-photos";
+import { scannerAvailable } from "./document-scanner";
 import { TILE_GAP, useTileWidth } from "./PaymentTiles";
+import { useFilePickers } from "./use-file-pickers";
 
-// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). Плитки 3 в ряд — фото записи и документы
-// (они лежат во вложениях КЛИЕНТА с меткой этой записи — владелец 2026-08-03:
-// «все чеки, все инвойсы — всё в одном месте»), под ними строка «Добавить»,
-// как «Добавить объект» (владелец 2026-09-06: «плюсик справа не нравится —
-// полноценную кнопку, как у объектов внизу»). Подпись — просто «Добавить»:
-// «файлы — это файл, а фотография называется по-другому». Строка открывает
-// лист: сделать фото, выбрать из галереи, выбрать файл; сканер встанет
-// четвёртым с нативным модулем. Строки состояния и счётчиков нет: плитки
-// говорят сами. Удаление — корзинка в углу плитки (владелец: «сейчас я не
-// знаю, как удалить фотографию из файлов»); удержание — тот же лист.
+// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). Плитки 3 в ряд — фото и видео записи,
+// документы (они лежат во вложениях КЛИЕНТА с меткой записи — владелец
+// 2026-08-03: «все чеки, все инвойсы — всё в одном месте»), инвойс и чеки,
+// которые выписал сам продукт (владелец: «оно автоматически закидывается в
+// файлы, и там чётко написано, что это и за что»). Под плитками строка
+// «Добавить», как «Добавить объект»; она открывает лист: снять фото или видео,
+// выбрать из галереи, выбрать файл, отсканировать документ (последнее — где
+// собран нативный сканер). Строки состояния и счётчиков нет: плитки говорят
+// сами. Удаление — корзинка в углу плитки и удержание.
 //
-// ДОКУМЕНТЫ, КОТОРЫЕ ВЫПИСАЛ САМ ПРОДУКТ, — ТОЖЕ ЗДЕСЬ (STORY-070, этап 3;
-// владелец: «выставляю инвойс — оно автоматически под запись закидывается в
-// файлы, не в оплату, и там чётко написано, что это и за что»): инвойс и чеки
-// записи стоят плитками рядом с фото и открываются своими экранами.
-//
-// Камера снимает и грузит СРАЗУ, без разметки «до/после» (владелец
-// 2026-09-06: «„до“ — не надо, это будет немного неправильно; просто чтобы
-// была возможность загрузить, и всё, без лишнего»). Удержание плитки — только
-// «Удалить». Сканер документов и видео — этап 2 истории.
+// У НОВОЙ ЗАПИСИ БЛОК ТОЖЕ ЕСТЬ (владелец 2026-09-06: «тут нет блока файлы»):
+// выбранное ждёт «Создать запись» в очереди страницы и уезжает после неё, как
+// ждёт оплата. Документы и скан требуют клиента — до его выбора этих пунктов нет.
 
 const EMPTY_PHOTOS: AppointmentPhotoRecord[] = [];
 
 export interface AppointmentFilesBlockProps {
-  appointmentId: string;
-  /** Владелец документов. Без него кнопки документа нет. */
+  /** null — запись ещё не создана: файлы копятся в `pending`. */
+  appointmentId: string | null;
   clientId: string | null;
   locationId: string | null;
   canUpload: boolean;
+  pending: PendingFile[];
+  onPendingChange: (next: PendingFile[]) => void;
 }
 
 export function AppointmentFilesBlock({
@@ -74,40 +70,46 @@ export function AppointmentFilesBlock({
   clientId,
   locationId,
   canUpload,
+  pending,
+  onPendingChange,
 }: AppointmentFilesBlockProps) {
   const t = useThemeColors();
   const toast = useToast();
+  const router = useRouter();
   const tileWidth = useTileWidth(3);
-  const photosQuery = useAppointmentPhotos(appointmentId);
-  const upload = useUploadAppointmentPhotos(appointmentId);
-  const remove = useDeleteAppointmentPhoto(appointmentId);
+  const saved = appointmentId != null;
+  const photosQuery = useAppointmentPhotos(appointmentId ?? "");
+  const upload = useUploadAppointmentPhotos(appointmentId ?? "");
+  const remove = useDeleteAppointmentPhoto(appointmentId ?? "");
   const attachments = useClientAttachments(clientId ?? "");
   const uploadDoc = useUploadAttachments(clientId ?? "", appointmentId);
   const removeDoc = useDeleteAttachment(clientId ?? "");
+  const invoicesQuery = useInvoices();
+  const receiptsQuery = useReceipts({ appointmentId, enabled: saved });
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const router = useRouter();
-  const invoicesQuery = useInvoices();
-  const receiptsQuery = useReceipts({ appointmentId });
+
+  const photos = saved ? (photosQuery.data ?? EMPTY_PHOTOS) : EMPTY_PHOTOS;
+  const docs = useMemo(
+    () => (saved ? (attachments.data?.items ?? []).filter((a) => a.appointment_id === appointmentId) : []),
+    [attachments.data, appointmentId, saved],
+  );
   const invoices = useMemo(
     () =>
-      (invoicesQuery.data ?? []).filter(
-        (inv) => inv.appointment_id === appointmentId && inv.status !== "void" && inv.status !== "cancelled",
-      ),
-    [invoicesQuery.data, appointmentId],
+      saved
+        ? (invoicesQuery.data ?? []).filter(
+            (inv) => inv.appointment_id === appointmentId && inv.status !== "void" && inv.status !== "cancelled",
+          )
+        : [],
+    [invoicesQuery.data, appointmentId, saved],
   );
   const receipts = useMemo(
-    () => (receiptsQuery.data ?? []).filter((r) => r.status !== "void"),
-    [receiptsQuery.data],
+    () => (saved ? (receiptsQuery.data ?? []).filter((r) => r.status !== "void") : []),
+    [receiptsQuery.data, saved],
   );
-
-  const photos = photosQuery.data ?? EMPTY_PHOTOS;
-  const docs = useMemo(
-    () => (attachments.data?.items ?? []).filter((a) => a.appointment_id === appointmentId),
-    [attachments.data, appointmentId],
-  );
-  const remaining = Math.max(0, MAX_APPOINTMENT_PHOTOS - photos.length);
+  const remaining = Math.max(0, MAX_APPOINTMENT_PHOTOS - photos.length - pending.filter((f) => f.kind === "media").length);
   const busy = upload.isPending || uploadDoc.isPending;
+  const hasTiles = photos.length + docs.length + invoices.length + receipts.length + pending.length > 0 || busy;
 
   const submit = (input: UploadAppointmentPhotosInput) => {
     upload.reset();
@@ -116,9 +118,7 @@ export function AppointmentFilesBlock({
         haptics.success();
         const videos = items.filter((item) => isVideoPath(item.storage_path)).length;
         toast(
-          items.length === 1
-            ? videos ? "Видео добавлено" : "Фото добавлено"
-            : `Добавлено файлов: ${items.length}`,
+          items.length === 1 ? (videos ? "Видео добавлено" : "Фото добавлено") : `Добавлено файлов: ${items.length}`,
           "success",
         );
       },
@@ -126,7 +126,7 @@ export function AppointmentFilesBlock({
         haptics.error();
         const retry = error instanceof RetryableAppointmentPhotoUploadError ? error.retryInput : null;
         toast(
-          error instanceof Error ? error.message : "Не удалось загрузить фото",
+          error instanceof Error ? error.message : "Не удалось загрузить",
           "error",
           retry ? { label: "Повторить", onPress: () => submit(retry) } : undefined,
         );
@@ -134,110 +134,37 @@ export function AppointmentFilesBlock({
     });
   };
 
-  const uploadAssets = (assets: ImagePicker.ImagePickerAsset[]) => {
-    if (assets.length === 0) return;
-    submit({
-      assets: assets.slice(0, remaining).map((asset) => ({
-        uri: asset.uri,
-        fileName: asset.fileName,
-        mimeType: asset.mimeType,
-        fileSize: asset.fileSize,
-        mediaType: asset.type === "video" ? "video" : "image",
-      })),
-      kind: "other",
-      locationId,
+  const onMedia = (assets: PickedAppointmentPhoto[]) => {
+    if (!saved) {
+      onPendingChange([...pending, ...pendingMedia(assets, randomUuid)]);
+      return;
+    }
+    submit({ assets, kind: "other", locationId });
+  };
+
+  const onDocs = (files: PickedFile[]) => {
+    if (!clientId) return;
+    if (!saved) {
+      onPendingChange([...pending, ...pendingDocs(files, randomUuid)]);
+      return;
+    }
+    uploadDoc.mutate(files, {
+      onSuccess: (count) => {
+        haptics.success();
+        toast(count === 1 ? "Файл добавлен" : `Добавлено файлов: ${count}`, "success");
+      },
     });
   };
 
-  /** Общие ворота съёмки и галереи: лимит и занятость. */
-  const gate = (): boolean => {
-    if (busy) return false;
-    if (remaining <= 0) {
-      toast(`На записи уже ${MAX_APPOINTMENT_PHOTOS} фото`, "error");
-      return false;
-    }
-    return true;
-  };
+  const pickers = useFilePickers({ remaining, busy, onMedia, onDocs });
 
-  const shoot = async () => {
-    if (!gate()) return;
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        notify("Нет доступа к камере", "Разрешите камеру: Настройки → Babun → Камера.");
-        return;
-      }
-      // Камера снимает и фото, и видео (владелец: «фото-видео фиксация»).
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ["images", "videos"],
-        quality: 0.75,
-        videoMaxDuration: 60,
-      });
-      if (!result.canceled) uploadAssets(result.assets);
-    } catch (error) {
-      notify("Не удалось открыть камеру", error instanceof Error ? error.message : "Попробуйте ещё раз.");
-    }
-  };
-
-  const pick = async () => {
-    if (!gate()) return;
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        notify("Нет доступа к фото", "Разрешите доступ: Настройки → Babun → Фото.");
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images", "videos"],
-        allowsMultipleSelection: true,
-        selectionLimit: remaining,
-        quality: 0.75,
-        // HEIC с живого iPhone бакет не примет — просим переносимый формат.
-        preferredAssetRepresentationMode:
-          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
-      });
-      if (!result.canceled) uploadAssets(result.assets);
-    } catch (error) {
-      notify("Не удалось открыть галерею", error instanceof Error ? error.message : "Попробуйте ещё раз.");
-    }
-  };
-
-  const pickDocument = async () => {
-    if (!clientId || busy) return;
-    try {
-      const res = await DocumentPicker.getDocumentAsync({
-        type: ["application/pdf", "text/plain", "image/jpeg", "image/png"],
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-      if (res.canceled || res.assets.length === 0) return;
-      uploadDoc.mutate(
-        res.assets.slice(0, 5).map((asset) => ({
-          uri: asset.uri,
-          fileName: asset.name,
-          mimeType: asset.mimeType ?? undefined,
-          fileSize: asset.size,
-        })),
-        {
-          onSuccess: (count) => {
-            haptics.success();
-            toast(count === 1 ? "Файл добавлен" : `Добавлено файлов: ${count}`, "success");
-          },
-        },
-      );
-    } catch (error) {
-      notify("Не удалось выбрать файл", error instanceof Error ? error.message : "Попробуйте ещё раз.");
-    }
-  };
-
-  /** Удержание фото — только удаление, лист и есть подтверждение. */
   const holdPhoto = async (photo: AppointmentPhotoRecord) => {
     haptics.tap();
     const index = await chooseOption(isVideoPath(photo.storage_path) ? "Видео" : "Фото", [{ label: "Удалить", destructive: true }]);
     if (index !== 0) return;
     remove.mutate(photo, {
-      onSuccess: () => toast("Фото удалено", "info"),
-      onError: (error) => toast(error instanceof Error ? error.message : "Не удалось удалить фото", "error"),
+      onSuccess: () => toast("Удалено", "info"),
+      onError: (error) => toast(error instanceof Error ? error.message : "Не удалось удалить", "error"),
     });
   };
 
@@ -257,24 +184,6 @@ export function AppointmentFilesBlock({
     }
   };
 
-  /** Скан: VisionKit → страницы → один PDF → документ записи. */
-  const scanDocument = async () => {
-    if (!clientId || busy) return;
-    try {
-      const pages = await scanDocumentPages();
-      if (!pages) return;
-      const pdf = await pagesToPdf(pages);
-      uploadDoc.mutate([{ uri: pdf.uri, fileName: pdf.fileName, mimeType: "application/pdf" }], {
-        onSuccess: () => {
-          haptics.success();
-          toast(pages.length === 1 ? "Скан добавлен" : `Скан добавлен: ${pages.length} стр.`, "success");
-        },
-      });
-    } catch (error) {
-      notify("Не удалось отсканировать", error instanceof Error ? error.message : "Попробуйте ещё раз.");
-    }
-  };
-
   const holdDoc = async (doc: ClientAttachment) => {
     haptics.tap();
     const index = await chooseOption(doc.filename, [{ label: "Удалить", destructive: true }]);
@@ -283,21 +192,20 @@ export function AppointmentFilesBlock({
   };
 
   const menu: PickerSheetItem[] = [
-    { id: "camera", label: "Снять фото или видео", icon: Camera, color: t.accent, onPress: () => void shoot() },
-    { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pick() },
+    { id: "camera", label: "Снять фото или видео", icon: Camera, color: t.accent, onPress: () => void pickers.shoot() },
+    { id: "library", label: "Выбрать из галереи", icon: Images, color: t.accent, onPress: () => void pickers.pick() },
     ...(clientId
-      ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickDocument() }]
+      ? [{ id: "file", label: "Выбрать файл", icon: FileText, color: t.accent, onPress: () => void pickers.pickDocument() }]
       : []),
-    // Только там, где нативный сканер собран (см. document-scanner.ts).
     ...(clientId && scannerAvailable()
-      ? [{ id: "scan", label: "Отсканировать документ", icon: ScanLine, color: t.accent, onPress: () => void scanDocument() }]
+      ? [{ id: "scan", label: "Отсканировать документ", icon: ScanLine, color: t.accent, onPress: () => void pickers.scanDocument() }]
       : []),
   ];
 
   return (
     <>
       <SectionCard title="Файлы">
-        {photos.length > 0 || docs.length > 0 || invoices.length > 0 || receipts.length > 0 || busy ? (
+        {hasTiles ? (
           <View
             className="flex-row flex-wrap"
             style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: TILE_GAP }}
@@ -308,8 +216,6 @@ export function AppointmentFilesBlock({
                 photo={photo}
                 size={tileWidth}
                 deleting={remove.isPending && remove.variables?.id === photo.id}
-                // Видео — системным проигрывателем по подписанной ссылке:
-                // кадра-превью и встроенного плеера пока нет (STORY-070).
                 onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
                 onDelete={() => void holdPhoto(photo)}
               />
@@ -341,12 +247,19 @@ export function AppointmentFilesBlock({
                 title={`Чек ${r.number}`}
                 subtitle={`${formatEURExact(r.amount)} · ${formatShortDateRu(r.issued_on)}`}
                 size={tileWidth}
-                // Экрана одного чека нет — лента чеков клиента, где он и стоит.
                 onOpen={() =>
                   router.push(
                     (clientId ? { pathname: "/documents/receipts", params: { clientId } } : "/documents/receipts") as Href,
                   )
                 }
+              />
+            ))}
+            {pending.map((file) => (
+              <PendingTile
+                key={file.id}
+                file={file}
+                size={tileWidth}
+                onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
               />
             ))}
             {busy ? <UploadingTile size={tileWidth} /> : null}
@@ -355,13 +268,13 @@ export function AppointmentFilesBlock({
         {canUpload ? (
           <AddRow
             label="Добавить"
-            separated={photos.length > 0 || docs.length > 0 || invoices.length > 0 || receipts.length > 0 || busy}
+            separated={hasTiles}
             onPress={() => {
               haptics.tap();
               setMenuOpen(true);
             }}
           />
-        ) : photos.length === 0 && docs.length === 0 && invoices.length === 0 && receipts.length === 0 ? (
+        ) : !hasTiles ? (
           <View style={{ height: 10 }} />
         ) : null}
       </SectionCard>
@@ -373,8 +286,8 @@ export function AppointmentFilesBlock({
           ...item,
           onPress: () => {
             setMenuOpen(false);
-            // Системный пикер поверх уходящего листа не открывается —
-            // даём листу уехать.
+            // Системный пикер поверх уходящего листа не открывается — даём
+            // листу уехать.
             setTimeout(item.onPress, 350);
           },
         }))}

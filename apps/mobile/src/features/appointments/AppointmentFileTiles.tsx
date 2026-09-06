@@ -5,6 +5,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { formatBytes, type ClientAttachment } from "@/features/clients/card-attachments";
 import { useThemeColors } from "@/theme/colors";
 import { docTitle, isVideoPath } from "./appointment-files";
+import type { PendingFile } from "./appointment-files";
 
 // ПЛИТКИ БЛОКА «ФАЙЛЫ» — только вид (STORY-070). Три в ряд, квадрат, сквиркл
 // карточки. Фото — картинка, видео — значок «play» на подложке (кадра-превью
@@ -188,5 +189,33 @@ export function GeneratedDocTile({
         </Text>
       </View>
     </Pressable>
+  );
+}
+
+/** Файл новой записи: ещё не уехал, ждёт «Создать запись». Выглядит как
+ *  готовая плитка — человек не должен различать «уже» и «пока». */
+export function PendingTile({ file, size, onDelete }: { file: PendingFile; size: number; onDelete: () => void }) {
+  const t = useThemeColors();
+  const tile = useTile(size);
+  return (
+    <View style={tile} accessible accessibilityLabel={`${file.video ? "Видео" : file.kind === "document" ? "Документ" : "Фото"} ${file.name}, добавится при создании`}>
+      {file.previewUri ? (
+        <Image source={{ uri: file.previewUri }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
+      ) : file.video ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: `${t.ink}b3` }}>
+            <Play color="#ffffff" size={18} strokeWidth={2.4} fill="#ffffff" />
+          </View>
+        </View>
+      ) : (
+        <View style={{ flex: 1, padding: 10, justifyContent: "space-between" }}>
+          <FileText color={t.accent} size={22} strokeWidth={2} />
+          <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
+            {docTitle(file.name)}
+          </Text>
+        </View>
+      )}
+      <TrashBadge label={`Убрать ${file.name}`} onPress={onDelete} disabled={false} />
+    </View>
   );
 }

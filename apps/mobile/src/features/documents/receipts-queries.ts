@@ -10,13 +10,16 @@ import { useTenantId } from "@/lib/tenant";
 export function useReceipts(filter?: {
   clientId?: string | null;
   appointmentId?: string | null;
+  /** Не спрашивать вовсе (у новой записи чеков нет — без этого флага пустой
+   *  фильтр по записи тянул бы ВСЕ чеки тенанта). */
+  enabled?: boolean;
 }) {
   const tenantId = useTenantId();
   const clientId = filter?.clientId ?? null;
   const appointmentId = filter?.appointmentId ?? null;
   return useQuery({
     queryKey: ["receipts", tenantId, clientId, appointmentId],
-    enabled: !!tenantId,
+    enabled: !!tenantId && filter?.enabled !== false,
     queryFn: async (): Promise<Receipt[]> => {
       let q = supabase
         .from("receipts")

@@ -125,6 +125,9 @@ import {
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { ChooseRow } from "@/components/ui/ChooseRow";
+import { uploadPendingFiles, type PendingFile } from "@/features/appointments/pending-files";
+import { useTenantId } from "@/lib/tenant";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
@@ -304,6 +307,7 @@ export default function BookScreen() {
   const showLabelBlock = blocks.includes("label");
   const showPayment = blocks.includes("payment");
   const showNote = blocks.includes("note");
+  const showFiles = blocks.includes("files");
   // Чем красить запись, когда цвет не выбирали руками, и какими цветами
   // говорить о незаполненном (Кабинет → «Запись»).
   const autoColorRule = useAutoColorRule();
@@ -484,6 +488,10 @@ export default function BookScreen() {
   // Деньги новой записи: счёт выбран, запишется после «Создать запись».
   // У существующей записи блок пишет оплату сам и сразу (STORY-065).
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
+  // Файлы новой записи ждут её id, как ждёт оплата (STORY-070).
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const tenantIdForFiles = useTenantId();
+  const queryClientForFiles = useQueryClient();
   const recordPayment = useRecordPayment();
   const [reminderOn, setReminderOn] = useState(false);
   const [clientPickerOpen, setClientPickerOpen] = useState(false);
@@ -1666,6 +1674,20 @@ export default function BookScreen() {
             notify("Запись создана, оплата не записана", (e as Error).message);
           }
         }
+        if (pendingFiles.length > 0 && tenantIdForFiles) {
+          // Файлы новой записи — тем же путём, что «Добавить» у сохранённой.
+          const failed = await uploadPendingFiles({
+            tenantId: tenantIdForFiles,
+            appointmentId: created.id,
+            clientId: created.client_id ?? null,
+            locationId: created.location_id ?? null,
+            files: pendingFiles,
+            queryClient: queryClientForFiles,
+          });
+          if (failed.length > 0) {
+            notify("Запись создана, файлы не загружены", failed.join(", "));
+          }
+        }
       }
       leaveBook();
     } catch (e) {
@@ -1731,6 +1753,7 @@ export default function BookScreen() {
         status !== "scheduled" ||
         reminderOn ||
         pendingPayment != null ||
+        pendingFiles.length > 0 ||
         colorOverride != null ||
         cityTouched ||
         dateTouchedRef.current ||
@@ -2533,15 +2556,22 @@ export default function BookScreen() {
 
               {/* ФАЙЛЫ ЗАПИСИ (STORY-070): фото, документы; у сохранённой
                   записи — файлам нужен её id. К отменённой не добавляют. */}
-              {editing ? (
+              {showFiles ? (
                 <AppointmentFilesBlock
-                  appointmentId={editing.id}
-                  clientId={editing.client_id}
-                  locationId={editing.location_id}
+                  appointmentId={editing?.id ?? null}
+                  clientId={editing?.client_id ?? client?.id ?? null}
+                  locationId={editing?.location_id ?? locationId ?? null}
                   canUpload={status !== "cancelled"}
+                  pending={pendingFiles}
+                  onPendingChange={setPendingFiles}
                 />
               ) : null}
 
+              {/* ОТМЕНЫ И УДАЛЕНИЯ НА СТРАНИЦЕ НЕТ (владелец 2026-09-06: «этот
+                  блок не нужен — при долгом нажатии на запись снизу поднимется
+                  мини-меню: удалить, отменить визит, копировать, перенести»).
+                  Карточка стояла здесь один вечер и снята; действия живут в
+                  меню долгого нажатия календаря, его состав владелец покажет. */}
 
               {/* БЛОК «ДОПОЛНИТЕЛЬНО» СНЕСЁН 2026-08-30 (владелец: «убрать
                   совсем»). За одной дверью лежали скидка, статус, источник
