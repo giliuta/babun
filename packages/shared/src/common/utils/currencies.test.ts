@@ -26,7 +26,8 @@ describe("словарь валют", () => {
     expect(searchCurrencies("грив")[0]?.code).toBe("UAH");
     expect(searchCurrencies("pln")[0]?.code).toBe("PLN");
     expect(searchCurrencies("₺")[0]?.code).toBe("TRY");
-    expect(searchCurrencies("доллар")[0]?.name.toLowerCase().startsWith("доллар")).toBe(true);
+    expect(searchCurrencies("доллар")[0]?.code).toBe("USD");
+    expect(searchCurrencies("фунт")[0]?.code).toBe("GBP");
     expect(searchCurrencies("")).toEqual([]);
     expect(currencyDef("eur")?.symbol).toBe("€");
   });

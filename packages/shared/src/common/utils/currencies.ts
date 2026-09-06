@@ -196,6 +196,12 @@ export function currencyWheelOrder(): CurrencyDef[] {
 export function searchCurrencies(query: string, limit = 40): CurrencyDef[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
+  // Внутри ранга ходовые впереди: на «дол» первым нужен «Доллар США», а не
+  // «Доллар Фиджи», который стоит раньше по коду.
+  const popularity = (code: string) => {
+    const i = POPULAR_CURRENCIES.indexOf(code as never);
+    return i < 0 ? POPULAR_CURRENCIES.length : i;
+  };
   const ranked: { c: CurrencyDef; rank: number }[] = [];
   for (const c of ALL_CURRENCIES) {
     const name = c.name.toLowerCase();
@@ -208,7 +214,7 @@ export function searchCurrencies(query: string, limit = 40): CurrencyDef[] {
     if (rank >= 0) ranked.push({ c, rank });
   }
   return ranked
-    .sort((a, b) => a.rank - b.rank)
+    .sort((a, b) => a.rank - b.rank || popularity(a.c.code) - popularity(b.c.code))
     .slice(0, limit)
     .map((x) => x.c);
 }
