@@ -125,7 +125,6 @@ import {
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { ChooseRow } from "@/components/ui/ChooseRow";
-import { AppointmentLifecycleCard } from "@/features/appointments/AppointmentLifecycleCard";
 import { useRecordPayment } from "@/features/appointments/payment-mutations";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import {
@@ -2543,19 +2542,6 @@ export default function BookScreen() {
                 />
               ) : null}
 
-              {/* ЖИЗНЬ ЗАПИСИ — ПОСЛЕДНЕЙ КАРТОЧКОЙ (аудит STORY-072): отменить
-                  с причиной, вернуть в план, удалить. Раньше это жило только в
-                  долгом нажатии по календарю. */}
-              {editing ? (
-                <AppointmentLifecycleCard
-                  appointment={editing}
-                  onStatusChanged={(next) => {
-                    setStatus(next);
-                    editBaselineRef.current = null;
-                  }}
-                  onDeleted={leaveBook}
-                />
-              ) : null}
 
               {/* БЛОК «ДОПОЛНИТЕЛЬНО» СНЕСЁН 2026-08-30 (владелец: «убрать
                   совсем»). За одной дверью лежали скидка, статус, источник
