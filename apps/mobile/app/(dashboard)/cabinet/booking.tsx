@@ -110,7 +110,6 @@ export default function BookingSettingsScreen() {
           <Divider inset={56} />
           <SettingsRow
             swatch={fallback}
-            icon={Palette}
             title="Если цвета нет"
             sub={colorName(fallback)}
             onPress={() => openColor("fallback")}
@@ -127,7 +126,6 @@ export default function BookingSettingsScreen() {
               {i > 0 ? <Divider inset={56} /> : null}
               <SettingsRow
                 swatch={palette[situation.id] ?? null}
-                icon={Palette}
                 title={situation.label}
                 sub={colorName(palette[situation.id])}
                 onPress={() => openColor(situation.id)}

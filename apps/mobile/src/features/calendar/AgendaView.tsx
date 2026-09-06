@@ -7,11 +7,7 @@ import {
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { parseYMD } from "@/features/appointments/helpers";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { edgeColor } from "@/components/ui/color-contrast";
-import {
-  CANCELLED_BORDER,
-  CANCELLED_EDGE,
-} from "@/features/calendar/status-colors";
+import { RecordMark } from "@/components/ui/RecordMark";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors, type ThemeColors } from "@/theme/colors";
 
@@ -282,45 +278,6 @@ function DaySection({
   );
 }
 
-/** КРУЖОК ЦВЕТА ЗАПИСИ — тот же язык, что у блока в сетке: заливка 18 % и
- *  кант в полную силу. Не корешок: владелец 2026-09-05 отверг полоску слева
- *  везде, и лента — не исключение.
- *
- *  Стоит в ОБЕИХ ветках строки. Раньше его получало только событие, а у
- *  работы `hueFor` вычислялся, приезжал в строку и не использовался: цвет,
- *  который отвечает «чего этой работе не хватает», в списке не показывался
- *  вовсе — притом что список служит сетке легендой и называет ту же дыру
- *  словом. */
-function RecordDot({
-  hue,
-  cancelled,
-  t,
-}: {
-  hue: string;
-  cancelled: boolean;
-  t: ThemeColors;
-}) {
-  return (
-    <View
-      style={{
-        width: 28,
-        height: 28,
-        borderRadius: 999,
-        alignSelf: "center",
-        // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ, как и её блок в сетке: она никуда не
-        // едет и не имеет права занимать слот палитры.
-        backgroundColor: cancelled ? `${t.ink}14` : `${hue}2e`,
-        borderWidth: 1,
-        borderColor: cancelled ? CANCELLED_EDGE : edgeColor(hue),
-        // Тот же закон, что в сетке: разомкнутый контур — работы не будет.
-        // Периметр кружка ≈ 88pt при шаге штриха 6pt — около четырнадцати
-        // штрихов, читается уверенно.
-        borderStyle: cancelled ? CANCELLED_BORDER : "solid",
-      }}
-    />
-  );
-}
-
 function AgendaRow({
   apt,
   clientName,
@@ -386,9 +343,10 @@ function AgendaRow({
           minHeight: 64,
         }}
       >
-        {/* КРУЖОК ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
-            отвергнутый корешок, только в ленте. */}
-        <RecordDot hue={hue} cancelled={cancelled} t={t} />
+        {/* ЗНАК ЗАПИСИ ВМЕСТО ПОЛОСКИ СЛЕВА (владелец 2026-09-05): тот же
+            отвергнутый корешок, только в ленте. Компонент общий с образцом в
+            настройке — лента и сетка обязаны говорить одним языком. */}
+        <RecordMark hue={hue} cancelled={cancelled} />
         <View style={{ width: 64, paddingLeft: 8 }}>
           <Text
             className="tabular-nums"
@@ -461,7 +419,7 @@ function AgendaRow({
         minHeight: 64,
       }}
     >
-      <RecordDot hue={hue} cancelled={cancelled} t={t} />
+      <RecordMark hue={hue} cancelled={cancelled} />
       <View style={{ width: 56 }}>
         <Text
           className="tabular-nums"

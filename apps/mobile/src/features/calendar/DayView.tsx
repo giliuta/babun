@@ -31,6 +31,7 @@ import {
 } from "@/features/calendar/status-colors";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
+  BLOCK_FILL,
   deepen,
   fillRgba,
   markColor,
@@ -371,7 +372,7 @@ function Block({
   // (измерено, 5.81 : 1 и 4.85 : 1 в худшем цвете палитры).
   const fillIdle = fillRgba(
     cancelled ? t.ink : colors.hue,
-    cancelled ? 0.0784 : completed ? 0.102 : 0.1804,
+    cancelled ? 0.0784 : completed ? 0.102 : BLOCK_FILL,
   );
   const fillPressed = fillRgba(
     cancelled ? t.ink : colors.hue,

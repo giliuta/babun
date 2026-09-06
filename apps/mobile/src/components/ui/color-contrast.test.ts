@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  BLOCK_FILL,
   contrastRatio,
   deepen,
   edgeColor,
@@ -85,7 +86,7 @@ describe("цвет записи на сетке календаря", () => {
   test("текст блока читается на любой заливке любого цвета палитры", () => {
     // Четыре плотности: обычная 18 %, выполненная 10 %, под пальцем 40 %.
     for (const preset of PRESET_COLORS) {
-      for (const alpha of [0.1804, 0.102, 0.4]) {
+      for (const alpha of [BLOCK_FILL, 0.102, 0.4]) {
         const bg = tintOver(preset.value, GRID_WORST, alpha);
         assert.ok(
           contrastRatio("#0b1220", bg) >= 4.5,
@@ -107,6 +108,25 @@ describe("цвет записи на сетке календаря", () => {
     const mark = markColor("#087a52");
     assert.ok(contrastRatio(mark, fillOver("#4B1D82")) >= 3, `знак ${mark} на тёмной`);
     assert.ok(contrastRatio(mark, fillOver("#FFF0BC")) >= 3, `знак ${mark} на светлой`);
+  });
+
+  test("кант образца виден на БЕЛОЙ карточке настроек, а не только на сетке", () => {
+    // Образец в «Кабинет → Запись» лежит на белом листе, а не на подложке
+    // сетки. Тело плитки (заливка 18 % над белым) даёт к белому 1.03–1.41 : 1 —
+    // его не видно, и это честно: в сетке заливка тоже почти не спорит с фоном.
+    // Значит ВЕСЬ образец говорит кантом, и порог обязан стоять на канте.
+    for (const preset of PRESET_COLORS) {
+      const edge = edgeColor(preset.value);
+      const fill = tintOver(preset.value, light.surface, BLOCK_FILL);
+      assert.ok(
+        contrastRatio(edge, light.surface) >= 3,
+        `${preset.name}: кант к карточке ${contrastRatio(edge, light.surface).toFixed(2)}`,
+      );
+      assert.ok(
+        contrastRatio(edge, fill) >= 3,
+        `${preset.name}: кант к своей заливке ${contrastRatio(edge, fill).toFixed(2)}`,
+      );
+    }
   });
 
   test("deepen кэширует и возвращает вход, если это не цвет", () => {

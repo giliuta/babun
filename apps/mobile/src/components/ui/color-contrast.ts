@@ -156,9 +156,24 @@ export function parseHexOk(value: string): boolean {
  *  о белый: гейт по белому был бы зелёным в CI и врал на экране. */
 export const GRID_WORST = "#cfced5";
 
+/** ЗАЛИВКА БЛОКА ЗАПИСИ — ОДНО ЧИСЛО НА ПРОДУКТ. Сетка, лента и образец в
+ *  настройке обязаны говорить одной альфой: три копии восемнадцати процентов
+ *  (число здесь, хвост `2e` в ленте, литерал в сетке) разошлись бы на первой
+ *  же правке тонирования, и образец начал бы врать тише, чем врал. */
+export const BLOCK_FILL = 0.1804;
+
+/** Кант отменённой записи: она теряет цвет записи и говорит нейтралью. Живёт
+ *  рядом с `edgeColor`, а не в календаре: этим кантом красят сетка, лента И
+ *  образец в настройке, а `components/ui` не имеет права тянуть из `features`. */
+export const CANCELLED_EDGE = "#5e6169";
+
+/** РАЗОМКНУТЫЙ КАНТ = РАБОТЫ НЕ БУДЕТ. Закон и его обоснование — там же, где
+ *  им пользуется сетка (`features/calendar/status-colors`). */
+export const CANCELLED_BORDER = "dashed" as const;
+
 /** Заливка блока: тот же цвет на 18 % поверх подложки. */
 export function fillOver(hue: string, backdrop: string = GRID_WORST): string {
-  return tintOver(hue, backdrop, 0.1804);
+  return tintOver(hue, backdrop, BLOCK_FILL);
 }
 
 const deepenCache = new Map<string, string>();
