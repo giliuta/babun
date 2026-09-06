@@ -37,13 +37,14 @@ describe("client native persistence contract", () => {
     const objectSheet = read("ObjectEditSheet.tsx");
     assert.match(screen, /Promise<boolean>/);
     assert.match(screen, /await updateClient\.mutateAsync\(patch\)/);
-    // Заметки: композер пустеет СРАЗУ (иначе автокоррекция iOS дописывала
-    // слово, сверка «текст тот же» не сходилась, и отправленная заметка
-    // висела в поле второй раз). Правило смещено, но текст не теряется:
-    // при неудачной записи набранное возвращается в поле.
-    assert.match(notes, /const saved = await notes\.apply/);
-    assert.match(notes, /if \(!saved\) setText/);
-    assert.match(notes, /catch \{\s*setText/);
+    // Заметка клиента — ОДНО поле (2026-09-06), привязанное к последней записи
+    // журнала: пишет тем же писателем «свежайший массив + очередь» через
+    // applyNoteEdit, а черновик держит useInlineNote — коммит на уходе с поля
+    // и с экрана, набранное не теряется и не пишется дважды.
+    assert.match(notes, /useJsonArrayWriter<ClientNote>\(list/);
+    assert.match(notes, /applyNoteEdit\(all, next, boundId/);
+    assert.match(notes, /useInlineNote<string \| null>\(/);
+    assert.doesNotMatch(notes, /TextInput/);
     // Лист правки объекта пишет ТЕМ ЖЕ писателем и удаляет с подтверждением.
     assert.match(objectSheet, /writer: LocationWriter/);
     assert.match(objectSheet, /Удалить объект/);
