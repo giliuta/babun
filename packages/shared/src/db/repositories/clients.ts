@@ -175,6 +175,12 @@ export function rowToClient(r: ClientRow): Client {
       id: l.id,
       label: l.label,
       address: l.address,
+      // Части адреса (2026-09-06) — тот же закон, что и у полей ниже: не
+      // перечислено здесь — стёрто первой же правкой объекта.
+      addressParts:
+        l.addressParts && typeof l.addressParts === "object"
+          ? l.addressParts
+          : undefined,
       mapUrl: l.mapUrl,
       // P0 2026-07-26: поля ниже маппер РАНЬШЕ НЕ ЧИТАЛ, хотя запись пишет
       // весь JSON целиком (clientToUpdate: out.locations = patch.locations).

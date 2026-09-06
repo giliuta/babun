@@ -2,6 +2,7 @@ import {
   extractAddressFromMapUrl,
   isLikelyUrl,
 } from "@babun/shared/common/utils/map-links";
+import type { AddressParts } from "@babun/shared/local/clients";
 
 // «АДРЕС ИЛИ ССЫЛКА» — ОДНО поле на два хранилища.
 //
@@ -58,4 +59,109 @@ export function addressOrLinkPatch(
   return prevAddress
     ? { address: value, mapUrl: (prev.mapUrl ?? "").trim() || undefined }
     : { address: value, mapUrl: undefined };
+}
+
+// ─── УТОЧНЕНИЕ АДРЕСА (2026-09-06) ──────────────────────────────────────────
+// Части живут в `addressParts`, строка `address` собирается из них: всё, что
+// показывает или шлёт адрес, читает одну строку и о частях не знает. Пин
+// остаётся главным для маршрута; из частей в карту уходит только то, что
+// геокодер найдёт, — без подъезда, этажа и квартиры.
+
+export const ADDRESS_PART_KEYS = [
+  "street",
+  "complex",
+  "entrance",
+  "floor",
+  "apartment",
+  "city",
+  "zip",
+] as const satisfies readonly (keyof AddressParts)[];
+
+/** Обрезанные части без пустых; `undefined`, если не осталось ничего. */
+export function cleanAddressParts(
+  parts: AddressParts | null | undefined,
+): AddressParts | undefined {
+  if (!parts) return undefined;
+  const out: AddressParts = {};
+  for (const key of ADDRESS_PART_KEYS) {
+    const value = (parts[key] ?? "").replace(/\s+/g, " ").trim();
+    if (value) out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Есть «где» — улица, комплекс или город. Без него строка адреса из частей
+ *  не собирается: «эт. 3, кв. 5» само по себе никуда не ведёт. */
+export function hasAddressPlace(parts: AddressParts | null | undefined): boolean {
+  const clean = cleanAddressParts(parts);
+  return Boolean(clean?.street || clean?.complex || clean?.city);
+}
+
+/** «Makariou 12, Sunny Court, подъезд 2, эт. 3, кв. 5, Лимасол 4000».
+ *  `forRoute` — только то, что найдёт карта: улица, комплекс, город, индекс. */
+export function composeAddress(
+  parts: AddressParts | null | undefined,
+  opts?: { forRoute?: boolean },
+): string {
+  const clean = cleanAddressParts(parts);
+  if (!clean) return "";
+  const out: string[] = [];
+  if (clean.street) out.push(clean.street);
+  if (clean.complex) out.push(clean.complex);
+  if (!opts?.forRoute) {
+    if (clean.entrance) out.push(`подъезд ${clean.entrance}`);
+    if (clean.floor) out.push(`эт. ${clean.floor}`);
+    if (clean.apartment) out.push(`кв. ${clean.apartment}`);
+  }
+  const place = [clean.city, clean.zip].filter(Boolean).join(" ");
+  if (place) out.push(place);
+  return out.join(", ");
+}
+
+/** Адрес для маршрута по тексту: у объекта с частями — геокодируемая часть,
+ *  иначе строка как есть. Пин (`mapUrl`) выбирает вызывающая сторона. */
+export function routeAddress(
+  loc: { address?: string | null; addressParts?: AddressParts | null } | null | undefined,
+): string {
+  if (!loc) return "";
+  return hasAddressPlace(loc.addressParts)
+    ? composeAddress(loc.addressParts, { forRoute: true })
+    : (loc.address ?? "").trim();
+}
+
+/** Патч объекта из частей: чистые части и собранная строка. Части без «где»
+ *  хранятся, но строку не трогают; пустые части снимаются, строка остаётся
+ *  прежней — человек ничего не терял, он лишь убрал уточнение. */
+export function addressPartsPatch(
+  parts: AddressParts | null | undefined,
+): { addressParts: AddressParts | undefined; address?: string } {
+  const clean = cleanAddressParts(parts);
+  if (!clean) return { addressParts: undefined };
+  return hasAddressPlace(clean)
+    ? { addressParts: clean, address: composeAddress(clean) }
+    : { addressParts: clean };
+}
+
+/** Открытие уточнения поверх набранной строки: адрес становится «Улица и дом»,
+ *  ссылка — пином. Набранное не пропадает, а уже заполненные части не трогаем. */
+export function partsFromLine(
+  parts: AddressParts,
+  line: string,
+  pin: string,
+): { parts: AddressParts; pin: string } {
+  const value = line.trim();
+  if (!value) return { parts, pin };
+  if (isLikelyUrl(value)) return { parts, pin: pin || value };
+  return {
+    parts: hasAddressPlace(parts) ? parts : { ...parts, street: parts.street || value },
+    pin,
+  };
+}
+
+/** Одни и те же части после чистки — писать нечего. */
+export function sameAddressParts(
+  a: AddressParts | null | undefined,
+  b: AddressParts | null | undefined,
+): boolean {
+  return JSON.stringify(cleanAddressParts(a) ?? null) === JSON.stringify(cleanAddressParts(b) ?? null);
 }

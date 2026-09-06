@@ -37,11 +37,15 @@ const FULL_LOCATION: Required<
     | "isPrimary"
     | "note"
     | "serviceEveryMonths"
+    | "addressParts"
   >
 > = {
   id: "loc-1",
   label: "Вилла",
-  address: "Ленина 1",
+  address: "Ленина 1, кв. 5",
+  // Части адреса (2026-09-06) — без строки в маппере уточнение стиралось бы
+  // первой же правкой объекта.
+  addressParts: { street: "Ленина 1", apartment: "5" },
   mapUrl: "https://maps.example/pin",
   isPrimary: true,
   note: "код домофона 25",

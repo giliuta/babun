@@ -127,10 +127,32 @@ export interface ClientNote {
 // переехало с клиента на объект, потому что у одной семьи может
 // быть 3 кондея в квартире и 5 в офисе — это разное оборудование
 // одного и того же клиента.
+/** УТОЧНЕНИЕ АДРЕСА (владелец 2026-09-06: «не строчку „адрес или ссылка“, а
+ *  полноценное заполнение — город, улица, дом, подъезд, квартира, индекс, как
+ *  на доставке»). Все поля необязательны. `address` СОБИРАЕТСЯ из них
+ *  (`composeAddress`), когда заполнено хоть одно «где» — улица, комплекс или
+ *  город: список, SMS и бригадный лист читают одну строку и о частях не
+ *  знают. Комплекс стоит выше подъезда намеренно: на Кипре спасает название
+ *  комплекса и корпус, а не номер подъезда. */
+export interface AddressParts {
+  /** Улица и дом одной строкой — так пишут адрес здесь: «Makariou 12». */
+  street?: string;
+  /** Комплекс, корпус, название здания. */
+  complex?: string;
+  entrance?: string;
+  floor?: string;
+  apartment?: string;
+  city?: string;
+  zip?: string;
+}
+
 export interface Location {
   id: string;
   label: string;         // "Дом", "Офис", "Вилла"
   address: string;
+  /** Части адреса, из которых собрана строка `address` (см. `AddressParts`).
+   *  Нет — адрес набран одной строкой или пришёл пином. */
+  addressParts?: AddressParts;
   /** P0 #6 (CRM Core brief) — per-object property type so a client
    *  with «дом + офис» doesn't have to repurpose one global
    *  client.property_type. Optional + additive: old localStorage

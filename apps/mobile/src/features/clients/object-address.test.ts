@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { addressOrLinkPatch, objectTarget } from "./object-address";
+import {
+  addressOrLinkPatch,
+  addressPartsPatch,
+  cleanAddressParts,
+  composeAddress,
+  hasAddressPlace,
+  objectTarget,
+  partsFromLine,
+  routeAddress,
+  sameAddressParts,
+} from "./object-address";
 
 describe("objectTarget", () => {
   test("адрес важнее ссылки", () => {
@@ -102,5 +112,68 @@ describe("addressOrLinkPatch", () => {
       }),
       { address: "", mapUrl: undefined },
     );
+  });
+});
+
+describe("уточнение адреса", () => {
+  const parts = {
+    street: " Makariou 12 ",
+    complex: "Sunny Court",
+    entrance: "2",
+    floor: "3",
+    apartment: "5",
+    city: "Лимасол",
+    zip: "4000",
+  };
+
+  test("cleanAddressParts: обрезает, выкидывает пустое, undefined когда пусто", () => {
+    assert.deepEqual(cleanAddressParts({ street: "  ", apartment: " 5 " }), { apartment: "5" });
+    assert.equal(cleanAddressParts({ street: " ", city: "" }), undefined);
+    assert.equal(cleanAddressParts(undefined), undefined);
+  });
+
+  test("composeAddress: полная строка и строка для карты", () => {
+    assert.equal(
+      composeAddress(parts),
+      "Makariou 12, Sunny Court, подъезд 2, эт. 3, кв. 5, Лимасол 4000",
+    );
+    assert.equal(composeAddress(parts, { forRoute: true }), "Makariou 12, Sunny Court, Лимасол 4000");
+    assert.equal(composeAddress({ street: "Makariou 12", apartment: "5" }), "Makariou 12, кв. 5");
+    assert.equal(composeAddress({ city: "Пафос" }), "Пафос");
+    assert.equal(composeAddress({}), "");
+  });
+
+  test("hasAddressPlace: без улицы, комплекса или города строка не собирается", () => {
+    assert.equal(hasAddressPlace({ floor: "3", apartment: "5" }), false);
+    assert.equal(hasAddressPlace({ complex: "Sunny Court" }), true);
+  });
+
+  test("routeAddress: части — геокодируемая часть, иначе строка как есть", () => {
+    assert.equal(routeAddress({ address: "что угодно", addressParts: parts }), "Makariou 12, Sunny Court, Лимасол 4000");
+    assert.equal(routeAddress({ address: " Ул. 5 ", addressParts: { apartment: "5" } }), "Ул. 5");
+    assert.equal(routeAddress(null), "");
+  });
+
+  test("addressPartsPatch: строка собирается только при «где»; пустое снимает части", () => {
+    assert.deepEqual(addressPartsPatch({ street: "Makariou 12", apartment: "5" }), {
+      addressParts: { street: "Makariou 12", apartment: "5" },
+      address: "Makariou 12, кв. 5",
+    });
+    assert.deepEqual(addressPartsPatch({ apartment: "5" }), { addressParts: { apartment: "5" } });
+    assert.deepEqual(addressPartsPatch({ street: " " }), { addressParts: undefined });
+  });
+});
+
+describe("partsFromLine / sameAddressParts", () => {
+  test("строка уходит в «Улица и дом», ссылка — в пин, заполненное не трогаем", () => {
+    assert.deepEqual(partsFromLine({}, " Makariou 12 ", ""), { parts: { street: "Makariou 12" }, pin: "" });
+    assert.deepEqual(partsFromLine({}, "https://maps.app.goo.gl/x", ""), { parts: {}, pin: "https://maps.app.goo.gl/x" });
+    assert.deepEqual(partsFromLine({ city: "Пафос" }, "Makariou 12", "p"), { parts: { city: "Пафос" }, pin: "p" });
+    assert.deepEqual(partsFromLine({}, "  ", "p"), { parts: {}, pin: "p" });
+  });
+  test("sameAddressParts сравнивает после чистки", () => {
+    assert.equal(sameAddressParts({ street: " A " }, { street: "A" }), true);
+    assert.equal(sameAddressParts({ street: "A" }, { street: "B" }), false);
+    assert.equal(sameAddressParts({ street: " " }, undefined), true);
   });
 });
