@@ -139,6 +139,55 @@ export function resolveRecordSituation(
   return null;
 }
 
+/** Ситуация ЗАПИСИ целиком — вместе с гейтами вида и статуса.
+ *
+ *  Событие не имеет ни клиента, ни объекта, ни услуг по определению; отменённую
+ *  нечего дозаполнять — сетка уже красит её нейтралью. Гейты живут ЗДЕСЬ, а не
+ *  в трёх поверхностях по отдельности, чтобы лента, месяц и сетка не разошлись
+ *  в ответе на один и тот же вопрос. */
+export function appointmentSituation(
+  apt: {
+    kind?: string | null;
+    status?: string | null;
+    color_override?: string | null;
+    client_id?: string | null;
+    location_id?: string | null;
+    address?: string | null;
+    service_ids?: unknown[] | null;
+    services?: unknown[] | null;
+    custom_total?: boolean | null;
+    total_amount?: number | string | null;
+  },
+  opts: {
+    palette: Partial<Record<ColorSituation, string | null>>;
+    active?: readonly ColorSituation[];
+  },
+): ColorSituation | null {
+  if (apt.kind !== "work") return null;
+  if (apt.status === "cancelled") return null;
+  return resolveRecordSituation({
+    override: apt.color_override,
+    filled: recordFilled(apt),
+    palette: opts.palette,
+    active: opts.active,
+  });
+}
+
+/** Худшая дыра ДНЯ — первая по `COLOR_SITUATIONS`. Порядок важности остаётся
+ *  одним массивом на продукт: правило записи, поднятое на день, без второго
+ *  ранжирования. */
+export function worstSituation(
+  ids: readonly (ColorSituation | null)[],
+): ColorSituation | null {
+  let best = -1;
+  for (const id of ids) {
+    if (!id) continue;
+    const i = COLOR_SITUATIONS.findIndex((s) => s.id === id);
+    if (i >= 0 && (best < 0 || i < best)) best = i;
+  }
+  return best < 0 ? null : COLOR_SITUATIONS[best].id;
+}
+
 export function resolveRecordColor(input: RecordColorInput): string {
   const own = (input.override ?? "").trim();
   if (own) return own;

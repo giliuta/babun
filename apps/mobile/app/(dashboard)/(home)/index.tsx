@@ -110,10 +110,11 @@ import {
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
+  appointmentSituation,
   recordFilled,
   resolveRecordColor,
   serviceBaseColor,
-  resolveRecordSituation,
+  worstSituation,
   type ColorSituation,
 } from "@/features/appointments/record-color";
 import { MonthView } from "@/features/calendar/MonthView";
@@ -981,10 +982,7 @@ export default function CalendarTab() {
   // для слова.
   const situationFor = useCallback(
     (a: Appointment): string | null => {
-      if (a.kind !== "work") return null;
-      const id = resolveRecordSituation({
-        override: a.color_override,
-        filled: recordFilled(a),
+      const id = appointmentSituation(a, {
         palette: situationPalette,
         active: activeSituations,
       });
@@ -1099,6 +1097,53 @@ export default function CalendarTab() {
   const visibleAppts = useMemo(
     () => expandedAppts.filter(byTeam),
     [expandedAppts, byTeam],
+  );
+
+  // ДЫРА ДНЯ ДЛЯ МЕСЯЦА — один проход на весь пейджер (три страницы месяца
+  // живут одновременно). Считается по ВИДИМОМУ набору, тому же, что даёт
+  // счётчик: денежный набор сюда подставлять нельзя, они намеренно расходятся
+  // по «Скрывать отменённые». В остальных видах не считаем вовсе.
+  const holeByDay = useMemo(() => {
+    const out = new Map<string, { name: string; color: string }>();
+    if (mode !== "month") return out;
+    const byDate = new Map<string, (ColorSituation | null)[]>();
+    for (const a of visibleAppts) {
+      const arr = byDate.get(a.date) ?? [];
+      arr.push(
+        appointmentSituation(a, {
+          palette: situationPalette,
+          active: activeSituations,
+        }),
+      );
+      byDate.set(a.date, arr);
+    }
+    for (const [date, list] of byDate) {
+      const worst = worstSituation(list);
+      const color = worst ? (situationPalette[worst] ?? "").trim() : "";
+      if (!worst || !color) continue;
+      out.set(date, {
+        name: COLOR_SITUATIONS.find((s) => s.id === worst)?.label ?? "",
+        color,
+      });
+    }
+    return out;
+  }, [mode, visibleAppts, situationPalette, activeSituations]);
+  const holeFor = useCallback(
+    (dateYmd: string) => holeByDay.get(dateYmd) ?? null,
+    [holeByDay],
+  );
+  // Стрелка прямо в пропе делала `memo` месяца мёртвым: свежая функция на
+  // каждый рендер родителя перерисовывала все три страницы пейджера, и
+  // стабильность `holeFor` ничего не защищала.
+  const onPickLabelDayMonth = useMemo(
+    () =>
+      canManageDayLabels && activeTeamId
+        ? (dateYmd: string) => {
+            haptics.tap();
+            setCityPickerYmd(dateYmd);
+          }
+        : undefined,
+    [canManageDayLabels, activeTeamId],
   );
 
   // Денежный набор: «Скрывать отменённые» — визуальная настройка сетки и
@@ -2347,15 +2392,9 @@ export default function CalendarTab() {
                   todayYmd={todayYmd}
                   showFinance={canViewCompanyFinance}
                   labelFor={labelFor}
+                  holeFor={holeFor}
                   onPickDay={openWeekFromMonth}
-                  onPickLabelDay={
-                    canManageDayLabels && activeTeamId
-                      ? (ymd) => {
-                          haptics.tap();
-                          setCityPickerYmd(ymd);
-                        }
-                      : undefined
-                  }
+                  onPickLabelDay={onPickLabelDayMonth}
                 />
               )}
             />

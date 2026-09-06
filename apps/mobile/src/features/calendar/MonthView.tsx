@@ -13,6 +13,10 @@ import {
   weekdayIndex,
   weekdayLabels,
 } from "@/features/calendar/week";
+import {
+  edgeColor,
+  readableTextOnColor,
+} from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
 
 const ymd = (d: Date) =>
@@ -45,6 +49,7 @@ export const MonthView = memo(function MonthView({
   teamId,
   todayYmd,
   labelFor,
+  holeFor,
   onPickDay,
   onPickLabelDay,
   showFinance = true,
@@ -65,6 +70,10 @@ export const MonthView = memo(function MonthView({
   /** Метка дня (город) — цветная точка у числа: месяц показывает маршрут
    *  меток так же, как шапки Дня/Недели (единая система дат). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;
+  /** Дыра дня — «чего этой работе не хватает», агрегатом на день: первая
+   *  незакрытая ситуация по `COLOR_SITUATIONS`. Месяц говорит «сюда надо
+   *  зайти»; имя дыры остаётся ленте и озвучке. */
+  holeFor?: (dateYmd: string) => { name: string; color: string } | null;
   /** Долгий тап по дню — провалиться в Неделю этого дня (тап без меток —
    *  тоже, см. onPickLabelDay). */
   onPickDay: (d: Date) => void;
@@ -121,7 +130,6 @@ export const MonthView = memo(function MonthView({
 
   const t = useThemeColors();
   const todayStr = todayYmd ?? ymd(new Date());
-  const accentTint = `${t.accent}1f`;
 
   return (
     <View style={{ flex: 1, backgroundColor: t.surface }}>
@@ -162,6 +170,13 @@ export const MonthView = memo(function MonthView({
               const count = byDay.get(key)?.length ?? 0;
               const totals = totalsByDay.get(key) ?? null;
               const label = inMonth ? labelFor?.(key) ?? null : null;
+              // ГРОМКО — ТОЛЬКО СЕГОДНЯ И ВПЕРЁД: в прошлом дозаполнять уже
+              // нечего, а половина месяца в тёмных пилюлях убила бы сигнал
+              // частотой. Гейта `inMonth` здесь НЕТ (в отличие от метки):
+              // хвостовые дни чужого месяца — настоящие дни, и счётчик с
+              // деньгами на них не гасится.
+              const hole = count > 0 && key >= todayStr ? holeFor?.(key) ?? null : null;
+              const pill = hole ? edgeColor(hole.color) : null;
               return (
                 <Pressable
                   key={key}
@@ -171,7 +186,7 @@ export const MonthView = memo(function MonthView({
                   onLongPress={() => onPickDay(d)}
                   delayLongPress={350}
                   accessibilityRole="button"
-                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${label ? `, метка: ${label.name}` : ""}`}
+                  accessibilityLabel={`${d.getDate()} ${d.toLocaleDateString("ru-RU", { month: "long" })}${isToday ? ", сегодня" : ""}${count > 0 ? `, записей: ${count}` : ""}${hole ? `, ${hole.name.toLowerCase()}` : ""}${label ? `, метка: ${label.name}` : ""}`}
                   accessibilityHint={
                     onPickLabelDay
                       ? "Нажатие меняет метку, долгое нажатие открывает неделю"
@@ -219,17 +234,32 @@ export const MonthView = memo(function MonthView({
                         />
                       ) : null}
                     </View>
+                    {/* ЧИП СЧЁТЧИКА ГОВОРИТ ТРЕМЯ ГРОМКОСТЯМИ, а нового
+                        элемента в клетке не заводится. Пусто — чипа нет;
+                        обычный день — тихая цифра чернилами без подложки; день
+                        с незакрытой дырой сегодня или впереди — плотная пилюля
+                        цвета худшей дыры с белой цифрой. Перепад держится не
+                        на тоне, а на инверсии и количестве чернил: тихая цифра
+                        занимает около одной двенадцатой громкой, поэтому
+                        сигнал жив и в чёрно-белом, и при любом дальтонизме.
+                        Кобальтового чипа в месяце больше нет: кобальт остаётся
+                        за «сегодня» и за прибылью. */}
                     {count > 0 ? (
                       <View
                         className="rounded-full px-1.5"
-                        style={{ backgroundColor: accentTint }}
+                        style={{ backgroundColor: pill ?? "transparent" }}
                       >
                         <Text
+                          maxFontSizeMultiplier={1.3}
                           style={{
                             fontSize: 10,
                             fontWeight: "700",
                             lineHeight: 16,
-                            color: t.accent,
+                            color: pill
+                              ? readableTextOnColor(pill, t.ink, t.onAccent)
+                              : inMonth
+                                ? t.sub
+                                : t.faint,
                           }}
                         >
                           {count}
