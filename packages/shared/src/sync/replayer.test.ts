@@ -28,6 +28,7 @@ import {
   type CachedClient,
 } from "../db/cache/sql";
 import {
+  __resetReplayerForTests,
   kickReplayer,
   setReplayerDefaults,
   type QuotaGate,
@@ -137,6 +138,8 @@ function makeFakeSupabase(
 beforeEach(() => {
   setSql(new MemorySqlAdapter(new Database(":memory:")));
   __resetCacheForTests();
+  // Засов `draining` мог остаться от чужого файла (см. __resetReplayerForTests).
+  __resetReplayerForTests();
 });
 afterEach(() => {
   setReplayerDefaults(null);

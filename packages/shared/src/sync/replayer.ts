@@ -125,6 +125,17 @@ export interface ReplayerOptions {
 let draining = false;
 let pendingFollowup = false;
 
+/** ТОЛЬКО ДЛЯ ТЕСТОВ. Обёртки кэша зовут `void kickReplayer(...)` не дожидаясь
+ *  ответа; когда такой вызов ещё в полёте на границе двух тестовых файлов,
+ *  следующий файл получает `draining = true` и все его kick-и молча выходят
+ *  (на CI-раннере Linux это воспроизводилось стабильно: очередь не сливалась,
+ *  к серверу никто не обращался). Снимаем засов перед каждым тестом. */
+export function __resetReplayerForTests(): void {
+  draining = false;
+  pendingFollowup = false;
+  replayerDefaults = {};
+}
+
 // Cached wrappers deliberately know nothing about the host application: they
 // can enqueue an op and call `kickReplayer({ supabase })`, but they cannot
 // import the mobile quota/notification adapters. Keep those host adapters as
