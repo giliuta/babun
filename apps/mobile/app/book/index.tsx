@@ -74,7 +74,8 @@ import {
 import { useThemeColors } from "@/theme/colors";
 import { ICON } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
-import { readableTextOnColor, tintOver } from "@/components/ui/color-contrast";
+import { Halo } from "@/components/ui/Halo";
+import { tintOver } from "@/components/ui/color-contrast";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -1869,23 +1870,15 @@ export default function BookScreen() {
   // кобальтовой во всём остальном: один предмет двух цветов. Правило одно, и
   // цвет у записи есть ВСЕГДА — выбранный, ситуационный, командный или
   // запасной, — поэтому и гасить подсветку не от чего.
-  // ЦВЕТ ЗАПИСИ — ПОЛНОЦЕННЫЙ БЛОК (владелец 2026-09-07: «выбор оранжевого —
-  // полноценный оранжевый блок, чтоб ярко, не только сверху»). Шапка и первые
-  // две карточки (команда · метка, время) стоят на заливке цвета записи в
-  // полную силу; ниже — тихая подложка того же тона. Текст шапки выбирается
-  // по контрасту: белый на тёмных и насыщенных, чернила на светлых.
-  const heroBg = identityC;
-  const heroInk = readableTextOnColor(identityC, t.ink, "#FFFFFF");
-  const heroSub = heroInk === "#FFFFFF" ? "rgba(255,255,255,0.86)" : t.body;
-  const heroStyle = {
-    backgroundColor: heroBg,
-    paddingBottom: 14,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-    borderCurve: "continuous" as const,
-  };
-  const groundBg = tintOver(identityC, t.canvas, 0.08);
-  const headerBorder = tintOver(identityC, t.canvas, 0.28);
+  // ЦВЕТНЫМ СТАНОВИТСЯ ТОЛЬКО ЗАДНИЙ ФОН (владелец 2026-09-07: «верхние блоки —
+  // такие же обычные блоки, как клиент; оставь их как было, делай только
+  // задний фон цветным, и всё»). Подложка страницы берёт цвет записи в
+  // полную видимую силу (38 % поверх холста: белые карточки читаются, а
+  // страница — оранжевая, а не «чуть тёплая»); шапка того же тона, чтобы блок
+  // цвета шёл от статус-бара до кнопки. Карточки не трогаются.
+  const groundBg = tintOver(identityC, t.canvas, 0.38);
+  const headerBg = groundBg;
+  const headerBorder = tintOver(identityC, t.canvas, 0.55);
 
   // «Маршрут» — реальное действие (его не было): открыть адрес в картах.
   // МАРШРУТ ЖИВЁТ У СТРОКИ ОБЪЕКТА, А НЕ У ФОРМЫ. Свой лист маршрута тут
@@ -2006,10 +1999,17 @@ export default function BookScreen() {
   }
 
   return (
-    <Screen edges={["top"]} bg={heroBg}>
+    <Screen edges={["top"]} bg={groundBg}>
       {/* шапка: Отмена · заголовок · Цвет записи — на identity-подложке;
           выбор цвета живо подсвечивает шапку (halo), фон и CTA. */}
-      <View style={{ backgroundColor: heroBg }}>
+      <View
+        style={{
+          backgroundColor: headerBg,
+          borderBottomWidth: 1,
+          borderBottomColor: headerBorder,
+        }}
+      >
+        <Halo color={identityC} intensity={0.16} />
         <View className="flex-row items-center px-3" style={{ height: 48 }}>
           <Pressable
             onPress={requestClose}
@@ -2020,11 +2020,11 @@ export default function BookScreen() {
             }
             style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
           >
-            <Text style={{ fontSize: 16, color: heroSub }}>Отмена</Text>
+            <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
           </Pressable>
           <Text
             className="flex-1 text-center"
-            style={{ fontSize: 16, fontWeight: "600", color: heroInk }}
+            style={{ fontSize: 16, fontWeight: "600", color: t.ink }}
           >
             {title}
           </Text>
@@ -2054,31 +2054,18 @@ export default function BookScreen() {
                   кнопка шапки во всём продукте спорила с «Отмена» и заголовком.
                   Образец крупнее — 28pt, — чтобы читаться как кнопка; имя для
                   VoiceOver — в accessibilityLabel. */}
-              {/* На заливке своего же цвета образец виден только рамкой:
-                  белая плашка с цветным квадратом внутри — кнопка палитры на
-                  любом тоне. */}
               <View
                 style={{
                   width: 28,
                   height: 28,
                   borderRadius: t.radius.card,
                   borderCurve: "continuous",
-                  backgroundColor: t.surface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0px 1px 4px rgba(0,0,0,0.18)",
+                  backgroundColor: identityC,
+                  borderWidth: 2,
+                  borderColor: t.surface,
+                  boxShadow: `0px 1px 4px ${identityC}66`,
                 }}
-              >
-                <View
-                  style={{
-                    width: 16,
-                    height: 16,
-                    borderRadius: 5,
-                    borderCurve: "continuous",
-                    backgroundColor: identityC,
-                  }}
-                />
-              </View>
+              />
             </Pressable>
           </View>
         </View>
@@ -2104,7 +2091,7 @@ export default function BookScreen() {
           bounces={false}
           overScrollMode="never"
           ref={scrollRef}
-          style={{ flex: 1, backgroundColor: groundBg }}
+          style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: 24 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -2147,9 +2134,6 @@ export default function BookScreen() {
 
           {kind === "work" ? (
             <>
-              {/* ГЕРОЙ ЦВЕТА: команда · метка и время — на заливке цвета записи,
-                  продолжающей шапку; ниже подложка тише. */}
-              <View style={heroStyle}>
               {/* Докет «Команда · Когда» — одна спокойная строка вместо пилюли
                   команды и карточки времени с мини-таймлайном */}
               {/* КТО И КУДА — одной карточкой: команда с мастером и метка
@@ -2194,7 +2178,6 @@ export default function BookScreen() {
                   haptics.tap();
                 }}
               />
-              </View>
 
               {/* КЛИЕНТ — ПЕРВЫЙ БЛОК И САМ ПО СЕБЕ (владелец 2026-08-31:
                   «первый блок это выбор клиента… потом второе это объект»).
@@ -2646,7 +2629,6 @@ export default function BookScreen() {
                   и оплаты, без названия («событие называется типом»), без
                   «весь день», повтора и напоминания («убрать совсем»).
                   «Личное» — событие без команды, как и было. */}
-              <View style={heroStyle}>
               <TeamLabelRow
                 teamName={teamId == null ? "Личное" : team?.name ?? "Команда"}
                 teamColor={teamId == null ? t.accent : team?.color ?? t.accent}
@@ -2676,7 +2658,6 @@ export default function BookScreen() {
                   haptics.tap();
                 }}
               />
-              </View>
 
               {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
                   у выбранного есть «убрать» — лист выбора пустого варианта не
