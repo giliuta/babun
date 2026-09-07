@@ -39,7 +39,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Версия bun — из .bun-version, та же, что у разработчика (см. ci.yml).
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
 
       - run: bun install --frozen-lockfile
 
