@@ -165,6 +165,9 @@ export interface Location {
    *  google.com/maps/dir по текстовому адресу. */
   mapUrl?: string;
   isPrimary: boolean;    // первый объект для автовыбора
+  /** Откуда объект: `client_link` — клиент сам отметил адрес по ссылке
+   *  (RPC location_request_submit, STORY-077). Пусто — заведён в CRM. */
+  source?: "client_link";
   /** v309 — заметка к объекту, видна команде у порога:
    *  «зелёная дверь, домофон 25», «снимать обувь», «собака во дворе». */
   note?: string;

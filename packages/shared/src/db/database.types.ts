@@ -1818,6 +1818,57 @@ export type Database = {
           },
         ]
       }
+      location_requests: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          location_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          location_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          location_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       master_documents: {
         Row: {
           created_at: string
@@ -3639,6 +3690,16 @@ export type Database = {
       list_payment_accounts_safe: {
         Args: { p_team_id: string }
         Returns: Json[]
+      }
+      location_request_coord: { Args: { p: number }; Returns: string }
+      location_request_create: {
+        Args: { p_client_id: string }
+        Returns: string
+      }
+      location_request_lookup: { Args: { p_token: string }; Returns: Json }
+      location_request_submit: {
+        Args: { p_payload: Json; p_token: string }
+        Returns: Json
       }
       lookup_rating_token: {
         Args: { p_token: string }
