@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client, ClientTag, Location } from "@babun/shared/local/clients";
 import ObjectsBlock from "@/features/clients/blocks/ObjectsBlock";
+import { useLocationRequestActions } from "@/features/clients/location-request-actions";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
@@ -10,6 +11,7 @@ import { ClientDocumentsRow } from "@/features/clients/blocks/ClientDocumentsRow
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 const EMPTY_LOCATIONS: Location[] = [];
 
@@ -47,6 +49,12 @@ export function ClientProfileBlocks({
     client.locations ?? EMPTY_LOCATIONS,
     update,
   );
+  // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077) — у сохранённого клиента и
+  // только владельцу/диспетчеру: черновику ссылку не выписать (нет id), а
+  // мастеру сервер откажет.
+  const role = useCurrentRole().data;
+  const canRequestAddress = !draft && (role === "owner" || role === "dispatcher");
+  const requestActions = useLocationRequestActions();
   return (
     <>
       <ObjectsBlock
@@ -54,6 +62,7 @@ export function ClientProfileBlocks({
         onOpen={(id) => setSheet({ id })}
         onDelete={(loc) => setSheet({ id: loc.id, askDelete: true })}
         onAdd={() => setObjectsOpen(true)}
+        requestsEnabled={canRequestAddress}
       />
       {/* Свайп по строке открывает тот же лист сразу с вопросом об удалении —
           подтверждение и запись остаются в одном месте. */}
@@ -72,6 +81,9 @@ export function ClientProfileBlocks({
         client={client}
         update={update}
         writer={locationWriter}
+        onRequestFromClient={
+          canRequestAddress ? () => void requestActions.request(client.id) : undefined
+        }
         onClose={() => setObjectsOpen(false)}
       />
 

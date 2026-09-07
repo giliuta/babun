@@ -6,6 +6,13 @@ import { RowGroup } from "@/components/ui/card-rows";
 import { AddRow } from "@/components/ui/AddRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
+import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
+import { useLocationRequestActions } from "@/features/clients/location-request-actions";
+import {
+  visibleLocationRequests,
+  type LocationRequest,
+} from "@/features/clients/location-request-link";
+import { useLocationRequests } from "@/features/clients/location-requests";
 import { objectTarget, routeAddress } from "@/features/clients/object-address";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -32,11 +39,14 @@ import { useThemeColors } from "@/theme/colors";
 // удаления в строке нет: она занимала бы место всегда и смыкалась зоной с
 // кнопкой маршрута — именно так палец однажды делал не то, во что целился.
 
+const EMPTY_REQUESTS: LocationRequest[] = [];
+
 export default function ObjectsBlock({
   client,
   onOpen,
   onDelete,
   onAdd,
+  requestsEnabled = false,
 }: {
   client: Client;
   /** Открыть лист правки этого объекта. */
@@ -46,8 +56,20 @@ export default function ObjectsBlock({
   /** Открыть лист добавления. Работает и в черновике: объект пишется в тот же
    *  черновик, поэтому пригашать строку больше не нужно. */
   onAdd: () => void;
+  /** Показывать ссылки «отметьте адрес», отправленные клиенту (STORY-077).
+   *  Только у сохранённого клиента и у владельца/диспетчера: черновику
+   *  ссылку не выписать, а мастеру таблица по RLS не видна. */
+  requestsEnabled?: boolean;
 }) {
   const t = useThemeColors();
+  // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС»: пока клиент не ответил, в списке стоит
+  // строка «Ждём адрес» — место объекта, которого ещё нет. Ответил — строка
+  // уходит, объект приезжает обычной строкой (см. useLocationRequests).
+  const { data: requests = EMPTY_REQUESTS } = useLocationRequests(
+    requestsEnabled ? client.id : null,
+  );
+  const requestActions = useLocationRequestActions();
+  const shownRequests = useMemo(() => visibleLocationRequests(requests), [requests]);
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
   const ordered = useMemo(
@@ -79,9 +101,17 @@ export default function ObjectsBlock({
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
           заводят несколько. */}
+      {shownRequests.map((request, i) => (
+        <LocationRequestRow
+          key={request.id}
+          request={request}
+          separated={ordered.length + i > 0}
+          onPress={() => void requestActions.menu(request)}
+        />
+      ))}
       <AddRow
         label="Добавить объект"
-        separated={ordered.length > 0}
+        separated={ordered.length + shownRequests.length > 0}
         onPress={onAdd}
       />
     </RowGroup>

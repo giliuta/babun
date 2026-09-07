@@ -138,6 +138,14 @@ import {
   resolveBookingTeamId,
 } from "@/features/appointments/booking-prefill";
 import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
+import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
+import { useLocationRequestActions } from "@/features/clients/location-request-actions";
+import {
+  visibleLocationRequests,
+  type LocationRequest,
+} from "@/features/clients/location-request-link";
+import { useLocationRequests } from "@/features/clients/location-requests";
+import { useCurrentRole } from "@/features/settings/tenant";
 import {
   ClientHistoryLine,
   clientHistoryText,
@@ -215,6 +223,7 @@ function TextInput({
 
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
+const EMPTY_REQUESTS: LocationRequest[] = [];
 const EMPTY_NOTES: ClientNote[] = [];
 /** Пауза перед первым листом цепочки: столько уезжает попап слота, из
  *  которого сюда пришли. Меньше — и лист подаётся поверх закрывающегося окна,
@@ -571,6 +580,20 @@ export default function BookScreen() {
     () => clients.find((c) => c.id === clientId) ?? null,
     [clients, clientId],
   );
+  // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС» (STORY-077). Пока клиент не ответил, блок
+  // объекта показывает строку «Ждём адрес»: диспетчер видит, что адрес уже
+  // спрошен, и не спрашивает второй раз. Ответ приезжает объектом сам —
+  // useLocationRequests перечитывает клиентов, когда ссылка использована.
+  const { data: locationRequests = EMPTY_REQUESTS } = useLocationRequests(
+    client?.id ?? null,
+  );
+  const pendingRequests = useMemo(
+    () => visibleLocationRequests(locationRequests),
+    [locationRequests],
+  );
+  const requestActions = useLocationRequestActions();
+  const viewerRole = useCurrentRole().data;
+  const canRequestAddress = viewerRole === "owner" || viewerRole === "dispatcher";
   // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
   // только инвалидируется, и с полсекунды `client.locations` не знает о новом
   // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
@@ -2362,6 +2385,19 @@ export default function BookScreen() {
                         нет с тех пор, как ушёл словарь кондиционеров: строка
                         не могла загореться ни у одного клиента. */}
 
+                    {/* Ссылка клиенту ещё без ответа — строка «Ждём адрес»
+                        (STORY-077); при выбранном объекте она лишняя. */}
+                    {!selectedLocation
+                      ? pendingRequests.map((request, i) => (
+                          <LocationRequestRow
+                            key={request.id}
+                            request={request}
+                            separated={clientLocations.length > 0 || i > 0}
+                            onPress={() => void requestActions.menu(request)}
+                          />
+                        ))
+                      : null}
+
                     {/* У клиента без единого объекта выбирать нечего — первый
                         заводится прямо отсюда, листом добавления. */}
                     {clientLocations.length === 0 ? (
@@ -2878,6 +2914,11 @@ export default function BookScreen() {
           update={updateClientPatch}
           writer={locationWriter}
           initialTarget={locationId ? "" : address}
+          onRequestFromClient={
+            canRequestAddress
+              ? () => void requestActions.request(client.id)
+              : undefined
+          }
           onAdded={(added) => {
             setAddedLocation({
               clientId: client.id,

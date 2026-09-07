@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Send } from "lucide-react-native";
 import type { AddressParts, Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
@@ -16,6 +17,7 @@ import {
   FieldRow,
   RowGroup,
 } from "@/components/ui/card-rows";
+import { ChooseRow } from "@/components/ui/ChooseRow";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   AddressDetailsFields,
@@ -91,6 +93,7 @@ export function ObjectSheet({
   writer,
   initialTarget,
   onAdded,
+  onRequestFromClient,
   onClose,
 }: {
   visible: boolean;
@@ -110,6 +113,11 @@ export function ObjectSheet({
     mapUrl?: string;
     note?: string;
   }) => void;
+  /** «Попросить адрес у клиента» (STORY-077): выписать ссылку и открыть
+   *  «Поделиться». Нет — строки нет (черновик клиента, роль мастера). Лист
+   *  сперва уходит, действие запускается после его ухода: системный лист
+   *  «Поделиться» поверх уходящего модального окна iOS закрывает вместе с ним. */
+  onRequestFromClient?: () => void;
   /** Только что добавленный объект убрали «✕». Экран записи по этому сигналу
    *  снимает выбор, если выбрал именно его: иначе id висел бы на удалённом. */
   onClose: () => void;
@@ -127,6 +135,8 @@ export function ObjectSheet({
   const [saving, setSaving] = useState(false);
   /** Идёт запись (добавление или отмена) — синхронно, в отличие от `saving`. */
   const busy = useRef(false);
+  /** Что сделать, когда лист полностью уйдёт (см. onRequestFromClient). */
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Предзаполнение — РОВНО ОДИН РАЗ на открытие и только в пустой черновик:
   // лист остаётся смонтированным, и без засова подстановка перетирала бы то,
@@ -237,6 +247,11 @@ export function ObjectSheet({
       title="Новый объект"
       maxHeightRatio={0.92}
       avoidKeyboard
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
     >
       {/* Тело листа — язык страницы (группы строк на прохладном фоне): лист
           заменяет собой страницу, и строки в нём те же самые. Паддинги только
@@ -346,6 +361,24 @@ export function ObjectSheet({
           </View>
         </RowGroup>
 
+        {/* АДРЕС МОЖНО НЕ СПРАШИВАТЬ ГОЛОСОМ (владелец 2026-09-07: «менеджеру
+            сложно постоянно запрашивать локацию — легче скопировать ссылку
+            нашего ПО, клиент сам заходит и вносит, куда приехать мастеру»).
+            Дверь стоит под формой: сперва человек пробует ввести адрес сам,
+            и лишь когда его нет под рукой — отправляет ссылку. */}
+        {onRequestFromClient ? (
+          <RowGroup>
+            <ChooseRow
+              icon={Send}
+              label="Попросить адрес у клиента"
+              hint="Выписывает ссылку и открывает «Поделиться»"
+              onPress={() => {
+                afterExit.current = onRequestFromClient;
+                close();
+              }}
+            />
+          </RowGroup>
+        ) : null}
       </ScrollView>
 
       {/* Футер — единственная громкая поверхность листа. Над клавиатурой его
