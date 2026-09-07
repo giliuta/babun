@@ -11,7 +11,6 @@ import { randomUuid } from "@babun/shared/sync/uuid";
 import { formatEUR } from "@babun/shared/common/utils/money";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { useToast } from "@/components/ui/Toast";
-import { useClientAppointments } from "@/features/clients/appointments";
 import {
   debtReminderChannels,
   debtReminderNote,
@@ -25,9 +24,7 @@ import {
 import { useThemeColors } from "@/theme/colors";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { clientDebt, todayYMD } from "@/features/clients/filter";
-import { lastVisitTarget } from "@/features/clients/repeat-visit";
-import { useServices } from "@/features/services/queries";
+import { clientDebt } from "@/features/clients/filter";
 import { NavRow, RowGroup } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
 
@@ -79,24 +76,6 @@ export default function ClientContactRow({
     client.locations?.find((l) => l.isPrimary)?.id ??
     client.locations?.[0]?.id ??
     null;
-
-  // «Как в прошлый раз» считается по записям ЭТОГО клиента; в черновике их
-  // нет по определению, поэтому запрос там не поднимаем.
-  const { data: appts = [] } = useClientAppointments(draft ? "" : client.id);
-  const { data: services = [] } = useServices();
-  // Справочник — источник и ОТБОРА (что ещё можно повторить), и ИМЁН (запись
-  // хранит id услуги с ценой, но без названия). Одна карта на оба дела.
-  const serviceNames = useMemo(
-    () => new Map(services.map((s) => [s.id, s.name])),
-    [services],
-  );
-  const repeat = useMemo(
-    () => (draft ? null : lastVisitTarget(appts, todayYMD(), new Set(serviceNames.keys()))),
-    [appts, draft, serviceNames],
-  );
-  const repeatWhat = repeat
-    ? repeat.serviceIds.map((id) => serviceNames.get(id)).join(" · ")
-    : null;
 
   // ── долг: сумма, текст напоминания и каналы, которые умеют его нести ──
   const [debtOpen, setDebtOpen] = useState(false);
@@ -152,31 +131,9 @@ export default function ClientContactRow({
             })
           }
         />
-        {/* КАК В ПРОШЛЫЙ РАЗ — самая частая работа сервиса: тот же адрес,
-            та же услуга, та же команда. Строка появляется только когда
-            прошлый раз ЕСТЬ, и справа говорит, что именно подставит.
-
-            Не «Повторить» (владелец 2026-08-08: «что такое повторить — есть
-            слово записать и есть слово повторить»). Одинокий глагол не
-            говорил, ЧТО повторяют, и — хуже — в продукте он уже занят: в
-            семи местах «Повторить» значит «повторить неудавшуюся попытку»
-            (загрузка фото, импорт, обновление роли). Соседство с «Записать»
-            превращало пару в загадку вместо двух понятных дверей: первая
-            открывает пустую запись, вторая — заполненную прошлым визитом. */}
-        {repeat ? (
-          <NavRow
-            label="Как в прошлый раз"
-            value={repeatWhat ?? undefined}
-            separated
-            onPress={() =>
-              guardedBook(client, {
-                locationId: repeat.locationId ?? primaryLocationId,
-                teamId: repeat.teamId ?? stats?.lastTeamId ?? null,
-                serviceIds: repeat.serviceIds,
-              })
-            }
-          />
-        ) : null}
+        {/* Строки «Как в прошлый раз» здесь больше нет (владелец 2026-09-07:
+            «это в клиентах не надо»). Повтор прошлого визита — дело формы
+            записи, а не карточки. */}
         {/* ДОЛГ — ГЛАГОЛ, А НЕ ЦИФРА. Сумма и раньше печаталась в сводке
             выше, но сделать с ней с карточки было нечего: текст напоминания
             и шаблоны жили на экране должников в другом табе. */}

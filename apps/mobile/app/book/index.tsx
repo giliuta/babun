@@ -318,7 +318,6 @@ export default function BookScreen() {
     teamId?: string;
     clientId?: string;
     locationId?: string;
-    services?: string;
     reminderId?: string;
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
@@ -437,9 +436,7 @@ export default function BookScreen() {
     addMinutesHM(first(params.time_start) ?? "10:00", 60),
   );
   const [durationTouched, setDurationTouched] = useState(false);
-  const [serviceIds, setServiceIds] = useState<string[]>(
-    first(params.services)?.split(",").filter(Boolean) ?? [],
-  );
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>(
     {},
   );
@@ -1520,12 +1517,6 @@ export default function BookScreen() {
           { label: "клиентов", query: clientsQuery },
           ...(isEdit
             ? ([{ label: "запись", query: appointmentsQuery }] as const)
-            : ([] as const)),
-          // Если услуги пришли параметром (deep-link), а каталог не грузится —
-          // гейтим экраном-ретраем, иначе фантомный service_id навсегда держит
-          // canSave=false без способа его убрать (soft-lock).
-          ...(first(params.services)
-            ? ([{ label: "услуги", query: servicesQuery }] as const)
             : ([] as const)),
         ] as const);
   const failedReference = essentialQueries.find(({ query }) => query.isError);
