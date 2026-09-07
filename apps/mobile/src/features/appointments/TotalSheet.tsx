@@ -312,78 +312,125 @@ function ServiceLine({
   onPriceChange: (serviceId: string, price: number) => void;
 }) {
   const t = useThemeColors();
-  const unit = line.unit ? ` ${line.unit}` : "";
-  // ЧЕРНОВИК ЦЕНЫ — СВОЙ У СТРОКИ. Пока набирают «13», строка не должна
-  // превращаться в «€13» и терять то, что человек ещё не дописал; число
-  // уходит в запись на каждый символ, а показывает поле набранное.
-  const [draft, setDraft] = useState<string | null>(null);
-  const shown = draft ?? String(Number(line.pricePerUnit.toFixed(2)));
+  // ЧЕРНОВИКИ — СВОИ У КАЖДОГО ПОЛЯ. Пока набирают «13», строка не должна
+  // превращаться в «€13» и терять то, что человек ещё не дописал; число уходит
+  // в запись на каждый символ, а показывает поле набранное.
+  const [unitDraft, setUnitDraft] = useState<string | null>(null);
+  const [totalDraft, setTotalDraft] = useState<string | null>(null);
+  const unitShown = unitDraft ?? String(Number(line.pricePerUnit.toFixed(2)));
+  const totalShown = totalDraft ?? String(Number(line.totalPrice.toFixed(2)));
   return (
     <View
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        minHeight: 56,
         paddingHorizontal: 14,
+        paddingVertical: 8,
+        gap: 2,
         borderRadius: t.radius.input,
         backgroundColor: t.rowFill,
       }}
     >
-      <ColorDot value={color} size={10} />
-      <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 40 }}>
+        <ColorDot value={color} size={10} />
         <Text
           numberOfLines={1}
-          style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
         >
           {name}
         </Text>
-        <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
-          {durationLabel(line.duration)}
-          {line.quantity > 1 ? ` · всего ${formatEURExact(line.totalPrice)}` : ""}
+        <StepButton
+          icon="minus"
+          label={`Убавить: ${name}`}
+          onPress={() => onQtyChange(line.serviceId, line.quantity - 1)}
+        />
+        <Text
+          style={{
+            minWidth: 22,
+            textAlign: "center",
+            fontSize: 15,
+            fontWeight: "700",
+            color: t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {line.quantity}
         </Text>
+        <StepButton
+          icon="plus"
+          label={`Добавить: ${name}`}
+          onPress={() => onQtyChange(line.serviceId, line.quantity + 1)}
+        />
       </View>
-      <StepButton
-        icon="minus"
-        label={`Убавить: ${name}`}
-        onPress={() => onQtyChange(line.serviceId, line.quantity - 1)}
-      />
-      <Text
-        style={{
-          minWidth: 22,
-          textAlign: "center",
-          fontSize: 15,
-          fontWeight: "700",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {line.quantity}
-      </Text>
-      <StepButton
-        icon="plus"
-        label={`Добавить: ${name}`}
-        onPress={() => onQtyChange(line.serviceId, line.quantity + 1)}
-      />
-      {/* ЦЕНА ЗА ОДНУ — ЕДИНСТВЕННОЕ ЧИСЛО, КОТОРОЕ ЗДЕСЬ ПРАВЯТ (владелец
-          2026-09-04: «чистка 135 €, я ставлю 130 € — и тогда меняется итого»).
-          Прайс при этом не трогается: цена живёт в снимке ЭТОЙ записи. */}
+      {/* ЦЕНА ЗА ОДНУ И СУММА СТРОКИ — ПРАВЯТСЯ ОБЕ (владелец 2026-09-07:
+          «в итого редактировать могу либо по количеству за штуку, либо общую
+          сумму»). Снимок строки хранит цену за штуку, итог = цена × количество
+          в копейках; набранная сумма пересчитывает цену за одну, и если она
+          не делится на количество без остатка, итог сойдётся с точностью до
+          копейки. Прайс каталога не трогается. */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: t.sub }}>
+          {durationLabel(line.duration)}
+        </Text>
+        <MoneyCell
+          label="за шт"
+          value={unitShown}
+          accessibilityLabel={`Цена за одну: ${name}`}
+          onChange={(next) => {
+            setUnitDraft(next);
+            setTotalDraft(null);
+            onPriceChange(line.serviceId, parseMoneyInput(next));
+          }}
+          onBlur={() => setUnitDraft(null)}
+        />
+        <MoneyCell
+          label="всего"
+          value={totalShown}
+          accessibilityLabel={`Сумма строки: ${name}`}
+          onChange={(next) => {
+            setTotalDraft(next);
+            setUnitDraft(null);
+            const total = parseMoneyInput(next);
+            const qty = Math.max(1, line.quantity);
+            onPriceChange(line.serviceId, Math.round((total / qty) * 100) / 100);
+          }}
+          onBlur={() => setTotalDraft(null)}
+        />
+      </View>
+    </View>
+  );
+}
+
+/** Подписанное денежное поле строки: «за шт 45 €», «всего 135 €». Подпись
+ *  тихая, число держит вес — как в строке услуги на странице записи. */
+function MoneyCell({
+  label,
+  value,
+  accessibilityLabel,
+  onChange,
+  onBlur,
+}: {
+  label: string;
+  value: string;
+  accessibilityLabel: string;
+  onChange: (next: string) => void;
+  onBlur: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <Text style={{ fontSize: 12, color: t.sub }}>{label}</Text>
       <TextInput
         keyboardAppearance="light"
-        value={shown}
-        onChangeText={(next) => {
-          setDraft(next);
-          onPriceChange(line.serviceId, parseMoneyInput(next));
-        }}
-        onBlur={() => setDraft(null)}
+        value={value}
+        onChangeText={onChange}
+        onBlur={onBlur}
         selectTextOnFocus
         keyboardType="decimal-pad"
         placeholder="0"
         placeholderTextColor={t.placeholder}
-        accessibilityLabel={`Цена: ${name}${unit ? ` за${unit}` : ""}`}
+        accessibilityLabel={accessibilityLabel}
         style={{
-          minWidth: 52,
-          minHeight: 44,
+          minWidth: 44,
+          minHeight: 40,
           textAlign: "right",
           fontSize: 15,
           fontWeight: "700",
@@ -391,7 +438,7 @@ function ServiceLine({
           fontVariant: ["tabular-nums"],
         }}
       />
-      <Text style={{ fontSize: 15, fontWeight: "600", color: t.sub }}>€</Text>
+      <Text style={{ fontSize: 14, fontWeight: "600", color: t.sub }}>€</Text>
     </View>
   );
 }
