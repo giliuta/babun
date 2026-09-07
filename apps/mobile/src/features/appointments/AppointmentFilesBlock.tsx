@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Linking, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Camera, FileText, Images, Receipt, ScanLine } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { formatEURExact } from "@babun/shared/common/utils/money";
+import { listAccounts } from "@babun/shared/db/repositories/accounts";
+import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { randomUuid } from "@babun/shared/sync";
 import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet, type PickerSheetItem } from "@/components/ui/PickerSheet";
@@ -11,6 +14,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
+import { supabase } from "@/lib/supabase";
+import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import {
   getSignedUrl,
@@ -21,6 +26,7 @@ import {
   type PickedFile,
 } from "@/features/clients/card-attachments";
 import { formatShortDateRu } from "@/features/clients/format";
+import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useInvoices } from "@/features/invoices/queries";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
@@ -78,6 +84,7 @@ export function AppointmentFilesBlock({
   const t = useThemeColors();
   const toast = useToast();
   const router = useRouter();
+  const tenantId = useTenantId();
   const tileWidth = useTileWidth(3);
   const businessNow = useBusinessNow();
   const saved = appointmentId != null;
@@ -89,6 +96,16 @@ export function AppointmentFilesBlock({
   const removeDoc = useDeleteAttachment(clientId ?? "");
   const invoicesQuery = useInvoices();
   const receiptsQuery = useReceipts({ appointmentId, enabled: saved });
+  // ЧЕК ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ЛИСТОМ С «ВЫСЛАТЬ ЧЕК» (STORY-068): раньше плитка
+  // уводила на экран всех чеков клиента, и до отправки было три экрана. Имя
+  // счёта листу — из того же справочника, что у оплаты; грузится по открытию.
+  const [openReceipt, setOpenReceipt] = useState<ReceiptDoc | null>(null);
+  const accountRows = useQuery({
+    queryKey: ["accounts", tenantId, "rows", "all"],
+    enabled: !!tenantId && openReceipt != null,
+    queryFn: () =>
+      listAccounts(supabase, tenantId as string, { includeInactive: true }),
+  });
   const [viewer, setViewer] = useState<AppointmentPhotoRecord | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -252,11 +269,7 @@ export function AppointmentFilesBlock({
                 title={`Чек ${r.number}`}
                 subtitle={`${formatEURExact(r.amount)} · ${formatShortDateRu(r.issued_on)}`}
                 size={tileWidth}
-                onOpen={() =>
-                  router.push(
-                    (clientId ? { pathname: "/documents/receipts", params: { clientId } } : "/documents/receipts") as Href,
-                  )
-                }
+                onOpen={() => setOpenReceipt(r)}
               />
             ))}
             {pending.map((file) => (
@@ -303,6 +316,19 @@ export function AppointmentFilesBlock({
         photo={viewer}
         onClose={() => setViewer(null)}
         onRetry={async () => (await photosQuery.refetch()).isSuccess}
+      />
+
+      {/* Запись листу не передаём: мы и так на ней — строка «запись» в чеке
+          молчит, а «Выслать чек» работает как на экране чеков. */}
+      <ReceiptSheet
+        receipt={openReceipt}
+        appointment={null}
+        accountName={
+          (accountRows.data ?? []).find((a) => a.id === openReceipt?.account_id)
+            ?.name ?? null
+        }
+        onClose={() => setOpenReceipt(null)}
+        onOpen={(href) => router.push(href as Href)}
       />
     </>
   );
