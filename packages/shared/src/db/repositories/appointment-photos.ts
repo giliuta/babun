@@ -95,6 +95,36 @@ async function rowWithUrl(
   };
 }
 
+/** Пути блобов записи — снять ДО удаления записи: строки уходят каскадом
+ *  вместе с ней, а файлы в хранилище сами не исчезают. */
+export async function listPhotoPaths(
+  supabase: DbSupabase,
+  appointmentId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("appointment_photos")
+    .select("storage_path")
+    .eq("appointment_id", appointmentId);
+  if (error) throw new Error(`listPhotoPaths: ${error.message}`);
+  return (data ?? [])
+    .map((r) => (r as { storage_path: string | null }).storage_path ?? "")
+    .filter((path) => path.length > 0);
+}
+
+/** Убрать блобы из хранилища, best effort: запись уже удалена, и осиротевший
+ *  файл — мусор, а не потеря; ошибку не поднимаем. */
+export async function removePhotoBlobs(
+  supabase: DbSupabase,
+  paths: readonly string[],
+): Promise<void> {
+  if (paths.length === 0) return;
+  try {
+    await supabase.storage.from(BUCKET).remove([...paths]);
+  } catch {
+    // Осиротевший блоб не стоит ошибки на экране удаления.
+  }
+}
+
 /** All photos for one appointment, sorted by sort_order then created_at. */
 export async function listPhotosForAppointment(
   supabase: DbSupabase,
