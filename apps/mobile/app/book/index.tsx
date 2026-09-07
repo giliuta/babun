@@ -76,6 +76,7 @@ import { ICON } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
+import { PageWash } from "@/features/appointments/PageWash";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -1890,9 +1891,14 @@ export default function BookScreen() {
   // полную видимую силу (38 % поверх холста: белые карточки читаются, а
   // страница — оранжевая, а не «чуть тёплая»); шапка того же тона, чтобы блок
   // цвета шёл от статус-бара до кнопки. Карточки не трогаются.
-  const groundBg = tintOver(identityC, t.canvas, 0.38);
-  const headerBg = groundBg;
-  const headerBorder = tintOver(identityC, t.canvas, 0.55);
+  // ПОДСВЕТКА, А НЕ ЗАЛИВКА (владелец 2026-09-07: «не прям жёлтая… плавная,
+  // не ядовитая, красивая подсветка»). Сплошные 38 % красили страницу целиком;
+  // теперь цвет записи стоит у шапки на 22 % и мягко сходит на нет к середине
+  // экрана (PageWash), низ страницы и футер — обычный холст.
+  const WASH = 0.22;
+  const groundBg = t.canvas;
+  const headerBg = tintOver(identityC, t.canvas, WASH);
+  const headerBorder = tintOver(identityC, t.canvas, 0.36);
 
   // «Маршрут» — реальное действие (его не было): открыть адрес в картах.
   // МАРШРУТ ЖИВЁТ У СТРОКИ ОБЪЕКТА, А НЕ У ФОРМЫ. Свой лист маршрута тут
@@ -2014,6 +2020,9 @@ export default function BookScreen() {
 
   return (
     <Screen edges={["top"]} bg={groundBg}>
+      {/* Подсветка цветом записи — ПОД шапкой и содержимым: рисуется первой,
+          шапка со своей подложкой ложится поверх. */}
+      <PageWash color={identityC} strength={WASH} />
       {/* шапка: Отмена · заголовок · Цвет записи — на identity-подложке;
           выбор цвета живо подсвечивает шапку (halo), фон и CTA. */}
       <View
@@ -2824,7 +2833,7 @@ export default function BookScreen() {
             paddingBottom: keyboardShown ? 8 : insets.bottom + 8,
             backgroundColor: groundBg,
             borderTopWidth: 1,
-            borderTopColor: headerBorder,
+            borderTopColor: t.separator,
           }}
         >
         {/* Причина, почему кнопка ещё не активна — всегда видна над CTA
