@@ -1,27 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
-import { AccessibilityInfo, Pressable, ScrollView, Text, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { X } from "lucide-react-native";
-import type { Client, Location } from "@babun/shared/local/clients";
+import { Send } from "lucide-react-native";
+import type { AddressParts, Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
   ChoiceRow,
   FieldRow,
-  RowActionButton,
   RowGroup,
 } from "@/components/ui/card-rows";
+import { ChooseRow } from "@/components/ui/ChooseRow";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
-  addressOrLinkPatch,
-  objectTarget,
+  AddressDetailsFields,
+  AddressDetailsToggle,
+} from "@/features/clients/AddressPartsFields";
+import {
+  composeDetails,
+  hasAddressPlace,
+  objectPlacePatch,
 } from "@/features/clients/object-address";
+import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import {
   defaultObjectType,
   snapObjectType,
   useFrozenObjectTypes,
 } from "@/features/clients/object-types";
 import { useClients } from "@/features/clients/queries";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -56,17 +70,21 @@ import { useThemeColors } from "@/theme/colors";
 
 /** Стабильная пустая ссылка: новый литерал в пропе писателя пересобирал бы
  *  его на каждый рендер. */
-const EMPTY_LOCATIONS: Location[] = [];
 
 interface Draft {
   label: string;
   /** Сырой ввод «адрес или ссылка». Разбор на address/mapUrl — при добавлении:
    *  разбирать на каждый символ значило бы подменять набираемый текст. */
   target: string;
+  /** Уточнение (2026-09-06): части БЕЗ улицы — она в `target`; пин — отдельная
+   *  ссылка, когда главная строка текст. `partsOpen` — раскрыто ли. */
+  parts: AddressParts;
+  partsOpen: boolean;
+  pin: string;
   note: string;
 }
 
-const EMPTY_DRAFT: Draft = { label: "", target: "", note: "" };
+const EMPTY_DRAFT: Draft = { label: "", target: "", parts: {}, partsOpen: false, pin: "", note: "" };
 
 export function ObjectSheet({
   visible,
@@ -75,6 +93,7 @@ export function ObjectSheet({
   writer,
   initialTarget,
   onAdded,
+  onRequestFromClient,
   onClose,
 }: {
   visible: boolean;
@@ -94,10 +113,19 @@ export function ObjectSheet({
     mapUrl?: string;
     note?: string;
   }) => void;
+  /** «Попросить адрес у клиента» (STORY-077): выписать ссылку и открыть
+   *  «Поделиться». Нет — строки нет (черновик клиента, роль мастера). Лист
+   *  сперва уходит, действие запускается после его ухода: системный лист
+   *  «Поделиться» поверх уходящего модального окна iOS закрывает вместе с ним. */
+  onRequestFromClient?: () => void;
+  /** Только что добавленный объект убрали «✕». Экран записи по этому сигналу
+   *  снимает выбор, если выбрал именно его: иначе id висел бы на удалённом. */
   onClose: () => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const typesHref = useReferenceHref().objectTypes;
   const insets = useSafeAreaInsets();
   const keyboardShown = useKeyboardShown();
   const { data: allClients = [] } = useClients();
@@ -107,10 +135,8 @@ export function ObjectSheet({
   const [saving, setSaving] = useState(false);
   /** Идёт запись (добавление или отмена) — синхронно, в отличие от `saving`. */
   const busy = useRef(false);
-  // Добавленные в ЭТОМ листе — только их можно отменить одним тапом.
-  const [addedIds, setAddedIds] = useState<string[]>([]);
-
-  const objects = client.locations ?? EMPTY_LOCATIONS;
+  /** Что сделать, когда лист полностью уйдёт (см. onRequestFromClient). */
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Предзаполнение — РОВНО ОДИН РАЗ на открытие и только в пустой черновик:
   // лист остаётся смонтированным, и без засова подстановка перетирала бы то,
@@ -144,7 +170,8 @@ export function ObjectSheet({
 
   // Объект существует, когда есть адрес ИЛИ ссылка: метка одна ничего не
   // значит, а по адресу или пину команда доедет.
-  const ready = draft.target.trim().length > 0;
+  const ready =
+    draft.target.trim().length > 0 || hasAddressPlace(draft.parts);
 
   const add = async (): Promise<boolean> => {
     // Засов СИНХРОННЫЙ: между тапом и появлением saving есть кадр, в котором
@@ -153,29 +180,36 @@ export function ObjectSheet({
     busy.current = true;
     setSaving(true);
     try {
-      const { address, mapUrl } = addressOrLinkPatch(draft.target);
+      // Главная строка + уточнение → одно место: строка-ссылка станет пином,
+      // строка-текст — «улица и дом» (см. objectPlacePatch).
+      const { address, mapUrl, addressParts } = objectPlacePatch(
+        draft.target,
+        draft.parts,
+        draft.pin,
+      );
       const id = await writer.addLocation({
         label: snapObjectType(type, typeOptions),
         address,
         mapUrl,
+        addressParts,
         note: draft.note.trim() || undefined,
-        });
+      });
       if (!id) {
         // Причину показал useUpdateClient — набранное НЕ выбрасываем.
         haptics.error();
         return false;
       }
       haptics.success();
-      setAddedIds((cur) => [...cur, id]);
       onAdded?.({ id, label: snapObjectType(type, typeOptions), address, mapUrl, note: draft.note.trim() || undefined });
-      // Форма пустеет, но ВЫБРАННЫЙ ТИП остаётся: три виллы подряд не должны
-      // требовать трёх тапов по чипу, а предзаполнение от основного объекта
-      // возвращало «Дом». Клавиатура тоже остаётся — следующий адрес набирают
-      // сразу, кнопка живёт в футере и фокус не отбирает.
+      // ДОБАВИЛ — ЛИСТ УХОДИТ (владелец 2026-09-04: «когда я добавил объект,
+      // он уже должен закрываться и перекидывать на саму запись»). Раньше лист
+      // оставался открытым под следующий объект, а добавленный уезжал в
+      // список «Уже есть» — экран отвечал на действие не тем, чего от него
+      // ждали: работа сделана, а лист стоит. Второй объект заводят вторым
+      // открытием, как и всё остальное в продукте.
       setDraft((d) => ({ ...EMPTY_DRAFT, label: d.label }));
-      // Анонс — не в тот же кадр: у сфокусированной кнопки прямо сейчас
-      // меняется состояние на «выключена», и VoiceOver перебивает сам себя
-      // (тот же приём, что в листе фильтров).
+      // Анонс — не в тот же кадр: лист уже уходит, и VoiceOver перебивал бы
+      // сам себя (тот же приём, что в листе фильтров).
       setTimeout(
         () =>
           AccessibilityInfo.announceForAccessibility(
@@ -183,6 +217,7 @@ export function ObjectSheet({
           ),
         350,
       );
+      close();
       return true;
     } finally {
       busy.current = false;
@@ -190,35 +225,12 @@ export function ObjectSheet({
     }
   };
 
-  const undo = async (loc: Location) => {
-    if (busy.current) return;
-    busy.current = true;
-    haptics.tap();
-    try {
-      const ok = await writer.removeLocation(loc.id);
-      if (ok) setAddedIds((cur) => cur.filter((id) => id !== loc.id));
-    } finally {
-      busy.current = false;
-    }
-  };
-
   // Закрытие скримом или свайпом НЕ выбрасывает набранное: спросить там
   // нечего, а правило карточки — «набранное не теряем молча». Черновик
   // доживёт до следующего открытия (лист остаётся смонтированным), так что
-  // работа продолжится с того же места. Сбрасываем только окно отмены: убрать
-  // одним тапом можно то, что добавил ТОЛЬКО ЧТО.
+  // работа продолжится с того же места.
   const close = () => {
-    setAddedIds([]);
     onClose();
-  };
-
-  // «Готово» — это «я закончил», а не «выйти без сохранения»: если адрес
-  // набран, объект ДОПИСЫВАЕТСЯ и только потом лист уходит. Иначе кнопка тем
-  // же словом, которым на карточке сохраняют клиента, молча выбрасывала бы
-  // работу. Запись не удалась — остаёмся на месте, причину уже показали.
-  const finish = async () => {
-    if (ready && !(await add())) return;
-    close();
   };
 
   return (
@@ -226,53 +238,21 @@ export function ObjectSheet({
       padded={false}
       visible={visible}
       onClose={close}
+      // ЗАГОЛОВОК — КАНОНИЧЕСКИЙ, БЕЗ «ГОТОВО» В УГЛУ (владелец 2026-09-04:
+      // «нет такого у нас по архитектуре, что справа „Готово“ — у нас нижняя
+      // кнопка»). Своя шапка 72│центр│72 держала вторую кнопку действия в
+      // углу; действие в листе одно и живёт внизу, а выход — скрим и свайп,
+      // как у всех листов продукта. Набранное при закрытии не теряется: лист
+      // остаётся смонтированным и черновик доживает до следующего открытия.
+      title="Новый объект"
       maxHeightRatio={0.92}
       avoidKeyboard
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
     >
-      {/* Шапка 72│центр│72 — «Объекты» оптически по центру. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          minHeight: 44,
-          paddingHorizontal: 16,
-          paddingTop: 2,
-        }}
-      >
-        <View style={{ width: 72 }} />
-        <View style={{ flex: 1, alignItems: "center" }}>
-          <Text
-            accessibilityRole="header"
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
-          >
-            Объекты
-          </Text>
-        </View>
-        <View style={{ width: 72, alignItems: "flex-end" }}>
-          <Pressable
-            onPress={() => void finish()}
-            disabled={saving}
-            accessibilityRole="button"
-            accessibilityLabel={ready ? "Готово, добавить объект" : "Готово"}
-            hitSlop={12}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-            >
-              Готово
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
       {/* Тело листа — язык страницы (группы строк на прохладном фоне): лист
           заменяет собой страницу, и строки в нём те же самые. Паддинги только
           через contentContainerStyle — className на ScrollView NativeWind
@@ -282,69 +262,123 @@ export function ObjectSheet({
         contentContainerStyle={{ paddingBottom: 12 }}
         keyboardShouldPersistTaps="handled"
       >
-        {objects.length > 0 ? (
-          <RowGroup title={`Уже есть · ${objects.length}`}>
-            {objects.map((loc, i) => (
-              <ObjectListRow
-                key={loc.id}
-                label={loc.label || "Объект"}
-                target={objectTarget(loc) || "адрес не указан"}
-                muted={!objectTarget(loc)}
-                separated={i > 0}
-                onUndo={addedIds.includes(loc.id) ? () => void undo(loc) : undefined}
-              />
-            ))}
-          </RowGroup>
-        ) : null}
-
-        <RowGroup title="Новый объект">
+        {/* СПИСКА «УЖЕ ЕСТЬ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-04: «зачем мне
+            этот мини-блок — добавил объект, он уехал вверх „уже есть“, а лист
+            по сути не закрылся»). Он держался на том, что лист оставался
+            открытым под следующий объект, и на крестике отмены — а крестик
+            вдобавок спорил с законом свайпа: удаляют смахиванием, а не
+            кнопкой в строке. Лист теперь уходит сразу после добавления, и
+            показывать в нём чужие строки незачем: заведённые объекты видно
+            там, откуда лист открыли. */}
+        {/* ОДНА КАРТОЧКА БЕЗ ДВОЙНОГО КАПСА (владелец 2026-09-06): лист уже
+            называется «Новый объект», а чипы типа говорят сами за себя —
+            «НОВЫЙ ОБЪЕКТ» над «ТИП ОБЪЕКТА» читалось как раздел, вложенный в
+            самого себя. Шестерёнка словаря типов — в ряду чипов. */}
+        <RowGroup>
+          {/* АДРЕС — ПЕРВЫМ: единственное обязательное поле, тип предзаполнен и
+              его обычно не трогают. Подписи сверху нет — плейсхолдер и есть
+              подпись, а пустой строки под ней не остаётся (дизайн-ревью
+              2026-09-06). */}
+          <FieldRow
+            label="Адрес"
+            hideLabel
+            big
+            value={draft.target}
+            placeholder="Адрес или ссылка на карту"
+            stacked
+            multiline
+            // live ОБЯЗАТЕЛЕН: кнопка «Добавить объект» живёт в футере, вне
+            // прокрутки, и фокус у поля НЕ снимает. Без записи на каждый
+            // символ она читала бы пустой черновик — кнопка оставалась серой,
+            // а «Готово» закрывало лист, молча выбросив набранный адрес.
+            live
+            onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
+            // Кнопки маршрута здесь НЕТ намеренно: ехать некуда — объект ещё
+            // не заведён; выбор карты — лист поверх листа (аудит 2026-07-27).
+          />
           <ChoiceRow
-            label="Тип объекта"
+            separated
             options={typeOptions}
             value={type}
             // Шестерёнка ведёт в настройки типов и ЗАКРЫВАЕТ лист: страница
             // настроек не может жить под нашим листом.
             onSettings={() => {
               close();
-              router.push("/clients/object-types");
+              router.push(typesHref);
             }}
             onSelect={(v) =>
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))
             }
           />
-          <FieldRow
-            label="Адрес или ссылка"
-            value={draft.target}
-            placeholder=""
-            stacked
-            separated
-            multiline
-            // live ОБЯЗАТЕЛЕН: кнопка «Добавить объект» живёт в футере, вне
-            // прокрутки, и фокус у поля НЕ снимает. Без записи на каждый
-            // символ она читала бы пустой черновик — кнопка оставалась серой,
-            // а «Готово» закрывало лист, молча выбросив набранный адрес.
-            // (Регресс 2026-07-27: проп снесло вместе с live у строки типа.)
-            live
-            onSave={(v) => setDraft((d) => ({ ...d, target: v }))}
-            // Кнопки маршрута здесь НЕТ намеренно: (1) ехать некуда — объект
-            // ещё не заведён; (2) выбор карты — это лист поверх листа, а
-            // системный хост выбора живёт в корне и под нашим листом
-            // невидим — тап по кнопке вешал ВСЕ последующие выборы в
-            // приложении (аудит 2026-07-27). Маршрут живёт у заведённого
-            // объекта: в его строке и на его странице.
+          {/* ТОЧНЫЙ АДРЕС — «мини-доп» под главной строкой: раскрывается и
+              сворачивается обратно; свёрнутая строка показывает, что в ней
+              есть. Ссылка на карту внутри — только когда главная строка текст. */}
+          <AddressDetailsToggle
+            open={draft.partsOpen}
+            summary={composeDetails(draft.parts)}
+            onToggle={() =>
+              setDraft((d) => ({ ...d, partsOpen: !d.partsOpen }))
+            }
           />
-          <FieldRow
-            label="Заметка"
-            value={draft.note}
-            placeholder=""
-            addLabel="Добавить"
-            stacked
-            separated
-            multiline
-            live
-            onSave={(v) => setDraft((d) => ({ ...d, note: v }))}
-          />
+          {draft.partsOpen ? (
+            <AddressDetailsFields
+              parts={draft.parts}
+              onChange={(parts) => setDraft((d) => ({ ...d, parts }))}
+              pin={draft.pin}
+              onPinChange={(pin) => setDraft((d) => ({ ...d, pin }))}
+              showPin={!isLikelyUrl(draft.target.trim())}
+            />
+          ) : null}
         </RowGroup>
+
+        {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
+            «мне нравились старые заметки»). Тот же вид, что у заметок на
+            странице записи; поле открыто сразу, без кнопки «добавить»
+            (владелец 2026-09-04). */}
+        <RowGroup title="Заметка">
+          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+            <TextInput
+              value={draft.note}
+              onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
+              multiline
+              accessibilityLabel="Заметка об объекте"
+              placeholder="Как войти, код, кто встречает…"
+              placeholderTextColor={t.placeholder}
+              selectionColor={t.accent}
+              keyboardAppearance="light"
+              maxFontSizeMultiplier={1.2}
+              style={{
+                minHeight: 44,
+                maxHeight: 120,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: t.radius.input,
+                backgroundColor: t.fill,
+                fontSize: 15,
+                color: t.ink,
+              }}
+            />
+          </View>
+        </RowGroup>
+
+        {/* АДРЕС МОЖНО НЕ СПРАШИВАТЬ ГОЛОСОМ (владелец 2026-09-07: «менеджеру
+            сложно постоянно запрашивать локацию — легче скопировать ссылку
+            нашего ПО, клиент сам заходит и вносит, куда приехать мастеру»).
+            Дверь стоит под формой: сперва человек пробует ввести адрес сам,
+            и лишь когда его нет под рукой — отправляет ссылку. */}
+        {onRequestFromClient ? (
+          <RowGroup>
+            <ChooseRow
+              icon={Send}
+              label="Попросить адрес у клиента"
+              hint="Выписывает ссылку и открывает «Поделиться»"
+              onPress={() => {
+                afterExit.current = onRequestFromClient;
+                close();
+              }}
+            />
+          </RowGroup>
+        ) : null}
       </ScrollView>
 
       {/* Футер — единственная громкая поверхность листа. Над клавиатурой его
@@ -395,65 +429,3 @@ export function ObjectSheet({
 /** Строка уже заведённого объекта: тип и «куда ехать». Двери в объект здесь
  *  нет намеренно (шеврон обещал бы страницу) — только отмена своего же
  *  добавления. */
-function ObjectListRow({
-  label,
-  target,
-  muted,
-  separated,
-  onUndo,
-}: {
-  label: string;
-  target: string;
-  muted?: boolean;
-  separated?: boolean;
-  onUndo?: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        minHeight: 56,
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderTopWidth: separated ? 1 : 0,
-        borderTopColor: t.separator,
-      }}
-    >
-      {/* Тип и «куда ехать» — ОДИН элемент для VoiceOver: двумя текстами
-          связь между ними теряется, а свайпов до формы становится вдвое
-          больше. Кнопка отмены остаётся СНАРУЖИ (иначе склеится со строкой). */}
-      <View
-        accessible
-        accessibilityLabel={`${label}: ${target}`}
-        style={{ flex: 1 }}
-      >
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {label}
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ fontSize: 13, color: muted ? t.faint : t.sub }}
-        >
-          {target}
-        </Text>
-      </View>
-      {onUndo ? (
-        <RowActionButton
-          icon={X}
-          color={t.danger}
-          label={`Убрать объект ${label}`}
-          hint="Отменяет только что добавленный объект"
-          onPress={onUndo}
-        />
-      ) : null}
-    </View>
-  );
-}

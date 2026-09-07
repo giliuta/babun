@@ -541,7 +541,7 @@ export default function AccountsScreen() {
           subtitle="Счёт заводится на команду — сперва добавьте команду"
           action={{
             label: "Добавить команду",
-            onPress: () => router.push("/cabinet/teams"),
+            onPress: () => router.push("/calendar"),
           }}
         />
       ) : rows.length === 0 ? (

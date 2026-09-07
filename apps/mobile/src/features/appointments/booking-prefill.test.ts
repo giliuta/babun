@@ -53,14 +53,17 @@ describe("resolveBookingClientPrefill", () => {
     });
   });
 
-  test("falls back from a stale object to the primary object", () => {
-    assert.deepEqual(resolveBookingClientPrefill(item, "deleted-location"), {
-      clientId: "client-1",
-      locationId: "home",
-      address: "Лимассол, 1",
-      addressNote: "код 42",
-      masterId: "master-1",
-    });
+  test("не подставляет объект сам: ни основной, ни первый", () => {
+    // Владелец 2026-09-05: заполненной запись делает человек, а не форма.
+    for (const requested of [undefined, null, "deleted-location"]) {
+      assert.deepEqual(resolveBookingClientPrefill(item, requested), {
+        clientId: "client-1",
+        locationId: null,
+        address: "",
+        addressNote: "",
+        masterId: "master-1",
+      });
+    }
   });
 });
 

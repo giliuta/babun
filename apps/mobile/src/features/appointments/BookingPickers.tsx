@@ -1,41 +1,38 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useRouter } from "expo-router";
 import {
-  Modal,
   Pressable,
-  ScrollView,
   Text as NativeText,
   TextInput as NativeTextInput,
   View,
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import { Check, Search, UserRound, X } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Search, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
-import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
-import { Chip } from "@/components/ui/Chip";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ICON } from "@/components/ui/tokens";
-import { Screen } from "@/components/ui/Screen";
-import { SectionCard } from "@/components/ui/SectionCard";
+import { GradientButton } from "@/components/ui/GradientButton";
+import {
+  ClientHistoryLine,
+  clientHistoryText,
+} from "@/features/clients/history-line";
+import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
+import { QtyBadge } from "@/features/appointments/QtyBadge";
 import { useThemeColors } from "@/theme/colors";
-import { supabase } from "@/lib/supabase";
-import { notify } from "@/lib/notify";
-import { useTenantId } from "@/lib/tenant";
-import { useCreateClient } from "@/features/clients/queries";
-import { friendlyCreateError } from "@/features/clients/client-create-errors";
 import type { Service } from "@/features/services/queries";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
 } from "@/features/appointments/booking-prefill";
-import { useReduceMotion } from "@/lib/reduce-motion";
-import { InlineServiceCreate } from "@/features/services/InlineServiceCreate";
 import { ColorDot } from "@/components/ui/picker-fields";
 import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
+import { unitPriceFor } from "@/features/appointments/helpers";
+import { round2 } from "@babun/shared/local/finance/appointment-calc";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -67,25 +64,112 @@ const OFF_DAY_WORD: Record<number, string> = {
   7: "воскресеньям",
 };
 
+// ВЫБОР — ШТОРКОЙ НА ПОЛЭКРАНА, А НЕ СТРАНИЦЕЙ (владелец 2026-09-04: «если
+// открывается полноценная страница, услуга находится самым вверху и пальцем
+// надо тянуться… а если надо выйти — тыкаю в верхнюю половину, и оно
+// закрывается; мне кажется, это будет гораздо лучше»). Высоту выбрал он же,
+// сравнив 50% и 75% на симуляторе: половина экрана.
+//
+// Отсюда и общая анатомия обеих шторок (DS §5): заголовок в жесте грабера →
+// поиск → список строк 52pt на подложке → одна кнопка в футере вне прокрутки.
+// Строка — тот же диалект, что у выбора объекта и клиента на карточке:
+// кружок 28pt слева, имя 15/600, подпись 13, отметка справа.
+const SHEET_RATIO = 0.5;
+const SIDE = 20;
+
+function SearchField({
+  value,
+  onChange,
+  placeholder,
+  accessibilityLabel,
+  onClear,
+  autoCapitalize,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+  accessibilityLabel: string;
+  onClear?: () => void;
+  autoCapitalize?: "none" | "words";
+}) {
+  const t = useThemeColors();
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginHorizontal: SIDE,
+        marginBottom: 10,
+        paddingLeft: 12,
+        paddingRight: value ? 4 : 12,
+        minHeight: 40,
+        borderRadius: t.radius.input,
+        backgroundColor: t.fill,
+      }}
+    >
+      <Search color={t.faint} size={16} strokeWidth={2} />
+      <TextInput
+        keyboardAppearance="light"
+        accessibilityLabel={accessibilityLabel}
+        value={value}
+        onChangeText={onChange}
+        placeholder={placeholder}
+        placeholderTextColor={t.placeholder}
+        selectionColor={t.accent}
+        // Из этой же строки создаётся клиент: автозамена успевала подменить
+        // набранное имя до того, как его сохранят.
+        autoCorrect={false}
+        spellCheck={false}
+        autoCapitalize={autoCapitalize}
+        style={{ flex: 1, fontSize: 15, color: t.ink }}
+      />
+      {value && onClear ? (
+        <Pressable
+          onPress={onClear}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Очистить поиск"
+          style={{ width: 32, height: 32, alignItems: "center", justifyContent: "center" }}
+        >
+          <X color={t.placeholder} size={ICON.sm} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export function ClientPicker({
   visible,
   onClose,
+  onExited,
   clients,
   recentIds,
+  statsById,
   onPick,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** Шторка ПОЛНОСТЬЮ ушла и её окно снято. Раньше этого момента другое
+   *  окно — вторая шторка, карточка клиента — открыть нельзя: iOS отвечает
+   *  «already presenting» и не показывает вовсе (см. `BottomSheet.onExited`).
+   *  Цепочка «клиент → услуги» ждёт именно этот сигнал. */
+  onExited?: () => void;
   clients: Client[];
   recentIds: string[];
+  /** Долг, визиты, деньги, последний визит — вводная о человеке (владелец
+   *  2026-09-04: «когда я выбираю клиента, там должна быть уже вводная
+   *  информация, как это написано в клиентах»). Считает форма: карта на весь
+   *  список строится один раз, а не по клиенту на строку. */
+  statsById?: Map<string, ClientStats>;
   onPick: (client: Client) => void;
 }) {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const reduced = useReduceMotion();
-  const tenantId = useTenantId();
+  const router = useRouter();
   const [q, setQ] = useState("");
-  const createClient = useCreateClient();
+  // Что сделать, когда шторка ПОЛНОСТЬЮ уйдёт: карточка клиента — своё окно,
+  // и открытая в тот же кадр она не появляется вовсе (закон `onExited`).
+  const afterExit = useRef<(() => void) | null>(null);
 
   const digits = q.replace(/\D/g, "");
   const quickDraft = useMemo(() => buildQuickClientDraft(q), [q]);
@@ -93,210 +177,203 @@ export function ClientPicker({
     () => findQuickClientDuplicate(clients, quickDraft.phone_e164),
     [clients, quickDraft.phone_e164],
   );
+  // ПРИ ПУСТОМ ПОИСКЕ ВИДНЫ ВСЕ, А НЕ ТОЛЬКО НЕДАВНИЕ (владелец 2026-08-31:
+  // «я вроде создал клиента, но он не создался — проверяй это»).
+  //
+  // Клиент создавался исправно. Не показывался: «Недавние» — это те, у кого
+  // УЖЕ БЫЛИ записи, а у новорождённого их нет по определению. Недавние
+  // остаются первыми: в девяти случаях из десяти записывают того, кто уже был.
+  const recent = useMemo(() => {
+    const byId = new Map(clients.map((c) => [c.id, c]));
+    return recentIds.map((id) => byId.get(id)).filter(Boolean) as Client[];
+  }, [clients, recentIds]);
+
+  const others = useMemo(() => {
+    const seen = new Set(recent.map((c) => c.id));
+    return clients
+      .filter((c) => !seen.has(c.id))
+      .sort((a, b) => (a.full_name || "").localeCompare(b.full_name || "", "ru"));
+  }, [clients, recent]);
+
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
-    if (!query) {
-      const byId = new Map(clients.map((c) => [c.id, c]));
-      return recentIds.map((id) => byId.get(id)).filter(Boolean) as Client[];
-    }
+    if (!query) return [...recent, ...others];
     return clients.filter(
       (c) =>
         (c.full_name || "").toLowerCase().includes(query) ||
         (digits.length > 0 &&
           (c.phone || "").replace(/\D/g, "").includes(digits)),
     );
-  }, [q, clients, recentIds, digits]);
+  }, [q, clients, recent, others, digits]);
 
-  const create = async () => {
-    if (!quickDraft.canCreate || createClient.isPending) return;
+  // ПОИСК НЕ ПОМНИТ ПРОШЛЫЙ ЗАПРОС: шторка остаётся смонтированной между
+  // открытиями, и набранное переживало выбор.
+  const close = () => {
+    setQ("");
+    onClose();
+  };
+  const pick = (client: Client) => {
+    setQ("");
+    onPick(client);
+  };
+
+  // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ ЗАПИСИ
+  // (`/book/client`, 2026-09-03). Быстрое создание одним тапом заводило
+  // клиента с именем без телефона или наоборот, вопреки правилам владельца.
+  // Набранное в поиске уезжает в карточку параметром.
+  const openCreateForm = () => {
     if (duplicate) {
-      onPick(duplicate);
-      setQ("");
+      pick(duplicate);
       return;
     }
-    try {
-      // Кэш может быть холодным/устаревшим: перед реальным insert повторяем
-      // серверный guard тем же repository helper, что экран создания клиента.
-      if (quickDraft.phone_e164 && tenantId) {
-        try {
-          const existing = await findClientByPhoneE164(
-            supabase,
-            quickDraft.phone_e164,
-            tenantId,
-          );
-          if (existing) {
-            onPick(existing);
-            setQ("");
-            return;
-          }
-        } catch {
-          // Offline-first create остаётся доступным; кэш-гвард уже отработал,
-          // а серверную гонку окончательно разрешит sync/replay.
-        }
-      }
-      const c = await createClient.mutateAsync({
-        full_name: quickDraft.full_name,
-        phone: quickDraft.phone,
-        phone_e164: quickDraft.phone_e164,
-      });
-      onPick(c);
-      setQ("");
-    } catch (e) {
-      // Сырой текст Postgres человеку показывать нельзя: быстрое создание
-      // говорит на том же языке, что и полная карточка клиента.
-      notify("Не получилось", friendlyCreateError(e));
-    }
+    const typed = q.trim();
+    const prefill = !typed
+      ? {}
+      : quickDraft.kind === "phone"
+        ? { phone: quickDraft.phone }
+        : { name: quickDraft.full_name };
+    afterExit.current = () =>
+      router.push({ pathname: "/book/client", params: { id: "new", ...prefill } });
+    close();
   };
 
   return (
-    <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
-      <Screen edges={["top"]}>
-        <View
-          className="flex-row items-center px-3"
-          style={{ height: 48, borderBottomWidth: 1, borderBottomColor: t.separator }}
-        >
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Закрыть выбор клиента"
-            style={{ minWidth: 72, minHeight: 44, justifyContent: "center" }}
-          >
-            <Text style={{ fontSize: 16, color: t.body }}>Отмена</Text>
-          </Pressable>
-          <Text className="flex-1 text-center" style={{ fontSize: 16, fontWeight: "600", color: t.ink }}>
-            Клиент
-          </Text>
-          <View style={{ minWidth: 72 }} />
+    <BottomSheet
+      visible={visible}
+      onClose={close}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        // Ушли заводить клиента — цепочке услуг здесь делать нечего:
+        // она продолжится, когда человек вернётся с новым клиентом.
+        if (run) {
+          run();
+          return;
+        }
+        onExited?.();
+      }}
+      title="Клиент"
+      padded={false}
+      scroll
+      avoidKeyboard
+      maxHeightRatio={SHEET_RATIO}
+      footer={
+        <View style={{ paddingHorizontal: SIDE }}>
+          <GradientButton label="Создать клиента" onPress={openCreateForm} />
         </View>
-
-        <View
-          className="mx-4 mt-3 flex-row items-center gap-2 rounded-[10px] px-3"
-          style={{ height: 44, backgroundColor: t.fill }}
-        >
-          <Search color={t.placeholder} size={ICON.sm} />
-        <TextInput
-          keyboardAppearance="light"
-          accessibilityLabel="Поиск клиента"
-            value={q}
-            onChangeText={setQ}
-            placeholder="Имя или телефон"
-            placeholderTextColor={t.placeholder}
-            keyboardType="default"
-            // Из этой же строки создаётся клиент: автозамена успевала
-            // подменить набранное имя до того, как его сохранят.
-            autoCorrect={false}
-            spellCheck={false}
-            autoCapitalize="words"
-            style={{ flex: 1, fontSize: 16, color: t.ink }}
-          />
-          {q ? (
+      }
+    >
+      <SearchField
+        value={q}
+        onChange={setQ}
+        placeholder="Имя или телефон"
+        accessibilityLabel="Поиск клиента"
+        onClear={() => setQ("")}
+        autoCapitalize="words"
+      />
+      <View style={{ paddingHorizontal: SIDE, paddingBottom: 12, gap: 8 }}>
+        {filtered.length > 0 ? (
+          filtered.map((c) => (
             <Pressable
-              onPress={() => setQ("")}
-              hitSlop={8}
+              key={c.id}
+              onPress={() => pick(c)}
               accessibilityRole="button"
-              accessibilityLabel="Очистить поиск"
-              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-            >
-              <X color={t.placeholder} size={ICON.sm} />
-            </Pressable>
-          ) : null}
-        </View>
-
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-        >
-          {!q ? (
-            <Text
-              className="px-5 pb-1.5 pt-4"
-              style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}
-            >
-              НЕДАВНИЕ
-            </Text>
-          ) : null}
-          <SectionCard>
-            {filtered.length > 0 ? (
-              filtered.map((c, i) => (
-                <Pressable
-                  key={c.id}
-                  onPress={() => onPick(c)}
-                  className="flex-row items-center px-4 py-3"
-                  style={i > 0 ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${c.full_name || "Без имени"}${c.phone ? `, ${c.phone}` : ""}`}
-                >
-                  <View
-                    className="mr-3 items-center justify-center rounded-full"
-                    style={{ width: 38, height: 38, backgroundColor: `${t.accent}14` }}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: t.accent }}>
-                      {(c.full_name || "?").slice(0, 1).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text style={{ fontSize: 15, fontWeight: "500", color: t.ink }}>
-                      {c.full_name || "Без имени"}
-                    </Text>
-                    {c.phone ? (
-                      <Text style={{ fontSize: 13, color: t.sub, marginTop: 2 }}>{c.phone}</Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))
-            ) : (
-              <EmptyState
-                title={q.trim() ? "Клиенты не найдены" : "Недавних клиентов пока нет"}
-                subtitle={
-                  q.trim()
-                    ? "Проверьте запрос или создайте клиента по введённым данным."
-                    : "Введите имя или телефон в строке поиска."
-                }
-              />
-            )}
-          </SectionCard>
-
-          {q.trim() && quickDraft.canCreate ? (
-            <Pressable
-              onPress={create}
-              disabled={createClient.isPending}
-              className="mx-4 mt-2 flex-row items-center gap-3 rounded-[10px] px-4 py-3.5"
-              style={{
-                backgroundColor: `${t.accent}0d`,
-                opacity: createClient.isPending ? 0.55 : 1,
-              }}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: createClient.isPending }}
-              accessibilityLabel={
-                duplicate
-                  ? `Выбрать существующего клиента ${duplicate.full_name || duplicate.phone || q.trim()}`
-                  : `Создать клиента ${q.trim()}`
-              }
+              accessibilityLabel={[
+                c.full_name || "Без имени",
+                c.phone,
+                clientHistoryText(c, statsById?.get(c.id)),
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                minHeight: 52,
+                paddingHorizontal: 14,
+                borderRadius: t.radius.input,
+                backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
+              })}
             >
               <View
-                className="items-center justify-center rounded-full"
-                style={{ width: 26, height: 26, backgroundColor: `${t.accent}1a` }}
+                className="items-center justify-center"
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: t.radius.pill,
+                  backgroundColor: `${t.accent}1a`,
+                }}
               >
-                <UserRound color={t.accent} size={ICON.xs} />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: t.accent }}>
+                  {(c.full_name || "?").slice(0, 1).toUpperCase()}
+                </Text>
               </View>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-                {createClient.isPending
-                  ? "Создаём клиента…"
-                  : duplicate
-                  ? `Выбрать существующего «${
-                      duplicate.full_name || duplicate.phone || q.trim()
-                    }»`
-                  : `Создать клиента «${q.trim()}»`}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
+                  {c.full_name || "Без имени"}
+                </Text>
+                <ClientHistoryLine client={c} stats={statsById?.get(c.id)} size={12} />
+                {c.phone ? (
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    {c.phone}
+                  </Text>
+                ) : null}
+              </View>
             </Pressable>
-          ) : q.trim() && quickDraft.kind === "phone" ? (
-            <Text className="px-5 pt-3" style={{ fontSize: 13, color: t.sub }}>
-              Введите полный номер телефона
+          ))
+        ) : (
+          <EmptyState
+            title={q.trim() ? "Клиенты не найдены" : "Клиентов пока нет"}
+          />
+        )}
+
+        {/* Набранное и есть будущий клиент: строка несёт его в карточку.
+            Найденный по номеру дубль — не создание, а выбор: два клиента на
+            одном номере невозможны. */}
+        {q.trim() ? (
+          <Pressable
+            onPress={openCreateForm}
+            accessibilityRole="button"
+            accessibilityLabel={
+              duplicate
+                ? `Выбрать существующего клиента ${duplicate.full_name || duplicate.phone || q.trim()}`
+                : `Создать клиента ${q.trim()}`
+            }
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              minHeight: 52,
+              paddingHorizontal: 14,
+              borderRadius: t.radius.input,
+              backgroundColor: pressed ? `${t.accent}1a` : `${t.accent}0d`,
+            })}
+          >
+            <View
+              className="items-center justify-center"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: t.radius.pill,
+                backgroundColor: `${t.accent}1a`,
+              }}
+            >
+              <UserRound color={t.accent} size={ICON.xs} />
+            </View>
+            <Text
+              numberOfLines={1}
+              style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.accent }}
+            >
+              {duplicate
+                ? `Выбрать существующего «${
+                    duplicate.full_name || duplicate.phone || q.trim()
+                  }»`
+                : `Создать клиента «${q.trim()}»`}
             </Text>
-          ) : null}
-        </ScrollView>
-      </Screen>
-    </Modal>
+          </Pressable>
+        ) : null}
+      </View>
+    </BottomSheet>
   );
 }
 
@@ -304,27 +381,25 @@ export function ServicePicker({
   visible,
   onClose,
   services,
-  frequent,
   selectedIds,
-  teamId,
   date,
+  quantities,
   onToggle,
+  onQtyChange,
 }: {
   visible: boolean;
   onClose: () => void;
   services: Service[];
-  frequent: Service[];
   selectedIds: string[];
-  /** Команда записи: её прайс и показан. Ей же заводится услуга, если прайс
-   *  пуст — иначе запись на такую команду не завести вовсе. */
-  teamId: string | null;
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
   onToggle: (id: string) => void;
+  /** Сколько каждой услуги уже в записи. Нет ключа — ни одной. */
+  quantities: Record<string, number>;
+  /** Ноль убирает услугу из записи. */
+  onQtyChange: (id: string, qty: number) => void;
 }) {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
-  const reduced = useReduceMotion();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -332,11 +407,9 @@ export function ServicePicker({
       ? services.filter((s) => s.name.toLowerCase().includes(query))
       : services;
     if (!date) return found;
-    // УСЛУГА, КОТОРУЮ В ЭТОТ ДЕНЬ НЕ ДЕЛАЮТ, УЕЗЖАЕТ ВНИЗ — И ТОЛЬКО.
-    // Ни спрятать, ни запретить: человек, не нашедший услугу, решит, что она
-    // исчезла из прайса (так уже обжигались с убранными услугами), а продукт
-    // не отказывает в деньгах — сегодня не делаем, но если клиент просит и
-    // бригада согласна, запись обязана состояться.
+    // УСЛУГА, КОТОРУЮ В ЭТОТ ДЕНЬ НЕ ДЕЛАЮТ, УЕЗЖАЕТ ВНИЗ — И ТОЛЬКО. Ни
+    // спрятать, ни запретить: продукт не отказывает в деньгах — сегодня не
+    // делаем, но если клиент просит и бригада согласна, запись состоится.
     const weekday = isoWeekdayOf(date);
     const served = found.filter((s) => servedOnWeekday(s, weekday));
     const rest = found.filter((s) => !servedOnWeekday(s, weekday));
@@ -352,164 +425,140 @@ export function ServicePicker({
   const offDayLabel = date
     ? `Не делаем по ${OFF_DAY_WORD[isoWeekdayOf(date)]}`
     : "";
-  // Живой счётчик выбранного — чтобы не закрывать модалку ради проверки.
+  const totalQty = useMemo(
+    () => selectedIds.reduce((n, id) => n + (quantities[id] ?? 1), 0),
+    [selectedIds, quantities],
+  );
+  // ЦЕНА — ПО ЛЕСТНИЦЕ КОЛИЧЕСТВА, КАК В ФОРМЕ: подвал считал по базовой цене
+  // и обещал «€150», а «Итого» на форме — €135 по опту от трёх.
   const subtotal = useMemo(
     () =>
-      selectedIds.reduce(
-        (sum, id) => sum + (services.find((s) => s.id === id)?.price ?? 0),
-        0,
+      round2(
+        selectedIds.reduce((sum, id) => {
+          const svc = services.find((s) => s.id === id);
+          if (!svc) return sum;
+          const qty = quantities[id] ?? 1;
+          return sum + unitPriceFor(svc, qty) * qty;
+        }, 0),
       ),
-    [selectedIds, services],
+    [selectedIds, services, quantities],
   );
+  const close = () => {
+    setQ("");
+    onClose();
+  };
+  // КОЛИЧЕСТВО НАБИРАЮТ ТАПАМИ (владелец 2026-09-04, выбрал вариант из
+  // четырёх на экране сравнения): тап по строке добавляет ещё одну, тап по
+  // бейджу «×3» убавляет, ноль убирает услугу из записи. Стрелок вверх/вниз
+  // больше нет ни здесь, ни в форме.
+  const add = (id: string) => {
+    const qty = quantities[id];
+    if (qty == null) onToggle(id);
+    else onQtyChange(id, qty + 1);
+  };
 
   return (
-    <Modal visible={visible} animationType={reduced ? "none" : "slide"} onRequestClose={onClose}>
-      <Screen edges={["top"]}>
-        <View
-          className="flex-row items-center px-3"
-          style={{ height: 48, borderBottomWidth: 1, borderBottomColor: t.separator }}
-        >
-          <View style={{ minWidth: 72 }} />
-          <Text className="flex-1 text-center" style={{ fontSize: 16, fontWeight: "600", color: t.ink }}>
-            Услуги
-          </Text>
-          <Pressable
-            onPress={onClose}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Закрыть выбор услуг"
-            style={{ minWidth: 72, minHeight: 44, alignItems: "flex-end", justifyContent: "center" }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>Готово</Text>
-          </Pressable>
-        </View>
-
-        <View
-          className="mx-4 mt-3 flex-row items-center gap-2 rounded-[10px] px-3"
-          style={{ height: 44, backgroundColor: t.fill }}
-        >
-          <Search color={t.placeholder} size={ICON.sm} />
-        <TextInput
-          keyboardAppearance="light"
-          accessibilityLabel="Поиск услуги"
-            value={q}
-            onChangeText={setQ}
-            placeholder="Название услуги"
-            placeholderTextColor={t.placeholder}
-            style={{ flex: 1, fontSize: 16, color: t.ink }}
+    <BottomSheet
+      visible={visible}
+      onClose={close}
+      title="Услуги"
+      padded={false}
+      scroll
+      avoidKeyboard
+      maxHeightRatio={SHEET_RATIO}
+      // ФУТЕР СТОИТ ВСЕГДА, даже когда ничего не выбрано. Появляясь после
+      // первого тапа, он забирал у списка ~70pt — и ВТОРОЙ тап по той же
+      // строке попадал уже в кнопку «Готово» (поймано на симуляторе
+      // 2026-09-04, набор количества тапами это делает обычным делом).
+      // Закрыть шторку без единой услуги законно: запись сохраняется и так.
+      footer={
+        <View style={{ paddingHorizontal: SIDE }}>
+          <GradientButton
+            // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ (владелец 2026-09-04: «сведи к
+            // одному слову»). Метка, команда, цвет и время говорят
+            // «Применить» — услуги говорят то же.
+            label={
+              selectedIds.length > 0
+                ? `Применить · ${totalQty} · ${formatEURExact(subtotal)}`
+                : "Применить"
+            }
+            onPress={close}
+            accessibilityHint={
+              selectedIds.length > 0
+                ? `Работ: ${totalQty} на ${formatEURExact(subtotal)}`
+                : undefined
+            }
           />
         </View>
+      }
+    >
+      <SearchField
+        value={q}
+        onChange={setQ}
+        placeholder="Название услуги"
+        accessibilityLabel="Поиск услуги"
+        onClear={() => setQ("")}
+      />
 
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-        >
-          {/* «ЧАСТЫЕ» — короткий путь в ДЛИННОМ прайсе. Когда услуг всего
-              две-три, пилюли повторяют список, который и так виден целиком, —
-              и это читается как сбой (владелец 2026-08-17). Показываем, только
-              если под ними есть что искать. */}
-          {!q && frequent.length > 0 && services.length > frequent.length + 2 ? (
-            <>
-              <Text
-                className="px-5 pb-1.5 pt-4"
-                style={{ fontSize: 12, fontWeight: "700", color: t.faint, letterSpacing: 0.4 }}
+
+      <View style={{ paddingHorizontal: SIDE, paddingBottom: 12, gap: 8 }}>
+        {filtered.length > 0 ? (
+          filtered.map((s) => {
+            const qty = quantities[s.id];
+            const on = selectedIds.includes(s.id);
+            return (
+              <Pressable
+                key={s.id}
+                onPress={() => add(s.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}${
+                  on ? `, взято ${qty ?? 1}` : ""
+                }`}
+                accessibilityHint="Добавляет ещё одну"
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  minHeight: 52,
+                  paddingHorizontal: 14,
+                  borderRadius: t.radius.input,
+                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
+                })}
               >
-                ЧАСТЫЕ
-              </Text>
-              <View className="flex-row flex-wrap gap-2 px-4 pb-2">
-                {frequent.map((s) => (
-                  <Chip
-                    key={s.id}
-                    label={s.name}
-                    variant="tint"
-                    selected={selectedIds.includes(s.id)}
-                    onPress={() => onToggle(s.id)}
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-          <SectionCard>
-            {filtered.length > 0 ? (
-              filtered.map((s, i) => {
-                const on = selectedIds.includes(s.id);
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => onToggle(s.id)}
-                    className="flex-row items-center px-4 py-3"
-                    style={i > 0 ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
-                    accessibilityRole="checkbox"
-                    accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}`}
-                    accessibilityState={{ checked: selectedIds.includes(s.id) }}
+                <ColorDot value={s.color} size={10} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "600",
+                      color: offDayIds.has(s.id) ? t.sub : t.ink,
+                    }}
                   >
-                    <ColorDot value={s.color} size={10} />
-                    <View className="ml-3 flex-1">
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          color: offDayIds.has(s.id) ? t.sub : t.ink,
-                        }}
-                      >
-                        {s.name}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
-                        {offDayIds.has(s.id)
-                          ? offDayLabel
-                          : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`}
-                      </Text>
-                    </View>
-                    {on ? <Check color={t.accent} size={ICON.md} /> : null}
-                  </Pressable>
-                );
-              })
-            ) : (
-              <EmptyState
-                title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
-                subtitle={
-                  q.trim()
-                    ? "Измените запрос и попробуйте ещё раз."
-                    : "Заведите первую — она сразу добавится в запись."
-                }
-              />
-            )}
-          </SectionCard>
-          {/* ПУСТОЙ ПРАЙС — НЕ ТУПИК: услуга заводится прямо здесь и сразу
-              уходит в запись. Поиск с пустым каталогом ничего не ищет, поэтому
-              под него блок не показываем. */}
-          {services.length === 0 && !q.trim() ? (
-            <InlineServiceCreate
-              teamId={teamId}
-              onCreated={(id) => onToggle(id)}
-            />
-          ) : null}
-        </ScrollView>
-
-        {selectedIds.length > 0 ? (
-          <View
-            style={{
-              paddingHorizontal: 14,
-              paddingTop: 8,
-              paddingBottom: insets.bottom + 8,
-              backgroundColor: t.canvas,
-              borderTopWidth: 1,
-              borderTopColor: t.separator,
-            }}
-          >
-            <Pressable
-              onPress={onClose}
-              accessibilityRole="button"
-              accessibilityLabel={`Готово, выбрано услуг: ${selectedIds.length} на ${formatEURExact(subtotal)}`}
-              className="items-center justify-center rounded-full"
-              style={{ minHeight: 50, backgroundColor: t.accent }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: "700", color: t.onAccent, fontVariant: ["tabular-nums"] }}>
-                Готово · {selectedIds.length} · {formatEURExact(subtotal)}
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </Screen>
-    </Modal>
+                    {s.name}
+                  </Text>
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    {offDayIds.has(s.id)
+                      ? offDayLabel
+                      : `${formatEURExact(s.price)} · ${durationLabel(s.duration_minutes)}`}
+                  </Text>
+                </View>
+                {on ? (
+                  <QtyBadge
+                    qty={qty ?? 1}
+                    unit={s.unit ?? null}
+                    onPress={() => onQtyChange(s.id, (qty ?? 1) - 1)}
+                  />
+                ) : null}
+              </Pressable>
+            );
+          })
+        ) : (
+          <EmptyState
+            title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
+          />
+        )}
+      </View>
+    </BottomSheet>
   );
 }

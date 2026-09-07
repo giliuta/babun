@@ -120,7 +120,7 @@ function safeLoadOperationalCalendarSettings(
   tenantId: string,
 ): CalendarSettings {
   try {
-    return loadOperationalCalendarSettings(tenantId);
+    return { ...loadOperationalCalendarSettings(tenantId) };
   } catch {
     return { ...DEFAULT_CALENDAR_SETTINGS };
   }
@@ -150,8 +150,10 @@ export function useCalendarSettings() {
       try {
         if (role === "master") {
           const settings = await getOperationalCalendarSettings(supabase);
-          safeSaveOperationalCalendarSettings(activeTenantId, settings);
-          return settings;
+          safeSaveOperationalCalendarSettings(activeTenantId, {
+            ...settings,
+          });
+          return { ...settings };
         }
         if (role === "owner" || role === "dispatcher") {
           const s = await getCalendarSettings(supabase, activeTenantId);

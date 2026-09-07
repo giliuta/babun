@@ -30,6 +30,7 @@ export function ScopeChips({
   activeId,
   seam = true,
   onCanvas = false,
+  trailing,
   onSelect,
 }: {
   items: ScopeChip[];
@@ -38,6 +39,16 @@ export function ScopeChips({
   /** Шов под лентой. Гасится, когда под ней сразу идёт своя граница —
    *  две линии подряд читаются как случайный зазор. */
   seam?: boolean;
+  /** ПРИКОЛОТОЕ ДЕЙСТВИЕ СПРАВА ОТ ЛЕНТЫ — не чип, а кнопка.
+   *
+   *  Живёт СНАРУЖИ прокрутки и потому не уезжает за край. Внутри ленты она
+   *  пряталась бы ровно от того, у кого календарей много: при трёх средних
+   *  именах лента занимает ~450pt на экране 402, а автоскролл подводит её к
+   *  ВЫБРАННОМУ чипу, не к последнему.
+   *
+   *  И это не второй тонированный чип: закон «тонируется ровно один чип —
+   *  выбранный» (2026-08-12) цел, потому что в ленту она не входит вовсе. */
+  trailing?: ReactNode;
   /** Лента лежит НА КАНВЕ, а не в белом хроме шапки: своей заливки и своего
    *  шва у неё тогда нет вовсе — шов остаётся за шапкой сверху.
    *
@@ -71,7 +82,10 @@ export function ScopeChips({
     if (activeId) reveal(activeId, true);
   }, [activeId, reveal]);
 
-  if (items.length === 0) return null;
+  // Пустую ленту не рисуем — но ТОЛЬКО если в ней нечему быть. С приколотым
+  // действием она остаётся: иначе ровно в состоянии «календарей ещё нет»
+  // пропадала бы единственная дверь создания.
+  if (items.length === 0 && !trailing) return null;
 
   const chip = (key: string, node: ReactNode) => (
     <View
@@ -87,15 +101,17 @@ export function ScopeChips({
     </View>
   );
 
-  return (
+  const strip = (
     <ScrollView
       ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
       style={{
         flexGrow: 0,
-        backgroundColor: onCanvas ? "transparent" : t.surface,
-        borderBottomWidth: !onCanvas && seam ? 1 : 0,
+        // С приколотым действием фон и шов несёт обёртка: иначе линия
+        // обрывается под кнопкой и та читается вырезанной из полосы.
+        backgroundColor: trailing || onCanvas ? "transparent" : t.surface,
+        borderBottomWidth: !trailing && !onCanvas && seam ? 1 : 0,
         borderBottomColor: t.separator,
       }}
       contentContainerStyle={{
@@ -141,5 +157,27 @@ export function ScopeChips({
         );
       })}
     </ScrollView>
+  );
+
+  if (!trailing) return strip;
+
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        backgroundColor: onCanvas ? "transparent" : t.surface,
+        borderBottomWidth: !onCanvas && seam ? 1 : 0,
+        borderBottomColor: t.separator,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>{strip}</View>
+      {/* Волосяная черта отделяет ленту от действия: без неё кнопка читается
+          последним чипом, который почему-то не выбирается. */}
+      <View
+        style={{ width: 1, height: 20, backgroundColor: t.separator }}
+      />
+      <View style={{ paddingLeft: 10, paddingRight: 14 }}>{trailing}</View>
+    </View>
   );
 }

@@ -371,3 +371,67 @@ describe("единица измерения доезжает до бумаги �
     assert.equal(lines[0].unit, null);
   });
 });
+
+describe("имя услуги переживает удаление из прайса", () => {
+  // Владелец 2026-08-29: «удаляю услугу — в истории она полностью хранится,
+  // проверь пожалуйста, чтоб это было действительно так».
+  //
+  // Имя работы кладётся в САМУ ЗАПИСЬ при сохранении (`serviceName`), и счёт
+  // обязан читать его первым. Каталог отвечает «как называется СЕЙЧАС», а на
+  // стёртой услуге не отвечает вовсе.
+  const emptyCatalog = () => undefined;
+
+  test("услуги в прайсе больше нет — счёт печатает имя из записи", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({
+        total_amount: 100,
+        services: [service({ serviceName: "Чистка сплит-системы" })],
+      }),
+      settings(),
+      emptyCatalog,
+    );
+    assert.equal(draft.lines[0].title, "Чистка сплит-системы");
+  });
+
+  test("услугу переименовали — счёт печатает имя НА ДЕНЬ ВИЗИТА", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({
+        total_amount: 100,
+        services: [service({ serviceName: "Чистка" })],
+      }),
+      settings(),
+      () => ({ name: "Чистка сплит-системы", description: null, unit: null }),
+    );
+    assert.equal(draft.lines[0].title, "Чистка");
+  });
+
+  test("снимка нет (запись до 25.08.2026) — берётся каталог", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({ total_amount: 100, services: [service()] }),
+      settings(),
+      () => ({ name: "Чистка", description: null, unit: null }),
+    );
+    assert.equal(draft.lines[0].title, "Чистка");
+  });
+
+  test("нет ни снимка, ни каталога — дефолтная строка, а не пустая", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({ total_amount: 100, services: [service()] }),
+      settings({ defaultLineTitle: "Работы" }),
+      emptyCatalog,
+    );
+    assert.equal(draft.lines[0].title, "Работы");
+  });
+
+  test("единица тоже из снимка", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({
+        total_amount: 100,
+        services: [service({ quantity: 2, serviceName: "Обмотка", unit: "м" })],
+      }),
+      settings(),
+      emptyCatalog,
+    );
+    assert.equal(draft.lines[0].unit, "м");
+  });
+});

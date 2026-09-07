@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
+import { useMoney } from "@/features/settings/currency";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
@@ -79,6 +80,7 @@ export default function TemplatesScreen() {
   const update = useUpdateTemplate();
   const del = useDeleteTemplate();
   const t = useThemeColors();
+  const { symbol } = useMoney();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<FinanceTemplate | null>(null);
@@ -343,7 +345,7 @@ export default function TemplatesScreen() {
           />
           <Field label="Название" value={name} onChangeText={setName} placeholder="Аренда" autoFocus={!editing} />
           <Field
-            label="Сумма €"
+            label={`Сумма ${symbol}`}
             value={amount}
             onChangeText={setAmount}
             placeholder="0"

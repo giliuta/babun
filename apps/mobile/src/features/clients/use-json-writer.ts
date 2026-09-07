@@ -25,6 +25,13 @@ export interface JsonArrayWriter<T> {
 export function useJsonArrayWriter<T>(
   items: T[],
   write: (next: T[]) => Promise<boolean>,
+  /** Чей это массив. Писатель на карточке живёт с одним клиентом, а на
+   *  форме записи клиента меняют под ним — и запись прошлого клиента,
+   *  ещё летящая на сервер, держала бы `pending` и его массив в «свежайшем»:
+   *  первая правка нового клиента уезжала бы поверх списка старого
+   *  (ревью 2026-09-04). Смена хозяина — новая правда: массив нового, очередь
+   *  прошлого доживает в своих замыканиях и на новую правду не влияет. */
+  ownerKey?: string | null,
 ): JsonArrayWriter<T> {
   const latest = useRef<T[]>(items);
   // Сколько наших записей ещё в пути. Пока хоть одна не ответила, рендеру
@@ -33,6 +40,13 @@ export function useJsonArrayWriter<T>(
   // неё. Раньше такой ответ безусловно ложился в latest, и третья запись
   // считалась от него — только что добавленный объект исчезал навсегда.
   const pending = useRef(0);
+  const owner = useRef(ownerKey);
+  useEffect(() => {
+    if (owner.current === ownerKey) return;
+    owner.current = ownerKey;
+    latest.current = items;
+    pending.current = 0;
+  }, [ownerKey, items]);
   // Рендер приносит авторитетное значение (в том числе после чужой правки по
   // реалтайму) — оно главнее нашего оптимистичного, но только когда своих
   // незавершённых записей нет.
@@ -57,7 +71,9 @@ export function useJsonArrayWriter<T>(
       };
       pending.current += 1;
       const settle = () => {
-        pending.current -= 1;
+        // Не ниже нуля: смена хозяина обнуляет счётчик, а запись прошлого
+        // хозяина отвечает позже.
+        pending.current = Math.max(0, pending.current - 1);
       };
       const run = chain.current.then(() => write(next)).then(
         (ok) => {

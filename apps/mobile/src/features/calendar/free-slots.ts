@@ -19,6 +19,12 @@ import { toMin } from "@/features/calendar/layout";
 // Длина кубика = ШАГ СЕТКИ (решение владельца): услуга выбирается позже, в
 // форме, и точная длительность там же и встанет. Кубик отвечает на вопрос
 // «сюда можно начать», а не «сколько это займёт».
+//
+// ПЕРЕНОС (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются
+// зелёные, куда можно перевести по всей таблице») считается тем же ядром с
+// двумя поправками: окно, которое обязано быть свободным, — не шаг, а вся
+// длительность записи (`durationMinutes`), и собственное время записи не
+// занято — она оттуда уезжает (`ignoreId`).
 
 export interface FreeSlot {
   /** Начало слота в минутах от полуночи. */
@@ -72,8 +78,13 @@ export function freeSlotsForDay(opts: {
   bufferMinutes: number;
   /** Сколько минут уже прошло сегодня; для будущих дней — null. */
   nowMinutes: number | null;
+  /** Окно, которое должно быть свободным целиком (перенос: длительность
+   *  записи). Меньше шага не бывает — кубик обещает как минимум шаг. */
+  durationMinutes?: number;
+  /** Запись, которую переносим: её собственное время не считается занятым. */
+  ignoreId?: string | null;
 }): FreeSlot[] {
-  const { band, fallback, appts, stepMinutes, bufferMinutes, nowMinutes } = opts;
+  const { band, fallback, stepMinutes, bufferMinutes, nowMinutes } = opts;
   // Выходной команды — предлагать нечего.
   if (band === null) return [];
   const startMin = band?.startMin ?? fallback.startMin;
@@ -81,11 +92,15 @@ export function freeSlotsForDay(opts: {
   if (!(endMin > startMin) || stepMinutes <= 0) return [];
 
   const step = Math.max(5, Math.round(stepMinutes));
+  const window = Math.max(step, Math.round(opts.durationMinutes ?? step));
+  const appts = opts.ignoreId
+    ? opts.appts.filter((a) => a.id !== opts.ignoreId)
+    : opts.appts;
   const breaks = band?.breaks ?? [];
   const out: FreeSlot[] = [];
 
-  for (let s = startMin; s + step <= endMin; s += step) {
-    const e = s + step;
+  for (let s = startMin; s + window <= endMin; s += step) {
+    const e = s + window;
     if (nowMinutes !== null && s < nowMinutes) continue;
     if (breaks.some((b) => s < b.endMin && e > b.startMin)) continue;
     if (busy(s, e, appts, bufferMinutes)) continue;

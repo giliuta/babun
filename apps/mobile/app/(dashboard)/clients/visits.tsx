@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ScrollView, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS, getDebtAmount } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -110,10 +109,10 @@ export default function ClientVisitsScreen() {
   // перебрасывает на календарь — она не должна так делать».
   // Раньше тап уводил в другой ТАБ: история выпадала из стека, и «назад»
   // возвращал не туда, откуда пришли.
-  const [editing, setEditing] = useState<Appointment | null>(null);
+  const router = useRouter();
   const open = (a: Appointment) => {
     haptics.tap();
-    setEditing(a);
+    router.push(`/book?appointmentId=${a.id}` as Href);
   };
 
   /** Значение строки: услуги, а если их нет — статус. Деньги отдельным
@@ -221,13 +220,8 @@ export default function ClientVisitsScreen() {
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {/* Шит записи живёт ЗДЕСЬ же: закрытие возвращает в историю, а не на
-          календарь. */}
-      <AppointmentSheet
-        visible={editing !== null}
-        appointment={editing}
-        onClose={() => setEditing(null)}
-      />
+      {/* Запись открывается СТРАНИЦЕЙ /book (STORY-064): назад — сюда же, в
+          историю визитов. */}
     </Screen>
   );
 }

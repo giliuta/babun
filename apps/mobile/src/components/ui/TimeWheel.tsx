@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -75,8 +75,12 @@ export function LoopWheelColumn({
   accessibilityLabel,
   activeColor,
   accessibilityValueSuffix,
+  width = COLUMN_W,
+  fontSize,
+  rows = VISIBLE_ROWS,
+  renderItem,
 }: {
-  /** ОДИН цикл значений: 24 часа либо 12 пятиминуток. */
+  /** ОДИН цикл значений: 24 часа, 12 пятиминуток либо 59 часовых поясов. */
   items: string[];
   /** Индекс внутри цикла (0…items.length−1). */
   value: number;
@@ -86,9 +90,29 @@ export function LoopWheelColumn({
   /** Суффикс к accessibilityValue («, вне рабочих часов») — VoiceOver обязан
    *  слышать состояние, а не только видеть цвет. */
   accessibilityValueSuffix?: string;
+  /** Ширина колонки. Цифрам хватает узкой, названию пояса — нет. */
+  width?: number;
+  /** Кегль активной строки. Цифры крупные; словам такой кегль не по ширине. */
+  fontSize?: number;
+  /** Сколько строк видно разом. Трёх хватает часам и минутам — там значения
+   *  известны наперёд. Длинному набору нужен обзор: у часовых поясов их 61,
+   *  и по трём строкам не понять, куда крутить (владелец 2026-08-27: «около
+   *  шести… или из семи: три сверху, три снизу и посередине одна»). */
+  rows?: number;
+  /** Своя разметка строки вместо простого текста. Нужна там, где в строке
+   *  ДВА разных по важности куска: у часового пояса это город (главное) и
+   *  смещение (справка). Одним кеглем они спорят, и строка читается как
+   *  сплошная надпись. `items` при этом остаются строками — их произносит
+   *  VoiceOver. */
+  renderItem?: (item: string, active: boolean, index: number) => ReactNode;
 }) {
   const t = useThemeColors();
   const ref = useRef<ScrollView>(null);
+  // Геометрия своя у каждого экземпляра: высота — целое число строк, отступ
+  // сверху и снизу — ровно половина остатка, иначе выбранная строка встаёт
+  // не по центру и линия среза врёт.
+  const wheelH = ITEM_H * rows;
+  const pad = (wheelH - ITEM_H) / 2;
   const len = items.length;
   const mid = Math.floor(REPS / 2) * len;
   /** Абсолютный индекс в повторённой ленте — только для крупной цифры. */
@@ -178,8 +202,8 @@ export function LoopWheelColumn({
         if (event.nativeEvent.actionName === "increment") adjust(1);
         if (event.nativeEvent.actionName === "decrement") adjust(-1);
       }}
-      style={{ width: COLUMN_W, height: WHEEL_H }}
-      contentContainerStyle={{ paddingVertical: PAD }}
+      style={{ width, height: wheelH }}
+      contentContainerStyle={{ paddingVertical: pad }}
     >
       {Array.from({ length: REPS * len }, (_, i) => {
         const active = i === live;
@@ -188,19 +212,27 @@ export function LoopWheelColumn({
             key={i}
             style={{ height: ITEM_H, alignItems: "center", justifyContent: "center" }}
           >
-            <Text
-              // Кап 1.2: геометрия колеса фиксированная — цифры не должны
-              // вырастать из своего ряда при AX-шрифтах.
-              maxFontSizeMultiplier={1.2}
-              style={{
-                fontVariant: ["tabular-nums"],
-                color: active ? activeColor ?? t.ink : t.placeholder,
-                fontWeight: active ? "700" : "500",
-                fontSize: active ? DIGIT_FONT : DIGIT_FONT - 3,
-              }}
-            >
-              {items[norm(i)]}
-            </Text>
+            {renderItem ? (
+              renderItem(items[norm(i)] ?? "", active, norm(i))
+            ) : (
+              <Text
+                // Кап 1.2: геометрия колеса фиксированная — цифры не должны
+                // вырастать из своего ряда при AX-шрифтах.
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{
+                  fontVariant: ["tabular-nums"],
+                  color: active ? activeColor ?? t.ink : t.placeholder,
+                  fontWeight: active ? "700" : "500",
+                  fontSize: active
+                    ? fontSize ?? DIGIT_FONT
+                    : (fontSize ?? DIGIT_FONT) - 3,
+                  paddingHorizontal: 8,
+                }}
+              >
+                {items[norm(i)]}
+              </Text>
+            )}
           </View>
         );
       })}

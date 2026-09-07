@@ -39,12 +39,14 @@ export function useRenameDayCity() {
   const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { from: string; to: string }) => {
+    mutationFn: async (input: { teamId: string; from: string; to: string }) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Изменять метки может владелец или диспетчер.");
       }
-      await renameDayCity(supabase, tenantId, input.from, input.to);
+      // Команда обязательна: метка принадлежит ей, и одноимённые метки
+      // разных календарей — разные метки.
+      await renameDayCity(supabase, tenantId, input.teamId, input.from, input.to);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["day-cities"] }),
     meta: { errorHandled: true }, // экран меток агрегирует ошибки каскада сам

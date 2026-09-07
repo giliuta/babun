@@ -18,6 +18,7 @@ import { useRouter, type Href } from "expo-router";
 import {
   BarChart3,
   BookUser,
+  CalendarCheck,
   Boxes,
   CalendarCheck2,
   CalendarClock,
@@ -26,19 +27,17 @@ import {
   IdCard,
   Landmark,
   LogOut,
-  MapPin,
   MessageSquareText,
   Package,
   Receipt,
   RefreshCw,
   RotateCw,
-  Scissors,
+  Briefcase,
   Shield,
   Star,
   Tag,
   Tags,
   UserCog,
-  Users,
   Wallet,
   Wrench,
 } from "lucide-react-native";
@@ -52,6 +51,12 @@ import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import {
+  AUTO_COLOR_RULES,
+  BOOKING_BLOCKS,
+  useAutoColorRule,
+  useBookingBlocks,
+} from "@/features/appointments/booking-prefs";
 import { Divider } from "@/components/ui/Divider";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -237,6 +242,19 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
 export default function CabinetHome() {
   const t = useThemeColors();
   const { data: role } = useCurrentRole();
+  // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
+  // которая молчит о своём состоянии, заставляет открывать её, чтобы
+  // вспомнить, что в ней стоит.
+  const bookingBlocks = useBookingBlocks();
+  const bookingRule = useAutoColorRule();
+  const bookingDesc = [
+    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
+    bookingBlocks.length === BOOKING_BLOCKS.length
+      ? "все блоки"
+      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
+          .map((b) => b.label)
+          .join(" · ") || "ни одного блока",
+  ].join(" · ");
   const owner = role === "owner";
   const dispatcher = role === "dispatcher";
   const master = role === "master";
@@ -426,7 +444,7 @@ export default function CabinetHome() {
                 icon={Tag}
                 tone={TILE.cyan}
                 title="Метки"
-                desc="Город / тег под датой в календаре"
+                desc="Что стоит под датой в календаре"
                 href={"/cabinet/labels" as Href}
               />
             </>
@@ -447,20 +465,22 @@ export default function CabinetHome() {
             href={"/clients/settings" as Href}
           />
           <Divider inset={58} />
+          {/* Настройка САМОЙ формы записи: какие блоки нужны этому бизнесу и
+              чем красить запись автоматически (владелец 2026-09-05). */}
           <MenuRow
-            icon={Scissors}
+            icon={CalendarCheck}
+            tone={TILE.blue}
+            title="Запись"
+            desc={bookingDesc}
+            href="/cabinet/booking"
+          />
+          <Divider inset={58} />
+          <MenuRow
+            icon={Briefcase}
             tone={TILE.blue}
             title="Услуги"
             desc="Каталог работ и цены"
             href="/cabinet/services"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={MapPin}
-            tone={TILE.cyan}
-            title="Города"
-            desc="Список и активность"
-            href="/cabinet/cities"
           />
           <Divider inset={58} />
           <MenuRow
@@ -498,14 +518,6 @@ export default function CabinetHome() {
                 href={"/cabinet/team-access" as Href}
               />
               <Divider inset={58} />
-          <MenuRow
-            icon={Users}
-            tone={TILE.orange}
-            title="Команды"
-            desc="Команды: состав, цвет, расписание"
-            href="/cabinet/teams"
-          />
-          <Divider inset={58} />
           <MenuRow
             icon={Wrench}
             tone={TILE.indigo}

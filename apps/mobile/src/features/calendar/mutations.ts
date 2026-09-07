@@ -13,6 +13,10 @@ import {
   updateAppointment,
 } from "@babun/shared/sync/appointmentsCached";
 import { isOnline, randomUuid } from "@babun/shared/sync";
+import {
+  listPhotoPaths,
+  removePhotoBlobs,
+} from "@babun/shared/db/repositories/appointment-photos";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
   resetAppointmentPayment,
@@ -130,6 +134,7 @@ export function useCreateAppointment() {
           clientId: input.client_id,
           teamId: input.team_id,
           date: input.date,
+          city: input.city ?? null,
         });
       }
     },
@@ -243,6 +248,9 @@ export function useUpdateAppointment() {
             clientId: current.client_id,
             teamId: current.team_id,
             date: current.date,
+            // Метка правленой записи — из свежего патча, а не из снимка до
+            // правки: сменил метку записи, клиент запоминает новую.
+            city: patch.city !== undefined ? patch.city : current.city,
           });
         }
       }
@@ -255,11 +263,17 @@ export function useDeleteAppointment() {
   const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => {
+    mutationFn: async (id: string) => {
       if (role !== "owner" && role !== "dispatcher") {
         throw new Error("Удалять заявки может владелец или диспетчер.");
       }
-      return deleteAppointment(supabase, id, tenantId as string);
+      // ФАЙЛЫ ЗАПИСИ: строки appointment_photos уходят каскадом вместе с
+      // записью, а блобы в хранилище — нет (2026-09-07: в бакете лежали
+      // файлы уже удалённых записей). Пути снимаем ДО удаления, чистим
+      // после и best effort — запись важнее мусора.
+      const paths = await listPhotoPaths(supabase, id).catch(() => [] as string[]);
+      await deleteAppointment(supabase, id, tenantId as string);
+      if (paths.length > 0) void removePhotoBlobs(supabase, paths);
     },
     onSuccess: () => {
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });

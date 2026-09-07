@@ -333,6 +333,7 @@ export type Database = {
           address_lng: number | null
           address_note: string
           cancel_reason: string | null
+          city: string | null
           client_id: string | null
           color_override: string | null
           comment: string
@@ -363,6 +364,7 @@ export type Database = {
           payment_status: string
           payments: Json
           prepaid_amount: number
+          prepayments: Json
           reminder_enabled: boolean
           reminder_offsets: Json
           reminder_template: string
@@ -385,6 +387,7 @@ export type Database = {
           address_lng?: number | null
           address_note?: string
           cancel_reason?: string | null
+          city?: string | null
           client_id?: string | null
           color_override?: string | null
           comment?: string
@@ -415,6 +418,7 @@ export type Database = {
           payment_status?: string
           payments?: Json
           prepaid_amount?: number
+          prepayments?: Json
           reminder_enabled?: boolean
           reminder_offsets?: Json
           reminder_template?: string
@@ -437,6 +441,7 @@ export type Database = {
           address_lng?: number | null
           address_note?: string
           cancel_reason?: string | null
+          city?: string | null
           client_id?: string | null
           color_override?: string | null
           comment?: string
@@ -467,6 +472,7 @@ export type Database = {
           payment_status?: string
           payments?: Json
           prepaid_amount?: number
+          prepayments?: Json
           reminder_enabled?: boolean
           reminder_offsets?: Json
           reminder_template?: string
@@ -614,33 +620,45 @@ export type Database = {
         Row: {
           color: string | null
           country: string
+          deleted_at: string | null
           created_at: string
           id: string
           is_active: boolean
           name: string
           position: number
+          team_id: string
+          tint_day: boolean
+          weekdays: number[]
           tenant_id: string
           updated_at: string
         }
         Insert: {
           color?: string | null
           country?: string
+          deleted_at?: string | null
           created_at?: string
           id: string
           is_active?: boolean
           name: string
           position?: number
+          team_id: string
+          tint_day?: boolean
+          weekdays?: number[]
           tenant_id: string
           updated_at?: string
         }
         Update: {
           color?: string | null
           country?: string
+          deleted_at?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
           name?: string
           position?: number
+          team_id?: string
+          tint_day?: boolean
+          weekdays?: number[]
           tenant_id?: string
           updated_at?: string
         }
@@ -1348,6 +1366,7 @@ export type Database = {
           account_id: string | null
           amount: number
           appointment_id: string | null
+          appointment_payment_id: string | null
           appointment_payment_kind: string | null
           category_id: string | null
           client_id: string | null
@@ -1362,6 +1381,7 @@ export type Database = {
           payment_method: string | null
           receipt_url: string | null
           refund_of_id: string | null
+          reversal_kind: string | null
           source: string
           team_id: string | null
           tenant_id: string
@@ -1376,6 +1396,7 @@ export type Database = {
           account_id?: string | null
           amount: number
           appointment_id?: string | null
+          appointment_payment_id?: string | null
           appointment_payment_kind?: string | null
           category_id?: string | null
           client_id?: string | null
@@ -1390,6 +1411,7 @@ export type Database = {
           payment_method?: string | null
           receipt_url?: string | null
           refund_of_id?: string | null
+          reversal_kind?: string | null
           source?: string
           team_id?: string | null
           tenant_id: string
@@ -1404,6 +1426,7 @@ export type Database = {
           account_id?: string | null
           amount?: number
           appointment_id?: string | null
+          appointment_payment_id?: string | null
           appointment_payment_kind?: string | null
           category_id?: string | null
           client_id?: string | null
@@ -1418,6 +1441,7 @@ export type Database = {
           payment_method?: string | null
           receipt_url?: string | null
           refund_of_id?: string | null
+          reversal_kind?: string | null
           source?: string
           team_id?: string | null
           tenant_id?: string
@@ -1787,6 +1811,57 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "location_labels_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      location_requests: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          id: string
+          location_id: string | null
+          tenant_id: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          location_id?: string | null
+          tenant_id: string
+          token: string
+          used_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          id?: string
+          location_id?: string | null
+          tenant_id?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "location_requests_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "location_requests_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -3387,6 +3462,63 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_appointment_payment: {
+        Args: { p_appointment_id: string; p_payment_id: string; p_request_id: string }
+        Returns: {
+          address: string
+          address_lat: number | null
+          address_lng: number | null
+          address_note: string
+          cancel_reason: string | null
+          city: string | null
+          client_id: string | null
+          color_override: string | null
+          comment: string
+          consent_given: boolean
+          created_at: string
+          created_by: string | null
+          custom_total: boolean
+          date: string
+          discount_amount: number
+          event_all_day: boolean
+          event_notes: string
+          event_push_at: string | null
+          event_push_enabled: boolean
+          event_push_offsets: Json
+          event_repeat: Json
+          event_url: string
+          expenses: Json
+          global_discount: Json | null
+          id: string
+          is_online_booking: boolean
+          kind: string
+          location_id: string | null
+          master_id: string | null
+          paid_amount: number
+          payment: Json | null
+          payment_account_id: string | null
+          payment_method: string | null
+          payment_status: string
+          payments: Json
+          prepaid_amount: number
+          prepayments: Json
+          reminder_enabled: boolean
+          reminder_offsets: Json
+          reminder_template: string
+          service_ids: Json
+          service_price_overrides: Json
+          services: Json
+          source: string | null
+          status: string
+          team_id: string | null
+          tenant_id: string
+          time_end: string
+          time_start: string
+          total_amount: number
+          total_duration: number
+          updated_at: string
+        }
+      }
       claim_account_deletion_cleanup: {
         Args: { p_limit?: number }
         Returns: {
@@ -3559,6 +3691,16 @@ export type Database = {
         Args: { p_team_id: string }
         Returns: Json[]
       }
+      location_request_coord: { Args: { p: number }; Returns: string }
+      location_request_create: {
+        Args: { p_client_id: string }
+        Returns: string
+      }
+      location_request_lookup: { Args: { p_token: string }; Returns: Json }
+      location_request_submit: {
+        Args: { p_payload: Json; p_token: string }
+        Returns: Json
+      }
       lookup_rating_token: {
         Args: { p_token: string }
         Returns: {
@@ -3668,6 +3810,7 @@ export type Database = {
           account_id: string | null
           amount: number
           appointment_id: string | null
+          appointment_payment_id: string | null
           appointment_payment_kind: string | null
           category_id: string | null
           client_id: string | null
@@ -3682,6 +3825,7 @@ export type Database = {
           payment_method: string | null
           receipt_url: string | null
           refund_of_id: string | null
+          reversal_kind: string | null
           source: string
           team_id: string | null
           tenant_id: string
@@ -3697,6 +3841,71 @@ export type Database = {
           to: "finance_transactions"
           isOneToOne: false
           isSetofReturn: true
+        }
+      }
+      record_appointment_payment: {
+        Args: {
+          p_account_id: string
+          p_amount: number
+          p_appointment_id: string
+          p_close_visit?: boolean
+          p_kind?: string
+          p_paid_at?: string
+          p_request_id: string
+        }
+        Returns: {
+          address: string
+          address_lat: number | null
+          address_lng: number | null
+          address_note: string
+          cancel_reason: string | null
+          city: string | null
+          client_id: string | null
+          color_override: string | null
+          comment: string
+          consent_given: boolean
+          created_at: string
+          created_by: string | null
+          custom_total: boolean
+          date: string
+          discount_amount: number
+          event_all_day: boolean
+          event_notes: string
+          event_push_at: string | null
+          event_push_enabled: boolean
+          event_push_offsets: Json
+          event_repeat: Json
+          event_url: string
+          expenses: Json
+          global_discount: Json | null
+          id: string
+          is_online_booking: boolean
+          kind: string
+          location_id: string | null
+          master_id: string | null
+          paid_amount: number
+          payment: Json | null
+          payment_account_id: string | null
+          payment_method: string | null
+          payment_status: string
+          payments: Json
+          prepaid_amount: number
+          prepayments: Json
+          reminder_enabled: boolean
+          reminder_offsets: Json
+          reminder_template: string
+          service_ids: Json
+          service_price_overrides: Json
+          services: Json
+          source: string | null
+          status: string
+          team_id: string | null
+          tenant_id: string
+          time_end: string
+          time_start: string
+          total_amount: number
+          total_duration: number
+          updated_at: string
         }
       }
       record_cash_count: {
@@ -3741,6 +3950,7 @@ export type Database = {
           account_id: string | null
           amount: number
           appointment_id: string | null
+          appointment_payment_id: string | null
           appointment_payment_kind: string | null
           category_id: string | null
           client_id: string | null
@@ -3755,6 +3965,7 @@ export type Database = {
           payment_method: string | null
           receipt_url: string | null
           refund_of_id: string | null
+          reversal_kind: string | null
           source: string
           team_id: string | null
           tenant_id: string
@@ -3784,6 +3995,7 @@ export type Database = {
           account_id: string | null
           amount: number
           appointment_id: string | null
+          appointment_payment_id: string | null
           appointment_payment_kind: string | null
           category_id: string | null
           client_id: string | null
@@ -3798,6 +4010,7 @@ export type Database = {
           payment_method: string | null
           receipt_url: string | null
           refund_of_id: string | null
+          reversal_kind: string | null
           source: string
           team_id: string | null
           tenant_id: string
@@ -3906,6 +4119,7 @@ export type Database = {
           payment_status: string
           payments: Json
           prepaid_amount: number
+          prepayments: Json
           reminder_enabled: boolean
           reminder_offsets: Json
           reminder_template: string
@@ -3988,6 +4202,7 @@ export type Database = {
           payment_status: string
           payments: Json
           prepaid_amount: number
+          prepayments: Json
           reminder_enabled: boolean
           reminder_offsets: Json
           reminder_template: string
@@ -4073,6 +4288,7 @@ export type Database = {
           payment_status: string
           payments: Json
           prepaid_amount: number
+          prepayments: Json
           reminder_enabled: boolean
           reminder_offsets: Json
           reminder_template: string

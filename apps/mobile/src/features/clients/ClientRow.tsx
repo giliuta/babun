@@ -377,11 +377,11 @@ export default function ClientRow({
           ) : null}
         </View>
       </Pressable>
-      {/* КАК СВЯЗАТЬСЯ, а не «позвонить» (владелец 2026-08-06): та же кнопка
-          и тот же лист, что у номера в карточке. Звонок остался внутри листа
-          первым пунктом — тем, кто звонит всегда, это по-прежнему один тап
-          после открытия, а остальным больше не нужно заходить в карточку
-          ради WhatsApp. */}
+      {/* ТАП ЗВОНИТ, УДЕРЖАНИЕ — СПОСОБЫ СВЯЗИ (владелец 2026-09-06): та же
+          кнопка и тот же лист, что у номера в карточке и в записи. С
+          2026-08-06 тап открывал лист со звонком первым пунктом — самое
+          частое действие стоило двух тапов; WhatsApp и остальное теперь за
+          удержанием. */}
       {trailing ? (
         <View className="mx-4 my-3 self-center">{trailing}</View>
       ) : phoneDigits && !selectionMode ? (
@@ -390,7 +390,6 @@ export default function ClientRow({
             number={client.phone}
             telegramUsername={client.telegram_username}
             label={client.full_name || undefined}
-            size={44}
           />
         </View>
       ) : null}

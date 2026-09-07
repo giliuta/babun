@@ -125,3 +125,56 @@ describe("free slots", () => {
     );
   });
 });
+
+// Перенос: кубик обещает, что запись ВСЯ влезет — иначе диспетчер поставит
+// полуторачасовой визит в получасовую щель перед чужой записью.
+describe("free slots for a move", () => {
+  test("окно длиннее шага: старт зелёный, только если влезает целиком", () => {
+    // Полоса 9–12, чужая запись 10:00–11:00, окно 90 мин.
+    const slots = freeSlotsForDay({
+      ...base,
+      durationMinutes: 90,
+      appts: [apt({ id: "other" })],
+    });
+    // 09:00 упирается в 10:00 через 60 минут; 11:00 — конец 12:30 за сменой.
+    assert.deepEqual(slots.map((s) => s.time), []);
+  });
+
+  test("окно упирается в перерыв — старт не предлагается", () => {
+    const slots = freeSlotsForDay({
+      ...base,
+      durationMinutes: 60,
+      band: { ...BAND, breaks: [{ startMin: 10 * 60, endMin: 10 * 60 + 30 }] },
+      appts: [],
+    });
+    assert.deepEqual(
+      slots.map((s) => s.time),
+      ["09:00", "10:30", "11:00"],
+    );
+  });
+
+  test("собственное время переносимой записи не занято", () => {
+    const moving = apt({ id: "moving", time_start: "10:00", time_end: "11:00" });
+    const withSelf = freeSlotsForDay({ ...base, appts: [moving] });
+    assert.deepEqual(
+      withSelf.map((s) => s.time),
+      ["09:00", "09:30", "11:00", "11:30"],
+    );
+    const ignoring = freeSlotsForDay({
+      ...base,
+      appts: [moving],
+      ignoreId: "moving",
+    });
+    assert.equal(ignoring.length, 6);
+  });
+
+  test("окно короче шага округляется до шага", () => {
+    const slots = freeSlotsForDay({
+      ...base,
+      durationMinutes: 15,
+      band: { startMin: 9 * 60, endMin: 9 * 60 + 20 },
+      appts: [],
+    });
+    assert.deepEqual(slots, []);
+  });
+});

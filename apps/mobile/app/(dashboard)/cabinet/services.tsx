@@ -1,10 +1,16 @@
 import { useMemo, useRef, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Archive, Copy, Trash2, X } from "lucide-react-native";
+import {
+  Briefcase,
+  EyeOff,
+  RotateCcw,
+  Trash2,
+  X,
+} from "lucide-react-native";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { formatCountRu } from "@babun/shared/common/utils/plural-ru";
-import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -12,39 +18,25 @@ import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { RowCaption, RowGroupHeader } from "@/components/ui/card-rows";
+import { RowCaption } from "@/components/ui/card-rows";
 import { FieldLabel } from "@/components/ui/Field";
 import { WEEKDAY_LABELS } from "@babun/shared/local/services";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
+import {
+  ServiceLadder,
+  type LadderStep,
+} from "@/features/services/ServiceLadder";
 import { useThemeColors } from "@/theme/colors";
 import { getStorage } from "@babun/shared/storage";
 import { useToast } from "@/components/ui/Toast";
 import {
   useDeleteService,
+  usePurgeService,
+  useServiceUsageCount,
   useTeams,
   useUpdateService,
 } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
-import {
-  calcPrice,
-  calcSavings,
-  calcSlot,
-  calcWorkDuration,
-} from "@babun/shared/local/services-pricing";
-import {
-  CollapsibleSection,
-  NumberField,
-  OverflowRule,
-  PriceCalculator,
-  ServiceTypeToggle,
-  VariantRows,
-  type VariantDraft,
-} from "@/features/services/ServiceEditorParts";
-import {
-  useSaveServiceVariants,
-  useServiceVariants,
-  type ServiceVariant,
-} from "@/features/services/variant-queries";
 import {
   useCreateService,
   useReorderServices,
@@ -55,15 +47,14 @@ import {
 } from "@/features/services/queries";
 import { ColorDot, NameColorField } from "@/components/ui/picker-fields";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
-import { durationLabel } from "@/features/services/format";
+import { durationLabel, roundToStep } from "@/features/services/format";
+import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
+
 import {
-  ServiceBlocks,
-  SETTINGS_PANEL,
-  roundToStep,
-} from "@/features/services/ServiceBlocks";
-import {
+  displayValue,
+  draftValue,
   createTierDraft,
   economicsDraftFromService,
   parsePriceTiers,
@@ -85,15 +76,20 @@ import {
 // использует. Ориентир в длинном прайсе даёт не коробка, а порядок, который
 // человек задаёт сам — перетаскиванием (`position`).
 //
-// ЦВЕТА У УСЛУГИ БОЛЬШЕ НЕТ. Полоса 4×36 слева красила поле, которое не читает
-// ни одна поверхность: блок в календаре берёт цвет записи, команды и статуса
-// (`status-colors.ts`), инвойс цвет услуги не открывает вовсе. Подпись «Цвет
-// на календаре» была прямой неправдой. Колонка в базе жива ради легаси-веба,
-// продукт её не пишет.
+// ЦВЕТ У УСЛУГИ ЕСТЬ, И ЕГО ЧИТАЕТ КАЛЕНДАРЬ. Точка слева от имени — та же, что
+// у метки и у команды (`NameColorField`), и она же становится цветом записи,
+// когда в Кабинете → «Запись» выбран «Обычный цвет: Цвет услуги» (запись берёт
+// цвет своей первой услуги). Второго места, где спрашивают цвет услуги, в
+// продукте быть не должно.
+//
+// Прежний комментарий утверждал, что колонка мертва и «продукт её не пишет», —
+// это была неправда уже тогда: экран её писал, рисовал точкой и показывал в
+// каталоге выбора при записи. Читателя не хватало ровно одного.
 //
 // Экран переиспользуется в двух местах (не дублируем CRUD):
 //  · глобальный /cabinet/services — весь прайс,
-//  · per-team /cabinet/teams/[id]/services — услуги одной команды.
+//  · обёртка «услуги одной команды» снесена 2026-08-30 вместе с разделом
+//    «Команды» в Кабинете; та же дверь есть в настройках календаря.
 
 /** Команда, чей прайс человек смотрел в прошлый раз. Свой ключ, а не запись в
  *  `calendar.view`: тап по чипу здесь не должен переключать чужой календарь. */
@@ -105,9 +101,6 @@ const CAL_VIEW_KEY = "calendar.view";
 /** Высота строки фиксирована: по ней перетаскивание считает, через сколько
  *  соседей перелетел палец. Две строки текста + воздух. */
 const ROW_H = 60;
-
-/** «1 вариант · 2 варианта · 5 вариантов» — склонение как во всём продукте. */
-const FORMS_VARIANT: [string, string, string] = ["вариант", "варианта", "вариантов"];
 
 type ServiceEditing =
   // `copy` — источник из ДРУГОЙ команды: имя не получает «копия» (в новой
@@ -145,7 +138,8 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   const create = useCreateService();
   const update = useUpdateService();
   const del = useDeleteService();
-  const saveVariants = useSaveServiceVariants();
+  const purge = usePurgeService();
+  const countUsage = useServiceUsageCount();
   const reorder = useReorderServices();
 
   const [editing, setEditing] = useState<ServiceEditing | null>(null);
@@ -187,55 +181,83 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
    *  разные вещи, и путать их нельзя ни в кнопке, ни в пустом состоянии. */
   const teamsUnknown = teamsQuery.isLoading;
 
-  const services = useMemo(
-    () =>
-      activeTeamId
-        ? allServices.filter((s) => s.team_id === activeTeamId)
-        : [],
-    [allServices, activeTeamId],
+  // ВЫКЛЮЧЕННЫЕ ОСТАЮТСЯ В СПИСКЕ, СЕРЫМИ И В ХВОСТЕ (владелец 2026-08-29:
+  // «смахнул вправо — и она просто выключена, серая, не используется»).
+  //
+  // Раньше выключенная услуга исчезала из списка и жила за иконкой архива в
+  // шапке. Прайс от этого выглядел полным, хотя половина работ была снята, —
+  // и вспомнить, что именно ты выключил, можно было только зайдя в архив.
+  // Теперь виден весь каталог: живые сверху, выключенные под ними серыми.
+  //
+  // Имя выключенной услуги в ИСТОРИИ не теряется: календарь и лист записи
+  // читают полный справочник (`useAllServices`). Фильтр по активным остался
+  // там, где он и нужен, — в выборе при записи и в «повторить как в прошлый
+  // раз»: предлагать снятую работу нельзя.
+  const services = useMemo(() => {
+    if (!activeTeamId) return [];
+    const mine = everyService.filter((s) => s.team_id === activeTeamId);
+    return [
+      ...mine.filter((s) => s.is_active),
+      ...mine.filter((s) => !s.is_active),
+    ];
+  }, [everyService, activeTeamId]);
+  /** Цвета, уже занятые в прайсе ЭТОЙ команды: новая услуга садится на первый
+   *  свободный из цикла — тот же приём, которым красится новый календарь. Без
+   *  него весь прайс сидит на одном Голубом, и правило «цвет по услуге» в день
+   *  включения выглядит сломанным. */
+  const usedColors = useMemo(
+    () => services.map((s) => s.color).filter(Boolean),
+    [services],
   );
   /** Убранные услуги ЭТОЙ команды — полный справочник минус живой. */
-  /** Варианты всех услуг — нужны и списку (диапазон цен в строке), и листу. */
-  const variantsQuery = useServiceVariants();
-  const variantsByService = useMemo(() => {
-    const map = new Map<string, ServiceVariant[]>();
-    for (const variant of variantsQuery.data ?? []) {
-      map.set(variant.service_id, [
-        ...(map.get(variant.service_id) ?? []),
-        variant,
-      ]);
-    }
-    return map;
-  }, [variantsQuery.data]);
-
-  const removed = useMemo(
-    () =>
-      activeTeamId
-        ? everyService.filter(
-            (s) => s.team_id === activeTeamId && !s.is_active,
-          )
-        : [],
-    [everyService, activeTeamId],
-  );
-  const [removedOpen, setRemovedOpen] = useState(false);
-  const [copyOpen, setCopyOpen] = useState(false);
-  /** Услуги ДРУГИХ команд — источник копирования. */
-  const foreignServices = useMemo(
-    () =>
-      activeTeamId
-        ? allServices.filter((s) => s.team_id !== activeTeamId)
-        : [],
-    [allServices, activeTeamId],
-  );
 
   const alertError = (e: unknown) =>
     notify("Ошибка", e instanceof Error ? e.message : "Не удалось сохранить");
 
-  const handleSave = async (
-    draft: ServiceInput,
-    serviceId?: string,
-    variants?: { name: string; price: number; duration_min: number }[],
-  ) => {
+  /** УДАЛЕНИЕ НАСОВСЕМ — с честным пересчётом последствий.
+   *
+   *  `appointments.service_ids` это jsonb-массив, а не связь с таблицей: база
+   *  удалению не помешает и ничего не спросит. Значит спросить обязан
+   *  продукт — иначе человек сотрёт услугу и молча обнулит имя работы в
+   *  собственной истории, а вернуть его будет неоткуда.
+   *
+   *  Поэтому перед вопросом считаем, в скольких записях услуга стоит, и
+   *  говорим ЧИСЛО. «Может повлиять на историю» — не предупреждение; «стоит
+   *  в 47 записях» — предупреждение. */
+  const handlePurge = async (svc: Service) => {
+    let used = 0;
+    try {
+      used = await countUsage(svc.id);
+    } catch {
+      // Счёт не сошёлся — не повод молчать о самом удалении. Предупреждаем
+      // без числа: неизвестность здесь хуже завышенной оценки.
+      used = -1;
+    }
+    confirmThen(
+      "Удалить услугу навсегда?",
+      {
+        message:
+          used === 0
+            ? `«${svc.name}» ещё не стоит ни в одной записи — удалить её можно без следа.`
+            : used > 0
+              ? `«${svc.name}» стоит в ${formatCountRu(used, ["записи", "записях", "записях"])}. После удаления имя работы там пропадёт, и вернуть его будет неоткуда. Если нужно просто убрать её из выбора — скройте.`
+              : `«${svc.name}» может стоять в уже сделанных записях. После удаления имя работы в них пропадёт безвозвратно. Если нужно просто убрать её из выбора — скройте.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      async () => {
+        try {
+          await purge.mutateAsync(svc.id);
+          setEditing(null);
+          toast("Услуга удалена");
+        } catch (e) {
+          alertError(e);
+        }
+      },
+    );
+  };
+
+  const handleSave = async (draft: ServiceInput, serviceId?: string) => {
     try {
       // РАСХОД ЧИТАЕТСЯ ИЗ ЖИВОГО КАТАЛОГА, А НЕ ИЗ СНИМКА ЗАПИСИ. Значит
       // первое же ненулевое число немедленно уменьшит показанную прибыль ВСЕХ
@@ -248,21 +270,10 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         !!serviceId &&
         draft.cost_per_unit !== undefined &&
         Number(before?.cost_per_unit ?? 0) !== draft.cost_per_unit;
-      let savedId = serviceId;
       if (serviceId) {
         await update.mutateAsync({ id: serviceId, patch: { ...draft } });
       } else {
-        const created = await create.mutateAsync({
-          ...draft,
-          position: allServices.length,
-        });
-        savedId = created?.id;
-      }
-      // ВАРИАНТЫ СОХРАНЯЮТСЯ ПОСЛЕ САМОЙ УСЛУГИ И ТОЛЬКО ДЛЯ СВОЕГО ТИПА: у
-      // «количества» их не бывает, и пустой список туда пишется явно —
-      // сменили тип, значит старые варианты обязаны уйти.
-      if (savedId && variants) {
-        await saveVariants.mutateAsync({ serviceId: savedId, variants });
+        await create.mutateAsync({ ...draft, position: allServices.length });
       }
       setEditing(null);
       toast(
@@ -277,11 +288,12 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   // принадлежит одной команде, а прежняя ветка при пустом `brigade_ids`
   // молча уносила услугу у ВСЕХ команд (владелец правил одну, ломал три).
   const handleDelete = (svc: Service) => {
-    // ОДИН ГЛАГОЛ РАЗРУШЕНИЯ НА ВЕСЬ ЭКРАН — «Убрать»: блок убирают, фразу
-    // убирают, услугу убирают из прайса. Удаление и так мягкое (`is_active`),
-    // а слово «Удалить» обещало необратимость, которой нет.
+    // СКРЫТЬ ≠ УДАЛИТЬ (владелец 2026-08-29: «удалить услугу, чтоб её вообще
+    // не было, и выключить — это разные вещи»). Здесь — скрытие: строка
+    // остаётся в базе и на экране серой, история цела. Удаление живёт
+    // отдельно, за другой кромкой свайпа.
     confirmThen(
-      "Убрать услугу из прайса?",
+      "Скрыть услугу?",
       {
         // ЧЕСТНЫЙ ТЕКСТ (аудит 2026-08-21). Здесь стояло «Записи, где она уже
         // стоит, не изменятся» — прямая неправда: все читатели имени услуги
@@ -289,15 +301,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
         // услуга теряет ИМЯ везде — в записи, в наряде команды, в ленте клиента,
         // в счёте, — печатаясь заглушкой «Услуга». Деньги и правда не меняются,
         // и обещать надо ровно это.
-        message: `«${svc.name}» исчезнет из выбора при записи. Уже сделанные записи и счета не изменятся — имя работы в них останется.`,
-        confirmLabel: "Убрать",
+        message: `«${svc.name}» перестанет предлагаться при записи и станет серой в списке. Уже сделанные записи и счета не изменятся.`,
+        confirmLabel: "Скрыть",
         destructive: true,
       },
       async () => {
         try {
           await del.mutateAsync(svc.id);
           setEditing(null);
-          toast("Услуга убрана из прайса");
+          toast("Услуга скрыта");
         } catch (e) {
           alertError(e);
         }
@@ -318,27 +330,14 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           (Кабинет → Команды → услуги) или из той, что открыта в календаре.
           Имя команды стоит подзаголовком — «какой команде принадлежат
           услуги» видно, но тронуть его отсюда нельзя. */}
-      {/* УБРАННУЮ УСЛУГУ ВОЗВРАЩАЮТ ОТСЮДА. `useServices()` фильтрует по
-          `is_active`, и убранная исчезала из продукта совсем: у Команды 1 так
-          и висел невидимый «Монтаж внутреннего блока» за €125, которого не
-          вернуть ни одной дверью. Кнопка показывается, только когда убранные
-          у этой команды есть, — пустая дверь не нужна. */}
+      {/* ИКОНКИ АРХИВА В ШАПКЕ БОЛЬШЕ НЕТ. Она вела на отдельный экран
+          убранных услуг — он был нужен, пока выключенная услуга исчезала из
+          списка совсем. Теперь она остаётся на месте серой, и включают её тем
+          же свайпом, каким выключили: дверь во второй экран стала дверью в
+          пустую комнату. */}
       <ScreenHeader
         title="Услуги"
         subtitle={activeTeam?.name ?? undefined}
-        right={
-          removed.length > 0 ? (
-            <Pressable
-              onPress={() => setRemovedOpen(true)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Убранные услуги: ${removed.length}`}
-              className="h-11 w-11 items-center justify-center active:opacity-60"
-            >
-              <Archive color={t.sub} size={ICON.sm} strokeWidth={2} />
-            </Pressable>
-          ) : undefined
-        }
       />
 
       {servicesQuery.isLoading ? (
@@ -361,19 +360,17 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           }}
         />
       ) : services.length === 0 ? (
-        // ПУСТО — ОДНИМ СЛОВОМ. Объяснение «заведите первую — она появится в
-        // выборе при записи» владелец снёс 24 августа («люди не дураки»), но
-        // ВООБЩЕ ничего оказалось хуже: белый экран не отличить от «не
-        // загрузилось», и человек не понимал, чей прайс перед ним пустой.
-        // Слово — одно, и это факт, а не инструкция.
-        <View className="flex-1 items-center justify-center px-8">
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{ fontSize: 15, color: t.faint, textAlign: "center" }}
-          >
-            {activeTeam ? `У «${activeTeam.name}» пока пусто` : "Пока пусто"}
-          </Text>
-        </View>
+        // ПУСТО — КАК ВЕЗДЕ (владелец 2026-08-27: «сделай то же самое,
+        // красиво, маленькое: „услуг пока нет" — как в метках»).
+        //
+        // Было своей вёрсткой: текст 15/faint по центру, без значка, мимо
+        // примитива. И с именем команды в самой фразе («У „Мой календарь"
+        // пока пусто») — оно отвечало на вопрос «чей прайс пустой», но
+        // ОТВЕТ УЖЕ СТОИТ В ШАПКЕ подзаголовком, двумя строками выше.
+        //
+        // Подписи под заголовком нет: пустое состояние говорит ровно одно —
+        // чего здесь нет (LOCKED 2026-08-27, §5).
+        <EmptyState fill icon={<Briefcase color={t.accent} size={28} />} title="Услуг пока нет" />
       ) : (
         <ScrollView
           className="flex-1"
@@ -396,12 +393,15 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
               spaced
               handleInside
               labelFor={(s) => s.name}
-              // Внутри команды список ОТФИЛЬТРОВАН, и записать позиции 0..n
-              // только видимым — значит перемешать невидимых. Ручка живёт там,
-              // где виден весь прайс.
-              rangeFor={(index) =>
-                teamId ? [index, index] : [0, services.length - 1]
-              }
+              // ПЕРЕТАСКИВАНИЕ РАЗРЕШЕНО (владелец 2026-08-29: «хочу шесть
+              // точек справа, чтоб можно было менять услуги местами»).
+              //
+              // Запрет стоял не зря: список был ОТФИЛЬТРОВАН по `is_active`, и
+              // записать позиции 0..n только видимым значило перемешать
+              // невидимых. Теперь фильтра нет — скрытые лежат тут же серыми,
+              // то есть на экране весь прайс команды целиком, и позиции
+              // пишутся полному набору.
+              rangeFor={() => [0, services.length - 1]}
               onReorder={(ids) => reorder.mutate(ids, { onError: alertError })}
               onDraggingChange={setDragging}
             >
@@ -412,59 +412,70 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                 // выглядела услугой с одной ценой, а внутри лежали ещё «от 2 —
                 // €100» и «от 3 — €135». По этому прайсу диктуют цену по
                 // телефону, и он обязан сказать, что цена не одна.
-                // СТРОКА ГОВОРИТ ТО, ЧТО РЕШАЕТ ТИП УСЛУГИ. У «количества» —
-                // есть ли лестница; у «вариантов» — сколько их и в каком
-                // разбросе цены. Дублировать «€50 · 30 мин» рядом с ценой
-                // справа незачем: это одно и то же число дважды.
+                // СТРОКА ГОВОРИТ, ЕСТЬ ЛИ У УСЛУГИ ЛЕСТНИЦА. Дублировать
+                // «€50 · 30 мин» рядом с ценой справа незачем: это одно и то
+                // же число дважды.
                 const tierCount = parsePriceTiers(svc.price_tiers).length;
-                const rowVariants = variantsByService.get(svc.id) ?? [];
                 const sub =
-                  svc.service_type === "variant"
-                    ? `${formatCountRu(rowVariants.length, FORMS_VARIANT)}`
-                    : tierCount > 0
-                      ? `${durationLabel(svc.duration_minutes)} · цена от количества`
-                      : durationLabel(svc.duration_minutes);
+                  tierCount > 0
+                    ? `${durationLabel(svc.duration_minutes)} · цена от количества`
+                    : durationLabel(svc.duration_minutes);
                 // ЦЕНА С КОПЕЙКАМИ. `formatEUR` округляет до целых евро
                 // (`money(Math.round(...))`), и услуга за 49,50 печаталась в
                 // прайсе как «€50» — прайс обязан говорить ровно ту цену,
                 // которая уедет в запись и в счёт.
-                const variantPrices = (variantsByService.get(svc.id) ?? []).map(
-                  (variant) => Number(variant.price),
-                );
-                const price =
-                  svc.service_type === "variant" && variantPrices.length > 0
-                    ? variantPrices.length === 1 ||
-                      Math.min(...variantPrices) === Math.max(...variantPrices)
-                      ? formatEURExact(variantPrices[0])
-                      : `${formatEURExact(Math.min(...variantPrices))}–${formatEURExact(
-                          Math.max(...variantPrices),
-                        )}`
-                    : formatEURExact(Number(svc.price));
+                const price = formatEURExact(Number(svc.price));
+                const off = !svc.is_active;
                 return (
                   <SwipeRow
-                    label="Убрать"
+                    // СПРАВА — УДАЛИТЬ, СЛЕВА — СКРЫТЬ (владелец 2026-08-29:
+                    // «удалить справа, скрыть слева, а не наоборот»).
+                    //
+                    // Стороны, а не направления: правая кромка у SwipeRow —
+                    // главная (`label`), левая — вторая (`leading`). Прошлый
+                    // заход развесил их наоборот, потому что я прочитал
+                    // «влево/вправо» как СВАЙП, а сказано было про сторону,
+                    // где появляется кнопка.
+                    //
+                    // Правая всегда одна и та же — «Удалить»; левая меняется
+                    // вместе со строкой: скрытая предлагает показать. Так
+                    // разрушительное действие живёт на постоянном месте и не
+                    // подменяется под пальцем.
+                    label="Удалить"
                     color={t.danger}
                     icon={Trash2}
-                    accessibilityLabel={`Убрать услугу ${svc.name}`}
-                    onAction={() => handleDelete(svc)}
-                    // ОБРАТНОЕ РАЗРУШЕНИЮ — «ПРОИЗВЕСТИ». Прайс растёт
-                    // вариантами: «Монтаж внутреннего блока» → «наружного»,
-                    // «Чистка» → «Чистка двух блоков». Дубль открывает лист с
-                    // копией (цена, минуты, команды, себестоимость уже
-                    // заполнены), а не пишет строку молча: строка, возникшая
-                    // от жеста сама, читается как сбой.
+                    accessibilityLabel={`Удалить услугу ${svc.name} навсегда`}
+                    onAction={() => void handlePurge(svc)}
+                    // `fullSwipe` НЕ включён и включён не будет: закон канона —
+                    // размашистый свайп не носит разрушительного, а здесь оно
+                    // необратимо.
                     leading={{
-                      label: "Дубль",
-                      color: t.accent,
-                      icon: Copy,
-                      accessibilityLabel: `Дублировать услугу ${svc.name}`,
-                      onAction: () => setEditing({ mode: "create", from: svc }),
+                      label: off ? "Показать" : "Скрыть",
+                      color: off ? t.success : t.warning,
+                      icon: off ? RotateCcw : EyeOff,
+                      accessibilityLabel: off
+                        ? `Показать услугу ${svc.name}`
+                        : `Скрыть услугу ${svc.name}`,
+                      onAction: () =>
+                        off
+                          ? update.mutate(
+                              { id: svc.id, patch: { is_active: true } },
+                              {
+                                onSuccess: () => toast("Услуга показана"),
+                                onError: alertError,
+                              },
+                            )
+                          : handleDelete(svc),
                     }}
                   >
                     <View
                       style={{
                         flexDirection: "row",
                         alignItems: "center",
+                        // Выключенная не исчезает и не кричит — она просто
+                        // тише живых. Полупрозрачность гасит и цветную точку
+                        // услуги, и цену: строка целиком уходит на второй план.
+                        opacity: off ? 0.45 : 1,
                         backgroundColor: t.surface,
                       }}
                     >
@@ -554,17 +565,17 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
           disabled={teamsUnknown}
           onPress={() => {
             if (teams.length === 0) {
-              router.push("/cabinet/teams");
+              router.push("/calendar");
               return;
             }
-            // ГОТОВОЕ ИЗ ДРУГОЙ КОМАНДЫ — ВМЕСТО ПОВТОРНОГО НАБОРА. Прайс у
-            // команд обычно один и тот же с поправкой на цену: пять порогов
-            // руками в каждой из пяти команд — это работа, которой не должно
-            // быть. Предлагаем только когда есть что предложить.
-            if (foreignServices.length > 0) {
-              setCopyOpen(true);
-              return;
-            }
+            // ВСЕГДА С НУЛЯ (владелец 2026-08-27: «что значит „создать с
+            // нуля"? Убираем, всегда создаётся с нуля — лучше один раз
+            // пересоздать, чем это»). Раньше здесь вставал лист «Создать с
+            // нуля / или взять готовую» — лишний экран между намерением и
+            // формой, и вставал он ТОЛЬКО когда в других командах что-то
+            // было, то есть кнопка вела себя по-разному в разные дни.
+            // Копирование готовой никуда не делось: у каждой услуги есть
+            // «дублировать» в её собственном редакторе.
             setEditing({ mode: "create" });
           }}
         />
@@ -572,141 +583,14 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 
       <ServiceSheet
         editing={editing}
+        usedColors={usedColors}
         lockedTeamId={activeTeamId ?? undefined}
         busy={busy}
         onClose={() => setEditing(null)}
         onSave={handleSave}
-        onDelete={handleDelete}
-        onDuplicate={(svc) => setEditing({ mode: "create", from: svc })}
-        variantsByService={variantsByService}
       />
 
-      {/* ВЗЯТЬ ГОТОВУЮ ИЗ ДРУГОЙ КОМАНДЫ. Копируется ВСЁ: пороги, варианты,
-          единица, режим, буферы, дни, ограничения — и открывается редактор с
-          заполненными полями, чтобы сразу поправить цену под эту команду.
-          Связь `copied_from_service_id` пишется молча: интерфейс её не
-          показывает, она нужна отчётам, чтобы склеить одну и ту же работу по
-          всем командам, не полагаясь на совпадение названий. */}
-      <BottomSheet
-        visible={copyOpen}
-        onClose={() => setCopyOpen(false)}
-        title="Новая услуга"
-        scroll
-      >
-        <Button
-          label="Создать с нуля"
-          onPress={() => {
-            setCopyOpen(false);
-            setTimeout(() => setEditing({ mode: "create" }), SHEET_EXIT_MS);
-          }}
-        />
-        <View style={{ height: 16 }} />
-        <FieldLabel text="или взять готовую" />
-        <View
-          className="overflow-hidden"
-          style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-        >
-          {foreignServices.map((svc, index) => {
-            const owner = teams.find((tm) => tm.id === svc.team_id);
-            return (
-              <Pressable
-                key={svc.id}
-                onPress={() => {
-                  // ДВА ЛИСТА НЕ ОТКРЫВАЮТСЯ В ОДНОМ КАДРЕ: RN Modal — это
-                  // отдельное окно, и редактор, поднятый ровно в тот момент,
-                  // когда уходит каталог, не показывается вовсе. Ждём ухода.
-                  setCopyOpen(false);
-                  setTimeout(
-                    () => setEditing({ mode: "create", from: svc, copy: true }),
-                    SHEET_EXIT_MS,
-                  );
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Взять «${svc.name}» из команды ${owner?.name ?? ""}`}
-                className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-                style={
-                  index > 0
-                    ? { borderTopWidth: 1, borderTopColor: t.separator }
-                    : undefined
-                }
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                  >
-                    {svc.name}
-                  </Text>
-                  <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                    {owner?.name ?? "Другая команда"}
-                  </Text>
-                </View>
-                <Text
-                  className="tabular-nums"
-                  style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {formatEURExact(Number(svc.price))}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </BottomSheet>
 
-      {/* УБРАННЫЕ. Возврат — одним тапом по строке: убирали услугу тоже одним
-          действием, и обратная дорога обязана быть такой же короткой. */}
-      <BottomSheet
-        visible={removedOpen}
-        onClose={() => setRemovedOpen(false)}
-        title="Убранные"
-        scroll
-      >
-        <View
-          className="overflow-hidden"
-          style={{ backgroundColor: t.canvas, borderRadius: t.radius.card }}
-        >
-          {removed.map((svc, index) => (
-            <Pressable
-              key={svc.id}
-              onPress={() => {
-                update.mutate(
-                  { id: svc.id, patch: { is_active: true } },
-                  {
-                    onError: alertError,
-                    onSuccess: () => toast(`«${svc.name}» вернулась в прайс`),
-                  },
-                );
-                if (removed.length === 1) setRemovedOpen(false);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Вернуть «${svc.name}» в прайс`}
-              className="flex-row items-center gap-3 px-4 py-3 active:opacity-60"
-              style={
-                index > 0
-                  ? { borderTopWidth: 1, borderTopColor: t.separator }
-                  : undefined
-              }
-            >
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text
-                  numberOfLines={1}
-                  style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {svc.name}
-                </Text>
-                <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
-                  {`${formatEURExact(Number(svc.price))} · ${durationLabel(
-                    svc.duration_minutes,
-                  )}`}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-                Вернуть
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </BottomSheet>
     </Screen>
   );
 }
@@ -717,30 +601,22 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 // метках 2026-08-17.
 function ServiceSheet({
   editing,
+  usedColors,
   lockedTeamId,
   busy,
   onClose,
   onSave,
-  onDelete,
-  onDuplicate,
-  variantsByService,
 }: {
   editing: ServiceEditing | null;
+  /** Цвета, занятые в этом прайсе, — чтобы новая услуга не села на чужой. */
+  usedColors?: readonly string[];
   /** Per-team-контекст: новая услуга сразу привязана к этой команде. */
   lockedTeamId?: string;
   busy: boolean;
   onClose: () => void;
-  onSave: (
-    draft: ServiceInput,
-    serviceId?: string,
-    variants?: { name: string; price: number; duration_min: number }[],
-  ) => void;
-  onDelete: (svc: Service) => void;
+  onSave: (draft: ServiceInput, serviceId?: string) => void;
   /** Дубль из шапки листа — вторая дверь к тому же, что делает свайп вправо
    *  по строке прайса (который перехватывает системный жест «назад»). */
-  onDuplicate: (svc: Service) => void;
-  /** Варианты по услуге — читаются один раз списком, лист берёт готовое. */
-  variantsByService: Map<string, ServiceVariant[]>;
 }) {
   const t = useThemeColors();
   // ЗНАК ВАЛЮТЫ — ИЗ ТЕНАНТА, а не зашитый «€»: у компании в другой валюте
@@ -766,31 +642,71 @@ function ServiceSheet({
    *  гасится пропом `visible`, поэтому чужой `useState` переезжал бы от
    *  услуги к услуге. */
   const [openRow, setOpenRow] = useState<string | null>(null);
-  /** Единица измерения услуги — одна на все блоки. `null` = «продаём штуками
-   *  и слово лишнее»: тогда всё печатается голым числом, как раньше. */
-  const [unit, setUnit] = useState<string | null>(null);
   /** Линза показа чисел: «за всё» или «за одну». Хранение не меняет. */
-  const [priceEntry, setPriceEntry] = useState<PriceEntryMode>("total");
+  // ЗА ЕДИНИЦУ ПО УМОЛЧАНИЮ (владелец 2026-08-27, согласившись с разбором):
+  // тогда лесенка значит «сколько стоит одна единица при таком объёме», и
+  // промежуточный объём считается сам. При «за всё» таблица становится
+  // справочником, и на 13 м² между ступенями 10 и 20 продукт обязан гадать.
+  // У уже заведённых услуг режим свой — он лежит в колонке `price_entry`.
+  const [priceEntry, setPriceEntry] = useState<PriceEntryMode>("unit");
+  // РЕЖИМ РАСХОДА КОЛОНКИ В БАЗЕ НЕ ИМЕЕТ. Расход хранится ЗА ЕДИНИЦУ всегда
+  // (`cost_per_unit`), а этот флаг — только способ ввода: «за всё» делит
+  // напечатанное на количество. Поэтому он не переживает переоткрытие листа,
+  // и это честно: само ЧИСЛО в базе от режима не зависит и не портится.
+  // Долг: колонка `cost_entry`, чтобы режим запоминался.
+  const [costEntry, setCostEntry] = useState<PriceEntryMode>("unit");
   /** Дни недели ISO 1..7. Пустой массив — делаем в любой день. */
   const [weekdays, setWeekdays] = useState<number[]>([]);
-  /** Столбец расхода показан. У всех услуг прода он нулевой, поэтому по
-   *  умолчанию его на экране нет — приходит по команде из «Как считаем». */
-  const [costShown, setCostShown] = useState(false);
-  /** ТИП УСЛУГИ решает всё устройство листа: «количество» считает лестницей,
-   *  «варианты» — плоским списком без единой формулы. */
-  const [serviceType, setServiceType] = useState<"quantity" | "variant">("quantity");
-  const [variants, setVariants] = useState<VariantDraft[]>([]);
-  /** Время вокруг работы: дорога до адреса и уборка за собой. */
-  const [bufferBefore, setBufferBefore] = useState("0");
+  // РАБОЧИЕ ДНИ — НЕОБЯЗАТЕЛЬНЫЙ ПАРАМЕТР, А НЕ ЧАСТЬ ФОРМЫ (владелец
+  // 2026-08-29: «это исключительно для тех, кому нужно; случайно нажмёшь — и
+  // он просто не будет работать»). Семь всегда зажжённых плиток были
+  // приглашением погасить день мимоходом и тихо сломать услугу: она бы
+  // перестала предлагаться, а причина осталась бы в форме, куда больше не
+  // заходят. Пустой список = «любой день», и пока он пуст, блока нет вовсе.
+  const [hasWeekdays, setHasWeekdays] = useState(false);
+  // ПЕРЕРЫВ ПОСЛЕ УСЛУГИ — тоже добавляемый параметр (владелец 2026-08-29:
+  // «можно добавить, сделать более автоматически — плюс добавить перерыв
+  // после услуги»). Это дорога до следующего объекта и уборка после работы:
+  // время, которое сейчас не считает никто, и поэтому в день влезает меньше
+  // работ, чем обещает сетка.
+  const [hasBufferAfter, setHasBufferAfter] = useState(false);
+  // ФЛАГ «ПОКАЗАН ЛИ СТОЛБЕЦ РАСХОДА» ДОЖИЛ ДО ХОЛОСТОГО ХОДА И УБРАН
+  // 2026-08-30. Расход показывается ВСЕГДА своей колонкой с тех пор, как
+  // лесенка стала таблицей, и значение флага перестали читать — его выбросили
+  // прямо в объявлении (`const [, setCostShown]`). Осталась только запись:
+  // состояние, которое никто не смотрит, но которое исправно дёргает
+  // перерисовку листа на каждом открытии.
+  //
+  // Комментарий про ТИП УСЛУГИ снят следом: он описывал устройство листа для
+  // «вариантов», а вариантов в продукте больше нет.
+  // СЕМЬ СОСТОЯНИЙ УБРАНЫ ОТСЮДА 2026-08-30, и все семь были одинаковы:
+  // заводились, посевались из услуги и уезжали обратно в базу тем же
+  // значением — БЕЗ ЕДИНОГО ЭЛЕМЕНТА УПРАВЛЕНИЯ в форме. Форма делала вид,
+  // что ими распоряжается.
+  //   `unit`, `overflow_price`, `overflow_duration_min` — владелец убрал сами
+  //     настройки 27–29 августа (единица живёт в НАЗВАНИИ услуги: «Обмотка
+  //     1 м», регрессия «свыше N» снесена целиком);
+  //   `min_qty`, `max_qty`, `required_staff`, `buffer_before_min` — двери на
+  //     мобильном не было никогда.
+  //
+  // УДАЛЕНИЕ НИЧЕГО НЕ СТИРАЕТ, и это проверено по обоим путям: обновление
+  // шлёт ЧАСТИЧНЫЙ патч — не отправленная колонка остаётся как была; а
+  // создание подставляет в `useCreateService` ровно те же значения по
+  // умолчанию, что стояли здесь (`unit ?? null`, `min_qty ?? 1`,
+  // `required_staff ?? 1`, `buffer_before_min ?? 0`). Значение, выставленное
+  // из веба, переживает сохранение с мобильного и так и так.
+  //
+  // `service_type` и `variants` УБРАНЫ СЛЕДОМ, 30 августа: владелец решил
+  // «удалить тогда», а данные подтвердили, что ломать нечего — вариантных
+  // услуг в базе НОЛЬ и строк вариантов НОЛЬ. Таблица `service_variants` и
+  // колонка `service_type` в базе целы: удалён интерфейс, а не данные.
+  //
+  // ДВЕ ИЗ СЕМИ КОЛОНОК ЖИВЫ и читаются записью — `unit` печатает «2 м» в
+  // строке услуги, `buffer_before_min` резервирует дорогу ДО работы. Это не
+  // мусор, а функции без двери на мобильном; сказано владельцу отдельно.
+  /** Перерыв ПОСЛЕ работы: дорога до следующего адреса и уборка за собой. */
   const [bufferAfter, setBufferAfter] = useState("0");
-  const [requiredStaff, setRequiredStaff] = useState("1");
-  /** Правило за последним порогом — «свыше N: +X и +M мин за каждую». */
-  const [overflowPrice, setOverflowPrice] = useState("");
-  const [overflowDuration, setOverflowDuration] = useState("");
-  const [minQty, setMinQty] = useState("1");
-  const [maxQty, setMaxQty] = useState("");
   /** Количество в блоке «Проверка» — живой калькулятор, не данные услуги. */
-  const [checkQty, setCheckQty] = useState(1);
   const [economics, setEconomics] = useState<ServiceEconomicsDraft>(() =>
     economicsDraftFromService(),
   );
@@ -828,35 +744,20 @@ function ServiceSheet({
     setBaseErrors({});
     // Владелец: у правки — свой, у дубля — тот же, у новой из хаба команды —
     // эта команда, иначе первая в списке. Услуга без команды не существует.
-    setColor(from?.color || PRESET_COLOR_CYCLE[0].value);
+    //
+    // ЦВЕТ: у правки свой, у дубля цвет источника, у НОВОЙ — первый свободный
+    // в этом прайсе. Пока здесь стоял `PRESET_COLOR_CYCLE[0]`, весь прайс
+    // садился на один Голубой, и день читался бы одним оттенком.
+    const used = new Set(usedColors ?? []);
+    const nextFree =
+      PRESET_COLOR_CYCLE.find((c) => !used.has(c.value))?.value ??
+      PRESET_COLOR_CYCLE[0].value;
+    setColor(from?.color || nextFree);
     setDescription(from?.description ?? "");
     setHasDescription(!!from?.description?.trim());
-    setUnit(typeof from?.unit === "string" && from.unit ? from.unit : null);
-    setCostShown(Number(from?.cost_per_unit ?? 0) > 0);
-    setServiceType(from?.service_type === "variant" ? "variant" : "quantity");
-    setVariants(
-      (from ? variantsByService.get(from.id) ?? [] : []).map((variant) => ({
-        id: variant.id,
-        name: variant.name,
-        price: String(Number(variant.price)),
-        duration: String(variant.duration_min),
-      })),
-    );
-    setBufferBefore(String(from?.buffer_before_min ?? 0));
     setBufferAfter(String(from?.buffer_after_min ?? 0));
-    setRequiredStaff(String(from?.required_staff ?? 1));
-    setOverflowPrice(
-      from?.overflow_price == null ? "" : String(Number(from.overflow_price)),
-    );
-    setOverflowDuration(
-      from?.overflow_duration_min == null
-        ? ""
-        : String(from.overflow_duration_min),
-    );
-    setMinQty(String(from?.min_qty ?? 1));
-    setMaxQty(from?.max_qty == null ? "" : String(Number(from.max_qty)));
-    setCheckQty(1);
-    setPriceEntry(from?.price_entry === "unit" ? "unit" : "total");
+    setPriceEntry(from?.price_entry === "total" ? "total" : "unit");
+    setCostEntry("unit");
     setWeekdays(
       Array.isArray(from?.available_weekdays)
         ? (from.available_weekdays as unknown[]).filter(
@@ -865,6 +766,13 @@ function ServiceSheet({
           )
         : [],
     );
+    // Блок показывается, только если у услуги ДЕЙСТВИТЕЛЬНО есть ограничение.
+    // Пустой список — «любой день», показывать нечего.
+    setHasWeekdays(
+      Array.isArray(from?.available_weekdays) &&
+        (from.available_weekdays as unknown[]).length > 0,
+    );
+    setHasBufferAfter(Number(from?.buffer_after_min ?? 0) > 0);
     setOpenRow(null);
   }
 
@@ -890,54 +798,85 @@ function ServiceSheet({
     }
   };
 
+  const bufferAfterMin = Math.max(0, Number(bufferAfter) || 0);
+
+  // ЛЕСЕНКА ОДНИМ СПИСКОМ: базовая строка (количество 1) плюс ступени.
+  // Четыре блока рисуют ОДИН И ТОТ ЖЕ список — иначе они разъехались бы по
+  // столбцам, и цена оказалась бы у количества, которого нет.
+  // ЧТО ЛЕЖИТ В ЧЕРНОВИКЕ И ЧТО ВИДИТ ЧЕЛОВЕК — РАЗНЫЕ ЧИСЛА, и направление
+  // пересчёта у цены и расхода ПРОТИВОПОЛОЖНОЕ:
+  //   цена   хранится ЗА ВСЮ строку  → в режиме «за единицу» делим на кол-во;
+  //   расход хранится ЗА ЕДИНИЦУ     → в режиме «за всё» умножаем на кол-во.
+  // Перепутать их местами — значит показать человеку число в десять раз
+  // больше или меньше, и он не заметит, пока не выставит счёт.
+  const qtyOf = (raw: string) => {
+    const n = Number(String(raw).trim().replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  };
+  const showCost = (raw: string, qty: number) => {
+    if (costEntry === "unit" || raw.trim() === "" || qty <= 1) return raw;
+    const n = Number(raw.trim().replace(",", "."));
+    return Number.isFinite(n) ? String(Math.round(n * qty * 100) / 100) : raw;
+  };
+  const storeCost = (typed: string, qty: number) => {
+    if (costEntry === "unit" || typed.trim() === "" || qty <= 1) return typed;
+    const n = Number(typed.trim().replace(",", "."));
+    return Number.isFinite(n) ? String(Math.round((n / qty) * 100) / 100) : typed;
+  };
+
+  const ladderSteps: LadderStep[] = [
+    {
+      tier: null,
+      qty: "1",
+      price,
+      cost,
+      duration,
+    },
+    ...economics.tiers.map((tier) => {
+      const q = qtyOf(tier.minQuantity);
+      return {
+        tier,
+        qty: tier.minQuantity,
+        price: displayValue(tier.rowPrice, q, priceEntry),
+        cost: showCost(tier.rowCost, q),
+        duration: tier.totalDuration,
+      };
+    }),
+  ];
+
   const submit = () => {
-    // У ВАРИАНТОВ СВОЕЙ ЦЕНЫ И ДЛИТЕЛЬНОСТИ НЕТ — они у каждого варианта. Но
-    // колонки `price`/`duration_minutes` читают строка прайса, каталог выбора
-    // и старые записи, поэтому в них уезжает ПЕРВЫЙ вариант: «от €50» в
-    // списке честнее пустоты, и ни один читатель не падает.
-    const firstVariant = variants.find((v) => v.name.trim() !== "");
-    const effectivePrice =
-      serviceType === "variant" ? (firstVariant?.price ?? "0") : price;
-    const effectiveDuration =
-      serviceType === "variant" ? (firstVariant?.duration ?? "60") : duration;
-    const parsedPrice = Number(effectivePrice.trim().replace(",", "."));
-    const parsedDuration = Number(effectiveDuration.trim());
+    const parsedPrice = Number(price.trim().replace(",", "."));
+    const parsedDuration = Number(duration.trim());
     const nextBaseErrors: { price?: string; duration?: string } = {};
-    // ПУСТО — ЭТО НЕ НОЛЬ. `Number("")` даёт 0, и услуга молча уезжала в
-    // прайс бесплатной, запекалась в снимок записи и всплывала у клиента в
-    // счёте. Напечатанный руками «0» законен: гарантийный выезд бесплатен.
-    if (effectivePrice.trim() === "") {
-      nextBaseErrors.price = "Впишите цену";
-    } else if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+    // ПУСТАЯ ЦЕНА = БЕСПЛАТНО, И ЭТО ЗАКОННО (владелец 2026-08-29: «цену
+    // необязательно вписывать — услуга может быть полностью бесплатной, её
+    // сделали, но денег не берём»).
+    //
+    // Запрет ставился против молчаливого нуля: `Number("")` даёт 0, и услуга
+    // уезжала в прайс бесплатной незаметно для человека. Довод отпал, когда
+    // ячейка цены стала показывать «0 €» подсказкой: пустое поле теперь
+    // ЧИТАЕТСЯ нулём, а не выглядит незаполненным. Молчания больше нет —
+    // значит нет и повода запрещать.
+    //
+    // Гарантийный выезд, переделка, бонус постоянному клиенту — работа
+    // сделана, денег нет. Заставлять писать «0» ради проформы незачем.
+    if (price.trim() !== "" && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
       nextBaseErrors.price = "Цена от 0";
     }
-    // НОЛЬ ЗАПРЕЩЁН ВАЛИДАЦИЕЙ, А НЕ БАРАБАНОМ: кольцо проносит через 00:00, и
-    // это нормально — недопустимо СОХРАНИТЬ. Услуга нулевой длины ломает
-    // календарь молча.
-    if (!Number.isSafeInteger(parsedDuration) || parsedDuration <= 0) {
+    // НУЛЕВОЕ ВРЕМЯ РАЗРЕШЕНО (владелец 2026-08-29: «гарантия или диагностика
+    // — добавляю её в запись, и структура времени не должна ломаться; ноль
+    // евро, ноль по времени, а в счёт она попадёт»).
+    //
+    // Запрет стоял со словами «услуга нулевой длины ломает календарь молча».
+    // Проверено — не ломает: конец записи только РАСТЁТ. В `AppointmentSheet`
+    // пересчёт выходит раньше на `computedDuration <= 0` и время не сжимает,
+    // а высоту блока в сетке задают `time_start`/`time_end` записи, а не
+    // сумма длительностей услуг. Нулевая услуга просто ничего не прибавляет.
+    //
+    // Отрицательное и дробное по-прежнему недопустимы: это не «строка в
+    // счёт», а испорченное число.
+    if (!Number.isSafeInteger(parsedDuration) || parsedDuration < 0) {
       nextBaseErrors.duration = "Поставьте время";
-    }
-    // У ВАРИАНТОВ СВОЯ ПРОВЕРКА: лестницы нет, зато список не может быть
-    // пустым и имена в нём не повторяются — иначе в записи два одинаковых
-    // чипа, и выбрать между ними нечем.
-    if (serviceType === "variant") {
-      const named = variants.filter((v) => v.name.trim() !== "");
-      if (named.length === 0) {
-        setBaseErrors({ price: "Добавьте хотя бы один вариант" });
-        return;
-      }
-      const names = named.map((v) => v.name.trim().toLowerCase());
-      if (new Set(names).size !== names.length) {
-        setBaseErrors({ price: "Названия вариантов повторяются" });
-        return;
-      }
-      const priceless = named.find(
-        (v) => v.price.trim() === "" || !Number.isFinite(Number(v.price.replace(",", "."))),
-      );
-      if (priceless) {
-        setBaseErrors({ price: `Впишите цену: ${priceless.name.trim()}` });
-        return;
-      }
     }
     const validated = validateServiceEconomics(economics);
     setBaseErrors(nextBaseErrors);
@@ -957,34 +896,15 @@ function ServiceSheet({
         duration_minutes: parsedDuration,
         // Уезжают ВСЕГДА, а не по «если заполнено»: снятая единица обязана
         // писаться явным `null`, снятые дни — явным пустым массивом.
-        unit,
         price_entry: priceEntry,
         available_weekdays: weekdays,
-        service_type: serviceType,
         ...(editing?.mode === "create" && editing.copy && source
           ? { copied_from_service_id: source.id }
           : {}),
-        buffer_before_min: Math.max(0, Number(bufferBefore) || 0),
         buffer_after_min: Math.max(0, Number(bufferAfter) || 0),
-        required_staff: Math.max(1, Number(requiredStaff) || 1),
-        overflow_price:
-          overflowPrice.trim() === "" ? null : Number(overflowPrice.replace(",", ".")),
-        overflow_duration_min:
-          overflowDuration.trim() === "" ? null : Number(overflowDuration),
-        min_qty: Math.max(1, Number(minQty) || 1),
-        max_qty: maxQty.trim() === "" ? null : Number(maxQty),
         ...validated.value,
       },
       service?.id,
-      serviceType === "variant"
-        ? variants
-            .filter((variant) => variant.name.trim() !== "")
-            .map((variant) => ({
-              name: variant.name.trim(),
-              price: Number(variant.price.replace(",", ".")) || 0,
-              duration_min: Math.max(1, Number(variant.duration) || 60),
-            }))
-        : [],
     );
   };
 
@@ -1017,66 +937,6 @@ function ServiceSheet({
 
   // Одна красная строка ПОД таблицей: три подписи под тремя колонками сломали
   // бы выравнивание, ради которого таблица и затевалась.
-  /** ПРОВЕРКА СЧИТАЕТСЯ ОБЩИМ ЯДРОМ, а не своей формулой на экране. Иначе
-   *  калькулятор показывал бы одно, а запись считала другое — и разошлись бы
-   *  они молча. Черновик листа переводится в ту же форму, в которой расчёт
-   *  живёт для всего продукта. */
-  const pricedDraft = useMemo(() => {
-    const num = (raw: string) => {
-      const parsed = Number(raw.trim().replace(",", "."));
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-    const baseTier = {
-      fromQty: 1,
-      price: num(price),
-      durationMin: num(duration),
-    };
-    const tiers = [
-      baseTier,
-      ...economics.tiers
-        .filter((tier) => tier.minQuantity.trim() !== "")
-        .map((tier) => ({
-          fromQty: num(tier.minQuantity),
-          // Черновик хранит числа «за всю строку»; ядро считает по цене
-          // ступени, поэтому делим ровно там же, где делит сохранение.
-          price:
-            num(tier.minQuantity) > 0
-              ? num(tier.rowPrice) / num(tier.minQuantity)
-              : num(tier.rowPrice),
-          durationMin: num(tier.totalDuration),
-        })),
-    ];
-    return {
-      serviceType,
-      pricingMode: "per_unit" as const,
-      tiers,
-      variants: variants.map((variant) => ({
-        id: variant.id,
-        name: variant.name,
-        price: num(variant.price),
-        durationMin: num(variant.duration),
-      })),
-      unit,
-      overflowPrice: overflowPrice.trim() === "" ? null : num(overflowPrice),
-      overflowDurationMin:
-        overflowDuration.trim() === "" ? null : num(overflowDuration),
-      bufferBeforeMin: num(bufferBefore),
-      bufferAfterMin: num(bufferAfter),
-    };
-  }, [
-    price, duration, economics.tiers, serviceType, variants, unit,
-    overflowPrice, overflowDuration, bufferBefore, bufferAfter,
-  ]);
-
-  const lastTierQty = economics.tiers.reduce(
-    (max, tier) => Math.max(max, Number(tier.minQuantity) || 0),
-    1,
-  );
-  const checkWork = calcWorkDuration(pricedDraft, checkQty);
-  const checkSlot = calcSlot([{ service: pricedDraft, qty: checkQty }], 15);
-  const checkPrice = String(calcPrice(pricedDraft, checkQty));
-  const savingsValue = calcSavings(pricedDraft, checkQty);
-  const checkSavings = savingsValue > 0 ? String(savingsValue) : null;
 
   const firstError =
     baseErrors.price ??
@@ -1108,36 +968,17 @@ function ServiceSheet({
       scrollRef={scrollRef}
       avoidKeyboard
       padded={false}
-      // Опасное действие — значком в шапке, а не второй кнопкой под
-      // «Сохранить»: две кнопки внизу стояли вплотную к большому пальцу и
-      // читались как равноправные выходы.
-      headerAction={
-        service ? (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-          {/* ДУБЛЬ ЖЕСТОМ БЫЛ НЕДОСТИЖИМ: свайп ВПРАВО по строке съедает
-              системный жест «назад», и до кромки «Дубль» палец не доходил.
-              Вторая дверь — здесь, словом и значком. */}
-          <Pressable
-            onPress={() => onDuplicate(service)}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={`Дублировать услугу ${service.name}`}
-            className="h-11 w-11 items-center justify-center active:opacity-60"
-          >
-            <Copy color={t.sub} size={ICON.sm} strokeWidth={2} />
-          </Pressable>
-          <Pressable
-            onPress={() => onDelete(service)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={`Убрать услугу ${service.name} из прайса`}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-          >
-            <Trash2 color={t.danger} size={ICON.sm} strokeWidth={2} />
-          </Pressable>
-          </View>
-        ) : undefined
-      }
+      // ЗНАЧКОВ В ШАПКЕ НЕТ (владелец 2026-08-29: «убери эти кнопочки, они
+      // нам на хер не нужны — у нас свайп вправо и можно удалить»).
+      //
+      // Здесь стояли «дублировать» и «удалить». Обе двери стали лишними:
+      // удаление и скрытие теперь живут на кромках свайпа, у каждой своя
+      // сторона и своё подтверждение. А мусорка вдобавок ОБРЕЗАЛАСЬ правым
+      // краем листа — красный значок наполовину уходил за экран.
+      //
+      // Дубль исчез вместе с ней: он был обходом того, что свайп вправо
+      // когда-то съедал системный жест «назад». Сейчас вправо — «Удалить»,
+      // и обходить нечего; скопировать услугу можно, заведя новую.
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
         <Button
@@ -1259,263 +1100,323 @@ function ServiceSheet({
         ) : null}
       </View>
 
-      {/* ТИП УСЛУГИ РЕШАЕТ ВСЁ ОСТАЛЬНОЕ (спека владельца v4). Тест простой:
-          имеет ли смысл вопрос «сколько стоит одна штука». Кондиционер — да;
-          комната в трёхкомнатной — нет, потому что трёхкомнатная это НЕ «три
-          раза комната». Первое считается лестницей, второе — плоским списком
-          без единой формулы. */}
-      <View style={{ paddingHorizontal: GUTTER, marginBottom: 16 }}>
-        <FieldLabel text="Тип услуги" />
-        <ServiceTypeToggle
-          value={serviceType}
-          locked={!!service}
-          onChange={(next) => {
-            setServiceType(next);
-            if (next === "variant") {
-              setEconomics({ tiers: [] });
-              if (variants.length === 0) {
-                setVariants([
-                  { id: `var-${Date.now()}`, name: "", price: "", duration: "60" },
-                ]);
-              }
-            } else {
-              setVariants([]);
-            }
-            setOpenRow(null);
-          }}
-        />
-      </View>
+      {/* ЧЕТЫРЕ БЛОКА ВМЕСТО ВСЕГО, ЧТО ЗДЕСЬ БЫЛО (владелец 2026-08-27:
+          «всё, что ниже названия, удаляем; первый блок — количество, второй —
+          цена, третий — расход, четвёртый — время»).
 
-      {serviceType === "variant" ? (
-        <View style={{ paddingHorizontal: GUTTER, marginBottom: 16 }}>
-          <FieldLabel text="Варианты" />
-          <VariantRows
-            variants={variants}
-            currencySymbol={currencySymbol}
-            onChange={setVariants}
-            onAdd={() =>
-              setVariants((current) => [
-                ...current,
-                {
-                  id: `var-${Date.now()}-${current.length}`,
-                  name: "",
-                  price: "",
-                  duration: "60",
-                },
-              ])
-            }
-          />
+          ЧТО УБРАНО ИЗ ИНТЕРФЕЙСА:
+            • «Тип услуги» и ветка «Варианты» — плоский список именованных
+              опций;
+            • «Проверка» — живой калькулятор «что получится на N штуках»;
+            • «Время вокруг работы» (дорога, после, людей) и «Ограничения»
+              (минимум, максимум);
+            • «Работаем по дням» — семь плиток.
+
+          НИ ОДНО ПОЛЕ БАЗЫ НЕ ТРОНУТО. Состояние живо, `submit` пишет те же
+          колонки прежними значениями, уже заведённые услуги ничего не теряют
+          при сохранении. Убран ТОЛЬКО интерфейс — вернуть его можно, не
+          трогая данные. */}
+      <ServiceLadder
+        steps={ladderSteps}
+        currencySymbol={currencySymbol}
+        priceEntry={priceEntry}
+        costEntry={costEntry}
+        onPriceEntryChange={setPriceEntry}
+        onCostEntryChange={setCostEntry}
+        openTimeId={openRow}
+        onOpenTime={(id) => {
+          setOpenRow(id);
+          // Барабан раскрывается ПОД строкой и в блоке «Время», то есть у
+          // самого низа листа — за кнопкой «Создать». Лист обязан сам довести
+          // его до глаза, иначе тап по времени выглядит не сделавшим ничего.
+          if (id) {
+            requestAnimationFrame(() =>
+              scrollRef.current?.scrollToEnd({ animated: true }),
+            );
+          }
+        }}
+        onQtyChange={(id, v) =>
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, minQuantity: v } : x,
+            ),
+          })
+        }
+        onPriceChange={(id, v) => {
+          if (id === "base") return setPrice(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id
+                ? { ...x, rowPrice: draftValue(v, qtyOf(x.minQuantity), priceEntry) }
+                : x,
+            ),
+          });
+        }}
+        onCostChange={(id, v) => {
+          if (id === "base") return setCost(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id
+                ? { ...x, rowCost: storeCost(v, qtyOf(x.minQuantity)) }
+                : x,
+            ),
+          });
+        }}
+        onDurationChange={(id, v) => {
+          if (id === "base") return setDuration(v);
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.map((x) =>
+              x.id === id ? { ...x, totalDuration: v } : x,
+            ),
+          });
+        }}
+        onAdd={addTier}
+        onRemove={(id) =>
+          updateEconomics({
+            ...economics,
+            tiers: economics.tiers.filter((x) => x.id !== id),
+          })
+        }
+      />
+
+      {/* РАБОЧИЕ ДНИ — ПАРАМЕТР, КОТОРЫЙ ДОБАВЛЯЮТ, А НЕ ФОРМА, КОТОРУЮ
+          ЗАПОЛНЯЮТ (владелец 2026-08-29). Пока его нет — одна строчка-кнопка,
+          как «＋ Описание» у названия. Заведён — семь плиток и крестик,
+          который снимает ограничение целиком.
+
+          Ограничение не про график команды: команда выезжает всю неделю, а
+          чистку кондиционеров в воскресенье не ставят, потому что поставщик
+          закрыт. Поэтому все семь зажжены сразу после добавления — гасят из
+          них лишние, а не набирают нужные.
+
+          КРЕСТИК ВОЗВРАЩАЕТ «ЛЮБОЙ ДЕНЬ», а не пустой набор дней: услуга без
+          единого дня не предлагалась бы никогда, и это была бы поломка,
+          выглядящая как настройка. */}
+      {hasWeekdays ? (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel text="График недели" />
+            <Pressable
+              onPress={() => {
+                setHasWeekdays(false);
+                setWeekdays([]);
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать ограничение по дням"
+              style={({ pressed }) => ({
+                paddingBottom: 6,
+                opacity: pressed ? 0.4 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2} />
+            </Pressable>
+          </View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
+              const on = weekdays.length === 0 || weekdays.includes(day);
+              return (
+                <Pressable
+                  key={day}
+                  onPress={() => {
+                    // Гашение первого дня разворачивает «пусто = все» в явный
+                    // список: иначе снять один день было бы нечем.
+                    const current =
+                      weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
+                    const next = current.includes(day)
+                      ? current.filter((x) => x !== day)
+                      : [...current, day].sort((a, b) => a - b);
+                    setWeekdays(next.length === 7 ? [] : next);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: t.radius.card,
+                    borderCurve: "continuous",
+                    backgroundColor: on ? t.accent : t.fill,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={{
+                      fontSize: 14,
+                      fontWeight: on ? "700" : "500",
+                      color: on ? t.onAccent : t.faint,
+                    }}
+                  >
+                    {WEEKDAY_LABELS[day]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       ) : (
-        <>
-          {/* БЛОКИ-СТРОКИ: одно количество — одна строка, подписей нет вовсе.
-              Устройство и арифметика ширин — в шапке `ServiceBlocks.tsx`. */}
-          <View style={{ paddingHorizontal: GUTTER }}>
-            <RowGroupHeader
-              title="Цена и время"
-              action={
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                  <Pressable
-                    onPress={() =>
-                      setOpenRow(openRow === SETTINGS_PANEL ? null : SETTINGS_PANEL)
-                    }
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: openRow === SETTINGS_PANEL }}
-                    accessibilityLabel="Как считаем"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.2}
-                      style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
-                    >
-                      {priceEntry === "total"
-                        ? "за всё"
-                        : unit
-                          ? `за 1 ${unit}`
-                          : "за одну"}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={addTier}
-                    hitSlop={10}
-                    accessibilityRole="button"
-                    accessibilityLabel="Добавить количество"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                  >
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-                    >
-                      ＋
-                    </Text>
-                  </Pressable>
-                </View>
-              }
-            />
-          </View>
-          <ServiceBlocks
-            price={price}
-            cost={cost}
-            duration={duration}
-            value={economics}
-            unit={unit}
-            priceEntry={priceEntry}
-            costShown={costShown}
-            onCostShownChange={setCostShown}
-            currencySymbol={currencySymbol}
-            openRow={openRow}
-            onOpenRow={setOpenRow}
-            onPriceChange={setPrice}
-            onCostChange={setCost}
-            onDurationChange={setDuration}
-            onUnitChange={setUnit}
-            onPriceEntryChange={setPriceEntry}
-            onChange={updateEconomics}
-          />
-
-          {/* ПРАВИЛО ЗА ПОСЛЕДНИМ ПОРОГОМ — словами, а не догадкой. Без него
-              цена за пределами лестницы берёт последнюю ступень, а время
-              тянется наклоном: продукт называет числа, которых никто не
-              вводил. Появляется вместе со второй ступенью — у одной цены
-              «свыше» не от чего считать. */}
-          {economics.tiers.length > 0 ? (
-            <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-              <OverflowRule
-                fromQty={lastTierQty}
-                unit={unit}
-                price={overflowPrice}
-                duration={overflowDuration}
-                currencySymbol={currencySymbol}
-                onPriceChange={setOverflowPrice}
-                onDurationChange={setOverflowDuration}
-              />
-            </View>
-          ) : null}
-
-          {/* ПРОВЕРКА — живой калькулятор. Владелец видит, что получится, ДО
-              сохранения, а не узнаёт от бригады на объекте. Показывает и
-              работу, и слот с буферами: в календарь уходит именно слот. */}
-          <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-            <FieldLabel text="Проверка" />
-            <PriceCalculator
-              qty={checkQty}
-              unit={unit}
-              onQtyChange={setCheckQty}
-              price={checkPrice}
-              work={checkWork}
-              slot={checkSlot}
-              savings={checkSavings}
-              currencySymbol={currencySymbol}
-            />
-          </View>
-        </>
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
+          <Pressable
+            onPress={() => setHasWeekdays(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="График недели: в какие дни услуга доступна"
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              paddingVertical: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
+            >
+              ＋ График недели
+            </Text>
+          </Pressable>
+        </View>
       )}
 
-      {/* ВРЕМЯ ВОКРУГ РАБОТЫ И ОГРАНИЧЕНИЯ — СВЁРНУТЫ. Салон с тремя услугами
-          их не увидит, выездной сервис развернёт. Свёрнутая секция при этом
-          говорит, что внутри не пусто: спрятанное значение однажды выстрелит. */}
-      <View style={{ paddingHorizontal: GUTTER, marginTop: 18, gap: 6 }}>
-        <CollapsibleSection
-          title="Время вокруг работы"
-          summary={`Дорога ${bufferBefore || 0} мин · после ${bufferAfter || 0} мин · людей ${requiredStaff || 1}`}
-          marked={
-            Number(bufferBefore) > 0 ||
-            Number(bufferAfter) > 0 ||
-            Number(requiredStaff) > 1
-          }
-        >
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <NumberField
-              label="Дорога, мин"
-              value={bufferBefore}
-              onChangeText={setBufferBefore}
+      {/* ПЕРЕРЫВ ПОСЛЕ УСЛУГИ. Не часть работы, а то, что идёт ПОСЛЕ неё:
+          дорога до следующего объекта, уборка, мойка инструмента. В сетку
+          он встаёт вместе с записью, поэтому следующая работа не садится
+          вплотную — а раньше садилась, и день оказывался плотнее, чем он
+          есть на самом деле.
+
+          Пресеты, а не поле ввода: перерыв — это «пятнадцать минут» или
+          «полчаса», а не 17. Клавиатура ради двух цифр здесь лишняя.
+          «Нет» снимает параметр целиком — то же, что крестик. */}
+      {hasBufferAfter ? (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel
+              text={`Перерыв после услуги · ${durationLabel(bufferAfterMin)}`}
             />
-            <NumberField
-              label="После, мин"
-              value={bufferAfter}
-              onChangeText={setBufferAfter}
-            />
-            <NumberField
-              label="Людей"
-              value={requiredStaff}
-              onChangeText={setRequiredStaff}
+            <Pressable
+              onPress={() => {
+                setHasBufferAfter(false);
+                setBufferAfter("0");
+              }}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Убрать перерыв после услуги"
+              style={({ pressed }) => ({
+                paddingBottom: 6,
+                opacity: pressed ? 0.4 : 1,
+              })}
+            >
+              <X color={t.faint} size={16} strokeWidth={2} />
+            </Pressable>
+          </View>
+          {/* ВРЕМЯ ВЫБИРАЕТСЯ БАРАБАНОМ. ВСЕГДА. Первый заход поставил здесь
+              пресеты 10/15/20/30/45/60 — и это было нарушением архитектуры
+              продукта, а не находкой: время в Babun выбирают барабаном везде,
+              от часов календаря до длительности услуги строкой выше. Владелец
+              2026-08-29: «у нас же выбор времени всегда заложен барабанами,
+              на хуя тут 10, 15, 20». Пресеты вдобавок ВРАЛИ: перерыв в 25
+              минут ими не выставить вовсе. */}
+          <View style={{ alignItems: "center" }}>
+            <TimeWheelPair
+              hour={Math.floor(bufferAfterMin / 60)}
+              minute={bufferAfterMin % 60}
+              // Половины коммитятся ПОРОЗНЬ и каждая считает от предыдущего
+              // состояния: колонка знает соседнее значение только по пропу, и
+              // два коммита в одном батче унесли бы устаревшую половину.
+              onChangeHour={(next) =>
+                setBufferAfter(String(next * 60 + (bufferAfterMin % 60)))
+              }
+              onChangeMinute={(next) =>
+                setBufferAfter(
+                  String(Math.floor(bufferAfterMin / 60) * 60 + next),
+                )
+              }
+              labelPrefix="Перерыв после услуги"
             />
           </View>
-        </CollapsibleSection>
-
-        {serviceType === "quantity" ? (
-          <CollapsibleSection
-            title="Ограничения"
-            summary={`Минимум ${minQty || 1}${maxQty ? ` · максимум ${maxQty}` : ""} · расход ${cost || 0}`}
-            marked={Number(minQty) > 1 || maxQty.trim() !== "" || Number(cost) > 0}
+        </View>
+      ) : (
+        <View style={{ paddingHorizontal: GUTTER, marginTop: 10 }}>
+          <Pressable
+            onPress={() => {
+              setHasBufferAfter(true);
+              // Пятнадцать минут — самый частый перерыв: дорога внутри города
+              // и разгрузка. Ноль означал бы «параметр есть, но не работает».
+              if (Number(bufferAfter) <= 0) setBufferAfter("15");
+            }}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить перерыв после услуги"
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              paddingVertical: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
           >
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <NumberField label="Минимум" value={minQty} onChangeText={setMinQty} />
-              <NumberField
-                label="Максимум"
-                value={maxQty}
-                onChangeText={setMaxQty}
-                placeholder="без предела"
-              />
-            </View>
-          </CollapsibleSection>
-        ) : null}
-      </View>
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 15, fontWeight: "500", color: t.accent }}
+            >
+              ＋ Перерыв после услуги
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
-      {/* ДНИ, ПО КОТОРЫМ УСЛУГУ ДЕЛАЮТ. Заведены ВМЕСТЕ С ЧИТАТЕЛЕМ (каталог
-          выбора услуги в записи): семь тумблеров, которых никто не прочитает,
-          — это ровно та единица измерения, которую владелец снёс со словами
-          «что мы от этого поимеем? если ничего, тогда лучше удалить».
-          Все зажжены — значит «любой день», и пустой список в базе означает
-          то же самое: заставлять зажигать семь плиток ради «как обычно»
-          незачем. Сб и Вс погашенными не рождаются: календарь красит их
-          красным как ГОСУДАРСТВЕННЫЕ выходные, а услуга — про работу команды. */}
-      <View style={{ paddingHorizontal: GUTTER, marginTop: 14 }}>
-        <FieldLabel text="Работаем по дням" />
-        <View style={{ flexDirection: "row", gap: 6 }}>
-          {([1, 2, 3, 4, 5, 6, 7] as const).map((day) => {
-            const on = weekdays.length === 0 || weekdays.includes(day);
-            return (
-              <Pressable
-                key={day}
-                onPress={() => {
-                  // Гашение первого дня разворачивает «пусто = все» в явный
-                  // список: иначе снять один день было бы нечем.
-                  const current = weekdays.length === 0 ? [1, 2, 3, 4, 5, 6, 7] : weekdays;
-                  const next = current.includes(day)
-                    ? current.filter((x) => x !== day)
-                    : [...current, day].sort((a, b) => a - b);
-                  // Зажгли всё обратно — возвращаемся к «любой день».
-                  setWeekdays(next.length === 7 ? [] : next);
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${WEEKDAY_LABELS[day]} — ${on ? "делаем" : "не делаем"}`}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  height: 44,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: t.radius.card,
-                  borderCurve: "continuous",
-                  backgroundColor: on ? t.accent : t.fill,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{
-                    fontSize: 14,
-                    fontWeight: on ? "700" : "500",
-                    color: on ? t.onAccent : t.faint,
-                  }}
-                >
-                  {WEEKDAY_LABELS[day]}
-                </Text>
-              </Pressable>
-            );
-          })}
+      {/* ОНЛАЙН-ЗАПИСЬ — ЗАГЛУШКА, И ОНА ЧЕСТНАЯ (владелец 2026-08-29:
+          «пока не включаем, ставим заглушку — скоро»).
+
+          Строка НЕ ПЕРЕКЛЮЧАЕТСЯ намеренно. Живой тумблер над невыполненной
+          функцией — худший вид вранья в продукте: человек его включает,
+          уходит уверенный, что клиенты записываются сами, и узнаёт правду
+          пустым календарём. Поэтому здесь нет тумблера вовсе — только
+          название и слово «Скоро».
+
+          Колонка `online_enabled` в базе есть и по умолчанию `true`; когда
+          функция появится, эта строка станет настоящим переключателем без
+          миграции. */}
+      <View style={{ paddingHorizontal: GUTTER, marginTop: 18 }}>
+        <View
+          className="flex-row items-center"
+          style={{
+            minHeight: 52,
+            paddingHorizontal: 16,
+            gap: 12,
+            borderRadius: t.radius.card,
+            borderCurve: "continuous",
+            backgroundColor: t.fill,
+          }}
+        >
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ flex: 1, fontSize: 16, color: t.sub }}
+          >
+            Онлайн-запись
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 13, fontWeight: "600", color: t.faint }}
+          >
+            Скоро
+          </Text>
         </View>
       </View>
 

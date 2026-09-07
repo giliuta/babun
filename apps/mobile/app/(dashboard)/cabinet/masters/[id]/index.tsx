@@ -382,14 +382,17 @@ export default function MasterHubScreen() {
               В командах
             </Text>
             <View className="flex-row flex-wrap gap-2">
+              {/* ЧИПЫ БОЛЬШЕ НЕ ВЕДУТ НИКУДА (2026-08-30): раздел «Команды» в
+                  Кабинете снесён по решению владельца — настройки календаря
+                  живут в самом календаре. Открывать было бы нечего, а
+                  нажимаемая на вид строка, которая ничего не делает, хуже
+                  ненажимаемой. Осталось ЧТЕНИЕ: в каких командах мастер. */}
               {assignedTeams.map((team) => (
-                <Pressable
+                <View
                   key={team.id}
-                  onPress={() => router.push(`/cabinet/teams/${team.id}`)}
-                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Открыть команду ${team.name}`}
-                  className="h-8 flex-row items-center gap-1.5 rounded-full px-3 active:opacity-70"
+                  accessible
+                  accessibilityLabel={`В команде ${team.name}`}
+                  className="h-8 flex-row items-center gap-1.5 rounded-full px-3"
                   style={{ backgroundColor: t.surface, boxShadow: t.cardShadow }}
                 >
                   <View
@@ -399,7 +402,7 @@ export default function MasterHubScreen() {
                   <Text style={{ fontSize: 13, fontWeight: "600", color: t.ink }}>
                     {team.name}
                   </Text>
-                </Pressable>
+                </View>
               ))}
             </View>
           </View>

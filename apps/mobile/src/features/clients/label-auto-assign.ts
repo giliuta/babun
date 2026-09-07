@@ -38,15 +38,22 @@ export async function autoAssignClientLabel(opts: {
   clientId: string;
   teamId: string | null;
   date: string;
+  /** Метка САМОЙ записи (2026-09-04). Есть — она и переезжает на клиента:
+   *  день в Лимассоле, а этого клиента возили в Пафос, и клиент должен
+   *  запомнить Пафос. Нет — работает прежнее правило метки дня. */
+  city?: string | null;
 }): Promise<void> {
   const { supabase, qc, tenantId, role, clientId, teamId, date } = opts;
   if (!teamId) return;
+  const own = (opts.city ?? "").trim();
   try {
     // Метка дня: тёплый кэш календаря отвечает и оффлайн; холодный кэш —
     // точечное чтение одной строки (только онлайн).
     const map = qc.getQueryData<DayCityMap>(dayCitiesQueryKey(tenantId, role));
     let label: string | null;
-    if (map) {
+    if (own) {
+      label = own;
+    } else if (map) {
       label = resolveDayLabel(map, teamId, date);
     } else {
       if (!isOnline()) return;

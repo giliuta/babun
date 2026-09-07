@@ -94,9 +94,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           pointerEvents={toast.action ? "box-none" : "none"}
           style={{
             position: "absolute",
-            top: insets.top + 8,
-            left: 16,
-            right: 16,
+            // ПОЛОСА ВО ВСЮ ШИРИНУ, вплотную к верху — у любого тона: ровно
+            // так лежит `CalendarNotice`, и поля с зазором делали бы из неё
+            // висящую карточку (владелец 2026-09-06: «все уведомления везде
+            // одинаковые — как полноценный design block»).
+            top: insets.top,
+            left: 0,
+            right: 0,
             opacity,
             transform: [{ translateY }],
           }}

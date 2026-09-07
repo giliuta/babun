@@ -86,10 +86,11 @@ export interface ClientHeaderDraft {
   onNameChange: (v: string) => void;
   /** Живой ввод номера: AsYouType + сброс дедупа (владеет композер). */
   onPhoneChange: (v: string) => void;
-  /** Нативный пикер контакта; undefined на билдах без модуля. */
-  onPickContacts?: () => void;
   /** Баннер дедупа / ошибка создания — внутри блока, под номером. */
   footer?: ReactNode;
+  /** Куда встаёт курсор при открытии. По умолчанию — в телефон (ключ
+   *  дедупа); когда телефон уже набран в поиске записи, — в имя. */
+  focus?: "name" | "phone";
 }
 
 interface ClientHeaderProps {
@@ -305,6 +306,7 @@ export default function ClientHeader({
           big
           stacked
           live={!!draft}
+          autoFocus={draft?.focus === "name"}
           // Имя обязательно НЕ только при создании: на сохранённой карточке
           // его тоже нельзя стереть в ноль — безымянного клиента не найти ни
           // поиском, ни глазами в списке. Пустое просто не пишем, строка
@@ -355,7 +357,7 @@ export default function ClientHeader({
           big
           stacked
           live={!!draft}
-          autoFocus={!!draft}
+          autoFocus={!!draft && draft.focus !== "name"}
           // Телефон — ключ дедупа (phone_e164 + UNIQUE-индекс). Стирание
           // номера у сохранённого клиента уносило и ключ: клиент становился
           // невидимым для защиты от дублей, и его можно было создать заново.
@@ -554,13 +556,6 @@ export default function ClientHeader({
           onClose={() => setAddOpen(false)}
         />
 
-        {draft?.onPickContacts ? (
-          <AddRow
-            label="Заполнить из контактов"
-            separated
-            onPress={draft.onPickContacts}
-          />
-        ) : null}
       </RowGroup>
 
       {/* МАЛЕНЬКАЯ КАРТОЧКА ПОД НОМЕРОМ (владелец 2026-07-26). Не строки-

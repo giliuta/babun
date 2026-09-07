@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
+import { RecordMark } from "./RecordMark";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -42,6 +43,7 @@ export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 
 export function SettingsRow({
   tile = "neutral",
+  swatch,
   icon: Icon,
   title,
   sub,
@@ -60,7 +62,17 @@ export function SettingsRow({
    *  чернилами, без диска. По умолчанию нейтральная — цвет заводится
    *  осознанно, а не забывается. */
   tile?: string | "neutral";
-  icon: IconType;
+  /** ЦВЕТ ЗАПИСИ КАК ЗНАЧЕНИЕ СТРОКИ. Рисуется НЕ кружком пигмента, а
+   *  миниатюрой блока календаря (`RecordMark`): заливка 18 % и кант в полную
+   *  силу. Кружок врал — он показывал единственный канал, которого в календаре
+   *  нет ни разу (сырой цвет на 100 %), и прятал оба, которые там есть; на
+   *  Ванильном #FFF0BC он давал к белой карточке 1.14 : 1, то есть образца
+   *  попросту не было видно. Кант держит 4.74 : 1 в худшем случае палитры —
+   *  «известный предел 2.00 : 1» закрыт. Читателем ПИГМЕНТА остаётся имя цвета
+   *  в `sub`: на 18 % «Оранжевый» и «Медный» — одно пятно. При `swatch` значок
+   *  не рисуется, поэтому `icon` в таких строках не передают. */
+  swatch?: string | null;
+  icon?: IconType;
   title: string;
   /** Текущее значение настройки / состояние счёта, не описание кнопки. */
   sub?: string;
@@ -88,7 +100,15 @@ export function SettingsRow({
    *  списка денежное действие оказалось бы доступно только зрячему пальцу. */
   a11yActions?: readonly { name: string; label: string }[];
   onA11yAction?: (name: string) => void;
-  onPress: () => void;
+  /** Отсутствует — строка ЗАГЛУШКА: рисуется, но не нажимается и не
+   *  притворяется кнопкой (без роли, без отклика на касание).
+   *
+   *  Живой контрол над невыполненной функцией — худший вид вранья в
+   *  продукте: человек нажимает, уходит уверенный, и узнаёт правду пустым
+   *  экраном. Опция здесь, а НЕ вторая строка рядом (закон канона от
+   *  2026-08-30): облик строки настроек обязан остаться одним на всё
+   *  приложение — расходятся не отступы, расходятся копии. */
+  onPress?: () => void;
   /** Меню по долгому нажатию. У жеста ОБЯЗАН быть видимый дублёр словом —
    *  строка, живущая только в долгом нажатии, недостижима ни для VoiceOver,
    *  ни для Voice Control. */
@@ -99,15 +119,19 @@ export function SettingsRow({
   const lines = stacked ? 2 : 1;
   const scale = stacked ? 1.6 : 1.2;
 
-  const tileNode = neutral ? (
+  const tileNode = swatch !== undefined ? (
+    <RecordMark hue={swatch} />
+  ) : neutral ? (
     // Голый глиф в боксе 20×28: та же высота, что у цветной плитки, поэтому
     // ритм строки и вертикальное выравнивание с текстом не разъезжаются.
     <View style={{ width: 20, height: 28, alignItems: "center", justifyContent: "center" }}>
-      <Icon
-        color={t.ink}
-        size={NEUTRAL_GLYPH.size}
-        strokeWidth={NEUTRAL_GLYPH.strokeWidth}
-      />
+      {Icon ? (
+        <Icon
+          color={t.ink}
+          size={NEUTRAL_GLYPH.size}
+          strokeWidth={NEUTRAL_GLYPH.strokeWidth}
+        />
+      ) : null}
     </View>
   ) : (
     <View
@@ -121,7 +145,7 @@ export function SettingsRow({
         backgroundColor: tile,
       }}
     >
-      <Icon color={t.onAccent} size={16} strokeWidth={2} />
+      {Icon ? <Icon color={t.onAccent} size={16} strokeWidth={2} /> : null}
     </View>
   );
 
@@ -186,14 +210,61 @@ export function SettingsRow({
     </Text>
   ) : null;
 
+  const layout = {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 12,
+    // 17/22 имени + 13/18 подписи = 40pt текста; 60 — это те же 10pt
+    // воздуха сверху и снизу, что были у строки 15/13 при 56.
+    minHeight: 60,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  };
+  const label = a11yLabel ?? [title, sub, value].filter(Boolean).join(", ");
+
+  // ТЕЛО СТРОКИ — ОДНО НА ОБЕ ВЕТКИ. Написанное дважды, оно уже начало
+  // расходиться на первой же правке: в «стопке» плитка стоит ВНУТРИ первого
+  // ряда, рядом с названием, и копия про это забыла.
+  const body = stacked ? (
+    <View style={{ flex: 1, gap: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        {tileNode}
+        {titleNode}
+      </View>
+      {subNode || valueNode ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          {subNode ?? <View style={{ flex: 1 }} />}
+          {valueNode}
+        </View>
+      ) : null}
+    </View>
+  ) : (
+    <>
+      {tileNode}
+      <View style={{ flex: 1 }}>
+        {titleNode}
+        {subNode}
+      </View>
+      {valueNode}
+    </>
+  );
+
+  // ЗАГЛУШКА: та же строка, но без роли кнопки, отклика на касание и шеврона.
+  // Шеврон обещает, что за строкой что-то есть, — обещать нечего.
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={label} style={layout}>
+        {body}
+      </View>
+    );
+  }
+
   return (
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       accessibilityRole="button"
-      accessibilityLabel={
-        a11yLabel ?? [title, sub, value].filter(Boolean).join(", ")
-      }
+      accessibilityLabel={label}
       accessibilityActions={a11yActions ? [...a11yActions] : undefined}
       onAccessibilityAction={
         onA11yAction
@@ -201,43 +272,12 @@ export function SettingsRow({
           : undefined
       }
       style={({ pressed }) => ({
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        // 17/22 имени + 13/18 подписи = 40pt текста; 60 — это те же 10pt
-        // воздуха сверху и снизу, что были у строки 15/13 при 56.
-        minHeight: 60,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        ...layout,
         // Нажатие УГЛУБЛЯЕТ материал, а не гасит строку прозрачностью.
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
-      {stacked ? (
-        <View style={{ flex: 1, gap: 6 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {tileNode}
-            {titleNode}
-          </View>
-          {subNode || valueNode ? (
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 12 }}
-            >
-              {subNode ?? <View style={{ flex: 1 }} />}
-              {valueNode}
-            </View>
-          ) : null}
-        </View>
-      ) : (
-        <>
-          {tileNode}
-          <View style={{ flex: 1 }}>
-            {titleNode}
-            {subNode}
-          </View>
-          {valueNode}
-        </>
-      )}
+      {body}
       {/* Шеврон — указатель, а не участник строки: −35% массы (18/2.2 → 16/1.75)
           при том же контрасте. Он держится альфой чернил, а не размером. */}
       <ChevronRight color={t.chevron} size={16} strokeWidth={1.75} />

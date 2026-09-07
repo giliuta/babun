@@ -28,7 +28,7 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
-import { AppointmentPhotos } from "@/features/appointments/AppointmentPhotos";
+import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { humanDay } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
@@ -111,6 +111,19 @@ export function CrewAppointmentSheet({
   const serviceNames = useMemo(() => {
     if (!appointment) return [];
     const byId = new Map(services.map((item) => [item.id, item.name]));
+    // СНИМОК ЗАПИСИ ПЕРВЫМ, каталог вторым. Наряд читает бригада НА ОБЪЕКТЕ:
+    // если услугу к тому времени стёрли из прайса, строка «Услуга удалена»
+    // не говорит человеку, что именно он приехал делать. Имя работы на день
+    // визита лежит в самой записи — берём его.
+    const snapshot = appointment.services ?? [];
+    if (snapshot.length > 0) {
+      return snapshot.map(
+        (line) =>
+          line.serviceName?.trim() ||
+          byId.get(line.serviceId) ||
+          "Услуга удалена",
+      );
+    }
     return appointment.service_ids.map((id) => byId.get(id) ?? "Услуга удалена");
   }, [appointment, services]);
 
@@ -309,13 +322,14 @@ export function CrewAppointmentSheet({
             </Text>
           </SectionCard>
 
-          <AppointmentPhotos
-            appointmentId={appointment.id}
-            locationId={appointment.location_id}
-            consentGiven={appointment.consent_given}
-            canUpload={status !== "cancelled"}
-            canDelete={false}
-          />
+          <AppointmentFilesBlock
+                appointmentId={appointment.id}
+                clientId={null}
+                locationId={appointment.location_id}
+                canUpload={status !== "cancelled"}
+                pending={[]}
+                onPendingChange={() => {}}
+              />
 
           <SectionCard title="Заметка команды" padded>
             <TextInput

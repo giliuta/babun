@@ -340,10 +340,7 @@ export function servedOnWeekday(
   );
 }
 
-/** ISO-день недели (1 = понедельник) из строки «YYYY-MM-DD». */
-export function isoWeekdayOf(ymd: string): number {
-  const [y, m, d] = ymd.split("-").map(Number);
-  if (!y || !m || !d) return 1;
-  const js = new Date(y, m - 1, d).getDay();
-  return js === 0 ? 7 : js;
-}
+// ISO-день недели переехал в `common/utils/date-utils` (2026-08-30): он нужен
+// и меткам, и услугам, а справочник дней недели — не часть прайса. Реэкспорт
+// оставлен, чтобы зовущие отсюда не переписывались.
+export { isoWeekdayOf } from "../common/utils/date-utils";

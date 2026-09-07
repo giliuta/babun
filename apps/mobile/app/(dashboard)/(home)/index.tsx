@@ -6,12 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  Linking,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import { Linking, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -26,15 +21,7 @@ import { chooseOption } from "@/lib/choose";
 import { confirmAction } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import type { Appointment } from "@babun/shared/local/appointments";
-import {
-  duplicateAppointment,
-  getDebtAmount,
-} from "@babun/shared/local/appointments";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  PAYMENT_METHOD_LABEL,
-  PAYMENT_METHODS,
-} from "@babun/shared/local/finance/transaction";
+import { duplicateAppointment } from "@babun/shared/local/appointments";
 import {
   isColdOfflineCacheMissError,
   randomUuid,
@@ -50,16 +37,19 @@ import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
-import { X } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useThemeColors } from "@/theme/colors";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
-import { AppointmentSheet } from "@/features/appointments/AppointmentSheet";
+import {
+  addMinutesHM,
+  formatYMD,
+  humanDay,
+  minutesBetweenHM,
+  parseYMD,
+} from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
-import { buildDebtPaidPatch } from "@/features/appointments/payment";
 import {
   DayView,
   type FreeSlotRange,
@@ -92,15 +82,34 @@ import {
 } from "@/features/calendar/BookSlotSheet";
 import { CalendarNotice } from "@/features/calendar/CalendarNotice";
 import {
-  dayCityKey,
   useDayCities,
   useSetDayCity,
 } from "@/features/calendar/day-cities";
 import { CITY_CLEARED } from "@babun/shared/local/day-cities";
+import {
+  resolveCalendarDayLabel,
+  type DayLabel,
+} from "@/features/calendar/day-label";
+import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
+import { isOverdue } from "@/features/calendar/overdue";
+import {
+  useAutoColorRule,
+  useBookingBlocks,
+  useFallbackColor,
+  useSituationPalette,
+} from "@/features/appointments/booking-prefs";
+import {
+  COLOR_SITUATIONS,
+  appointmentSituation,
+  recordFilled,
+  resolveRecordColor,
+  serviceBaseColor,
+  worstSituation,
+  type ColorSituation,
+} from "@/features/appointments/record-color";
 import { MonthView } from "@/features/calendar/MonthView";
 import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
-import { EndOfDayBanner } from "@/features/calendar/EndOfDayBanner";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { startOfWeek } from "@/features/calendar/week";
 import {
@@ -111,7 +120,9 @@ import {
 } from "@/features/calendar/window";
 import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
-import { RescheduleSheet } from "@/features/calendar/RescheduleSheet";
+import { ModePlaque } from "@/features/calendar/ModePlaque";
+import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
+import { serverReason } from "@/features/calendar/server-reason";
 import {
   cancelAppointmentReminders,
   reconcileEventAppointmentReminders,
@@ -131,14 +142,12 @@ import { useAppointments } from "@/features/calendar/queries";
 import {
   useCreateAppointment,
   useDeleteAppointment,
-  useUndoAppointmentPayment,
   useUpdateAppointment,
 } from "@/features/calendar/mutations";
 import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import {
-  teamCities,
   useCities,
   useCreateTeam,
   useTeams,
@@ -245,9 +254,7 @@ export default function CalendarTab() {
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
-  const weekStart = calSettings?.weekStart ?? "monday";
   const updateAppt = useUpdateAppointment();
-  const undoPayment = useUndoAppointmentPayment();
   const createTeam = useCreateTeam();
   const toast = useToast();
   const t = useThemeColors();
@@ -275,6 +282,15 @@ export default function CalendarTab() {
   // Контрол ленты отражает ЖЕСТ: раньше он питался от isRefetching, то есть
   // выезжал сам при каждом возврате на календарь.
   const pull = usePullRefresh(onRefresh);
+
+  /** Часовой пояс записи: её команды, иначе бизнеса. Дата и время записи —
+   *  «настенные» поля бизнеса, а не устройства диспетчера. */
+  const appointmentTimeZone = (apt: Appointment): string =>
+    (apt.team_id
+      ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
+      : null) ??
+    calSettings?.timezone ??
+    "Europe/Nicosia";
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
     if (!canMutateAppointment(apt)) {
@@ -339,18 +355,14 @@ export default function CalendarTab() {
           if (isCalendarEvent(apt)) {
             void syncEventAppointmentReminders(
               { ...apt, time_start: newStart, time_end: newEnd },
-              (apt.team_id
-                ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
-                : null) ??
-                calSettings?.timezone ??
-                "Europe/Nicosia",
+              appointmentTimeZone(apt),
             );
           } else {
             void cancelAppointmentReminders(apt.id);
           }
           toast(warn ? `Перенесено. ${warn}` : `Перенесено на ${newStart}`);
         },
-        onError: () => toast("Не удалось перенести"),
+        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести"),
       },
     );
   };
@@ -440,9 +452,15 @@ export default function CalendarTab() {
     params.pickReminder,
     router,
   ]);
-  // Уход с календаря снимает вопрос «когда?»: он задан один раз.
+  // Уход с календаря снимает вопросы «когда?» и «куда?»: они заданы один раз.
   useFocusEffect(
-    useCallback(() => () => setPick(null), []),
+    useCallback(
+      () => () => {
+        setPick(null);
+        setMoving(null);
+      },
+      [],
+    ),
   );
 
   // Вид и команда переживают перезапуск (MMKV): владелец двух команд в
@@ -495,7 +513,6 @@ export default function CalendarTab() {
   const rememberViewRef = useRef(rememberView);
   rememberViewRef.current = rememberView;
   const [miniCalOpen, setMiniCalOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
   // once data appears).
@@ -506,12 +523,15 @@ export default function CalendarTab() {
     getStorage().set(ONBOARDING_DISMISSED_KEY, true);
     setOnboardingDismissed(true);
   };
-  const [editing, setEditing] = useState<Appointment | null>(null);
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
-  // «Перенести» из контекстного меню — запись в шите переноса (null = закрыт).
-  const [reschedulingApt, setReschedulingApt] = useState<Appointment | null>(
-    null,
-  );
+  // РЕЖИМ ПЕРЕНОСА — запись, для которой сетка показывает зелёные кубики
+  // (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются зелёные,
+  // куда можно перевести по всей таблице»). null = обычный календарь.
+  const [moving, setMoving] = useState<Appointment | null>(null);
+  // Без блока «Оплата» (Кабинет → «Запись») визит закрывать нечем: статус на
+  // странице записи меняет только оплата. Тогда «Выполнена» живёт здесь, в
+  // меню долгого нажатия, — денег она не пишет.
+  const paymentBlockOn = useBookingBlocks().includes("payment");
 
   // Чипы календаря: активные команды плюс архивные, за которыми осталась
   // работа. Порядок сохраняем — архивные уходят в хвост.
@@ -671,11 +691,10 @@ export default function CalendarTab() {
               : params.from?.startsWith("account:")
                 ? `/accounts/${params.from.slice("account:".length)}`
                 : null;
+        // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
+        // старый лист правки здесь больше не открывается.
         if (isCrew || !canMutateAppointment(target)) setCrewViewing(target);
-        else {
-          setEditing(target);
-          setSheetOpen(true);
-        }
+        else router.push(`/book?appointmentId=${target.id}` as Href);
       } else {
         toast("Заявка не найдена или больше недоступна");
       }
@@ -748,13 +767,42 @@ export default function CalendarTab() {
     () => new Map(clients.map((c) => [c.id, c.full_name])),
     [clients],
   );
+  // Адрес клиента — тоже картой: `addressFor` зовут на КАЖДЫЙ блок сетки, а в
+  // неделе их полторы сотни. Линейный поиск по всем клиентам на каждый блок
+  // стоил бы кадра на большой базе.
+  const addressById = useMemo(
+    () => new Map(clients.map((c) => [c.id, c.address])),
+    [clients],
+  );
+  // СОБЫТИЕ НАЗЫВАЕТСЯ СВОИМ ТИПОМ и с клиентом тоже (форма события 2026-09-06:
+  // клиент у события необязателен): имя человека идёт второй строкой блока
+  // (см. serviceLabel), а не вместо «Обед».
   const clientName = (a: Appointment) =>
-    a.client_id ? nameById.get(a.client_id) ?? "" : "";
+    a.client_id && !isCalendarEvent(a) ? nameById.get(a.client_id) ?? "" : "";
+  // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
+  // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
+  // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
+  // клиентский адрес для него — единственная правда.
+  const addressFor = useCallback(
+    (a: Appointment) => {
+      const own = (a.address ?? "").trim();
+      if (own) return own;
+      const client = a.client_id ? addressById.get(a.client_id) : null;
+      return (client ?? "").trim() || null;
+    },
+    [addressById],
+  );
 
   // Лента дня называет услуги ПРОШЕДШИХ записей — по полному справочнику;
   // `services` выше остаётся про живой каталог (онбординг спрашивает им,
   // заведён ли прайс вообще).
   const { data: allServices = [] } = useAllServices();
+  // ЦВЕТ УСЛУГИ ЧИТАЕТСЯ ПО ПОЛНОМУ СПРАВОЧНИКУ, как и имя: услуга, убранная
+  // из прайса, обязана продолжать красить прошлые дни.
+  const serviceColorById = useMemo(
+    () => new Map(allServices.map((s) => [s.id, s.color])),
+    [allServices],
+  );
   const serviceNameById = useMemo(
     () => new Map(allServices.map((s) => [s.id, s.name])),
     [allServices],
@@ -762,6 +810,28 @@ export default function CalendarTab() {
   // «Чистка, x2 Диагностика» — web AgendaView service summary.
   const serviceSummaryFor = useCallback(
     (a: Appointment) => {
+      // ИМЯ БЕРЁТСЯ ИЗ СНИМКА ЗАПИСИ, И ТОЛЬКО ПОТОМ ИЗ КАТАЛОГА.
+      //
+      // `services[].serviceName` — имя НА ДЕНЬ ВИЗИТА: его кладут при
+      // сохранении именно затем, чтобы прошлая работа продолжала называться
+      // так, как её назвали тогда. Каталог отвечает «как называется сейчас»,
+      // а на стёртой услуге не отвечает вовсе — и лента печатала «Услуга
+      // удалена» поверх работы, которую бригада делала и за которую взяли
+      // деньги. Каталог остаётся вторым источником: у записей до 25 августа
+      // 2026 снимка ещё нет.
+      const snapshot = a.services ?? [];
+      if (snapshot.length > 0) {
+        return snapshot
+          .map((line) => {
+            const name =
+              line.serviceName?.trim() ||
+              serviceNameById.get(line.serviceId) ||
+              "Услуга удалена";
+            const q = line.quantity > 1 ? line.quantity : 1;
+            return q > 1 ? `x${q} ${name}` : name;
+          })
+          .join(", ");
+      }
       const qty = new Map<string, number>();
       for (const id of a.service_ids) qty.set(id, (qty.get(id) ?? 0) + 1);
       return [...qty.entries()]
@@ -774,8 +844,17 @@ export default function CalendarTab() {
     [serviceNameById],
   );
   const serviceLabel = useCallback(
-    (a: Appointment) => serviceSummaryFor(a) || a.comment || null,
-    [serviceSummaryFor],
+    (a: Appointment) => {
+      if (isCalendarEvent(a)) {
+        // Заголовок блока уже печатает тип события — третья строка не
+        // повторяет слово, а называет клиента или первую строку заметки.
+        const who = a.client_id ? nameById.get(a.client_id) ?? "" : "";
+        const note = (a.event_notes ?? "").trim().split("\n")[0]?.trim() ?? "";
+        return who || note || null;
+      }
+      return serviceSummaryFor(a) || a.comment || null;
+    },
+    [serviceSummaryFor, nameById],
   );
 
   const teamColor = useMemo(() => {
@@ -785,13 +864,26 @@ export default function CalendarTab() {
     }
     return m;
   }, [teams]);
-  const teamColorFor = useCallback(
-    (a: Appointment) => (a.team_id ? teamColor.get(a.team_id) ?? null : null),
-    [teamColor],
-  );
+
 
   // ─── Метки дней (web parity: city pill в шапке дня) ─────────────────
-  const citiesQuery = useCities();
+  // МЕТКИ АКТИВНОГО КАЛЕНДАРЯ, а не всего тенанта. С 2026-08-29 метка
+  // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
+  // показывал «Лимассол» столько раз, сколько в компании команд.
+  const autoColorRule = useAutoColorRule();
+  const situationPalette = useSituationPalette();
+  const fallbackColor = useFallbackColor();
+  // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
+  // мастера объекта нет вовсе.
+  const bookingBlocks = useBookingBlocks();
+  const activeSituations = useMemo<ColorSituation[]>(
+    () =>
+      COLOR_SITUATIONS.map((s) => s.id).filter(
+        (id) => id !== "noObject" || bookingBlocks.includes("object"),
+      ),
+    [bookingBlocks],
+  );
+  const citiesQuery = useCities({ teamId: activeTeamId });
   const dayCitiesQuery = useDayCities();
   const cities = useMemo(() => citiesQuery.data ?? [], [citiesQuery.data]);
   const dayCities = useMemo(
@@ -820,27 +912,122 @@ export default function CalendarTab() {
   }, [notice]);
   // Разбор финансов дня по тапу на футер Доход/Расход (null = закрыт).
   const [finModalYmd, setFinModalYmd] = useState<string | null>(null);
-  // Date-label resolver: explicit (day_cities) → team default_city (web
-  // getCityFor parity). Shared by the day-header pill, the week header
-  // pills and the label-tint column wash below.
+  // МЕТКА ДНЯ — ТОЛЬКО ЯВНАЯ (владелец 2026-08-29: «кнопку „основная" вообще
+  // стираем; поставить метку можно исключительно выбором по датам — надо
+  // везде, выберу все даты»).
+  //
+  // Фолбэка на `team.default_city` больше нет. Он был «одна метка на все дни
+  // сразу» — невидимая настройка, которая красила календарь из другого
+  // экрана: день выглядел помеченным, хотя на нём никто ничего не ставил, и
+  // снять это можно было только найдя звезду в справочнике.
+  // ПРАВИЛО «КАКАЯ МЕТКА У ДНЯ» ПЕРЕЕХАЛО В `features/calendar/day-label`
+  // (2026-08-31). Оно жило здесь и наружу не выводилось — а форма записи
+  // обязана показать в шапке ТУ ЖЕ метку, что стоит на дне в календаре.
+  // Вторая копия разошлась бы на первой правке, и два экрана заговорили бы о
+  // разных метках одного дня. Порядок ступеней и закон «прошлое не
+  // переписывается настройкой» теперь под одиннадцатью тестами.
   const labelFor = useCallback(
-    (dateYmd: string): { name: string; color: string } | null => {
-      if (!activeTeamId) return null;
-      const assigned = dayCities[dayCityKey(activeTeamId, dateYmd)];
-      // Сентинел CITY_CLEARED = «метка явно снята» — БЕЗ отката на
-      // default_city (web getCityFor, DashboardClientLayout v693).
-      if (assigned === CITY_CLEARED) return null;
-      const name = assigned ?? activeTeam?.default_city ?? "";
-      if (!name) return null;
-      // Фолбэк цвета — нейтральный серый, НЕ accent: кобальтовая кромка
-      // метки сливалась с кругом «сегодня» и читалась как второй маркер.
-      return {
-        name,
-        color: cities.find((c) => c.name === name)?.color ?? t.faint,
-      };
-    },
-    [activeTeamId, activeTeam?.default_city, dayCities, cities, t.faint],
+    (dateYmd: string): DayLabel | null =>
+      resolveCalendarDayLabel({
+        dayCities,
+        cities,
+        teamId: activeTeamId,
+        dateYmd,
+        todayYmd,
+        fallbackColor: t.faint,
+      }),
+    [activeTeamId, dayCities, cities, todayYmd, t.faint],
   );
+
+  // ЦВЕТ ЗАПИСИ В АВТОМАТИЧЕСКОМ РЕЖИМЕ — ПО ПРАВИЛУ ИЗ НАСТРОЙКИ (Кабинет →
+  // «Запись», владелец 2026-09-05). Форма записи спрашивает то же правило:
+  // иначе один и тот же выезд был бы одного цвета в форме и другого в сетке.
+  // «Цвет метки» падает на цвет команды, когда метки нет ни у записи, ни у
+  // дня: блок без цвета хуже блока «не той» окраски.
+  const teamColorFor = useCallback(
+    (a: Appointment) => {
+      // Цвет команды — общая последняя ступень для всех трёх правил: блок без
+      // цвета хуже блока «не той» окраски.
+      const teamBase = a.team_id ? teamColor.get(a.team_id) ?? null : null;
+      const base =
+        autoColorRule === "label"
+          ? (() => {
+              const name = (a.city ?? "").trim() || labelFor(a.date)?.name;
+              return name
+                ? cities.find((c) => c.name === name)?.color ?? null
+                : null;
+            })() ?? teamBase
+          : autoColorRule === "service"
+            ? serviceBaseColor(a, (id) => serviceColorById.get(id)) ?? teamBase
+            : teamBase;
+      // СОБЫТИЕ НЕ ИМЕЕТ НИ КЛИЕНТА, НИ ОБЪЕКТА, НИ УСЛУГ ПО ОПРЕДЕЛЕНИЮ:
+      // палитра «чего не хватает» к нему не применяется — иначе обед в
+      // календаре горел бы «нет клиента».
+      if (a.kind !== "work") return base;
+      return resolveRecordColor({
+        override: a.color_override,
+        filled: recordFilled(a),
+        base,
+        palette: situationPalette,
+        active: activeSituations,
+        fallback: fallbackColor,
+      });
+    },
+    [
+      autoColorRule,
+      cities,
+      labelFor,
+      teamColor,
+      serviceColorById,
+      situationPalette,
+      activeSituations,
+      fallbackColor,
+    ],
+  );
+  // ЧУЖАЯ МЕТКА НА БЛОКЕ ЗАПИСИ (владелец 2026-09-04: «можно подсвечивать
+  // другим цветом, когда метка другая, окантовку какую-то»). Правило и его
+  // границы — в `appointment-label.ts`; здесь только связка с меткой дня,
+  // которую календарь уже считает.
+  const offLabelFor = useCallback(
+    (a: Appointment) =>
+      resolveOffDayLabel({
+        city: a.city,
+        dayLabelName: labelFor(a.date)?.name ?? null,
+        cities,
+      }),
+    [labelFor, cities],
+  );
+  // ЛЕНТА НАЗЫВАЕТ ДЫРУ СЛОВОМ. Она служит сетке легендой: цвет один на три
+  // ситуации различает их слишком слабо для дальтоника, а в списке есть место
+  // для слова.
+  const situationFor = useCallback(
+    (a: Appointment): string | null => {
+      const id = appointmentSituation(a, {
+        palette: situationPalette,
+        active: activeSituations,
+      });
+      return id
+        ? COLOR_SITUATIONS.find((s) => s.id === id)?.label ?? null
+        : null;
+    },
+    [situationPalette, activeSituations],
+  );
+
+  // ЛЕНТА НАЗЫВАЕТ И НЕЗАКРЫТУЮ РАБОТУ. В сетке просрочка говорит толщиной
+  // канта — каналом СРАВНИТЕЛЬНЫМ: на сплошь просроченной прошлой неделе все
+  // канты одинаково толстые, и «сколько висит» по ним не прочесть. В списке
+  // для слова есть место.
+  const overdueFor = useCallback(
+    (a: Appointment) => isOverdue(a, todayYmd, nowMinutes),
+    [todayYmd, nowMinutes],
+  );
+
+  // Сетке хватает цвета: в колонке дня словам места нет.
+  const offLabelColorFor = useCallback(
+    (a: Appointment): string | null => offLabelFor(a)?.color ?? null,
+    [offLabelFor],
+  );
+
   // Тап по дате всегда открывает метки. Даже если у команды их ещё нет,
   // DayLabelSheet показывает честное пустое состояние и ведёт в настройки.
   // Иначе новый диспетчер нажимал на дату в ожидании метки, а приложение
@@ -851,20 +1038,28 @@ export default function CalendarTab() {
   // team.tint_days_by_label (default on) drops the resolver entirely.
   const labelTintFor = useMemo(() => {
     if (!(activeTeam?.tint_days_by_label ?? true)) return undefined;
-    return (dateYmd: string) => labelFor(dateYmd)?.color ?? null;
+    // Два уровня, и оба нужны: командный `tint_days_by_label` гасит заливку
+    // во всём календаре разом, метка-уровневый `tint_day` — только свою.
+    return (dateYmd: string) => {
+      const label = labelFor(dateYmd);
+      return label?.tint ? label.color : null;
+    };
   }, [activeTeam?.tint_days_by_label, labelFor]);
   // Web CityPickerModal pickerList: активные метки справочника, суженные до
   // меток команды, когда они заданы; пустой список команды при заданном
   // default_city → весь активный справочник (web parity).
-  const labelOptions = useMemo(() => {
-    const source = cities
-      .filter((c) => c.is_active)
-      .map((c) => ({ name: c.name, color: c.color ?? t.accent }));
-    const brigade = activeTeam ? teamCities(activeTeam) : [];
-    return brigade.length > 0
-      ? source.filter((c) => brigade.includes(c.name))
-      : source;
-  }, [activeTeam, cities, t.accent]);
+  const labelOptions = useMemo(
+    () =>
+      // ПОДБОРА БОЛЬШЕ НЕТ. Здесь стоял фильтр по `teams.cities` — списку
+      // имён, подобранных команде из ОБЩЕГО справочника. С 29 августа метка
+      // принадлежит команде, и `cities` уже приходят её собственные; старый
+      // фильтр стал не сужением, а ПОТЕРЕЙ: у команды со списком из одного
+      // имени её же вторая метка исчезала из выбора.
+      cities
+        .filter((c) => c.is_active && !c.deleted_at)
+        .map((c) => ({ name: c.name, color: c.color ?? t.accent })),
+    [cities, t.accent],
+  );
 
   // Скрывать отменённые: настройка команды побеждает глобальную (web
   // parity: dashboard/page.tsx:1613 `activeTeam?.hide_cancelled ?? …`).
@@ -924,6 +1119,53 @@ export default function CalendarTab() {
     [expandedAppts, byTeam],
   );
 
+  // ДЫРА ДНЯ ДЛЯ МЕСЯЦА — один проход на весь пейджер (три страницы месяца
+  // живут одновременно). Считается по ВИДИМОМУ набору, тому же, что даёт
+  // счётчик: денежный набор сюда подставлять нельзя, они намеренно расходятся
+  // по «Скрывать отменённые». В остальных видах не считаем вовсе.
+  const holeByDay = useMemo(() => {
+    const out = new Map<string, { name: string; color: string }>();
+    if (mode !== "month") return out;
+    const byDate = new Map<string, (ColorSituation | null)[]>();
+    for (const a of visibleAppts) {
+      const arr = byDate.get(a.date) ?? [];
+      arr.push(
+        appointmentSituation(a, {
+          palette: situationPalette,
+          active: activeSituations,
+        }),
+      );
+      byDate.set(a.date, arr);
+    }
+    for (const [date, list] of byDate) {
+      const worst = worstSituation(list);
+      const color = worst ? (situationPalette[worst] ?? "").trim() : "";
+      if (!worst || !color) continue;
+      out.set(date, {
+        name: COLOR_SITUATIONS.find((s) => s.id === worst)?.label ?? "",
+        color,
+      });
+    }
+    return out;
+  }, [mode, visibleAppts, situationPalette, activeSituations]);
+  const holeFor = useCallback(
+    (dateYmd: string) => holeByDay.get(dateYmd) ?? null,
+    [holeByDay],
+  );
+  // Стрелка прямо в пропе делала `memo` месяца мёртвым: свежая функция на
+  // каждый рендер родителя перерисовывала все три страницы пейджера, и
+  // стабильность `holeFor` ничего не защищала.
+  const onPickLabelDayMonth = useMemo(
+    () =>
+      canManageDayLabels && activeTeamId
+        ? (dateYmd: string) => {
+            haptics.tap();
+            setCityPickerYmd(dateYmd);
+          }
+        : undefined,
+    [canManageDayLabels, activeTeamId],
+  );
+
   // Денежный набор: «Скрывать отменённые» — визуальная настройка сетки и
   // итоги дня менять не должна. Судьбу отменённых в деньгах решает сам
   // computeDayFinance (planned их не считает, earned — только
@@ -963,16 +1205,10 @@ export default function CalendarTab() {
     (ymd: string) => apptsByDate.get(ymd) ?? [],
     [apptsByDate],
   );
-  // Записи бизнес-СЕГОДНЯ (не просматриваемого дня) — вечерний баннер долгов.
-  const todayAppts = useMemo(
-    () => apptsByDate.get(todayYmd) ?? [],
-    [apptsByDate, todayYmd],
-  );
-
   const weekDays = useMemo(() => {
-    const first = startOfWeek(day, weekStart);
+    const first = startOfWeek(day);
     return Array.from({ length: 7 }, (_, i) => addDays(first, i));
-  }, [day, weekStart]);
+  }, [day]);
   const weekYmds = useMemo(() => weekDays.map(formatYMD), [weekDays]);
   // Финансы недельного футера — денежный набор (см. financeAppts выше).
   const financeWeekAppts = useMemo(
@@ -1035,10 +1271,9 @@ export default function CalendarTab() {
     });
   };
 
-  // First-run gate CTA — spins up the first team calendar (web parity:
-  // /dashboard/teams?new=1 immediately creates a team). Default name +
-  // first unused palette colour; the «Назвать» toast lands on /calendar,
-  // whose identity card renames and recolours in place.
+  // Заводит первый календарь тенанта. Вызывается АВТОМАТИЧЕСКИ эффектом
+  // ниже; кнопка осталась только запасным выходом, если автосоздание не
+  // прошло (нет связи, отказ базы).
   const createFirstCalendar = () => {
     const used = new Set(
       (teams as { color?: string | null }[]).map((tm) => tm.color).filter(Boolean),
@@ -1055,18 +1290,47 @@ export default function CalendarTab() {
         onSuccess: (team) => {
           setTeamChoice(team.id);
           rememberView({ teamId: team.id });
-          // Не роутим в настройки: человек только что попросил календарь —
-          // он должен увидеть СВОЙ КАЛЕНДАРЬ, а не допрос про часы. Имя
-          // предлагаем поменять действием в тосте, необязательным.
-          toast("Календарь создан", "success", {
-            label: "Назвать",
-            onPress: () => router.push(`/calendar?team=${team.id}`),
-          });
+          // Тоста нет намеренно: календарь заводится САМ, человек его не
+          // просил — сообщать ему о результате действия, которого он не
+          // совершал, значит требовать внимания ни за чем. Имя видно в
+          // чипе над сеткой, переименование живёт под шестерёнкой.
         },
-        onError: () => toast("Не удалось создать календарь"),
+        onError: () => {
+          // Автосоздание не прошло — показываем кнопку как ручной выход.
+          // Молча оставить пустой экран нельзя: человек окажется в
+          // календаре, которого нет, без единого способа это исправить.
+          setFirstCalendarFailed(true);
+          toast("Не удалось создать календарь");
+        },
       },
     );
   };
+
+  // КАЛЕНДАРЬ ЗАВОДИТСЯ САМ (владелец 2026-08-27: «когда я впервые захожу
+  // в календарь, я хочу, чтобы там уже был создан календарь — не надо было
+  // нажимать кнопку, она по сути бессмысленный этап»).
+  //
+  // Шаг и правда был пустым: единственная кнопка единственного экрана
+  // делала ровно одно действие без единого выбора — ни имени, ни цвета, ни
+  // типа. Экран, который спрашивает «продолжить?», не спрашивает ничего.
+  //
+  // Условия строгие, потому что цена ошибки — лишняя команда в базе:
+  // только владелец (мастер календарей не заводит), только когда список
+  // команд ДОЗАГРУЖЕН и пуст, только один раз за жизнь экрана (ref, а не
+  // state — он не должен перезапускать эффект).
+  const firstCalendarStarted = useRef(false);
+  const [firstCalendarFailed, setFirstCalendarFailed] = useState(false);
+  useEffect(() => {
+    if (firstCalendarStarted.current) return;
+    if (role !== "owner") return;
+    if (teamsFetching || teamsError) return;
+    if (teams.length > 0) return;
+    firstCalendarStarted.current = true;
+    createFirstCalendar();
+    // createFirstCalendar намеренно не в зависимостях: он пересоздаётся
+    // каждый рендер, и его включение превратило бы эффект в цикл.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, teamsFetching, teamsError, teams.length]);
   const openEdit = (apt: Appointment) => {
     // Виртуальное вхождение повтора редактируем через его seed-запись —
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
@@ -1076,8 +1340,19 @@ export default function CalendarTab() {
       setCrewViewing(target);
       return;
     }
-    setEditing(target);
-    setSheetOpen(true);
+    // ПРАВКА УХОДИТ НА /book (2026-08-31). Форм записи было две — отдельная
+    // для создания и отдельная для правки, — и владелец решил свести их в
+    // одну: «нам надо одна единая, и чтобы это было сразу создание и
+    // редактирование, значит одна из них лишняя».
+    //
+    // Лишним оказался лист: /book УЖЕ умеет править (STORY-064, «одна
+    // страница создаёт и правит»), просто сюда его не звали. Пока обе формы
+    // живы, любая правка делается наполовину — вчерашний снос «Источника
+    // заявки» вычистил его из создания и оставил в правке.
+    router.push({
+      pathname: "/book",
+      params: { appointmentId: target.id },
+    } as Href);
   };
 
   // ─── Контекстное меню записи (долгое нажатие без движения) ──────────
@@ -1124,28 +1399,32 @@ export default function CalendarTab() {
                 },
           );
         },
-        onError: () => toast("Не удалось изменить статус", "error"),
+        onError: (e) =>
+          toast(serverReason(e) ?? "Не удалось изменить статус", "error"),
       },
     );
   };
 
-  const cancelToggle = (apt: Appointment) => {
-    const to = apt.status === "cancelled" ? "scheduled" : "cancelled";
-    const prev = apt.status;
+  /** Отмена и возврат в план — одна дорога с откатом из тоста. Причина
+   *  ложится в cancel_reason (список — cancel-reasons.ts) и стирается при
+   *  «Восстановить». */
+  const setCancelled = (apt: Appointment, reason: string | null) => {
+    const to: Appointment["status"] = reason ? "cancelled" : "scheduled";
+    const prev = { status: apt.status, cancel_reason: apt.cancel_reason ?? null };
     updateAppt.mutate(
-      { id: apt.id, patch: { status: to } },
+      { id: apt.id, patch: { status: to, cancel_reason: reason } },
       {
         onSuccess: () => {
           haptics.success();
           if (to === "cancelled") void cancelAppointmentReminders(apt.id);
           toast(
-            to === "cancelled" ? "Запись отменена" : "Запись восстановлена",
+            to === "cancelled" ? "Визит отменён" : "Запись восстановлена",
             "info",
             {
               label: "Отменить",
               onPress: () =>
                 updateAppt.mutate(
-                  { id: apt.id, patch: { status: prev } },
+                  { id: apt.id, patch: prev },
                   {
                     // Без колбэка откат падал молча: options-level onError
                     // хука гасит глобальный алерт MutationCache.
@@ -1156,9 +1435,23 @@ export default function CalendarTab() {
             },
           );
         },
-        onError: () => toast("Не удалось изменить запись", "error"),
+        onError: (e) =>
+          toast(serverReason(e) ?? "Не удалось изменить запись", "error"),
       },
     );
+  };
+
+  /** «Отменить визит» — вторым листом причина, без неё визит не отменяется:
+   *  отмена без причины в отчёте дня читается как «забыли». */
+  const cancelWithReason = (apt: Appointment) => {
+    void chooseOption(
+      "Причина отмены",
+      CANCEL_REASONS.map((label) => ({ label })),
+      { haptic: false },
+    ).then((i) => {
+      const reason = i === null ? undefined : CANCEL_REASONS[i];
+      if (reason) setCancelled(apt, reason);
+    });
   };
 
   const deleteAppointmentConfirmed = (apt: Appointment) => {
@@ -1194,68 +1487,34 @@ export default function CalendarTab() {
           haptics.warning();
           toast(isCalendarEvent(apt) ? "Событие удалено" : "Запись удалена", "info");
         },
-        onError: () => toast("Не удалось удалить", "error"),
+        onError: (e) => toast(serverReason(e) ?? "Не удалось удалить", "error"),
       });
     });
   };
 
-  // Быстрая оплата ОСТАТКА из контекстного меню — тот же полный платёжный
-  // патч, что у карточки записи (buildDebtPaidPatch): пять зеркальных полей
-  // сразу, иначе payment_status оставался "unpaid" (income в финансах не
-  // создавался), а сумма брала полный total_amount, считая предоплату
-  // второй раз. «Перевод» не предлагается: способ должны понимать все три
-  // платёжных енума модели (см. payment.ts) — тот же выбор, что в шите.
-  const openPaymentMenu = (apt: Appointment) => {
-    const debt = getDebtAmount(apt);
-    const methods = PAYMENT_METHODS;
-    void chooseOption(
-      `Оплата ${formatEUR(debt)}`,
-      methods.map((m) => ({ label: PAYMENT_METHOD_LABEL[m] })),
-      { haptic: false },
-    ).then((i) => {
-      const method = i === null ? undefined : methods[i];
-      if (!method) return;
-      updateAppt.mutate(
-        {
-          id: apt.id,
-          patch: {
-            ...buildDebtPaidPatch(apt, { method, amount: debt }),
-            status: "completed",
-          },
-        },
-        {
-          onSuccess: () => {
-            haptics.success();
-            toast(`Оплата ${formatEUR(debt)} принята`, "success", {
-              label: "Отменить",
-              onPress: () =>
-                undoPayment.mutate(apt.id, {
-                  onSuccess: () => toast("Оплата отменена", "success"),
-                  onError: (error) =>
-                    toast(error.message || "Не удалось отменить оплату", "error"),
-                }),
-            });
-          },
-          onError: (error) =>
-            toast(
-              error.message.replace(/^updateAppointment:\s*/, "") ||
-                "Не удалось отметить оплату",
-              "error",
-            ),
-        },
-      );
-    });
+
+  /** «Перенести» из меню — в режим зелёных кубиков. Список и Месяц кубиков не
+   *  рисуют, поэтому переезжаем в Неделю этой записи; выйти — крестиком на
+   *  плашке, сменой команды или уходом с экрана. */
+  const startMove = (apt: Appointment) => {
+    setPick(null);
+    setNotice(null);
+    setMoving(apt);
+    if (mode !== "week" && mode !== "day") {
+      setMode("week");
+      rememberView({ mode: "week" });
+    }
+    setDay(startOfDay(parseYMD(apt.date)));
   };
 
   const copyAppointment = (apt: Appointment) => {
     const copy = { ...duplicateAppointment(apt), id: randomUuid() };
     createAppt.mutate(copy, {
       onSuccess: () => {
-        // Открываем копию на правку сразу — web parity (page.tsx:1786).
-        setEditing(copy);
-        setSheetOpen(true);
+        // Открываем копию на правку сразу — на странице записи.
+        router.push(`/book?appointmentId=${copy.id}` as Href);
       },
-      onError: () => toast("Не удалось скопировать", "error"),
+      onError: (e) => toast(serverReason(e) ?? "Не удалось скопировать", "error"),
     });
   };
 
@@ -1264,12 +1523,6 @@ export default function CalendarTab() {
   // resolve them in the assigned brigade timezone (global business timezone
   // as fallback), never in the timezone of the dispatcher's current device.
   const openReminderMenu = (apt: Appointment) => {
-    const appointmentTimeZone =
-      (apt.team_id
-        ? teams.find((candidate) => candidate.id === apt.team_id)?.timezone
-        : null) ??
-      calSettings?.timezone ??
-      "Europe/Nicosia";
     const presets: {
       label: string;
       timing: AppointmentReminderTiming;
@@ -1291,7 +1544,7 @@ export default function CalendarTab() {
         when = appointmentReminderInstant(
           apt,
           preset.timing,
-          appointmentTimeZone,
+          appointmentTimeZone(apt),
         );
       } catch {
         toast("Не удалось определить время напоминания", "error");
@@ -1345,13 +1598,12 @@ export default function CalendarTab() {
     const mutable = canMutateAppointment(apt);
 
     type Item = { label: string; run: () => void; destructive?: boolean };
-    const items: Item[] = [
-      {
+    const items: Item[] = [];
+    if (isCrew) {
+      items.push({
         label: event ? "Открыть событие" : "Открыть заявку",
         run: () => openEdit(apt),
-      },
-    ];
-    if (isCrew) {
+      });
       // Мастер может двигать статус только вперёд на один шаг. Это ровно
       // совпадает с серверной политикой и не оставляет кнопок, которые после
       // тапа всё равно закончатся отказом. Team events are read-only.
@@ -1364,71 +1616,66 @@ export default function CalendarTab() {
           });
         }
       }
-    } else if (!event) {
-      // Оплата уместна, пока есть остаток — в т.ч. у «Выполнена» и «В работе»
-      // (раньше пункт видели только «Запланирован», а долги висят как раз на
-      // выполненных).
-      if (
-        apt.kind === "work" &&
-        apt.status !== "cancelled" &&
-        getDebtAmount(apt) > 0
-      )
-        items.push({ label: "Отметить оплату", run: () => openPaymentMenu(apt) });
-      if (apt.status !== "completed")
-        items.push({ label: "Выполнена", run: () => quickStatus(apt, "completed") });
-      if (apt.status !== "in_progress")
-        items.push({ label: "В работе", run: () => quickStatus(apt, "in_progress") });
-      if (apt.status !== "scheduled" && apt.status !== "cancelled")
+      // Локальное напоминание доступно и для командного события в режиме
+      // просмотра: это настройка устройства, она не изменяет чужую запись.
+      if (apt.status !== "cancelled" && apt.date >= todayYmd)
+        items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
+      if (phone)
         items.push({
-          label: "Вернуть в план",
-          run: () => quickStatus(apt, "scheduled"),
+          label: "Позвонить",
+          run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
         });
-      // Перенос отменённой бессмыслен — сначала «Восстановить».
-      if (apt.status !== "cancelled")
-        items.push({ label: "Перенести", run: () => setReschedulingApt(apt) });
-    } else if (mutable) {
-      // У событий нет рабочего lifecycle «В работу / Выполнена / Отменена».
-      // Автор может перенести/удалить seed; другой оператор получает только
-      // просмотр и копирование — ровно как creator-only RLS.
-      items.push({ label: "Перенести", run: () => setReschedulingApt(apt) });
-    }
-    // Локальное напоминание доступно и для командного события в режиме
-    // просмотра: это настройка устройства, она не изменяет чужую запись.
-    if (apt.status !== "cancelled" && apt.date >= todayYmd)
-      items.push({ label: "Напомнить…", run: () => openReminderMenu(apt) });
-    if (phone)
-      items.push({
-        label: "Позвонить",
-        run: () => Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`),
-      });
-    if (address)
-      items.push({
-        label: "Маршрут",
-        run: () =>
-          Linking.openURL(
-            `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-          ),
-      });
-    if (!isCrew) {
+      if (address)
+        items.push({
+          label: "Маршрут",
+          run: () =>
+            Linking.openURL(
+              `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
+            ),
+        });
+    } else {
+      // МИНИ-МЕНЮ ДИСПЕТЧЕРА — ЧЕТЫРЕ ДЕЙСТВИЯ (владелец 2026-09-06: «долгое
+      // нажатие открывает перенести — кубики зелёные, куда можно перевести по
+      // всей таблице; потом копировать; потом отменить, удалить»). «Открыть»,
+      // оплата, статусы, звонок и маршрут отсюда ушли: тап открывает запись,
+      // деньги и статус живут в её блоке «Оплата», звонок и маршрут — в шапке.
+      // Перенос отменённой бессмыслен — сначала «Восстановить»; «весь день»
+      // кубиками не ставится — дату ему меняют на странице записи.
+      if (
+        apt.status !== "cancelled" &&
+        apt.event_all_day !== true &&
+        (!event || mutable)
+      )
+        items.push({ label: "Перенести", run: () => startMove(apt) });
       items.push({ label: "Копировать", run: () => copyAppointment(apt) });
       if (!event) {
-        items.push({
-          label: apt.status === "cancelled" ? "Восстановить" : "Отменить запись",
-          run: () => cancelToggle(apt),
-        });
+        if (!paymentBlockOn && apt.status !== "cancelled")
+          items.push(
+            apt.status === "completed"
+              ? {
+                  label: "Вернуть в план",
+                  run: () => quickStatus(apt, "scheduled"),
+                }
+              : { label: "Выполнена", run: () => quickStatus(apt, "completed") },
+          );
+        items.push(
+          apt.status === "cancelled"
+            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+        );
       }
-      if (mutable) {
+      if (mutable)
         items.push({
           // Явный null-чек: у одиночного события event_repeat = null, и
           // «undefined !== "none"» обещал бы удаление несуществующей серии.
-          label:
-            event && apt.event_repeat && apt.event_repeat.kind !== "none"
+          label: event
+            ? apt.event_repeat && apt.event_repeat.kind !== "none"
               ? "Удалить серию"
-              : "Удалить",
+              : "Удалить событие"
+            : "Удалить запись",
           destructive: true,
           run: () => deleteAppointmentConfirmed(apt),
         });
-      }
     }
 
     void chooseOption(
@@ -1633,8 +1880,13 @@ export default function CalendarTab() {
 
   // Свободные кубики считаются ТОЛЬКО в режиме подбора: обычный календарь
   // остаётся прежним, без зелени.
+  // Окно переноса — длительность записи; у записи без длительности — шаг.
+  const moveWindowMin = moving
+    ? minutesBetweenHM(moving.time_start, moving.time_end) ||
+      (activeTeam?.default_slot_minutes ?? 30)
+    : 0;
   const freeSlotsFor = useMemo(() => {
-    if (!pickClientId) return undefined;
+    if (!pickClientId && !moving) return undefined;
     // Считаем каждую дату ОДИН раз: пейджер держит три страницы, и в Неделе
     // резолвер зовётся 21 раз за рендер — без кэша это тысячи проходов по
     // записям на каждый тик «сейчас» и на каждый свайп.
@@ -1670,6 +1922,9 @@ export default function CalendarTab() {
         stepMinutes: step,
         bufferMinutes,
         nowMinutes: dateYmd === todayYmd ? nowMinutes ?? null : null,
+        // Перенос: окно = длительность записи, её собственное время свободно.
+        durationMinutes: moving ? moveWindowMin : undefined,
+        ignoreId: moving?.id ?? null,
       }).map((slot) => ({
         startMin: slot.startMin,
         endMin: slot.startMin + step,
@@ -1677,6 +1932,8 @@ export default function CalendarTab() {
     }
   }, [
     pickClientId,
+    moving,
+    moveWindowMin,
     apptsFor,
     activeTeamId,
     workBandFor,
@@ -1708,14 +1965,14 @@ export default function CalendarTab() {
     return nowMinutes != null && startMin < nowMinutes;
   };
 
-  /** В режиме подбора запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
+  /** В режимах подбора и переноса запись ставится ТОЛЬКО в кубик. Зелень обещает «здесь
    *  у команды свободно»; тап мимо неё (обед, нерабочий час, щель между
    *  визитами) уходил в форму молча — и обещание оказывалось краской. */
   const rejectOutsideFreeSlots = (
     dateYmd: string,
     timeStart: string,
   ): boolean => {
-    if (!pickClientId) return false;
+    if (!freeSlotsFor) return false;
     const [h, m] = timeStart.split(":").map(Number);
     const startMin = (h || 0) * 60 + (m || 0);
     if ((freeSlotsFor?.(dateYmd) ?? []).some((s) => s.startMin === startMin)) {
@@ -1747,8 +2004,59 @@ export default function CalendarTab() {
     });
   };
 
+  /** Тап по кубику в режиме переноса: запись уезжает туда целиком, длительность
+   *  прежняя; напоминания события переезжают следом, напоминание о визите
+   *  снимается (оно целилось в старое время). Откат — из тоста. */
+  const moveToSlot = (apt: Appointment, dateYmd: string, timeStart: string) => {
+    if (rejectOutsideFreeSlots(dateYmd, timeStart)) return;
+    setMoving(null);
+    if (apt.date === dateYmd && apt.time_start === timeStart) return;
+    const prev = {
+      date: apt.date,
+      time_start: apt.time_start,
+      time_end: apt.time_end,
+    };
+    const next = {
+      date: dateYmd,
+      time_start: timeStart,
+      time_end: addMinutesHM(timeStart, moveWindowMin),
+    };
+    const tz = appointmentTimeZone(apt);
+    const syncReminders = (placed: Appointment) => {
+      if (isCalendarEvent(placed)) void syncEventAppointmentReminders(placed, tz);
+      else void cancelAppointmentReminders(placed.id);
+    };
+    updateAppt.mutate(
+      { id: apt.id, patch: next },
+      {
+        onSuccess: () => {
+          haptics.success();
+          syncReminders({ ...apt, ...next });
+          toast(`Перенесено: ${humanDay(dateYmd)}, ${timeStart}`, "success", {
+            label: "Отменить",
+            onPress: () =>
+              updateAppt.mutate(
+                { id: apt.id, patch: prev },
+                {
+                  onSuccess: () => syncReminders(apt),
+                  onError: (e) =>
+                    toast(serverReason(e) ?? "Не удалось вернуть запись", "error"),
+                },
+              ),
+          });
+        },
+        onError: (e) => toast(serverReason(e) ?? "Не удалось перенести", "error"),
+      },
+    );
+  };
+
   /** Тап по пустому времени — одна дорога для Недели и Дня. */
   const createAt = (dateYmd: string, timeStart: string) => {
+    // Режим переноса: тап по кубику — переезд записи, не новая запись.
+    if (moving) {
+      moveToSlot(moving, dateYmd, timeStart);
+      return;
+    }
     // Кнопка на плашке зовёт ровно тот же путь, минуя проверки: на них уже
     // ответили тапом по кнопке.
     const open = () => {
@@ -1792,6 +2100,7 @@ export default function CalendarTab() {
   const gridProps = {
     clientName,
     serviceLabel,
+    addressFor,
     teamColorFor,
     onEdit: openEdit,
     onReschedule: canManageBookings ? reschedule : undefined,
@@ -1881,11 +2190,20 @@ export default function CalendarTab() {
                 : "Первый календарь создаёт владелец компании."
             }
           />
-        ) : (
+        ) : firstCalendarFailed ? (
+          // Запасной выход. В обычной жизни сюда не попадают: календарь
+          // заводится сам эффектом выше.
           <FirstRunCalendarChoice
-            onCreate={createFirstCalendar}
-            creating={createTeam.isPending || teamsFetching}
+            onCreate={() => {
+              setFirstCalendarFailed(false);
+              createFirstCalendar();
+            }}
+            creating={createTeam.isPending}
           />
+        ) : (
+          // Календарь уже создаётся — показываем скелет сетки, а не кнопку:
+          // человек пришёл в календарь, и ждать он должен календарь.
+          <CalendarSkeleton mode="week" />
         )}
       </Screen>
     );
@@ -1925,63 +2243,32 @@ export default function CalendarTab() {
       ) : null}
       </View>
 
-      {/* ПЛАШКА ПОДБОРА — «кого записываем». Пока она висит, свободное время
-          подсвечено зелёным, а тап по сетке ведёт сразу в форму записи.
-          Крестик выходит из режима, оставляя календарь там же, где стоите. */}
+      {/* ПЛАШКА РЕЖИМА — «кого записываем» или «что переносим». Пока она
+          висит, свободное время подсвечено зелёным, а тап по кубику ведёт в
+          форму записи либо переставляет запись. */}
       {pickClientId ? (
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 10,
-            marginHorizontal: 12,
-            marginTop: 8,
-            paddingHorizontal: 14,
-            paddingVertical: 10,
-            borderRadius: t.radius.input,
-            backgroundColor: `${t.success}1f`,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              numberOfLines={1}
-              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
-            >
-              {`Записать: ${pickClientName || "клиент"}`}
-            </Text>
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 13, color: t.sub }}
-            >
-              {`Выберите зелёное время · ${activeTeam?.default_slot_minutes ?? 30} мин`}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              setPick(null);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Отменить выбор времени"
-            hitSlop={10}
-            style={({ pressed }) => ({
-              width: 32,
-              height: 32,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            <X color={t.sub} size={18} strokeWidth={2.4} />
-          </Pressable>
-        </View>
+        <ModePlaque
+          title={`Записать: ${pickClientName || "клиент"}`}
+          subtitle={`Выберите зелёное время · ${activeTeam?.default_slot_minutes ?? 30} мин`}
+          exitLabel="Отменить выбор времени"
+          onExit={() => setPick(null)}
+        />
+      ) : moving ? (
+        <ModePlaque
+          title={`Перенести: ${clientName(moving) || moving.comment || "Запись"}`}
+          subtitle={`Выберите зелёное время · ${moveWindowMin} мин`}
+          exitLabel="Отменить перенос"
+          onExit={() => setMoving(null)}
+        />
       ) : null}
 
       <ScopeChips
         items={calendarTeams}
         activeId={activeTeamId}
         onSelect={(id) => {
+          // Смена команды выходит из переноса: зелень другой команды обещала
+          // бы её свободное время чужой записи.
+          setMoving(null);
           setTeamChoice(id);
           rememberView({ teamId: id });
         }}
@@ -2027,6 +2314,14 @@ export default function CalendarTab() {
           onEdit={openEdit}
           onMenu={openActionMenu}
           labelFor={labelFor}
+          offLabelFor={offLabelFor}
+          // ВЫБРАННЫЙ РУКОЙ ЦВЕТ СИЛЬНЕЕ ПРАВИЛА — так же, как в сетке
+          // (`useBlockColors` спрашивает `color_override` первым). Без этого
+          // событие с выбранным цветом красилось в сетке выбранным, а в ленте
+          // цветом команды: один предмет двух цветов.
+          hueFor={(a) => a.color_override || teamColorFor(a) || t.accent}
+          situationFor={situationFor}
+          overdueFor={overdueFor}
           onCreateNew={canManageBookings ? () => bookAt() : undefined}
           showAmounts={!isCrew}
           refreshing={pull.refreshing}
@@ -2040,6 +2335,7 @@ export default function CalendarTab() {
               apptsFor={apptsFor}
               today={now}
               labelFor={labelFor}
+              offLabelColorFor={offLabelColorFor}
               onCreateAt={canManageBookings ? createAt : undefined}
               onMenu={openActionMenu}
               onPickDay={pickDay}
@@ -2077,6 +2373,7 @@ export default function CalendarTab() {
               apptsFor={apptsFor}
               todayYmd={todayYmd}
               labelFor={labelFor}
+              offLabelColorFor={offLabelColorFor}
               onDayLabelTap={
                 canManageDayLabels && activeTeamId
                   ? () => {
@@ -2113,18 +2410,11 @@ export default function CalendarTab() {
                   financeAppointments={financeAppts}
                   teamId={activeTeamId}
                   todayYmd={todayYmd}
-                  weekStart={weekStart}
                   showFinance={canViewCompanyFinance}
                   labelFor={labelFor}
+                  holeFor={holeFor}
                   onPickDay={openWeekFromMonth}
-                  onPickLabelDay={
-                    canManageDayLabels && activeTeamId
-                      ? (ymd) => {
-                          haptics.tap();
-                          setCityPickerYmd(ymd);
-                        }
-                      : undefined
-                  }
+                  onPickLabelDay={onPickLabelDayMonth}
                 />
               )}
             />
@@ -2159,18 +2449,9 @@ export default function CalendarTab() {
         )
       ) : null}
 
-      {/* Вечерний контроль денег: после 18:00 выполненные СЕГОДНЯ с долгом
-          (web EndOfDayBanner) — плавающая карточка над футером. CTA ведёт
-          в «Закрыть день» (web parity) — экран ровно этих записей;
-          /cabinet/unclosed показывал только просроченные «Запланирован». */}
-      {canViewCompanyFinance ? (
-        <EndOfDayBanner
-          appointments={todayAppts}
-          todayYmd={todayYmd}
-          nowHour={now.getHours()}
-          onOpenUnpaid={() => router.push("/cabinet/close-day")}
-        />
-      ) : null}
+      {/* ПЛАШКИ «N без оплаты · закройте до конца дня» БОЛЬШЕ НЕТ (владелец
+          2026-09-06: «это ненужная штука — и так всё видно»): долг стоит
+          янтарём в самой строке, а незакрытые — в «Закрыть день». */}
 
       {/* Разбор финансов дня — тап по футеру Доход/Расход. */}
       {canViewCompanyFinance ? (
@@ -2297,23 +2578,12 @@ export default function CalendarTab() {
         currentDate={day}
         todayYmd={todayYmd}
         appointments={visibleAppts}
-        weekStart={weekStart}
         onSelectDate={jumpToDate}
         onClose={() => setMiniCalOpen(false)}
       />
 
-      {/* AppointmentSheet теперь только РЕДАКТИРУЕТ существующую запись —
-          создание живёт на отдельном экране /book (тап по слоту, агенда,
-          «Записать» с карточки). Поэтому нет ни defaults, ни пре-попапа. */}
-      <AppointmentSheet
-        visible={sheetOpen && !isCrew && !calendarLoading && !calendarError}
-        onClose={() => {
-          setSheetOpen(false);
-          returnHome();
-        }}
-        appointment={editing}
-      />
-
+      {/* Старого листа правки здесь больше нет (STORY-064, 2026-09-06): владелец
+          и диспетчер правят запись на странице /book; лист бригады остался. */}
       <CrewAppointmentSheet
         appointment={calendarLoading || calendarError ? null : crewViewing}
         onClose={() => {
@@ -2322,16 +2592,6 @@ export default function CalendarTab() {
         }}
       />
 
-      {/* «Перенести» из контекстного меню — дата + время одним шитом,
-          длительность сохраняется. */}
-      <RescheduleSheet
-        appointment={isCrew || calendarLoading || calendarError ? null : reschedulingApt}
-        appointments={visibleAppts}
-        workBandFor={workBandFor}
-        bufferMinutes={bufferMinutes}
-        timeZone={timezone ?? "Europe/Nicosia"}
-        onClose={() => setReschedulingApt(null)}
-      />
     </Screen>
   );
 }

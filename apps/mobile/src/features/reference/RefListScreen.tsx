@@ -45,7 +45,7 @@ export function RefListScreen<T extends { id: string }>({
   isLoading,
   error,
   onRetry,
-  fields,
+  fields = [],
   onCreate,
   onUpdate,
   onDelete,
@@ -61,8 +61,13 @@ export function RefListScreen<T extends { id: string }>({
   /** Ошибка загрузки списка — сбой сети не должен выглядеть как «пусто». */
   error?: unknown;
   onRetry?: () => void;
-  fields: RefField[];
-  onCreate: (values: Record<string, string>) => Promise<void>;
+  /** Необязательны вместе с `onCreate`: без создания форма не открывается. */
+  fields?: RefField[];
+  /** Необязателен: справочник, у которого создание живёт В ДРУГОМ месте,
+   *  показывает только список (команды, 2026-08-27 — календарь заводится в
+   *  настройках календаря). Без него не рисуются ни строка «Добавить», ни
+   *  кнопка в пустом состоянии. */
+  onCreate?: (values: Record<string, string>) => Promise<void>;
   onUpdate?: (id: string, values: Record<string, string>) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   itemToValues?: (item: T) => Record<string, string>;
@@ -70,7 +75,7 @@ export function RefListScreen<T extends { id: string }>({
   renderItem: (item: T) => ReactElement;
   emptyText: string;
   /** Подпись строки создания: «Добавить команду», «Добавить город»… */
-  addLabel: string;
+  addLabel?: string;
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -104,7 +109,7 @@ export function RefListScreen<T extends { id: string }>({
     setBusy(true);
     try {
       if (editing && onUpdate) await onUpdate(editing.id, values);
-      else await onCreate(values);
+      else await onCreate?.(values);
       close();
       setValues({});
     } catch (e) {
@@ -173,7 +178,7 @@ export function RefListScreen<T extends { id: string }>({
           }
           ItemSeparatorComponent={() => <Divider inset={16} />}
           ListFooterComponent={
-            items.length > 0 ? (
+            items.length > 0 && onCreate && addLabel ? (
               <>
                 <Divider inset={16} />
                 <AddRow label={addLabel} onPress={openCreate} />
@@ -184,7 +189,11 @@ export function RefListScreen<T extends { id: string }>({
             <EmptyState
               fill
               title={emptyText}
-              action={{ label: addLabel, onPress: openCreate }}
+              action={
+                onCreate && addLabel
+                  ? { label: addLabel, onPress: openCreate }
+                  : undefined
+              }
             />
           }
         />

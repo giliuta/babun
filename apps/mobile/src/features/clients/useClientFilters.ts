@@ -215,9 +215,17 @@ export function useClientFilters(
       if (!used.has(norm)) used.set(norm, city);
     }
     const options: FacetOption[] = [];
+    // ОДНО ИМЯ — ОДИН ВАРИАНТ. С 2026-08-29 метка принадлежит команде, и у
+    // каждой своя строка в справочнике: без схлопывания фильтр предлагал бы
+    // «Лимассол» столько раз, сколько в компании календарей. У КЛИЕНТА
+    // команды нет — его метка это просто имя, поэтому здесь имя и есть
+    // единица выбора.
+    const seenName = new Set<string>();
     for (const lib of cities) {
       const name = lib.name.trim();
       if (!name) continue;
+      if (seenName.has(name.toLowerCase())) continue;
+      seenName.add(name.toLowerCase());
       used.delete(name.toLowerCase());
       options.push({
         value: name,

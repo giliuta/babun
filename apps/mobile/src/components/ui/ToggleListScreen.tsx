@@ -4,10 +4,9 @@ import { Check } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { ReorderList } from "@/components/ui/ReorderList";
-import { RowCaption } from "@/components/ui/card-rows";
+import { GUTTER } from "@/components/ui/tokens";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -35,8 +34,6 @@ export interface ToggleListItem {
   /** Тап-переключатель игнорируется; подпись гаснет. Перетаскивание при этом
    *  остаётся: «последнюю карту нельзя выключить» — это не «нельзя двигать». */
   locked?: boolean;
-  /** Закреплён сверху: не двигается вовсе («Позвонить»). */
-  pinned?: boolean;
   /** Приписка, объясняющая замок: «всегда», «нужна хотя бы одна». */
   lockedNote?: string;
   onToggle: () => void;
@@ -65,6 +62,7 @@ function ToggleRow({ item }: { item: ToggleListItem }) {
         gap: 12,
         height: ROW_H,
         paddingLeft: 16,
+        paddingRight: 4,
         backgroundColor: pressed ? t.pressed : "transparent",
       })}
     >
@@ -104,8 +102,6 @@ export interface ToggleListSection {
   /** Капс-заголовок над карточкой. Одна секция — можно без него. */
   title?: string;
   items: ToggleListItem[];
-  /** Тихая подпись под карточкой. */
-  footer?: string;
   /** Новый порядок id. Не задан — секция не перетаскивается. */
   onReorder?: (ids: string[]) => void;
 }
@@ -119,51 +115,69 @@ function Section({
   onDraggingChange: (dragging: boolean) => void;
 }) {
   const { items, onReorder } = section;
-  // Ниже закреплённых пунктов: «Позвонить» всегда первый, и встать выше него
-  // нельзя ни одной строкой.
-  const minIndex = items.findIndex((item) => !item.pinned);
+  // ВЫКЛЮЧЕННОЕ ПАДАЕТ ВНИЗ САМО (владелец 2026-09-04: «то, что выключено,
+  // должно падать вниз — выключаю Viber, и он сразу падает вниз; смысл
+  // перетягивать это всё»). Порядок задают ради того, ЧТО предлагается: у
+  // выключенного места в этой очереди нет, и таскать его незачем — ручка ему
+  // не даётся вовсе (`rangeFor` в одну точку гасит её в примитиве).
+  // Сохранённый порядок при этом не переписывается: включат обратно — строка
+  // вернётся туда, где стояла.
+  const shown = [
+    ...items.filter((item) => item.checked),
+    ...items.filter((item) => !item.checked),
+  ];
+  const onCount = items.filter((item) => item.checked).length;
 
   return (
     <>
       {section.title ? <SectionEyebrow>{section.title}</SectionEyebrow> : null}
-      <SectionCard>
+      {/* КАЖДЫЙ ПУНКТ — СВОЯ КАРТОЧКА, А НЕ СТРОКА ОБЩЕГО ПОЛОТНА (владелец
+          2026-09-04 про «Карты для маршрута»: «должно быть такой же
+          архитектуры, как услуга или метка; разделитель должен быть не
+          волосина, а нормальный разделитель, как и везде»). Тот же счёт он
+          предъявил услугам 29 августа и меткам 30-го — теперь правило дошло и
+          до страниц-наборов, последнего места со швами внутри карточки.
+          Дело не только во вкусе: волосяной шов рвётся под пальцем. У строки,
+          которую тянут, фон уезжает, у соседней остаётся — и линия повисает
+          между ними ничьей. `spaced`-строка сама себе поверхность, и разделять
+          их нечем: они и так раздельные. */}
+      <View style={{ marginHorizontal: GUTTER, marginTop: 8 }}>
         <ReorderList
-          items={items}
+          items={shown}
           rowHeight={ROW_H}
+          spaced
           labelFor={(item) => item.label}
           rangeFor={(index) =>
-            onReorder && !items[index].pinned
-              ? [minIndex, items.length - 1]
-              : [index, index]
+            onReorder && index < onCount ? [0, onCount - 1] : [index, index]
           }
           onReorder={(ids) => onReorder?.(ids)}
           onDraggingChange={onDraggingChange}
         >
           {(item) => <ToggleRow item={item} />}
         </ReorderList>
-      </SectionCard>
-      {section.footer ? <RowCaption text={section.footer} /> : null}
+      </View>
     </>
   );
 }
 
+// БЕЗ ПОЯСНИТЕЛЬНЫХ ПОДПИСЕЙ (владелец 2026-09-04: «эти подсказки просто
+// ненужные»). Страница-набор носила подзаголовок под именем, подпись под
+// каждой карточкой и приписку «тяните строку за ручку справа» — три текста на
+// семь строк списка. Галка, ручка и порядок объясняют себя сами первым же
+// касанием, а прочитанная один раз подсказка потом просто занимает экран.
 export function ToggleListScreen({
   title,
-  hint,
   sections,
 }: {
   title: string;
-  /** Подпись под заголовком: зачем этот набор. */
-  hint?: string;
   sections: ToggleListSection[];
 }) {
   // Пока строку тянут, список не должен уезжать под пальцем.
   const [dragging, setDragging] = useState(false);
-  const anyDraggable = sections.some((s) => !!s.onReorder);
 
   return (
     <Screen>
-      <ScreenHeader title={title} subtitle={hint} />
+      <ScreenHeader title={title} />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 32 }}
@@ -176,9 +190,6 @@ export function ToggleListScreen({
             onDraggingChange={setDragging}
           />
         ))}
-        {anyDraggable ? (
-          <RowCaption text="Порядок задаёте вы: тяните строку за ручку справа." />
-        ) : null}
       </ScrollView>
     </Screen>
   );

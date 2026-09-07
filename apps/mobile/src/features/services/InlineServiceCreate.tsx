@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { useCreateService } from "@/features/services/queries";
+import { useMoney } from "@/features/settings/currency";
 import { notify } from "@/lib/notify";
 
 // ПУСТОЙ КАТАЛОГ — НЕ ТУПИК. Первая запись у новой компании и любая команда с
@@ -27,6 +28,7 @@ export function InlineServiceCreate({
   teamId: string | null;
   onCreated: (id: string) => void;
 }) {
+  const { symbol } = useMoney();
   const create = useCreateService();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -55,7 +57,7 @@ export function InlineServiceCreate({
         autoFocus
       />
       <Field
-        label="Цена €"
+        label={`Цена ${symbol}`}
         value={price}
         onChangeText={setPrice}
         keyboardType="decimal-pad"

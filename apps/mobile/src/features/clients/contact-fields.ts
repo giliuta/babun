@@ -7,7 +7,6 @@ import {
   whatsappUrl,
 } from "@babun/shared/common/utils/messenger-links";
 import { MOBILE_CHANNEL_COLORS } from "@/theme/readable-color";
-import { createEnabledPrefs } from "@/lib/enabled-prefs";
 
 // СПОСОБЫ СВЯЗИ КЛИЕНТА, КОТОРЫЕ НЕ ЯВЛЯЮТСЯ НОМЕРОМ — Telegram, Instagram,
 // WhatsApp на другом номере, почта.
@@ -121,17 +120,7 @@ export const CONTACT_FIELDS: ContactFieldDef[] = [
 // весь Кипр в WhatsApp, тому Instagram в листе — лишняя строка на каждом
 // клиенте. Уже заполненное у клиента поле показывается на карточке всегда,
 // даже если способ выключен: спрятать введённые данные хуже, чем показать.
-const prefs = createEnabledPrefs<ContactFieldId>({
-  storageKey: "babun-contact-fields",
-  queryKey: "contact-fields",
-  all: CONTACT_FIELDS.map((f) => f.id),
-  defaults: CONTACT_FIELDS.map((f) => f.id),
-});
 
-export const useEnabledContactFields = prefs.use;
-export const useContactFieldsOrder = prefs.useOrder;
-export const useToggleContactField = prefs.useToggle;
-export const useReorderContactFields = prefs.useReorder;
 
 /** Определение поля по id — списки ходят по ПОРЯДКУ ПОЛЬЗОВАТЕЛЯ. */
 export function contactFieldDef(id: ContactFieldId): ContactFieldDef | undefined {

@@ -33,6 +33,32 @@ function service(patch: Partial<PricedService> = {}): PricedService {
 }
 
 describe("ступень по количеству", () => {
+  // ПРИМЕР ВЛАДЕЛЬЦА 2026-08-27, СЛОВО В СЛОВО. Он описал правило своими
+  // числами и спросил, так ли оно работает. Так — и вот проверка, чтобы
+  // ответ не остался на слово.
+  //
+  //   строки прайса: 1 → €50, 3 → €45, 10 → €40
+  //   пробили 2  → считается по строке 1  (€50), «от 1 до 3»
+  //   пробили 5  → по строке 3            (€45), «от 3 до 10»
+  //   пробили 8  → по строке 3            (€45)
+  //   пробили 12 → по строке 10           (€40), «от 10 и выше»
+  test("ступень выбирается по последнему порогу, не превышающему количество", () => {
+    const tiers = [
+      { fromQty: 1, price: 50, durationMin: 60 },
+      { fromQty: 3, price: 45, durationMin: 60 },
+      { fromQty: 10, price: 40, durationMin: 60 },
+    ];
+    assert.equal(resolveTier(tiers, 1)?.price, 50);
+    assert.equal(resolveTier(tiers, 2)?.price, 50);
+    assert.equal(resolveTier(tiers, 3)?.price, 45);
+    assert.equal(resolveTier(tiers, 5)?.price, 45);
+    assert.equal(resolveTier(tiers, 8)?.price, 45);
+    assert.equal(resolveTier(tiers, 9)?.price, 45);
+    assert.equal(resolveTier(tiers, 10)?.price, 40);
+    assert.equal(resolveTier(tiers, 12)?.price, 40);
+    assert.equal(resolveTier(tiers, 1000)?.price, 40);
+  });
+
   test("ниже первого порога действует первая ступень — прайс не отказывает", () => {
     assert.equal(resolveTier(service().tiers, 0.5)?.fromQty, 1);
   });

@@ -137,6 +137,87 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
           </View>
         ) : null}
 
+        {/* ПОДТВЕРЖДЕНИЕ — ДВЕ КНОПКИ В РЯД, А НЕ МЕНЮ ИЗ ОДНОГО ПУНКТА
+            (владелец 2026-08-31: «когда я закрываю запись… надо это нормально
+            оформить, две кнопки — отмена или закрыть, сделай красиво в нашем
+            стиле, по нашей архитектуре»).
+
+            ГРАНИЦА ПО СМЫСЛУ, А НЕ ПО ВКУСУ: один пункт плюс «Отмена» — это
+            ВОПРОС с двумя ответами, а не список, из которого выбирают. Список
+            остаётся столбиком: у трёх пунктов ряд не строится, а «Отмена» под
+            ними — правильная иерархия. У вопроса же столбик врал: ответы
+            равноправны, а стояли лесенкой, где нижний выглядит главнее.
+
+            ГЕОМЕТРИЯ ИЗ КАНОНА (§5, «у кнопки есть залитый семантический
+            вид»): те же 52pt и тот же радиус, что у главной CTA, меняется
+            только заливка — красная у разрушительного ответа, кобальтовая у
+            обычного. Цвет продолжает значить разрушение, а не украшать.
+
+            «ОТМЕНА» СЛЕВА. Безопасный ответ там, где палец идёт первым, и там
+            же, где его ждёт iOS: слева — уйти, справа — сделать. */}
+        {request && request.choices.length === 1 ? (
+          <View
+            style={{
+              flexDirection: "row",
+              gap: 10,
+              paddingHorizontal: 12,
+              paddingTop: 4,
+              paddingBottom: Math.max(insets.bottom, 12),
+            }}
+          >
+            <Pressable
+              onPress={() => answer(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Отмена"
+              style={({ pressed }) => ({
+                flex: 1,
+                minHeight: 52,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: t.radius.cta,
+                borderCurve: "continuous",
+                backgroundColor: pressed ? t.rowFillPressed : t.fill,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 17, fontWeight: "600", color: t.ink }}
+              >
+                Отмена
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                answer(0);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={request.choices[0].label}
+              style={({ pressed }) => ({
+                flex: 1,
+                minHeight: 52,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: t.radius.cta,
+                borderCurve: "continuous",
+                backgroundColor: request.choices[0].destructive
+                  ? t.danger
+                  : t.accent,
+                opacity: pressed ? 0.85 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+                style={{ fontSize: 17, fontWeight: "700", color: t.onAccent }}
+              >
+                {request.choices[0].label}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
         <ScrollView
           style={{ flexShrink: 1 }}
           contentContainerStyle={{ paddingHorizontal: 12 }}
@@ -208,6 +289,8 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
             </Text>
           </Pressable>
         </View>
+          </>
+        )}
       </BottomSheet>
     </>
   );

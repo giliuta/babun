@@ -19,6 +19,13 @@ module.exports = ({ config }) => ({
       "expo-notifications",
       { mode: IS_DEV ? "development" : "production" },
     ],
+    // Сканер документов (STORY-070, этап 2): VisionKit на iOS. Плагин пишет
+    // только текст разрешения камеры; сам модуль нативный — dev-клиент
+    // пересобирается, а в JS он подключён через проверку наличия.
+    [
+      "react-native-document-scanner-plugin",
+      { cameraPermission: "Babun использует камеру для фото объектов и сканирования документов" },
+    ],
   ],
   ios: {
     ...config.ios,

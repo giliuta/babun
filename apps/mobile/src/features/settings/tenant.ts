@@ -1,3 +1,4 @@
+import { setDefaultCurrency } from "@babun/shared/common/utils/money";
 import {
   useMutation,
   useQuery,
@@ -190,14 +191,20 @@ export function useTenant() {
       );
       if (error) {
         if (isMissingSafeTenantRpc(error)) {
-          return readTenantProfileFallback(
+          const fallback = await readTenantProfileFallback(
             tenantId as string,
             role as UserRole,
           );
+          setDefaultCurrency(fallback?.currency);
+          return fallback;
         }
         throw new Error(error.message);
       }
-      return parseTenantProfile(data);
+      const profile = parseTenantProfile(data);
+      // Валюта тенанта — в реестр форматтеров: все суммы продукта печатаются
+      // ею, а не евро (см. money.ts).
+      setDefaultCurrency(profile?.currency);
+      return profile;
     },
   });
 }

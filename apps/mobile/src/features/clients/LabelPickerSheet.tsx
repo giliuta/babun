@@ -2,6 +2,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { haptics } from "@/lib/haptics";
+import { useMemo } from "react";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useCities } from "@/features/reference/queries";
 import { useThemeColors } from "@/theme/colors";
@@ -29,7 +30,19 @@ export function LabelPickerSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const { data: cities = [] } = useCities();
+  const { data: all = [] } = useCities();
+  // ОДНО ИМЯ — ОДНА СТРОКА. Метка принадлежит команде (2026-08-29), и у
+  // каждой своя запись; у КЛИЕНТА команды нет, его метка — просто имя.
+  // Без схлопывания список показывал бы «Лимассол» по разу на календарь.
+  const cities = useMemo(() => {
+    const seen = new Set<string>();
+    return all.filter((c) => {
+      const key = c.name.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [all]);
   const value = current.trim();
   const inLibrary = cities.some((c) => c.name === value);
 

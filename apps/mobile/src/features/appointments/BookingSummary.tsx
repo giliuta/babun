@@ -1,22 +1,18 @@
 import {
   Pressable,
   Text as NativeText,
-  TextInput as NativeTextInput,
   View,
-  type TextInputProps,
   type TextProps,
 } from "react-native";
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-} from "lucide-react-native";
+import { AlertTriangle, ChevronRight, MapPin, Users } from "lucide-react-native";
+import type { LucideIcon } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
+import { formatEURExact } from "@babun/shared/common/utils/money";
 import { durationLabel } from "@/features/services/format";
+import { Card } from "@/components/ui/Card";
 
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
@@ -24,131 +20,47 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   );
 }
 
-function TextInput({
-  maxFontSizeMultiplier = 1.3,
-  ...props
-}: TextInputProps) {
-  return (
-    <NativeTextInput
-      maxFontSizeMultiplier={maxFontSizeMultiplier}
-      {...props}
-    />
-  );
-}
+// СТЕППЕР СО СТРЕЛКАМИ СНЕСЁН 2026-09-04. Количество услуги набирают ТАПАМИ
+// по строке в списке услуг, а сама запись печатает его оттиском «×3»
+// (`QtyBadge`): владелец, сравнив четыре варианта на экране рядом, выбрал
+// этот — «стрелочки вверх-вниз можно сделать красивее и статичнее».
 
-export function Stepper({
-  qty,
-  unit,
-  onDec,
-  onInc,
+// ИТОГ — СТРОКА-ДВЕРЬ В ЛИСТ ДЕНЕГ (владелец 2026-09-04: «когда я открываю
+// „Итого“, открывается снизу вверх шторка, где прописаны каждая услуга,
+// количество их, и там уже можно редактировать… там же можно делать скидки»).
+//
+// Раньше это было поле прямо в строке: сумму правили между списком услуг и
+// предоплатой, а из чего она сложилась — видно не было, и скидку поставить
+// было нечем. Поле переехало в лист вместе с услугами и скидкой; здесь
+// осталась строка того же диалекта, что клиент, объект и время.
+export function TotalRow({
+  total,
+  custom,
+  discountAmount,
+  discountReason,
+  onPress,
 }: {
-  qty: number;
-  /** Единица услуги: «4 м» вместо голой четвёрки. `null` — просто число.
-   *  Ради этого единицу и вернули: бригадир, набивая количество, обязан
-   *  видеть, метры это или блоки. */
-  unit?: string | null;
-  onDec: () => void;
-  onInc: () => void;
+  total: number;
+  /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
+  custom: boolean;
+  discountAmount: number;
+  discountReason: string | null;
+  onPress: () => void;
 }) {
   const t = useThemeColors();
-  const btn = (
-    direction: "down" | "up",
-    onPress: () => void,
-  ) => (
+  const note =
+    discountAmount > 0
+      ? `Скидка${discountReason ? ` · ${discountReason}` : ""} −${formatEURExact(discountAmount)}`
+      : custom
+        ? "Сумма вписана рукой"
+        : null;
+  return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={
-        direction === "up" ? "Увеличить количество" : "Уменьшить количество"
-      }
-      style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}
-    >
-      {direction === "up" ? (
-        <ChevronUp color={t.accent} size={18} />
-      ) : (
-        <ChevronDown color={t.accent} size={18} />
-      )}
-    </Pressable>
-  );
-  return (
-    <View
-      className="mr-3 flex-row items-center rounded-[10px]"
-      style={{ backgroundColor: t.fill }}
-      accessibilityLabel={`Количество: ${qty}${unit ? ` ${unit}` : ""}`}
-    >
-      {btn("down", onDec)}
-      <Text
-        numberOfLines={1}
-        style={{
-          minWidth: 24,
-          paddingHorizontal: 2,
-          textAlign: "center",
-          fontSize: 14,
-          fontWeight: "600",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {unit ? `${qty} ${unit}` : qty}
-      </Text>
-      {btn("up", onInc)}
-    </View>
-  );
-}
-
-export function MoneyRow({
-  label,
-  value,
-  color,
-  strong,
-  top,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  strong?: boolean;
-  top?: boolean;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      className="flex-row items-center px-4 py-3"
-      style={top ? { borderTopWidth: 1, borderTopColor: t.separator } : undefined}
-    >
-      <Text style={{ fontSize: 14, color: strong ? t.ink : t.sub, fontWeight: strong ? "600" : "400", flex: 1 }}>
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: strong ? "700" : "400",
-          color: color ?? t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-export function TotalEditor({
-  value,
-  custom,
-  onChange,
-  onReset,
-  accessoryId,
-}: {
-  value: string;
-  custom: boolean;
-  onChange: (value: string) => void;
-  onReset: () => void;
-  accessoryId?: string;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
+      accessibilityLabel={`Итого ${formatEURExact(total)}${note ? `, ${note}` : ""}`}
+      accessibilityHint="Открывает услуги, количество и скидку"
+      style={({ pressed }) => ({
         minHeight: 56,
         flexDirection: "row",
         alignItems: "center",
@@ -156,143 +68,307 @@ export function TotalEditor({
         paddingHorizontal: 16,
         borderTopWidth: 1,
         borderTopColor: t.separator,
-      }}
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
     >
-      <Text style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}>
-        Итого
-      </Text>
-      {custom ? (
-        <Pressable
-          onPress={onReset}
-          accessibilityRole="button"
-          accessibilityLabel="Вернуть сумму по услугам"
-          style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 6 }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-            По услугам
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>Итого</Text>
+        {note ? (
+          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
+            {note}
           </Text>
-        </Pressable>
-      ) : null}
-      <TextInput
-        keyboardAppearance="light"
-        value={value}
-        onChangeText={onChange}
-        selectTextOnFocus
-        keyboardType="decimal-pad"
-        inputAccessoryViewID={accessoryId}
-        placeholder="0"
-        placeholderTextColor={t.placeholder}
-        accessibilityLabel="Итоговая сумма записи"
+        ) : null}
+      </View>
+      <Text
         style={{
-          minWidth: 58,
-          minHeight: 44,
-          paddingVertical: 8,
-          textAlign: "right",
           fontSize: 17,
           fontWeight: "700",
           color: t.ink,
           fontVariant: ["tabular-nums"],
         }}
-      />
-      <Text style={{ fontSize: 17, fontWeight: "600", color: t.sub }}>€</Text>
-    </View>
+      >
+        {formatEURExact(total)}
+      </Text>
+      <ChevronRight color={t.chevron} size={ICON.sm} />
+    </Pressable>
   );
 }
 
-// «Докет» — одна спокойная строка «Команда · Когда», заменившая отдельную
-// пилюлю команды и карточку «Когда» с мини-таймлайном. Слева команда (тап →
-// выбор команды/мастера), справа дата·время (тап → колесо). Тонкий цветной
-// корешок слева несёт identity записи; под строкой — ОДНА янтарная строка,
-// когда есть предупреждение (пересечение ИЛИ вне графика/перерыв/буфер).
-export function DocketRow({
+// КАРТОЧКИ ШАПКИ БЕЛЫЕ, КАК ВСЕ БЛОКИ ФОРМЫ (владелец 2026-09-06: «эти блоки
+// не должны окрашиваться, они должны быть такие же белые, как клиент и объект
+// — это тоже блок; почему они окрашиваются, а другие нет»). День назад те же
+// три карточки заливались цветом записи (владелец 2026-09-05: «хочу, чтоб блок
+// подсвечивался этим цветом») — подсветка осталась у подложки, шапки, halo и
+// кружка «Цвет», а карточки вернулись в один ряд с остальными: один предмет —
+// одна поверхность, `Card`.
+
+// ДВА БЛОКА ВМЕСТО ОДНОГО (владелец 2026-09-04: «мы можем по сути совместить
+// команду и метку в одно, а время поставить блоком ниже — так будет лучше»).
+//
+// Верхний блок отвечает на «КТО и ГДЕ»: команда с мастером и метка этого
+// выезда — две зоны тапа в одной карточке, разделённые волоском. Нижний — на
+// «КОГДА»: дата, начало и длительность во всю ширину, и под ним единственная
+// янтарная строка предупреждения (пересечение, вне графика, буфер).
+//
+// Раньше это была одна строка «команда · когда», а метка стояла третьей
+// карточкой ниже — три разных предмета в трёх местах. Теперь порядок читается
+// сверху вниз: кто едет и куда, когда, к кому, на какой объект.
+
+
+export function TeamLabelRow({
   teamName,
   teamColor,
   masterName,
-  date,
-  timeStart,
-  duration,
-  allDay,
-  warning,
-  accent,
+  label,
+  labelColor,
+  labelFromDay,
+  showLabel,
+  labelIcon,
+  labelPlaceholder,
   onEditTeam,
-  onEditTime,
+  onEditLabel,
 }: {
   teamName: string;
   teamColor: string;
   masterName?: string | null;
+  /** Метка этого выезда: своя либо унаследованная у дня. */
+  label: string | null;
+  labelColor?: string | null;
+  /** Метка не своя, а взята у дня — читается тише, чтобы отличать. */
+  labelFromDay?: boolean;
+  /** Бизнес не пользуется метками — тогда команда занимает всю строку. */
+  showLabel: boolean;
+  /** У события в этой плитке стоит ТИП (значок и слово другие). */
+  labelIcon?: LucideIcon;
+  labelPlaceholder?: string;
+  onEditTeam: () => void;
+  onEditLabel: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    // ДВА ПОЛНОЦЕННЫХ БЛОКА, А НЕ ОДИН СО ШВОМ (владелец 2026-09-04:
+    // «раздели не волосиной между командой и меткой, а раздели полноценные
+    // блоки»). Волосок делил карточку на две половинки одного предмета, а
+    // команда и метка — предметы разные: кто едет и куда. Рядом они стоят
+    // потому, что отвечают на один вопрос и вместе занимают одну строку
+    // экрана.
+    <View className="mx-4 mt-2" style={{ flexDirection: "row", gap: 8 }}>
+      <IdentityCard
+        icon={Users}
+        color={teamColor}
+        title={teamName}
+        sub={masterName ?? undefined}
+        onPress={onEditTeam}
+        accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
+        accessibilityHint="Открывает выбор команды и мастера"
+      />
+      {showLabel ? (
+      <IdentityCard
+        icon={labelIcon ?? MapPin}
+        color={label ? (labelColor ?? t.accent) : t.faint}
+        title={label ?? labelPlaceholder ?? "Метка"}
+        muted={!label}
+        quiet={!!label && !!labelFromDay}
+        onPress={onEditLabel}
+        accessibilityLabel={
+          label
+            ? `${labelPlaceholder ?? "Метка"}: ${label}${labelFromDay ? ", как у дня" : ""}`
+            : `${labelPlaceholder ?? "Метка"} не выбран${labelPlaceholder ? "" : "а"}`
+        }
+        accessibilityHint={`Открывает выбор: ${(labelPlaceholder ?? "метка").toLowerCase()}`}
+      />
+      ) : null}
+    </View>
+  );
+}
+
+/** Блок «кто» или «куда»: кружок со значком в цвете сущности и значение рядом.
+ *
+ *  ЦВЕТ ПЕРЕЕХАЛ ИЗ КОРЕШКА В КРУЖОК (владелец 2026-09-04: «вроде неплохо, но
+ *  что-то оно как-то отпугивает»). Отпугивала именно полоска: яркая вертикаль,
+ *  прижатая к левому краю маленькой карточки, читается как маркер тревоги —
+ *  такими в списках метят «ошибка» и «непрочитанное», — и была самым громким
+ *  пятном страницы. Тот же цвет в кружке под значком звучит спокойно и говорит
+ *  ровно то же; тем же приёмом набраны строки в листе метки, который владелец
+ *  уже одобрил.
+ *
+ *  Шеврона нет (владелец 2026-09-04: «убери справа эти стрелочки») — вся
+ *  карточка и есть кнопка. */
+function IdentityCard({
+  icon: Icon,
+  color,
+  title,
+  sub,
+  muted,
+  quiet,
+  onPress,
+  accessibilityLabel,
+  accessibilityHint,
+}: {
+  icon: LucideIcon;
+  color: string;
+  title: string;
+  sub?: string;
+  /** Значения ещё нет — «Метка» вместо имени метки. */
+  muted?: boolean;
+  /** Значение не своё, а взятое у дня: тише, но на том же месте. */
+  quiet?: boolean;
+  onPress: () => void;
+  accessibilityLabel: string;
+  accessibilityHint: string;
+}) {
+  const t = useThemeColors();
+  return (
+    <Card style={{ flex: 1 }}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        paddingVertical: 9,
+        paddingHorizontal: 10,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+    >
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: `${color}1f`,
+        }}
+      >
+        <Icon color={color} size={15} strokeWidth={2.2} />
+      </View>
+      <View style={{ flexShrink: 1 }}>
+        <Text
+          numberOfLines={1}
+          style={{
+            fontSize: 15,
+            fontWeight: "600",
+            color: muted ? t.placeholder : quiet ? t.body : t.ink,
+          }}
+        >
+          {title}
+        </Text>
+        {sub ? (
+          <Text numberOfLines={1} style={{ fontSize: 12, color: t.sub, marginTop: 1 }}>
+            {sub}
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+    </Card>
+  );
+}
+
+export function WhenRow({
+  date,
+  timeStart,
+  timeEnd,
+  duration,
+  allDay,
+  warning,
+  onPress,
+}: {
   date: string;
   timeStart: string;
+  timeEnd: string;
   duration: number;
   allDay?: boolean;
   warning?: string | null;
-  accent: string;
-  onEditTeam: () => void;
-  onEditTime: () => void;
+  onPress: () => void;
 }) {
   const t = useThemeColors();
   return (
     <View className="mx-4 mt-2">
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "stretch",
-          backgroundColor: t.surface,
-          borderRadius: t.radius.card,
-          boxShadow: t.cardShadow,
-          overflow: "hidden",
-        }}
-      >
-        {/* цветной корешок = identity записи (цвет команды / выбранный цвет) */}
-        <View style={{ width: 3, backgroundColor: accent }} />
-
-        {/* команда — тап открывает выбор команды и мастера */}
+      <Card style={{ flexDirection: "row", alignItems: "stretch" }}>
+        {/* У ВРЕМЕНИ НЕТ СВОЕГО ЦВЕТА (владелец 2026-09-04: «убери синенькую плашку
+            с времени, она там не нужна — у времени нет цвета»). Цветной
+            корешок называет ЧЕЙ выезд; час дня ничей, и полоска рядом с ним
+            только притворялась значащей. */}
         <Pressable
-          onPress={onEditTeam}
-          className="flex-row items-center gap-2 py-3 pl-3.5 pr-2"
+          onPress={onPress}
           style={({ pressed }) => ({
             flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            paddingVertical: 10,
+            paddingHorizontal: 12,
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Команда: ${teamName}${masterName ? `, мастер ${masterName}` : ""}`}
-          accessibilityHint="Открывает выбор команды и мастера"
-        >
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: teamColor }} />
-          <View style={{ flexShrink: 1 }}>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }} numberOfLines={1}>
-              {teamName}
-            </Text>
-            {masterName ? (
-              <Text style={{ fontSize: 13, color: t.sub, marginTop: 1 }} numberOfLines={1}>
-                {masterName}
-              </Text>
-            ) : null}
-          </View>
-          {/* шеврон = «тап, чтобы сменить команду/мастера» */}
-          <ChevronRight color={t.chevron} size={ICON.xs} />
-        </Pressable>
-
-        {/* волосяной разделитель — две независимые зоны тапа в одной строке */}
-        <View style={{ width: 1, marginVertical: 10, backgroundColor: t.separator }} />
-
-        {/* когда — тап открывает колесо даты/времени */}
-        <Pressable
-          onPress={onEditTime}
-          className="flex-row items-center py-3 pl-2 pr-3"
-          style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
-          accessibilityRole="button"
-          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `${timeStart}, ${durationLabel(duration)}`}`}
+          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `с ${timeStart} до ${timeEnd}, ${durationLabel(duration)}`}`}
           accessibilityHint="Открывает выбор даты и времени"
         >
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ fontSize: 12, color: t.sub }}>{humanDay(date)}</Text>
-            <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink, marginTop: 1 }}>
-              {allDay ? "весь день" : `${timeStart} · ${durationLabel(duration)}`}
+          {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
+              «первое — суббота 19 сентября, потом время, потом длительность;
+              не сверху мелким шрифтом, а красиво всё в строчку, чтоб это
+              нормально анализировалось»). Дата стояла надстрочной подписью
+              12-м кеглем — читалась как служебная пометка, хотя это первое,
+              что спрашивают о записи. Теперь три величины идут слева направо
+              в порядке вопроса «когда»: какой день, во сколько, насколько.
+              Время держит вес: его ищут глазами. */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Text
+              numberOfLines={1}
+              style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
+            >
+              {humanDay(date)}
             </Text>
+            <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
+            {allDay ? (
+              <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+                весь день
+              </Text>
+            ) : (
+              <>
+                {/* НАЧАЛО И КОНЕЦ, ПОТОМ ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
+                    «поставим начало и конец — 11:00 – 11:30, — а ещё
+                    длительность; так будет ещё круче»). Одно число отвечало
+                    только на «во сколько приезжать»; пара отвечает и на «когда
+                    освободимся», а длительность остаётся третьей величиной —
+                    её считают услуги. */}
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: "700",
+                    color: t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                >
+                  {`${timeStart} – ${timeEnd}`}
+                </Text>
+                {/* ДЛИТЕЛЬНОСТЬ — ТИХОЙ ПИЛЮЛЕЙ: третья величина в строке
+                    спорила с первыми двумя одинаковым весом, а она СЛЕДСТВИЕ
+                    начала и конца. Серая подложка отделяет её от времени лучше
+                    точки и делает строку ритмичной, а не сплошной. */}
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: t.radius.pill,
+                    backgroundColor: t.fill,
+                  }}
+                >
+                  <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    {durationLabel(duration)}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
-          <ChevronRight color={t.chevron} size={ICON.sm} style={{ marginLeft: 2 }} />
         </Pressable>
-      </View>
+      </Card>
 
       {warning ? (
         <View

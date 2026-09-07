@@ -117,7 +117,7 @@ async function listAttachments(args: {
   return (data ?? []) as ClientAttachment[];
 }
 
-async function uploadAttachment(args: {
+export async function uploadAttachment(args: {
   tenantId: string;
   clientId: string;
   file: PickedFile;

@@ -34,12 +34,19 @@ export function resolveBookingClientPrefill(
   client: BookingClientRef,
   requestedLocationId?: string | null,
 ): BookingClientPrefill {
+  // ОБЪЕКТ НЕ ПОДТЯГИВАЕТСЯ ЗА КЛИЕНТОМ (владелец 2026-09-05: «сделай это не
+  // автоматически — нужно тапнуть, чтоб добавить объект; если автоматически,
+  // можно запутаться: оно показывает, что вроде объект есть»).
+  //
+  // Форма подставляла основной объект клиента молча, и запись выглядела
+  // заполненной раньше, чем человек её заполнил: у клиента три виллы, а в
+  // записи стояла первая — и бригада уезжала на неё же. Своё право
+  // подставить остаётся только у ЯВНОГО адреса: тап «Записать» из строки
+  // конкретного объекта (`locationId` в ссылке) — там человек уже сказал,
+  // куда едут.
   const locations = client.locations ?? [];
   const location =
-    locations.find((item) => item.id === requestedLocationId) ??
-    locations.find((item) => item.isPrimary) ??
-    locations[0] ??
-    null;
+    locations.find((item) => item.id === requestedLocationId) ?? null;
 
   return {
     clientId: client.id,

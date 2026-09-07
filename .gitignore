@@ -47,3 +47,7 @@ bumpix-*.png
 # hooks. Auto-approvals are a local trust decision — they must never be
 # shared through the repo.
 .claude/settings.local.json
+
+# Рабочие скриншоты агентов-дизайнеров: черновики сравнения, не результат.
+# Результат живёт в docs/ и в коде, а не картинками в служебной папке.
+.claude/design-reviews/

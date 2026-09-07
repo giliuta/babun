@@ -7,7 +7,6 @@ import {
   Send,
   type LucideIcon,
 } from "lucide-react-native";
-import { createEnabledPrefs } from "@/lib/enabled-prefs";
 import type { Client } from "@babun/shared/local/clients";
 import {
   smsUrl,
@@ -56,7 +55,7 @@ export interface ChannelDef {
 }
 
 /** Набор по умолчанию; фактический порядок задаёт пользователь. */
-const CONTACT_CHANNELS: ChannelDef[] = [
+export const CONTACT_CHANNELS: ChannelDef[] = [
   {
     id: "call",
     label: "Позвонить",
@@ -118,23 +117,10 @@ export function channelDef(id: ChannelId): ChannelDef | undefined {
   return CONTACT_CHANNELS.find((c) => c.id === id);
 }
 
-const prefs = createEnabledPrefs<ChannelId>({
-  storageKey: "babun-contact-channels",
-  queryKey: "contact-channels",
-  all: CONTACT_CHANNELS.map((c) => c.id),
-  defaults: ["call", "whatsapp", "telegram", "sms", "chat"],
-  // «Позвонить» всегда включён и всегда первый: без него кнопка связи
-  // теряет смысл, и переставлять его некуда (владелец 2026-08-02).
-  pinned: ["call"],
-});
-
-/** Включённые каналы В ПОРЯДКЕ ПОКАЗА — тумблер и перетаскивание в
- *  настройках сразу меняют лист у номера. */
-export const useEnabledChannels = prefs.use;
-/** Полный порядок (включая выключенное) — для страницы настройки. */
-export const useChannelsOrder = prefs.useOrder;
-export const useToggleChannel = prefs.useToggle;
-export const useReorderChannels = prefs.useReorder;
+// НАСТРОЙКА ЖИВЁТ НЕ ЗДЕСЬ. Каналы у номера и поля карточки слились в один
+// набор «Способы связи» (`contact-ways`): человек думает «мы работаем в
+// WhatsApp», а не «канал включён, а поле выключено». Здесь остались только
+// определения каналов и правила, КУДА они ведут.
 
 export interface ResolvedChannel extends ChannelDef {
   /** Куда вести. Для внутреннего чата — маршрут приложения. */

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQuery,
@@ -115,7 +116,6 @@ export function useCreateTeam() {
   return useMutation({
     mutationFn: async (input: {
       name: string;
-      region?: string;
       color?: string;
     }) => {
       if (role !== "owner") {
@@ -127,7 +127,6 @@ export function useCreateTeam() {
           id: generateId("team"),
           tenant_id: tenantId as string,
           name: input.name,
-          region: input.region || null,
           color: input.color || null,
           // Календарные колонки НЕ засеваются: null = «как везде». Раньше
           // здесь прописывались окно 00:00–23:00, скролл 10:00 и строка
@@ -252,13 +251,20 @@ export function useCreateMaster() {
 // `includeInactive` — экран «Города» показывает и выключенные (тумблер
 // активности + реактивация); пикеры/метки зовут без опции и видят
 // только активные (паттерн useTeams).
-export function useCities(opts?: { includeInactive?: boolean }) {
+// МЕТКИ ЧИТАЮТСЯ ПО КОМАНДЕ (владелец 2026-08-29: «метка закрепляется за
+// командой — то же самое, как график, как услуга; нельзя поставить метку в
+// другую команду»). Без `teamId` вернётся весь справочник тенанта: так
+// читают экраны, которым нужно назвать метку прошлого дня, а не предложить
+// её к выбору.
+export function useCities(opts?: {
+  includeInactive?: boolean;
+  teamId?: string | null;
+}) {
   const tenantId = useTenantId();
   const includeInactive = !!opts?.includeInactive;
+  const teamId = opts?.teamId ?? null;
   return useQuery({
-    queryKey: includeInactive
-      ? ["cities", tenantId, "all"]
-      : ["cities", tenantId],
+    queryKey: ["cities", tenantId, includeInactive ? "all" : "live", teamId],
     enabled: !!tenantId,
     queryFn: async () => {
       let q = supabase
@@ -266,6 +272,10 @@ export function useCities(opts?: { includeInactive?: boolean }) {
         .select("*")
         .eq("tenant_id", tenantId as string);
       if (!includeInactive) q = q.eq("is_active", true);
+      // Метка принадлежит команде: без её id вернётся весь справочник
+      // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
+      // дня, а не предложить её к выбору.
+      if (teamId) q = q.eq("team_id", teamId);
       const { data, error } = await q.order("position");
       if (error) throw new Error(error.message);
       return data;
@@ -280,9 +290,19 @@ export function useCreateCity() {
   return useMutation({
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
     // per-city accent colour that tints the calendar day chip (web parity).
-    mutationFn: async (input: { name: string; country?: string; color?: string }) => {
+    mutationFn: async (input: {
+      name: string;
+      country?: string;
+      color?: string;
+      /** Дни недели (1=Пн…7=Вс), когда метка встаёт сама. Пусто — вручную. */
+      weekdays?: number[];
+      /** Команда-владелец. Метка без команды больше не существует. */
+      teamId: string;
+      /** Заливать ли колонку дня цветом метки. По умолчанию да. */
+      tintDay?: boolean;
+    }) => {
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Добавлять города может владелец или диспетчер.");
+        throw new Error("Добавлять метки может владелец или диспетчер.");
       }
       const { data, error } = await supabase
         .from("cities")
@@ -292,6 +312,9 @@ export function useCreateCity() {
           name: input.name,
           country: input.country || "",
           color: input.color || null,
+          weekdays: input.weekdays ?? [],
+          tint_day: input.tintDay ?? true,
+          team_id: input.teamId,
         })
         .select("*")
         .single();
@@ -316,7 +339,7 @@ function assertCanWriteReference(
 ): void {
   if (table === "cities") {
     if (role === "owner" || role === "dispatcher") return;
-    throw new Error("Изменять города может владелец или диспетчер.");
+    throw new Error("Изменять метки может владелец или диспетчер.");
   }
   if (role !== "owner") {
     throw new Error("Изменять этот справочник может только владелец.");
@@ -430,6 +453,12 @@ function useRefDelete(table: RefTable) {
 export const useUpdateTeam = () => useRefUpdate("teams");
 export const useUpdateMaster = () => useRefUpdate("masters");
 export const useDeleteMaster = () => useRefDelete("masters");
+// Удаление КАЛЕНДАРЯ. Механизм лежал написанным с самого начала, но наружу
+// его не выводили: завести календарь было можно, убрать — нечем (владелец
+// 2026-08-27: «а как удалять команду, вот если я создал, а удалить её как»).
+// Оно мягкое (`is_active=false`): записи ссылаются на `team_id`, и жёсткое
+// удаление порвало бы им ссылку. Строка из базы не уходит, из ленты — да.
+export const useDeleteTeam = () => useRefDelete("teams");
 export const useUpdateCity = () => useRefUpdate("cities");
 
 /**
@@ -463,8 +492,90 @@ export function useReorderCities() {
   });
 }
 export const useDeleteCity = () => useRefDelete("cities");
+
+/** ОКОНЧАТЕЛЬНАЯ ЗАЧИСТКА МЕТОК, УДАЛЁННЫХ БОЛЬШЕ 30 ДНЕЙ НАЗАД.
+ *
+ *  Крона в продукте нет, а обещание «через 30 дней удалится совсем» должно
+ *  когда-то исполняться. Естественный момент — открытие экрана меток: там же,
+ *  где удаляют, и не чаще, чем туда заходят.
+ *
+ *  Тихая: сбой зачистки не повод показывать человеку ошибку — метка просто
+ *  доживёт до следующего захода. */
+export function usePurgeExpiredCities() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useCallback(async () => {
+    if (!tenantId) return;
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { error, count } = await supabase
+      .from("cities")
+      .delete({ count: "exact" })
+      .eq("tenant_id", tenantId)
+      .not("deleted_at", "is", null)
+      .lt("deleted_at", cutoff);
+    if (!error && (count ?? 0) > 0) {
+      qc.invalidateQueries({ queryKey: ["cities"] });
+    }
+  }, [tenantId, qc]);
+}
 export const useUpdateService = () => useRefUpdate("services");
 export const useDeleteService = () => useRefDelete("services");
+
+/** СКОЛЬКО ЗАПИСЕЙ ССЫЛАЮТСЯ НА УСЛУГУ.
+ *
+ *  Нужен ровно одному месту — подтверждению перед НАСТОЯЩИМ удалением. Связи
+ *  с таблицей у услуги нет: `appointments.service_ids` это jsonb-массив, и
+ *  база удалению не помешает. Значит спросить обязан продукт, иначе человек
+ *  сотрёт услугу и молча обнулит имя работы в своей же истории. */
+export function useServiceUsageCount() {
+  const tenantId = useTenantId();
+  return useCallback(
+    async (serviceId: string): Promise<number> => {
+      if (!tenantId) return 0;
+      // `.contains([...])` ЗДЕСЬ НЕ РАБОТАЕТ, и это не мелочь: supabase-js
+      // сериализует массив как МАССИВ POSTGRES (`cs.{...}`), а `service_ids`
+      // это `jsonb` — ему нужен JSON (`cs.[...]`). Запрос падал, счёт
+      // возвращался неизвестным, и подтверждение печатало запасное «может
+      // стоять в записях» вместо числа. Поймано на симуляторе.
+      const { count, error } = await supabase
+        .from("appointments")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .filter("service_ids", "cs", JSON.stringify([serviceId]));
+      if (error) throw new Error(error.message);
+      return count ?? 0;
+    },
+    [tenantId],
+  );
+}
+
+/** НАСТОЯЩЕЕ УДАЛЕНИЕ УСЛУГИ — строка уходит из базы совсем.
+ *
+ *  Отдельно от `useDeleteService`, и это НЕ дубль: тот выключает
+ *  (`is_active = false`), услуга остаётся в списке серой, история цела.
+ *  Этот стирает — и вместе со строкой пропадает имя работы во всех уже
+ *  сделанных записях и счетах, потому что называть их станет нечем.
+ *  Владелец 2026-08-29: «удалить услугу, чтоб её вообще не было, и выключить
+ *  — это разные вещи». Разные и здесь. */
+export function usePurgeService() {
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (!tenantId) throw new Error("Нет активного аккаунта.");
+      assertCanWriteReference("services", role);
+      const { error } = await supabase
+        .from("services")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["services"] }),
+    meta: { errorHandled: true },
+  });
+}
 
 // ─── Brigade membership write (roles/members ↔ lead_ids/helper_ids) ───
 // RISK-2 parity: the web finances / schedule readers still consume the

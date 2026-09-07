@@ -21,9 +21,9 @@ function apptBounds(appts: readonly Appointment[]): [number, number] | null {
   let lo = Infinity;
   let hi = -Infinity;
   for (const a of appts) {
-    // «Весь день» хранится как 00:00–23:59, но на сетке живёт полоской у
-    // кромки колонки НЕЗАВИСИМО от окна — одно событие-отпуск не должно
-    // растягивать рельс всех дней до 00–24.
+    // «Весь день» хранится как 00:00–23:59, но на сетке живёт чипом в
+    // закреплённой полосе НАД сеткой, независимо от окна — одно
+    // событие-отпуск не должно растягивать рельс всех дней до 00–24.
     if (a.event_all_day === true) continue;
     const s = Number(a.time_start?.slice(0, 2));
     const e = Number(a.time_end?.slice(0, 2));

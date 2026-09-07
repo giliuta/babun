@@ -5,6 +5,44 @@ const MONTH_NAMES_SHORT = [
   "июл", "авг", "сен", "окт", "ноя", "дек",
 ];
 
+/** ISO-НОМЕР ДНЯ НЕДЕЛИ ПО ДАТЕ «ГГГГ-ММ-ДД»: 1 = понедельник … 7 = воскресенье.
+ *
+ *  Именно ISO, а не `Date.getDay()` (0 = воскресенье): в этой нумерации
+ *  хранится расписание меток (`cities.weekdays`) и рабочие дни услуг
+ *  (`services.available_weekdays`), и она же стоит в `WEEKDAY_LABELS`.
+ *  Смешать две нумерации — значит сдвинуть неделю на день, причём заметно это
+ *  станет только в воскресенье.
+ *
+ *  Дата разбирается ПОКОМПОНЕНТНО, а не через `new Date(ymd)`: разбор
+ *  ISO-строки даёт полночь UTC, и в зоне восточнее Гринвича `getDay()` вернёт
+ *  ПРЕДЫДУЩИЙ день. Здесь дата — календарная, без времени и зоны вовсе.
+ *
+ *  ЖИЛА В ДВУХ МЕСТАХ ДО 2026-08-30 — `local/services.ts` и мобильный
+ *  `features/calendar/iso-weekday.ts`, — байт в байт одинаковых. Опасность
+ *  была не в дублировании, а в комментарии: ловушку с UTC описывала только
+ *  одна копия, и «починка» второй через `new Date(ymd)` сломала бы расписание
+ *  молча.
+ */
+export function isoWeekdayOf(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return 1;
+  const js = new Date(y, m - 1, d).getDay();
+  return js === 0 ? 7 : js;
+}
+
+/** YYYY-MM-DD + N дней. Считается в UTC намеренно: дата документа — календарный
+ *  день без времени, и местная полночь не должна сдвигать срок оплаты.
+ *
+ *  ЖИЛ В `invoice-generator` ДО 2026-08-30, пока читателем был один счёт. С
+ *  тех пор те же сутки считает расписание меток, а справочник, импортирующий
+ *  финансовый модуль ради сложения дней, — не зависимость, а случайность. */
+export function addDaysYmd(ymd: string, days: number): string {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 // Formats "2026-04-12" as "12 апреля 2026 г."
 export function formatDateLongRu(dateKey: string): string {
   const d = new Date(dateKey + "T00:00:00");

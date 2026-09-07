@@ -33,7 +33,8 @@ import { confirmThen } from "@/lib/confirm";
 
 // Экран склада переиспользуется в двух местах (не дублируем CRUD):
 //  · глобальный /cabinet/inventory (весь склад, InventoryScreen ниже),
-//  · per-team /cabinet/teams/[id]/equipment (обёртка передаёт lockedTeamId).
+//  · обёртка «оборудование одной команды» снесена 2026-08-30 вместе с
+//    разделом «Команды» в Кабинете; склад остался общим.
 // С lockedTeamId список сужается до позиций ЭТОЙ команды
 // (assigned_team_id === id), а новая позиция создаётся уже привязанной.
 export default function InventoryScreen() {

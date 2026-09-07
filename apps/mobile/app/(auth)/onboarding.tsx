@@ -175,7 +175,7 @@ function Wizard({
           onSuccess: () => {
             // Инвалидация tenant-состояния уже в onSuccess мутации — входим в
             // dashboard без перезапуска приложения.
-            router.replace(next === "team" ? "/cabinet/teams" : "/");
+            router.replace(next === "team" ? "/calendar" : "/");
           },
           onError: (e) =>
             setError(

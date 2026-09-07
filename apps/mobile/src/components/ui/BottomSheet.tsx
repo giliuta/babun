@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Keyboard,
@@ -86,6 +86,7 @@ export function BottomSheet({
   avoidKeyboard = false,
   padded = true,
   headerAction,
+  onExited,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -116,12 +117,28 @@ export function BottomSheet({
    *  стояло вплотную к большому пальцу и читалось как второй равноправный
    *  выход. */
   headerAction?: ReactNode;
+  /** ЛИСТ ПОЛНОСТЬЮ УШЁЛ: анимация закончилась и `Modal` снят. Только ПОСЛЕ
+   *  этого можно показывать другое окно — второй лист или вопрос хоста.
+   *  Таймер `SHEET_EXIT_MS` мерил анимацию, а не снятие окна, и «Удалить
+   *  объект» из листа правки получал от iOS «already presenting» — вопрос не
+   *  появлялся (2026-09-04). Кто открывает окно вслед за листом, ждёт этот
+   *  сигнал, а не таймер. */
+  onExited?: () => void;
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
   const reduced = useReduceMotion();
   // Остаётся смонтированным на время анимации закрытия, потом снимается.
   const [mounted, setMounted] = useState(visible);
+  const exitedRef = useRef(onExited);
+  exitedRef.current = onExited;
+  const wasMounted = useRef(mounted);
+  useEffect(() => {
+    // Эффект идёт ПОСЛЕ коммита, в котором `Modal` уже снят с дерева, —
+    // а без анимации UIKit убирает его окно тут же.
+    if (wasMounted.current && !mounted) exitedRef.current?.();
+    wasMounted.current = mounted;
+  }, [mounted]);
 
   const ty = useSharedValue(SCREEN_H); // сдвиг листа вниз (0 = на месте)
   const scrim = useSharedValue(0); // прозрачность затемнения (0…1)

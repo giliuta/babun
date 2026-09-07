@@ -6,12 +6,16 @@ interface ClientDraftNoticeProps {
   duplicate: Client | null;
   error: string | null;
   onOpenDuplicate: (id: string) => void;
+  /** Что делает кнопка у найденного дубля. На карточке — «Открыть» его;
+   *  из записи — «Выбрать» его в запись (карточку там не открывают). */
+  openLabel?: string;
 }
 
 export function ClientDraftNotice({
   duplicate,
   error,
   onOpenDuplicate,
+  openLabel = "Открыть",
 }: ClientDraftNoticeProps) {
   const t = useThemeColors();
   if (!duplicate && !error) return null;
@@ -45,12 +49,12 @@ export function ClientDraftNotice({
             <Pressable
               onPress={() => onOpenDuplicate(duplicate.id)}
               accessibilityRole="button"
-              accessibilityLabel="Открыть существующего клиента"
+              accessibilityLabel={`${openLabel} существующего клиента`}
               className="min-h-11 justify-center rounded-[10px] px-3.5 active:opacity-80"
               style={{ backgroundColor: t.accent }}
             >
               <Text className="text-sm font-semibold" style={{ color: t.onAccent }}>
-                Открыть
+                {openLabel}
               </Text>
             </Pressable>
           </View>

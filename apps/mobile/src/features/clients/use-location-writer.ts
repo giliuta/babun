@@ -33,12 +33,14 @@ export interface LocationWriter {
 export function useLocationWriter(
   locations: Location[],
   update: (patch: Partial<Client>) => Promise<boolean>,
+  /** Чей это список — там, где клиента меняют под писателем (форма записи). */
+  ownerKey?: string | null,
 ): LocationWriter {
   const write = useCallback(
     (next: Location[]) => update({ locations: next }),
     [update],
   );
-  const { apply } = useJsonArrayWriter<Location>(locations, write);
+  const { apply } = useJsonArrayWriter<Location>(locations, write, ownerKey);
 
   const patchLocation = useCallback(
     (

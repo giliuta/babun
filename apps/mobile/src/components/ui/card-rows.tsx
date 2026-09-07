@@ -745,33 +745,52 @@ export function NavRow({
  *  2026-07-26: «с правой стороны нажимаешь кнопку и выбираешь, что делать».
  *
  *  32pt кружок: меньше цели касания 44pt по кругу, поэтому hitSlop
- *  добирает остальное — иначе палец бьёт по строке и уводит со экрана. */
+ *  добирает остальное — иначе палец бьёт по строке и уводит со экрана.
+ *
+ *  РАЗМЕР ОДИН НА ПРОДУКТ (владелец 2026-09-06: «зачем ты делаешь два разных
+ *  размера — если иконка смотрится в одном, делай в одном; иконка вызова
+ *  везде одинаковая во всей системе»). Список клиентов держал ту же кнопку
+ *  44-й, карточка записи рисовала звонок своим 44-м кружком — рядом с 32-м
+ *  «…» это читалось как две разные вещи. */
 export function RowActionButton({
   icon: Icon,
   color,
   label,
   hint,
-  size = 32,
   onPress,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   icon: LucideIcon;
   color: string;
   label: string;
   hint?: string;
-  /** Диаметр кружка. 32 — хвост строки, 44 — строка списка клиентов. */
-  size?: number;
   onPress: () => void;
+  /** Второе действие удержанием (кнопка звонка: тап звонит, удержание —
+   *  способы связи). Удержание незаметно VoiceOver — дублируй его действием
+   *  ротора через `accessibilityActions`. */
+  onLongPress?: () => void;
+  accessibilityActions?: readonly { name: string; label: string }[];
+  onAccessibilityAction?: (name: string) => void;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={
+        onAccessibilityAction
+          ? (e) => onAccessibilityAction(e.nativeEvent.actionName)
+          : undefined
+      }
       hitSlop={8}
       style={({ pressed }) => ({
-        width: size,
-        height: size,
+        width: 32,
+        height: 32,
         // Круг: w === h. Круг не может стать прямоугольником — это
         // геометрическое исключение из закона одного радиуса.
         borderRadius: 999,
@@ -781,7 +800,7 @@ export function RowActionButton({
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Icon color={color} size={size >= 40 ? 18 : 16} strokeWidth={2.2} />
+      <Icon color={color} size={16} strokeWidth={2.2} />
     </Pressable>
   );
 }
@@ -879,7 +898,7 @@ export function ChoiceRow({
         borderTopColor: t.separator,
       }}
     >
-      {label || onSettings ? (
+      {label ? (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <Text
             maxFontSizeMultiplier={1.2}
@@ -918,6 +937,7 @@ export function ChoiceRow({
         style={{
           flexDirection: "row",
           flexWrap: "wrap",
+          alignItems: "center",
           rowGap: 14,
           columnGap: 6,
         }}
@@ -933,6 +953,25 @@ export function ChoiceRow({
             onPress={() => onSelect(option)}
           />
         ))}
+        {/* БЕЗ ЯРЛЫКА шестерёнка живёт В РЯДУ ЧИПОВ, а не отдельной строкой
+            над ними: строка ради одной иконки — пустой этаж карточки
+            (владелец 2026-09-06: «этот блок мне не нравится, как выглядит»).
+            Тише чипов (sub), чтобы не спорить с выбором. */}
+        {!label && onSettings ? (
+          <Pressable
+            onPress={onSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Настроить список"
+            hitSlop={{ top: 14, bottom: 14, left: 8, right: 12 }}
+            style={({ pressed }) => ({
+              marginLeft: "auto",
+              paddingHorizontal: 4,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Settings2 color={t.sub} size={17} strokeWidth={2} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );

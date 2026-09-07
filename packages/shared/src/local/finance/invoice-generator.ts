@@ -1,6 +1,7 @@
 import type { Appointment } from "../appointments";
 import { lineTotal, subtotal } from "./appointment-calc";
 import { invoiceLineTotal } from "./invoice-ledger";
+import { addDaysYmd } from "../../common/utils/date-utils";
 
 // ГЕНЕРАТОР ИНВОЙСА ИЗ ЗАПИСИ.
 //
@@ -128,14 +129,28 @@ function buildLines(
   services.forEach((service, i) => {
     const last = i === services.length - 1;
     const qty = service.quantity > 0 ? service.quantity : 1;
-    // Неизвестная услуга не выдумывается: строка называется дефолтом.
+    // ИМЯ БЕРЁТСЯ ИЗ СНИМКА ЗАПИСИ, И ТОЛЬКО ПОТОМ ИЗ КАТАЛОГА.
+    //
+    // `serviceName` в строке записи — это имя НА ДЕНЬ ВИЗИТА: его кладут при
+    // сохранении именно затем, чтобы документ пережил и переименование, и
+    // удаление услуги. Спрашивать каталог первым значит спрашивать «как эта
+    // работа называется СЕЙЧАС», хотя счёт выставляется за то, что сделали
+    // тогда. А если услугу стёрли насовсем, каталог не ответит вовсе, и счёт
+    // печатал бы дефолтную строку вместо настоящего названия работы.
+    //
+    // Каталог остаётся вторым источником: у записей, сделанных до 25 августа
+    // 2026, снимка ещё нет.
     const title =
-      serviceName(service.serviceId)?.name?.trim() || settings.defaultLineTitle;
+      service.serviceName?.trim() ||
+      serviceName(service.serviceId)?.name?.trim() ||
+      settings.defaultLineTitle;
     // ОПИСАНИЕ ЕДЕТ И В ВЕТКУ СХЛОПЫВАНИЯ. Иначе оно исчезает молча ровно там,
     // где строка и так выглядит странно («Чистка × 3»).
     const description =
       serviceName(service.serviceId)?.description?.trim() || null;
-    const unit = serviceName(service.serviceId)?.unit?.trim() || null;
+    // Единица — тем же порядком: снимок, затем каталог.
+    const unit =
+      service.unit?.trim() || serviceName(service.serviceId)?.unit?.trim() || null;
     // Последняя строка добирает ВЕСЬ остаток, а не свою долю: центы от деления
     // и от скидки копятся именно в ней, и документ обязан сойтись с записью.
     const want = last ? round2(total - printed) : round2(lineTotal(service) * factor);
@@ -198,14 +213,10 @@ function lineTitle(
   );
 }
 
-/** YYYY-MM-DD + N дней. Считается в UTC намеренно: дата документа — календарный
- *  день без времени, и местная полночь не должна сдвигать срок оплаты. */
-export function addDaysYmd(ymd: string, days: number): string {
-  const [year, month, day] = ymd.split("-").map(Number);
-  const date = new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
+// `addDaysYmd` переехал в `common/utils/date-utils` (2026-08-30): его второй
+// читатель — расписание меток, и справочнику незачем импортировать финансы
+// ради сложения дней. Реэкспорт оставлен, чтобы не трогать зовущих отсюда.
+export { addDaysYmd };
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;

@@ -1,14 +1,20 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { Appointment } from "@babun/shared/local/appointments";
+import { MoreHorizontal } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { RowGroup } from "@/components/ui/card-rows";
 import { AddRow } from "@/components/ui/AddRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
-import { objectTarget } from "@/features/clients/object-address";
-import { servicePlan, type ServicePlan } from "@/features/clients/service-plan";
-import { todayYMD } from "@/features/clients/filter";
+import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
+import { useLocationRequestActions } from "@/features/clients/location-request-actions";
+import {
+  visibleLocationRequests,
+  type LocationRequest,
+} from "@/features/clients/location-request-link";
+import { useLocationRequests } from "@/features/clients/location-requests";
+import { objectTarget, routeAddress } from "@/features/clients/object-address";
+import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 
 // ОБЪЕКТЫ на карточке клиента.
@@ -33,16 +39,16 @@ import { useThemeColors } from "@/theme/colors";
 // удаления в строке нет: она занимала бы место всегда и смыкалась зоной с
 // кнопкой маршрута — именно так палец однажды делал не то, во что целился.
 
+const EMPTY_REQUESTS: LocationRequest[] = [];
+
 export default function ObjectsBlock({
   client,
-  appointments,
   onOpen,
   onDelete,
   onAdd,
+  requestsEnabled = false,
 }: {
   client: Client;
-  /** Визиты клиента — по ним считается, когда объект пора обслужить снова. */
-  appointments: readonly Appointment[];
   /** Открыть лист правки этого объекта. */
   onOpen: (locId: string) => void;
   /** Удалить объект (спрашивает подтверждение сама карточка). */
@@ -50,8 +56,20 @@ export default function ObjectsBlock({
   /** Открыть лист добавления. Работает и в черновике: объект пишется в тот же
    *  черновик, поэтому пригашать строку больше не нужно. */
   onAdd: () => void;
+  /** Показывать ссылки «отметьте адрес», отправленные клиенту (STORY-077).
+   *  Только у сохранённого клиента и у владельца/диспетчера: черновику
+   *  ссылку не выписать, а мастеру таблица по RLS не видна. */
+  requestsEnabled?: boolean;
 }) {
   const t = useThemeColors();
+  // ССЫЛКА КЛИЕНТУ «ОТМЕТЬТЕ АДРЕС»: пока клиент не ответил, в списке стоит
+  // строка «Ждём адрес» — место объекта, которого ещё нет. Ответил — строка
+  // уходит, объект приезжает обычной строкой (см. useLocationRequests).
+  const { data: requests = EMPTY_REQUESTS } = useLocationRequests(
+    requestsEnabled ? client.id : null,
+  );
+  const requestActions = useLocationRequestActions();
+  const shownRequests = useMemo(() => visibleLocationRequests(requests), [requests]);
   // Основной первым: при записи подставляется он, и в списке он должен
   // читаться первым. Бейджа «основной» нет — порядок и есть признак.
   const ordered = useMemo(
@@ -74,7 +92,6 @@ export default function ObjectsBlock({
         >
           <ObjectRow
             loc={loc}
-            plan={servicePlan(loc, appointments, todayYMD())}
             separated={i > 0}
             onPress={() => onOpen(loc.id)}
           />
@@ -84,30 +101,51 @@ export default function ObjectsBlock({
           Добавление открывается ЛИСТОМ снизу (владелец 2026-07-27), а не
           страницей: три поля не стоят экрана поверх экрана, и объектов подряд
           заводят несколько. */}
+      {shownRequests.map((request, i) => (
+        <LocationRequestRow
+          key={request.id}
+          request={request}
+          separated={ordered.length + i > 0}
+          onPress={() => void requestActions.menu(request)}
+        />
+      ))}
       <AddRow
         label="Добавить объект"
-        separated={ordered.length > 0}
+        separated={ordered.length + shownRequests.length > 0}
         onPress={onAdd}
       />
     </RowGroup>
   );
 }
 
-function ObjectRow({
+// СТРОКА ОБЪЕКТА ОТКРЫТА НАРУЖУ (2026-08-31). Форма записи показывала объекты
+// клиента ЧИПАМИ — одно слово в пилюле, без адреса, без срока ТО, без заметки.
+// Владелец: «блок объекта должен быть такой же, как в клиентах». Не похожий —
+// ТОТ ЖЕ: скопированная карточка адреса разошлась бы с оригиналом на первой же
+// правке, как разошлись две формы записи.
+export function ObjectRow({
   loc,
-  plan,
   separated,
+  onMore,
+  showNote = true,
   onPress,
 }: {
   loc: Location;
-  /** «Пора обслужить» / «Следующее — 12 окт» — null, если не регулярный. */
-  plan: ServicePlan | null;
   separated?: boolean;
+  /** Кружок «…» в хвосте строки — правка ЭТОГО объекта (форма записи, где
+   *  сам тап по строке меняет объект). Стрелки справа нет нигде: владелец
+   *  2026-09-04 — «эти стрелочки убираем, ставим красивую иконку, при тапе на
+   *  неё открывается редактирование объекта». На карточке клиента правку
+   *  открывает сам тап, и кружка там нет. */
+  onMore?: () => void;
+  /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
+   *  своей плашкой под строкой, и третья строка дублировала бы её. */
+  showNote?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
-  const note = (loc.note ?? "").trim();
+  const note = showNote ? (loc.note ?? "").trim() : "";
 
   return (
     <View
@@ -130,7 +168,9 @@ function ObjectRow({
         accessibilityLabel={[loc.label || "Объект", target, note]
           .filter(Boolean)
           .join(", ")}
-        accessibilityHint="Открывает правку объекта"
+        accessibilityHint={
+          onMore ? "Открывает выбор объекта" : "Открывает правку объекта"
+        }
         style={({ pressed }) => ({
           flex: 1,
           flexDirection: "row",
@@ -157,31 +197,16 @@ function ObjectRow({
           >
             {target || "адрес не указан"}
           </Text>
-          {/* ТРЕТЬЯ СТРОКА ОДНА НА ДВОИХ: заметка и срок обслуживания делят
-              её через «·». Каждому свой этаж — и строка объекта вырастала до
-              четырёх ярусов (~86pt), вдвое выше соседней «Записать», после
-              чего блок переставал читаться списком.
-              Срок идёт первым: он про деньги и сгорает по времени, заметка
-              («код домофона») ждёт у двери и не срочна. */}
-          {plan || note ? (
-            <Text maxFontSizeMultiplier={1.2} numberOfLines={1}>
-              {plan ? (
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: plan.due ? "600" : "400",
-                    color: plan.due ? t.warning : t.sub,
-                  }}
-                >
-                  {plan.text}
-                </Text>
-              ) : null}
-              {plan && note ? (
-                <Text style={{ fontSize: 13, color: t.faint }}>{"  ·  "}</Text>
-              ) : null}
-              {note ? (
-                <Text style={{ fontSize: 13, color: t.sub }}>{note}</Text>
-              ) : null}
+          {/* ТРЕТЬЯ СТРОКА — ЗАМЕТКА («код домофона»). Срок обслуживания делил
+              её через «·», пока у объекта был интервал; сам интервал снесён
+              2026-09-04 (владелец: «сделаем лучше в напоминаниях»). */}
+          {note ? (
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 13, color: t.sub }}
+            >
+              {note}
             </Text>
           ) : null}
         </View>
@@ -191,9 +216,32 @@ function ObjectRow({
           карты приезжает снизу (chooseOption → канонический лист). */}
       <ObjectRouteButton
         mapUrl={loc.mapUrl}
-        address={loc.address}
+        // Объект с частями едет по геокодируемой части адреса: подъезд, этаж и
+        // квартира карте только мешают.
+        address={routeAddress(loc)}
         label={loc.label}
       />
+
+      {/* Правка объекта — кружок в хвосте, СНАРУЖИ нажимаемой области строки
+          (иначе VoiceOver склеит их в один элемент). */}
+      {onMore ? (
+        <Pressable
+          onPress={onMore}
+          accessibilityRole="button"
+          accessibilityLabel={`Правка объекта ${loc.label || "Объект"}`}
+          style={({ pressed }) => ({
+            width: 32,
+            height: 32,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 999,
+            backgroundColor: t.rowFill,
+            opacity: pressed ? 0.6 : 1,
+          })}
+        >
+          <MoreHorizontal color={t.body} size={ICON.sm} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }

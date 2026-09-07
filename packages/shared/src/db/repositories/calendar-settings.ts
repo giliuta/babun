@@ -67,6 +67,11 @@ function rowToSettings(r: Row): CalendarSettings {
   return {
     startHour: r.start_hour,
     endHour: r.end_hour,
+    // Отставший проект типов: колонка приезжает с сервера, но в
+    // database.types.ts её ещё нет. `?? false` — действующий тенант
+    // остаётся в РУЧНОМ режиме: его зона уже отвечает про его бизнес,
+    // и переписывать её задним числом нельзя.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     // Минуты окна приезжают отдельным полем (миграция
     // 20260817090000_calendar_window_minutes): час остался часом, чтобы
     // не переписанный читатель не принял 510 минут за 510-й час.

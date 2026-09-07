@@ -13,22 +13,26 @@ import { useDefaultCountry } from "@/features/clients/default-country";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { haptics } from "@/lib/haptics";
+import { deliverCreatedClient } from "@/features/appointments/pending-client";
 import {
   friendlyCreateError,
   isPhoneTakenError,
 } from "@/features/clients/client-create-errors";
 
-// expo-contacts can be absent in an older dev build. A guarded require keeps
-// every route bootable; the native picker simply stays hidden until rebuild.
-let Contacts: typeof import("expo-contacts") | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Contacts = require("expo-contacts");
-} catch {
-  Contacts = null;
+export interface ClientDraftOptions {
+  /** Черновик открыт ПОВЕРХ записи (`/book/client`): после «Готово» клиент
+   *  отдаётся записи и экран уходит «назад», а не на карточку созданного. */
+  forBooking?: boolean;
+  /** Что уже набрали в поиске клиента — имя или телефон. Перепечатывать
+   *  их ещё раз в карточке незачем. */
+  name?: string;
+  phone?: string;
 }
 
-export function useClientDraft(active: boolean) {
+export function useClientDraft(
+  active: boolean,
+  { forBooking = false, name, phone }: ClientDraftOptions = {},
+) {
   const router = useRouter();
   const tenantId = useTenantId();
   const create = useCreateClient();
@@ -38,7 +42,12 @@ export function useClientDraft(active: boolean) {
   const country = useDefaultCountry();
   const dial = countryDialCode(country);
   const [draft, setDraft] = useState<Client>(() =>
-    createBlankClient({ phone: `${countryDialCode(country)} ` }),
+    createBlankClient({
+      full_name: name?.trim() ?? "",
+      phone: phone?.trim()
+        ? formatPhoneAsYouType(phone.trim(), country)
+        : `${countryDialCode(country)} `,
+    }),
   );
   // Профиль компании приезжает асинхронно: если поле ещё не тронули, а код
   // оказался другим — подставляем правильный, не мешая набору.
@@ -69,27 +78,6 @@ export function useClientDraft(active: boolean) {
     }));
     setDuplicate(null);
     setCreateError(null);
-  };
-
-  const pickFromContacts = async () => {
-    if (!Contacts) return;
-    try {
-      const contact = await Contacts.presentContactPickerAsync();
-      if (!contact) return;
-      const rawPhone = contact.phoneNumbers?.[0]?.number ?? "";
-      const name =
-        contact.name ||
-        [contact.firstName, contact.lastName].filter(Boolean).join(" ");
-      setDraft((current) => ({
-        ...current,
-        full_name: name || current.full_name,
-        phone: rawPhone ? formatPhoneAsYouType(rawPhone, country) : current.phone,
-      }));
-      setDuplicate(null);
-      setCreateError(null);
-    } catch {
-      // Dismissed or unavailable. Manual input remains available.
-    }
   };
 
   /** Поиск клиента по каноническому номеру. Сеть — авторитет, но при её
@@ -208,6 +196,21 @@ export function useClientDraft(active: boolean) {
         phone_e164: e164,
       });
       haptics.success();
+      // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЗАПИСИ, ВОЗВРАЩАЕТСЯ В ЗАПИСЬ (владелец
+      // 2026-08-31: «нажимаю „Готово" — и оно остаётся на странице клиента, а
+      // должно сразу переходить в саму запись, я ж делаю в первую очередь
+      // запись»).
+      //
+      // Карточка открыта ПОВЕРХ записи (`/book/client`, см. pending-client.ts):
+      // запись стоит в стеке прямо под нами со всем набранным, поэтому
+      // хватает отдать ей id и уйти «назад». Прежний путь — переоткрыть
+      // запись со слотом из ящика — терял услуги и заметку, набранные до
+      // похода за клиентом.
+      if (forBooking) {
+        deliverCreatedClient(created.id);
+        router.back();
+        return created.id;
+      }
       router.replace(`/clients/${created.id}`);
       // Засов не снимаем: экран уже уехал на карточку созданного клиента, и
       // повторное создание из этого черновика недопустимо.
@@ -248,7 +251,6 @@ export function useClientDraft(active: boolean) {
     canSave,
     isSaving: create.isPending,
     onPhoneChange,
-    onPickContacts: Contacts ? pickFromContacts : undefined,
     save,
   };
 }

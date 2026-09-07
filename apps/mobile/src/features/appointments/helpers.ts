@@ -124,10 +124,6 @@ export interface ServiceOverride {
    * лестница обязана посчитать её по действующему прайсу.
    */
   locked?: LockedLine;
-  /** Выбранный вариант услуги типа «варианты». Цена и длительность берутся у
-   *  него, количество в расчёте не участвует: трёхкомнатная — это не «три
-   *  раза комната». */
-  variantId?: string | null;
 }
 
 /** Что держит замок: три числа и два слова снимка. */
@@ -162,8 +158,6 @@ export function buildServices(
   serviceIds: string[],
   catalog: Map<string, Service>,
   overrides?: Record<string, ServiceOverride>,
-  /** Варианты по услуге — нужны только для услуг типа «варианты». */
-  variants?: Map<string, { id: string; name: string; price: number; durationMin: number }[]>,
 ): AppointmentService[] {
   return serviceIds.map((id) => {
     const c = catalog.get(id);
@@ -171,12 +165,6 @@ export function buildServices(
     const baseDuration = c ? c.duration_minutes : 60;
     const ov = overrides?.[id];
     const lock = ov?.locked;
-    // УСЛУГА С ВАРИАНТАМИ СЧИТАЕТСЯ ПО ВЫБРАННОМУ ВАРИАНТУ, а не по лестнице:
-    // между вариантами нет математики, количество к цене отношения не имеет.
-    const variant =
-      c?.service_type === "variant"
-        ? (variants?.get(id) ?? []).find((v) => v.id === ov?.variantId) ?? null
-        : null;
     // КОЛИЧЕСТВО ЕСТЬ У КАЖДОЙ УСЛУГИ (2026-08-21). Флага «продаём целиком»
     // (`is_countable`) больше нет: он спрашивал в справочнике про поведение
     // ДРУГОГО экрана — степпера в записи, — и владелец справедливо не понял
@@ -193,17 +181,13 @@ export function buildServices(
         ? ov.price
         : lock
           ? lock.pricePerUnit
-          : variant
-            ? variant.price
-            : c
-              ? unitPriceFor(c, qty)
-              : 0;
+          : c
+            ? unitPriceFor(c, qty)
+            : 0;
     const durationTiers = c ? parseDurationTiers(c.duration_tiers) : [];
     const duration = lock
       ? lock.duration
-      : variant
-        ? variant.durationMin
-        : c
+      : c
         ? durationForQuantity(
             {
               duration_minutes: baseDuration,
@@ -229,7 +213,6 @@ export function buildServices(
       // строки берём записанное, у новой — сегодняшнее из каталога.
       serviceName: lock?.serviceName ?? c?.name ?? undefined,
       unit: lock ? lock.unit ?? null : c?.unit ?? null,
-      variantId: ov?.variantId ?? null,
     };
   });
 }
