@@ -204,10 +204,13 @@ function DetailBox({
         backgroundColor: t.fill,
       }}
     >
+      {/* Подпись НЕ СЖИМАЕТСЯ: в браузере у поля ввода есть своя «природная»
+          ширина, и без этого ужималась подпись — «Под…», «Инде…» на ширине
+          телефона (публичная страница /l, STORY-077). Сжимается поле. */}
       <Text
         maxFontSizeMultiplier={1.2}
         numberOfLines={1}
-        style={{ fontSize: 15, color: t.sub }}
+        style={{ flexShrink: 0, fontSize: 15, color: t.sub }}
       >
         {label}
       </Text>

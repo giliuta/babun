@@ -173,6 +173,10 @@ function RootNavigator() {
       {/* Invitation deep links stay outside auth/dashboard guards so a signed-
           out user can preserve the token, authenticate, and return here. */}
       <Stack.Screen name="invite" options={{ gestureEnabled: false }} />
+      {/* «Куда приехать мастеру» (STORY-077): клиент открывает
+          babun.app/l/<токен> без входа, поэтому экран живёт вне (auth) и
+          (dashboard) — как приглашение. */}
+      <Stack.Screen name="l" />
     </Stack>
   );
 }
