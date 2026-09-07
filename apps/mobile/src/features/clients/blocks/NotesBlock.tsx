@@ -16,7 +16,7 @@
 // и есть «последняя», при первой правке переезжает в журнал одним патчем
 // (два патча подряд в офлайн-кэше затирали друг друга).
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
@@ -33,10 +33,6 @@ import { useThemeColors } from "@/theme/colors";
 interface NotesBlockProps {
   client: Client;
   update: (patch: Partial<Client>) => Promise<boolean>;
-  /** Строка «Документация» — последней в этой же карточке (владелец
-   *  2026-08-06: «документация пусть будет тоже в заметках»). Заметка и
-   *  документ — одного рода: это то, что мы ЗНАЕМ о клиенте. */
-  footerRow?: ReactNode;
 }
 
 /** Стабильная пустая ссылка: `client.notes ?? []` давал новый массив на
@@ -46,11 +42,7 @@ const EMPTY_NOTES: ClientNote[] = [];
 /** Тот же предел, что у поля на странице записи. */
 const MAX_LEN = 500;
 
-export default function NotesBlock({
-  client,
-  update,
-  footerRow,
-}: NotesBlockProps) {
+export default function NotesBlock({ client, update }: NotesBlockProps) {
   const t = useThemeColors();
   const [earlierOpen, setEarlierOpen] = useState(false);
   const list = client.notes ?? EMPTY_NOTES;
@@ -167,8 +159,6 @@ export default function NotesBlock({
             />
           ))
         : null}
-
-      {footerRow}
     </RowGroup>
   );
 }
