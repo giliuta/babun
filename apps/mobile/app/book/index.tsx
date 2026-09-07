@@ -1110,6 +1110,15 @@ export default function BookScreen() {
     "idle" | "client" | "clientClosing" | "services" | "done"
   >("idle");
   const pickClient = (c: Client) => {
+    // У СОБЫТИЯ КЛИЕНТ — ТОЛЬКО ЧЕЛОВЕК (владелец 2026-09-06: клиент и объект
+    // у события независимы): команда, объект и любимый мастер за ним не
+    // подтягиваются, цепочка «клиент → услуги» не запускается.
+    if (kind === "event") {
+      setClientId(c.id);
+      setLocationId(null);
+      haptics.tap();
+      return;
+    }
     // НЕ сбрасываем loyaltyAppliedRef здесь: сброс заставлял эффект принять
     // авто-скидку прошлого клиента за ручную (discountType && !ref → return) и
     // перенести её на нового. Эффект сам пересчитает лояльность по clientId.
