@@ -12,6 +12,15 @@ name: CI
 #               missing shims) before it reaches a deploy.
 #
 # Lint stays informational — see the pre-existing React-Compiler hints.
+#
+# BUN ЗАКРЕПЛЁН (`.bun-version`, 2026-09-07). Без версии setup-bun ставит
+# свежайший bun, а с ним — свежие ICU и tzdata. Тесты поясов сверяют группы
+# зон с ICU той машины, где запускаются: на свежем bun две группы
+# (Лос-Анджелес и Ванкувер, Денвер и Эдмонтон) стали вести себя одинаково
+# весь 2026 год, а тяжёлая сверка «каждый город как представитель»
+# переставала укладываться в 5 с. Заодно на свежем bun падали тесты
+# реплеера. Одна версия здесь и у разработчика — один ответ; обновлять bun
+# осознанно, вместе с этим файлом и словарём поясов.
 
 on:
   push:
@@ -34,6 +43,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
 
@@ -43,6 +54,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - run: bun run test
 
@@ -52,6 +65,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: Export web bundle
         env:
@@ -68,6 +83,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
       - name: ESLint
         continue-on-error: true
