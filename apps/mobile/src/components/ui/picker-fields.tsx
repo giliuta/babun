@@ -13,7 +13,7 @@ import { ColorPicker } from "./ColorPicker";
 import { Divider } from "./Divider";
 import { IconPicker } from "./IconPicker";
 import { FieldLabel } from "./Field";
-import { iconPreset } from "./icon-set";
+import { iconPreset, type IconPreset } from "./icon-set";
 import { ICON } from "./tokens";
 
 /** Высота плавающей карточки выбора: пять рядов по 42 плюс поля. Точная
@@ -227,13 +227,19 @@ export function IconGlyph({
   value,
   color,
   size = 22,
+  icons,
 }: {
   value?: string | null;
   color?: string | null;
   size?: number;
+  /** Набор-переопределение — тот же, что отдан пикеру: иначе значок в строке
+   *  и значок в решётке брались бы из разных наборов. */
+  icons?: readonly IconPreset[];
 }) {
   const t = useThemeColors();
-  const Glyph = iconPreset(value);
+  const Glyph = icons
+    ? icons.find((i) => i.value === value)?.icon ?? null
+    : iconPreset(value);
   if (!Glyph) return <View style={{ width: size, height: size }} />;
   return <Glyph color={color ?? t.ink} size={size} strokeWidth={2} />;
 }
@@ -274,6 +280,7 @@ export function IconField({
   onChange,
   label = "Значок",
   tint,
+  icons,
   disabled,
 }: {
   value: string | null | undefined;
@@ -281,6 +288,9 @@ export function IconField({
   label?: string;
   /** Цвет заливки выбранного значка — обычно цвет самой сущности. */
   tint?: string | null;
+  /** Набор-переопределение: у типов событий свои слаги, они хранятся в базе
+   *  и с общими сорока значками не совпадают. */
+  icons?: readonly IconPreset[];
   disabled?: boolean;
 }) {
   return (
@@ -288,13 +298,14 @@ export function IconField({
       label={label}
       disabled={disabled}
       float
-      accessory={<IconGlyph value={value} color={tint} />}
+      accessory={<IconGlyph value={value} color={tint} icons={icons} />}
     >
       <IconPicker
         label={null}
         value={value}
         onChange={onChange}
         tint={tint}
+        icons={icons}
         disabled={disabled}
       />
     </DisclosureField>
