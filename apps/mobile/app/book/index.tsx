@@ -210,6 +210,24 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
 // когда этот экран научится править запись; до тех пор источник ЖИВ.
 
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
+// ВЫСОТА БЛОКОВ «КЛИЕНТ» И «ОБЪЕКТ» ЗАФИКСИРОВАНА (владелец 2026-09-08: «я
+// хочу, чтобы, когда я выбираю клиента, оно не расширялось — чтобы размер
+// блока был зафиксирован наперёд, такой, чтоб туда сразу помещалась заметка и
+// всё остальное»).
+//
+// Форма прыгала дважды на каждый выбор: у клиента появлялись строка истории и
+// поле заметки, у объекта — карточка адреса вместо фразы «Сначала выберите
+// клиента». Страница перекладывалась под пальцем, и следующая кнопка уезжала
+// из-под него. Числа — высота ЗАПОЛНЕННОГО состояния, посчитанная по своим же
+// строкам: имя 22 + история 18 + телефон 20 + поля 20 + заметка 42 у клиента;
+// карточка объекта 60 + заметка 42 у объекта.
+const CLIENT_BLOCK_H = 124;
+/** У события заметки клиента и строки истории нет — блок держит своё
+ *  заполненное состояние (имя + телефон), а не чужое. Резервировать здесь 124
+ *  значило бы платить полстроки пустоты за состояние, которого не бывает. */
+const EVENT_CLIENT_BLOCK_H = 96;
+const OBJECT_BLOCK_H = 104;
+
 const EMPTY_LOCATIONS: Location[] = [];
 const EMPTY_REQUESTS: LocationRequest[] = [];
 const EMPTY_NOTES: ClientNote[] = [];
@@ -2315,6 +2333,9 @@ export default function BookScreen() {
                   живёт кружком в хвосте. Стрелки справа больше нет ни у
                   клиента, ни у объекта. */}
               <SectionCard title="Клиент">
+                {/* Высота блока задана наперёд: выбор клиента дописывает
+                    историю и заметку, но НЕ раздвигает страницу. */}
+                <View style={{ minHeight: CLIENT_BLOCK_H, justifyContent: "flex-start" }}>
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
@@ -2392,6 +2413,7 @@ export default function BookScreen() {
                     maxLength={500}
                   />
                 ) : null}
+                </View>
               </SectionCard>
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
@@ -2406,6 +2428,7 @@ export default function BookScreen() {
                   Верно второе: объект принадлежит клиенту. */}
               {showObject ? (
               <SectionCard title="Объект">
+                <View style={{ minHeight: OBJECT_BLOCK_H, justifyContent: "flex-start" }}>
                 {client ? (
                   // БЕЗ ВЕРХНЕГО ВОЛОСКА: он шёл сразу под заголовком «ОБЪЕКТ»
                   // и читался как чужая линия — у карточки клиента её нет.
@@ -2504,15 +2527,20 @@ export default function BookScreen() {
                     ) : null}
                   </View>
                 ) : (
-                  <View className="px-4 py-3">
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      style={{ fontSize: 15, color: t.placeholder }}
-                    >
-                      Сначала выберите клиента
-                    </Text>
-                  </View>
+                  /* ДВЕРЬ СТОИТ НА МЕСТЕ И ПРИГАШЕНА (владелец 2026-09-08).
+                     Фраза «Сначала выберите клиента» отвечала на вопрос,
+                     которого человек не задавал, и меняла высоту блока; серая
+                     строка «Добавить объект» говорит то же самое собой — она
+                     тут, но пока не нажимается. */
+                  <ChooseRow
+                    icon={MapPin}
+                    label="Добавить объект"
+                    hint="Станет доступно после выбора клиента"
+                    disabled
+                    onPress={() => {}}
+                  />
                 )}
+                </View>
               </SectionCard>
 
               ) : null}
@@ -2805,10 +2833,15 @@ export default function BookScreen() {
               <EventTypeBlock
                 types={eventTypes}
                 selectedId={eventTypeId}
+                loading={eventTypesQuery.isLoading}
                 onSelect={applyEventType}
                 onSettings={() => {
                   haptics.tap();
-                  router.push("/cabinet/event-types" as Href);
+                  // СИБЛИНГ ФОРМЫ, А НЕ ЭКРАН ЧУЖОЙ ВКЛАДКИ: push в
+                  // /cabinet/event-types клал поверх формы вторую копию табов,
+                  // и «назад» уводил на календарь, теряя набранное событие
+                  // (владелец 2026-09-08: «нажимаю назад — оно вылетает»).
+                  router.push("/book/event-types" as Href);
                 }}
               />
 
@@ -2816,6 +2849,7 @@ export default function BookScreen() {
                   у выбранного есть «убрать» — лист выбора пустого варианта не
                   предлагает. */}
               <SectionCard title="Клиент">
+                <View style={{ minHeight: EVENT_CLIENT_BLOCK_H, justifyContent: "flex-start" }}>
                 {client ? (
                   <View className="flex-row items-center">
                     <Pressable
@@ -2884,6 +2918,7 @@ export default function BookScreen() {
                     onPress={() => setClientPickerOpen(true)}
                   />
                 )}
+                </View>
               </SectionCard>
 
               {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
@@ -2906,6 +2941,7 @@ export default function BookScreen() {
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
               {showObject ? (
               <SectionCard title="Объект">
+                <View style={{ minHeight: OBJECT_BLOCK_H, justifyContent: "flex-start" }}>
                 {eventLocationEntry ? (
                   <>
                     <ObjectRow
@@ -2993,6 +3029,7 @@ export default function BookScreen() {
                     </View>
                   </>
                 )}
+                </View>
               </SectionCard>
               ) : null}
 
@@ -3024,8 +3061,14 @@ export default function BookScreen() {
                   placeholderTextColor={t.placeholder}
                   multiline
                   className="px-4 py-3"
+                  // СРЕДНИЙ БЛОК, КОТОРЫЙ РАСТЁТ ПОД ТЕКСТ (владелец
+                  // 2026-09-08: «сделай средний блок, допустим как объект, но
+                  // если я пишу много информации, то оно так подудлиняется»).
+                  // Было 200pt всегда: у пустого события треть экрана занимала
+                  // пустая рамка. Высоты сверху нет — многострочный ввод на
+                  // iOS растёт сам, а страница и так прокручивается.
                   style={{
-                    minHeight: 200,
+                    minHeight: 88,
                     fontSize: 15,
                     lineHeight: 21,
                     color: t.ink,

@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import type { LucideIcon } from "lucide-react-native";
 import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -19,7 +20,10 @@ export function SectionCard({
   children,
 }: {
   title?: string;
-  action?: { label: string; onPress: () => void };
+  /** Действие в правом краю шапки. Со `icon` рисуется значком, а подпись
+   *  уходит в озвучку: у блока типов события это ползунки настроек, и слово
+   *  рядом с ними спорило бы с самим заголовком блока. */
+  action?: { label: string; icon?: LucideIcon; onPress: () => void };
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -59,9 +63,16 @@ export function SectionCard({
                   opacity: pressed ? 0.65 : 1,
                 })}
               >
-                <Text style={{ fontSize: 14, fontWeight: "500", color: t.accent }}>
-                  {action.label}
-                </Text>
+                {/* ЗНАЧОК — ТОТ ЖЕ, ЧТО У «мини-настроек» ЛИСТОВ ВЫБОРА
+                    (`PickerSheet`): шестерёнка 20pt в `t.sub`. Один жест —
+                    один значок: человек уже знает его по листу метки. */}
+                {action.icon ? (
+                  <action.icon color={t.sub} size={20} strokeWidth={2} />
+                ) : (
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: t.accent }}>
+                    {action.label}
+                  </Text>
+                )}
               </Pressable>
             ) : null}
           </View>

@@ -15,28 +15,47 @@ export function ChooseRow({
   icon,
   label,
   hint,
+  disabled,
   onPress,
 }: {
   icon: LucideIcon;
   label: string;
   hint?: string;
+  /** ДВЕРЬ ЕЩЁ ЗАКРЫТА, НО СТОИТ НА МЕСТЕ (владелец 2026-09-08: «просто там
+   *  написано „добавить объект“, он выделен серым до тех пор, пока не выбран
+   *  клиент; как только выбрал — становится с серого на голубой»). Раньше на
+   *  этом месте стояла фраза «Сначала выберите клиента»: строка меняла и
+   *  вид, и высоту, и блок прыгал под пальцем. */
+  disabled?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   return (
     <Pressable
       className="flex-row items-center px-4 py-3.5"
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      style={({ pressed }) => ({ backgroundColor: pressed ? t.pressed : "transparent" })}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => ({
+        backgroundColor: pressed && !disabled ? t.pressed : "transparent",
+      })}
     >
-      <IconCircle icon={icon} />
-      <Text className="flex-1" style={{ marginLeft: 12, fontSize: 17, fontWeight: "600", color: t.accent }}>
+      <IconCircle icon={icon} muted={disabled} />
+      <Text
+        className="flex-1"
+        style={{
+          marginLeft: 12,
+          fontSize: 17,
+          fontWeight: "600",
+          color: disabled ? t.faint : t.accent,
+        }}
+      >
         {label}
       </Text>
-      <ChevronRight color={t.chevron} size={ICON.sm} />
+      {disabled ? null : <ChevronRight color={t.chevron} size={ICON.sm} />}
     </Pressable>
   );
 }

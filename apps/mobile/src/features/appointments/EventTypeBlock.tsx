@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { Settings } from "lucide-react-native";
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
@@ -20,7 +21,12 @@ import { useThemeColors } from "@/theme/colors";
 // значок поставь просто „типы события“ с правой стороны, чтоб можно было
 // всегда открывать настройки»). Плитка-шестерёнка уезжала за край вместе с
 // лентой — то есть дверь в справочник пряталась ровно тогда, когда типов
-// много и она нужнее всего.
+// много и она нужнее всего. Тем же днём владелец уточнил: не слово, а
+// ЗНАЧОК ползунков — тот же, которым в продукте обозначены настройки; слово
+// «Типы событий» рядом с заголовком «ТИП СОБЫТИЯ» читалось как второй
+// заголовок. Значок — КАНОНИЧЕСКАЯ шестерёнка «мини-настроек» из `PickerSheet`
+// (та, что стоит в листе метки), а не какая-то своя: один жест — один значок.
+// Подпись жива в озвучке.
 //
 // Каждый тип показан своим значком из справочника и своим цветом: цвет
 // события и есть цвет типа, и выбор его сразу показывает.
@@ -33,14 +39,17 @@ const CIRCLE = 40;
 export function EventTypeBlock({
   types,
   selectedId,
+  loading,
   onSelect,
   onSettings,
 }: {
   types: readonly PersonalEventType[];
   /** Выбранный тип; `null` — событие без типа (оно называется «Событие»). */
   selectedId: string | null;
+  /** Справочник ещё едет: «Типов пока нет» в этот момент — неправда. */
+  loading?: boolean;
   onSelect: (id: string) => void;
-  /** Кабинет → «Типы событий»: там их заводят, красят и переименовывают. */
+  /** Справочник типов: там их заводят, красят и переименовывают. */
   onSettings: () => void;
 }) {
   const t = useThemeColors();
@@ -49,14 +58,18 @@ export function EventTypeBlock({
   return (
     <SectionCard
       title="Тип события"
-      action={{ label: "Типы событий", onPress: onSettings }}
+      action={{
+        label: "Типы событий",
+        icon: Settings,
+        onPress: onSettings,
+      }}
     >
       {types.length === 0 ? (
         <Text
           maxFontSizeMultiplier={1.3}
           style={{ paddingHorizontal: 16, paddingBottom: 12, fontSize: 15, color: t.placeholder }}
         >
-          Типов пока нет — заведите их в «Типах событий».
+          {loading ? "Загружаем типы…" : "Типов пока нет — заведите их в настройках."}
         </Text>
       ) : (
         // px через contentContainerStyle: className на ScrollView NativeWind
