@@ -584,6 +584,7 @@ function rowToEventType(r: EventTypeRow): PersonalEventType {
     defaultDuration: r.default_duration,
     allDay: r.all_day,
     order: r.position,
+    hidden: !r.is_active,
   };
 }
 
@@ -613,8 +614,13 @@ export function usePersonalEventTypes() {
           .order("position");
         if (error) throw serverOperationError("usePersonalEventTypes", error);
         if ((data ?? []).length > 0) {
+          // СКРЫТЫЕ ЕДУТ ВМЕСТЕ С ЖИВЫМИ (владелец 2026-09-08): справочник
+          // показывает их серой строкой и возвращает одним касанием. Форма
+          // события отбирает `!hidden` сама — фильтр в запросе оставил бы
+          // экран настроек без того, чем он управляет. Удалённые (у них своя
+          // колонка `deleted_at`) не приезжают вовсе.
           const list = (data ?? [])
-            .filter((row) => row.is_active)
+            .filter((row) => row.deleted_at == null)
             .map(rowToEventType);
           safeSavePersonalEventTypes(list);
           return list;
@@ -695,7 +701,11 @@ export function useSavePersonalEventTypes() {
               default_duration: t.defaultDuration,
               all_day: t.allDay,
               position: i,
-              is_active: true,
+              is_active: !t.hidden,
+              // Строка возвращается из удалённых, если её id снова сохранили:
+              // «Показать» у скрытой и повторное заведение того же типа
+              // должны воскрешать одну и ту же запись, а не спорить с ней.
+              deleted_at: null,
             })),
             { onConflict: "tenant_id,id" },
           )
@@ -713,7 +723,7 @@ export function useSavePersonalEventTypes() {
       if (gone.length > 0) {
         const { error: deleteError } = await supabase
           .from("personal_event_types")
-          .update({ is_active: false })
+          .update({ is_active: false, deleted_at: new Date().toISOString() })
           .eq("tenant_id", tenantId)
           .in("id", gone);
         if (deleteError) {
