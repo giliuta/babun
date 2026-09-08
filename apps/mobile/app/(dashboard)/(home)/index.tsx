@@ -2454,6 +2454,11 @@ export default function CalendarTab() {
           businessToday={todayYmd}
           onClose={() => setFinModalYmd(null)}
           onEditAppointment={openEdit}
+          // «Добавить долг» — новая запись на этот день: долг рождается только
+          // у записи. Права проверяет сам bookAt.
+          onCreateRecord={
+            canManageBookings ? (ymd) => bookAt({ date: ymd, kind: "work" }) : undefined
+          }
         />
       ) : null}
 

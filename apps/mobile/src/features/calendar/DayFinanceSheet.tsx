@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { X } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
@@ -14,7 +14,7 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { RowGroup } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ICON } from "@/components/ui/tokens";
-import { formatHM, parseYMD } from "@/features/appointments/helpers";
+import { formatHM } from "@/features/appointments/helpers";
 import {
   dayDebtRecords,
   ledgerExtrasForDay,
@@ -35,20 +35,24 @@ import { useThemeColors } from "@/theme/colors";
 
 // ФИНАНСЫ ДНЯ — ЛИСТ СНИЗУ С ПЛИТКАМИ КАК В «ФИНАНСАХ» (владелец 2026-09-08:
 // «тапаю внизу — снизу поднимается плашка; сверху четыре блока, как в
-// финансах, в тех же цветах: запланировано · доход · расход · долг; нажимаю
-// „Доход“ — вижу чётко весь доход за этот день; внизу кнопка „Добавить
-// операцию“»).
+// финансах: доход слева вверху, расход справа, долг слева внизу, ожидается
+// справа внизу — серым, оно менее важное; шторка на 50–75 %, чтобы вошли все
+// операции дня; даты сверху не надо; внизу синяя кнопка, и она меняется:
+// добавить доход · добавить расход · добавить долг, у ожидается — добавить
+// операцию»).
 //
 // Смысл плиток — строго по дню:
-//   Запланировано — что вообще можно получить по записям дня;
-//   Доход         — только то, что уже ОПЛАЧЕНО (плюс ручные доходы);
-//   Расход        — операции дня и материалы записей;
-//   Долг          — время записи прошло, а «оплачено» не нажали.
+//   Доход     — только то, что уже ОПЛАЧЕНО (плюс ручные доходы);
+//   Расход    — операции дня и материалы записей;
+//   Долг      — время записи прошло, а «оплачено» не нажали;
+//   Ожидается — что ещё предстоит по записям дня.
 // Под плитками — список выбранной плитки, теми же деньгами, что на вкладке
 // «Финансы». Тап по записи открывает запись, по ручной операции — её правку.
-// «Добавить операцию» — та же форма, что в «Финансах», сразу на этом дне.
+// Кнопка внизу ведёт в ту же форму операции, что в «Финансах», сразу на этом
+// дне (доход и расход — по категориям, не по услугам); «Добавить долг» — это
+// новая запись на этот день: долг рождается только у записи.
 
-type DayView = "planned" | "income" | "expense" | "debt";
+type DayView = "income" | "expense" | "debt" | "planned";
 
 export function DayFinanceSheet({
   dateYmd,
@@ -57,6 +61,7 @@ export function DayFinanceSheet({
   businessToday,
   onClose,
   onEditAppointment,
+  onCreateRecord,
 }: {
   /** День разбора (null = закрыто). */
   dateYmd: string | null;
@@ -68,9 +73,13 @@ export function DayFinanceSheet({
   onClose: () => void;
   /** Открыть запись — отметить оплату, посмотреть работу. */
   onEditAppointment?: (a: Appointment) => void;
+  /** «Добавить долг» — новая запись на этот день (долг бывает только у
+   *  записи). Нет права записывать — кнопки нет. */
+  onCreateRecord?: (ymd: string) => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const { height: screenH } = useWindowDimensions();
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
   const { data: clients = [] } = useClients();
@@ -143,16 +152,6 @@ export function DayFinanceSheet({
     (a.services ?? []).map((s) => s.serviceName).filter(Boolean).join(", ");
 
   const isFuture = ymd > businessToday;
-  const dateLabel = shownYmd
-    ? (() => {
-        const s = parseYMD(shownYmd).toLocaleDateString("ru-RU", {
-          weekday: "short",
-          day: "numeric",
-          month: "long",
-        });
-        return s.charAt(0).toUpperCase() + s.slice(1);
-      })()
-    : "";
 
   // ФОРМА ОПЕРАЦИИ — ПОСЛЕ УХОДА ЛИСТА: второй системный Modal поверх
   // уходящего iOS молча не показывает (тот же закон, что у попапа финансов).
@@ -218,47 +217,62 @@ export function DayFinanceSheet({
     setView(next);
   };
 
+  // КНОПКА СЛЕДУЕТ ЗА ПЛИТКОЙ. Будущий день операций не принимает (леджер
+  // не пишет вперёд), поэтому там остаётся только «Добавить долг» — новая
+  // запись на этот день.
+  const cta: { label: string; onPress: () => void } | null =
+    view === "debt"
+      ? onCreateRecord
+        ? {
+            label: "Добавить долг",
+            onPress: () => {
+              afterExit.current = () => onCreateRecord(ymd);
+              onClose();
+            },
+          }
+        : null
+      : isFuture
+        ? null
+        : view === "income"
+          ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
+          : view === "expense"
+            ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
+            : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
+
   return (
     <>
       <BottomSheet
         visible={dateYmd != null}
         onClose={onClose}
-        title={dateLabel}
         padded={false}
         scroll
-        maxHeightRatio={0.9}
+        // Шторка встаёт на 50–75 % экрана (владелец): содержимое держит
+        // минимум высоты, а список длиннее — прокручивается внутри.
+        maxHeightRatio={0.75}
         onExited={() => {
           const run = afterExit.current;
           afterExit.current = null;
           run?.();
         }}
         footer={
-          // Будущий день денег ещё не видел: леджер не принимает операции
-          // вперёд, и кнопка честно отсутствует.
-          !isFuture ? (
+          cta ? (
             <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
-              <GradientButton
-                label="Добавить операцию"
-                onPress={() =>
-                  openOperation(null, view === "expense" ? "expense" : "income")
-                }
-              />
+              <GradientButton label={cta.label} onPress={cta.onPress} />
             </View>
           ) : undefined
         }
       >
-        <View style={{ backgroundColor: t.canvas, paddingBottom: 12 }}>
+        <View
+          style={{
+            backgroundColor: t.canvas,
+            paddingBottom: 12,
+            minHeight: Math.round(screenH * 0.55),
+          }}
+        >
           {/* ЧЕТЫРЕ ПЛИТКИ — ТЕ ЖЕ, ЧТО НА «ФИНАНСАХ» (SummaryToggle): цвет
               несёт смысл, тинт — только у выбранной. */}
           <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 6 }}>
             <View style={{ flexDirection: "row", gap: 6 }}>
-              <SummaryToggle
-                label="Запланировано"
-                color={t.accent}
-                value={formatEUR(totals.planned)}
-                active={view === "planned"}
-                onPress={() => pick("planned")}
-              />
               <SummaryToggle
                 label="Доход"
                 color={moneySign(totals.earned) < 0 ? t.danger : t.success}
@@ -266,8 +280,6 @@ export function DayFinanceSheet({
                 active={view === "income"}
                 onPress={() => pick("income")}
               />
-            </View>
-            <View style={{ flexDirection: "row", gap: 6 }}>
               <SummaryToggle
                 label="Расход"
                 color={t.danger}
@@ -275,12 +287,22 @@ export function DayFinanceSheet({
                 active={view === "expense"}
                 onPress={() => pick("expense")}
               />
+            </View>
+            <View style={{ flexDirection: "row", gap: 6 }}>
               <SummaryToggle
                 label="Долг"
                 color={t.warning}
                 value={formatEUR(debtTotal)}
                 active={view === "debt"}
                 onPress={() => pick("debt")}
+              />
+              {/* Серым: план — не деньги, а то, что ещё предстоит. */}
+              <SummaryToggle
+                label="Ожидается"
+                color={t.sub}
+                value={formatEUR(totals.planned)}
+                active={view === "planned"}
+                onPress={() => pick("planned")}
               />
             </View>
           </View>
@@ -292,7 +314,7 @@ export function DayFinanceSheet({
                 time={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
                 title={clientName(a)}
                 amount={view === "debt" ? getDebtAmount(a) : a.total_amount}
-                color={view === "debt" ? t.warning : t.accent}
+                color={view === "debt" ? t.warning : t.sub}
                 separated={i > 0}
                 onPress={() => openRecord(a.id)}
               />
