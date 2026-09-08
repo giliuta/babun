@@ -59,7 +59,7 @@ import {
 
 type ColorTarget = ColorSituation | "fallback";
 
-export default function BookingSettingsScreen() {
+export default function BookingRecordSettingsScreen() {
   const t = useThemeColors();
   const router = useRouter();
   // ДВЕРЬ «БЛОКИ ФОРМЫ» ОСТАЁТСЯ В ТОМ СТЕКЕ, ГДЕ ЕЁ ОТКРЫЛИ. Эта страница

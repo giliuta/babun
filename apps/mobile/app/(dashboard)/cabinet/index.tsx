@@ -36,7 +36,6 @@ import {
   Shield,
   Star,
   Tag,
-  Tags,
   UserCog,
   Wallet,
   Wrench,
@@ -51,12 +50,6 @@ import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
-import {
-  AUTO_COLOR_RULES,
-  BOOKING_BLOCKS,
-  useAutoColorRule,
-  useBookingBlocks,
-} from "@/features/appointments/booking-prefs";
 import { Divider } from "@/components/ui/Divider";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -245,16 +238,11 @@ export default function CabinetHome() {
   // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
   // которая молчит о своём состоянии, заставляет открывать её, чтобы
   // вспомнить, что в ней стоит.
-  const bookingBlocks = useBookingBlocks();
-  const bookingRule = useAutoColorRule();
-  const bookingDesc = [
-    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
-    bookingBlocks.length === BOOKING_BLOCKS.length
-      ? "все блоки"
-      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
-          .map((b) => b.label)
-          .join(" · ") || "ни одного блока",
-  ].join(" · ");
+  // ЗА ДВЕРЬЮ ТЕПЕРЬ РАЗВИЛКА, А НЕ НАСТРОЙКИ (2026-09-08): подпись называет
+  // обе страницы, а состояние каждой печатает уже сама развилка. Прежняя
+  // строка перечисляла правило цвета и блоки — то есть половину того, что за
+  // дверью, и молчала про вторую половину.
+  const bookingDesc = "Страница записи · страница события";
   const owner = role === "owner";
   const dispatcher = role === "dispatcher";
   const master = role === "master";
@@ -428,17 +416,12 @@ export default function CabinetHome() {
               />
             </>
           ) : null}
-          {/* Типы применяются на /book; метки используются в календаре. */}
+          {/* Метки используются в календаре. ТИПЫ СОБЫТИЙ ОТСЮДА УЕХАЛИ
+              (владелец 2026-09-08: «настройку типов событий переносим в
+              „Запись“»): они настраивают форму события, а не живут сами по
+              себе, и теперь стоят за «Запись» → «Страница события». */}
           {owner && PERSONAL_CALENDAR_ENABLED ? (
             <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={Tags}
-                tone={TILE.purple}
-                title="Типы событий"
-                desc="Чипы быстрого применения: Обед, Встреча…"
-                href="/cabinet/event-types"
-              />
               <Divider inset={58} />
               <MenuRow
                 icon={Tag}
@@ -465,8 +448,8 @@ export default function CabinetHome() {
             href={"/clients/settings" as Href}
           />
           <Divider inset={58} />
-          {/* Настройка САМОЙ формы записи: какие блоки нужны этому бизнесу и
-              чем красить запись автоматически (владелец 2026-09-05). */}
+          {/* Настройка САМИХ форм календаря: за дверью развилка — страница
+              записи (цвет, блоки) и страница события (типы, блоки). */}
           <MenuRow
             icon={CalendarCheck}
             tone={TILE.blue}
