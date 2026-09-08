@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { NoticeBar } from "@/components/ui/NoticeBar";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -23,11 +24,13 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
 import { useAppointments } from "@/features/calendar/queries";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import {
   formatInvoiceDate,
   formatInvoiceMoney,
+  invoiceVatMode,
   todayYmd,
 } from "@/features/invoices/format";
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
@@ -38,6 +41,7 @@ import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import {
   useCancelInvoice,
   useCreditNoteLinks,
+  useEditInvoice,
   useInvoice,
   useInvoicePayments,
   useInvoices,
@@ -115,6 +119,12 @@ export default function InvoiceDetailScreen() {
       : 0,
     [payments, refundTarget],
   );
+  // ДОКУМЕНТ БЕЗ КЛИЕНТА МОЖНО ПРИВЯЗАТЬ (владелец 2026-09-07: «открываю
+  // документ — сверху пишет, что он ни к чему не присвоен, и предлагает
+  // выбрать клиента, чтобы не потерялся»). Идёт тем же путём, что правка
+  // инвойса: сервер пересобирает снимок клиента и печатает его на бумаге.
+  const [pickClientOpen, setPickClientOpen] = useState(false);
+  const edit = useEditInvoice(id, invoice.data?.issued_on ?? businessToday);
   // Счёт компании обслуживает подключённые к нему команды — сервер такую
   // оплату принимает, а экран её запрещал: инвойс команды нельзя было
   // оплатить на общий Revolut, хотя деньги приходят именно туда.
@@ -289,6 +299,35 @@ export default function InvoiceDetailScreen() {
     awaitsPayment &&
     !!row.due_on &&
     row.due_on < businessToday;
+  const unassigned = !row.client_id && !isCreditNote;
+  // Сервер меняет реквизиты только у неоплаченного инвойса без операций
+  // (сторож prevent_settled_invoice_rewrite): оплаченную бумагу не трогаем.
+  const canAssignClient =
+    unassigned && row.status === "issued" && settlement.paid === 0;
+  const assignClient = async (clientId: string) => {
+    setPickClientOpen(false);
+    try {
+      await edit.mutateAsync({
+        due_on: row.due_on,
+        client_id: clientId,
+        appointment_id: row.appointment_id,
+        brigade_id: row.brigade_id,
+        vat_mode: invoiceVatMode(row),
+        vat_percent: row.vat_percent,
+        lines: row.lines.map((line) => ({
+          title: line.title,
+          qty: line.qty,
+          unit_price: line.unit_price,
+          description: line.description,
+          unit: line.unit,
+        })),
+        notes: row.notes,
+      });
+      haptics.success();
+    } catch (error) {
+      notify("Не удалось привязать клиента", (error as Error).message);
+    }
+  };
 
   const openPayment = () => {
     if (paymentAccounts.length > 0) {
@@ -378,6 +417,24 @@ export default function InvoiceDetailScreen() {
           )}
         </View>
 
+        {unassigned ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <NoticeBar
+              tone="info"
+              message={
+                canAssignClient
+                  ? "Документ ни к кому не привязан"
+                  : "Документ ни к кому не привязан. Привязать можно только неоплаченный инвойс без операций."
+              }
+              action={
+                canAssignClient
+                  ? { label: "Выбрать клиента", onPress: () => setPickClientOpen(true) }
+                  : undefined
+              }
+            />
+          </View>
+        ) : null}
+
         <SectionCard title="Документ">
           <InfoRow label="Выставлен" value={formatInvoiceDate(row.issued_on)} />
           <Divider inset={16} />
@@ -424,6 +481,12 @@ export default function InvoiceDetailScreen() {
               label="Клиент"
               value={clientIsArchived ? `${recipientName} · Архив` : recipientName}
               muted={clientIsArchived}
+            />
+          ) : canAssignClient ? (
+            <ValueRow
+              label="Клиент"
+              value="Выбрать"
+              onPress={() => setPickClientOpen(true)}
             />
           ) : (
             <InfoRow label="Клиент" value="Не привязан" muted />
@@ -611,6 +674,12 @@ export default function InvoiceDetailScreen() {
           await refund.mutateAsync(value);
         }}
         onClose={() => setRefundTarget(null)}
+      />
+      <ClientPickerSheet
+        visible={pickClientOpen}
+        title="Клиент инвойса"
+        onSelect={(client) => void assignClient(client.id)}
+        onClose={() => setPickClientOpen(false)}
       />
     </Screen>
   );

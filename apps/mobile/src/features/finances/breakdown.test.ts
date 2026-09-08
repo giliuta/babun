@@ -42,6 +42,7 @@ function tx(
     vat_rate: null,
     vat_amount: null,
     occurred_on: "2026-08-10",
+    occurred_time: null,
     receipt_url: null,
     transfer_group_id: null,
     invoice_id: null,

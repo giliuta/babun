@@ -49,7 +49,7 @@ import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
+import { formatHM, formatYMD, parseHM, parseYMD } from "@/features/appointments/helpers";
 import { useRouter } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -147,6 +147,10 @@ export function OperationSheet({
   const [teamId, setTeamId] = useState<string | null>(defaultTeamId ?? null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [date, setDate] = useState(businessToday);
+  // Время операции (владелец 2026-09-07: «выбираю дату, время»). Новая —
+  // сейчас; у старой строки времени может не быть — тогда его предлагают
+  // указать, а не подставляют выдуманное.
+  const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
   const [notes, setNotes] = useState("");
   // Документ, подтверждающий операцию (путь в приватном бакете).
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -203,6 +207,7 @@ export function OperationSheet({
       setTeamId(transaction.team_id ?? null);
       setAccountId(transaction.account_id ?? null);
       setDate(transaction.occurred_on);
+      setTime(transaction.occurred_time ?? null);
       setNotes(transaction.notes ?? "");
       setReceiptUrl(transaction.receipt_url ?? null);
     } else {
@@ -213,6 +218,7 @@ export function OperationSheet({
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       setDate(businessToday);
+      setTime(formatHM(new Date()));
       setNotes("");
       setReceiptUrl(null);
     }
@@ -454,6 +460,7 @@ export function OperationSheet({
         payment_method: payment,
         notes: notes.trim() || null,
         occurred_on: date,
+        occurred_time: time,
         receipt_url: receiptUrl,
         business_today: businessToday,
       };
@@ -659,6 +666,32 @@ export function OperationSheet({
               locale="ru-RU"
               onChange={(_, d) => d && setDate(formatYMD(d))}
             />
+          </View>
+          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
+          <View className="flex-row items-center justify-between px-4 py-2.5">
+            <Text className="text-base" style={{ color: th.ink }}>Время</Text>
+            {time == null ? (
+              <Pressable
+                onPress={() => setTime(formatHM(new Date()))}
+                accessibilityRole="button"
+                accessibilityLabel="Указать время операции"
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+              >
+                <Text className="text-base" style={{ color: th.accent }}>Указать</Text>
+              </Pressable>
+            ) : (
+              <DateTimeInput
+                value={parseHM(time)}
+                mode="time"
+                display="compact"
+                minuteInterval={5}
+                themeVariant="light"
+                locale="ru-RU"
+                accessibilityLabel="Время операции"
+                onChange={(_, d) => d && setTime(formatHM(d))}
+              />
+            )}
           </View>
         </SectionCard>
 

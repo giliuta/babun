@@ -6,8 +6,7 @@ import { useLocationRequestActions } from "@/features/clients/location-request-a
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
-import { AttachmentsRow } from "@/features/clients/blocks/AttachmentsBlock";
-import { ClientDocumentsRow } from "@/features/clients/blocks/ClientDocumentsRow";
+import DocumentationBlock from "@/features/clients/blocks/DocumentationBlock";
 import NotesBlock from "@/features/clients/blocks/NotesBlock";
 import { PersonalBlock } from "@/features/clients/blocks/PersonalBlock";
 import { RowCaption } from "@/components/ui/card-rows";
@@ -101,27 +100,16 @@ export function ClientProfileBlocks({
           2026-08-02). Число визитов и так стояло в сводке, и строка повторяла
           его второй раз ради одного шеврона. */}
 
-      {/* ПОРЯДОК (владелец 2026-08-06): объекты → заметки → личное. Сразу под
-          объектами — то, что ЗАПИСЫВАЮТ по ходу дела (заметка, документ), и
+      {/* ПОРЯДОК (владелец 2026-08-06): объекты → заметки → документация →
+          личное. Сразу под объектами — то, что ЗАПИСЫВАЮТ по ходу дела, и
           только потом справочные свойства человека.
 
-          «Документация» — строка ВНУТРИ заметок. Своей карточки у файлов
-          больше нет: до сохранения клиента их всё равно нельзя приложить
-          (путь в хранилище строится по id), поэтому в черновике строки нет. */}
-      <NotesBlock
-        client={client}
-        update={update}
-        footerRow={
-          !draft ? (
-            <>
-              <AttachmentsRow clientId={client.id} separated />
-              {/* Счета и чеки — отдельной строкой от «Документации»: первое
-                  выдали клиенту, второе сложили про него. */}
-              <ClientDocumentsRow clientId={client.id} separated />
-            </>
-          ) : null
-        }
-      />
+          ДОКУМЕНТАЦИЯ — СВОЯ КАРТОЧКА (владелец 2026-09-07: «заметка клиента
+          — отдельный блок, а документация со счетами и чеками — всё вместе,
+          с разбивкой по записям»). В черновике её нет: документы живут у
+          записей, а записей у несохранённого клиента не бывает. */}
+      <NotesBlock client={client} update={update} />
+      {!draft ? <DocumentationBlock clientId={client.id} /> : null}
       <PersonalBlock client={client} update={update} tags={tags} />
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют

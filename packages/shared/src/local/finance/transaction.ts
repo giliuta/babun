@@ -70,6 +70,9 @@ export interface FinanceTransaction {
    *  повторяет знак суммы — возврат уносит и налог. */
   vat_amount: number | null;
   occurred_on: string; // YYYY-MM-DD — drives day grouping
+  /** HH:MM по часам бизнеса — когда операция случилась в этот день. null —
+   *  без времени (старые строки, авто-проводки: у них время берётся у записи). */
+  occurred_time: string | null;
   receipt_url: string | null; // storage path in `receipts` bucket
   transfer_group_id: string | null;
   invoice_id: string | null;

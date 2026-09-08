@@ -1378,6 +1378,7 @@ export type Database = {
           master_id: string | null
           notes: string | null
           occurred_on: string
+          occurred_time: string | null
           payment_method: string | null
           receipt_url: string | null
           refund_of_id: string | null
@@ -1408,6 +1409,7 @@ export type Database = {
           master_id?: string | null
           notes?: string | null
           occurred_on?: string
+          occurred_time?: string | null
           payment_method?: string | null
           receipt_url?: string | null
           refund_of_id?: string | null
@@ -1438,6 +1440,7 @@ export type Database = {
           master_id?: string | null
           notes?: string | null
           occurred_on?: string
+          occurred_time?: string | null
           payment_method?: string | null
           receipt_url?: string | null
           refund_of_id?: string | null

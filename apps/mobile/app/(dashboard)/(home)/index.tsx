@@ -394,7 +394,6 @@ export default function CalendarTab() {
     locationId?: string;
     teamId?: string;
     date?: string;
-    services?: string; // CSV service-id — префилл услуг («Повторить», ТО)
     kind?: string; // AppointmentKind черновика
     reminderId?: string; // recurring ТО → mark booked after successful create
     /** Куда вернуться, когда запись закроют. Ставит её тот, кто сюда привёл:
@@ -409,10 +408,9 @@ export default function CalendarTab() {
     // который уже существует, и там просто выбираешь»).
     pickClient?: string;
     pickLocation?: string;
-    /** Команда/услуги/напоминание того же задания — везём их до формы, а не
+    /** Команда и напоминание того же задания — везём их до формы, а не
      *  теряем на пересадке в календаре. */
     pickTeam?: string;
-    pickServices?: string;
     pickReminder?: string;
   }>();
   // РЕЖИМ — СОСТОЯНИЕ ЭКРАНА, А НЕ АДРЕС. Параметр вкладки переживает всё:
@@ -424,7 +422,6 @@ export default function CalendarTab() {
     clientId: string;
     locationId: string | null;
     teamId: string | null;
-    services: string | null;
     reminderId: string | null;
   } | null>(null);
   const pickClientId = pick?.clientId ?? null;
@@ -434,21 +431,18 @@ export default function CalendarTab() {
       clientId: params.pickClient,
       locationId: params.pickLocation || null,
       teamId: params.pickTeam || null,
-      services: params.pickServices || null,
       reminderId: params.pickReminder || null,
     });
     router.setParams({
       pickClient: "",
       pickLocation: "",
       pickTeam: "",
-      pickServices: "",
       pickReminder: "",
     });
   }, [
     params.pickClient,
     params.pickLocation,
     params.pickTeam,
-    params.pickServices,
     params.pickReminder,
     router,
   ]);
@@ -646,7 +640,6 @@ export default function CalendarTab() {
         locationId: undefined,
         teamId: undefined,
         date: undefined,
-        services: undefined,
         kind: undefined,
         reminderId: undefined,
         appointmentId: undefined,
@@ -728,7 +721,6 @@ export default function CalendarTab() {
           ...(params.locationId ? { locationId: params.locationId } : {}),
           ...(params.teamId ? { teamId: params.teamId } : {}),
           ...(draftDate ? { date: draftDate } : {}),
-          ...(params.services ? { services: params.services } : {}),
           ...(draftKind ? { kind: draftKind } : {}),
           ...(params.reminderId ? { reminderId: params.reminderId } : {}),
         },
@@ -1994,7 +1986,6 @@ export default function CalendarTab() {
         ...(activeTeamId ? { teamId: activeTeamId } : {}),
         // Услуги прошлого визита («Повторить») и гашение напоминания о ТО
         // доезжают до формы вместе с выбранным временем.
-        ...(pick?.services ? { services: pick.services } : {}),
         ...(pick?.reminderId ? { reminderId: pick.reminderId } : {}),
         date: dateYmd,
         // Форма ждёт именно `time_start` — под именем `time` выбранный кубик

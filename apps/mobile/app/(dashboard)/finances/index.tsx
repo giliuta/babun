@@ -41,6 +41,9 @@ import {
 } from "@/features/finances/queries";
 import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
+import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
+import { incomeDeals } from "@/features/finances/income-deals";
+import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { TransferSheet } from "@/features/finances/TransferSheet";
 import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import type { DocumentFilter } from "@/features/finances/documents";
@@ -188,6 +191,7 @@ function FinancesContent() {
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
   const [popupTx, setPopupTx] = useState<FinanceTransaction | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [createAccountOpen, setCreateAccountOpen] = useState(false);
 
   const categoriesQuery = useFinanceCategories();
   const teamsQuery = useTeams();
@@ -589,15 +593,27 @@ function FinancesContent() {
     [allTeams],
   );
 
+  // Материалы записей — строками в «Расходе» (владелец 2026-09-07): плитка
+  // считала их всегда, теперь и список их называет поимённо.
+  const materialRows = useMemo(
+    () =>
+      materialExpenseRows(scopedAppointments, services, {
+        from: period.from,
+        to: period.to,
+        teamId: scope,
+      }),
+    [period.from, period.to, scope, scopedAppointments, services],
+  );
+
   // Feed filtered by the active overview card (web parity: feedTx).
   const feedTx = useMemo(() => {
+    // «Доход» — только сделки: снятая оплата с её откатом прячется парой
+    // (см. incomeDeals), плитка считает то же нетто.
     const byView =
       view === "income"
-        ? scopedTransactions.filter(
-            (tx) => tx.type === "income" || tx.type === "refund",
-          )
+        ? incomeDeals(scopedTransactions)
         : view === "expense"
-          ? scopedTransactions.filter((tx) => tx.type === "expense")
+          ? [...scopedTransactions.filter((tx) => tx.type === "expense"), ...materialRows]
           : scopedTransactions;
     const needle = query.trim().toLowerCase();
     if (!needle) return byView;
@@ -627,6 +643,7 @@ function FinancesContent() {
     });
   }, [
     scopedTransactions,
+    materialRows,
     view,
     query,
     clientName,
@@ -932,24 +949,8 @@ function FinancesContent() {
             services={services}
             title={feedTitle}
             refreshControl={refreshControl}
-            // ПЛИТКА И ЛЕНТА ОБЯЗАНЫ СХОДИТЬСЯ. «Расход» плитки = операции
-            // журнала ПЛЮС материалы записей (`expenseWithMaterials`), а в
-            // ленте лежат только операции: у материалов нет и не будет своей
-            // проводки — это расчётная величина по записям. Пока разницу никто
-            // не называл, владелец видел €540 на плитке и складывал €400 по
-            // строкам. Сноска называет её и ведёт туда, где эти деньги
-            // разложены поимённо, — в разбор прибыли.
-            footnote={
-              view === "expense" && materialSummary.amount > 0
-                ? {
-                    text: `Плюс материалы: ${money(materialSummary.amount)} за ${formatCountRu(
-                      materialSummary.appointmentCount,
-                      FORMS_ZAPIS,
-                    )} — своей проводки у них нет. Разбор — в «Прибыли».`,
-                    onPress: () => setView("profit"),
-                  }
-                : undefined
-            }
+            // Плитка «Расход» и список сходятся: материалы записей стоят в
+            // списке своими строками (materialExpenseRows).
             onReset={view !== "all" ? () => setView("all") : undefined}
             onTxTap={(tx) => {
               // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15:
@@ -994,26 +995,23 @@ function FinancesContent() {
           между вкладками она прыгала. */}
       <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
         {view === "accounts" ? (
-          <>
-            {accounts.length < 2 ? (
-              // ПРИЧИНА ПЕЧАТАЕТСЯ ВСЕГДА (закон TransferSheet): серая кнопка
-              // без единого слова читается как поломка продукта.
-              <Text
-                className="mb-2 text-center text-[13px]"
-                style={{ color: t.sub }}
-              >
-                Для перевода нужен второй счёт — его заводят в настройках счетов
-              </Text>
-            ) : null}
+          // КНОПКА ДЕЛАЕТ ТО, ЧТО ВОЗМОЖНО (владелец 2026-09-07: «нет ни одного
+          // счёта — кнопка „Добавить счёт“; после создания она сама меняется
+          // на переводы»). Перевод — движение между ДВУМЯ счетами, поэтому до
+          // второго счёта кнопка заводит счёт, а не стоит серой с оправданием.
+          // Считаем ВСЕ счета тенанта, а не срез команды: деньги ходят между
+          // командами.
+          accounts.length < 2 ? (
+            <GradientButton
+              label="Добавить счёт"
+              onPress={() => setCreateAccountOpen(true)}
+            />
+          ) : (
             <GradientButton
               label="Сделать перевод"
-              // Считаем ВСЕ счета тенанта, а не срез команды: лист получает их
-              // все, и деньги ходят между командами. По срезу кнопка гасла бы у
-              // команды с одной своей кассой, хотя перевести ей есть куда.
-              disabled={accounts.length < 2}
               onPress={() => setTransferOpen(true)}
             />
-          </>
+          )
         ) : view === "documents" && docFilter === "receipt" ? (
           // ЧЕК НЕЛЬЗЯ ВЫПИСАТЬ КНОПКОЙ. Его выдаёт сервер в тот же миг, когда
           // принимает деньги (триггер issue_receipt_for_income): чек — это
@@ -1130,6 +1128,15 @@ function FinancesContent() {
         onClose={() => setTransferOpen(false)}
         accounts={accounts}
         teamById={teamByIdAll}
+      />
+      {/* Первый счёт заводится прямо отсюда — тем же листом, что на странице
+          счетов; команда — та, что выбрана чипом. */}
+      <AccountCreateSheet
+        visible={createAccountOpen}
+        onClose={() => setCreateAccountOpen(false)}
+        teams={teams}
+        accounts={accounts}
+        presetTeamId={scope === NO_TEAM ? null : scope}
       />
 
       <PeriodPresetModal

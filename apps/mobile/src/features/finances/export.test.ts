@@ -26,6 +26,7 @@ function transaction(
     payment_method: null,
     notes: null,
     occurred_on: "2026-07-20",
+    occurred_time: null,
     receipt_url: null,
     transfer_group_id: null,
     invoice_id: null,

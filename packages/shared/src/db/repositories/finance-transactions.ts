@@ -88,6 +88,8 @@ function rowToTx(r: Row): FinanceTransaction {
     payment_method: (r.payment_method ?? null) as PaymentMethod | null,
     notes: r.notes,
     occurred_on: r.occurred_on,
+    // Postgres отдаёт time как «HH:MM:SS» — в модели живёт «HH:MM».
+    occurred_time: r.occurred_time ? r.occurred_time.slice(0, 5) : null,
     receipt_url: r.receipt_url,
     // Налог снимком: считать его на лету по текущей ставке нельзя —
     // изменение ставки бесшумно переписало бы прошлую отчётность.
@@ -334,6 +336,8 @@ export interface TransactionDraft {
   payment_method?: PaymentMethod | null;
   notes?: string | null;
   occurred_on?: string;
+  /** HH:MM по часам бизнеса; null — без времени. */
+  occurred_time?: string | null;
   /** Tenant-local date supplied by the UI for preflight validation only. */
   business_today?: string;
   receipt_url?: string | null;
@@ -372,6 +376,7 @@ export async function insertTransaction(
     payment_method: draft.payment_method ?? null,
     notes: draft.notes ?? null,
     occurred_on: occurredOn,
+    occurred_time: draft.occurred_time ?? null,
     receipt_url: draft.receipt_url ?? null,
     vat_mode: draft.vat_mode ?? null,
     invoice_id: draft.invoice_id ?? null,
@@ -423,6 +428,7 @@ export async function updateTransaction(
   if (patch.payment_method !== undefined) update.payment_method = patch.payment_method;
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.occurred_on !== undefined) update.occurred_on = patch.occurred_on;
+  if (patch.occurred_time !== undefined) update.occurred_time = patch.occurred_time;
   if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
   const { data, error } = await supabase

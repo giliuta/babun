@@ -24,9 +24,6 @@ export interface BookingTarget {
   clientId: string;
   locationId?: string | null;
   teamId?: string | null;
-  /** Услуги для предзаполнения — из последнего завершённого визита.
-   *  Экран записи читает их из параметра `services` (id через запятую). */
-  serviceIds?: readonly string[];
   /** YYYY-MM-DD, если дата известна («Записать» на дату ТО). Без неё
    *  экран записи открывается на СЕГОДНЯ по времени тенанта. */
   date?: string | null;
@@ -47,7 +44,6 @@ export function useBookingNav(): (target: BookingTarget) => void {
     clientId,
     locationId,
     teamId,
-    serviceIds,
     date,
     reminderId,
   }: BookingTarget) => {
@@ -70,15 +66,11 @@ export function useBookingNav(): (target: BookingTarget) => void {
         params: {
           pickClient: clientId,
           ...(locationId ? { pickLocation: locationId } : {}),
-          // Команда, услуги и напоминание ЕДУТ ДАЛЬШЕ вместе с клиентом.
-          // Раньше эта ветка забирала только клиента: календарь считал
-          // свободное время по команде, открытой в чипе, и записывал туда
-          // же — клиента, который всегда ездит к команде Б, ставили к А.
-          // «Как в прошлый раз» без услуг тем более пустое.
+          // Команда и напоминание ЕДУТ ДАЛЬШЕ вместе с клиентом. Раньше эта
+          // ветка забирала только клиента: календарь считал свободное время
+          // по команде, открытой в чипе, и записывал туда же — клиента,
+          // который всегда ездит к команде Б, ставили к А.
           ...(teamId ? { pickTeam: teamId } : {}),
-          ...(serviceIds && serviceIds.length
-            ? { pickServices: serviceIds.join(",") }
-            : {}),
           ...(reminderId ? { pickReminder: reminderId } : {}),
         },
       });
@@ -92,9 +84,6 @@ export function useBookingNav(): (target: BookingTarget) => void {
         ...(teamId ? { teamId } : {}),
         ...(date ? { date } : {}),
         ...(reminderId ? { reminderId } : {}),
-        ...(serviceIds && serviceIds.length
-          ? { services: serviceIds.join(",") }
-          : {}),
       },
     });
   };
