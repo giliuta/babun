@@ -43,6 +43,7 @@ import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
 import { incomeDeals } from "@/features/finances/income-deals";
+import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { TransferSheet } from "@/features/finances/TransferSheet";
 import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import type { DocumentFilter } from "@/features/finances/documents";
@@ -592,6 +593,18 @@ function FinancesContent() {
     [allTeams],
   );
 
+  // Материалы записей — строками в «Расходе» (владелец 2026-09-07): плитка
+  // считала их всегда, теперь и список их называет поимённо.
+  const materialRows = useMemo(
+    () =>
+      materialExpenseRows(scopedAppointments, services, {
+        from: period.from,
+        to: period.to,
+        teamId: scope,
+      }),
+    [period.from, period.to, scope, scopedAppointments, services],
+  );
+
   // Feed filtered by the active overview card (web parity: feedTx).
   const feedTx = useMemo(() => {
     // «Доход» — только сделки: снятая оплата с её откатом прячется парой
@@ -600,7 +613,7 @@ function FinancesContent() {
       view === "income"
         ? incomeDeals(scopedTransactions)
         : view === "expense"
-          ? scopedTransactions.filter((tx) => tx.type === "expense")
+          ? [...scopedTransactions.filter((tx) => tx.type === "expense"), ...materialRows]
           : scopedTransactions;
     const needle = query.trim().toLowerCase();
     if (!needle) return byView;
@@ -630,6 +643,7 @@ function FinancesContent() {
     });
   }, [
     scopedTransactions,
+    materialRows,
     view,
     query,
     clientName,
@@ -935,24 +949,8 @@ function FinancesContent() {
             services={services}
             title={feedTitle}
             refreshControl={refreshControl}
-            // ПЛИТКА И ЛЕНТА ОБЯЗАНЫ СХОДИТЬСЯ. «Расход» плитки = операции
-            // журнала ПЛЮС материалы записей (`expenseWithMaterials`), а в
-            // ленте лежат только операции: у материалов нет и не будет своей
-            // проводки — это расчётная величина по записям. Пока разницу никто
-            // не называл, владелец видел €540 на плитке и складывал €400 по
-            // строкам. Сноска называет её и ведёт туда, где эти деньги
-            // разложены поимённо, — в разбор прибыли.
-            footnote={
-              view === "expense" && materialSummary.amount > 0
-                ? {
-                    text: `Плюс материалы: ${money(materialSummary.amount)} за ${formatCountRu(
-                      materialSummary.appointmentCount,
-                      FORMS_ZAPIS,
-                    )} — своей проводки у них нет. Разбор — в «Прибыли».`,
-                    onPress: () => setView("profit"),
-                  }
-                : undefined
-            }
+            // Плитка «Расход» и список сходятся: материалы записей стоят в
+            // списке своими строками (materialExpenseRows).
             onReset={view !== "all" ? () => setView("all") : undefined}
             onTxTap={(tx) => {
               // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15:
