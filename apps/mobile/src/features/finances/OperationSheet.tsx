@@ -173,6 +173,8 @@ export function OperationSheet({
   // Идемпотентность вставки: клиентский PK, новый после каждого успеха.
   const [requestId, setRequestId] = useState(randomUuid);
   const savingRef = useRef(false);
+  /** Отложенное до полного ухода листа: см. `remove` и `runAfterExit`. */
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
   // в полночь или фоновый рефетч не должны стирать заполняемую форму.
@@ -484,25 +486,35 @@ export function OperationSheet({
 
   const remove = () => {
     if (!transaction) return;
-    // Тело — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
+    const target = transaction;
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
+    // рисует хост приложения, а лист — отдельное окно `Modal`. Открытый в тот
+    // же кадр, вопрос получал от iOS «already presenting» и не появлялся
+    // вовсе: кнопка «Удалить» молчала, и это была единственная дверь к откату
+    // денег с экрана (2026-09-08). Сперва уезжаем, спрашиваем по `onExited` —
+    // тем же способом, что «Удалить объект» в листе правки объекта.
+    //
+    // Тело вопроса — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
     // account-alerts): человек решает по тому, что произойдёт с деньгами.
-    confirmThen(
-      "Удалить операцию?",
-      {
-        message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
-        confirmLabel: "Удалить",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await del.mutateAsync(transaction.id);
-          haptics.success();
-          onClose();
-        } catch (e) {
-          notify("Ошибка", (e as Error).message);
-        }
-      },
-    );
+    afterExit.current = () => {
+      confirmThen(
+        "Удалить операцию?",
+        {
+          message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await del.mutateAsync(target.id);
+            haptics.success();
+          } catch (e) {
+            notify("Ошибка", (e as Error).message);
+          }
+        },
+      );
+    };
+    onClose();
   };
 
   // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
@@ -510,6 +522,14 @@ export function OperationSheet({
   // закрытой ленты, где набранное потеряно.
   const guardedClose = () => {
     if (!busy) onClose();
+  };
+
+  /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
+   *  `remove` и закон `BottomSheet.onExited`. */
+  const runAfterExit = () => {
+    const run = afterExit.current;
+    afterExit.current = null;
+    run?.();
   };
 
   // Строки «Ещё»: разделители считаются от реально показанных соседей.
@@ -576,6 +596,7 @@ export function OperationSheet({
       padded={false}
       visible={visible}
       onClose={guardedClose}
+      onExited={runAfterExit}
       title={isEdit ? "Операция" : "Новая операция"}
       scroll
       avoidKeyboard
