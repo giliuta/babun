@@ -70,7 +70,7 @@ export interface OverviewTotals {
  * Тинт остаётся ровно за ВЫБРАННЫМ состоянием: раньше он стоял у половины
  * строк просто так и потому ничего не значил.
  */
-function SummaryToggle({
+export function SummaryToggle({
   label,
   color,
   value,
