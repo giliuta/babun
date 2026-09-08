@@ -119,12 +119,24 @@ export function TransactionsFeed({
     [accounts, teams, categories, clients, appointments, services],
   );
 
+  // Когда операция случилась в этот день: время записи, иначе время самой
+  // операции, иначе — момент создания. По нему строки дня идут сверху вниз.
+  const timeOf = (tx: FinanceTransaction): string => {
+    const appt = tx.appointment_id
+      ? lookups.appointment.get(tx.appointment_id)
+      : null;
+    return appt?.time_start || tx.occurred_time || hhmm(tx.created_at, businessTimezone);
+  };
+
   const sections = useMemo(() => {
     const byDate = new Map<string, FinanceTransaction[]>();
     for (const tx of transactions) {
       const arr = byDate.get(tx.occurred_on) ?? [];
       arr.push(tx);
       byDate.set(tx.occurred_on, arr);
+    }
+    for (const arr of byDate.values()) {
+      arr.sort((a, b) => timeOf(b).localeCompare(timeOf(a)) || b.created_at.localeCompare(a.created_at));
     }
     return [...byDate.entries()]
       .sort((a, b) => b[0].localeCompare(a[0]))
@@ -143,7 +155,8 @@ export function TransactionsFeed({
         ),
         data,
       }));
-  }, [transactions, contextMode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- timeOf читает lookups и пояс, они в зависимостях ниже
+  }, [transactions, contextMode, lookups, businessTimezone]);
 
   const renderRow = (tx: FinanceTransaction) => {
     const isIncome = tx.type === "income";
@@ -181,9 +194,9 @@ export function TransactionsFeed({
     let ctx = "";
     if (isIn) {
       const client = tx.client_id ? lookups.client.get(tx.client_id) : null;
-      // Доход без привязанной записи — время создания операции (web parity).
-      const time = appt?.time_start || hhmm(tx.created_at, businessTimezone);
-      ctx = [time, client?.full_name].filter(Boolean).join(" · ");
+      // Доход без привязанной записи — время самой операции, иначе момент
+      // создания (web parity).
+      ctx = [timeOf(tx), client?.full_name].filter(Boolean).join(" · ");
     } else if (tx.notes && (isTr || (isEx && cat))) {
       ctx = tx.notes;
     }
@@ -196,6 +209,12 @@ export function TransactionsFeed({
       ]
         .filter(Boolean)
         .join(" · ");
+    }
+    // Расход и перевод тоже показывают своё время, когда оно есть: владелец
+    // 2026-09-07 — «в операции дата, время…», значит и в ленте.
+    if (!isIn) {
+      const when = appt?.time_start || tx.occurred_time;
+      if (when) ctx = [when, ctx].filter(Boolean).join(" · ");
     }
 
     const barColor = isIncome ? t.success : isRefund || isEx ? t.danger : t.faint;
