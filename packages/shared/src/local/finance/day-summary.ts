@@ -41,6 +41,12 @@ export interface DayFinanceTotals {
 const isClosable = (a: Appointment) =>
   a.status === "completed" || a.status === "in_progress";
 
+/** Запись, которая ещё может принести деньги: не отменена и не возвращена.
+ *  Один предикат и на сумму «Ожидается», и на её список в разборе дня. */
+export const isPlannedRecord = (
+  a: Pick<Appointment, "status" | "payment_status">,
+): boolean => a.status !== "cancelled" && a.payment_status !== "refunded";
+
 /**
  * Compute the day's finance totals.
  *
@@ -71,10 +77,7 @@ export function computeDayFinance(
   );
 
   const planned = appointments
-    .filter(
-      (a) =>
-        a.status !== "cancelled" && a.payment_status !== "refunded",
-    )
+    .filter(isPlannedRecord)
     .reduce((sum, a) => sum + a.total_amount, 0);
 
   const extrasSum = sumExtras(extras);

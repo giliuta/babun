@@ -95,6 +95,9 @@ export function SummaryToggle({
       accessibilityRole="button"
       accessibilityState={{ expanded: active }}
       accessibilityLabel={`${label}: ${a11yValue ?? value}`}
+      // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
+      // за счёт зазора, вид не меняется (тот же приём, что у Chip).
+      hitSlop={{ top: 3, bottom: 3 }}
       className="flex-1 flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
       style={{
         minHeight: 38,
