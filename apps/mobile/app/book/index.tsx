@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   Text as NativeText,
+  TextInput,
   View,
   type TextProps,
 } from "react-native";
@@ -338,10 +339,6 @@ export default function BookScreen() {
   );
   const loyalty = loyaltyQuery.data;
   const calendarSettings = calendarSettingsQuery.data;
-  const eventTypes = useMemo(
-    () => eventTypesQuery.data ?? [],
-    [eventTypesQuery.data],
-  );
   // Создание заявки и весь его хвост (закрытие напоминания, синхронизация
   // push события, тосты, хаптика) живут в общем хуке — на нём же строится
   // шторка «Записать» с карточки клиента, чтобы путь создания остался один.
@@ -423,6 +420,12 @@ export default function BookScreen() {
     addMinutesHM(first(params.time_start) ?? "10:00", 60),
   );
   const [durationTouched, setDurationTouched] = useState(false);
+  // ДЛИТЕЛЬНОСТЬ, ВЫБРАННАЯ РУКАМИ, СИЛЬНЕЕ ДЛИТЕЛЬНОСТИ ТИПА (владелец
+  // 2026-09-08: «тип события — это стандарт, но если в событии я выбираю
+  // время, скажем, тридцать минут, то главнее эти тридцать минут»).
+  // Отдельный флаг от `durationTouched`: тот взводит и сам выбор типа —
+  // иначе второй тип уже не смог бы поставить свою длительность.
+  const [durationByHand, setDurationByHand] = useState(false);
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [overrides, setOverrides] = useState<Record<string, ServiceOverride>>(
     {},
@@ -452,6 +455,14 @@ export default function BookScreen() {
   const [eventTitle, setEventTitle] = useState("");
   const [eventColor, setEventColor] = useState<string | null>(null);
   const [eventTypeId, setEventTypeId] = useState<string | null>(null);
+  // СКРЫТЫЕ ТИПЫ ФОРМЕ НЕ ПРЕДЛАГАЮТСЯ. Запрос отдаёт их вместе с живыми —
+  // ими управляет справочник, — а лента выбора показывает только живые. Тип
+  // уже выбранного события остаётся видимым, даже если его скрыли после:
+  // иначе правка молча меняла бы тип на «нет типа».
+  const eventTypes = useMemo(() => {
+    const all = eventTypesQuery.data ?? [];
+    return all.filter((type) => !type.hidden || type.id === eventTypeId);
+  }, [eventTypesQuery.data, eventTypeId]);
   const [eventNotes, setEventNotes] = useState("");
   const [eventAddress, setEventAddress] = useState("");
   const [eventUrl, setEventUrl] = useState("");
@@ -1440,12 +1451,14 @@ export default function BookScreen() {
     setEventTypeId(preset.id);
     setEventTitle(preset.label);
     setEventColor(preset.color);
-    // «Весь день», повтор и напоминание с формы сняты (владелец 2026-09-06:
-    // «убрать совсем»): длительность типа ставит конец от того же начала.
-    const start = timeStart === "00:00" ? "10:00" : timeStart;
-    setTimeStart(start);
-    setTimeEnd(addMinutesHM(start, preset.defaultDuration));
-    setDurationTouched(true);
+    // Длительность типа — СТАНДАРТ, а не приказ: если человек уже выбрал
+    // время сам, тип красит и называет событие, но время не трогает.
+    if (!durationByHand) {
+      const start = timeStart === "00:00" ? "10:00" : timeStart;
+      setTimeStart(start);
+      setTimeEnd(addMinutesHM(start, preset.defaultDuration));
+      setDurationTouched(true);
+    }
     haptics.tap();
   };
 
@@ -2945,13 +2958,21 @@ export default function BookScreen() {
                         onSave={setEventAddress}
                       />
                     ) : null}
-                    {eventLocationPool.length > 0 ? (
-                      <View
-                        style={{
-                          borderTopWidth: eventAddress.trim() ? 1 : 0,
-                          borderTopColor: t.separator,
-                        }}
-                      >
+                    {/* ОДНА КНОПКА, А НЕ ДВЕ (владелец 2026-09-08: «ты
+                        неправильно сделал объект — „выбрать объект“ или
+                        „добавить объект“ это неправильно, идёт одна кнопка;
+                        посмотри, как сделано в клиентах»). «Добавить объект»
+                        живёт в футере листа выбора — там, куда идут, когда
+                        нужного объекта нет. Пустой справочник — единственный
+                        случай, когда выбирать нечего и дверь сразу ведёт к
+                        добавлению. */}
+                    <View
+                      style={{
+                        borderTopWidth: eventAddress.trim() ? 1 : 0,
+                        borderTopColor: t.separator,
+                      }}
+                    >
+                      {eventLocationPool.length > 0 ? (
                         <ChooseRow
                           icon={MapPin}
                           label="Выбрать объект"
@@ -2961,41 +2982,55 @@ export default function BookScreen() {
                             haptics.tap();
                           }}
                         />
-                      </View>
-                    ) : null}
-                    <View
-                      style={{
-                        borderTopWidth:
-                          eventLocationPool.length > 0 || eventAddress.trim() ? 1 : 0,
-                        borderTopColor: t.separator,
-                      }}
-                    >
-                      <AddRow label="Добавить объект" onPress={openEventObjectAdd} />
+                      ) : (
+                        <ChooseRow
+                          icon={MapPin}
+                          label="Добавить объект"
+                          hint="Заводит первый объект"
+                          onPress={openEventObjectAdd}
+                        />
+                      )}
                     </View>
                   </>
                 )}
               </SectionCard>
               ) : null}
 
-              {/* ЗАМЕТКА — ТО ЖЕ ПОЛЕ, ЧТО У ЗАПИСИ, КЛИЕНТА И ОБЪЕКТА
-                  (владелец 2026-09-08: «соответственно заметка — так же»).
-                  Здесь был голый TextInput на 120pt: одна и та же заметка
-                  выглядела на двух вкладках одной формы по-разному. */}
+              {/* ЗАМЕТКА СОБЫТИЯ — БОЛЬШОЕ ПОЛЕ СВОЕЙ ГРУППОЙ (владелец
+                  2026-09-08: «заметки надо сделать как было до этого —
+                  отдельно группа „Заметка“, и поставить туда как можно
+                  больше места, потому что в событиях заметка считается более
+                  правильной»).
+
+                  Я успел свести её к однострочной плашке `InlineNoteField`
+                  ради единообразия с заметками клиента и объекта — и это
+                  было ошибкой по существу: у записи заметка это приписка к
+                  работе, а у события она сама и есть содержание встречи. */}
               {showNote ? (
               <SectionCard title="Заметка">
-                <InlineNoteField
-                  note={{
-                    draft: eventNotes,
-                    setDraft: setEventNotes,
-                    onFocus: () =>
-                      setTimeout(
-                        () => scrollRef.current?.scrollToEnd({ animated: true }),
-                        KEYBOARD_SETTLE_MS,
-                      ),
-                    onBlur: () => {},
-                  }}
-                  placeholder="Детали, что взять с собой"
+                <TextInput
+                  keyboardAppearance="light"
+                  maxFontSizeMultiplier={1.3}
                   accessibilityLabel="Заметка события"
+                  value={eventNotes}
+                  onChangeText={setEventNotes}
+                  onFocus={() =>
+                    setTimeout(
+                      () => scrollRef.current?.scrollToEnd({ animated: true }),
+                      KEYBOARD_SETTLE_MS,
+                    )
+                  }
+                  placeholder="О чём встреча, что взять с собой, что не забыть"
+                  placeholderTextColor={t.placeholder}
+                  multiline
+                  className="px-4 py-3"
+                  style={{
+                    minHeight: 200,
+                    fontSize: 15,
+                    lineHeight: 21,
+                    color: t.ink,
+                    textAlignVertical: "top",
+                  }}
                 />
               </SectionCard>
               ) : null}
@@ -3092,7 +3127,12 @@ export default function BookScreen() {
           // услуга по-прежнему обязана удлинить запись.
           const before = minutesBetweenHM(timeStart, timeEnd);
           const after = minutesBetweenHM(next.timeStart, next.timeEnd);
-          if (next.allDay || after !== before) setDurationTouched(true);
+          if (next.allDay || after !== before) {
+            setDurationTouched(true);
+            // Рука человека на длительности — с этого момента тип её не
+            // перебивает (см. `durationByHand`).
+            setDurationByHand(true);
+          }
         }}
         onClose={() => setWhenOpen(false)}
       />
