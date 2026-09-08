@@ -3,7 +3,7 @@ import { Pressable, Text, useWindowDimensions, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { X } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { getDebtAmount } from "@babun/shared/local/appointments";
+import { getDebtAmount, getPaidAmount } from "@babun/shared/local/appointments";
 import {
   formatEURExact as formatEUR,
   moneySign,
@@ -21,7 +21,7 @@ import { RowGroup } from "@/components/ui/card-rows";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ICON } from "@/components/ui/tokens";
-import { formatHM } from "@/features/appointments/helpers";
+import { formatHM, humanDay } from "@/features/appointments/helpers";
 import {
   dayDebtRecords,
   ledgerExtrasForDay,
@@ -63,19 +63,20 @@ import { useThemeColors } from "@/theme/colors";
 // долг — не транзакция. Тап по записи открывает запись, по ручной операции —
 // её правку; там, где открыть нечего, тапа нет.
 //
-// КНОПКА ВНИЗУ СТОИТ ВСЕГДА И ДЕЛАЕТ ТО, ЧТО ВОЗМОЖНО (закон вкладки
-// «Финансы»): на прошедшем и сегодняшнем дне — «Добавить доход / расход» в ту
-// же форму операции по категориям, сразу на этом дне; «Добавить долг» — новая
-// запись на этот день, долг рождается только у записи; на «Ожидается» —
-// «Добавить операцию». Будущий день леджер не принимает (операцию нельзя
-// записать вперёд), и единственное выполнимое там — запись: на всех плитках
-// один глагол «Создать запись», а не «Добавить доход», который молча уехал бы
-// на сегодня.
+// КНОПКА ВНИЗУ — ВСЕГДА ОПЕРАЦИЯ ИЗ «ФИНАНСОВ» (владелец 2026-09-08: «это
+// финансы в календаре — вся система из страницы финансов, а не из „создать
+// запись“»): «Добавить доход» и «Добавить расход» на своих плитках, иначе
+// «Добавить операцию» — та же форма по категориям, что на вкладке. День
+// подставляется в форму; будущий день леджер не принимает, поэтому форма
+// открывается на сегодняшней дате и показывает её в строке «Дата».
 //
 // Старые «ручные операции дня» (day_extras) показываются и удаляются с
 // вопросом; новых не заводится — деньги живут в одном леджере.
 
-type DayView = "income" | "expense" | "debt" | "planned";
+// «all» — плитка не выбрана: план дня целиком (владелец 2026-09-08: «под
+// долгом прописывается день, ниже — всё остальное по времени записей;
+// если снимаю выбор с плитки, показывается всё, и „ожидается“ с услугами»).
+type DayView = "all" | "income" | "expense" | "debt" | "planned";
 
 export function DayFinanceSheet({
   dateYmd,
@@ -84,7 +85,6 @@ export function DayFinanceSheet({
   businessToday,
   onClose,
   onEditAppointment,
-  onCreateRecord,
   onReopen,
 }: {
   /** День разбора (null = закрыто). */
@@ -97,9 +97,6 @@ export function DayFinanceSheet({
   onClose: () => void;
   /** Открыть запись — отметить оплату, посмотреть работу. */
   onEditAppointment?: (a: Appointment) => void;
-  /** Новая запись на этот день («Добавить долг», «Создать запись»). Нет
-   *  права записывать — этих кнопок нет. */
-  onCreateRecord?: (ymd: string) => void;
   /** Форма операции закрылась — вернуть разбор того же дня, с той же плиткой. */
   onReopen?: (ymd: string) => void;
 }) {
@@ -111,27 +108,24 @@ export function DayFinanceSheet({
   const { data: clients = [] } = useClients();
   const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
-  const [view, setView] = useState<DayView>("income");
+  const [view, setView] = useState<DayView>("all");
 
   // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
   // его записи держим снимком, чтобы содержимое не мигало на анимации ухода.
-  // Стартовая плитка — по дню: у будущего дня денег ещё нет, там смотрят
-  // «Ожидается»; на том же дне повторное открытие плитку не сбрасывает
-  // (после формы операции человек возвращается туда, откуда ушёл).
+  // Новый день открывается планом целиком (плитка не выбрана); на том же
+  // дне повторное открытие плитку не сбрасывает (после формы операции
+  // человек возвращается туда, откуда ушёл).
   const [shownYmd, setShownYmd] = useState<string | null>(dateYmd);
   const [shownAppts, setShownAppts] = useState<Appointment[]>(appointments);
   useEffect(() => {
     if (dateYmd == null) return;
-    if (dateYmd !== shownYmd) {
-      setView(dateYmd > businessToday ? "planned" : "income");
-    }
+    if (dateYmd !== shownYmd) setView("all");
     setShownYmd(dateYmd);
     setShownAppts(appointments);
-  }, [dateYmd, appointments, businessToday, shownYmd]);
+  }, [dateYmd, appointments, shownYmd]);
   const ymd = shownYmd ?? businessToday;
   const appts = shownAppts;
   const nowHm = formatHM(new Date());
-  const isFuture = ymd > businessToday;
 
   const txQuery = useTransactions(ymd, ymd, {
     brigadeIds: teamId ? [teamId] : undefined,
@@ -190,13 +184,35 @@ export function DayFinanceSheet({
       ),
     [dayTx, apptById],
   );
-  const expenseRows = useMemo(
-    () => [
-      ...dayTx.filter((tx) => tx.type === "expense"),
-      ...materialExpenseRows(appts, services, { from: ymd, to: ymd, teamId }),
-    ],
-    [dayTx, appts, services, ymd, teamId],
+  const materialRows = useMemo(
+    () => materialExpenseRows(appts, services, { from: ymd, to: ymd, teamId }),
+    [appts, services, ymd, teamId],
   );
+  const expenseRows = useMemo(
+    () => [...dayTx.filter((tx) => tx.type === "expense"), ...materialRows],
+    [dayTx, materialRows],
+  );
+  // ПЛАН ДНЯ — всё по времени: записи дня (оплачено · долг · ожидается) и
+  // операции без записи; проводки записей не дублируют сами записи.
+  const timeOfTx = (tx: FinanceTransaction): string =>
+    (tx.appointment_id ? apptById.get(tx.appointment_id)?.time_start : null) ||
+    tx.occurred_time ||
+    "24:00";
+  const dayPlan = useMemo(() => {
+    const items: { key: string; time: string; record?: Appointment; tx?: FinanceTransaction }[] = [];
+    for (const a of appts) {
+      if (a.status === "cancelled") continue;
+      items.push({ key: `a:${a.id}`, time: a.time_start, record: a });
+    }
+    for (const tx of dayTx) {
+      if (tx.appointment_id) continue;
+      if (tx.type !== "income" && tx.type !== "expense" && tx.type !== "refund") continue;
+      items.push({ key: `t:${tx.id}`, time: timeOfTx(tx), tx });
+    }
+    for (const tx of materialRows) items.push({ key: `m:${tx.id}`, time: timeOfTx(tx), tx });
+    return items.sort((x, y) => x.time.localeCompare(y.time));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- timeOfTx читает apptById, он в зависимостях
+  }, [appts, dayTx, materialRows, apptById]);
 
   const clientName = (a: Appointment) =>
     (a.client_id ? nameById.get(a.client_id) : null) || a.comment?.trim() || "Без имени";
@@ -280,31 +296,38 @@ export function DayFinanceSheet({
   const listExtras: DayExtra[] =
     view === "income" || view === "expense"
       ? legacyExtras.filter((e) => e.kind === view)
-      : [];
+      : view === "all"
+        ? legacyExtras
+        : [];
   const listTx = view === "income" ? incomeRows : view === "expense" ? expenseRows : [];
   const listRecords = view === "planned" ? plannedRecords : view === "debt" ? debtRecords : [];
-  const listLoading = (view === "income" || view === "expense") && ledgerLoading;
-  const listEmpty = listTx.length === 0 && listExtras.length === 0 && listRecords.length === 0;
+  const listLoading = (view === "income" || view === "expense" || view === "all") && ledgerLoading;
+  const listEmpty =
+    view === "all"
+      ? dayPlan.length === 0 && listExtras.length === 0
+      : listTx.length === 0 && listExtras.length === 0 && listRecords.length === 0;
 
+  // Плитка — фильтр: повторный тап снимает выбор и возвращает план дня.
   const pick = (next: DayView) => {
     haptics.tap();
-    setView(next);
+    setView((current) => (current === next ? "all" : next));
   };
 
-  const createRecord = onCreateRecord
-    ? { onPress: () => leaveThen(() => onCreateRecord(ymd)) }
-    : null;
-  const cta: { label: string; onPress: () => void } | null = isFuture
-    ? createRecord && { label: "Создать запись", ...createRecord }
-    : view === "debt"
-      ? createRecord
-        ? { label: "Добавить долг", ...createRecord }
-        : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") }
-      : view === "income"
-        ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
-        : view === "expense"
-          ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
-          : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
+  // Статус записи в плане дня: оплачено · долг · ожидается.
+  const recordStatus = (a: Appointment): { word: string; amount: number; color: string } => {
+    const debt = getDebtAmount(a);
+    if (debt <= 0) return { word: "оплачено", amount: getPaidAmount(a), color: t.success };
+    if (debtRecords.some((d) => d.id === a.id)) return { word: "долг", amount: debt, color: t.warning };
+    return { word: "ожидается", amount: debt, color: t.sub };
+  };
+
+  const cta: { label: string; onPress: () => void } =
+    view === "income"
+      ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
+      : view === "expense"
+        ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
+        : // План дня, «Долг» и «Ожидается» — общая операция.
+          { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
 
   const closing = dateYmd == null;
 
@@ -328,14 +351,12 @@ export function DayFinanceSheet({
           run?.();
         }}
         footer={
-          cta ? (
-            <View
-              pointerEvents={closing ? "none" : "auto"}
-              style={{ paddingHorizontal: 16, paddingTop: 8 }}
-            >
-              <GradientButton label={cta.label} onPress={cta.onPress} />
-            </View>
-          ) : undefined
+          <View
+            pointerEvents={closing ? "none" : "auto"}
+            style={{ paddingHorizontal: 16, paddingTop: 8 }}
+          >
+            <GradientButton label={cta.label} onPress={cta.onPress} />
+          </View>
         }
       >
         <View
@@ -398,7 +419,35 @@ export function DayFinanceSheet({
           {listLoading ? (
             <EmptyState state="loading" />
           ) : listEmpty ? null : (
-            <RowGroup>
+            <RowGroup title={humanDay(ymd)}>
+              {view === "all"
+                ? dayPlan.map((item, i) =>
+                    item.record ? (
+                      <RecordRow
+                        key={item.key}
+                        name={clientName(item.record)}
+                        context={[item.record.time_start, servicesOf(item.record)]
+                          .filter(Boolean)
+                          .join(" · ")}
+                        amount={recordStatus(item.record).amount}
+                        color={recordStatus(item.record).color}
+                        status={recordStatus(item.record).word}
+                        separated={i > 0}
+                        onPress={() => openRecord(item.record!.id)}
+                      />
+                    ) : item.tx ? (
+                      <TxRow
+                        key={item.key}
+                        context={rowContext(item.tx)}
+                        title={rowTitle(item.tx)}
+                        amount={item.tx.amount}
+                        outflow={item.tx.type === "expense" || item.tx.type === "refund"}
+                        separated={i > 0}
+                        onPress={rowAction(item.tx)}
+                      />
+                    ) : null,
+                  )
+                : null}
               {listRecords.map((a, i) => (
                 <RecordRow
                   key={a.id}
@@ -428,7 +477,7 @@ export function DayFinanceSheet({
                   title={e.name}
                   amount={e.amount}
                   outflow={e.kind === "expense"}
-                  separated={i > 0 || listTx.length > 0}
+                  separated={i > 0 || listTx.length > 0 || (view === "all" && dayPlan.length > 0)}
                   onRemove={teamId ? () => askRemoveLegacy(e) : undefined}
                 />
               ))}
@@ -536,6 +585,7 @@ function RecordRow({
   context,
   amount,
   color,
+  status,
   separated,
   onPress,
 }: {
@@ -543,6 +593,8 @@ function RecordRow({
   context: string;
   amount: number;
   color: string;
+  /** «оплачено» · «долг» · «ожидается» — словом под суммой, в плане дня. */
+  status?: string;
   separated?: boolean;
   onPress: () => void;
 }) {
@@ -551,7 +603,7 @@ function RecordRow({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${formatEUR(amount)} — открыть запись`}
+      accessibilityLabel={`${name}, ${status ? `${status} ` : ""}${formatEUR(amount)} — открыть запись`}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -573,9 +625,14 @@ function RecordRow({
           </Text>
         ) : null}
       </View>
-      <Text style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
-        {formatEUR(amount)}
-      </Text>
+      <View style={{ alignItems: "flex-end" }}>
+        <Text style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
+          {formatEUR(amount)}
+        </Text>
+        {status ? (
+          <Text style={{ fontSize: 12, color: t.faint }}>{status}</Text>
+        ) : null}
+      </View>
     </Pressable>
   );
 }
