@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement } from "react";
+import { Fragment, useMemo, type ReactElement } from "react";
 import {
   Linking,
   Platform,
@@ -203,29 +203,43 @@ export function DebtorsList({
         />
       ) : (
         <Card style={{ marginHorizontal: GUTTER }}>
-          {[...rows].sort((a, b) => Number(a.unclosed) - Number(b.unclosed)).map((r, i, sorted) => (
+          {[...rows].sort((a, b) => Number(a.unclosed) - Number(b.unclosed)).map((r, i, sorted) => {
+          // ГРУППА «НЕ ЗАКРЫТЫ» (STORY-067): сначала выполненные с долгом,
+          // ниже — прошедшие, по которым команда не отчиталась. Подпись один
+          // раз, ПЕРЕД первой такой строкой.
+          //
+          // Раньше подпись висела абсолютом внутри самой строки и печаталась
+          // ПОВЕРХ имени должника: экран, где решают «звонить или нет»,
+          // показывал перечёркнутое имя (2026-09-08). Теперь это обычный
+          // заголовок группы со своим местом в разметке, и он же несёт шов —
+          // иначе над ним и под ним рисовались бы две линии подряд.
+          const startsGroup = r.unclosed && (i === 0 || !sorted[i - 1].unclosed);
+          return (
+            <Fragment key={r.id}>
+            {startsGroup ? (
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingTop: i > 0 ? 10 : 2,
+                  paddingBottom: 2,
+                  ...(i > 0
+                    ? { borderTopWidth: 1, borderTopColor: t.separator }
+                    : null),
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", letterSpacing: 0.6, color: t.warning }}>
+                  НЕ ЗАКРЫТЫ
+                </Text>
+              </View>
+            ) : null}
             <View
-              key={r.id}
               className="min-h-11 flex-row items-stretch"
               style={
-                i > 0
+                i > 0 && !startsGroup
                   ? { borderTopWidth: 1, borderTopColor: t.separator }
                   : undefined
               }
             >
-              {/* ГРУППА «НЕ ЗАКРЫТЫ» (STORY-067): сначала выполненные с долгом,
-                  ниже — прошедшие, по которым команда не отчиталась. Подпись
-                  один раз, перед первой такой строкой. */}
-              {r.unclosed && (i === 0 || !sorted[i - 1].unclosed) ? (
-                <View
-                  pointerEvents="none"
-                  style={{ position: "absolute", top: 4, left: 16 }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: "700", letterSpacing: 0.6, color: t.warning }}>
-                    НЕ ЗАКРЫТЫ
-                  </Text>
-                </View>
-              ) : null}
               <Pressable
                 onPress={() => openAppointment(r)}
                 onLongPress={
@@ -283,7 +297,9 @@ export function DebtorsList({
                 </Pressable>
               ) : null}
             </View>
-          ))}
+            </Fragment>
+          );
+          })}
         </Card>
       )}
     </ScrollView>
