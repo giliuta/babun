@@ -77,6 +77,7 @@ import { Screen } from "@/components/ui/Screen";
 import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
 import { PageWash } from "@/features/appointments/PageWash";
+import { resolveReturnTo } from "@/features/appointments/return-to";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -323,6 +324,9 @@ export default function BookScreen() {
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
     appointmentId?: string;
+    /** Откуда пришли открывать запись: «finances», «invoice:<id>»,
+     *  «account:<id>». Словарь дорог — `resolveReturnTo`. */
+    from?: string;
   }>();
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
@@ -1646,8 +1650,18 @@ export default function BookScreen() {
 
   // A notification/deep link can open /book without a navigation history.
   // In that case router.back() is a dead action; return to the calendar tab.
+  //
+  // ДОРОГА НАЗАД СИЛЬНЕЕ ИСТОРИИ (2026-09-08). Запись из денег открывают через
+  // календарь, поэтому стек — «финансы → календарь → запись», и слепой
+  // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
+  // уходим по ней, а не по истории.
   const leaveBook = () => {
     bypassGuardRef.current = true;
+    const returnTo = resolveReturnTo(params.from);
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace("/");
   };
