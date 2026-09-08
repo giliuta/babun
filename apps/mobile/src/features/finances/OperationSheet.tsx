@@ -85,6 +85,7 @@ export function OperationSheet({
   defaultTeamId,
   defaultAccountId,
   defaultType = "expense",
+  defaultDate = null,
   businessToday,
   transaction,
   onInvoice,
@@ -103,6 +104,9 @@ export function OperationSheet({
    *  десяток), поэтому он и по умолчанию. «Принять оплату» из вкладки чеков
    *  открывает сразу доход: иначе кнопка обещает одно, а форма делает другое. */
   defaultType?: "income" | "expense";
+  /** День НОВОЙ операции, YYYY-MM-DD (разбор дня в календаре открывает форму
+   *  сразу на своём дне). Нет — сегодня по времени бизнеса. */
+  defaultDate?: string | null;
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
@@ -217,14 +221,16 @@ export function OperationSheet({
       setCategoryId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
-      setDate(businessToday);
+      // Разбор дня открывает форму на своём дне; будущее леджер не примет,
+      // поэтому дальше сегодняшнего не уходим.
+      setDate(defaultDate && defaultDate <= businessToday ? defaultDate : businessToday);
       setTime(formatHM(new Date()));
       setNotes("");
       setReceiptUrl(null);
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, defaultTeamId, defaultType, transaction?.id, businessToday]);
+  }, [visible, defaultTeamId, defaultType, defaultDate, transaction?.id, businessToday]);
 
   const cats = useMemo(
     () =>
