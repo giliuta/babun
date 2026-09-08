@@ -599,6 +599,17 @@ export function usePersonalEventTypes() {
       roleQuery.isSuccess &&
       (role === "owner" || role === "dispatcher"),
     networkMode: "always",
+    // ЛЕНТА ТИПОВ РИСУЕТСЯ СРАЗУ, А НЕ ПОСЛЕ ОТВЕТА СЕРВЕРА (владелец
+    // 2026-09-08: «когда открываю событие, долго прогружается тип события —
+    // оно успевает открыться, а тип не успевает»). Форма события открывается
+    // мгновенно, а этот запрос ждал и роль, и сеть: секунду-полторы на месте
+    // блока стояла пустота, и человек успевал решить, что типов нет.
+    //
+    // Кэш на устройстве держит ровно тот же список (его пишет каждое
+    // успешное сохранение), поэтому он и есть первый кадр. `placeholderData`,
+    // а не `initialData`: запрос всё равно уходит и заменяет список свежим,
+    // просто человек этого не видит.
+    placeholderData: () => safeLoadPersonalEventTypes(),
     queryFn: async (): Promise<PersonalEventType[]> => {
       const cached = safeLoadPersonalEventTypes();
       const activeTenantId = tenantId as string;
