@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -9,30 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  Bell,
-  Book,
-  Briefcase,
-  Calendar,
-  Car,
-  Coffee,
-  Dumbbell,
-  Gift,
-  GraduationCap,
-  Heart,
-  Home,
-  Moon,
-  Music,
-  Navigation,
-  Phone,
-  Plane,
-  ShoppingBag,
-  Star,
-  Stethoscope,
-  Tag,
-  Trash2,
-  Users,
-} from "lucide-react-native";
+import { Trash2 } from "lucide-react-native";
 import {
   generatePersonalEventTypeId,
   type PersonalEventTypeIcon,
@@ -54,38 +31,15 @@ import {
   usePersonalEventTypes,
   useSavePersonalEventTypes,
 } from "@/features/settings/local-settings";
+import {
+  EVENT_TYPE_ICON_KEYS,
+  eventTypeIcon,
+} from "@/features/calendar/event-type-icons";
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // local SWATCHES list is gone — default stays синий.
 const DEFAULT_COLOR = PRESET_COLOR_CYCLE[1].value;
 
-type IconCmp = ComponentType<{ color?: string; size?: number; strokeWidth?: number }>;
-
-// Полный набор иконок модели PersonalEventTypeIcon (веб-паритет пикера).
-const EVENT_ICONS: Record<PersonalEventTypeIcon, IconCmp> = {
-  coffee: Coffee,
-  briefcase: Briefcase,
-  navigation: Navigation,
-  moon: Moon,
-  plane: Plane,
-  bell: Bell,
-  heart: Heart,
-  star: Star,
-  dumbbell: Dumbbell,
-  book: Book,
-  music: Music,
-  "graduation-cap": GraduationCap,
-  stethoscope: Stethoscope,
-  car: Car,
-  home: Home,
-  users: Users,
-  phone: Phone,
-  "shopping-bag": ShoppingBag,
-  gift: Gift,
-  calendar: Calendar,
-  tag: Tag,
-};
-const ICON_KEYS = Object.keys(EVENT_ICONS) as PersonalEventTypeIcon[];
 
 export default function EventTypesScreen() {
   const t = useThemeColors();
@@ -176,7 +130,7 @@ export default function EventTypesScreen() {
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
           renderItem={({ item }) => {
-            const Icon = EVENT_ICONS[item.icon] ?? Tag;
+            const Icon = eventTypeIcon(item.icon);
             return (
             <View className="flex-row items-center px-4 py-3">
               <View
@@ -245,8 +199,8 @@ export default function EventTypesScreen() {
             Иконка
           </Text>
           <View className="flex-row flex-wrap gap-2">
-            {ICON_KEYS.map((key) => {
-              const Icon = EVENT_ICONS[key];
+            {EVENT_TYPE_ICON_KEYS.map((key) => {
+              const Icon = eventTypeIcon(key);
               const selected = icon === key;
               return (
                 <Pressable
