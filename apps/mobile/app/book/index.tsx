@@ -8,9 +8,7 @@ import {
   Pressable,
   ScrollView,
   Text as NativeText,
-  TextInput as NativeTextInput,
   View,
-  type TextInputProps,
   type TextProps,
 } from "react-native";
 import {
@@ -28,7 +26,6 @@ import {
   MoreHorizontal,
   UserRound,
   Users,
-  Tag,
   X,
   Briefcase,
 } from "lucide-react-native";
@@ -125,6 +122,7 @@ import {
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
+import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { FieldRow } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -189,18 +187,6 @@ import { durationLabel } from "@/features/services/format";
 function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
   return (
     <NativeText maxFontSizeMultiplier={maxFontSizeMultiplier} {...props} />
-  );
-}
-
-function TextInput({
-  maxFontSizeMultiplier = 1.3,
-  ...props
-}: TextInputProps) {
-  return (
-    <NativeTextInput
-      maxFontSizeMultiplier={maxFontSizeMultiplier}
-      {...props}
-    />
   );
 }
 
@@ -487,9 +473,9 @@ export default function BookScreen() {
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [teamSheetOpen, setTeamSheetOpen] = useState(false);
-  // Событие: команда («Личное» + команды) и тип — листами выбора.
+  // Событие: команда («Личное» + команды) — листом выбора. Тип листа больше
+  // не имеет: он выбирается плитками прямо в форме (EventTypeBlock).
   const [eventTeamSheetOpen, setEventTeamSheetOpen] = useState(false);
-  const [eventTypeSheetOpen, setEventTypeSheetOpen] = useState(false);
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
@@ -612,6 +598,40 @@ export default function BookScreen() {
   }, [client, serverLocations, addedLocation]);
   const selectedLocation =
     clientLocations.find((l) => l.id === locationId) ?? null;
+
+  // ОБЪЕКТ СОБЫТИЯ ВЫБИРАЕТСЯ БЕЗ КЛИЕНТА (владелец 2026-09-08: «в записи мы
+  // сначала должны выбрать клиента, потом объект; в событии мы можем
+  // выбирать отдельно объект, отдельно клиента»).
+  //
+  // Объект в базе принадлежит клиенту — он лежит в его `locations`, своей
+  // таблицы у него нет. Поэтому «без клиента» здесь значит не «объект-сирота»,
+  // а «не спрашиваем клиента, чтобы показать объекты»: событие выбирает из
+  // объектов ВСЕХ клиентов, а чей объект — говорит подписью в листе. Клиент
+  // события при этом остаётся своим полем и может быть пустым или другим.
+  const eventLocationPool = useMemo(() => {
+    const rows: { loc: Location; ownerId: string; ownerName: string }[] = [];
+    for (const candidate of clients) {
+      // У клиента, выбранного в форме, берём список с только что добавленным
+      // объектом — он ещё не приехал с сервера (см. `addedLocation`).
+      const list =
+        client && candidate.id === client.id
+          ? clientLocations
+          : candidate.locations ?? EMPTY_LOCATIONS;
+      for (const loc of list) {
+        rows.push({
+          loc,
+          ownerId: candidate.id,
+          ownerName: candidate.full_name || "Без имени",
+        });
+      }
+    }
+    return rows;
+  }, [clients, client, clientLocations]);
+  const eventLocationEntry =
+    eventLocationPool.find((row) => row.loc.id === locationId) ?? null;
+  const eventLocationOwner = eventLocationEntry
+    ? clients.find((c) => c.id === eventLocationEntry.ownerId) ?? null
+    : null;
   // Объект удалили листом правки или убрали «✕» сразу после добавления —
   // выбор снимается, адрес-снимок пустеет: id удалённого в запись не едет.
   const forgetLocation = (id: string) => {
@@ -1208,15 +1228,37 @@ export default function BookScreen() {
 
   const pickLocation = (id: string) => {
     setLocationId(id);
-    const loc = clientLocations.find((l) => l.id === id);
+    // У события объект берётся из общего пула (он может принадлежать не
+    // выбранному клиенту), у записи — только из объектов её клиента.
+    const loc =
+      (kind === "event"
+        ? eventLocationPool.find((row) => row.loc.id === id)?.loc
+        : clientLocations.find((l) => l.id === id)) ?? null;
     if (loc) {
       setAddress(locationAddressForBooking(loc));
-      // У события объект клиента — подсказка адресу: строка заполняется
-      // адресом объекта, но остаётся адресом ЭТОГО события.
+      // Адрес-снимок события: объект могут удалить, а куда ехали — видно.
       if (kind === "event") setEventAddress(locationAddressForBooking(loc));
     }
     haptics.tap();
   };
+
+  // «ДОБАВИТЬ ОБЪЕКТ» У СОБЫТИЯ. Выбрать объект можно без клиента, а вот
+  // ЗАВЕСТИ новый — нет: своей таблицы у объекта нет, он лежит в `locations`
+  // клиента. Поэтому строка не пропадает и не превращается в отговорку
+  // «сначала выберите клиента» — она сама открывает выбор клиента и говорит,
+  // зачем он понадобился.
+  const openEventObjectAdd = () => {
+    haptics.tap();
+    if (!client) {
+      toast("Объект заводится клиенту — выберите клиента");
+      setClientPickerOpen(true);
+      return;
+    }
+    setObjectSheet(true);
+  };
+  // Правка объекта пишет в карточку его ВЛАДЕЛЬЦА: у события это может быть
+  // не тот клиент, что стоит в форме.
+  const objectEditClient = kind === "event" ? eventLocationOwner : client;
 
   // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЭТОЙ ЗАПИСИ. Карточка нового клиента открывается
   // ПОВЕРХ формы (`/book/client`), после «Готово» кладёт id в ящик и уходит
@@ -1263,6 +1305,26 @@ export default function BookScreen() {
     client?.locations ?? EMPTY_LOCATIONS,
     updateClientPatch,
     clientId,
+  );
+
+  // Писатель объектов ВЛАДЕЛЬЦА выбранного объекта. У события объект может
+  // принадлежать не тому клиенту, что стоит в форме (или клиента нет вовсе),
+  // а заметка объекта («код ворот») обязана лечь в его собственную карточку —
+  // не в карточку случайного клиента этого события.
+  const updateOwnerPatch = async (patch: Partial<Client>) => {
+    const ownerId = eventLocationOwner?.id;
+    if (!ownerId) return false;
+    try {
+      await updateClient.mutateAsync({ id: ownerId, patch });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const eventLocationWriter = useLocationWriter(
+    eventLocationOwner?.locations ?? EMPTY_LOCATIONS,
+    updateOwnerPatch,
+    eventLocationOwner?.id ?? null,
   );
 
   // ═══ ЗАМЕТКА КЛИЕНТА И ЗАМЕТКА ОБЪЕКТА — ПОЛЯМИ ПРЯМО В ФОРМЕ ═══
@@ -1325,6 +1387,16 @@ export default function BookScreen() {
     writeObjectNote,
     locationId,
   );
+  const writeEventObjectNote = (next: string, boundId: string | null) => {
+    if (!boundId) return;
+    void eventLocationWriter.patchLocation(boundId, { note: next || undefined });
+  };
+  const eventObjectNote = useInlineNote<string | null>(
+    eventLocationEntry?.loc.note ?? "",
+    locationId,
+    writeEventObjectNote,
+    locationId,
+  );
 
   const toggleService = (id: string) => {
     setServiceIds((prev) =>
@@ -1352,7 +1424,6 @@ export default function BookScreen() {
   const eventType = eventTypeId
     ? eventTypes.find((candidate) => candidate.id === eventTypeId) ?? null
     : null;
-  const eventTypeLabel = eventType?.label ?? (eventTitle.trim() || null);
   // Прежнее событие, чьё название совпадает с типом, узнаёт свой тип само.
   useEffect(() => {
     if (kind !== "event" || eventTypeId || !eventTitle.trim()) return;
@@ -1384,8 +1455,14 @@ export default function BookScreen() {
       // Одна строка «адрес или ссылка»: ссылка — в event_url, текст — в
       // address. Адрес события — его собственный, не объект из базы
       // (владелец 2026-09-06: «просто адрес, фиксируется только на событии»).
-      const place = eventAddress.trim();
-      const placeIsUrl = isLikelyUrl(place);
+      // Выбран объект — адрес-снимок берётся у него; нет объекта — остаётся
+      // прежний вольный адрес события (у старых событий он единственное, что
+      // говорит, куда ехать, и терять его нельзя).
+      const eventLoc = eventLocationEntry?.loc ?? null;
+      const place = eventLoc
+        ? locationAddressForBooking(eventLoc)
+        : eventAddress.trim();
+      const placeIsUrl = !eventLoc && isLikelyUrl(place);
       return {
         kind: "event",
         date,
@@ -1409,10 +1486,14 @@ export default function BookScreen() {
         comment: (eventType?.label ?? eventTitle.trim()) || "Событие",
         address: placeIsUrl ? "" : place,
         color_override: eventColor,
-        // Клиент и объект у события необязательны и независимы; объект без
-        // клиента не бывает — без клиента остаётся только адрес.
+        // Метка события — та же метка выезда, что у записи: null значит «как
+        // у дня» (владелец 2026-09-08: «тип справа вверху переделай на метку,
+        // как в клиентах»).
+        city,
+        // Клиент и объект у события необязательны и НЕЗАВИСИМЫ: объект может
+        // принадлежать другому клиенту или стоять вовсе без клиента события.
         client_id: clientId,
-        location_id: clientId ? locationId : null,
+        location_id: locationId,
         service_ids: [],
         services: [],
         total_amount: 0,
@@ -2660,25 +2741,35 @@ export default function BookScreen() {
           ) : (
             /* ── Событие ── */
             <>
-              {/* ТА ЖЕ ЛЕСТНИЦА, ЧТО У ЗАПИСИ (владелец 2026-09-06): команда и
-                  тип одной строкой, время, клиент, объект, заметка. Без услуг
-                  и оплаты, без названия («событие называется типом»), без
-                  «весь день», повтора и напоминания («убрать совсем»).
-                  «Личное» — событие без команды, как и было. */}
+              {/* ТА ЖЕ ЛЕСТНИЦА, ЧТО У ЗАПИСИ: команда и метка одной строкой,
+                  время, ТИП, клиент, объект, заметка, файлы. Без услуг и
+                  оплаты, без названия («событие называется типом»), без
+                  «весь день», повтора и напоминания.
+                  «Личное» — событие без команды, как и было.
+
+                  ВТОРАЯ ПЛИТКА ШАПКИ — МЕТКА, А НЕ ТИП (владелец 2026-09-08:
+                  «вот этот вот тип, что справа вверху, переделай его на метку,
+                  как в клиентах, а ниже под временем сделаем новый блок —
+                  тип события»). Пока тип стоял здесь, у нового события это
+                  был серый кружок со словом «Тип» — самое тихое место экрана
+                  на месте, где у записи горит метка выезда. Метка у события и
+                  у записи теперь одна и та же вещь: та же библиотека Кабинета,
+                  тот же лист, та же колонка `city`. */}
               <TeamLabelRow
                 teamName={teamId == null ? "Личное" : team?.name ?? "Команда"}
                 teamColor={teamId == null ? t.accent : team?.color ?? t.accent}
-                label={eventTypeLabel}
-                labelColor={eventType?.color ?? null}
-                labelIcon={Tag}
-                labelPlaceholder="Тип"
-                showLabel
+                label={effectiveLabel}
+                labelColor={
+                  teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
+                }
+                labelFromDay={city == null}
+                showLabel={showLabelBlock}
                 onEditTeam={() => {
                   setEventTeamSheetOpen(true);
                   haptics.tap();
                 }}
                 onEditLabel={() => {
-                  setEventTypeSheetOpen(true);
+                  setLabelSheetOpen(true);
                   haptics.tap();
                 }}
               />
@@ -2692,6 +2783,19 @@ export default function BookScreen() {
                 onPress={() => {
                   setWhenOpen(true);
                   haptics.tap();
+                }}
+              />
+
+              {/* ТИП СОБЫТИЯ — СВОИМ БЛОКОМ, ПЛИТКАМИ В ОДНО КАСАНИЕ. Цвет
+                  события и есть цвет типа: плитки красятся им, и выбор сразу
+                  перекрашивает всю страницу. */}
+              <EventTypeBlock
+                types={eventTypes}
+                selectedId={eventTypeId}
+                onSelect={applyEventType}
+                onSettings={() => {
+                  haptics.tap();
+                  router.push("/cabinet/event-types" as Href);
                 }}
               />
 
@@ -2769,54 +2873,148 @@ export default function BookScreen() {
                 )}
               </SectionCard>
 
-              {/* ОБЪЕКТ — АДРЕС СОБЫТИЯ (владелец 2026-09-06: «просто адрес,
-                  не из базы; фиксируется только на этом событии»). Объект
-                  клиента — подсказка: строка ниже подставляет его адрес. */}
+              {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
+                  2026-09-08: «объект надо сделать точно такой же вид объекта,
+                  как мы делали в клиентах, один в один; только тут другое — в
+                  событии можно добавить объект, не выбирая клиента»).
+
+                  Раньше здесь стояло поле «Адрес или ссылка на карту»: у
+                  события был свой вольный адрес, не из базы. Он не знал ни
+                  кода ворот, ни маршрута, ни того, что на этот же дом ездят
+                  записями. Теперь событие берёт НАСТОЯЩИЙ объект — ту же
+                  строку `ObjectRow`, что на карточке клиента и в записи.
+
+                  БЕЗ КЛИЕНТА ВЫБОР РАБОТАЕТ: список — объекты всех клиентов,
+                  чей объект, сказано подписью в листе. Заводится новый объект
+                  всё-таки клиенту (своей таблицы у объекта нет), поэтому
+                  «Добавить объект» без клиента сперва спрашивает клиента.
+
+                  Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
+                  объект не выбран, он стоит тем же полем и уезжает в патч. */}
+              {showObject ? (
               <SectionCard title="Объект">
-                <FieldRow
-                  label="Адрес"
-                  hideLabel
-                  value={eventAddress}
-                  placeholder="Адрес или ссылка на карту"
-                  stacked
-                  multiline
-                  live
-                  onSave={setEventAddress}
-                />
-                {client && clientLocations.length > 0 ? (
-                  <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                    <ChooseRow
-                      icon={MapPin}
-                      label="Объект клиента"
-                      hint="Подставляет адрес объекта клиента"
+                {eventLocationEntry ? (
+                  <>
+                    <ObjectRow
+                      loc={eventLocationEntry.loc}
+                      showNote={false}
+                      onMore={() => {
+                        setObjectEdit(true);
+                        haptics.tap();
+                      }}
                       onPress={() => {
                         setObjectPicker(true);
                         haptics.tap();
                       }}
                     />
-                  </View>
-                ) : null}
+                    {/* Чей объект — строкой под ним, когда это не клиент
+                        события: иначе «Дом» ничего не говорит о том, куда
+                        едут. */}
+                    {eventLocationEntry.ownerId !== clientId ? (
+                      <Text
+                        maxFontSizeMultiplier={1.2}
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingBottom: 8,
+                          fontSize: 13,
+                          color: t.faint,
+                        }}
+                      >
+                        {`Объект клиента: ${eventLocationEntry.ownerName}`}
+                      </Text>
+                    ) : null}
+                    <InlineNoteField
+                      note={eventObjectNote}
+                      placeholder="Заметка объекта"
+                      accessibilityLabel="Заметка объекта"
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Вольный адрес прежнего события — только пока объекта
+                        нет: у нового события поля не будет вовсе. */}
+                    {eventAddress.trim() ? (
+                      <FieldRow
+                        label="Адрес"
+                        hideLabel
+                        value={eventAddress}
+                        placeholder="Адрес или ссылка на карту"
+                        stacked
+                        multiline
+                        live
+                        onSave={setEventAddress}
+                      />
+                    ) : null}
+                    {eventLocationPool.length > 0 ? (
+                      <View
+                        style={{
+                          borderTopWidth: eventAddress.trim() ? 1 : 0,
+                          borderTopColor: t.separator,
+                        }}
+                      >
+                        <ChooseRow
+                          icon={MapPin}
+                          label="Выбрать объект"
+                          hint="Открывает объекты клиентов"
+                          onPress={() => {
+                            setObjectPicker(true);
+                            haptics.tap();
+                          }}
+                        />
+                      </View>
+                    ) : null}
+                    <View
+                      style={{
+                        borderTopWidth:
+                          eventLocationPool.length > 0 || eventAddress.trim() ? 1 : 0,
+                        borderTopColor: t.separator,
+                      }}
+                    >
+                      <AddRow label="Добавить объект" onPress={openEventObjectAdd} />
+                    </View>
+                  </>
+                )}
               </SectionCard>
+              ) : null}
 
-              {/* ЗАМЕТКА — БОЛЬШАЯ, ПОСЛЕДНЕЙ. */}
+              {/* ЗАМЕТКА — ТО ЖЕ ПОЛЕ, ЧТО У ЗАПИСИ, КЛИЕНТА И ОБЪЕКТА
+                  (владелец 2026-09-08: «соответственно заметка — так же»).
+                  Здесь был голый TextInput на 120pt: одна и та же заметка
+                  выглядела на двух вкладках одной формы по-разному. */}
+              {showNote ? (
               <SectionCard title="Заметка">
-                <TextInput
-                  keyboardAppearance="light"
-                  accessibilityLabel="Заметка события"
-                  value={eventNotes}
-                  onChangeText={setEventNotes}
-                  placeholder="Заметка"
-                  placeholderTextColor={t.placeholder}
-                  multiline
-                  className="px-4 py-3"
-                  style={{
-                    minHeight: 120,
-                    fontSize: 15,
-                    color: t.ink,
-                    textAlignVertical: "top",
+                <InlineNoteField
+                  note={{
+                    draft: eventNotes,
+                    setDraft: setEventNotes,
+                    onFocus: () =>
+                      setTimeout(
+                        () => scrollRef.current?.scrollToEnd({ animated: true }),
+                        KEYBOARD_SETTLE_MS,
+                      ),
+                    onBlur: () => {},
                   }}
+                  placeholder="Детали, что взять с собой"
+                  accessibilityLabel="Заметка события"
                 />
               </SectionCard>
+              ) : null}
+
+              {/* ФАЙЛЫ СОБЫТИЯ — ТОТ ЖЕ БЛОК, ЧТО У ЗАПИСИ (владелец
+                  2026-09-08: «сделай блок добавления файлов; по сути событие
+                  это точно такое же, только без услуги и оплаты»). У события
+                  без клиента документы не заводятся — их место карточка
+                  клиента, — а фото и сканы живут на самом событии. */}
+              {showFiles ? (
+                <AppointmentFilesBlock
+                  appointmentId={editing?.id ?? null}
+                  clientId={editing?.client_id ?? client?.id ?? null}
+                  locationId={editing?.location_id ?? locationId ?? null}
+                  canUpload={status !== "cancelled"}
+                  pending={pendingFiles}
+                  onPendingChange={setPendingFiles}
+                />
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -2931,28 +3129,40 @@ export default function BookScreen() {
           onClose={() => setObjectSheet(false)}
         />
       ) : null}
-      {client ? (
-        <>
-          {/* Выбор/замена объекта; «Добавить объект» в его футере открывает
-              лист добавления, когда этот уже уехал. */}
-          <ObjectPickerSheet
-            visible={objectPicker}
-            locations={clientLocations}
-            selectedId={locationId}
-            onSelect={(loc) => pickLocation(loc.id)}
-            onAdd={() => setObjectSheet(true)}
-            onClose={() => setObjectPicker(false)}
-          />
-          {/* Правка выбранного объекта — тем же листом, что на карточке. */}
-          <ObjectEditSheet
-            visible={objectEdit}
-            client={client}
-            locationId={objectEdit ? locationId : null}
-            writer={locationWriter}
-            onDeleted={forgetLocation}
-            onClose={() => setObjectEdit(false)}
-          />
-        </>
+      {/* Выбор/замена объекта; «Добавить объект» в его футере открывает лист
+          добавления, когда этот уже уехал. У записи список — объекты её
+          клиента; у события — объекты ВСЕХ клиентов, и чей объект, сказано
+          третьей строкой (владелец 2026-09-08). */}
+      <ObjectPickerSheet
+        visible={objectPicker}
+        locations={
+          kind === "event"
+            ? eventLocationPool.map((row) => row.loc)
+            : clientLocations
+        }
+        selectedId={locationId}
+        ownerNameFor={
+          kind === "event"
+            ? (loc) =>
+                eventLocationPool.find((row) => row.loc.id === loc.id)?.ownerName ??
+                null
+            : undefined
+        }
+        onSelect={(loc) => pickLocation(loc.id)}
+        onAdd={kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)}
+        onClose={() => setObjectPicker(false)}
+      />
+      {/* Правка выбранного объекта — тем же листом, что на карточке, и тем же
+          писателем, что у его владельца. */}
+      {objectEditClient ? (
+        <ObjectEditSheet
+          visible={objectEdit}
+          client={objectEditClient}
+          locationId={objectEdit ? locationId : null}
+          writer={kind === "event" ? eventLocationWriter : locationWriter}
+          onDeleted={forgetLocation}
+          onClose={() => setObjectEdit(false)}
+        />
       ) : null}
       <ClientPicker
         statsById={statsById}
@@ -3027,6 +3237,7 @@ export default function BookScreen() {
       />
       <LabelSheet
         visible={labelSheetOpen}
+        title={kind === "event" ? "Метка события" : "Метка записи"}
         options={teamCities.map((c) => ({ name: c.name, color: c.color ?? t.accent }))}
         // ВЫБРАНА ТА, ЧТО ДЕЙСТВУЕТ СЕЙЧАС — своя либо взятая у дня (владелец
         // 2026-09-04: «открываем метку, там уже автоматически выбрана метка,
@@ -3066,26 +3277,6 @@ export default function BookScreen() {
           })),
         ]}
         onClose={() => setEventTeamSheetOpen(false)}
-      />
-      <PickerSheet
-        visible={eventTypeSheetOpen}
-        title="Тип события"
-        items={eventTypes.map((preset) => ({
-          id: preset.id,
-          label: preset.label,
-          icon: Tag,
-          color: preset.color,
-          onPress: () => {
-            applyEventType(preset.id);
-            setEventTypeSheetOpen(false);
-          },
-        }))}
-        onSettings={() => {
-          setEventTypeSheetOpen(false);
-          router.push("/cabinet/event-types" as Href);
-        }}
-        settingsLabel="Настроить типы событий"
-        onClose={() => setEventTypeSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}

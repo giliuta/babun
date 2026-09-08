@@ -34,6 +34,7 @@ export function ObjectPickerSheet({
   visible,
   locations,
   selectedId,
+  ownerNameFor,
   onSelect,
   onAdd,
   onClose,
@@ -41,6 +42,10 @@ export function ObjectPickerSheet({
   visible: boolean;
   locations: readonly Location[];
   selectedId: string | null;
+  /** Чей объект — третьей строкой. Событие выбирает объект БЕЗ клиента
+   *  (владелец 2026-09-08), и без имени владельца три «Дома» подряд
+   *  неразличимы. У записи клиент уже выбран — там подписи нет. */
+  ownerNameFor?: (location: Location) => string | null;
   onSelect: (location: Location) => void;
   /** Открыть лист добавления объекта — после того, как этот уедет. */
   onAdd: () => void;
@@ -85,6 +90,7 @@ export function ObjectPickerSheet({
         {ordered.map((loc) => {
           const label = loc.label || "Объект";
           const target = objectTarget(loc);
+          const owner = ownerNameFor?.(loc) ?? null;
           const chosen = loc.id === selectedId;
           return (
             <Pressable
@@ -95,7 +101,7 @@ export function ObjectPickerSheet({
               }}
               accessibilityRole="button"
               accessibilityState={{ selected: chosen }}
-              accessibilityLabel={[label, target].filter(Boolean).join(", ")}
+              accessibilityLabel={[label, target, owner].filter(Boolean).join(", ")}
               style={({ pressed }) => ({
                 flexDirection: "row",
                 alignItems: "center",
@@ -133,6 +139,15 @@ export function ObjectPickerSheet({
                 >
                   {target || "адрес не указан"}
                 </Text>
+                {owner ? (
+                  <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.3}
+                    style={{ fontSize: 13, color: t.faint }}
+                  >
+                    {owner}
+                  </Text>
+                ) : null}
               </View>
               {chosen ? (
                 <Check color={t.accent} size={18} strokeWidth={2.4} />

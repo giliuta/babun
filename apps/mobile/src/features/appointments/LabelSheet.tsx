@@ -29,6 +29,7 @@ export function LabelSheet({
   visible,
   options,
   value,
+  title = "Метка записи",
   onPick,
   onClose,
 }: {
@@ -37,6 +38,8 @@ export function LabelSheet({
   options: readonly LabelOption[];
   /** Метка, действующая сейчас: своя либо взятая у дня. */
   value: string | null;
+  /** Лист один на запись и событие — заголовок называет, чью метку правят. */
+  title?: string;
   onPick: (next: string) => void;
   onClose: () => void;
 }) {
@@ -45,7 +48,7 @@ export function LabelSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Метка записи"
+      title={title}
       padded={false}
       scroll
       maxHeightRatio={0.5}
