@@ -92,6 +92,7 @@ export function OperationSheet({
   onClientOpen,
   onRefund,
   refundedTotal = 0,
+  onExited,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -118,6 +119,9 @@ export function OperationSheet({
   /** Сколько уже вернули — по нему прячем «Создать возврат» и не даём
    *  опустить сумму дохода ниже возвращённого. */
   refundedTotal?: number;
+  /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
+   *  (разбор дня в календаре), пора вернуть свой. */
+  onExited?: () => void;
 }) {
   const th = useThemeColors();
   const online = useIsOnline();
@@ -579,6 +583,7 @@ export function OperationSheet({
 
   return (
     <BottomSheet
+      onExited={onExited}
       padded={false}
       visible={visible}
       onClose={guardedClose}

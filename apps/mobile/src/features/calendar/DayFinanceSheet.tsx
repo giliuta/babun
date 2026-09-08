@@ -4,14 +4,21 @@ import { useRouter, type Href } from "expo-router";
 import { X } from "lucide-react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { getDebtAmount } from "@babun/shared/local/appointments";
-import { formatEUR, moneySign } from "@babun/shared/common/utils/money";
-import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
+import {
+  formatEURExact as formatEUR,
+  moneySign,
+} from "@babun/shared/common/utils/money";
+import {
+  computeDayFinance,
+  isPlannedRecord,
+} from "@babun/shared/local/finance/day-summary";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import type { DayExtra } from "@babun/shared/local/day-extras";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { RowGroup } from "@/components/ui/card-rows";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ICON } from "@/components/ui/tokens";
 import { formatHM } from "@/features/appointments/helpers";
@@ -29,7 +36,11 @@ import { SummaryToggle } from "@/features/finances/FinanceOverview";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { OperationSheet } from "@/features/finances/OperationSheet";
-import { useTransactions } from "@/features/finances/queries";
+import {
+  useFinanceCategories,
+  useTransactions,
+} from "@/features/finances/queries";
+import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -39,18 +50,30 @@ import { useThemeColors } from "@/theme/colors";
 // справа внизу — серым, оно менее важное; шторка на 50–75 %, чтобы вошли все
 // операции дня; даты сверху не надо; внизу синяя кнопка, и она меняется:
 // добавить доход · добавить расход · добавить долг, у ожидается — добавить
-// операцию»).
+// операцию; вместо „Операций нет“ — просто пусто»).
 //
 // Смысл плиток — строго по дню:
 //   Доход     — только то, что уже ОПЛАЧЕНО (плюс ручные доходы);
 //   Расход    — операции дня и материалы записей;
 //   Долг      — время записи прошло, а «оплачено» не нажали;
 //   Ожидается — что ещё предстоит по записям дня.
-// Под плитками — список выбранной плитки, теми же деньгами, что на вкладке
-// «Финансы». Тап по записи открывает запись, по ручной операции — её правку.
-// Кнопка внизу ведёт в ту же форму операции, что в «Финансах», сразу на этом
-// дне (доход и расход — по категориям, не по услугам); «Добавить долг» — это
-// новая запись на этот день: долг рождается только у записи.
+// Под плитками — список выбранной плитки, теми же деньгами и той же
+// грамматикой строк, что на вкладке «Финансы» (пилюля цвета знака, контекст
+// над названием). Записи (Долг, Ожидается) — грамматикой списка должников:
+// долг — не транзакция. Тап по записи открывает запись, по ручной операции —
+// её правку; там, где открыть нечего, тапа нет.
+//
+// КНОПКА ВНИЗУ СТОИТ ВСЕГДА И ДЕЛАЕТ ТО, ЧТО ВОЗМОЖНО (закон вкладки
+// «Финансы»): на прошедшем и сегодняшнем дне — «Добавить доход / расход» в ту
+// же форму операции по категориям, сразу на этом дне; «Добавить долг» — новая
+// запись на этот день, долг рождается только у записи; на «Ожидается» —
+// «Добавить операцию». Будущий день леджер не принимает (операцию нельзя
+// записать вперёд), и единственное выполнимое там — запись: на всех плитках
+// один глагол «Создать запись», а не «Добавить доход», который молча уехал бы
+// на сегодня.
+//
+// Старые «ручные операции дня» (day_extras) показываются и удаляются с
+// вопросом; новых не заводится — деньги живут в одном леджере.
 
 type DayView = "income" | "expense" | "debt" | "planned";
 
@@ -62,6 +85,7 @@ export function DayFinanceSheet({
   onClose,
   onEditAppointment,
   onCreateRecord,
+  onReopen,
 }: {
   /** День разбора (null = закрыто). */
   dateYmd: string | null;
@@ -73,9 +97,11 @@ export function DayFinanceSheet({
   onClose: () => void;
   /** Открыть запись — отметить оплату, посмотреть работу. */
   onEditAppointment?: (a: Appointment) => void;
-  /** «Добавить долг» — новая запись на этот день (долг бывает только у
-   *  записи). Нет права записывать — кнопки нет. */
+  /** Новая запись на этот день («Добавить долг», «Создать запись»). Нет
+   *  права записывать — этих кнопок нет. */
   onCreateRecord?: (ymd: string) => void;
+  /** Форма операции закрылась — вернуть разбор того же дня, с той же плиткой. */
+  onReopen?: (ymd: string) => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -83,26 +109,42 @@ export function DayFinanceSheet({
   const services = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
   const { data: clients = [] } = useClients();
+  const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
   const [view, setView] = useState<DayView>("income");
 
-  // Лист остаётся смонтированным с dateYmd=null: последний открытый день
-  // держим, чтобы содержимое не пустело на анимации ухода.
+  // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
+  // его записи держим снимком, чтобы содержимое не мигало на анимации ухода.
+  // Стартовая плитка — по дню: у будущего дня денег ещё нет, там смотрят
+  // «Ожидается»; на том же дне повторное открытие плитку не сбрасывает
+  // (после формы операции человек возвращается туда, откуда ушёл).
   const [shownYmd, setShownYmd] = useState<string | null>(dateYmd);
+  const [shownAppts, setShownAppts] = useState<Appointment[]>(appointments);
   useEffect(() => {
-    if (dateYmd != null) {
-      setShownYmd(dateYmd);
-      setView("income");
+    if (dateYmd == null) return;
+    if (dateYmd !== shownYmd) {
+      setView(dateYmd > businessToday ? "planned" : "income");
     }
-  }, [dateYmd]);
+    setShownYmd(dateYmd);
+    setShownAppts(appointments);
+  }, [dateYmd, appointments, businessToday, shownYmd]);
   const ymd = shownYmd ?? businessToday;
+  const appts = shownAppts;
   const nowHm = formatHM(new Date());
+  const isFuture = ymd > businessToday;
 
   const txQuery = useTransactions(ymd, ymd, {
     brigadeIds: teamId ? [teamId] : undefined,
     enabled: shownYmd != null,
   });
-  const dayTx = useMemo(() => txQuery.data ?? [], [txQuery.data]);
+  // keepPreviousData подсовывает прошлый день под новыми плитками — режем
+  // строго по дню, как это делает ledgerExtrasForDay для цифр.
+  const dayTx = useMemo(
+    () => (txQuery.data ?? []).filter((tx) => tx.occurred_on === ymd),
+    [txQuery.data, ymd],
+  );
+  const ledgerLoading =
+    (txQuery.isPending && txQuery.data === undefined) || txQuery.isPlaceholderData;
 
   const legacyExtras = useMemo(
     () => (shownYmd ? getDayExtras(extrasMap, teamId, shownYmd) : []),
@@ -110,92 +152,129 @@ export function DayFinanceSheet({
   );
   const totals = useMemo(
     () =>
-      computeDayFinance(appointments, services, [
+      computeDayFinance(appts, services, [
         ...legacyExtras,
         ...ledgerExtrasForDay(dayTx, ymd),
       ]),
-    [appointments, services, legacyExtras, dayTx, ymd],
+    [appts, services, legacyExtras, dayTx, ymd],
   );
 
-  const plannedRecords = useMemo(
-    () =>
-      appointments
-        .filter((a) => a.status !== "cancelled" && a.total_amount > 0)
-        .sort((a, b) => a.time_start.localeCompare(b.time_start)),
-    [appointments],
-  );
-  const debtRecords = useMemo(
-    () => dayDebtRecords(appointments, businessToday, nowHm),
-    [appointments, businessToday, nowHm],
-  );
-  const debtTotal = debtRecords.reduce((sum, a) => sum + getDebtAmount(a), 0);
-  const incomeRows = useMemo(() => incomeDeals(dayTx), [dayTx]);
-  const expenseRows = useMemo(
-    () => [
-      ...dayTx.filter((tx) => tx.type === "expense"),
-      ...materialExpenseRows(appointments, services, { from: ymd, to: ymd, teamId }),
-    ],
-    [dayTx, appointments, services, ymd, teamId],
-  );
-
+  const apptById = useMemo(() => new Map(appts.map((a) => [a.id, a])), [appts]);
   const nameById = useMemo(
     () => new Map(clients.map((c) => [c.id, c.full_name])),
     [clients],
   );
-  const apptById = useMemo(
-    () => new Map(appointments.map((a) => [a.id, a])),
-    [appointments],
+  const categoryName = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
   );
+
+  const plannedRecords = useMemo(
+    () =>
+      appts
+        .filter((a) => isPlannedRecord(a) && a.total_amount > 0)
+        .sort((a, b) => a.time_start.localeCompare(b.time_start)),
+    [appts],
+  );
+  const debtRecords = useMemo(
+    () => dayDebtRecords(appts, businessToday, nowHm),
+    [appts, businessToday, nowHm],
+  );
+  const debtTotal = debtRecords.reduce((sum, a) => sum + getDebtAmount(a), 0);
+  // Доход — сделки дня; оплата чужой записи (предоплата за завтра) в плитке
+  // не считается, значит и в списке ей не место.
+  const incomeRows = useMemo(
+    () =>
+      incomeDeals(dayTx).filter(
+        (tx) => !tx.appointment_id || apptById.has(tx.appointment_id),
+      ),
+    [dayTx, apptById],
+  );
+  const expenseRows = useMemo(
+    () => [
+      ...dayTx.filter((tx) => tx.type === "expense"),
+      ...materialExpenseRows(appts, services, { from: ymd, to: ymd, teamId }),
+    ],
+    [dayTx, appts, services, ymd, teamId],
+  );
+
   const clientName = (a: Appointment) =>
     (a.client_id ? nameById.get(a.client_id) : null) || a.comment?.trim() || "Без имени";
   const servicesOf = (a: Appointment) =>
     (a.services ?? []).map((s) => s.serviceName).filter(Boolean).join(", ");
 
-  const isFuture = ymd > businessToday;
-
-  // ФОРМА ОПЕРАЦИИ — ПОСЛЕ УХОДА ЛИСТА: второй системный Modal поверх
-  // уходящего iOS молча не показывает (тот же закон, что у попапа финансов).
+  // ФОРМА ОПЕРАЦИИ И ЗАПИСЬ — ПОСЛЕ УХОДА ЛИСТА: второй системный Modal
+  // поверх уходящего iOS молча не показывает (тот же закон, что у попапа
+  // финансов). Пока лист уходит, тапы не принимаются — второй тап затирал бы
+  // отложенное действие.
   const [opOpen, setOpOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
   const [opType, setOpType] = useState<"income" | "expense">("expense");
   const afterExit = useRef<(() => void) | null>(null);
+  const leaveThen = (run: () => void) => {
+    afterExit.current = run;
+    onClose();
+  };
   const openOperation = (tx: FinanceTransaction | null, type: "income" | "expense") => {
     setEditingTx(tx);
     setOpType(type);
-    afterExit.current = () => setOpOpen(true);
-    onClose();
+    leaveThen(() => setOpOpen(true));
   };
   const openRecord = (appointmentId: string) => {
     const known = apptById.get(appointmentId);
-    afterExit.current = () => {
+    leaveThen(() => {
       if (known && onEditAppointment) onEditAppointment(known);
       else router.push(`/book?appointmentId=${appointmentId}` as Href);
-    };
-    onClose();
-  };
-  const removeLegacy = (id: string) => {
-    if (!teamId || !shownYmd) return;
-    haptics.tap();
-    setExtras.mutate({
-      teamId,
-      dateKey: shownYmd,
-      extras: legacyExtras.filter((e) => e.id !== id),
     });
   };
+  const askRemoveLegacy = (e: DayExtra) => {
+    if (!teamId || !shownYmd) return;
+    haptics.tap();
+    const day = shownYmd;
+    const rest = legacyExtras.filter((x) => x.id !== e.id);
+    leaveThen(() =>
+      confirmThen(
+        "Удалить операцию?",
+        {
+          message: `«${e.name}» исчезнет из финансов этого дня.`,
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        () => setExtras.mutate({ teamId, dateKey: day, extras: rest }),
+      ),
+    );
+  };
 
+  // Заголовок и контекст строки — той же грамматикой, что лента «Финансов»:
+  // доход по записи называется её услугами, расход — категорией.
   const rowTitle = (tx: FinanceTransaction): string => {
     const appt = tx.appointment_id ? apptById.get(tx.appointment_id) : null;
     const names = appt ? servicesOf(appt) : "";
+    const cat = tx.category_id ? categoryName.get(tx.category_id) : null;
     if (tx.type === "income" || tx.type === "refund") {
-      return names || tx.notes || (tx.type === "refund" ? "Возврат" : "Поступление");
+      return names || tx.notes || cat || (tx.type === "refund" ? "Возврат" : "Поступление");
     }
-    return tx.notes || "Расход";
+    return cat || tx.notes || "Расход";
   };
   const rowContext = (tx: FinanceTransaction): string => {
     const appt = tx.appointment_id ? apptById.get(tx.appointment_id) : null;
     const time = appt?.time_start || tx.occurred_time || "";
-    const who = tx.client_id ? nameById.get(tx.client_id) ?? "" : "";
-    return [time, who].filter(Boolean).join(" · ");
+    if (tx.type === "income" || tx.type === "refund") {
+      const who = tx.client_id ? nameById.get(tx.client_id) ?? "" : "";
+      return [time, who].filter(Boolean).join(" · ");
+    }
+    const cat = tx.category_id ? categoryName.get(tx.category_id) : null;
+    return [time, cat && tx.notes ? tx.notes : ""].filter(Boolean).join(" · ");
+  };
+  const rowAction = (tx: FinanceTransaction): (() => void) | undefined => {
+    if (tx.appointment_id) {
+      const id = tx.appointment_id;
+      return () => openRecord(id);
+    }
+    if (canEditTransaction(tx)) {
+      return () => openOperation(tx, tx.type === "expense" ? "expense" : "income");
+    }
+    return undefined;
   };
 
   const listExtras: DayExtra[] =
@@ -204,50 +283,44 @@ export function DayFinanceSheet({
       : [];
   const listTx = view === "income" ? incomeRows : view === "expense" ? expenseRows : [];
   const listRecords = view === "planned" ? plannedRecords : view === "debt" ? debtRecords : [];
+  const listLoading = (view === "income" || view === "expense") && ledgerLoading;
   const listEmpty = listTx.length === 0 && listExtras.length === 0 && listRecords.length === 0;
-  const emptyText =
-    view === "planned"
-      ? "Записей нет"
-      : view === "debt"
-        ? "Долгов нет"
-        : "Операций нет";
 
   const pick = (next: DayView) => {
     haptics.tap();
     setView(next);
   };
 
-  // КНОПКА СЛЕДУЕТ ЗА ПЛИТКОЙ. Будущий день операций не принимает (леджер
-  // не пишет вперёд), поэтому там остаётся только «Добавить долг» — новая
-  // запись на этот день.
-  const cta: { label: string; onPress: () => void } | null =
-    view === "debt"
-      ? onCreateRecord
-        ? {
-            label: "Добавить долг",
-            onPress: () => {
-              afterExit.current = () => onCreateRecord(ymd);
-              onClose();
-            },
-          }
-        : null
-      : isFuture
-        ? null
-        : view === "income"
-          ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
-          : view === "expense"
-            ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
-            : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
+  const createRecord = onCreateRecord
+    ? { onPress: () => leaveThen(() => onCreateRecord(ymd)) }
+    : null;
+  const cta: { label: string; onPress: () => void } | null = isFuture
+    ? createRecord && { label: "Создать запись", ...createRecord }
+    : view === "debt"
+      ? createRecord
+        ? { label: "Добавить долг", ...createRecord }
+        : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") }
+      : view === "income"
+        ? { label: "Добавить доход", onPress: () => openOperation(null, "income") }
+        : view === "expense"
+          ? { label: "Добавить расход", onPress: () => openOperation(null, "expense") }
+          : { label: "Добавить операцию", onPress: () => openOperation(null, "expense") };
+
+  const closing = dateYmd == null;
 
   return (
     <>
       <BottomSheet
         visible={dateYmd != null}
         onClose={onClose}
+        // Имя листа, а не дата: день назван тем, по чему тапнули (владелец:
+        // «даты сверху не надо»); шапка держит жест закрытия и заголовок для
+        // VoiceOver, как у всех листов с кнопкой.
+        title="Финансы дня"
         padded={false}
         scroll
-        // Шторка встаёт на 50–75 % экрана (владелец): содержимое держит
-        // минимум высоты, а список длиннее — прокручивается внутри.
+        // Шторка встаёт на 50–75 % экрана: содержимое держит минимум высоты,
+        // список длиннее — прокручивается внутри.
         maxHeightRatio={0.75}
         onExited={() => {
           const run = afterExit.current;
@@ -256,13 +329,17 @@ export function DayFinanceSheet({
         }}
         footer={
           cta ? (
-            <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8 }}>
+            <View
+              pointerEvents={closing ? "none" : "auto"}
+              style={{ paddingHorizontal: 16, paddingTop: 8 }}
+            >
               <GradientButton label={cta.label} onPress={cta.onPress} />
             </View>
           ) : undefined
         }
       >
         <View
+          pointerEvents={closing ? "none" : "auto"}
           style={{
             backgroundColor: t.canvas,
             paddingBottom: 12,
@@ -270,8 +347,16 @@ export function DayFinanceSheet({
           }}
         >
           {/* ЧЕТЫРЕ ПЛИТКИ — ТЕ ЖЕ, ЧТО НА «ФИНАНСАХ» (SummaryToggle): цвет
-              несёт смысл, тинт — только у выбранной. */}
-          <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 6 }}>
+              несёт смысл, тинт — только у выбранной. Пока срез дня в пути,
+              цифры гаснут, как гаснет сводка «Финансов» при смене периода. */}
+          <View
+            style={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              gap: 6,
+              opacity: listLoading ? 0.4 : 1,
+            }}
+          >
             <View style={{ flexDirection: "row", gap: 6 }}>
               <SummaryToggle
                 label="Доход"
@@ -307,70 +392,57 @@ export function DayFinanceSheet({
             </View>
           </View>
 
-          <RowGroup>
-            {listRecords.map((a, i) => (
-              <LedgerRow
-                key={a.id}
-                time={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
-                title={clientName(a)}
-                amount={view === "debt" ? getDebtAmount(a) : a.total_amount}
-                color={view === "debt" ? t.warning : t.sub}
-                separated={i > 0}
-                onPress={() => openRecord(a.id)}
-              />
-            ))}
-            {listTx.map((tx, i) => (
-              <LedgerRow
-                key={tx.id}
-                time={rowContext(tx)}
-                title={rowTitle(tx)}
-                amount={tx.amount}
-                sign={tx.type === "expense" || tx.type === "refund" ? "−" : ""}
-                color={tx.type === "expense" || tx.type === "refund" ? t.danger : t.success}
-                separated={i > 0}
-                onPress={() => {
-                  if (tx.appointment_id) {
-                    openRecord(tx.appointment_id);
-                    return;
-                  }
-                  if (canEditTransaction(tx)) {
-                    openOperation(tx, tx.type === "expense" ? "expense" : "income");
-                  }
-                }}
-              />
-            ))}
-            {listExtras.map((e, i) => (
-              <LedgerRow
-                key={e.id}
-                time="Ручная запись дня"
-                title={e.name}
-                amount={e.amount}
-                sign={e.kind === "expense" ? "−" : ""}
-                color={e.kind === "expense" ? t.danger : t.success}
-                separated={i > 0 || listTx.length > 0}
-                onRemove={teamId ? () => removeLegacy(e.id) : undefined}
-              />
-            ))}
-            {listEmpty ? (
-              <Text
-                style={{
-                  paddingHorizontal: 16,
-                  paddingVertical: 14,
-                  textAlign: "center",
-                  fontSize: 14,
-                  color: t.faint,
-                }}
-              >
-                {emptyText}
-              </Text>
-            ) : null}
-          </RowGroup>
+          {/* Пусто — ничего: плитка уже сказала «€0», кнопка внизу — что
+              делать. Только загрузка движется, иначе «грузится» и «пусто»
+              были бы неотличимы. */}
+          {listLoading ? (
+            <EmptyState state="loading" />
+          ) : listEmpty ? null : (
+            <RowGroup>
+              {listRecords.map((a, i) => (
+                <RecordRow
+                  key={a.id}
+                  name={clientName(a)}
+                  context={[a.time_start, servicesOf(a)].filter(Boolean).join(" · ")}
+                  amount={view === "debt" ? getDebtAmount(a) : a.total_amount}
+                  color={view === "debt" ? t.warning : t.sub}
+                  separated={i > 0}
+                  onPress={() => openRecord(a.id)}
+                />
+              ))}
+              {listTx.map((tx, i) => (
+                <TxRow
+                  key={tx.id}
+                  context={rowContext(tx)}
+                  title={rowTitle(tx)}
+                  amount={tx.amount}
+                  outflow={tx.type === "expense" || tx.type === "refund"}
+                  separated={i > 0}
+                  onPress={rowAction(tx)}
+                />
+              ))}
+              {listExtras.map((e, i) => (
+                <TxRow
+                  key={e.id}
+                  context="Ручная операция"
+                  title={e.name}
+                  amount={e.amount}
+                  outflow={e.kind === "expense"}
+                  separated={i > 0 || listTx.length > 0}
+                  onRemove={teamId ? () => askRemoveLegacy(e) : undefined}
+                />
+              ))}
+            </RowGroup>
+          )}
         </View>
       </BottomSheet>
 
       <OperationSheet
         visible={opOpen}
         onClose={() => setOpOpen(false)}
+        onExited={() => {
+          if (shownYmd) onReopen?.(shownYmd);
+        }}
         defaultTeamId={teamId}
         defaultType={opType}
         defaultDate={shownYmd}
@@ -381,32 +453,34 @@ export function DayFinanceSheet({
   );
 }
 
-function LedgerRow({
-  time,
+/** Строка операции — грамматика ленты «Финансов»: пилюля цвета знака,
+ *  контекст над названием, сумма справа. */
+function TxRow({
+  context,
   title,
   amount,
-  sign = "",
-  color,
+  outflow,
   separated,
   onPress,
   onRemove,
 }: {
-  time: string;
+  context: string;
   title: string;
   amount: number;
-  sign?: string;
-  color: string;
+  outflow: boolean;
   separated?: boolean;
   onPress?: () => void;
   onRemove?: () => void;
 }) {
   const t = useThemeColors();
+  const color = outflow ? t.danger : t.success;
+  const money = `${outflow ? "−" : ""}${formatEUR(Math.abs(amount))}`;
   return (
     <Pressable
       onPress={onPress}
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : undefined}
-      accessibilityLabel={`${title}, ${sign}${formatEUR(Math.abs(amount))}`}
+      accessibilityLabel={`${title}, ${outflow ? "списание" : "поступление"} ${formatEUR(Math.abs(amount))}`}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
@@ -419,19 +493,19 @@ function LedgerRow({
         backgroundColor: pressed && onPress ? t.pressed : "transparent",
       })}
     >
+      <View style={{ width: 6, height: 36, borderRadius: 999, backgroundColor: color }} />
       <View style={{ flex: 1 }}>
+        {context ? (
+          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
+            {context}
+          </Text>
+        ) : null}
         <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
           {title}
         </Text>
-        {time ? (
-          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
-            {time}
-          </Text>
-        ) : null}
       </View>
-      <Text className="tabular-nums" style={{ fontSize: 15, fontWeight: "600", color }}>
-        {sign}
-        {formatEUR(Math.abs(amount))}
+      <Text style={{ fontSize: 16, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
+        {money}
       </Text>
       {onRemove ? (
         <Pressable
@@ -451,6 +525,57 @@ function LedgerRow({
           <X color={t.faint} size={ICON.xs} />
         </Pressable>
       ) : null}
+    </Pressable>
+  );
+}
+
+/** Строка записи (долг, план) — грамматика списка должников: имя сверху,
+ *  время и работа под ним, сумма справа. Долг — не транзакция, пилюли нет. */
+function RecordRow({
+  name,
+  context,
+  amount,
+  color,
+  separated,
+  onPress,
+}: {
+  name: string;
+  context: string;
+  amount: number;
+  color: string;
+  separated?: boolean;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}, ${formatEUR(amount)} — открыть запись`}
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        minHeight: 56,
+        paddingHorizontal: 16,
+        borderTopWidth: separated ? 1 : 0,
+        borderTopColor: t.separator,
+        backgroundColor: pressed ? t.pressed : "transparent",
+      })}
+    >
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontSize: 15, fontWeight: "500", color: t.ink }}>
+          {name}
+        </Text>
+        {context ? (
+          <Text numberOfLines={1} style={{ fontSize: 12, color: t.faint }}>
+            {context}
+          </Text>
+        ) : null}
+      </View>
+      <Text style={{ fontSize: 15, fontWeight: "700", color, fontVariant: ["tabular-nums"] }}>
+        {formatEUR(amount)}
+      </Text>
     </Pressable>
   );
 }

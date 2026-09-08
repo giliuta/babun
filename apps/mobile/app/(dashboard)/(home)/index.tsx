@@ -2459,6 +2459,8 @@ export default function CalendarTab() {
           onCreateRecord={
             canManageBookings ? (ymd) => bookAt({ date: ymd, kind: "work" }) : undefined
           }
+          // После формы операции человек возвращается в разбор того же дня.
+          onReopen={(ymd) => setFinModalYmd(ymd)}
         />
       ) : null}
 
