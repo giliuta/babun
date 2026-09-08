@@ -6,10 +6,6 @@ import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
 import { money } from "@babun/shared/common/utils/money";
-import {
-  FORMS_ZAPIS,
-  formatCountRu,
-} from "@babun/shared/common/utils/plural-ru";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import {
