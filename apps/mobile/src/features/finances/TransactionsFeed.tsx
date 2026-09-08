@@ -11,6 +11,7 @@ import {
   moneySign,
 } from "@babun/shared/common/utils/money";
 import {
+  REVERSAL_LABEL,
   signedAmount,
   type FinanceTransaction,
 } from "@babun/shared/local/finance/transaction";
@@ -196,7 +197,18 @@ export function TransactionsFeed({
       const client = tx.client_id ? lookups.client.get(tx.client_id) : null;
       // Доход без привязанной записи — время самой операции, иначе момент
       // создания (web parity).
-      ctx = [timeOf(tx), client?.full_name].filter(Boolean).join(" · ");
+      //
+      // МИНУС НАЗЫВАЕТ СЕБЯ СЛОВОМ (владелец 2026-09-08, вариант 4). Заголовок
+      // у минуса — та же услуга, что у прихода, поэтому без слова строка
+      // «A/C Cleaning −€50» читалась как трата на эту услугу. Слово берётся у
+      // `reversal_kind`: снятие и возврат клиенту — разные события.
+      ctx = [
+        timeOf(tx),
+        isRefund && tx.reversal_kind ? REVERSAL_LABEL[tx.reversal_kind] : null,
+        client?.full_name,
+      ]
+        .filter(Boolean)
+        .join(" · ");
     } else if (tx.notes && (isTr || (isEx && cat))) {
       ctx = tx.notes;
     }
@@ -217,8 +229,13 @@ export function TransactionsFeed({
       if (when) ctx = [when, ctx].filter(Boolean).join(" · ");
     }
 
-    const barColor = isIncome ? t.success : isRefund || isEx ? t.danger : t.faint;
-    const amountColor = isIncome ? t.success : isRefund || isEx ? t.danger : t.sub;
+    // КРАСНЫЙ НА ЭТОМ ЭКРАНЕ ОЗНАЧАЕТ РАСХОД, А МИНУС ПО ЗАПИСИ — НЕ РАСХОД.
+    // Снятая оплата красилась как трата: восемь строк из девятнадцати стояли
+    // красными минусами под плиткой «Расход €0» (владелец 2026-09-08 выбрал
+    // приглушённый вариант). Поправка ленты не спорит за внимание с живыми
+    // деньгами, а зачёркнутая сумма говорит «этой суммы нет».
+    const barColor = isIncome ? t.success : isEx ? t.danger : t.faint;
+    const amountColor = isIncome ? t.success : isEx ? t.danger : isRefund ? t.faint : t.sub;
     const sign = isIncome || (isTr && tx.amount > 0) ? "" : "−";
 
     return (
@@ -249,7 +266,11 @@ export function TransactionsFeed({
         </View>
         <Text
           className="text-base font-bold"
-          style={{ color: amountColor, fontVariant: ["tabular-nums"] }}
+          style={{
+            color: amountColor,
+            fontVariant: ["tabular-nums"],
+            textDecorationLine: isRefund ? "line-through" : "none",
+          }}
         >
           {sign}
           {formatEUR(Math.abs(tx.amount))}

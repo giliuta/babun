@@ -44,6 +44,15 @@ export function paymentMethodLabel(method: string | null | undefined): string {
   return PAYMENT_METHOD_LABEL[method as PaymentMethod] ?? method;
 }
 
+export type ReversalKind = "not_received" | "client_refund";
+
+/** Слово для строки минуса. «Возврат» на снятой оплате — неправда: денег не
+ *  возвращали, их не получили. */
+export const REVERSAL_LABEL: Record<ReversalKind, string> = {
+  not_received: "Оплата снята",
+  client_refund: "Возврат",
+};
+
 export interface FinanceTransaction {
   id: string;
   tenant_id: string;
@@ -77,6 +86,11 @@ export interface FinanceTransaction {
   transfer_group_id: string | null;
   invoice_id: string | null;
   refund_of_id: string | null;
+  /** ПОЧЕМУ МИНУС. Оба случая лежат в леджере типом `refund`, но означают
+   *  разное: `not_received` — оплату сняли, деньги так и не пришли (работа
+   *  уходит в долг); `client_refund` — деньги вернули клиенту. Разными
+   *  словами их называет UI, поэтому поле доезжает до клиента. */
+  reversal_kind: ReversalKind | null;
   source: TransactionSource;
   created_at: string;
   updated_at: string;

@@ -29,6 +29,7 @@ function tx(
   return {
     tenant_id: "t",
     currency: "EUR",
+    reversal_kind: null,
     category_id: null,
     account_id: "acc-1",
     appointment_id: null,

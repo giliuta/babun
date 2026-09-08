@@ -99,6 +99,7 @@ function rowToTx(r: Row): FinanceTransaction {
     transfer_group_id: r.transfer_group_id,
     invoice_id: r.invoice_id,
     refund_of_id: r.refund_of_id,
+    reversal_kind: (r.reversal_kind ?? null) as FinanceTransaction["reversal_kind"],
     source: r.source as TransactionSource,
     created_at: r.created_at,
     updated_at: r.updated_at,

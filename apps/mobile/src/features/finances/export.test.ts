@@ -10,6 +10,7 @@ function transaction(
   return {
     id: "transaction-1",
     tenant_id: "tenant-1",
+    reversal_kind: null,
     type: "income",
     amount: 125.5,
     currency: "EUR",

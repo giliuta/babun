@@ -44,6 +44,7 @@ export function materialExpenseRows(
       id: `${MATERIAL_TX_PREFIX}${a.id}`,
       // У записи в модели нет tenant_id; строка виртуальная и в базу не едет.
       tenant_id: "",
+      reversal_kind: null,
       type: "expense",
       amount: Math.round(amount * 100) / 100,
       currency: "EUR",
