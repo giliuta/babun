@@ -22,6 +22,17 @@ describe("resolveReturnTo", () => {
     assert.equal(resolveReturnTo("account:  "), null);
   });
 
+  test("разрез вкладки денег восстанавливается из адреса", () => {
+    assert.equal(resolveReturnTo("finances:income"), "/finances?view=income");
+    assert.equal(resolveReturnTo("finances:debt"), "/finances?view=debt");
+  });
+
+  test("незнакомый разрез открывает корень денег, а не собирает адрес из метки", () => {
+    assert.equal(resolveReturnTo("finances:profit&x=1"), "/finances");
+    assert.equal(resolveReturnTo("finances:../cabinet"), "/finances");
+    assert.equal(resolveReturnTo("finances:"), "/finances");
+  });
+
   test("незнакомая метка игнорируется", () => {
     assert.equal(resolveReturnTo("calendar"), null);
     assert.equal(resolveReturnTo("invoices:abc"), null);

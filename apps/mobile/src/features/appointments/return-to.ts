@@ -14,9 +14,21 @@
 // Формат `from`: «finances» — вкладка денег; «invoice:<id>» и «account:<id>» —
 // страница-донор, с чьей проводки запись открыли.
 
+/** Разрезы вкладки денег, которые дорога назад умеет восстановить. Список
+ *  закрытый: `from` приходит из адреса, и собирать по нему произвольный путь
+ *  или произвольный параметр нельзя. */
+const FINANCE_VIEWS = new Set(["income", "expense", "debt", "documents"]);
+
 export function resolveReturnTo(from: string | undefined): string | null {
   if (!from) return null;
   if (from === "finances") return "/finances";
+  if (from.startsWith("finances:")) {
+    // ДОРОГА НАЗАД НЕСЁТ РАЗРЕЗ. Вкладка денег пересоздаётся при возврате, и
+    // выбранная плитка сбрасывалась на «Все»: человек открывал запись из
+    // «Дохода», закрывал её и попадал в общую ленту (2026-09-09).
+    const view = from.slice("finances:".length).trim();
+    return FINANCE_VIEWS.has(view) ? `/finances?view=${view}` : "/finances";
+  }
   const donor = (prefix: string, base: string) => {
     if (!from.startsWith(prefix)) return null;
     const id = from.slice(prefix.length).trim();
