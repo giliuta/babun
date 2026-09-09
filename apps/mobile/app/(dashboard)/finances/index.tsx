@@ -45,7 +45,13 @@ import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
-import { TransactionsFeed } from "@/features/finances/TransactionsFeed";
+import { RecordRowsPanel } from "@/features/finances/RecordRowsPanel";
+import {
+  mergeByRecord,
+  recordRows,
+  type RecordRow,
+} from "@/features/finances/record-rows";
+import { debtRows } from "@/features/finances/debt-rows";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import { NO_TEAM } from "@/features/finances/accounts-sections";
@@ -71,6 +77,18 @@ import { todayYmd } from "@/features/invoices/format";
 import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+
+/** Разрезы, которые вкладка умеет восстановить из адреса. Список шире, чем в
+ *  `resolveReturnTo`: оттуда приходят только те, из которых открывают запись
+ *  (доход, расход, долги, документы), а сюда можно прийти и диплинком. */
+const VIEWS = new Set<HomeView>([
+  "accounts",
+  "documents",
+  "income",
+  "expense",
+  "debt",
+  "profit",
+]);
 
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
@@ -109,6 +127,9 @@ function FinancesContent() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     clientId?: string | string[];
+    /** Разрез, с которого ушли открывать запись: возврат ставит его обратно
+     *  (см. resolveReturnTo). Читается один раз, при создании состояния. */
+    view?: string;
   }>();
   const requestedClientId = Array.isArray(params.clientId)
     ? params.clientId[0]
@@ -175,7 +196,15 @@ function FinancesContent() {
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
   const [scope, setScope] = useState<string | null>(null);
-  const [view, setView] = useState<HomeView>("all");
+  // Разрез переживает поездку в запись: вкладка пересоздаётся при возврате, и
+  // без этого «Доход» сбрасывался на «Все» (2026-09-09). Ленивый инициализатор,
+  // а не эффект: разрез должен стоять уже в первом кадре, иначе человек видит
+  // вспышку общей ленты. Незнакомое значение из адреса игнорируем.
+  const [view, setView] = useState<HomeView>(() =>
+    params.view && VIEWS.has(params.view as HomeView)
+      ? (params.view as HomeView)
+      : "all",
+  );
   // Открыта панель документов: у шапки другой предмет поиска, и она обязана
   // сказать об этом словами подсказки.
   const documentsView = view === "documents";
@@ -564,24 +593,6 @@ function FinancesContent() {
     return { openCount };
   }, [invoicePayments, scope, scopedInvoices]);
 
-  // Словари для поиска: одна сборка на рендер вместо линейного поиска по
-  // четырём массивам на каждую строку ленты при каждой букве.
-  const clientName = useMemo(
-    () => new Map(clients.map((c) => [c.id, c.full_name])),
-    [clients],
-  );
-  const categoryName = useMemo(
-    () => new Map(categories.map((c) => [c.id, c.name])),
-    [categories],
-  );
-  const accountName = useMemo(
-    () => new Map(accounts.map((a) => [a.id, a.name])),
-    [accounts],
-  );
-  const teamName = useMemo(
-    () => new Map(allTeams.map((tm) => [tm.id, tm.name])),
-    [allTeams],
-  );
   // Листу перевода нужны сами команды, а не их имена: он подписывает счета
   // командами, и расформированная команда обязана остаться названной.
   const teamByIdAll = useMemo(
@@ -601,51 +612,115 @@ function FinancesContent() {
     [period.from, period.to, scope, scopedAppointments, services],
   );
 
-  // Feed filtered by the active overview card (web parity: feedTx).
-  const feedTx = useMemo(() => {
-    // «Доход» — только сделки: снятая оплата с её откатом прячется парой
-    // (см. incomeDeals), плитка считает то же нетто.
-    const byView =
+  // ГЛАВНАЯ ЛЕНТА СЧИТАЕТ ЗАПИСЯМИ, А НЕ ПРОВОДКАМИ (владелец 2026-09-09:
+  // «я хочу видеть не каждую операцию, а полноценно… но не несколько операций
+  // по одной записи — это же глупо, оно забьёт всё»).
+  //
+  // Один визит 6 сентября держал 19 строк: оплату вносили и снимали восемь
+  // раз, пока подбирали сумму. Теперь запись даёт САМОЕ БОЛЬШЕЕ ДВЕ строки —
+  // свой доход целиком и свой расход целиком. Схлопывать их между собой
+  // нельзя (владелец 2026-09-08: «доход 135 стоит целиком, расход 10 стоит
+  // целиком, а в прибыли уже 135 − 10»), поэтому строки разные и разного
+  // цвета, а ключ несёт направление — иначе две строки одного визита
+  // подрались бы за один ключ списка.
+  //
+  // Поимённая история платежей никуда не делась: она переезжает в саму
+  // запись, кнопкой в блоке оплаты.
+  const recordRefs = useMemo(
+    () => ({
+      appointments: scopedAppointments,
+      clients,
+      services,
+      categories,
+      accounts,
+    }),
+    [scopedAppointments, clients, services, categories, accounts],
+  );
+
+  const blockRows = useMemo(() => {
+    if (view !== "all" && view !== "income" && view !== "expense") return [];
+    const tag = (rows: ReturnType<typeof recordRows>, tone: "income" | "expense") =>
+      rows.map((row) => ({ ...row, tone, key: `${tone}:${row.key}` }));
+
+    const income =
+      view === "expense"
+        ? []
+        : tag(recordRows(incomeDeals(scopedTransactions), recordRefs), "income");
+    const expense =
       view === "income"
-        ? incomeDeals(scopedTransactions)
-        : view === "expense"
-          ? [...scopedTransactions.filter((tx) => tx.type === "expense"), ...materialRows]
-          : scopedTransactions;
+        ? []
+        : tag(
+            recordRows(
+              [
+                ...scopedTransactions.filter((tx) => tx.type === "expense"),
+                ...materialRows,
+              ],
+              recordRefs,
+            ),
+            "expense",
+          );
+    // Долг — деньги, которые ПРИДУТ. На своей плитке он был виден, а в общей
+    // ленте его не было вовсе: «висит долг по кому-то, почему в общем нет»
+    // (владелец 2026-09-09). Один визит может дать и доход, и долг — это не
+    // задвоение, а два разных состояния одних работ.
+    const debts =
+      view === "all"
+        ? debtRows(scopedAppointments, clients, services, {
+            from: period.from,
+            to: period.to,
+            today: businessToday,
+            teamId: scope === NO_TEAM ? null : scope,
+            invoicedAppointmentIds: invoicedAppointments,
+          }).map((row) => ({ ...row, key: `debt:${row.key}` }))
+        : [];
+    // Перевод — не доход и не расход: в срезах его нет, а в общей ленте он
+    // обязан быть, иначе деньги между счетами исчезают из виду.
+    const transfers =
+      view === "all"
+        ? recordRows(
+            scopedTransactions.filter((tx) => tx.type === "transfer"),
+            recordRefs,
+          ).map((row) => ({ ...row, key: `tr:${row.key}` }))
+        : [];
+
     const needle = query.trim().toLowerCase();
-    if (!needle) return byView;
-    // Сумму ищут в том виде, в каком лента её печатает: «1 234,50», с € или
-    // без. Сравниваем деньги в одном каноне (canonMoney) — тогда совпадают
-    // и сырое «1234.5», и экранное «€1 234,50».
     const moneyNeedle = canonMoney(needle);
-    // Ищем по тому, что человек видит в строке: заметка, клиент, категория,
-    // счёт, команда и сумма. Отдельного индекса не заводим — лента за период
-    // и так лежит в памяти, а лишний индекс разошёлся бы с показанным.
-    return byView.filter((tx) => {
-      const text = [
-        tx.notes ?? "",
-        clientName.get(tx.client_id ?? "") ?? "",
-        categoryName.get(tx.category_id ?? "") ?? "",
-        accountName.get(tx.account_id ?? "") ?? "",
-        teamName.get(tx.team_id ?? "") ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (text.includes(needle)) return true;
-      if (!moneyNeedle) return false;
-      return (
-        canonMoney(money(tx.amount)).includes(moneyNeedle) ||
-        String(tx.amount).includes(moneyNeedle)
-      );
-    });
+    // Ищем по тому, что человек ВИДИТ в блоке: клиент, услуги и сумма. Раньше
+    // поиск шёл по проводкам (счёт, категория, заметка) — их в блоке нет, и
+    // строка поиска молча искала невидимое.
+    const match = (row: RecordRow) =>
+      !needle ||
+      row.title.toLowerCase().includes(needle) ||
+      row.services.some((name) => name.toLowerCase().includes(needle)) ||
+      canonMoney(money(Math.abs(row.amount))).includes(moneyNeedle);
+
+    const all = [...income, ...expense, ...debts, ...transfers];
+    // ОДНА ЗАПИСЬ — ОДНА СТРОКА (владелец 2026-09-09). В общей ленте состояния
+    // одной работы склеиваются: доход главным числом, остальное подписью.
+    // В разрезах склейки нет — там человек просил именно этот вид денег.
+    return (view === "all" ? mergeByRecord(all) : all)
+      .filter(match)
+      .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      const at = a.time ?? "";
+      const bt = b.time ?? "";
+      if (at !== bt) return at < bt ? 1 : -1;
+      return a.key < b.key ? 1 : -1;
+      });
   }, [
-    scopedTransactions,
-    materialRows,
     view,
     query,
-    clientName,
-    categoryName,
-    accountName,
-    teamName,
+    scopedTransactions,
+    materialRows,
+    recordRefs,
+    scopedAppointments,
+    clients,
+    services,
+    period.from,
+    period.to,
+    businessToday,
+    scope,
+    invoicedAppointments,
   ]);
 
   const toggleView = (v: HomeView) =>
@@ -682,8 +757,9 @@ function FinancesContent() {
       `/(dashboard)?appointmentId=${target.id}&date=${target.date}` +
         (target.team_id ? `&teamId=${target.team_id}` : "") +
         // Дорога назад: закрыв запись, человек возвращается в ленту денег, а не
-        // остаётся в календаре (владелец 2026-08-15).
-        "&from=finances",
+        // остаётся в календаре (владелец 2026-08-15) — и в ТОТ ЖЕ разрез, из
+        // которого ушёл: вкладка пересоздаётся, и «Доход» сбрасывался на «Все».
+        (view === "all" ? "&from=finances" : `&from=finances:${view}`),
     );
     return true;
   };
@@ -795,12 +871,15 @@ function FinancesContent() {
     </View>
   );
 
+  // Счётчик считает ПОКАЗАННОЕ. Лента считает записями, а не проводками:
+  // «Операции · 19» над одним визитом читалось как девятнадцать дел
+  // (2026-09-09).
   const feedTitle =
     view === "income"
-      ? `Доход · ${feedTx.length}`
+      ? `Доход · ${blockRows.length}`
       : view === "expense"
-        ? `Расход · ${feedTx.length}`
-        : `Операции · ${feedTx.length}`;
+        ? `Расход · ${blockRows.length}`
+        : `Записи · ${blockRows.length}`;
 
   if (loading) {
     return (
@@ -916,6 +995,7 @@ function FinancesContent() {
           <DebtorsList
             appointments={scopedAppointments}
             clients={clients}
+            services={services}
             teamId={scope}
             fromDate={period.from}
             toDate={period.to}
@@ -928,44 +1008,30 @@ function FinancesContent() {
             refreshControl={refreshControl}
           />
         ) : (
-          <TransactionsFeed
-            transactions={feedTx}
-            // Поиск ищет ВНУТРИ периода — лента грузится окном. Молчать об
-            // этом значит выдать «ничего не найдено» за «такого не было».
+          <RecordRowsPanel
+            rows={blockRows}
+            title={feedTitle}
             emptyTitle={
               query.trim()
                 ? "В выбранном периоде ничего не найдено"
-                : undefined
+                : view === "income"
+                  ? "Дохода за период нет"
+                  : view === "expense"
+                    ? "Расхода за период нет"
+                    : "Нет операций за период"
             }
-            accounts={accounts}
-            teams={allTeams}
-            categories={categories}
-            clients={clients}
-            appointments={scopedAppointments}
-            services={services}
-            title={feedTitle}
-            refreshControl={refreshControl}
-            // Плитка «Расход» и список сходятся: материалы записей стоят в
-            // списке своими строками (materialExpenseRows).
             onReset={view !== "all" ? () => setView("all") : undefined}
-            onTxTap={(tx) => {
-              // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15:
-              // «кликаю на оплату по заявке — открывается полноценная запись с
-              // клиентом в календаре»). Такая проводка — не самостоятельная
-              // операция, а ЗЕРКАЛО визита: править в ней нечего, а всё, что
-              // человек хочет увидеть, — что это была за работа.
-              //
-              // Авто-проводки записи — только доход и возврат
-              // (sync_appointment_finance); авто-расхода в леджере НЕТ, расход
-              // по материалам — расчётная величина клиента (materialSummary).
-              if (tx.appointment_id && openAppointment(tx.appointment_id)) return;
-              // ТАП ОТКРЫВАЕТ ПРАВКУ, А НЕ ВИТРИНУ. Владелец 2026-08-10: «чтобы
-              // не надо было по пять раз нажимать редактировать — сразу всё
-              // открывается и правится». Витрина остаётся только для того, что
-              // править нельзя: проводка из записи и операция с инвойсом
-              // меняются в своём документе, а перевод не правится вовсе —
-              // раньше тап по нему сразу спрашивал «Удалить перевод?», подменяя
-              // ответ «куда ушли деньги» деструктивным вопросом без контекста.
+            refreshControl={refreshControl}
+            onOpenRecord={(row) => {
+              // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
+              if (row.appointmentId && openAppointment(row.appointmentId)) return;
+              // Одиночная операция — бензин, обед, перевод — открывается на
+              // правку: другой двери к ней на экране нет. Витрина остаётся
+              // тому, что править нельзя (перевод, проводка инвойса).
+              const tx = row.txId
+                ? scopedTransactions.find((x) => x.id === row.txId)
+                : null;
+              if (!tx) return;
               if (canEditTransaction(tx)) {
                 setEditingTx(tx);
                 setOpOpen(true);
@@ -1027,9 +1093,42 @@ function FinancesContent() {
             label="Выставить инвойс"
             onPress={() => pushOnce("/invoices/new")}
           />
-        ) : (
+        ) : view === "debt" ? (
+          // ДОЛГ РОЖДАЕТСЯ ИЗ РАБОТЫ, А НЕ ИЗ ОПЕРАЦИИ (владелец 2026-09-09:
+          // «нажимаю долги — кнопка добавить долг»). Отдельной «операции
+          // долга» в продукте нет: долг — это состояние записи, за которую не
+          // заплатили. Поэтому кнопка ведёт в создание записи, а не в форму
+          // операции: операция завела бы доход или расход, и долг из неё не
+          // появился бы — кнопка обещала бы одно, а делала другое.
+          //
+          // Раньше здесь стояло «Добавить операцию», и форма открывалась
+          // РАСХОДОМ: на экране про то, кто должен нам, предлагалось записать
+          // трату.
           <GradientButton
-            label="Добавить операцию"
+            label="Добавить долг"
+            onPress={() =>
+              pushOnce(
+                `/book?date=${businessToday}` +
+                  (scope && scope !== NO_TEAM
+                    ? `&teamId=${encodeURIComponent(scope)}`
+                    : "") +
+                  "&from=finances:debt",
+              )
+            }
+          />
+        ) : (
+          // КНОПКА СЛЕДУЕТ ЗА РАЗРЕЗОМ (владелец 2026-09-08: «нажимаю на доход
+          // — внизу меняется кнопка на добавить доход… и вытягивается только
+          // по доходу»). Направление уже выбрано плиткой; спрашивать его
+          // второй раз в форме незачем.
+          <GradientButton
+            label={
+              view === "income"
+                ? "Добавить доход"
+                : view === "expense"
+                  ? "Добавить расход"
+                  : "Добавить операцию"
+            }
             onPress={() => {
               setEditingTx(null);
               setOpOpen(true);
@@ -1088,6 +1187,8 @@ function FinancesContent() {
         onClose={() => setOpOpen(false)}
         // Псевдо-скоуп «Без команды» команды не несёт: лист сам спросит.
         defaultTeamId={scope === NO_TEAM ? null : scope}
+        // Разрез уже сказал направление — форма открывается им же.
+        defaultType={view === "income" ? "income" : "expense"}
         businessToday={businessToday}
         transaction={editingTx}
         onInvoice={(tx) => {
