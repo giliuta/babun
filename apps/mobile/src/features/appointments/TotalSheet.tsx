@@ -155,15 +155,23 @@ export function TotalSheet({
           <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
         </View>
 
-        {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — три строки, читаются сверху вниз. */}
+        {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — строки, читаются сверху вниз.
+            «УСЛУГИ» СТОЯТ ТОЛЬКО ПРИ СКИДКЕ (владелец 2026-09-08: «вот это мы
+            и так знаем, в „Итого“ всё написано — зачем повторять, услуги это
+            не надо»). Без скидки строка печатала то же число, что и «Итого»
+            двумя строками ниже: «Услуги €180 / Итого €180». Со скидкой она
+            перестаёт быть повтором и становится тем, ИЗ ЧЕГО вычли, — без неё
+            «−€20 / Итого €180» не с чем сверить. */}
         <View style={{ gap: 8 }}>
-          <SumRow label="Услуги" value={formatEURExact(servicesTotal)} />
           {discountAmount > 0 ? (
-            <SumRow
-              label={`Скидка${discountReason ? ` · ${discountReason}` : ""}`}
-              value={`−${formatEURExact(discountAmount)}`}
-              color={t.success}
-            />
+            <>
+              <SumRow label="Услуги" value={formatEURExact(servicesTotal)} />
+              <SumRow
+                label={`Скидка${discountReason ? ` · ${discountReason}` : ""}`}
+                value={`−${formatEURExact(discountAmount)}`}
+                color={t.success}
+              />
+            </>
           ) : null}
           <View
             style={{
