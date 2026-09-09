@@ -120,39 +120,48 @@ export function TotalSheet({
             Клавиша «Без скидки» называла НОРМУ: обычный день работы объявлялся
             выбором. Ноль в поле говорит то же самое молча, а переключатель
             «€ | %» стоит рядом и нужен только тому, кто уже что-то вписал. */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-            minHeight: 52,
-            paddingLeft: 14,
-            paddingRight: 6,
-            borderRadius: t.radius.input,
-            backgroundColor: t.rowFill,
-          }}
-        >
-          <Text style={{ flex: 1, fontSize: 15, color: t.sub }}>Скидка</Text>
-          <TextInput
-            keyboardAppearance="light"
-            value={discountValue}
-            onChangeText={onDiscountValueChange}
-            selectTextOnFocus
-            keyboardType="decimal-pad"
-            placeholder="0"
-            placeholderTextColor={t.placeholder}
-            accessibilityLabel="Скидка"
+        {/* КОМПАКТНО (владелец 2026-09-08: «просто сделать как-то
+            компактно»). Скидка занимала полосу во всю ширину листа — ровно
+            столько же, сколько «Итого», — и половина этой полосы была пустой:
+            подпись у левого края, число у правого. Скидку ставят не каждый
+            раз, а полоса кричала каждый. Теперь это одна маленькая пилюля у
+            правого края, на той же колонке цифр, что и «Итого»: подпись,
+            число и знак стоят вплотную и читаются одним словом. */}
+        <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+          <View
             style={{
-              minWidth: 56,
-              minHeight: 44,
-              textAlign: "right",
-              fontSize: 17,
-              fontWeight: "700",
-              color: t.ink,
-              fontVariant: ["tabular-nums"],
+              flexDirection: "row",
+              alignItems: "center",
+              height: 40,
+              paddingLeft: 12,
+              paddingRight: 4,
+              borderRadius: t.radius.input,
+              backgroundColor: t.rowFill,
             }}
-          />
-          <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
+          >
+            <Text style={{ fontSize: 13, color: t.sub }}>Скидка</Text>
+            <TextInput
+              keyboardAppearance="light"
+              value={discountValue}
+              onChangeText={onDiscountValueChange}
+              selectTextOnFocus
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={t.placeholder}
+              accessibilityLabel="Скидка"
+              style={{
+                minWidth: 46,
+                height: 40,
+                paddingHorizontal: 4,
+                textAlign: "right",
+                fontSize: 16,
+                fontWeight: "700",
+                color: t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            />
+            <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
+          </View>
         </View>
 
         {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — строки, читаются сверху вниз.
@@ -251,10 +260,12 @@ function UnitToggle({
       accessibilityRole="button"
       accessibilityLabel={percent ? "Скидка в процентах" : "Скидка в валюте"}
       accessibilityHint={percent ? "Переключить на сумму" : "Переключить на проценты"}
+      // 32pt вместо 36 и без своих полей: пилюля сидит внутри маленькой
+      // строки, а до 44pt зону касания добирает hitSlop — не размер.
+      hitSlop={8}
       style={({ pressed }) => ({
-        minWidth: 44,
-        minHeight: 36,
-        paddingHorizontal: 10,
+        minWidth: 32,
+        height: 32,
         alignItems: "center",
         justifyContent: "center",
         borderRadius: t.radius.input,
