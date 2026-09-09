@@ -2813,12 +2813,22 @@ export default function BookScreen() {
                 }}
               />
 
-              {/* ТИП СОБЫТИЯ — ВЫШЕ ВРЕМЕНИ (владелец 2026-09-08: «тип
-                  событий должен быть сверху»). Он и правда идёт раньше:
-                  событие сперва называют типом, а тип ставит конец времени по
-                  своей длительности — стоять ПОСЛЕ времени значило читать
-                  причину после следствия. Плитки, выбор в одно касание; цвет
-                  события и есть цвет типа. */}
+              <WhenRow
+                date={date}
+                timeStart={timeStart}
+                timeEnd={timeEnd}
+                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
+                warning={null}
+                onPress={() => {
+                  setWhenOpen(true);
+                  haptics.tap();
+                }}
+              />
+              {/* ТИП СОБЫТИЯ — ПОД ВРЕМЕНЕМ (владелец 2026-09-06 завёл его
+                  здесь; 2026-09-08 я поднял блок выше, и владелец вернул:
+                  «нет, я неправильно объяснил — опусти на один блок ниже,
+                  время обратно»). Плитки, выбор в одно касание; цвет события
+                  и есть цвет типа. */}
               <EventTypeBlock
                 types={eventTypes}
                 selectedId={eventTypeId}
@@ -2834,17 +2844,6 @@ export default function BookScreen() {
                 }}
               />
 
-              <WhenRow
-                date={date}
-                timeStart={timeStart}
-                timeEnd={timeEnd}
-                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-                warning={null}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
-              />
 
               {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
                   у выбранного есть «убрать» — лист выбора пустого варианта не

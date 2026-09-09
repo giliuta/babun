@@ -36,7 +36,15 @@ export function SectionCard({
     <View className={`mt-2 ${className}`} style={{ marginHorizontal: GUTTER }}>
       <Card>
         {title ? (
-          <View className="flex-row items-center justify-between px-4 pb-0.5 pt-2.5">
+          // ВЫСОТУ ШАПКИ ЗАДАЁТ ТОЛЬКО ПОДПИСЬ (владелец 2026-09-08: «отступ
+          // от начала блока до слова должен быть одинаково — клиент, объект,
+          // заметка, тип события, всё в одной архитектуре, по пикселям»).
+          // Кнопка действия стояла в потоке строки со своими 44pt высоты, и
+          // подпись, выровненная по центру, съезжала вниз на шесть пикселей:
+          // у блока с действием шапка начиналась ниже, чем у соседей.
+          // Кнопка ушла в абсолют — на поток она больше не влияет, а 44pt
+          // зоны касания ей даёт hitSlop.
+          <View className="relative flex-row items-center px-4 pb-0.5 pt-2.5">
             <Text
               accessibilityRole="header"
               // Caption tier (DS §2: 11/700/+0.6 uppercase) — same recipe as
@@ -54,12 +62,15 @@ export function SectionCard({
             {action ? (
               <Pressable
                 onPress={action.onPress}
+                hitSlop={12}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
                 style={({ pressed }) => ({
-                  minHeight: 44,
-                  justifyContent: "center",
-                  paddingLeft: 12,
+                  position: "absolute",
+                  right: 16,
+                  // Значок 20pt по центру подписи (11pt, строка ~13):
+                  // 10 сверху у шапки минус половина разницы высот.
+                  top: 6,
                   opacity: pressed ? 0.65 : 1,
                 })}
               >
