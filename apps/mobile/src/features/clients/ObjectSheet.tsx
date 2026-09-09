@@ -9,14 +9,11 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Send, SlidersHorizontal, type LucideIcon } from "lucide-react-native";
+import { Send, Settings2 } from "lucide-react-native";
 import type { AddressParts, Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import {
-  ChoiceRow,
-  FieldRow,
-  RowGroup,
-} from "@/components/ui/card-rows";
+import { ChoiceRow, FieldRow } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
   AddressDetailsFields,
@@ -273,28 +270,27 @@ export function ObjectSheet({
             «ТИП ОБЪЕКТА» стоял ПЕРВЫМ прямо под заголовком «Новый объект» и
             читался как раздел, вложенный в самого себя. Первым теперь идёт
             «АДРЕС» — то, ради чего лист открыли и единственное обязательное. */}
-        {/* ТРИ БЛОКА ОДНОЙ АРХИТЕКТУРЫ (владелец 2026-09-09: «сделай так же
-            поблочно, как клиент, как объект: тип объекта — а справа в этой же
-            строчке настройки, внизу перечень; потом адрес полноценно; потом
-            третий блок — заметки; и сделай всё в одной архитектуре»).
-            У каждого блока своя капс-подпись и своя команда СПРАВА В ТОЙ ЖЕ
-            СТРОКЕ: у типа — шестерёнка словаря, у адреса — «попросить у
-            клиента». Так команда не влезает внутрь содержимого блока: раньше
-            шестерёнка стояла пятой в ряду чипов, а «попросить адрес» — целой
-            строкой под формой. */}
-        <RowGroup
+        {/* ТРИ БЛОКА ТОЙ ЖЕ АРХИТЕКТУРЫ, ЧТО «КЛИЕНТ» И «ОБЪЕКТ» НА
+            СТРАНИЦЕ ЗАПИСИ (владелец 2026-09-09: «блок „клиент“ — и надпись
+            „клиент“ В блоке, а надпись „тип объекта“ не в блоке, это просто
+            над блоком — это неправильно»).
+            Я собрал их на `RowGroup`, у которого капс стоит НАД карточкой, —
+            а нужен `SectionCard`: у него подпись внутри, на белом, и там же
+            справа его команда. Тот же примитив, что у блоков записи, — то
+            есть буквально одна архитектура, а не похожая.
+            Значок команды — тот же, что владелец прислал картинкой для блока
+            типа события: ползунки настроек, а не своя шестерёнка. */}
+        <SectionCard
           title="Тип объекта"
-          action={
-            <HeaderAction
-              icon={SlidersHorizontal}
-              label="Настроить типы объектов"
-              onPress={() => {
-                // Настройки ЗАКРЫВАЮТ лист: страница не может жить под ним.
-                close();
-                router.push(typesHref);
-              }}
-            />
-          }
+          action={{
+            label: "Настроить типы объектов",
+            icon: Settings2,
+            onPress: () => {
+              // Настройки ЗАКРЫВАЮТ лист: страница не может жить под ним.
+              close();
+              router.push(typesHref);
+            },
+          }}
         >
           <ChoiceRow
             options={typeOptions}
@@ -303,23 +299,23 @@ export function ObjectSheet({
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))
             }
           />
-        </RowGroup>
+        </SectionCard>
 
-        <RowGroup
+        <SectionCard
           title="Адрес"
           action={
-            onRequestFromClient ? (
-              <HeaderAction
-                icon={Send}
-                label="Попросить адрес у клиента"
-                onPress={() => {
-                  // Лист сперва уходит: системный «Поделиться» поверх
-                  // уходящего модального окна iOS закрывается вместе с ним.
-                  afterExit.current = onRequestFromClient;
-                  close();
-                }}
-              />
-            ) : null
+            onRequestFromClient
+              ? {
+                  label: "Попросить адрес у клиента",
+                  icon: Send,
+                  onPress: () => {
+                    // Лист сперва уходит: системный «Поделиться» поверх
+                    // уходящего модального окна iOS закрывается вместе с ним.
+                    afterExit.current = onRequestFromClient;
+                    close();
+                  },
+                }
+              : undefined
           }
         >
           {/* АДРЕС — ГЛАВНАЯ СТРОКА БЛОКА: сюда же вставляют ссылку на карту,
@@ -360,14 +356,13 @@ export function ObjectSheet({
               showPin={!isLikelyUrl(draft.target.trim())}
             />
           ) : null}
-        </RowGroup>
+        </SectionCard>
 
-        {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
-            «мне нравились старые заметки»). Тот же вид, что у заметок на
-            странице записи; поле открыто сразу, без кнопки «добавить»
-            (владелец 2026-09-04). */}
-        <RowGroup title="Заметка">
-          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+        {/* ЗАМЕТКА — ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07: «мне нравились
+            старые заметки»). Тот же вид, что у заметок на странице записи;
+            поле открыто сразу, без кнопки «добавить» (владелец 2026-09-04). */}
+        <SectionCard title="Заметка">
+          <View style={{ paddingHorizontal: 12, paddingBottom: 10, paddingTop: 2 }}>
             <TextInput
               value={draft.note}
               onChangeText={(v) => setDraft((d) => ({ ...d, note: v }))}
@@ -393,7 +388,7 @@ export function ObjectSheet({
               }}
             />
           </View>
-        </RowGroup>
+        </SectionCard>
       </ScrollView>
 
       {/* Футер — единственная громкая поверхность листа. Над клавиатурой его
@@ -462,31 +457,3 @@ export function ObjectSheet({
  *  нет намеренно (шеврон обещал бы страницу) — только отмена своего же
  *  добавления. */
 
-/** КОМАНДА БЛОКА — ЗНАЧОК СПРАВА В ЕГО КАПС-СТРОКЕ. Высоту шапки не меняет:
- *  до 44pt зону касания добирает hitSlop, а не размер (тот же приём, что в
- *  `SectionCard` после правки 2026-09-08). */
-function HeaderAction({
-  icon: Icon,
-  label,
-  onPress,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={() => {
-        haptics.tap();
-        onPress();
-      }}
-      hitSlop={12}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-    >
-      <Icon color={t.sub} size={18} strokeWidth={2} />
-    </Pressable>
-  );
-}

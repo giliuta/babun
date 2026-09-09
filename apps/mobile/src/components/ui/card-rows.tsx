@@ -204,7 +204,6 @@ export function RowGroup({
   title,
   accent,
   value,
-  action,
   footer,
   children,
 }: {
@@ -217,24 +216,14 @@ export function RowGroup({
    *  («БРИГАДА ЮРА … €1 050»). Цифры моноширинные: подытоги секций стоят
    *  друг под другом и при рефетче не должны гулять по ширине. */
   value?: string;
-  /** Действие СПРАВА В ШАПКЕ группы: шестерёнка словаря у «Типа объекта»,
-   *  «отправить ссылку» у «Адреса» (владелец 2026-09-09: «тип объекта, да, а
-   *  справа в этой же строчке — настройки»). Так у каждой группы своя команда
-   *  стоит на одном месте, а не влезает в ряд её содержимого. */
-  action?: ReactNode;
   /** Пояснение ПОД группой: «Наличными €640 · На картах €410». */
   footer?: string;
   children: ReactNode;
 }) {
   return (
     <View style={{ marginTop: 12 }}>
-      {title || value || action ? (
-        <RowGroupHeader
-          title={title}
-          accent={accent}
-          value={value}
-          action={action}
-        />
+      {title || value ? (
+        <RowGroupHeader title={title} accent={accent} value={value} />
       ) : null}
       <RowGroupBody>{children}</RowGroupBody>
       {footer ? <RowGroupFooter text={footer} /> : null}
