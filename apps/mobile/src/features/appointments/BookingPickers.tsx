@@ -8,7 +8,7 @@ import {
   type TextInputProps,
   type TextProps,
 } from "react-native";
-import { Search, UserRound, X } from "lucide-react-native";
+import { Check, Search, UserRound, X } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
@@ -21,14 +21,13 @@ import {
   clientHistoryText,
 } from "@/features/clients/history-line";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import { QtyBadge } from "@/features/appointments/QtyBadge";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import type { Service } from "@/features/services/queries";
 import {
   buildQuickClientDraft,
   findQuickClientDuplicate,
 } from "@/features/appointments/booking-prefill";
-import { ColorDot } from "@/components/ui/picker-fields";
 import { isoWeekdayOf, servedOnWeekday } from "@babun/shared/local/services";
 import { durationLabel } from "@/features/services/format";
 import { unitPriceFor } from "@/features/appointments/helpers";
@@ -447,14 +446,18 @@ export function ServicePicker({
     setQ("");
     onClose();
   };
-  // КОЛИЧЕСТВО НАБИРАЮТ ТАПАМИ (владелец 2026-09-04, выбрал вариант из
-  // четырёх на экране сравнения): тап по строке добавляет ещё одну, тап по
-  // бейджу «×3» убавляет, ноль убирает услугу из записи. Стрелок вверх/вниз
-  // больше нет ни здесь, ни в форме.
-  const add = (id: string) => {
-    const qty = quantities[id];
-    if (qty == null) onToggle(id);
-    else onQtyChange(id, qty + 1);
+  // ТАП ПО СТРОКЕ — ВЗЯТЬ ИЛИ СНЯТЬ, КОЛИЧЕСТВО — СТЕППЕРОМ (владелец
+  // 2026-09-08: «количество набирать несколькими тапами не очень прикольно, а
+  // чтобы снять — надо прям на это нажимать, не все люди это поймут»).
+  //
+  // До этого тап по строке ДОБАВЛЯЛ ещё одну: три чистки — три тапа, а снять
+  // услугу можно было только попав в маленький бейдж «×3», о чём на экране не
+  // говорило ничто. Теперь строка ведёт себя как везде в продукте: тап —
+  // выбор, повторный тап — снятие; количество живёт своим органом «− 3 +»,
+  // который появляется у выбранной услуги.
+  const toggle = (id: string) => {
+    haptics.tap();
+    onToggle(id);
   };
 
   return (
@@ -509,23 +512,37 @@ export function ServicePicker({
             return (
               <Pressable
                 key={s.id}
-                onPress={() => add(s.id)}
-                accessibilityRole="button"
+                onPress={() => toggle(s.id)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: on }}
                 accessibilityLabel={`${s.name}, ${formatEURExact(s.price)}${
                   on ? `, взято ${qty ?? 1}` : ""
                 }`}
-                accessibilityHint="Добавляет ещё одну"
+                accessibilityHint={on ? "Снять услугу" : "Взять услугу"}
                 style={({ pressed }) => ({
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 12,
-                  minHeight: 52,
-                  paddingHorizontal: 14,
+                  minHeight: 56,
+                  paddingLeft: 14,
+                  paddingRight: on ? 6 : 14,
                   borderRadius: t.radius.input,
-                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
+                  // ВЫБРАННАЯ УСЛУГА ВИДНА ПОДЛОЖКОЙ, а не одним бейджем в
+                  // хвосте: со списка в двадцать строк взятое должно читаться,
+                  // не вчитываясь.
+                  backgroundColor: pressed
+                    ? t.rowFillPressed
+                    : on
+                      ? `${t.accent}14`
+                      : t.rowFill,
                 })}
               >
-                <ColorDot value={s.color} size={10} />
+                <Check
+                  color={on ? t.accent : t.faint}
+                  size={ICON.sm}
+                  strokeWidth={on ? 2.6 : 2}
+                  opacity={on ? 1 : 0.35}
+                />
                 <View style={{ flex: 1 }}>
                   <Text
                     numberOfLines={1}
@@ -544,10 +561,10 @@ export function ServicePicker({
                   </Text>
                 </View>
                 {on ? (
-                  <QtyBadge
+                  <PickerQty
+                    name={s.name}
                     qty={qty ?? 1}
-                    unit={s.unit ?? null}
-                    onPress={() => onQtyChange(s.id, (qty ?? 1) - 1)}
+                    onChange={(next) => onQtyChange(s.id, next)}
                   />
                 ) : null}
               </Pressable>
@@ -560,5 +577,78 @@ export function ServicePicker({
         )}
       </View>
     </BottomSheet>
+  );
+}
+
+/** КОЛИЧЕСТВО ВЫБРАННОЙ УСЛУГИ — «− 3 +» прямо в строке списка. Пилюля, а не
+ *  три кнопки: один орган с числом посередине. Нажатия по ней НЕ доходят до
+ *  строки — вложенный `Pressable` забирает касание себе, поэтому подкрутить
+ *  количество можно, не сняв услугу.
+ *
+ *  «−» на единице ПРИГАШЕН: снять услугу — это тап по строке, и два разных
+ *  жеста для одного действия только сбивают. */
+function PickerQty({
+  name,
+  qty,
+  onChange,
+}: {
+  name: string;
+  qty: number;
+  onChange: (next: number) => void;
+}) {
+  const t = useThemeColors();
+  const step = (delta: number, label: string, sign: string, off?: boolean) => (
+    <Pressable
+      onPress={() => {
+        if (off) return;
+        haptics.tap();
+        onChange(qty + delta);
+      }}
+      disabled={off}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!off }}
+      style={({ pressed }) => ({
+        width: 32,
+        height: 36,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: off ? 0.3 : pressed ? 0.5 : 1,
+      })}
+    >
+      <Text
+        maxFontSizeMultiplier={1}
+        style={{ fontSize: 18, fontWeight: "600", color: t.ink, lineHeight: 22 }}
+      >
+        {sign}
+      </Text>
+    </Pressable>
+  );
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        width: 92,
+        height: 36,
+        borderRadius: t.radius.input,
+        backgroundColor: t.surface,
+      }}
+    >
+      {step(-1, `Убавить: ${name}`, "\u2212", qty <= 1)}
+      <Text
+        maxFontSizeMultiplier={1.2}
+        style={{
+          fontSize: 15,
+          fontWeight: "700",
+          color: t.ink,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {qty}
+      </Text>
+      {step(1, `Добавить: ${name}`, "+")}
+    </View>
   );
 }
