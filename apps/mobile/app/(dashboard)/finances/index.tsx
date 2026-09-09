@@ -51,7 +51,14 @@ import {
   recordRows,
   type RecordRow,
 } from "@/features/finances/record-rows";
-import { debtRows } from "@/features/finances/debt-rows";
+import { debtRows, manualDebtRows } from "@/features/finances/debt-rows";
+import { DebtSheet } from "@/features/finances/DebtSheet";
+import { useDebtPaidTotals, useDebts } from "@/features/finances/debts-queries";
+import {
+  debtPaymentType,
+  type Debt,
+  type DebtDirection,
+} from "@babun/shared/local/finance/debt";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import { NO_TEAM } from "@/features/finances/accounts-sections";
@@ -217,6 +224,21 @@ function FinancesContent() {
   const [popupTx, setPopupTx] = useState<FinanceTransaction | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
+  // Какую сторону долгов смотрим и какой долг правим. Живут ЗДЕСЬ, а не в
+  // панели: от стороны зависит подпись главной кнопки внизу экрана, а она
+  // снаружи панели (тот же довод, что у `docFilter`).
+  const [debtSide, setDebtSide] = useState<DebtDirection>("incoming");
+  const [debtOpen, setDebtOpen] = useState(false);
+  const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
+  // Платёж по долгу открывает ТУ ЖЕ форму операции, что и всё остальное:
+  // движение денег в продукте одно, и второй его формы быть не должно.
+  const [debtPayment, setDebtPayment] = useState<{
+    debtId: string;
+    counterparty: string;
+    amount: number;
+    clientId: string | null;
+    direction: DebtDirection;
+  } | null>(null);
 
   const categoriesQuery = useFinanceCategories();
   const teamsQuery = useTeams();
@@ -231,6 +253,8 @@ function FinancesContent() {
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
   const accountsQuery = useAccountsWithBalances();
+  const debtsQuery = useDebts(period.from, period.to, { teamId: scope });
+  const debtPaidQuery = useDebtPaidTotals();
   const categories = useMemo(
     () => categoriesQuery.data ?? [],
     [categoriesQuery.data],
@@ -411,6 +435,29 @@ function FinancesContent() {
     [invoices],
   );
 
+  // Пустышки через useMemo, а не `?? []` в выражении: новый литерал на каждый
+  // рендер ломает мемоизацию списка долгов, ради которой он и написан.
+  const debts = useMemo(() => debtsQuery.data ?? [], [debtsQuery.data]);
+  const debtPaid = useMemo(
+    () => debtPaidQuery.data ?? new Map<string, number>(),
+    [debtPaidQuery.data],
+  );
+
+  // ПЛИТКА И СПИСОК ПОД НЕЙ СЧИТАЮТ ОДНОЙ ФУНКЦИЕЙ. «Долги» — это всё, что
+  // должны МНЕ: долги записей плюс ручные входящие. «Я должен» в плитку не
+  // подмешивается: одни деньги придут, другие уйдут, и общая сумма не значила
+  // бы ничего (владелец 2026-09-10 — две стороны, переключатель между ними).
+  const manualIncomingDebt = useMemo(
+    () =>
+      manualDebtRows(
+        debts,
+        debtPaid,
+        { clients, categories },
+        { today: businessToday, direction: "incoming" },
+      ).reduce((sum, r) => sum + r.amount, 0),
+    [debts, debtPaid, clients, categories, businessToday],
+  );
+
   const totals = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -445,9 +492,10 @@ function FinancesContent() {
       income,
       expense: expenseWithMaterials,
       profit: income - expenseWithMaterials,
-      debt,
+      debt: debt + manualIncomingDebt,
     };
   }, [
+    manualIncomingDebt,
     scopedTransactions,
     scopedAppointments,
     invoicedAppointments,
@@ -1001,6 +1049,17 @@ function FinancesContent() {
             toDate={period.to}
             todayYmd={businessToday}
             invoicedAppointmentIds={invoicedAppointments}
+            debts={debts}
+            paidTotals={debtPaid}
+            categories={categories}
+            direction={debtSide}
+            onDirectionChange={setDebtSide}
+            onEditDebt={(debtId) => {
+              const found = debts.find((d) => d.id === debtId);
+              if (!found) return;
+              setEditingDebt(found);
+              setDebtOpen(true);
+            }}
             onOpenDocuments={() => {
               setDocFilter("invoice");
               setView("documents");
@@ -1094,27 +1153,22 @@ function FinancesContent() {
             onPress={() => pushOnce("/invoices/new")}
           />
         ) : view === "debt" ? (
-          // ДОЛГ РОЖДАЕТСЯ ИЗ РАБОТЫ, А НЕ ИЗ ОПЕРАЦИИ (владелец 2026-09-09:
-          // «нажимаю долги — кнопка добавить долг»). Отдельной «операции
-          // долга» в продукте нет: долг — это состояние записи, за которую не
-          // заплатили. Поэтому кнопка ведёт в создание записи, а не в форму
-          // операции: операция завела бы доход или расход, и долг из неё не
-          // появился бы — кнопка обещала бы одно, а делала другое.
+          // ДОЛГ — СВОЯ СУЩНОСТЬ, И ЗАВОДИТСЯ ОН СВОЕЙ ШТОРКОЙ (владелец
+          // 2026-09-10: «почему, когда я нажимаю „Добавить долг“, открывается
+          // форма записи? Там должна открываться такая менюшка, только,
+          // наверно, другие категории»).
           //
-          // Раньше здесь стояло «Добавить операцию», и форма открывалась
-          // РАСХОДОМ: на экране про то, кто должен нам, предлагалось записать
-          // трату.
+          // Раньше кнопка уводила в создание ЗАПИСИ: долг умел рождаться
+          // только из визита, и «Вася должен мне €100» без визита, как и «я
+          // должен Gree €900» за товар, записать было негде. Теперь у долга
+          // есть строка с направлением, и форма спрашивает ровно его вопросы —
+          // без счёта и способа оплаты: долг не деньги, деньги будут платежом.
           <GradientButton
-            label="Добавить долг"
-            onPress={() =>
-              pushOnce(
-                `/book?date=${businessToday}` +
-                  (scope && scope !== NO_TEAM
-                    ? `&teamId=${encodeURIComponent(scope)}`
-                    : "") +
-                  "&from=finances:debt",
-              )
-            }
+            label={debtSide === "incoming" ? "Добавить долг" : "Добавить свой долг"}
+            onPress={() => {
+              setEditingDebt(null);
+              setDebtOpen(true);
+            }}
           />
         ) : (
           // КНОПКА СЛЕДУЕТ ЗА РАЗРЕЗОМ (владелец 2026-09-08: «нажимаю на доход
@@ -1184,11 +1238,23 @@ function FinancesContent() {
         visible={opOpen}
         // editingTx НЕ обнуляется здесь: шапка мигала «Операция»→«Новая
         // операция» пока лист уезжал; открывающие пути сами ставят нужное.
-        onClose={() => setOpOpen(false)}
+        onClose={() => {
+          setOpOpen(false);
+          setDebtPayment(null);
+        }}
         // Псевдо-скоуп «Без команды» команды не несёт: лист сам спросит.
         defaultTeamId={scope === NO_TEAM ? null : scope}
-        // Разрез уже сказал направление — форма открывается им же.
-        defaultType={view === "income" ? "income" : "expense"}
+        // Разрез уже сказал направление — форма открывается им же. У платежа
+        // по долгу направление решает сам долг: «мне должны» гасят доходом,
+        // «я должен» — расходом.
+        defaultType={
+          debtPayment
+            ? debtPaymentType(debtPayment.direction)
+            : view === "income"
+              ? "income"
+              : "expense"
+        }
+        debtPayment={debtPayment}
         businessToday={businessToday}
         transaction={editingTx}
         onInvoice={(tx) => {
@@ -1214,6 +1280,31 @@ function FinancesContent() {
               : Number.POSITIVE_INFINITY
             : 0
         }
+      />
+
+      {/* Долг — своя шторка из тех же блоков, что операция: направление,
+          день, кто, категория, сумма, заметка. Счёта в ней нет нарочно — долг
+          не деньги, и в момент его появления со счёта ничего не уходит.
+          Сторона приезжает из переключателя панели: нажав «Я должен», человек
+          заводит свой долг, а не чужой. */}
+      <DebtSheet
+        visible={debtOpen}
+        debt={editingDebt}
+        paid={editingDebt ? debtPaid.get(editingDebt.id) ?? 0 : 0}
+        onPay={(payment) => {
+          // Одна шторка закрывается, следом открывается другая: два окна в
+          // один кадр iOS не показывает («already presenting»).
+          setDebtOpen(false);
+          setEditingTx(null);
+          setDebtPayment(payment);
+          setTimeout(() => setOpOpen(true), OPERATION_SHEET_EXIT_MS);
+        }}
+        initialDirection={debtSide}
+        teamId={scope === NO_TEAM ? null : scope}
+        teamName={
+          scope && scope !== NO_TEAM ? teamByIdAll.get(scope)?.name : undefined
+        }
+        onClose={() => setDebtOpen(false)}
       />
 
       {/* Перевод — тот же лист, что на странице счетов: одна форма движения
