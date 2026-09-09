@@ -2813,21 +2813,12 @@ export default function BookScreen() {
                 }}
               />
 
-              <WhenRow
-                date={date}
-                timeStart={timeStart}
-                timeEnd={timeEnd}
-                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-                warning={null}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
-              />
-
-              {/* ТИП СОБЫТИЯ — СВОИМ БЛОКОМ, ПЛИТКАМИ В ОДНО КАСАНИЕ. Цвет
-                  события и есть цвет типа: плитки красятся им, и выбор сразу
-                  перекрашивает всю страницу. */}
+              {/* ТИП СОБЫТИЯ — ВЫШЕ ВРЕМЕНИ (владелец 2026-09-08: «тип
+                  событий должен быть сверху»). Он и правда идёт раньше:
+                  событие сперва называют типом, а тип ставит конец времени по
+                  своей длительности — стоять ПОСЛЕ времени значило читать
+                  причину после следствия. Плитки, выбор в одно касание; цвет
+                  события и есть цвет типа. */}
               <EventTypeBlock
                 types={eventTypes}
                 selectedId={eventTypeId}
@@ -2840,6 +2831,18 @@ export default function BookScreen() {
                   // и «назад» уводил на календарь, теряя набранное событие
                   // (владелец 2026-09-08: «нажимаю назад — оно вылетает»).
                   router.push("/book/event-types" as Href);
+                }}
+              />
+
+              <WhenRow
+                date={date}
+                timeStart={timeStart}
+                timeEnd={timeEnd}
+                duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
+                warning={null}
+                onPress={() => {
+                  setWhenOpen(true);
+                  haptics.tap();
                 }}
               />
 

@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Settings } from "lucide-react-native";
+import { Settings2 } from "lucide-react-native";
 import type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { eventTypeIcon } from "@/features/calendar/event-type-icons";
@@ -24,9 +24,9 @@ import { useThemeColors } from "@/theme/colors";
 // много и она нужнее всего. Тем же днём владелец уточнил: не слово, а
 // ЗНАЧОК ползунков — тот же, которым в продукте обозначены настройки; слово
 // «Типы событий» рядом с заголовком «ТИП СОБЫТИЯ» читалось как второй
-// заголовок. Значок — КАНОНИЧЕСКАЯ шестерёнка «мини-настроек» из `PickerSheet`
-// (та, что стоит в листе метки), а не какая-то своя: один жест — один значок.
-// Подпись жива в озвучке.
+// заголовок. Значок — ползунки (владелец 2026-09-08 прислал картинкой): не
+// шестерёнка «мини-настроек» листа, а два ползунка — «здесь настраивают
+// список», а не «здесь настройки экрана». Подпись жива в озвучке.
 //
 // Каждый тип показан своим значком из справочника и своим цветом: цвет
 // события и есть цвет типа, и выбор его сразу показывает.
@@ -60,7 +60,7 @@ export function EventTypeBlock({
       title="Тип события"
       action={{
         label: "Типы событий",
-        icon: Settings,
+        icon: Settings2,
         onPress: onSettings,
       }}
     >
