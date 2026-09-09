@@ -21,9 +21,33 @@ import {
   type FinanceCategoryPatch,
   type NewFinanceCategory,
 } from "@babun/shared/db/repositories/finance-categories";
+import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { NEVER_PAUSE } from "./accounts";
+
+/**
+ * Журнал ОДНОЙ записи — для истории платежей в блоке оплаты. Отдельный запрос,
+ * а не срез месяца: история открывается из записи, которая может быть за любой
+ * период, и тянуть ради неё весь журнал тенанта незачем.
+ */
+export function useAppointmentLedger(appointmentId: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["appointment-ledger", tenantId, appointmentId],
+    enabled: !!tenantId && !!appointmentId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance_transactions")
+        .select("*")
+        .eq("tenant_id", tenantId as string)
+        .eq("appointment_id", appointmentId as string)
+        .order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as FinanceTransaction[];
+    },
+  });
+}
 
 /** Ключ среза журнала. Собирается ОДНОЙ функцией, потому что тот же срез
  *  берут и хук, и разовая дозагрузка выписки — разъехавшиеся ключи молча
