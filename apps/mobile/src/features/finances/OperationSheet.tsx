@@ -90,6 +90,7 @@ export function OperationSheet({
   defaultType = "expense",
   businessToday,
   transaction,
+  debtPayment,
   onInvoice,
   onClientOpen,
   onRefund,
@@ -109,6 +110,17 @@ export function OperationSheet({
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
+  /** ПЛАТЁЖ ПО ДОЛГУ. Долг сам по себе не деньги: движением денег становится
+   *  ровно эта операция, поэтому платить по нему нечем, кроме обычной формы.
+   *  Что известно заранее — кому, сколько осталось и в какую сторону, —
+   *  форма не переспрашивает; человеку остаётся счёт. */
+  debtPayment?: {
+    debtId: string;
+    counterparty: string;
+    /** Остаток долга: сумма минус уже уплаченное. */
+    amount: number;
+    clientId: string | null;
+  } | null;
   /** Действия существующей операции — живут внизу той же формы, а не в
    *  отдельной витрине: владелец 2026-08-10 «всё сразу в редакции». */
   onInvoice?: (tx: FinanceTransaction) => void;
@@ -190,7 +202,8 @@ export function OperationSheet({
       hydratedFor.current = null;
       return;
     }
-    const key = transaction?.id ?? "new";
+    const key =
+      transaction?.id ?? (debtPayment ? `debt:${debtPayment.debtId}` : "new");
     if (hydratedFor.current === key) return;
     hydratedFor.current = key;
     setRequestId(randomUuid());
@@ -221,18 +234,27 @@ export function OperationSheet({
     } else {
       setType(defaultType);
       setVatTouched(false);
-      setAmount("");
+      // Остаток долга подставлен, но не заперт: отдать можно и часть — тогда
+      // долг останется висеть на разницу, как и должен.
+      setAmount(debtPayment ? String(debtPayment.amount) : "");
       setCategoryId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
       setDate(businessToday);
       setTime(formatHM(new Date()));
-      setNotes("");
+      setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, defaultTeamId, defaultType, transaction?.id, businessToday]);
+  }, [
+    visible,
+    defaultTeamId,
+    defaultType,
+    transaction?.id,
+    businessToday,
+    debtPayment,
+  ]);
 
   const cats = useMemo(
     () =>
@@ -483,6 +505,11 @@ export function OperationSheet({
         occurred_time: time,
         receipt_url: receiptUrl,
         business_today: businessToday,
+        // Связь с долгом — она и делает операцию его погашением: остаток
+        // считается по привязанным платежам, а не колонкой в долге.
+        ...(debtPayment
+          ? { debt_id: debtPayment.debtId, client_id: debtPayment.clientId }
+          : {}),
       };
       if (isEdit && transaction) {
         await update.mutateAsync({ id: transaction.id, patch: draft });
@@ -615,7 +642,9 @@ export function OperationSheet({
       visible={visible}
       onClose={guardedClose}
       onExited={runAfterExit}
-      title={isEdit ? "Операция" : "Новая операция"}
+      title={
+        debtPayment ? "Оплата долга" : isEdit ? "Операция" : "Новая операция"
+      }
       // Команда не выбирается — она приехала чипом с экрана финансов. Строкой
       // поля она выглядела нажимаемой; здесь она просто подписана.
       subtitle={
@@ -642,11 +671,13 @@ export function OperationSheet({
           ) : null}
           <Button
             label={
-              isEdit
-                ? "Сохранить"
-                : isExpense
-                  ? "Добавить расход"
-                  : "Добавить доход"
+              debtPayment
+                ? "Записать оплату"
+                : isEdit
+                  ? "Сохранить"
+                  : isExpense
+                    ? "Добавить расход"
+                    : "Добавить доход"
             }
             onPress={save}
             disabled={!canSave}
@@ -676,7 +707,10 @@ export function OperationSheet({
             setType(seg);
             setCategoryId(null);
           }}
-          disabled={isEdit}
+          // У платежа по долгу направление уже решено самим долгом: «мне
+          // должны» гасят доходом, «я должен» — расходом. Переключатель здесь
+          // только называет сторону.
+          disabled={isEdit || !!debtPayment}
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
