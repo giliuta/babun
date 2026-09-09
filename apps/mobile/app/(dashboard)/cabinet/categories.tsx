@@ -190,9 +190,22 @@ export default function CategoriesScreen() {
                   <Trash2 color={th.danger} size={ICON.sm} />
                 </Pressable>
               ) : (
-                <View className="min-h-[52px] justify-center pr-4">
-                  <Text className="text-xs" style={{ color: th.faint }}>станд.</Text>
-                </View>
+                // СТАНДАРТНУЮ КАТЕГОРИЮ НЕ УДАЛИТЬ, НО МОЖНО УБРАТЬ ИЗ СПИСКА.
+                // Здесь стояло немое «станд.»: строка выглядела неживой, и
+                // владелец не знал, что скрытие вообще есть — «сделай
+                // возможность удалять» (2026-09-10), хотя оно было тапом по
+                // строке. Действие обязано называть себя словом.
+                <Pressable
+                  onPress={() => toggleHidden(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Убрать ${item.name} из списка`}
+                  className="min-h-[52px] flex-row items-center gap-1.5 pr-4 active:opacity-60"
+                >
+                  <EyeOff color={th.sub} size={ICON.sm} />
+                  <Text className="text-xs" style={{ color: th.sub }}>
+                    Скрыть
+                  </Text>
+                </Pressable>
               )}
             </View>
           )}
