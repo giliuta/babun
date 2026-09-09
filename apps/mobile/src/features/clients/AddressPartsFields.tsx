@@ -34,15 +34,67 @@ const SHORT: { key: keyof AddressParts; label: string }[] = [
 export function AddressDetailsToggle({
   open,
   summary,
+  variant = "row",
   onToggle,
 }: {
   open: boolean;
   /** Что уже заполнено — подпись свёрнутой строки (см. composeDetails). */
   summary: string;
+  /** `link` — маленькая синяя строка внутри карточки адреса (владелец
+   *  2026-09-09: «потом маленькая такая кнопочка синеньким — „точный
+   *  адрес“»). Полноразмерная строка на 48pt весила столько же, сколько сам
+   *  адрес, хотя это его уточнение. `row` — прежняя строка: она осталась на
+   *  публичной странице, где по ней тапает клиент с телефона. */
+  variant?: "row" | "link";
   onToggle: () => void;
 }) {
   const t = useThemeColors();
   const Chevron = open ? ChevronUp : ChevronDown;
+  if (variant === "link") {
+    return (
+      <Pressable
+        onPress={() => {
+          haptics.tap();
+          onToggle();
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={
+          summary ? `${ADDRESS_DETAILS_LABEL}: ${summary}` : ADDRESS_DETAILS_LABEL
+        }
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          minHeight: 40,
+          paddingHorizontal: 16,
+          borderTopWidth: 1,
+          borderTopColor: t.separator,
+          opacity: pressed ? 0.5 : 1,
+        })}
+      >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{ fontSize: 14, fontWeight: "500", color: t.accent }}
+        >
+          {ADDRESS_DETAILS_LABEL}
+        </Text>
+        {!open && summary ? (
+          <Text
+            maxFontSizeMultiplier={1.2}
+            numberOfLines={1}
+            ellipsizeMode="head"
+            style={{ flex: 1, fontSize: 13, color: t.sub }}
+          >
+            {summary}
+          </Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
+        <Chevron color={t.accent} size={14} strokeWidth={2.4} />
+      </Pressable>
+    );
+  }
   return (
     <Pressable
       onPress={() => {

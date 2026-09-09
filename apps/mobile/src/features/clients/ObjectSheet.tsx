@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Send } from "lucide-react-native";
+import { Send, SlidersHorizontal, type LucideIcon } from "lucide-react-native";
 import type { AddressParts, Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import {
@@ -273,33 +273,57 @@ export function ObjectSheet({
             «ТИП ОБЪЕКТА» стоял ПЕРВЫМ прямо под заголовком «Новый объект» и
             читался как раздел, вложенный в самого себя. Первым теперь идёт
             «АДРЕС» — то, ради чего лист открыли и единственное обязательное. */}
-        {/* ТИП — САМЫМ ВЕРХОМ И СРАЗУ ВИДЕН (владелец 2026-09-09: «тип
-            объекта подставить в самый верх»; и следом, на мою раскрывашку:
-            «нет-нет, оно так же должно выглядеть, не надо лишний этап для
-            открытия»). Чипы стоят как стояли — без своего капса: лист уже
-            назван «Новым объектом», а второй капс на 20pt ниже читался бы
-            разделом, вложенным в самого себя (решение 2026-09-06).
-            Шестерёнка словаря — в ряду чипов, там её и завёл владелец
-            2026-07-27 («не плюсик, а справа шестерёнка»). */}
-        <RowGroup>
+        {/* ТРИ БЛОКА ОДНОЙ АРХИТЕКТУРЫ (владелец 2026-09-09: «сделай так же
+            поблочно, как клиент, как объект: тип объекта — а справа в этой же
+            строчке настройки, внизу перечень; потом адрес полноценно; потом
+            третий блок — заметки; и сделай всё в одной архитектуре»).
+            У каждого блока своя капс-подпись и своя команда СПРАВА В ТОЙ ЖЕ
+            СТРОКЕ: у типа — шестерёнка словаря, у адреса — «попросить у
+            клиента». Так команда не влезает внутрь содержимого блока: раньше
+            шестерёнка стояла пятой в ряду чипов, а «попросить адрес» — целой
+            строкой под формой. */}
+        <RowGroup
+          title="Тип объекта"
+          action={
+            <HeaderAction
+              icon={SlidersHorizontal}
+              label="Настроить типы объектов"
+              onPress={() => {
+                // Настройки ЗАКРЫВАЮТ лист: страница не может жить под ним.
+                close();
+                router.push(typesHref);
+              }}
+            />
+          }
+        >
           <ChoiceRow
             options={typeOptions}
             value={type}
-            // Шестерёнка ведёт в настройки типов и ЗАКРЫВАЕТ лист: страница
-            // настроек не может жить под нашим листом.
-            onSettings={() => {
-              close();
-              router.push(typesHref);
-            }}
             onSelect={(v) =>
               setDraft((d) => ({ ...d, label: snapObjectType(v, typeOptions) }))
             }
           />
         </RowGroup>
 
-        <RowGroup title="Адрес">
-          {/* АДРЕС — ПЕРВЫМ И БЕЗ ВТОРОЙ ПОДПИСИ В СТРОКЕ: группа уже
-              назвала его, а плейсхолдер говорит, что сюда годится и ссылка. */}
+        <RowGroup
+          title="Адрес"
+          action={
+            onRequestFromClient ? (
+              <HeaderAction
+                icon={Send}
+                label="Попросить адрес у клиента"
+                onPress={() => {
+                  // Лист сперва уходит: системный «Поделиться» поверх
+                  // уходящего модального окна iOS закрывается вместе с ним.
+                  afterExit.current = onRequestFromClient;
+                  close();
+                }}
+              />
+            ) : null
+          }
+        >
+          {/* АДРЕС — ГЛАВНАЯ СТРОКА БЛОКА: сюда же вставляют ссылку на карту,
+              разбор на текст/пин — при добавлении (см. objectPlacePatch). */}
           <FieldRow
             label="Адрес"
             hideLabel
@@ -317,9 +341,10 @@ export function ObjectSheet({
             // Кнопки маршрута здесь НЕТ намеренно: ехать некуда — объект ещё
             // не заведён; выбор карты — лист поверх листа (аудит 2026-07-27).
           />
-          {/* ТОЧНЫЙ АДРЕС — «мини-доп» под главной строкой: раскрывается и
-              сворачивается обратно; закрытая строка называет свой состав. */}
+          {/* ТОЧНЫЙ АДРЕС — маленькой синей строкой: это уточнение адреса, а
+              не второй адрес, и весить как главная строка оно не должно. */}
           <AddressDetailsToggle
+            variant="link"
             open={draft.partsOpen}
             summary={composeDetails(draft.parts)}
             onToggle={() =>
@@ -336,42 +361,6 @@ export function ObjectSheet({
             />
           ) : null}
         </RowGroup>
-
-        {/* «ПОПРОСИТЬ АДРЕС» — ТИХОЙ ССЫЛКОЙ, А НЕ КАРТОЧКОЙ (владелец
-            2026-09-09: «полноценный блок „попросить адрес у клиента“ мне не
-            нравится, должно быть как-то не так открыто»). Своей карточкой со
-            значком и шевроном он весил столько же, сколько сам адрес, и спорил
-            с главной кнопкой листа. Это выход на случай «адреса нет под
-            рукой»: стоит там, где эта мысль приходит — сразу под адресом, —
-            и звучит вдвое тише. */}
-        {onRequestFromClient ? (
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              afterExit.current = onRequestFromClient;
-              close();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Попросить адрес у клиента"
-            accessibilityHint="Выписывает ссылку и открывает «Поделиться»"
-            style={({ pressed }) => ({
-              minHeight: 44,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            <Send color={t.accent} size={14} strokeWidth={2.2} />
-            <Text
-              maxFontSizeMultiplier={1.2}
-              style={{ fontSize: 14, fontWeight: "500", color: t.accent }}
-            >
-              Адреса нет — попросить у клиента
-            </Text>
-          </Pressable>
-        ) : null}
 
         {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
             «мне нравились старые заметки»). Тот же вид, что у заметок на
@@ -472,3 +461,32 @@ export function ObjectSheet({
 /** Строка уже заведённого объекта: тип и «куда ехать». Двери в объект здесь
  *  нет намеренно (шеврон обещал бы страницу) — только отмена своего же
  *  добавления. */
+
+/** КОМАНДА БЛОКА — ЗНАЧОК СПРАВА В ЕГО КАПС-СТРОКЕ. Высоту шапки не меняет:
+ *  до 44pt зону касания добирает hitSlop, а не размер (тот же приём, что в
+ *  `SectionCard` после правки 2026-09-08). */
+function HeaderAction({
+  icon: Icon,
+  label,
+  onPress,
+}: {
+  icon: LucideIcon;
+  label: string;
+  onPress: () => void;
+}) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onPress();
+      }}
+      hitSlop={12}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+    >
+      <Icon color={t.sub} size={18} strokeWidth={2} />
+    </Pressable>
+  );
+}

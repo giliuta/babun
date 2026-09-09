@@ -260,6 +260,7 @@ export function ObjectEditSheet({
               сворачивается обратно; свёрнутая строка показывает, что в ней
               есть. Пустые части снимаются на записи сами. */}
           <AddressDetailsToggle
+            variant="link"
             open={address.open}
             summary={address.summary}
             onToggle={address.toggle}
