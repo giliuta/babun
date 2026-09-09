@@ -3,9 +3,12 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  debtAge,
+  mergeByRecord,
   recordRows,
   servicesLine,
-  whenLine,
+  paymentsLine,
+  whatLine,
   type RecordRowRefs,
 } from "./record-rows";
 
@@ -142,6 +145,47 @@ describe("recordRows", () => {
     assert.equal(bare.title, "Операция");
   });
 
+  test("две ноги перевода — одна строка с направлением и без знака", () => {
+    const rows = recordRows(
+      [
+        tx({ id: "out", appointment_id: null, type: "transfer", amount: -55, transfer_group_id: "g1", account_id: "acc-cash" }),
+        tx({ id: "in", appointment_id: null, type: "transfer", amount: 55, transfer_group_id: "g1", account_id: "acc-card" }),
+      ],
+      {
+        ...refs,
+        accounts: [
+          { id: "acc-cash", name: "Наличные" },
+          { id: "acc-card", name: "Карта" },
+        ],
+      },
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].title, "Перевод");
+    assert.equal(rows[0].subtitle, "Наличные → Карта");
+    assert.equal(rows[0].amount, 55);
+    assert.equal(rows[0].tone, "transfer");
+    assert.equal(rows[0].key, "transfer:g1");
+  });
+
+  test("одинокая нога перевода знак сохраняет: вторая осталась за срезом", () => {
+    const rows = recordRows(
+      [tx({ id: "out", appointment_id: null, type: "transfer", amount: -55, transfer_group_id: "g1", account_id: "acc-cash" })],
+      { ...refs, accounts: [{ id: "acc-cash", name: "Наличные" }] },
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].amount, -55);
+    assert.equal(rows[0].subtitle, "Наличные");
+  });
+
+  test("перевод называет себя переводом, а не заметкой", () => {
+    const [row] = recordRows(
+      [tx({ id: "tr1", appointment_id: null, type: "transfer", amount: -50, notes: "на бензин" })],
+      refs,
+    );
+    assert.equal(row.title, "Перевод");
+    assert.equal(row.amount, -50);
+  });
+
   test("проводка на запись вне окна периода не теряется", () => {
     const rows = recordRows([tx({ appointment_id: "gone" })], refs);
     assert.equal(rows.length, 1);
@@ -194,19 +238,120 @@ describe("servicesLine", () => {
   });
 });
 
-describe("whenLine", () => {
-  test("один платёж — только время: считать нечего", () => {
-    assert.equal(whenLine({ time: "11:30", count: 1 }), "11:30");
+describe("whatLine", () => {
+  test("время идёт перед услугами: по нему узнают работу", () => {
+    assert.equal(
+      whatLine({ time: "11:30", services: ["A/C Cleaning"] }),
+      "11:30 · A/C Cleaning",
+    );
   });
 
-  test("несколько платежей склоняются по-русски", () => {
-    assert.equal(whenLine({ time: "11:30", count: 2 }), "11:30 · 2 платежа");
-    assert.equal(whenLine({ time: "11:30", count: 5 }), "11:30 · 5 платежей");
-    assert.equal(whenLine({ time: "11:30", count: 21 }), "11:30 · 21 платёж");
+  test("без времени остаются услуги, без услуг — одно время", () => {
+    assert.equal(whatLine({ time: null, services: ["A/C Cleaning"] }), "A/C Cleaning");
+    assert.equal(whatLine({ time: "17:45", services: [] }), "17:45");
+    assert.equal(whatLine({ time: null, services: [] }), "");
+  });
+});
+
+describe("paymentsLine", () => {
+  test("несколько платежей склоняются, один — молчит", () => {
+    assert.equal(paymentsLine({ count: 1 }), "");
+    assert.equal(paymentsLine({ count: 2 }), "2 платежа");
+    assert.equal(paymentsLine({ count: 5 }), "5 платежей");
+    assert.equal(paymentsLine({ count: 21 }), "21 платёж");
+  });
+});
+
+describe("debtAge", () => {
+  test("сегодняшний и вчерашний долг зовутся словами, а не числом", () => {
+    assert.equal(debtAge("2026-09-09", "2026-09-09"), "сегодня");
+    assert.equal(debtAge("2026-09-08", "2026-09-09"), "вчера");
   });
 
-  test("без времени остаётся только счёт платежей", () => {
-    assert.equal(whenLine({ time: null, count: 3 }), "3 платежа");
-    assert.equal(whenLine({ time: null, count: 1 }), "");
+  test("дальше — возраст в днях, склонённый по-русски", () => {
+    assert.equal(debtAge("2026-09-06", "2026-09-09"), "3 дня");
+    assert.equal(debtAge("2026-08-28", "2026-09-09"), "12 дней");
+    assert.equal(debtAge("2026-09-08", "2026-09-29"), "21 день");
+  });
+
+  test("дату строка не печатает: она уже стоит заголовком дня", () => {
+    assert.ok(!debtAge("2026-09-06", "2026-09-09").includes("сен"));
+  });
+});
+
+describe("mergeByRecord", () => {
+  const row = (over: Partial<import("./record-rows").RecordRow>) =>
+    ({
+      key: "k",
+      appointmentId: "a1",
+      title: "Константин",
+      services: ["A/C Cleaning"],
+      amount: 0,
+      date: "2026-09-06",
+      time: "11:30",
+      count: 1,
+      ...over,
+    }) as import("./record-rows").RecordRow;
+
+  test("доход и долг одной записи — одна строка, доход главный", () => {
+    const [merged] = mergeByRecord([
+      row({ key: "in:a1", tone: "income", amount: 128 }),
+      row({ key: "debt:a1", tone: "debt", amount: 7, caption: "6 сен · 3 дня" }),
+    ]);
+    assert.equal(merged.amount, 128);
+    assert.equal(merged.tone, "income");
+    assert.deepEqual(merged.extras, [{ tone: "debt", amount: 7 }]);
+    assert.equal(merged.key, "rec:a1");
+  });
+
+  test("доход, расход и долг — всё в одной строке, хвост по порядку", () => {
+    const [merged] = mergeByRecord([
+      row({ key: "in:a1", tone: "income", amount: 128 }),
+      row({ key: "ex:a1", tone: "expense", amount: -10 }),
+      row({ key: "debt:a1", tone: "debt", amount: 7 }),
+    ]);
+    assert.equal(merged.amount, 128);
+    assert.deepEqual(merged.extras, [
+      { tone: "debt", amount: 7 },
+      { tone: "expense", amount: 10 },
+    ]);
+    assert.equal(merged.count, 3);
+  });
+
+  test("прихода не было — главным становится долг", () => {
+    const [merged] = mergeByRecord([
+      row({ key: "debt:a1", tone: "debt", amount: 50, caption: "3 дня" }),
+      row({ key: "ex:a1", tone: "expense", amount: -10 }),
+    ]);
+    assert.equal(merged.amount, 50);
+    assert.equal(merged.tone, "debt");
+    assert.deepEqual(merged.extras, [{ tone: "expense", amount: 10 }]);
+  });
+
+  test("одинокое состояние остаётся собой, подпись не трогаем", () => {
+    const [merged] = mergeByRecord([
+      row({ key: "debt:a1", tone: "debt", amount: 50, caption: "3 дня" }),
+    ]);
+    assert.equal(merged.caption, "3 дня");
+    assert.equal(merged.key, "debt:a1");
+  });
+
+  test("операции без записи не склеиваются между собой", () => {
+    const merged = mergeByRecord([
+      row({ key: "m1", appointmentId: null, tone: "expense", amount: -55 }),
+      row({ key: "m2", appointmentId: null, tone: "expense", amount: -28 }),
+    ]);
+    assert.equal(merged.length, 2);
+  });
+
+  test("порядок — от свежего к старому", () => {
+    const merged = mergeByRecord([
+      row({ key: "a", appointmentId: "a", date: "2026-09-06", tone: "income", amount: 10 }),
+      row({ key: "b", appointmentId: "b", date: "2026-09-08", tone: "income", amount: 10 }),
+    ]);
+    assert.deepEqual(
+      merged.map((r) => r.key),
+      ["b", "a"],
+    );
   });
 });
