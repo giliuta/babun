@@ -3300,7 +3300,6 @@ export default function BookScreen() {
         nameFor={(line) =>
           line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена"
         }
-        colorFor={(line) => catalog.get(line.serviceId)?.color ?? null}
         onQtyChange={setQty}
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.

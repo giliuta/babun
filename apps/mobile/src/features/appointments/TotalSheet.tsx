@@ -3,8 +3,6 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ColorDot } from "@/components/ui/picker-fields";
-import { durationLabel } from "@/features/services/format";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import { useMoney } from "@/features/settings/currency";
@@ -42,7 +40,6 @@ export function TotalSheet({
   onClose,
   lines,
   nameFor,
-  colorFor,
   onQtyChange,
   onPriceChange,
   servicesTotal,
@@ -61,7 +58,6 @@ export function TotalSheet({
   lines: readonly AppointmentService[];
   /** Имя строки — снимок записи, а не сегодняшний прайс. */
   nameFor: (line: AppointmentService) => string;
-  colorFor: (line: AppointmentService) => string | null;
   onQtyChange: (serviceId: string, qty: number) => void;
   /** Цена ОДНОЙ услуги в этой записи. Прайс не трогается: это снимок строки. */
   onPriceChange: (serviceId: string, price: number) => void;
@@ -111,12 +107,12 @@ export function TotalSheet({
               overflow: "hidden",
             }}
           >
+            <ColumnHeader />
             {lines.map((line, index) => (
               <ServiceLine
                 key={line.serviceId}
                 line={line}
                 name={nameFor(line)}
-                color={colorFor(line)}
                 separated={index > 0}
                 onQtyChange={onQtyChange}
                 onPriceChange={onPriceChange}
@@ -331,17 +327,57 @@ function SumRow({
   );
 }
 
+/** Ширины колонок — ОДНИ на шапку и на строки: иначе подпись и число
+ *  разъезжаются на первом же длинном имени. */
+const COL_QTY = 78;
+const COL_PRICE = 52;
+const COL_SUM = 58;
+const COL_GAP = 8;
+
+/** ШАПКА КОЛОНОК — ВМЕСТО ПОДПИСЕЙ В КАЖДОЙ СТРОКЕ (владелец 2026-09-08:
+ *  «названия — красивый блок, потом количество — тоже красивый блок, потом
+ *  цена за единицу и общая цена»). Слова «за шт» и «всего» повторялись в
+ *  каждой строке и съедали ту самую ширину, которой не хватало именам. Здесь
+ *  они сказаны один раз сверху, и список становится таблицей. */
+function ColumnHeader() {
+  const t = useThemeColors();
+  const cap = {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    letterSpacing: 0.6,
+    textTransform: "uppercase" as const,
+    color: t.faint,
+  };
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: COL_GAP,
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        paddingBottom: 6,
+      }}
+    >
+      <Text style={[cap, { flex: 1 }]}>Услуга</Text>
+      <Text style={[cap, { width: COL_QTY, textAlign: "center" }]}>Кол-во</Text>
+      {/* Без знака валюты: «Сумма, €» переносилось на вторую строку и рвало
+          шапку, а лист и так весь про деньги одной валюты. */}
+      <Text style={[cap, { width: COL_PRICE, textAlign: "right" }]}>Цена</Text>
+      <Text style={[cap, { width: COL_SUM, textAlign: "right" }]}>Сумма</Text>
+    </View>
+  );
+}
+
 function ServiceLine({
   line,
   name,
-  color,
   separated,
   onQtyChange,
   onPriceChange,
 }: {
   line: AppointmentService;
   name: string;
-  color: string | null;
   /** Не первая строка списка — волосок сверху. */
   separated?: boolean;
   onQtyChange: (serviceId: string, qty: number) => void;
@@ -356,91 +392,85 @@ function ServiceLine({
   const unitShown = unitDraft ?? String(Number(line.pricePerUnit.toFixed(2)));
   const totalShown = totalDraft ?? String(Number(line.totalPrice.toFixed(2)));
 
-  // ЧТО ЧИТАЮТ — НАВЕРХУ, ЧТО КРУТЯТ — ВНИЗУ (владелец 2026-09-08: «сделай
-  // этот блок аккуратнее, количество не очень нравится»). Было наоборот:
-  // первую строку занимал степпер во всю ширину, а сумма работы пряталась во
-  // второй между словами «за шт» и «всего». Слова ушли: цену и количество
-  // называет знак «×» между ними, а сумму — её место в колонке справа.
+  // ОДНА СТРОКА НА УСЛУГУ, ЧЕТЫРЕ КОЛОНКИ. Было две строки: во второй стояли
+  // цветная точка услуги и её длительность — и то и другое здесь лишнее
+  // (владелец 2026-09-08: «цвет услуги не нужен»; «полтора часа — на хуя его
+  // второй раз дублировать, оно не меняется»). Длительность живёт в строке
+  // услуги на самой странице записи и от правки цены не меняется, цвет тут
+  // ничего не различает — услуг в списке немного, и каждая названа словом.
+  //
+  // Имя переносится на вторую строку, а не обрезается: «Заправка фреоном» в
+  // 130pt не влезает, а услуга без имени — не услуга.
   return (
     <View
       style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: COL_GAP,
+        minHeight: 52,
         paddingHorizontal: 14,
-        paddingTop: separated ? 10 : 8,
-        paddingBottom: 8,
-        gap: 2,
+        paddingVertical: 6,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <ColorDot value={color} size={10} />
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-        >
-          {name}
-        </Text>
-        {/* СУММА РАБОТЫ — В КОЛОНКЕ СПРАВА, у всех строк на одной вертикали:
-            список читается сверху вниз одним взглядом. Правится тоже здесь. */}
-        <MoneyCell
-          value={totalShown}
-          strong
-          accessibilityLabel={`Сумма строки: ${name}`}
-          onChange={(next) => {
-            setTotalDraft(next);
-            setUnitDraft(null);
-            const total = parseMoneyInput(next);
-            const qty = Math.max(1, line.quantity);
-            onPriceChange(line.serviceId, Math.round((total / qty) * 100) / 100);
-          }}
-          onBlur={() => setTotalDraft(null)}
-        />
-      </View>
-
-      {/* ЦЕНА ЗА ОДНУ И КОЛИЧЕСТВО — ОДНИМ ВЫРАЖЕНИЕМ «45 € × 3» (владелец
-          2026-09-07: «в итого редактировать могу либо по количеству за штуку,
-          либо общую сумму»). Снимок строки хранит цену за штуку, итог = цена ×
-          количество в копейках; набранная сумма пересчитывает цену за одну.
-          Прайс каталога не трогается. */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 13, color: t.sub }}
-        >
-          {durationLabel(line.duration)}
-        </Text>
-        <MoneyCell
-          value={unitShown}
-          accessibilityLabel={`Цена за одну: ${name}`}
-          onChange={(next) => {
-            setUnitDraft(next);
-            setTotalDraft(null);
-            onPriceChange(line.serviceId, parseMoneyInput(next));
-          }}
-          onBlur={() => setUnitDraft(null)}
-        />
-        <Text style={{ fontSize: 14, color: t.faint }}>×</Text>
-        <QtyStepper
-          name={name}
-          qty={line.quantity}
-          onChange={(next) => onQtyChange(line.serviceId, next)}
-        />
-      </View>
+      <Text
+        numberOfLines={2}
+        style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
+      >
+        {name}
+      </Text>
+      <QtyStepper
+        name={name}
+        qty={line.quantity}
+        onChange={(next) => onQtyChange(line.serviceId, next)}
+      />
+      {/* ЦЕНА ЗА ОДНУ И СУММА СТРОКИ — ПРАВЯТСЯ ОБЕ (владелец 2026-09-07:
+          «в итого редактировать могу либо по количеству за штуку, либо общую
+          сумму»). Снимок строки хранит цену за штуку, итог = цена × количество
+          в копейках; набранная сумма пересчитывает цену за одну. Прайс
+          каталога не трогается. */}
+      <MoneyCell
+        width={COL_PRICE}
+        value={unitShown}
+        accessibilityLabel={`Цена за одну: ${name}`}
+        onChange={(next) => {
+          setUnitDraft(next);
+          setTotalDraft(null);
+          onPriceChange(line.serviceId, parseMoneyInput(next));
+        }}
+        onBlur={() => setUnitDraft(null)}
+      />
+      <MoneyCell
+        width={COL_SUM}
+        value={totalShown}
+        strong
+        accessibilityLabel={`Сумма строки: ${name}`}
+        onChange={(next) => {
+          setTotalDraft(next);
+          setUnitDraft(null);
+          const total = parseMoneyInput(next);
+          const qty = Math.max(1, line.quantity);
+          onPriceChange(line.serviceId, Math.round((total / qty) * 100) / 100);
+        }}
+        onBlur={() => setTotalDraft(null)}
+      />
     </View>
   );
 }
 
-/** Денежное поле строки. Подписей «за шт» и «всего» больше нет: цену от суммы
- *  отличает место — цена стоит в выражении «45 € × 3», сумма в колонке
- *  справа. Подложка говорит, что число правится. */
+/** Денежное поле колонки. Знака валюты в ячейке нет — он сказан в шапке
+ *  колонки один раз; подложка говорит, что число правится. */
 function MoneyCell({
   value,
+  width,
   strong,
   accessibilityLabel,
   onChange,
   onBlur,
 }: {
   value: string;
+  width: number;
   /** Сумма работы: крупнее и чернилами — её читают, остальное крутят. */
   strong?: boolean;
   accessibilityLabel: string;
@@ -449,45 +479,30 @@ function MoneyCell({
 }) {
   const t = useThemeColors();
   return (
-    <View
+    <TextInput
+      keyboardAppearance="light"
+      value={value}
+      onChangeText={onChange}
+      onBlur={onBlur}
+      selectTextOnFocus
+      keyboardType="decimal-pad"
+      placeholder="0"
+      placeholderTextColor={t.placeholder}
+      accessibilityLabel={accessibilityLabel}
+      maxFontSizeMultiplier={1.2}
       style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 2,
-        height: 32,
+        width,
+        height: 34,
         paddingHorizontal: 8,
         borderRadius: t.radius.input,
         backgroundColor: t.fill,
+        textAlign: "right",
+        fontSize: strong ? 16 : 15,
+        fontWeight: "700",
+        color: t.ink,
+        fontVariant: ["tabular-nums"],
       }}
-    >
-      <TextInput
-        keyboardAppearance="light"
-        value={value}
-        onChangeText={onChange}
-        onBlur={onBlur}
-        selectTextOnFocus
-        keyboardType="decimal-pad"
-        placeholder="0"
-        placeholderTextColor={t.placeholder}
-        accessibilityLabel={accessibilityLabel}
-        maxFontSizeMultiplier={1.2}
-        style={{
-          minWidth: strong ? 46 : 36,
-          height: 32,
-          textAlign: "right",
-          fontSize: strong ? 16 : 15,
-          fontWeight: "700",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      />
-      <Text
-        maxFontSizeMultiplier={1.2}
-        style={{ fontSize: 13, fontWeight: "600", color: t.sub }}
-      >
-        €
-      </Text>
-    </View>
+    />
   );
 }
 
@@ -512,7 +527,9 @@ function QtyStepper({
       style={{
         flexDirection: "row",
         alignItems: "center",
-        height: 32,
+        justifyContent: "space-between",
+        width: COL_QTY,
+        height: 34,
         borderRadius: t.radius.input,
         backgroundColor: t.fill,
       }}
@@ -525,8 +542,6 @@ function QtyStepper({
       <Text
         maxFontSizeMultiplier={1.2}
         style={{
-          minWidth: 20,
-          textAlign: "center",
           fontSize: 15,
           fontWeight: "700",
           color: t.ink,
@@ -572,9 +587,11 @@ function StepButton({
       accessibilityLabel={label}
       // Внутри пилюли `QtyStepper`: подложку и радиус даёт она, кнопке
       // остаётся зона касания. Своя заливка рисовала бы круг в круге.
+      // Внутри пилюли `QtyStepper`: подложку и радиус даёт она, кнопке
+      // остаётся зона касания. Своя заливка рисовала бы круг в круге.
       style={({ pressed }) => ({
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 34,
         alignItems: "center",
         justifyContent: "center",
         opacity: pressed ? 0.5 : 1,
