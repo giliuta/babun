@@ -19,6 +19,11 @@ import { useThemeColors } from "@/theme/colors";
 // мастеру нужнее названия комплекса. Все поля `live`: черновик держит лист.
 
 export const ADDRESS_DETAILS_LABEL = "Точный адрес";
+/** ЧТО ВНУТРИ — СКАЗАНО НА ЗАКРЫТОЙ СТРОКЕ (аудит листа объекта 2026-09-09).
+ *  Пустая строка «Точный адрес ›» не отвечала на единственный вопрос, который
+ *  у неё возникает: а что там? Человек, вписавший «Karpathou 9, кв. 5» одной
+ *  строкой, так и не узнавал, что для квартиры есть своё поле. */
+const ADDRESS_DETAILS_HINT = "подъезд, этаж, квартира";
 
 const SHORT: { key: keyof AddressParts; label: string }[] = [
   { key: "entrance", label: "Подъезд" },
@@ -74,11 +79,11 @@ export function AddressDetailsToggle({
           flex: 1,
           textAlign: "right",
           fontSize: 15,
-          fontWeight: "500",
-          color: t.ink,
+          fontWeight: summary ? "500" : "400",
+          color: summary ? t.ink : t.placeholder,
         }}
       >
-        {open ? "" : summary}
+        {open ? "" : summary || ADDRESS_DETAILS_HINT}
       </Text>
       <Chevron color={t.chevron} size={17} strokeWidth={2.2} />
     </Pressable>
