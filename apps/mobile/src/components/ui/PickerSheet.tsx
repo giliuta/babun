@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from "react-native";
-import { Settings } from "lucide-react-native";
+import { Check, Settings } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
@@ -21,7 +21,9 @@ import { useThemeColors } from "@/theme/colors";
 export interface PickerSheetItem {
   id: string;
   label: string;
-  icon: LucideIcon;
+  /** Значок строки: компонент из общего словаря (`icon-set`) либо эмодзи
+   *  строкой — категории операций хранят именно его. */
+  icon: LucideIcon | string;
   color: string;
   onPress: () => void;
 }
@@ -30,6 +32,7 @@ export function PickerSheet({
   visible,
   title,
   items,
+  selectedId,
   onSettings,
   settingsLabel = "Настроить список",
   onClose,
@@ -37,6 +40,9 @@ export function PickerSheet({
   visible: boolean;
   title: string;
   items: PickerSheetItem[];
+  /** Что выбрано сейчас. У выбора «с нуля» (тип события новой записи) его
+   *  нет; у правки существующей операции без него не видно, что стоит. */
+  selectedId?: string | null;
   /** Шестерёнка справа от заголовка — вход на страницу этого списка. */
   onSettings?: () => void;
   settingsLabel?: string;
@@ -132,7 +138,18 @@ export function PickerSheet({
                 backgroundColor: `${item.color}1a`,
               }}
             >
-              <item.icon color={item.color} size={16} strokeWidth={2.2} />
+              {/* ЗНАЧОК БЫВАЕТ ДВУХ ПОРОД. Типы событий и счета хранят слаг
+                  общего словаря (`icon-set`), а категории операций — ЭМОДЗИ:
+                  у владельца в базе лежат ⛽ 🍔 🧰. Рисуя только компонент,
+                  список молча ронял половину значков в запасной ярлычок,
+                  хотя данные были (2026-09-09). */}
+              {typeof item.icon === "string" ? (
+                <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
+                  {item.icon}
+                </Text>
+              ) : (
+                <item.icon color={item.color} size={16} strokeWidth={2.2} />
+              )}
             </View>
             <Text
               maxFontSizeMultiplier={1.3}
@@ -141,6 +158,9 @@ export function PickerSheet({
             >
               {item.label}
             </Text>
+            {selectedId === item.id ? (
+              <Check color={t.accent} size={18} strokeWidth={2.6} />
+            ) : null}
           </Pressable>
         ))}
       </View>

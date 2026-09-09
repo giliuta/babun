@@ -386,6 +386,7 @@ export function TimeRangePicker({
   onChangeEnd,
   labels = { start: "Начало", end: "Конец" },
   allowEndOfDay = true,
+  singleSide = false,
 }: {
   start: { hour: number; minute: number };
   end: { hour: number; minute: number };
@@ -400,6 +401,9 @@ export function TimeRangePicker({
   /** Конец умеет быть 24:00 (окно календаря). У смены дня — нет: рабочий день
    *  заканчивается часом суток, а не их концом. */
   allowEndOfDay?: boolean;
+  /** Половина одна: у операции время — момент, а не отрезок, и переключать
+   *  нечего. Сегмент прячется, барабаны остаются те же. */
+  singleSide?: boolean;
 }) {
   const t = useThemeColors();
   const [side, setSide] = useState<"start" | "end">("start");
@@ -460,31 +464,39 @@ export function TimeRangePicker({
 
   return (
     <View>
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 4,
-          padding: 4,
-          marginBottom: 12,
-          backgroundColor: t.fill,
-          borderRadius: t.radius.card,
-        }}
-      >
-        {segment("start", labels.start, start)}
-        {segment("end", labels.end, end)}
-      </View>
+      {/* Половина одна — переключать нечего, и сегмент был бы контролом без
+          назначения (владелец 2026-09-09: время операции — момент). */}
+      {singleSide ? null : (
+        <View
+          style={{
+            flexDirection: "row",
+            gap: 4,
+            padding: 4,
+            marginBottom: 12,
+            backgroundColor: t.fill,
+            borderRadius: t.radius.card,
+          }}
+        >
+          {segment("start", labels.start, start)}
+          {segment("end", labels.end, end)}
+        </View>
+      )}
       <TimeWheelPair
-        key={side}
-        hour={active.hour}
-        minute={active.minute}
+        key={singleSide ? "start" : side}
+        hour={singleSide ? start.hour : active.hour}
+        minute={singleSide ? start.minute : active.minute}
         onChangeHour={(hour) =>
-          side === "start" ? onChangeStart({ hour }) : onChangeEnd({ hour })
+          side === "start" || singleSide
+            ? onChangeStart({ hour })
+            : onChangeEnd({ hour })
         }
         onChangeMinute={(minute) =>
-          side === "start" ? onChangeStart({ minute }) : onChangeEnd({ minute })
+          side === "start" || singleSide
+            ? onChangeStart({ minute })
+            : onChangeEnd({ minute })
         }
-        labelPrefix={side === "start" ? labels.start : labels.end}
-        maxHour={side === "end" && allowEndOfDay ? 24 : 23}
+        labelPrefix={singleSide || side === "start" ? labels.start : labels.end}
+        maxHour={!singleSide && side === "end" && allowEndOfDay ? 24 : 23}
       />
     </View>
   );
