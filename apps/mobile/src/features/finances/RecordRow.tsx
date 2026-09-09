@@ -78,7 +78,13 @@ export function RecordRowView({
           row.title,
           what,
           `${TONE_WORD[tone]} ${formatEUR(Math.abs(row.amount))}`,
-          row.appointmentId ? "открыть запись" : null,
+          row.appointmentId
+            ? "открыть запись"
+            : row.debtId
+              ? "открыть долг"
+              : row.txId
+                ? "открыть операцию"
+                : null,
         ]
           .filter(Boolean)
           .join(", ")}

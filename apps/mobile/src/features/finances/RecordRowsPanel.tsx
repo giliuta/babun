@@ -109,7 +109,16 @@ export function RecordRowsPanel({
         <RecordRowView
           row={item}
           tone={item.tone ?? tone ?? "income"}
-          onPress={item.appointmentId ? () => onOpenRecord(item) : undefined}
+          // НАЖИМАЕТСЯ ВСЁ, У ЧЕГО ЕСТЬ ДВЕРЬ, а не только записи. Условие
+          // было `item.appointmentId`, и строка без визита — бензин, обед,
+          // перевод, ручной долг — не нажималась вовсе: обработчик экрана их
+          // ждал и умел открыть, но нажатие до него не доходило. Другой двери
+          // к правке одиночной операции на экране нет.
+          onPress={
+            item.appointmentId || item.txId || item.debtId
+              ? () => onOpenRecord(item)
+              : undefined
+          }
         />
       )}
       ItemSeparatorComponent={() => (
