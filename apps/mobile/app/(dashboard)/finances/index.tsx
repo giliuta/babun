@@ -711,15 +711,27 @@ function FinancesContent() {
     // ленте его не было вовсе: «висит долг по кому-то, почему в общем нет»
     // (владелец 2026-09-09). Один визит может дать и доход, и долг — это не
     // задвоение, а два разных состояния одних работ.
-    const debts =
+    // Ручные долги идут В ТОЙ ЖЕ ленте: для владельца это одно событие дня —
+    // «взяли кондиционеры у Gree и не заплатили» стоит рядом с деньгами того
+    // же дня. Сторону в общей ленте называет отметка «Я должен»: переключателя
+    // здесь нет, а без неё «должны нам» и «должны мы» выглядят одинаково.
+    const debtBlocks =
       view === "all"
-        ? debtRows(scopedAppointments, clients, services, {
-            from: period.from,
-            to: period.to,
-            today: businessToday,
-            teamId: scope === NO_TEAM ? null : scope,
-            invoicedAppointmentIds: invoicedAppointments,
-          }).map((row) => ({ ...row, key: `debt:${row.key}` }))
+        ? [
+            ...debtRows(scopedAppointments, clients, services, {
+              from: period.from,
+              to: period.to,
+              today: businessToday,
+              teamId: scope === NO_TEAM ? null : scope,
+              invoicedAppointmentIds: invoicedAppointments,
+            }),
+            ...manualDebtRows(
+              debts,
+              debtPaid,
+              { clients, categories },
+              { today: businessToday, markDirection: true },
+            ),
+          ].map((row) => ({ ...row, key: `debt:${row.key}` }))
         : [];
     // Перевод — не доход и не расход: в срезах его нет, а в общей ленте он
     // обязан быть, иначе деньги между счетами исчезают из виду.
@@ -742,7 +754,7 @@ function FinancesContent() {
       row.services.some((name) => name.toLowerCase().includes(needle)) ||
       canonMoney(money(Math.abs(row.amount))).includes(moneyNeedle);
 
-    const all = [...income, ...expense, ...debts, ...transfers];
+    const all = [...income, ...expense, ...debtBlocks, ...transfers];
     // ОДНА ЗАПИСЬ — ОДНА СТРОКА (владелец 2026-09-09). В общей ленте состояния
     // одной работы склеиваются: доход главным числом, остальное подписью.
     // В разрезах склейки нет — там человек просил именно этот вид денег.
@@ -769,6 +781,9 @@ function FinancesContent() {
     businessToday,
     scope,
     invoicedAppointments,
+    debts,
+    debtPaid,
+    categories,
   ]);
 
   const toggleView = (v: HomeView) =>
@@ -1084,6 +1099,14 @@ function FinancesContent() {
             onOpenRecord={(row) => {
               // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
               if (row.appointmentId && openAppointment(row.appointmentId)) return;
+              // Ручной долг записи не имеет — открывается он сам.
+              if (row.debtId) {
+                const found = debts.find((d) => d.id === row.debtId);
+                if (!found) return;
+                setEditingDebt(found);
+                setDebtOpen(true);
+                return;
+              }
               // Одиночная операция — бензин, обед, перевод — открывается на
               // правку: другой двери к ней на экране нет. Витрина остаётся
               // тому, что править нельзя (перевод, проводка инвойса).

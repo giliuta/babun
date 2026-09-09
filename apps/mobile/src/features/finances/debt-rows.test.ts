@@ -254,6 +254,43 @@ describe("manualDebtRows", () => {
   });
 });
 
+describe("отметка стороны в общей ленте", () => {
+  test("«я должен» называет себя: в общей ленте переключателя нет", () => {
+    const [row] = manualDebtRows([debt()], new Map(), { clients, categories: cats }, {
+      today: "2026-09-09",
+      markDirection: true,
+    });
+    assert.equal(row.subtitle, "Я должен · Поставщики");
+  });
+
+  test("«мне должны» отметки не получает: янтарь и так про приход", () => {
+    const [row] = manualDebtRows(
+      [debt({ direction: "incoming", counterparty: "Вася" })],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09", markDirection: true },
+    );
+    assert.equal(row.subtitle, "Поставщики");
+  });
+
+  test("в разрезе «Долги» отметки нет — сторону называет переключатель", () => {
+    const [row] = manualDebtRows([debt()], new Map(), { clients, categories: cats }, {
+      today: "2026-09-09",
+    });
+    assert.equal(row.subtitle, "Поставщики");
+  });
+
+  test("без категории и заметки отметка стоит одна", () => {
+    const [row] = manualDebtRows(
+      [debt({ category_id: null, note: null })],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09", markDirection: true },
+    );
+    assert.equal(row.subtitle, "Я должен");
+  });
+});
+
 describe("mergeDebtRows", () => {
   test("долги записей и ручные — один список, свежие сверху", () => {
     const fromRecords = debtRows([appt({ date: "2026-09-05" })], clients, services, win());

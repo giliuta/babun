@@ -4,6 +4,7 @@ import {
 } from "@babun/shared/local/appointments";
 import {
   debtRemainderCents,
+  DEBT_DIRECTION_LABEL,
   type Debt,
   type DebtDirection,
 } from "@babun/shared/local/finance/debt";
@@ -37,9 +38,6 @@ export interface DebtRow extends RecordRow {
   /** Куда поедут деньги. У долга записи всегда «мне должны»: работа сделана,
    *  клиент не заплатил. «Я должен» бывает только у ручного долга. */
   direction: DebtDirection;
-  /** Строка в `debts`, если долг завели руками. У долга записи её нет —
-   *  он вычисляется из визита и своей строки в базе не имеет. */
-  debtId?: string;
 }
 
 export interface DebtWindow {
@@ -117,7 +115,15 @@ export function manualDebtRows(
     clients: readonly { id: string; full_name: string; phone?: string | null }[];
     categories: readonly { id: string; name: string }[];
   },
-  window: { today: string; direction?: DebtDirection },
+  window: {
+    today: string;
+    direction?: DebtDirection;
+    /** ОБЩАЯ ЛЕНТА СМЕШИВАЕТ СТОРОНЫ, и там «должны нам» и «должны мы»
+     *  выглядели бы одинаково: обе строки янтарные и обе положительные.
+     *  В разрезе «Долги» сторону называет переключатель, и отметка была бы
+     *  повтором, — поэтому она включается, а не стоит всегда. */
+    markDirection?: boolean;
+  },
 ): DebtRow[] {
   const byId = new Map(refs.clients.map((c) => [c.id, c]));
   const categoryName = new Map(refs.categories.map((c) => [c.id, c.name]));
@@ -130,7 +136,14 @@ export function manualDebtRows(
       // отдали €300, — это €600 висящих денег; печатать €900 значит врать
       // и человеку, и плитке над списком.
       const remainder = debtRemainderCents(d.amount, paidTotals.get(d.id) ?? 0);
-      const what = categoryName.get(d.category_id ?? "") || d.note?.trim() || "";
+      const what = [
+        window.markDirection && d.direction === "outgoing"
+          ? DEBT_DIRECTION_LABEL.outgoing
+          : "",
+        categoryName.get(d.category_id ?? "") || d.note?.trim() || "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
       return {
         key: `debt-row:${d.id}`,
         debtId: d.id,
