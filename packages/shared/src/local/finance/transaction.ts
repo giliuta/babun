@@ -85,6 +85,9 @@ export interface FinanceTransaction {
   receipt_url: string | null; // storage path in `receipts` bucket
   transfer_group_id: string | null;
   invoice_id: string | null;
+  /** Долг, который гасит эта операция. Платёж по долгу — обычная строка
+   *  журнала: сам долг деньгами не является и в прибыль не входит. */
+  debt_id: string | null;
   refund_of_id: string | null;
   /** ПОЧЕМУ МИНУС. Оба случая лежат в леджере типом `refund`, но означают
    *  разное: `not_received` — оплату сняли, деньги так и не пришли (работа

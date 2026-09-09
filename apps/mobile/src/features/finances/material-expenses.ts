@@ -52,6 +52,7 @@ export function materialExpenseRows(
       account_id: null,
       appointment_id: a.id,
       appointment_payment_kind: null,
+      debt_id: null,
       client_id: a.client_id ?? null,
       team_id: a.team_id ?? null,
       master_id: a.master_id ?? null,

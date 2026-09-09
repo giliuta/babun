@@ -98,6 +98,7 @@ function rowToTx(r: Row): FinanceTransaction {
     vat_amount: r.vat_amount ?? null,
     transfer_group_id: r.transfer_group_id,
     invoice_id: r.invoice_id,
+    debt_id: r.debt_id,
     refund_of_id: r.refund_of_id,
     reversal_kind: (r.reversal_kind ?? null) as FinanceTransaction["reversal_kind"],
     source: r.source as TransactionSource,
@@ -346,6 +347,9 @@ export interface TransactionDraft {
    *  обязан его уважать, даже когда у компании налог включён. */
   vat_mode?: "none" | "inclusive" | "exclusive" | null;
   invoice_id?: string | null;
+  /** Гасит этот долг. Долг — не деньги; движением денег становится ровно эта
+   *  операция, поэтому платёж живёт в журнале, а не в таблице долгов. */
+  debt_id?: string | null;
   refund_of_id?: string | null;
   /** Клиентский PK строки. Стабилен на время попытки: ретрай после
    *  потерянного ответа или двойной тап упирается в duplicate key,
@@ -381,6 +385,7 @@ export async function insertTransaction(
     receipt_url: draft.receipt_url ?? null,
     vat_mode: draft.vat_mode ?? null,
     invoice_id: draft.invoice_id ?? null,
+    debt_id: draft.debt_id ?? null,
     refund_of_id: draft.refund_of_id ?? null,
     source: "manual",
   };
@@ -432,6 +437,7 @@ export async function updateTransaction(
   if (patch.occurred_time !== undefined) update.occurred_time = patch.occurred_time;
   if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
   if (patch.vat_mode !== undefined) update.vat_mode = patch.vat_mode;
+  if (patch.debt_id !== undefined) update.debt_id = patch.debt_id;
   const { data, error } = await supabase
     .from("finance_transactions")
     .update(update)

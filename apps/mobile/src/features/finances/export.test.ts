@@ -21,6 +21,7 @@ function transaction(
     account_id: null,
     appointment_id: null,
     appointment_payment_kind: null,
+    debt_id: null,
     client_id: null,
     team_id: null,
     master_id: null,
