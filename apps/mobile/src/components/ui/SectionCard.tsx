@@ -5,6 +5,12 @@ import { Card } from "./Card";
 import { GUTTER } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
 
+interface SectionCardAction {
+  label: string;
+  icon?: LucideIcon;
+  onPress: () => void;
+}
+
 // Grouped-iOS card. Reuses the light Card surface (radius 14, frosted edge).
 // No inner padding by default (lists sit flush); pass
 // `padded` for form/content cards.
@@ -22,8 +28,12 @@ export function SectionCard({
   title?: string;
   /** Действие в правом краю шапки. Со `icon` рисуется значком, а подпись
    *  уходит в озвучку: у блока типов события это ползунки настроек, и слово
-   *  рядом с ними спорило бы с самим заголовком блока. */
-  action?: { label: string; icon?: LucideIcon; onPress: () => void };
+   *  рядом с ними спорило бы с самим заголовком блока.
+   *
+   *  МАССИВ — когда у блока их два (адрес объекта: «точка на карте» и
+   *  «попросить у клиента»). Больше двух в шапку не ставят: третий значок в
+   *  капс-строке читается уже как панель инструментов. */
+  action?: SectionCardAction | SectionCardAction[];
   padded?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
@@ -32,6 +42,7 @@ export function SectionCard({
   children: ReactNode;
 }) {
   const t = useThemeColors();
+  const actions = action ? (Array.isArray(action) ? action : [action]) : [];
   return (
     <View className={`mt-2 ${className}`} style={{ marginHorizontal: GUTTER }}>
       <Card>
@@ -59,32 +70,45 @@ export function SectionCard({
             >
               {title}
             </Text>
-            {action ? (
-              <Pressable
-                onPress={action.onPress}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                style={({ pressed }) => ({
+            {/* КОМАНДЫ — ОДНОЙ АБСОЛЮТНОЙ СТРОКОЙ У ПРАВОГО КРАЯ. В потоке
+                они меняли бы высоту шапки, и подпись блока с командой стояла
+                бы ниже, чем у соседей (правка 2026-09-08); абсолютом их
+                высота на поток не влияет, а до 44pt зону касания добирает
+                hitSlop. Ряд, а не один значок: у адреса объекта их два. */}
+            {actions.length > 0 ? (
+              <View
+                style={{
                   position: "absolute",
                   right: 16,
                   // Значок 20pt по центру подписи (11pt, строка ~13):
                   // 10 сверху у шапки минус половина разницы высот.
                   top: 6,
-                  opacity: pressed ? 0.65 : 1,
-                })}
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 16,
+                }}
               >
-                {/* ЗНАЧОК — ТОТ ЖЕ, ЧТО У «мини-настроек» ЛИСТОВ ВЫБОРА
-                    (`PickerSheet`): шестерёнка 20pt в `t.sub`. Один жест —
-                    один значок: человек уже знает его по листу метки. */}
-                {action.icon ? (
-                  <action.icon color={t.sub} size={20} strokeWidth={2} />
-                ) : (
-                  <Text style={{ fontSize: 14, fontWeight: "500", color: t.accent }}>
-                    {action.label}
-                  </Text>
-                )}
-              </Pressable>
+                {actions.map((item) => (
+                  <Pressable
+                    key={item.label}
+                    onPress={item.onPress}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.label}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+                  >
+                    {item.icon ? (
+                      <item.icon color={t.sub} size={20} strokeWidth={2} />
+                    ) : (
+                      <Text
+                        style={{ fontSize: 14, fontWeight: "500", color: t.accent }}
+                      >
+                        {item.label}
+                      </Text>
+                    )}
+                  </Pressable>
+                ))}
+              </View>
             ) : null}
           </View>
         ) : null}

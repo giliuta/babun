@@ -9,9 +9,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Send, Settings2 } from "lucide-react-native";
+import { MapPinned, Send, Settings2 } from "lucide-react-native";
 import type { AddressParts, Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { MapPicker } from "@/features/clients/MapPicker";
+import {
+  formatCoords,
+  googleMapsSearchUrl,
+  type Coords,
+} from "@/features/clients/location-request-form";
 import { ChoiceRow, FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
@@ -20,11 +26,13 @@ import {
   AddressDetailsToggle,
 } from "@/features/clients/AddressPartsFields";
 import {
+  composeAddress,
   composeDetails,
   hasAddressPlace,
   objectPlacePatch,
 } from "@/features/clients/object-address";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
+import { geocodeAddress } from "@/features/clients/geocode";
+import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
 import {
   defaultObjectType,
   snapObjectType,
@@ -129,6 +137,10 @@ export function ObjectSheet({
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [saving, setSaving] = useState(false);
+  /** Раскрыта ли карта под адресом. */
+  const [mapOpen, setMapOpen] = useState(false);
+  /** Куда переехать карте: адрес словами, найденный геокодером. */
+  const [found, setFound] = useState<Coords | null>(null);
   /** Идёт запись (добавление или отмена) — синхронно, в отличие от `saving`. */
   const busy = useRef(false);
   /** Что сделать, когда лист полностью уйдёт (см. onRequestFromClient). */
@@ -166,8 +178,39 @@ export function ObjectSheet({
 
   // Объект существует, когда есть адрес ИЛИ ссылка: метка одна ничего не
   // значит, а по адресу или пину команда доедет.
+  // Объект существует, когда есть адрес, части с «где» ИЛИ отмеченная точка:
+  // по пину команда доедет даже без единого слова адреса — на кипрских виллах
+  // это обычное дело.
   const ready =
-    draft.target.trim().length > 0 || hasAddressPlace(draft.parts);
+    draft.target.trim().length > 0 ||
+    hasAddressPlace(draft.parts) ||
+    isLikelyUrl(draft.pin.trim());
+
+  // АДРЕС СЛОВАМИ ВЕДЁТ КАРТУ (владелец 2026-09-10: «когда я вписываю точный
+  // адрес, хочу, чтобы он отображался на этой мини-карте — убедиться, что это
+  // точный адрес»). Ищем только пока карта раскрыта и не чаще раза в 800 мс
+  // после последней буквы: служба чужая и бесплатная. Ссылку не геокодируем —
+  // у неё координаты уже внутри.
+  const geoQuery = mapOpen
+    ? hasAddressPlace(draft.parts)
+      ? composeAddress(draft.parts, { forRoute: true })
+      : isLikelyUrl(draft.target.trim())
+        ? ""
+        : draft.target.trim()
+    : "";
+  useEffect(() => {
+    if (!geoQuery) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => {
+      void geocodeAddress(geoQuery, abort.signal).then((coords) => {
+        if (coords) setFound(coords);
+      });
+    }, 800);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [geoQuery]);
 
   const add = async (): Promise<boolean> => {
     // Засов СИНХРОННЫЙ: между тапом и появлением saving есть кадр, в котором
@@ -303,20 +346,31 @@ export function ObjectSheet({
 
         <SectionCard
           title="Адрес"
-          action={
-            onRequestFromClient
-              ? {
-                  label: "Попросить адрес у клиента",
-                  icon: Send,
-                  onPress: () => {
-                    // Лист сперва уходит: системный «Поделиться» поверх
-                    // уходящего модального окна iOS закрывается вместе с ним.
-                    afterExit.current = onRequestFromClient;
-                    close();
+          action={[
+            {
+              // ТОЧКА НА КАРТЕ — СВОЙ ЛИСТ, А НЕ УХОД В GOOGLE MAPS (владелец
+              // 2026-09-10). Вернуть выбранную точку из чужого приложения
+              // нельзя: ни у Google, ни у Apple нет режима «выбери и вернись»
+              // — их URL-схемы односторонние. Поэтому карта своя.
+              label: "Выбрать точку на карте",
+              icon: MapPinned,
+              onPress: () => setMapOpen((v) => !v),
+            },
+            ...(onRequestFromClient
+              ? [
+                  {
+                    label: "Попросить адрес у клиента",
+                    icon: Send,
+                    onPress: () => {
+                      // Лист сперва уходит: системный «Поделиться» поверх
+                      // уходящего модального окна iOS закрывается вместе с ним.
+                      afterExit.current = onRequestFromClient;
+                      close();
+                    },
                   },
-                }
-              : undefined
-          }
+                ]
+              : []),
+          ]}
         >
           {/* АДРЕС — ГЛАВНАЯ СТРОКА БЛОКА: сюда же вставляют ссылку на карту,
               разбор на текст/пин — при добавлении (см. objectPlacePatch). */}
@@ -337,6 +391,58 @@ export function ObjectSheet({
             // Кнопки маршрута здесь НЕТ намеренно: ехать некуда — объект ещё
             // не заведён; выбор карты — лист поверх листа (аудит 2026-07-27).
           />
+          {/* КАРТА РАСКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ПОД АДРЕСОМ. Точка ставится в
+              центре и применяется на каждое движение — «Готово» только
+              сворачивает блок, ничего не «сохраняя»: сохранять нечего, всё уже
+              в черновике.
+
+              КУДА ЗАПИСЫВАЕТСЯ. Главная строка пуста — ссылка Google Maps с
+              координатами становится ею: поле так и называется, «адрес или
+              ссылка». Уже есть текст — точка уходит в пин «Точного адреса»
+              (он главнее ссылки в строке). */}
+          {mapOpen ? (
+            <View style={{ paddingHorizontal: 12, paddingBottom: 10 }}>
+              <MapPicker
+                value={coordsOf(draft.pin) ?? coordsOf(draft.target)}
+                follow={found}
+                onChange={(coords) =>
+                  setDraft((d) => ({ ...d, pin: googleMapsSearchUrl(coords) }))
+                }
+              />
+              {/* ТОЧКА НАЗЫВАЕТСЯ КООРДИНАТАМИ, А НЕ ССЫЛКОЙ. Сперва она
+                  писалась в главную строку — и в поле «Адрес» тянулась голая
+                  `https://www.google.com/maps/search/?api=1&query=…`. Ровно на
+                  это ругался разбор ссылок 2026-07-26: ссылка в поле адреса
+                  перестаёт быть адресом. Точка живёт пином, а строка остаётся
+                  свободной для человеческого адреса. */}
+              {coordsOf(draft.pin) ? (
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{ marginTop: 8, fontSize: 13, color: t.sub, textAlign: "center" }}
+                >
+                  {`Точка отмечена · ${formatCoords(coordsOf(draft.pin) as Coords)}`}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  setMapOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Свернуть карту"
+                style={({ pressed }) => ({
+                  minHeight: 40,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: pressed ? 0.5 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: t.accent }}>
+                  Готово
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
           {/* ТОЧНЫЙ АДРЕС — маленькой синей строкой: это уточнение адреса, а
               не второй адрес, и весить как главная строка оно не должно. */}
           <AddressDetailsToggle
@@ -419,7 +525,7 @@ export function ObjectSheet({
               marginBottom: 8,
             }}
           >
-            Впишите адрес или вставьте ссылку на карту
+            Впишите адрес, вставьте ссылку или отметьте точку на карте
           </Text>
         ) : null}
         <Pressable
@@ -457,3 +563,10 @@ export function ObjectSheet({
  *  нет намеренно (шеврон обещал бы страницу) — только отмена своего же
  *  добавления. */
 
+/** Координаты из строки-ссылки, если они в ней есть: с них открывается карта,
+ *  когда точку ставят повторно. */
+function coordsOf(value: string): { lat: number; lng: number } | null {
+  const raw = value.trim();
+  if (!raw) return null;
+  return parseAddress(raw).coords ?? null;
+}
