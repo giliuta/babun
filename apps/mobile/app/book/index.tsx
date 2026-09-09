@@ -79,7 +79,6 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { AddRow } from "@/components/ui/AddRow";
-import { ColorDot } from "@/components/ui/picker-fields";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -2613,14 +2612,13 @@ export default function BookScreen() {
                           accessibilityLabel={`${lineName}, ${durationLabel(line.duration)}, ${formatEURExact(line.totalPrice)}`}
                           accessibilityHint="Открывает выбор услуг"
                         >
-                          {/* ЦВЕТ УСЛУГИ СТОИТ И ЗДЕСЬ (владелец 2026-09-04:
-                              «цвет услуги должен быть также в услуге»): в
-                              списке выбора он есть, а в самой записи услуги
-                              стояли безымянными строками. Точки выстроены
-                              столбиком — список читается сверху вниз одним
-                              взглядом. */}
-                          <ColorDot value={svc?.color ?? null} size={10} />
-                          <View className="flex-1 pl-2.5 pr-2">
+                          {/* ЦВЕТНОЙ ТОЧКИ БОЛЬШЕ НЕТ (владелец 2026-09-08:
+                              «убираем полностью цвет — я понял, что он вообще
+                              не нужен»). Она заводилась, чтобы услуги в записи
+                              не стояли безымянными строками, но имя у них есть
+                              и так, а цвет ничего не различал: услуг в записи
+                              две-три. Освободившиеся 20pt ушли имени. */}
+                          <View className="flex-1 pr-2">
                             <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
                             <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
                               {durationLabel(line.duration)}

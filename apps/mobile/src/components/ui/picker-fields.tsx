@@ -312,6 +312,83 @@ export function IconField({
   );
 }
 
+/** ИМЯ БЕЗ ЦВЕТА — та же рамка и та же кнопка у подписи, что у
+ *  `NameColorField`, только без точки и палитры. Нужна там, где у сущности
+ *  цвета нет: у услуги его сняли 2026-09-08 («он вообще не нужен»), а поле с
+ *  «＋ Описание» у подписи осталось — обычный `Field` этой кнопки не знает. */
+export function NameField({
+  name,
+  onNameChange,
+  label = "Название",
+  autoFocus,
+  maxLength,
+  onBlur,
+  labelAction,
+}: {
+  name: string;
+  onNameChange: (value: string) => void;
+  label?: string | null;
+  autoFocus?: boolean;
+  maxLength?: number;
+  onBlur?: () => void;
+  labelAction?: ReactNode;
+}) {
+  const t = useThemeColors();
+  return (
+    <View style={{ marginBottom: 16 }}>
+      {label ? (
+        labelAction ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <FieldLabel text={label} />
+            {labelAction}
+          </View>
+        ) : (
+          <FieldLabel text={label} />
+        )
+      ) : null}
+      <View
+        style={{
+          borderRadius: t.radius.input,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: t.separator,
+          flexDirection: "row",
+          alignItems: "center",
+          paddingLeft: 16,
+        }}
+      >
+        <TextInput
+          value={name}
+          onChangeText={onNameChange}
+          accessibilityLabel={label ?? "Название"}
+          placeholderTextColor={t.placeholder}
+          selectionColor={t.accent}
+          keyboardAppearance="light"
+          autoFocus={autoFocus}
+          maxLength={maxLength}
+          onBlur={onBlur}
+          returnKeyType="done"
+          onSubmitEditing={onBlur}
+          style={{
+            flex: 1,
+            minHeight: 48,
+            paddingRight: 16,
+            paddingVertical: 12,
+            fontSize: 16,
+            color: t.ink,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 /**
  * ИМЯ И ЕГО ЦВЕТ — ОДНА СТРОКА (владелец 2026-08-18: «поставь цвет в название
  * справа»). Отдельная строка «Цвет» под названием спрашивала во второй раз про
