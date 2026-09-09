@@ -276,6 +276,7 @@ export function WhenRow({
   timeEnd,
   duration,
   allDay,
+  dateOnly = false,
   warning,
   onPress,
 }: {
@@ -288,6 +289,10 @@ export function WhenRow({
   timeEnd?: string;
   duration?: number;
   allDay?: boolean;
+  /** У ДОЛГА ЧАСА НЕТ ВОВСЕ. Он возник в день — «взяли кондиционеры первого»,
+   *  — и в базе у него только дата. Печатать рядом «14:32» значило бы
+   *  показывать величину, которой нет и которую никто не вводил. */
+  dateOnly?: boolean;
   warning?: string | null;
   onPress: () => void;
 }) {
@@ -311,14 +316,19 @@ export function WhenRow({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${
-            allDay
-              ? "весь день"
+          accessibilityLabel={`${dateOnly ? "Дата" : "Дата и время"}: ${humanDay(date)}${
+            dateOnly
+              ? ""
+              : ", " +
+                (allDay
+                  ? "весь день"
               : timeEnd
                 ? `с ${timeStart} до ${timeEnd}, ${durationLabel(duration ?? 0)}`
-                : timeStart
+                : timeStart)
           }`}
-          accessibilityHint="Открывает выбор даты и времени"
+          accessibilityHint={
+            dateOnly ? "Открывает выбор даты" : "Открывает выбор даты и времени"
+          }
         >
           {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
               «первое — суббота 19 сентября, потом время, потом длительность;
@@ -335,8 +345,10 @@ export function WhenRow({
             >
               {humanDay(date)}
             </Text>
-            <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
-            {allDay ? (
+            {dateOnly ? null : (
+              <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
+            )}
+            {dateOnly ? null : allDay ? (
               <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
                 весь день
               </Text>
