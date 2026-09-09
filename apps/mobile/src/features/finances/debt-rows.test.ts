@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
-import { debtRows, type DebtWindow } from "./debt-rows";
+import type { Debt } from "@babun/shared/local/finance/debt";
+import {
+  debtRows,
+  manualDebtRows,
+  mergeDebtRows,
+  type DebtWindow,
+} from "./debt-rows";
 
 const appt = (over: Partial<Appointment>): Appointment =>
   ({
@@ -143,6 +149,123 @@ describe("debtRows", () => {
     assert.deepEqual(
       rows.map((r) => r.key),
       ["new", "old"],
+    );
+  });
+});
+
+const debt = (over: Partial<Debt> = {}): Debt => ({
+  id: "d1",
+  tenant_id: "tn",
+  direction: "outgoing",
+  client_id: null,
+  counterparty: "Gree",
+  amount: 900,
+  currency: "EUR",
+  category_id: "cat-1",
+  note: null,
+  occurred_on: "2026-09-01",
+  team_id: null,
+  created_at: "2026-09-01T10:00:00Z",
+  ...over,
+});
+
+const cats = [{ id: "cat-1", name: "Поставщики" }];
+
+describe("manualDebtRows", () => {
+  test("«я должен» — строка с контрагентом, категорией и возрастом", () => {
+    const [row] = manualDebtRows([debt()], new Map(), { clients, categories: cats }, {
+      today: "2026-09-09",
+    });
+    assert.equal(row.title, "Gree");
+    assert.equal(row.subtitle, "Поставщики");
+    assert.equal(row.amount, 900);
+    assert.equal(row.direction, "outgoing");
+    assert.equal(row.debtId, "d1");
+    assert.equal(row.appointmentId, null);
+    assert.equal(row.tone, "debt");
+    assert.equal(row.caption, "8 дней");
+  });
+
+  test("сумма строки — ОСТАТОК: платёж уменьшает висящие деньги", () => {
+    const [row] = manualDebtRows(
+      [debt()],
+      new Map([["d1", 300]]),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.equal(row.amount, 600);
+  });
+
+  test("закрытый долг уходит из списка сам, удалять его не нужно", () => {
+    const rows = manualDebtRows(
+      [debt()],
+      new Map([["d1", 900]]),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.deepEqual(rows, []);
+  });
+
+  test("копеечный хвост не оставляет закрытый долг висеть", () => {
+    const rows = manualDebtRows(
+      [debt({ amount: 0.3 })],
+      new Map([["d1", 0.1 + 0.2]]),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.deepEqual(rows, []);
+  });
+
+  test("направление режет список: «мне должны» не показывает «я должен»", () => {
+    const rows = manualDebtRows(
+      [debt(), debt({ id: "d2", direction: "incoming", counterparty: "Вася" })],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09", direction: "incoming" },
+    );
+    assert.deepEqual(rows.map((r) => r.title), ["Вася"]);
+  });
+
+  test("клиент из справочника даёт имя и телефон, контрагент — запасное имя", () => {
+    const [withClient, freeText] = manualDebtRows(
+      [
+        debt({ id: "d2", client_id: "c1", counterparty: "Петров" }),
+        debt({ id: "d3", counterparty: "Магазин у дома" }),
+      ],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.equal(withClient.title, "Константин Петров");
+    assert.equal(withClient.phone, "+357 111");
+    assert.equal(freeText.title, "Магазин у дома");
+    assert.equal(freeText.phone, null);
+    assert.equal(freeText.firstName, "Магазин");
+  });
+
+  test("без категории вторая строка берёт заметку", () => {
+    const [row] = manualDebtRows(
+      [debt({ category_id: null, note: "  кондиционеры  " })],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.equal(row.subtitle, "кондиционеры");
+  });
+});
+
+describe("mergeDebtRows", () => {
+  test("долги записей и ручные — один список, свежие сверху", () => {
+    const fromRecords = debtRows([appt({ date: "2026-09-05" })], clients, services, win());
+    const manual = manualDebtRows(
+      [debt({ occurred_on: "2026-09-07" })],
+      new Map(),
+      { clients, categories: cats },
+      { today: "2026-09-09" },
+    );
+    assert.deepEqual(
+      mergeDebtRows(fromRecords, manual).map((r) => r.date),
+      ["2026-09-07", "2026-09-05"],
     );
   });
 });

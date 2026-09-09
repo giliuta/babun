@@ -3,6 +3,11 @@ import {
   type Appointment,
 } from "@babun/shared/local/appointments";
 import {
+  debtRemainderCents,
+  type Debt,
+  type DebtDirection,
+} from "@babun/shared/local/finance/debt";
+import {
   appointmentServiceNames,
   debtAge,
   type RecordRow,
@@ -29,6 +34,12 @@ export interface DebtRow extends RecordRow {
   /** Время прошло, а статус остался «запланирована»: долг ли это, команда
    *  ещё не сказала (STORY-067). */
   unclosed: boolean;
+  /** Куда поедут деньги. У долга записи всегда «мне должны»: работа сделана,
+   *  клиент не заплатил. «Я должен» бывает только у ручного долга. */
+  direction: DebtDirection;
+  /** Строка в `debts`, если долг завели руками. У долга записи её нет —
+   *  он вычисляется из визита и своей строки в базе не имеет. */
+  debtId?: string;
 }
 
 export interface DebtWindow {
@@ -86,8 +97,76 @@ export function debtRows(
         clientId: client?.id ?? null,
         teamId: a.team_id ?? null,
         unclosed: a.status !== "completed",
+        direction: "incoming",
       };
     })
     .filter((r) => r.amount > 0)
     .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+// ─── РУЧНОЙ ДОЛГ ─────────────────────────────────────────────────────────────
+// «Вася должен мне €100» без визита и «я должен Gree €900» за товар, взятый до
+// оплаты. Одна и та же строка списка, что у долга записи: кто, за что, сколько
+// и сколько дней висит. Разница ровно одна — вместо услуг визита стоит
+// категория или заметка, потому что работы за этим долгом нет.
+
+export function manualDebtRows(
+  debts: readonly Debt[],
+  paidTotals: ReadonlyMap<string, number>,
+  refs: {
+    clients: readonly { id: string; full_name: string; phone?: string | null }[];
+    categories: readonly { id: string; name: string }[];
+  },
+  window: { today: string; direction?: DebtDirection },
+): DebtRow[] {
+  const byId = new Map(refs.clients.map((c) => [c.id, c]));
+  const categoryName = new Map(refs.categories.map((c) => [c.id, c.name]));
+
+  return debts
+    .filter((d) => !window.direction || d.direction === window.direction)
+    .map((d): DebtRow => {
+      const client = d.client_id ? byId.get(d.client_id) : undefined;
+      // СУММА СТРОКИ — ОСТАТОК, А НЕ ИСХОДНЫЙ ДОЛГ. Долг на €900, по которому
+      // отдали €300, — это €600 висящих денег; печатать €900 значит врать
+      // и человеку, и плитке над списком.
+      const remainder = debtRemainderCents(d.amount, paidTotals.get(d.id) ?? 0);
+      const what = categoryName.get(d.category_id ?? "") || d.note?.trim() || "";
+      return {
+        key: `debt-row:${d.id}`,
+        debtId: d.id,
+        // Записи за ручным долгом нет: тап открывает сам долг, а не визит.
+        appointmentId: null,
+        title: client?.full_name || d.counterparty,
+        services: [],
+        ...(what ? { subtitle: what } : {}),
+        amount: remainder / 100,
+        date: d.occurred_on,
+        time: null,
+        caption: debtAge(d.occurred_on, window.today),
+        count: 1,
+        tone: "debt",
+        phone: client?.phone?.trim() || null,
+        firstName: (client?.full_name || d.counterparty).trim().split(/\s+/)[0] ?? "",
+        clientId: client?.id ?? null,
+        teamId: d.team_id ?? null,
+        // Ручной долг заводит человек, а не команда: отчитываться по нему
+        // некому, и «не закрыт» тут не про статус визита.
+        unclosed: false,
+        direction: d.direction,
+      };
+    })
+    // Закрытый долг уходит из списка САМ (владелец 2026-09-10: «я потом просто
+    // буду удалять, если долг оплачен»). Удалять не нужно и вредно: пропала бы
+    // история, кто и когда его закрыл, а в доход долг не попадал никогда —
+    // в прибыль входит платёж по нему.
+    .filter((r) => r.amount > 0);
+}
+
+/** Долги записей и ручные — один список, свежие сверху. Порядок общий, потому
+ *  что для человека это один вопрос: кто и сколько мне должен. */
+export function mergeDebtRows(
+  fromRecords: readonly DebtRow[],
+  manual: readonly DebtRow[],
+): DebtRow[] {
+  return [...fromRecords, ...manual].sort((a, b) => (a.date < b.date ? 1 : -1));
 }
