@@ -1460,6 +1460,34 @@ export default function BookScreen() {
     haptics.tap();
   };
 
+  // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «когда я выбрал тип
+  // события, я могу ещё раз нажать на него и оно отменится; и так же я могу
+  // создавать события без типа события»).
+  //
+  // Событие без типа законно и было законно всегда: кнопка его не требует, а
+  // называется такое событие словом «Событие». Не было только выхода — выбрав
+  // тип один раз, снять его было нечем.
+  //
+  // НАЗВАНИЕ УХОДИТ ВМЕСТЕ С ТИПОМ. `eventTitle` — снимок имени типа, а эффект
+  // выше узнаёт тип по совпадению имени: оставь название — и тип вернётся сам
+  // в следующем же кадре.
+  //
+  // ЦВЕТ: доставшийся от типа уходит с ним, выбранный рукой остаётся. Отличаем
+  // их сравнением с цветом самого типа — другого следа «руки» у события нет.
+  const toggleEventType = (id: string) => {
+    if (id !== eventTypeId) {
+      applyEventType(id);
+      return;
+    }
+    const preset = eventTypes.find((candidate) => candidate.id === id);
+    haptics.tap();
+    setEventTypeId(null);
+    setEventTitle("");
+    setEventColor((current) =>
+      preset && current === preset.color ? null : current,
+    );
+  };
+
   // ── сохранение (тот же контракт, что старый шит) ──
   const buildPatch = (): Partial<Appointment> => {
     if (kind === "event") {
@@ -2825,7 +2853,7 @@ export default function BookScreen() {
                 types={eventTypes}
                 selectedId={eventTypeId}
                 loading={eventTypesQuery.isLoading}
-                onSelect={applyEventType}
+                onSelect={toggleEventType}
                 onSettings={() => {
                   haptics.tap();
                   // СИБЛИНГ ФОРМЫ, А НЕ ЭКРАН ЧУЖОЙ ВКЛАДКИ: push в

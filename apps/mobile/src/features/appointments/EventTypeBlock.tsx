@@ -86,7 +86,11 @@ export function EventTypeBlock({
               color={type.color}
               icon={type.icon}
               selected={type.id === selectedId}
-              hint={`Длительность ${durationLabel(type.defaultDuration)}`}
+              hint={
+                type.id === selectedId
+                  ? "Повторный тап снимает тип"
+                  : `Длительность ${durationLabel(type.defaultDuration)}`
+              }
               onPress={() => onSelect(type.id)}
             />
           ))}
@@ -120,7 +124,7 @@ export function EventTypeBlock({
             maxFontSizeMultiplier={1.3}
             style={{ flex: 1, fontSize: 13, color: t.sub }}
           >
-            {`Красит событие · ${durationLabel(selected.defaultDuration)} по умолчанию`}
+            {`Красит событие · ${durationLabel(selected.defaultDuration)} по умолчанию · тап снимает`}
           </Text>
         </View>
       ) : null}
