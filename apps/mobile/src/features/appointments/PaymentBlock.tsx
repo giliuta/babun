@@ -17,6 +17,8 @@ import { haptics } from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { appointmentOverpaidCents } from "@babun/shared/local/finance/appointment-calc";
+import { getPaidAmount } from "@babun/shared/local/appointments";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
@@ -138,6 +140,13 @@ export function PaymentBlock({
     { date: visit.date, time_start: visit.timeStart },
     businessNow(),
   );
+  const overpaid = appointment
+    ? appointmentOverpaidCents(
+        appointment.total_amount,
+        getPaidAmount(appointment),
+        appointment.payment_status,
+      )
+    : 0;
   const outstanding = appointment
     ? outstandingCents(appointment)
     : Math.round(totalDraft * 100);
@@ -297,6 +306,8 @@ export function PaymentBlock({
     started,
     hasPending: Boolean(pending),
     outstandingLabel: formatEURExact(outstanding / 100),
+    overpaid,
+    overpaidLabel: formatEURExact(overpaid / 100),
   });
   const captionColor =
     caption?.tone === "success"
