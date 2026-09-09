@@ -160,6 +160,10 @@ function invalidateLedger(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ["accounts"] });
   qc.invalidateQueries({ queryKey: ["invoices"] });
   qc.invalidateQueries({ queryKey: ["receipts"] });
+  // ["debts"] — остаток долга считается по привязанным операциям, а не
+  // колонкой: платёж, не уронивший этот ключ, оставил бы закрытый долг
+  // висеть в списке до перезапуска приложения.
+  qc.invalidateQueries({ queryKey: ["debts"] });
 }
 
 export function useInsertTransaction() {
