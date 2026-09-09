@@ -78,7 +78,6 @@ import { PageWash } from "@/features/appointments/PageWash";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
-import { AddRow } from "@/components/ui/AddRow";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -2492,11 +2491,28 @@ export default function BookScreen() {
                       : null}
 
                     {/* У клиента без единого объекта выбирать нечего — первый
-                        заводится прямо отсюда, листом добавления. */}
+                        заводится прямо отсюда, листом добавления.
+
+                        ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА, ОБЪЕКТА И УСЛУГИ (владелец
+                        2026-09-09: «почему тут изменилась архитектура, если
+                        она должна быть другой — как у нас принято»). Здесь
+                        стоял `AddRow`: без кружка со значком и с волоском
+                        сверху. Пока над ним были строки объектов, волосок их
+                        разделял; у клиента без объектов он оказывался прямо
+                        под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
+                        «Выбрать услугу», у которой кружок есть. Один вопрос —
+                        одна дверь: `ChooseRow`, как у соседей. */}
                     {clientLocations.length === 0 ? (
-                      <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
-                        <AddRow
+                      <View
+                        style={{
+                          borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
+                          borderTopColor: t.separator,
+                        }}
+                      >
+                        <ChooseRow
+                          icon={MapPin}
                           label="Добавить объект"
+                          hint="Заводит первый объект клиента"
                           onPress={() => setObjectSheet(true)}
                         />
                       </View>
