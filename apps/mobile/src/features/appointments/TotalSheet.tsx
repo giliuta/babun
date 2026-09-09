@@ -120,50 +120,12 @@ export function TotalSheet({
             Клавиша «Без скидки» называла НОРМУ: обычный день работы объявлялся
             выбором. Ноль в поле говорит то же самое молча, а переключатель
             «€ | %» стоит рядом и нужен только тому, кто уже что-то вписал. */}
-        {/* КОМПАКТНО (владелец 2026-09-08: «просто сделать как-то
-            компактно»). Скидка занимала полосу во всю ширину листа — ровно
-            столько же, сколько «Итого», — и половина этой полосы была пустой:
-            подпись у левого края, число у правого. Скидку ставят не каждый
-            раз, а полоса кричала каждый. Теперь это одна маленькая пилюля у
-            правого края, на той же колонке цифр, что и «Итого»: подпись,
-            число и знак стоят вплотную и читаются одним словом. */}
-        <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              height: 40,
-              paddingLeft: 12,
-              paddingRight: 4,
-              borderRadius: t.radius.input,
-              backgroundColor: t.rowFill,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: t.sub }}>Скидка</Text>
-            <TextInput
-              keyboardAppearance="light"
-              value={discountValue}
-              onChangeText={onDiscountValueChange}
-              selectTextOnFocus
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={t.placeholder}
-              accessibilityLabel="Скидка"
-              style={{
-                minWidth: 46,
-                height: 40,
-                paddingHorizontal: 4,
-                textAlign: "right",
-                fontSize: 16,
-                fontWeight: "700",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            />
-            <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
-          </View>
-        </View>
-
+        {/* КОМПАКТНО — И В ОДНОЙ СТРОКЕ С ИТОГОМ (владелец 2026-09-08:
+            «поставим скидку посередине блока „Итого“, или скидку слева в этом
+            блоке, а „Итого“ прямо возле суммы»). Своей полосы у скидки больше
+            нет вовсе: она стоит слева в блоке итога, а слово «Итого» съехало
+            вплотную к сумме — деньги записи читаются одной строкой, слева
+            вычет, справа результат. */}
         {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — строки, читаются сверху вниз.
             «УСЛУГИ» СТОЯТ ТОЛЬКО ПРИ СКИДКЕ (владелец 2026-09-08: «вот это мы
             и так знаем, в „Итого“ всё написано — зачем повторять, услуги это
@@ -193,9 +155,30 @@ export function TotalSheet({
               backgroundColor: t.rowFill,
             }}
           >
-            <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
-              Итого
-            </Text>
+            {/* СКИДКА — ЛЕВЫЙ КРАЙ БЛОКА ИТОГА. Без своей подложки: пилюля
+                внутри пилюли читалась бы вторым блоком, а это одна строка. */}
+            <Text style={{ fontSize: 13, color: t.sub }}>Скидка</Text>
+            <TextInput
+              keyboardAppearance="light"
+              value={discountValue}
+              onChangeText={onDiscountValueChange}
+              selectTextOnFocus
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor={t.placeholder}
+              accessibilityLabel="Скидка"
+              style={{
+                minWidth: 40,
+                height: 44,
+                paddingHorizontal: 2,
+                textAlign: "right",
+                fontSize: 16,
+                fontWeight: "700",
+                color: t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            />
+            <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
             {/* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
                 СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
                 можно, иначе такая запись навсегда осталась бы со своим
@@ -220,6 +203,11 @@ export function TotalSheet({
               </Pressable>
             ) : null}
             <View style={{ flex: 1 }} />
+            {/* «ИТОГО» ВПЛОТНУЮ К СУММЕ: слово и число — один предмет, и
+                читаются вместе, а не через всю строку друг от друга. */}
+            <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+              Итого
+            </Text>
             <Text
               style={{
                 fontSize: 20,
