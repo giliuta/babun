@@ -90,6 +90,7 @@ export function OperationSheet({
   defaultTeamId,
   defaultAccountId,
   defaultType = "expense",
+  defaultDate = null,
   businessToday,
   transaction,
   debtPayment,
@@ -97,6 +98,7 @@ export function OperationSheet({
   onClientOpen,
   onRefund,
   refundedTotal = 0,
+  onExited,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -109,6 +111,9 @@ export function OperationSheet({
    *  десяток), поэтому он и по умолчанию. «Принять оплату» из вкладки чеков
    *  открывает сразу доход: иначе кнопка обещает одно, а форма делает другое. */
   defaultType?: "income" | "expense";
+  /** День НОВОЙ операции, YYYY-MM-DD (разбор дня в календаре открывает форму
+   *  сразу на своём дне). Нет — сегодня по времени бизнеса. */
+  defaultDate?: string | null;
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
@@ -131,6 +136,9 @@ export function OperationSheet({
   /** Сколько уже вернули — по нему прячем «Создать возврат» и не даём
    *  опустить сумму дохода ниже возвращённого. */
   refundedTotal?: number;
+  /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
+   *  (разбор дня в календаре), пора вернуть свой. */
+  onExited?: () => void;
 }) {
   const th = useThemeColors();
   const tileWidth = useTileWidth();
@@ -242,7 +250,9 @@ export function OperationSheet({
       setCategoryId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
-      setDate(businessToday);
+      // Разбор дня открывает форму на своём дне; будущее леджер не примет,
+      // поэтому дальше сегодняшнего не уходим.
+      setDate(defaultDate && defaultDate <= businessToday ? defaultDate : businessToday);
       setTime(formatHM(new Date()));
       setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
@@ -253,6 +263,7 @@ export function OperationSheet({
     visible,
     defaultTeamId,
     defaultType,
+    defaultDate,
     transaction?.id,
     businessToday,
     debtPayment,
@@ -565,11 +576,14 @@ export function OperationSheet({
   };
 
   /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
-   *  `remove` и закон `BottomSheet.onExited`. */
-  const runAfterExit = () => {
+   *  `remove` и закон `BottomSheet.onExited`. Возвращает `true`, если что-то
+   *  выполнилось, — по нему решается, звать ли `onExited` вызывающего. */
+  const runAfterExit = (): boolean => {
     const run = afterExit.current;
     afterExit.current = null;
-    run?.();
+    if (!run) return false;
+    run();
+    return true;
   };
 
   // Строки «Ещё»: разделители считаются от реально показанных соседей.
@@ -636,7 +650,19 @@ export function OperationSheet({
       padded={false}
       visible={visible}
       onClose={guardedClose}
-      onExited={runAfterExit}
+      // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
+      // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
+      // шторки дня. Открытые в один кадр, они дают iOS «already presenting», и
+      // вопрос не появляется вовсе: ровно тот баг, который чинили у «Удалить
+      // операцию» 2026-09-08. Поэтому свой вопрос имеет приоритет, а шторка дня
+      // возвращается только когда спрашивать нечего.
+      //
+      // СЛЕДСТВИЕ, КОТОРОЕ НАДО РЕШИТЬ ХОЗЯИНУ ШТОРКИ ДНЯ: после удаления
+      // операции день сам не открывается. Здесь это выбрано как меньшее зло —
+      // молчащая кнопка удаления хуже незакрывшегося круга.
+      onExited={() => {
+        if (!runAfterExit()) onExited?.();
+      }}
       title={
         debtPayment ? "Оплата долга" : isEdit ? "Операция" : "Новая операция"
       }
