@@ -45,7 +45,13 @@ export function CategoryBlock({
   if (!category) {
     return (
       <SectionCard title={title}>
-        <ChooseRow icon={Tag} label={emptyLabel} hint={emptyHint} onPress={onPress} />
+        <ChooseRow
+          icon={Tag}
+          label={emptyLabel}
+          hint={emptyHint}
+          compact
+          onPress={onPress}
+        />
       </SectionCard>
     );
   }
@@ -74,9 +80,9 @@ export function CategoryBlock({
       >
         <View
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: 17,
+            width: 30,
+            height: 30,
+            borderRadius: 15,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: `${tint}1f`,

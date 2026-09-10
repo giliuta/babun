@@ -46,6 +46,7 @@ export function DebtWhoBlock({
         icon={UserRound}
         label="Выбрать клиента"
         hint="Открывает поиск по имени или телефону"
+        compact
         onPress={onOpenPicker}
       />
     );
@@ -58,7 +59,7 @@ export function DebtWhoBlock({
   // а лист поверх листа iOS всё равно не покажет.
   return (
     <Pressable
-      className="flex-row items-center px-4 py-2.5"
+      className="flex-row items-center px-4 py-2"
       onPress={onOpenPicker}
       accessibilityRole="button"
       accessibilityLabel={`Клиент: ${client?.full_name || counterparty || "без имени"}`}
