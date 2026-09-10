@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { SectionList, Text, View, type RefreshControlProps } from "react-native";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import {
   formatEURExact as formatEUR,
   moneySign,
@@ -26,6 +26,10 @@ export function RecordRowsPanel({
   title,
   tone,
   emptyTitle,
+  emptySubtitle,
+  emptyAction,
+  headerRight,
+  countEveryTone,
   onReset,
   refreshControl,
   onOpenRecord,
@@ -36,6 +40,16 @@ export function RecordRowsPanel({
    *  приносит своё (`row.tone`). */
   tone?: RecordRowTone;
   emptyTitle?: string;
+  emptySubtitle?: string;
+  emptyAction?: { label: string; onPress: () => void };
+  /** Что стоит справа в эйбрау (кнопки сторон у долгов). */
+  headerRight?: ReactNode;
+  /** ИТОГ ДНЯ СКЛАДЫВАЕТ ВСЕ СТРОКИ, а не только движение денег. Нужен
+   *  однородному списку: в разрезе «Долги» каждая строка — долг, и без этого
+   *  над каждым днём стоял бы ноль. В смешанной ленте наоборот: долг ещё не
+   *  пришёл, перевод переехал между своими счетами, и складывать их с доходом
+   *  значит печатать числа, которые не значат ничего. */
+  countEveryTone?: boolean;
   /** «Все» в эйбрау — возврат к полной ленте. */
   onReset?: () => void;
   refreshControl?: ReactElement<RefreshControlProps>;
@@ -58,17 +72,36 @@ export function RecordRowsPanel({
       // ничего: «€185» при 128 в кассе, «€55» в день без единой продажи.
       net: data.reduce(
         (sum, row) =>
-          row.tone === "debt" || row.tone === "transfer" ? sum : sum + row.amount,
+          !countEveryTone && (row.tone === "debt" || row.tone === "transfer")
+            ? sum
+            : sum + row.amount,
         0,
       ),
       data,
     }));
-  }, [rows]);
+  }, [rows, countEveryTone]);
 
   const sectionHeader = (section: { title: string; net: number }) => {
     // Ноль движения — не приход: цвет здесь означает направление денег, а у
     // нуля направления нет (тот же закон, что в ленте операций).
     const netSign = moneySign(section.net);
+    // У ОДНОРОДНОГО СПИСКА ЦВЕТ ДАЁТ ЕГО ТОН, а не знак суммы. В разрезе
+    // «Долги» все строки янтарные, а итог дня печатался зелёным — числом
+    // прихода, которого не было: €195 долга не деньги в кассе.
+    const dayColor =
+      countEveryTone && tone
+        ? tone === "income"
+          ? t.success
+          : tone === "debt"
+            ? t.warning
+            : tone === "transfer"
+              ? t.sub
+              : t.danger
+        : netSign < 0
+          ? t.danger
+          : netSign > 0
+            ? t.success
+            : t.sub;
     return (
       <View
         className="flex-row items-center justify-between px-4 py-1.5"
@@ -82,10 +115,7 @@ export function RecordRowsPanel({
         </Text>
         <Text
           className="text-xs font-semibold"
-          style={{
-            color: netSign < 0 ? t.danger : netSign > 0 ? t.success : t.sub,
-            fontVariant: ["tabular-nums"],
-          }}
+          style={{ color: dayColor, fontVariant: ["tabular-nums"] }}
         >
           {formatEUR(section.net)}
         </Text>
@@ -99,9 +129,15 @@ export function RecordRowsPanel({
       sections={sections}
       refreshControl={refreshControl}
       keyExtractor={(row) => row.key}
-      ListHeaderComponent={<PanelHeader title={title} onReset={onReset} />}
+      ListHeaderComponent={
+        <PanelHeader title={title} right={headerRight} onReset={onReset} />
+      }
       ListEmptyComponent={
-        <EmptyState title={emptyTitle ?? "Нет записей за период"} />
+        <EmptyState
+          title={emptyTitle ?? "Нет записей за период"}
+          subtitle={emptySubtitle}
+          action={emptyAction}
+        />
       }
       contentContainerStyle={{ paddingBottom: 96 }}
       renderSectionHeader={({ section }) => sectionHeader(section)}

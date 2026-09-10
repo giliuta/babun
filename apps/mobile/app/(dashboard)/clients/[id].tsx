@@ -537,12 +537,7 @@ export default function ClientDetailScreen() {
             другого номера. */}
         {!isDraft ? <DuplicateNotice client={c} /> : null}
 
-        <ClientContactRow
-          client={c}
-          stats={stats}
-          draft={isDraft}
-          update={update}
-        />
+        <ClientContactRow client={c} stats={stats} draft={isDraft} />
 
         <ClientProfileBlocks
           key={`blocks-${id}`}

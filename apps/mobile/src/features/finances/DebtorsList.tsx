@@ -1,19 +1,14 @@
 import { useMemo, type ReactElement } from "react";
-import { ScrollView, View, type RefreshControlProps } from "react-native";
+import { Pressable, Text, type RefreshControlProps } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
-import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import { Card } from "@/components/ui/Card";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
-import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
-import { PanelHeader } from "./PanelHeader";
-import { RecordRowView } from "./RecordRow";
+import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
+import type { RecordRow } from "./record-rows";
 
 // «Долги» panel — port of the web DebtorsList
 // (apps/web/src/components/finance/DebtorsList.tsx): completed-but-unpaid
@@ -124,10 +119,17 @@ export function DebtorsList({
     direction,
   ]);
 
-  // Итог стороны. Число здесь важнее счётчика строк: «сколько всего висит» —
-  // первый вопрос к этому списку, а «сколько строк» не спрашивают никогда.
-  const total = useMemo(
-    () => rows.reduce((sum, r) => sum + r.amount, 0),
+  // ПОРЯДОК — КАК В ЛЕНТЕ: свежий день сверху, внутри дня свежий час сверху.
+  // Без него дни в секциях выстроились бы в порядке встречи строк.
+  const sorted = useMemo(
+    () =>
+      [...rows].sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+        const at = a.time ?? "";
+        const bt = b.time ?? "";
+        if (at !== bt) return at < bt ? 1 : -1;
+        return a.key < b.key ? 1 : -1;
+      }),
     [rows],
   );
 
@@ -150,108 +152,102 @@ export function DebtorsList({
   // Долг закрывается В САМОЙ ЗАПИСИ (канон владельца) — тап ведёт туда тем же
   // адресом с «дорогой назад», каким ленту операций водит openAppointment:
   // календарь встаёт на день и команду записи, закрытие возвращает в финансы.
-  const openRow = (r: (typeof rows)[number]) => {
+  const openRow = (r: RecordRow) => {
     // За ручным долгом записи нет — открывать нечего, правят его самого.
     if (r.debtId) {
       onEditDebt(r.debtId);
       return;
     }
+    // Команда визита нужна адресу: календарь встаёт на её колонку. Строка
+    // приходит из общей панели, поэтому берём её из набора долгов.
+    const teamOfRow = sorted.find((x) => x.key === r.key)?.teamId ?? null;
     router.push(
-      (`/(dashboard)?appointmentId=${r.key}&date=${r.date}` +
-        (r.teamId ? `&teamId=${r.teamId}` : "") +
+      (`/(dashboard)?appointmentId=${r.appointmentId ?? r.key}&date=${r.date}` +
+        (teamOfRow ? `&teamId=${teamOfRow}` : "") +
         // Возврат — в ТОТ ЖЕ разрез: закрыв запись, человек ждёт список
         // должников, а не общую ленту (см. resolveReturnTo).
         "&from=finances:debt") as Href,
     );
   };
 
-  return (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 96 }}
-      refreshControl={refreshControl}
-    >
-      {/* Эйбрау — тот же, что у ленты операций: панель обязана называть себя,
-          иначе список должников читается как продолжение сводки. Тело
-          начинается сразу под ним — воздух между именем панели и её строками
-          один на все шесть. */}
-      {/* ДВЕ СТОРОНЫ ОДНОГО ВОПРОСА (владелец 2026-09-10). Складывать их в
-          одно число нельзя: одни деньги придут, другие уйдут, и сумма «€957»
-          не значила бы ничего. Поэтому переключатель, а не общий столбик. */}
-      <SegmentedControl
-        options={[
-          {
-            value: "incoming" as DebtDirection,
-            label: DEBT_DIRECTION_LABEL.incoming,
-            color: t.warning,
-          },
-          {
-            value: "outgoing" as DebtDirection,
-            label: DEBT_DIRECTION_LABEL.outgoing,
-            color: t.danger,
-          },
-        ]}
-        value={direction}
-        onChange={onDirectionChange}
-        style={{ marginHorizontal: GUTTER, marginTop: 4 }}
-      />
-      {/* Сумма ИМЕННО ЭТОЙ стороны. Плитка «Долги» над списком считает деньги,
-          которые придут, и рядом с открытой стороной «Я должен» её €252
-          читались как «я должен €252». Итог под переключателем снимает
-          вопрос — в том числе нулём. */}
-      <PanelHeader title={`Всего · ${formatEUR(total)}`} />
-      {rows.length === 0 ? (
-        // Пустое состояние — общее на все панели экрана: своя тихая строчка
-        // внутри карточки выглядела как «карточка сломалась».
-        <EmptyState
-          title={
-            direction === "incoming"
-              ? "Нет должников за период"
-              : "Вы никому не должны за период"
-          }
-          subtitle={
-            movedToInvoices
-              ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
-              : undefined
-          }
-          action={
-            movedToInvoices
-              ? { label: "Открыть документы", onPress: onOpenDocuments }
-              : undefined
-          }
-        />
-      ) : (
-        <Card style={{ marginHorizontal: GUTTER }}>
-          {/* ТА ЖЕ СТРОКА, ЧТО В ДОХОДЕ И РАСХОДЕ (владелец 2026-09-09):
-              клиент, услуги, сумма — и «когда и как давно» вместо часа
-              визита. Час приезда бригады на решение «звонить или нет» не
-              влияет, возраст долга влияет.
+  // ДВЕ СТОРОНЫ — ДВА СЛОВА СПРАВА В ЭЙБРАУ (владелец 2026-09-10: «маленькими
+  // кнопочками с правой стороны… не надо выделять в кружок, это лишнее; и не
+  // надо назначать цветом — можно просто жирность добавить»).
+  //
+  // Сперва я поставил сюда канонический чип: пилюля с обводкой и цветом
+  // стороны (янтарь / красный). Владелец снял и то и другое, и он прав по
+  // законам самого продукта: цвет здесь означает НАПРАВЛЕНИЕ ДЕНЕГ, а обе
+  // стороны — долги, и красить их разным значило бы обещать, что «я должен» —
+  // это расход. Пилюля же весит как действие, а это всего лишь взгляд на тот
+  // же список. Остаётся самый тихий признак выбора — вес шрифта.
+  const sideButton = (side: DebtDirection) => {
+    const active = direction === side;
+    return (
+      <Pressable
+        key={side}
+        onPress={() => onDirectionChange(side)}
+        accessibilityRole="radio"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={DEBT_DIRECTION_LABEL[side]}
+        hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <Text
+          maxFontSizeMultiplier={1.2}
+          style={{
+            fontSize: 13,
+            fontWeight: active ? "700" : "500",
+            color: active ? t.ink : t.sub,
+          }}
+        >
+          {DEBT_DIRECTION_LABEL[side]}
+        </Text>
+      </Pressable>
+    );
+  };
 
-              КРИЧАЩЕЙ ПОДПИСИ «НЕ ЗАКРЫТЫ» БОЛЬШЕ НЕТ (владелец 2026-09-09:
-              «зачем ты пишешь „не закрыто“, это лишнее»). Она называла
-              состояние ЗАПИСИ словами продукта и не подсказывала действия.
-              Порядок остался: сначала подтверждённые долги, ниже — визиты,
-              по которым бригада не отчиталась. */}
-          {[...rows]
-            .sort((a, b) => Number(a.unclosed) - Number(b.unclosed))
-            .map((r, i) => (
-              <View
-                key={r.key}
-                style={
-                  i > 0
-                    ? { borderTopWidth: 1, borderTopColor: t.separator }
-                    : undefined
-                }
-              >
-                <RecordRowView
-                  row={r}
-                  tone="debt"
-                  onPress={() => openRow(r)}
-                />
-              </View>
-            ))}
-        </Card>
-      )}
-    </ScrollView>
+  const sideChips = (
+    <>
+      {sideButton("incoming")}
+      <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 13, color: t.separator }}>
+        ·
+      </Text>
+      {sideButton("outgoing")}
+    </>
+  );
+
+  return (
+    <RecordRowsPanel
+      // РАЗБИВКА ПО ДНЯМ — КАК У ДОХОДА И РАСХОДА (владелец 2026-09-10: «оно
+      // должно разбиваться по времени и дате, как и всё остальное; не „всего
+      // столько-то“, а каждый долг — то же самое, что доход и расход»). Панель
+      // взята та же: дни с итогом, те же швы, тот же эйбрау. Одно «ВСЕГО»
+      // сверху отвечало на вопрос, которого к списку не задают, — а «когда это
+      // повисло» пряталось в подписи строки.
+      rows={sorted}
+      title={`Долги · ${sorted.length}`}
+      tone="debt"
+      headerRight={sideChips}
+      // Итог дня складывает долги: список однороден, и без этого над каждым
+      // днём стоял бы ноль.
+      countEveryTone
+      emptyTitle={
+        direction === "incoming"
+          ? "Нет должников за период"
+          : "Вы никому не должны за период"
+      }
+      emptySubtitle={
+        movedToInvoices
+          ? "Работы, на которые выставлен счёт, ждут оплату в «Документах»"
+          : undefined
+      }
+      emptyAction={
+        movedToInvoices
+          ? { label: "Открыть документы", onPress: onOpenDocuments }
+          : undefined
+      }
+      refreshControl={refreshControl}
+      onOpenRecord={openRow}
+    />
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Text, View } from "react-native";
 import { Tag } from "lucide-react-native";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
@@ -14,9 +14,11 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { OperationReceiptRow } from "./OperationReceiptRow";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
+import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useRouter } from "expo-router";
@@ -92,6 +94,8 @@ export function DebtSheet({
     cats,
     note,
     setNote,
+    receiptUrl,
+    setReceiptUrl,
     busy,
     clients,
     statsById,
@@ -227,44 +231,15 @@ export function DebtSheet({
           }}
         />
 
-        {/* 5. СУММА — БЛОК СО СВОЕЙ ШАПКОЙ, КАК ВСЕ ОСТАЛЬНЫЕ (владелец
-            2026-09-10: «там просто ноль показан; сверху подпись „сумма“,
-            чтобы было понимание, что это такое»). Он единственный стоял без
-            подписи между блоками с подписями и читался как отвалившийся.
-
-            ЕВРО СЛЕВА, ВПЛОТНУЮ К ЧИСЛУ. Везде в продукте деньги печатаются
-            «€195» — знак идёт первым; в поле он один стоял у правой кромки, и
-            глаз шёл к нему через пустое поле. Теперь «€ 0» читается одним
-            предметом, а курсор встаёт сразу за знаком. */}
-        <SectionCard title="Сумма" dense>
-          <View className="flex-row items-center gap-1.5 px-4 py-1">
-            <Text
-              maxFontSizeMultiplier={1.2}
-              className="text-[28px] font-bold"
-              style={{ color: th.faint }}
-            >
-              €
-            </Text>
-            <TextInput
-              value={amount}
-              accessibilityLabel="Сумма долга"
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={th.placeholder}
-              selectionColor={th.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              className="flex-1 text-[28px] font-bold"
-              style={{
-                // Цвет долга — янтарь, когда должны нам, и красный, когда
-                // должны мы: те же два цвета, что у строк в списке.
-                color: direction === "incoming" ? th.warning : th.danger,
-                fontVariant: ["tabular-nums"],
-              }}
-            />
-          </View>
-        </SectionCard>
+        {/* 5. СУММА — общий блок продукта (`AmountBlock`). */}
+        <AmountBlock
+          value={amount}
+          onChange={setAmount}
+          accessibilityLabel="Сумма долга"
+          // Цвет долга — янтарь, когда должны нам, и красный, когда должны мы:
+          // те же два цвета, что у строк в списке.
+          color={direction === "incoming" ? th.warning : th.danger}
+        />
 
         {/* ЗАМЕТКА НАЗЫВАЕТ СЕБЯ, А НЕ ОБЪЯСНЯЕТ (владелец 2026-09-10: «в
             заметках напиши „заметка долга“; как объяснение не надо — это
@@ -288,6 +263,19 @@ export function DebtSheet({
             placeholder="Заметка долга"
             accessibilityLabel="Заметка долга"
             maxLength={500}
+          />
+        </SectionCard>
+
+        {/* ФАЙЛ — ТА ЖЕ СТРОКА, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «добавь
+            блок файл в долги»). Под долгом чаще всего лежит бумага —
+            накладная, расписка, счёт, — и без неё через месяц не вспомнить, за
+            что висят деньги. Хранилище, загрузчик и чистка сирот те же:
+            второго способа приложить бумагу в продукте быть не должно. */}
+        <SectionCard title="Файл" dense>
+          <OperationReceiptRow
+            receiptUrl={receiptUrl}
+            onPick={setReceiptUrl}
+            disabled={busy}
           />
         </SectionCard>
 
@@ -343,7 +331,13 @@ export function DebtSheet({
         items={cats.map((c) => ({
           id: c.id,
           label: c.name,
-          icon: iconPreset(c.icon) ?? c.icon ?? Tag,
+          // БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай категории так же, как
+          // события; эмодзи убираем, это не надо»). В справочнике у категорий
+          // лежат ⛽ 🍔 📦, и лист печатал их вперемешку со значками словаря —
+          // единственное место продукта, где строка выбора выглядела иначе,
+          // чем у команды, метки и типа события. Цвет категории остаётся: он и
+          // различает строки.
+          icon: iconPreset(c.icon) ?? Tag,
           color: c.color ?? th.accent,
           onPress: () => setCategoryId(c.id),
         }))}

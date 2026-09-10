@@ -1,34 +1,12 @@
 import { useRouter } from "expo-router";
-import type { Client, ClientNote } from "@babun/shared/local/clients";
+import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import {
-  resolveChannels,
-} from "@/features/clients/contact-channels";
+import { resolveChannels } from "@/features/clients/contact-channels";
 import { useEnabledChannels } from "@/features/clients/contact-ways";
-import { useMemo, useState } from "react";
-import { Linking } from "react-native";
-import { randomUuid } from "@babun/shared/sync/uuid";
-import { formatEUR } from "@babun/shared/common/utils/money";
-import { PickerSheet } from "@/components/ui/PickerSheet";
-import { useToast } from "@/components/ui/Toast";
-import {
-  debtReminderChannels,
-  debtReminderNote,
-} from "@/features/clients/debt-reminder";
-import { firstName } from "@/features/clients/bulk-sms";
-import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
-import {
-  renderDebtSms,
-  useSmsTemplates,
-} from "@/features/settings/sms-templates";
-import { useThemeColors } from "@/theme/colors";
 import { useGuardedBookingNav } from "@/features/clients/card-booking";
 import { useDefaultCountry } from "@/features/clients/default-country";
-import { clientDebt } from "@/features/clients/filter";
 import { NavRow, RowGroup } from "@/components/ui/card-rows";
 import { haptics } from "@/lib/haptics";
-
-const EMPTY_NOTES: ClientNote[] = [];
 
 // ДЕЙСТВИЯ УРОВНЯ ЧЕЛОВЕКА — строками, а не кружками.
 //
@@ -53,17 +31,12 @@ export default function ClientContactRow({
   client,
   stats,
   draft,
-  update,
 }: {
   client: Client;
   stats: ClientStats | undefined;
   /** Черновик: строка видна, но записывать ещё некого. */
   draft?: boolean;
-  /** Тот же persist-путь карточки — сюда уходит отметка «напомнили». */
-  update: (patch: Partial<Client>) => Promise<boolean> | void;
 }) {
-  const t = useThemeColors();
-  const toast = useToast();
   const router = useRouter();
   const enabled = useEnabledChannels();
   const guardedBook = useGuardedBookingNav();
@@ -76,42 +49,6 @@ export default function ClientContactRow({
     client.locations?.find((l) => l.isPrimary)?.id ??
     client.locations?.[0]?.id ??
     null;
-
-  // ── долг: сумма, текст напоминания и каналы, которые умеют его нести ──
-  const [debtOpen, setDebtOpen] = useState(false);
-  const { data: smsTemplates = [] } = useSmsTemplates();
-  const debt = draft ? 0 : clientDebt(client, stats);
-  const debtAmount = formatEUR(debt);
-  const debtChannels = useMemo(() => {
-    if (debt <= 0) return [];
-    return debtReminderChannels({
-      phone: client.phone,
-      phoneE164: client.phone_e164,
-      whatsappPhone:
-        client.whatsapp_phone ||
-        (client.phones ?? []).find((p) => p.label === "WhatsApp")?.number ||
-        null,
-      country,
-      enabled,
-      text: renderDebtSms(smsTemplates, {
-        amount: debtAmount,
-        name: firstName(client),
-        visitDate: stats?.lastVisitDate
-          ? stats.lastVisitDate.split("-").reverse().slice(0, 2).join(".")
-          : null,
-      }),
-    });
-  }, [debt, debtAmount, client, country, enabled, smsTemplates, stats]);
-
-  const notes = useJsonArrayWriter<ClientNote>(
-    client.notes ?? EMPTY_NOTES,
-    (next) => Promise.resolve(update({ notes: next })).then((ok) => ok !== false),
-  );
-  const addNote = (text: string) =>
-    notes.apply((all) => [
-      { id: randomUuid(), text, created_at: new Date().toISOString() },
-      ...all,
-    ]);
 
   // ЧЕРНОВИК БЕЗ МЁРТВЫХ СТРОК (владелец 2026-09-06: «всё как-то более
   // компактно»). Пригашенная «Записать» с подписью «можно после сохранения»
@@ -134,21 +71,12 @@ export default function ClientContactRow({
         {/* Строки «Как в прошлый раз» здесь больше нет (владелец 2026-09-07:
             «это в клиентах не надо»). Повтор прошлого визита — дело формы
             записи, а не карточки. */}
-        {/* ДОЛГ — ГЛАГОЛ, А НЕ ЦИФРА. Сумма и раньше печаталась в сводке
-            выше, но сделать с ней с карточки было нечего: текст напоминания
-            и шаблоны жили на экране должников в другом табе. */}
-        {debtChannels.length > 0 ? (
-          <NavRow
-            label="Напомнить об оплате"
-            value={debtAmount}
-            valueColor={t.warning}
-            separated
-            onPress={() => {
-              haptics.tap();
-              setDebtOpen(true);
-            }}
-          />
-        ) : null}
+        {/* СТРОКИ «НАПОМНИТЬ ОБ ОПЛАТЕ» ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-10:
+            «этот блок надо вообще убрать — напомнить об оплате я сам буду
+            связываться, повторять не надо»). Это второе такое решение подряд:
+            кнопку «Напомнить» он снял и из списка долгов 2026-09-09 теми же
+            словами. Долг человек видит в сводке карточки и в разрезе «Долги»,
+            а звонить или писать решает сам — каналы связи висят у номера. */}
         {chat ? (
           <NavRow
             label="Чат"
@@ -161,35 +89,6 @@ export default function ClientContactRow({
         ) : null}
       </RowGroup>
 
-      {/* Чем напомнить — тот же канонический лист, что «Как связаться»:
-          набор и порядок каналов берутся из настроек тенанта. */}
-      <PickerSheet
-        visible={debtOpen}
-        title={`Напомнить об оплате · ${debtAmount}`}
-        items={debtChannels.map((c) => ({
-          id: c.id,
-          label: c.label,
-          icon: c.icon,
-          color: c.color,
-          onPress: () => {
-            // ЗАПИСЬ В ИСТОРИЮ — ТОЛЬКО ЕСЛИ МЕССЕНДЖЕР ОТКРЫЛСЯ. Раньше
-            // заметка ставилась в тот же миг, что и `openURL`: человек
-            // возвращался из WhatsApp ничего не отправив (или приложение
-            // вообще не установлено), а в истории уже стояло «Напомнили».
-            // Диспетчер верил записи и не звонил.
-            //
-            // Формулировка тоже честная: мы знаем ровно то, что открыли
-            // переписку, — отправку подтвердить нечем.
-            void Linking.openURL(c.url)
-              .then(() => addNote(debtReminderNote(debtAmount, c.label)))
-              .catch(() => {
-                haptics.warning();
-                toast(`Не удалось открыть ${c.label}`, "error");
-              });
-          },
-        }))}
-        onClose={() => setDebtOpen(false)}
-      />
     </>
   );
 }

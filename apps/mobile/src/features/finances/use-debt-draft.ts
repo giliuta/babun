@@ -60,6 +60,8 @@ export function useDebtDraft({
   const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  // Документ под долгом — тот же приватный бакет чеков, что у операции.
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   // Открытость листов (когда, категория, клиент) — забота вёрстки, не данных.
   const [busy, setBusy] = useState(false);
   /** Отложенное до полного ухода листа: см. `destroy` и уход за клиентом. */
@@ -95,6 +97,7 @@ export function useDebtDraft({
     setTime(debt ? debt.occurred_time : formatHM(new Date()));
     setCategoryId(debt?.category_id ?? null);
     setNote(debt?.note ?? "");
+    setReceiptUrl(debt?.receipt_url ?? null);
     setBusy(false);
   }, [visible, debt, initialDirection]);
 
@@ -158,6 +161,7 @@ export function useDebtDraft({
         occurred_time: time,
         category_id: categoryId,
         note: note.trim() || null,
+        receipt_url: receiptUrl,
         team_id: teamId ?? null,
         business_today: todayYmd(),
       };
@@ -246,6 +250,8 @@ export function useDebtDraft({
     cats,
     note,
     setNote,
+    receiptUrl,
+    setReceiptUrl,
     busy,
     clients,
     statsById,

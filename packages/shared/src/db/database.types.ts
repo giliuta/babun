@@ -1092,6 +1092,7 @@ export type Database = {
           note: string | null
           occurred_on: string
           occurred_time: string | null
+          receipt_url: string | null
           team_id: string | null
           tenant_id: string
           updated_at: string
@@ -1109,6 +1110,7 @@ export type Database = {
           note?: string | null
           occurred_on: string
           occurred_time: string | null
+          receipt_url: string | null
           team_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -1126,6 +1128,7 @@ export type Database = {
           note?: string | null
           occurred_on?: string
           occurred_time?: string | null
+          receipt_url?: string | null
           team_id?: string | null
           tenant_id?: string
           updated_at?: string

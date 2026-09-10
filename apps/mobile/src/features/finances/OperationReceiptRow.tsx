@@ -142,7 +142,7 @@ export function OperationReceiptRow({
 
   if (receiptUrl) {
     return (
-      <View className="flex-row items-center gap-3 px-4 py-3">
+      <View className="flex-row items-center gap-3 px-4 py-2">
         <FileText color={t.accent} size={18} strokeWidth={2} />
         <Pressable
           onPress={() => signed && void Linking.openURL(signed)}
@@ -196,6 +196,7 @@ export function OperationReceiptRow({
       <AddRow
         label="Добавить"
         disabled={disabled}
+        compact
         onPress={() => setPickerOpen(true)}
       />
 

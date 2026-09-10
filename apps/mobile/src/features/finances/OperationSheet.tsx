@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { ChevronRight, Tag } from "lucide-react-native";
+import { Text, View } from "react-native";
+import { Tag } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
 import { OperationReceiptRow } from "./OperationReceiptRow";
+import { AmountBlock } from "./AmountBlock";
+import { CategoryBlock } from "./CategoryBlock";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -281,8 +283,6 @@ export function OperationSheet({
     [accounts, teamId],
   );
 
-  const categoryName =
-    categories.find((c) => c.id === categoryId)?.name ?? null;
   const selectedAccount = useMemo(
     () => accounts.find((a) => a.id === accountId) ?? null,
     [accounts, accountId],
@@ -443,13 +443,8 @@ export function OperationSheet({
   const category = categoryId
     ? categories.find((c) => c.id === categoryId) ?? null
     : null;
-  // Значок категории: слаг словаря даёт компонент, эмодзи печатается как
-  // текст. У владельца в базе лежат эмодзи — рисовать только компонент значило
-  // бы показать ярлычок-заглушку там, где значок есть.
-  const categoryGlyph = iconPreset(category?.icon) ?? null;
-  const categoryEmoji = !categoryGlyph && category?.icon ? category.icon : null;
-  const CategoryIcon = categoryGlyph ?? Tag;
-  const categoryTint = category?.color ?? th.faint;
+  // Значок и цвет категории живут теперь в самом блоке (`CategoryBlock`) —
+  // одном на долг и операцию: две копии этой развилки уже начинали расходиться.
 
   const save = async () => {
     // Синхронный гард: isPending включается только после ре-рендера,
@@ -732,80 +727,33 @@ export function OperationSheet({
           }}
         />
 
-        {/* 3–4. КАТЕГОРИЯ И СУММА — ОДНОЙ КАРТОЧКОЙ (владелец 2026-09-10: «форма
-            слишком большая, давит»). Семь карточек с капс-ярлыками занимали
-            экран целиком; «за что» и «сколько» — один вопрос, и ярлык «СУММА»
-            над трёхкратным числом с евро не сообщал ничего. */}
-        <SectionCard>
-          <Pressable
-            onPress={() => setCategoryPickerOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Категория: ${categoryName ?? "не выбрана"}`}
-            className="min-h-[52px] flex-row items-center gap-3 px-4 py-2.5"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? th.pressed : "transparent",
-            })}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: `${categoryTint}1a`,
-              }}
-            >
-              {categoryEmoji ? (
-                <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
-                  {categoryEmoji}
-                </Text>
-              ) : (
-                <CategoryIcon color={categoryTint} size={16} strokeWidth={2.2} />
-              )}
-            </View>
-            <Text className="text-base" style={{ color: th.ink }}>
-              Категория
-            </Text>
-            <View className="ml-auto flex-row items-center gap-1.5">
-              <Text
-                className="text-base"
-                style={{ color: categoryName ? th.ink : th.faint }}
-                numberOfLines={1}
-              >
-                {categoryName ?? "Выбрать"}
-              </Text>
-              <ChevronRight color={th.chevron} size={17} strokeWidth={2.2} />
-            </View>
-          </Pressable>
-                  <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center px-4 py-2.5">
-            <TextInput
-              value={amount}
-              accessibilityLabel="Сумма операции"
-              onChangeText={setAmount}
-              keyboardType="decimal-pad"
-              autoFocus
-              placeholder="0"
-              placeholderTextColor={th.placeholder}
-              selectionColor={th.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              className="flex-1 text-3xl font-bold"
-              style={{
-                color: isExpense ? th.danger : th.success,
-                fontVariant: ["tabular-nums"],
-              }}
-            />
-            <Text
-              maxFontSizeMultiplier={1.2}
-              className="text-3xl font-bold"
-              style={{ color: th.faint }}
-            >
-              €
-            </Text>
-          </View>
-                </SectionCard>
+        {/* 3. КАТЕГОРИЯ И 4. СУММА — ТЕ ЖЕ БЛОКИ, ЧТО У ДОЛГА (владелец
+            2026-09-10: «операции сделай так же, как долги — блок категории,
+            блок сумма, ниже заметка, ниже файл; берёшь то, что уже имеем»).
+
+            Были склеены в одну карточку ради компактности, и от блока
+            оставалась строка поля: слово «Категория» слева, серое «Выбрать» в
+            хвосте, сумма без подписи. Блок узнают по шапке и границам раньше,
+            чем читают, — а компактность взята воздухом, а не слиянием. */}
+        <CategoryBlock
+          category={category ?? null}
+          onPress={() => {
+            setCategoryPickerOpen(true);
+            haptics.tap();
+          }}
+        />
+
+        {/* КЛАВИАТУРА НЕ ПОДНИМАЕТСЯ САМА (владелец 2026-09-10: «когда я
+            нажимаю „добавить доход“, оно не должно сразу переключаться на
+            клавиатуру»). Автофокус на сумме закрывал половину формы ещё до
+            того, как человек посмотрел на неё: категория, счёт и заметка
+            уезжали под клавиатуру, и первым делом приходилось её убирать. */}
+        <AmountBlock
+          value={amount}
+          onChange={setAmount}
+          accessibilityLabel="Сумма операции"
+          color={isExpense ? th.danger : th.success}
+        />
 
         {/* 4a. НДС — ТРИ КЛАВИШИ НА КАЖДОЙ ОПЕРАЦИИ. Появляются только у тех,
             кто с налогом работает: выключили тумблер компании — слова «НДС» в
@@ -902,10 +850,11 @@ export function OperationSheet({
           </SectionCard>
         )}
 
-        {/* 6–7. ЗАМЕТКА И ФАЙЛЫ — ОДНОЙ КАРТОЧКОЙ. И то и другое прикладывают
-            к операции; двумя карточками они занимали вдвое больше воздуха, чем
-            стоят. Строка «Добавить» — та же, что у файлов записи. */}
-        <SectionCard title="Заметка и файлы">
+        {/* 6. ЗАМЕТКА. Подсказка НАЗЫВАЕТ поле, а не объясняет примером
+            (владелец 2026-09-10 о заметке долга: «как объяснение не надо, это
+            „например, обещал…“»). Разные подсказки по направлению ушли вместе
+            с примером. */}
+        <SectionCard title="Заметка" dense>
           <InlineNoteField
             note={{
               draft: notes,
@@ -913,17 +862,14 @@ export function OperationSheet({
               onFocus: () => {},
               onBlur: () => {},
             }}
-            // Подсказка идёт за направлением: на доходе «бензин, материалы»
-            // предлагали записать трату в приход (2026-09-08).
-            placeholder={
-              type === "income"
-                ? "Напр. чаевые, доплата…"
-                : "Напр. бензин, материалы…"
-            }
-            accessibilityLabel="Заметка к операции"
+            placeholder="Заметка операции"
+            accessibilityLabel="Заметка операции"
             maxLength={500}
           />
-                  <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
+        </SectionCard>
+
+        {/* 7. ФАЙЛ — та же строка, что у долга и у файлов записи. */}
+        <SectionCard title="Файл" dense>
           <OperationReceiptRow
             receiptUrl={receiptUrl}
             onPick={setReceiptUrl}
@@ -1013,7 +959,13 @@ export function OperationSheet({
         items={cats.map((c) => ({
           id: c.id,
           label: c.name,
-          icon: iconPreset(c.icon) ?? c.icon ?? Tag,
+          // БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай категории так же, как
+          // события; эмодзи убираем, это не надо»). В справочнике у категорий
+          // лежат ⛽ 🍔 📦, и лист печатал их вперемешку со значками словаря —
+          // единственное место продукта, где строка выбора выглядела иначе,
+          // чем у команды, метки и типа события. Цвет категории остаётся: он и
+          // различает строки.
+          icon: iconPreset(c.icon) ?? Tag,
           color: c.color ?? th.accent,
           onPress: () => setCategoryId(c.id),
         }))}
