@@ -1,36 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ScrollView,
-  TextInput,
-  View,
-} from "react-native";
+import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { ActionRow } from "@/components/ui/card-rows";
 import { useLastNonNull } from "@/lib/use-last-non-null";
-import {
-  ActionRow,
-  ChoiceRow,
-  FieldRow,
-  RowGroup,
-} from "@/components/ui/card-rows";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
-  AddressDetailsFields,
-  AddressDetailsToggle,
-} from "@/features/clients/AddressPartsFields";
+  ObjectFields,
+  useObjectTypeOptions,
+} from "@/features/clients/ObjectFields";
 import { objectTarget, primaryLine } from "@/features/clients/object-address";
-import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
 import { useAddressPartsEdit } from "@/features/clients/use-address-parts-edit";
-import {
-  snapObjectType,
-  useFrozenObjectTypes,
-} from "@/features/clients/object-types";
-import { useClients } from "@/features/clients/queries";
+import { snapObjectType } from "@/features/clients/object-types";
 import { useReferenceHref } from "@/features/clients/reference-href";
-import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
 import { confirmAction } from "@/lib/confirm";
@@ -40,11 +26,12 @@ import { useThemeColors } from "@/theme/colors";
 // страница объекта вообще не открывается… если нажимаешь — вылазит менюшка
 // по поводу редактирования»).
 //
-// Объект — это три поля: что это, куда ехать, как войти. Ради них экран
-// поверх экрана не открывают. Страницы `/clients/object` и `/clients/unit`
-// удалены целиком вместе с уровнем «Информация»: техника с датами ТО была
-// придумана под кондиционерщиков и для клининга или бьюти означала пустой
-// раздел с чужими словами.
+// ВИД ЛИСТА ЖИВЁТ НЕ ЗДЕСЬ, А В `ObjectFields` — том же теле, что у листа
+// добавления (см. его заголовок). Этот файл отвечает ровно за одно: писать
+// правки в объект СРАЗУ, на уходе с каждого поля, — так ведут себя все строки
+// карточки. Раньше здесь лежала вторая форма того же объекта, и она разошлась
+// с первой: тип строкой вместо своей карточки, ни карты, ни «попросить адрес
+// у клиента».
 //
 // Удаление живёт ЗДЕСЬ (и свайпом по строке на карточке) — с подтверждением:
 // объект с историей стирается насовсем.
@@ -92,18 +79,11 @@ export function ObjectEditSheet({
     ),
   );
 
-  const { data: allClients = [] } = useClients();
-  const { data: labelPresets = [] } = useLocationLabels();
-  const presetNames = useMemo(
-    () => labelPresets.map((p) => p.name),
-    [labelPresets],
-  );
-  const typeOptions = useFrozenObjectTypes(allClients, presetNames, loc?.label);
+  const typeOptions = useObjectTypeOptions(loc?.label);
 
-  // Черновик поля «адрес или ссылка»: разбираем его один раз — на уходе со
-  // строки. Заполняем ТОЛЬКО на открытии листа (по locationId, а не по самому
-  // объекту): `loc` — новая ссылка после каждого ответа сервера, и эффект по
-  // нему перезаписывал набранный адрес прямо под курсором.
+  // Черновик главной строки и заметки. Заполняем ТОЛЬКО на открытии листа (по
+  // locationId, а не по самому объекту): `loc` — новая ссылка после каждого
+  // ответа сервера, и эффект по нему перезаписывал набранное под курсором.
   const asked = useRef(false);
   const confirmDeleteRef = useRef<() => void>(() => {});
   /** Что сделать, когда лист полностью уйдёт (см. `onExited`). Хук стоит
@@ -123,7 +103,7 @@ export function ObjectEditSheet({
     void writer.patchLocation(id, p),
   );
 
-  // Свайп «Удалить»: спрашиваем один раз на открытие. Alert живёт в эффекте —
+  // Свайп «Удалить»: спрашиваем один раз на открытие. Вопрос живёт в эффекте —
   // из render его звать нельзя (он выполняется и при повторных рендерах).
   useEffect(() => {
     if (!visible || !askDelete) {
@@ -139,9 +119,6 @@ export function ObjectEditSheet({
 
   const patch = (p: Partial<Location>) => void writer.patchLocation(loc.id, p);
 
-  /** Разбор «адрес или ссылка» с оглядкой на ПРЕЖНЕЕ значение: без него
-   *  присланный клиентом пин стирался при любой правке адреса — и даже от
-   *  простого «Готово», ничего не трогая. */
   /** Место пишется целиком — главная строка + уточнение (см. хук). */
   const commitTarget = () => address.commit(target);
 
@@ -160,17 +137,17 @@ export function ObjectEditSheet({
   };
 
   const confirmDelete = () => {
-    const target = loc;
+    const victim = loc;
     const ask = () =>
       confirmAction("Удалить объект?", {
-        message: objectTarget(target) || target.label || "Объект",
+        message: objectTarget(victim) || victim.label || "Объект",
         confirmLabel: "Удалить",
         destructive: true,
       }).then((ok) => {
         if (ok) {
           haptics.warning();
-          void writer.removeLocation(target.id);
-          onDeleted?.(target.id);
+          void writer.removeLocation(victim.id);
+          onDeleted?.(victim.id);
         } else {
           // Без этого отказ оставлял лист открытым (askDelete рисует null —
           // экран выглядел обычным), а `asked` — взведённым: красная кнопка
@@ -186,10 +163,8 @@ export function ObjectEditSheet({
     }
     // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
     // рисует хост приложения, а лист — отдельное окно `Modal`, и вопрос
-    // честно появлялся ПОД ним: «Удалить объект» из строки листа молчала, и
-    // на карточке, и в записи. Сперва уезжаем — с набранным, как при любом
-    // закрытии, — и спрашиваем, когда окно листа СНЯТО (`onExited`): таймер
-    // по анимации здесь не успевал, iOS отвечал «already presenting».
+    // честно появлялся ПОД ним. Сперва уезжаем — с набранным, как при любом
+    // закрытии, — и спрашиваем, когда окно листа СНЯТО (`onExited`).
     afterExit.current = () => void ask();
     commitAll();
     onClose();
@@ -205,7 +180,7 @@ export function ObjectEditSheet({
       visible={visible}
       // Закрытие скримом/свайпом — тоже уход со строки: без этого набранный
       // адрес пропадал вместе с листом (onEditEnd при размонтировании не
-      // приходит, а live-строки коммит на размонтировании пропускает).
+      // приходит, а live-строки коммит на размонтировании пропускают).
       onClose={() => {
         commitAll();
         onClose();
@@ -216,99 +191,47 @@ export function ObjectEditSheet({
         run?.();
       }}
       title="Объект"
+      maxHeightRatio={0.92}
       avoidKeyboard
     >
-
+      {/* Тело — то же, что у листа добавления: прохладный фон под карточками
+          блоков. Паддинги только через contentContainerStyle — className на
+          ScrollView NativeWind молча роняет. */}
       <ScrollView
-        style={{ flexShrink: 1 }}
-        contentContainerStyle={{ paddingBottom: 8 }}
+        style={{ flexShrink: 1, backgroundColor: t.canvas }}
+        contentContainerStyle={{ paddingBottom: 12 }}
         keyboardShouldPersistTaps="handled"
       >
-        <RowGroup>
-          {/* АДРЕС — ПЕРВЫМ, без подписи сверху (дизайн-ревью 2026-09-06):
-              плейсхолдер и есть подпись. */}
-          <FieldRow
-            label="Адрес"
-            hideLabel
-            big
-            value={target}
-            placeholder="Адрес или ссылка на карту"
-            stacked
-            multiline
-            live
-            onSave={(v) => setTarget(v)}
-            // Разбор «адрес или ссылка» — на уходе со строки: делать это на
-            // каждый символ значило бы подменять набираемый текст.
-            onEditEnd={commitTarget}
-          />
-          <ChoiceRow
-            separated
-            options={typeOptions}
-            value={loc.label}
-            // Шестерёнка ведёт в настройки типов и ЗАКРЫВАЕТ лист: страница
-            // настроек не может жить под нашим листом. Уход отсюда — такой
-            // же уход со строки, как скрим: без коммита набранный адрес
-            // пропадал по дороге в настройки.
-            onSettings={() => {
-              commitAll();
-              onClose();
-              router.push(typesHref);
-            }}
-            onSelect={(v) => patch({ label: snapObjectType(v, typeOptions) })}
-          />
-          {/* ТОЧНЫЙ АДРЕС — «мини-доп» под главной строкой: раскрывается и
-              сворачивается обратно; свёрнутая строка показывает, что в ней
-              есть. Пустые части снимаются на записи сами. */}
-          <AddressDetailsToggle
-            variant="link"
-            open={address.open}
-            summary={address.summary}
-            onToggle={address.toggle}
-          />
-          {address.open ? (
-            <AddressDetailsFields
-              parts={address.details}
-              onChange={address.setDetails}
-              onEditEnd={commitTarget}
-              pin={address.pin}
-              onPinChange={address.setPin}
-              onPinEditEnd={commitTarget}
-              showPin={!isLikelyUrl(target.trim())}
-            />
-          ) : null}
-        </RowGroup>
-
-        {/* ЗАМЕТКА — СВОЕЙ КАРТОЧКОЙ, ПОЛЕМ-ПОДЛОЖКОЙ (владелец 2026-09-07:
-            «мне нравились старые заметки»). Тот же вид, что у заметок на
-            странице записи; поле открыто сразу, без кнопки «добавить»
-            (владелец 2026-09-04). Пишется на уходе с поля и на закрытии. */}
-        <RowGroup title="Заметка">
-          <View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              onBlur={commitNote}
-              multiline
-              accessibilityLabel="Заметка об объекте"
-              placeholder="Как войти, код, кто встречает…"
-              placeholderTextColor={t.placeholder}
-              selectionColor={t.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              style={{
-                minHeight: 44,
-                maxHeight: 120,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: t.radius.input,
-                backgroundColor: t.fill,
-                fontSize: 15,
-                color: t.ink,
-              }}
-            />
-          </View>
-        </RowGroup>
-
+        <ObjectFields
+          value={{
+            type: loc.label ?? "",
+            target,
+            parts: address.details,
+            partsOpen: address.open,
+            pin: address.pin,
+            note,
+          }}
+          typeOptions={typeOptions}
+          onChange={(p) => {
+            // Тип — единственное, что пишется тем же тапом: строка выбора не
+            // знает «ухода с поля», а объект уже существует.
+            if (p.type !== undefined)
+              patch({ label: snapObjectType(p.type, typeOptions) });
+            if (p.target !== undefined) setTarget(p.target);
+            if (p.parts !== undefined) address.setDetails(p.parts);
+            if (p.pin !== undefined) address.setPin(p.pin);
+            if (p.partsOpen !== undefined) address.setOpen(p.partsOpen);
+            if (p.note !== undefined) setNote(p.note);
+          }}
+          onCommit={commitAll}
+          onTypeSettings={() => {
+            // Уход в настройки — такой же уход со строки, как скрим: без
+            // коммита набранный адрес пропадал по дороге.
+            commitAll();
+            onClose();
+            router.push(typesHref);
+          }}
+        />
 
         {/* «УДАЛИТЬ ОБЪЕКТ» СТРОКОЙ ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 2026-09-04:
             «удалить объект так нельзя — это свайп вправо удалить, как
@@ -316,7 +239,7 @@ export function ObjectEditSheet({
             объекта в карточке и там же переспрашивает; `confirmDelete` цел —
             именно его зовёт свайп, приходя сюда с `askDelete`. */}
         {!loc.isPrimary ? (
-          <RowGroup>
+          <SectionCard>
             <ActionRow
               label="Сделать основным"
               onPress={() => {
@@ -324,7 +247,7 @@ export function ObjectEditSheet({
                 void writer.makePrimary(loc.id);
               }}
             />
-          </RowGroup>
+          </SectionCard>
         ) : null}
       </ScrollView>
 
@@ -339,8 +262,7 @@ export function ObjectEditSheet({
         }}
       >
         {/* ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ И КАРТОЧКИ — «Применить» (владелец
-            2026-09-04). Кнопка была собрана руками; теперь это канонический
-            `Button`, как в листах метки, команды, цвета и времени. */}
+            2026-09-04). */}
         <Button
           label="Применить"
           onPress={() => {
@@ -351,15 +273,6 @@ export function ObjectEditSheet({
           }}
         />
       </View>
-
-      {/* «ОБСЛУЖИВАНИЕ» СНЕСЕНО 2026-09-04. Строка спрашивала, как часто сюда
-          ездить («разовое / раз в 2 месяца»), и кормила подпись «Пора
-          обслужить» в строке объекта. Владелец: «для чего это, давай это
-          полностью сотри — мы потом это сделаем лучше в напоминаниях для
-          клиента». Ни один объект интервала так и не получил (проверено
-          запросом: 0 из 16 клиентов), то есть подпись не загоралась ни разу.
-          Колонка в базе цела: частичный патч её не трогает, и будущие
-          напоминания смогут ею воспользоваться. */}
     </BottomSheet>
   );
 }

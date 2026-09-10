@@ -78,7 +78,6 @@ export function ClientProfileBlocks({
       <ObjectSheet
         visible={objectsOpen}
         client={client}
-        update={update}
         writer={locationWriter}
         onRequestFromClient={
           canRequestAddress ? () => void requestActions.request(client.id) : undefined

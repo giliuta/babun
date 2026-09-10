@@ -3210,7 +3210,6 @@ export default function BookScreen() {
         <ObjectSheet
           visible={objectSheet}
           client={client}
-          update={updateClientPatch}
           writer={locationWriter}
           initialTarget={locationId ? "" : address}
           onRequestFromClient={
