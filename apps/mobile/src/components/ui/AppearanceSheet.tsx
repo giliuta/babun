@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
+import { Tag } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ColorPicker } from "@/components/ui/ColorPicker";
@@ -63,15 +64,19 @@ export function AppearanceTile({
         justifyContent: "center",
       }}
     >
+      {/* ПУСТОЙ ВИД ГОВОРИТ, ЧТО ОН ПУСТОЙ. Квадрат без цвета и без значка
+          читался серой дырой в списке, будто строка не догрузилась; тихий
+          ярлычок вместо него означает «вид не выбран» — то же слово, каким
+          пустоту показывает блок категории. */}
       {Glyph ? (
         <Glyph
           size={Math.round(size * 0.56)}
           strokeWidth={2}
-          color={
-            color ? readableTextOnColor(color, t.ink, "#FFFFFF") : t.body
-          }
+          color={color ? readableTextOnColor(color, t.ink, "#FFFFFF") : t.body}
         />
-      ) : null}
+      ) : color ? null : (
+        <Tag size={Math.round(size * 0.5)} strokeWidth={2} color={t.faint} />
+      )}
     </View>
   );
 }

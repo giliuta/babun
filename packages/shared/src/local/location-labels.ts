@@ -7,6 +7,12 @@ import { getStorage } from "../storage/provider";
 export interface LocationLabel {
   id: string;
   name: string;
+  /** ВИД ТИПА ОБЪЕКТА — цвет и значок из общих наборов (владелец 2026-09-10:
+   *  «нету у нас это в дом, нету в квартиру… давай лучше везде это делать»).
+   *  Пусто — «не красить» и «глиф вида»: у справочника, заведённого до этой
+   *  правки, вида нет, и подставлять его за пользователя нельзя. */
+  color?: string | null;
+  icon?: string | null;
 }
 
 const STORAGE_KEY = "babun2:settings:location-labels";

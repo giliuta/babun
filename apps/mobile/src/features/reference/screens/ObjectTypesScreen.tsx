@@ -11,7 +11,9 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { Field } from "@/components/ui/Field";
+import { NameColorField } from "@/components/ui/picker-fields";
+import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
@@ -51,6 +53,14 @@ import {
 const ROW_H = 52;
 
 type Editing = { mode: "create" } | { mode: "edit"; label: LocationLabel };
+
+/** Что лист отдаёт наружу: имя и вид одним ответом. Тремя позиционными
+ *  аргументами это разъезжается при первой же правке порядка. */
+interface TypeDraft {
+  name: string;
+  color: string | null;
+  icon: string | null;
+}
 
 export function ObjectTypesScreen() {
   const t = useThemeColors();
@@ -110,8 +120,8 @@ export function ObjectTypesScreen() {
         label.name.trim().toLowerCase() === name.trim().toLowerCase(),
     );
 
-  const submit = async (name: string) => {
-    const value = name.trim();
+  const submit = async (draft: TypeDraft) => {
+    const value = draft.name.trim();
     if (!value || !editing) return;
     const exceptId = editing.mode === "edit" ? editing.label.id : undefined;
     if (duplicate(value, exceptId)) {
@@ -121,9 +131,19 @@ export function ObjectTypesScreen() {
     const next =
       editing.mode === "edit"
         ? labels.map((label) =>
-            label.id === exceptId ? { ...label, name: value } : label,
+            label.id === exceptId
+              ? { ...label, name: value, color: draft.color, icon: draft.icon }
+              : label,
           )
-        : [...labels, { id: generateLocationLabelId(), name: value }];
+        : [
+            ...labels,
+            {
+              id: generateLocationLabelId(),
+              name: value,
+              color: draft.color,
+              icon: draft.icon,
+            },
+          ];
     const ok = await write(
       next,
       editing.mode === "edit"
@@ -225,11 +245,21 @@ export function ObjectTypesScreen() {
                       style={({ pressed }) => ({
                         flex: 1,
                         height: ROW_H,
-                        justifyContent: "center",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
                         paddingLeft: 16,
                         backgroundColor: pressed ? t.pressed : t.surface,
                       })}
                     >
+                      {/* ПЛИТКА ВИДА — как у типа события и категории: тип
+                          объекта узнаётся в списке тем же способом, что и
+                          соседний справочник в том же кабинете. */}
+                      <AppearanceTile
+                        color={label.color}
+                        icon={label.icon}
+                        size={28}
+                      />
                       <Text
                         numberOfLines={1}
                         maxFontSizeMultiplier={1.3}
@@ -284,10 +314,12 @@ function TypeSheet({
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (name: string) => void;
+  onSubmit: (draft: TypeDraft) => void;
 }) {
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
+  const [color, setColor] = useState<string | null>(null);
+  const [icon, setIcon] = useState<string | null>(null);
   // Черновик берётся у той строки, которую открыли, и ровно один раз:
   // пока лист открыт, значением владеет поле.
   const [seededFor, setSeededFor] = useState<string | null>(null);
@@ -295,6 +327,14 @@ function TypeSheet({
   if (key !== seededFor) {
     setSeededFor(key);
     setName(editing?.mode === "edit" ? editing.label.name : "");
+    // НОВЫЙ ТИП РОЖДАЕТСЯ ЦВЕТНЫМ. Пустой вид у первой же строки читается как
+    // «сломалось»: соседние справочники цветные. Правка чужой вид не трогает.
+    setColor(
+      editing?.mode === "edit"
+        ? (editing.label.color ?? null)
+        : PRESET_COLOR_CYCLE[0].value,
+    );
+    setIcon(editing?.mode === "edit" ? (editing.label.icon ?? null) : "house");
   }
 
   return (
@@ -306,18 +346,23 @@ function TypeSheet({
       footer={
         <Button
           label={isEdit ? "Сохранить" : "Создать"}
-          onPress={() => onSubmit(name)}
+          onPress={() => onSubmit({ name, color, icon })}
           disabled={!name.trim() || busy}
           loading={busy}
         />
       }
     >
-      <Field
-        label="Название"
-        value={name}
-        onChangeText={setName}
+      {/* ИМЯ, ЦВЕТ И ЗНАЧОК ОДНОЙ СТРОКОЙ — тот же блок, что у метки, услуги,
+          тега, категории и типа события (владелец 2026-09-10: «точно такой же
+          блок… и используются везде»). */}
+      <NameColorField
+        name={name}
+        onNameChange={setName}
+        color={color}
+        onColorChange={setColor}
+        icon={icon}
+        onIconChange={setIcon}
         autoFocus
-        autoCapitalize="sentences"
       />
     </BottomSheet>
   );

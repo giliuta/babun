@@ -394,7 +394,12 @@ function rowsToLocationLabels(rows: LocationLabelRow[]): LocationLabel[] {
   return rows
     .filter((row) => row.is_active)
     .sort((a, b) => a.position - b.position)
-    .map((row) => ({ id: row.id, name: row.name }));
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      color: row.color ?? null,
+      icon: row.icon ?? null,
+    }));
 }
 
 function locationLabelsToJson(
@@ -409,6 +414,10 @@ function locationLabelsToJson(
       id: label.id,
       name: label.name,
       position: positionById.get(label.id) ?? 0,
+      // Пустое значение отправляем строкой «»: RPC приводит её к NULL. Так
+      // снятие цвета доезжает до базы, а `undefined` просто выпал бы из JSON.
+      color: label.color ?? "",
+      icon: label.icon ?? "",
     }),
   );
 }
@@ -512,6 +521,10 @@ export function useSaveLocationLabels() {
       const normalized = l.map((label) => ({
         id: label.id.trim(),
         name: label.name.trim(),
+        // Вид едет вместе с именем: без этих двух полей правка цвета и значка
+        // доходила до RPC пустой, и справочник оставался серым.
+        color: label.color ?? null,
+        icon: label.icon ?? null,
       }));
       const cacheKey = [
         "location-labels",

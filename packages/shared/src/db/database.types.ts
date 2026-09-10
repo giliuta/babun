@@ -1871,8 +1871,10 @@ export type Database = {
       }
       location_labels: {
         Row: {
+          color: string | null
           created_at: string
           created_by: string | null
+          icon: string | null
           id: string
           is_active: boolean
           name: string
@@ -1881,8 +1883,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          color?: string | null
           created_at?: string
           created_by?: string | null
+          icon?: string | null
           id: string
           is_active?: boolean
           name: string
@@ -1891,8 +1895,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          color?: string | null
           created_at?: string
           created_by?: string | null
+          icon?: string | null
           id?: string
           is_active?: boolean
           name?: string
