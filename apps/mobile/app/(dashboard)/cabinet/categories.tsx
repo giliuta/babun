@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+  type AccessibilityActionEvent,
+} from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type {
   FinanceCategory,
@@ -40,10 +46,26 @@ import {
 // канонический `BottomSheet` с `NameColorField`, главное действие — кнопкой
 // внизу экрана.
 //
-// ПРАВАЯ КРОМКА НЕСЁТ САМОЕ СИЛЬНОЕ ИЗ ДОСТУПНОГО ЭТОЙ СТРОКЕ. У своей
-// категории это «Удалить», у стандартной удалять нечего (она общая на весь
-// продукт, её защищает RLS) — и справа стоит «Скрыть». Слово на кромке всегда
-// называет то, что произойдёт: немых кромок не бывает.
+// СПРАВА — «УДАЛИТЬ», СЛЕВА — «СКРЫТЬ» (владелец 2026-09-10: «свайп вправо —
+// это удалить, а не скрыть»; «чтобы её скрыть, надо свайпнуть, и оно
+// открывается с левой стороны»). Сторона закреплена за СМЫСЛОМ, а не за
+// «самым сильным из доступного этой строке»: у стандартной категории удалять
+// нечего (она общая на весь продукт, её защищает RLS), и правой кромки у неё
+// просто НЕТ — палец упирается в ноль, а не находит там скрытие. Иначе
+// мышечная память врёт: на одной строке справа удаление, на соседней — нет.
+//
+// ТАП — ВСЕГДА ПРАВКА (владелец 2026-09-10: «тап на категорию — это идёт
+// редактирование, а не оно скрыто»). Раньше тап по стандартной строке её
+// скрывал: одно касание молча убирало категорию из списка — так у владельца
+// пропали «Налоги и сборы». Теперь правку открывает только своя строка, а
+// стандартная на тап не отвечает вовсе: скрыть её можно лишь намеренным
+// жестом, у которого на кромке написано, что будет.
+//
+// СКРЫТАЯ ПАДАЕТ ВНИЗ (владелец 2026-09-10: «она больше не показывается в
+// выборе категории и падает вниз»). В листах выбора её нет совсем — кроме
+// той, что уже стоит в операции или шаблоне, иначе прошлая запись потеряла бы
+// подпись. Здесь она остаётся, но в конце списка: исчезнувшая строка
+// читалась бы как «категория удалена».
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // tailwind-hued SWATCHES are gone — default stays индиго.
@@ -72,7 +94,12 @@ export default function CategoriesScreen() {
   const [color, setColor] = useState(DEFAULT_COLOR);
 
   const filtered = useMemo(
-    () => cats.filter((c) => c.type === type),
+    // Порядок внутри групп — как пришёл из справочника; sort стабилен, так
+    // что скрытые лишь опускаются в конец, ничего между собой не меняя.
+    () =>
+      cats
+        .filter((c) => c.type === type)
+        .sort((a, b) => Number(a.hidden) - Number(b.hidden)),
     [cats, type],
   );
 
@@ -84,7 +111,8 @@ export default function CategoriesScreen() {
   };
   // СТАНДАРТНУЮ КАТЕГОРИЮ НЕЛЬЗЯ ПЕРЕИМЕНОВАТЬ — она общая на весь продукт,
   // и правка задела бы чужие компании. Зато её можно убрать из СВОЕГО списка:
-  // владелец 2026-08-09 просил, чтобы список менялся полностью.
+  // владелец 2026-08-09 просил, чтобы список менялся полностью. Убирает
+  // только левая кромка — тапом это не делается (см. закон в шапке).
   const toggleHidden = (c: FinanceCategory) => {
     setHidden.mutate(
       { id: c.id, hidden: !c.hidden },
@@ -185,30 +213,31 @@ export default function CategoriesScreen() {
           <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
             {filtered.map((item) => {
               const own = !!item.tenant_id;
-              const hide = {
-                label: item.hidden ? "Показать" : "Скрыть",
-                color: item.hidden ? th.success : th.warning,
-                icon: item.hidden ? RotateCcw : EyeOff,
-                accessibilityLabel: `${item.hidden ? "Показать" : "Скрыть"} категорию ${item.name}`,
-                onAction: () => toggleHidden(item),
-              };
               return (
                 <SwipeRow
                   key={item.id}
-                  {...(own
-                    ? {
-                        label: "Удалить",
-                        color: th.danger,
-                        icon: Trash2,
-                        accessibilityLabel: `Удалить категорию ${item.name}`,
-                        onAction: () => confirmDelete(item),
-                        leading: hide,
-                      }
-                    : hide)}
+                  label={own ? "Удалить" : undefined}
+                  color={own ? th.danger : undefined}
+                  icon={own ? Trash2 : undefined}
+                  accessibilityLabel={
+                    own ? `Удалить категорию ${item.name}` : undefined
+                  }
+                  onAction={own ? () => confirmDelete(item) : undefined}
+                  leading={{
+                    label: item.hidden ? "Показать" : "Скрыть",
+                    color: item.hidden ? th.success : th.warning,
+                    icon: item.hidden ? RotateCcw : EyeOff,
+                    accessibilityLabel: `${
+                      item.hidden ? "Показать" : "Скрыть"
+                    } категорию ${item.name}`,
+                    onAction: () => toggleHidden(item),
+                  }}
                 >
                   <CategoryRow
                     item={item}
-                    onPress={own ? () => openEdit(item) : () => toggleHidden(item)}
+                    onEdit={own ? () => openEdit(item) : undefined}
+                    onToggleHidden={() => toggleHidden(item)}
+                    onDelete={own ? () => confirmDelete(item) : undefined}
                   />
                 </SwipeRow>
               );
@@ -259,37 +288,51 @@ export default function CategoriesScreen() {
 }
 
 /** Строка категории — 52pt, кружок цвета, имя. Скрытая гаснет, но остаётся на
- *  месте: исчезнувшая строка читалась бы как «категория пропала». */
+ *  месте: исчезнувшая строка читалась бы как «категория пропала».
+ *
+ *  ТАП ОТКРЫВАЕТ ПРАВКУ — и только её. У стандартной категории правки нет,
+ *  поэтому строка не нажимается вовсе: «нажал — и оно скрылось» человек
+ *  прочитает как поломку. Кромкам это не мешает, а ротор получает те же
+ *  действия словами — подложка свайпа от него спрятана (см. SwipeRow). */
 function CategoryRow({
   item,
-  onPress,
+  onEdit,
+  onToggleHidden,
+  onDelete,
 }: {
   item: FinanceCategory;
-  onPress: () => void;
+  /** Правка своей категории; `undefined` — стандартная, править нечего. */
+  onEdit?: () => void;
+  onToggleHidden: () => void;
+  onDelete?: () => void;
 }) {
   const th = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={
-        item.hidden
-          ? `Категория ${item.name}, скрыта — вернуть в список`
-          : item.tenant_id
-            ? `Категория ${item.name}, переименовать`
-            : `Категория ${item.name}, убрать из списка`
-      }
-      style={({ pressed }) => ({
-        height: 52,
-        flexDirection: "row",
-        alignItems: "center",
-        paddingLeft: 16,
-        paddingRight: 12,
-        borderRadius: th.radius.card,
-        backgroundColor: pressed ? th.pressed : th.surface,
-        opacity: item.hidden ? 0.45 : 1,
-      })}
-    >
+  const actions = [
+    { name: "hide", label: item.hidden ? "Показать" : "Скрыть" },
+    ...(onDelete ? [{ name: "delete", label: "Удалить" }] : []),
+  ];
+  const onAccessibilityAction = (e: AccessibilityActionEvent) => {
+    if (e.nativeEvent.actionName === "hide") onToggleHidden();
+    if (e.nativeEvent.actionName === "delete") onDelete?.();
+  };
+  const label = item.hidden
+    ? `Категория ${item.name}, скрыта`
+    : onEdit
+      ? `Категория ${item.name}`
+      : `Категория ${item.name}, стандартная`;
+  const box = (pressed: boolean) =>
+    ({
+      height: 52,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingLeft: 16,
+      paddingRight: 12,
+      borderRadius: th.radius.card,
+      backgroundColor: pressed ? th.pressed : th.surface,
+      opacity: item.hidden ? 0.45 : 1,
+    }) as const;
+  const face = (
+    <>
       <View
         style={{
           height: 12,
@@ -310,6 +353,31 @@ function CategoryRow({
           скрыта
         </Text>
       ) : null}
+    </>
+  );
+
+  return onEdit ? (
+    <Pressable
+      onPress={onEdit}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint="Открывает имя и цвет"
+      accessibilityActions={actions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={({ pressed }) => box(pressed)}
+    >
+      {face}
     </Pressable>
+  ) : (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      accessibilityActions={actions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={box(false)}
+    >
+      {face}
+    </View>
   );
 }
