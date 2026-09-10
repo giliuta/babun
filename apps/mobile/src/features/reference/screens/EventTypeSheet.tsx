@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { Pressable, Switch, Text, View } from "react-native";
+import { View } from "react-native";
 import type { PersonalEventType, PersonalEventTypeIcon } from "@babun/shared/local/personal-event-types";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { Field, FieldLabel } from "@/components/ui/Field";
+import { FieldLabel } from "@/components/ui/Field";
 import { IconField, NameColorField } from "@/components/ui/picker-fields";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { EVENT_TYPE_ICON_PRESETS } from "@/features/calendar/event-type-icons";
-import { durationLabel } from "@/features/services/format";
-import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
 
 // ПРАВКА ТИПА СОБЫТИЯ — КАНОНИЧЕСКИЙ ЛИСТ, как «Новая метка» и «Услуга».
 // Заведение и правка — один лист: поля у них одни и те же, а два разных окна
@@ -19,9 +18,8 @@ import { useThemeColors } from "@/theme/colors";
 // заданный из листа, не показался бы вовсе (закон о двух окнах).
 
 const DEFAULT_COLOR = PRESET_COLOR_CYCLE[1].value;
-/** Длительности, которые набирают чаще всего. Поле рядом остаётся: обед на
- *  25 минут — законное число, и решётка не должна его запрещать. */
-const QUICK_MINUTES = [15, 30, 45, 60, 90, 120, 180, 240];
+/** Меньше пяти минут события не бывает: шаг барабана и есть минимум. */
+const MIN_DURATION = 5;
 
 export interface EventTypeDraft {
   label: string;
@@ -46,12 +44,11 @@ export function EventTypeSheet({
   onClose: () => void;
   onSubmit: (draft: EventTypeDraft) => void;
 }) {
-  const t = useThemeColors();
   const [label, setLabel] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState<PersonalEventTypeIcon>("tag");
   const [allDay, setAllDay] = useState(false);
-  const [minutes, setMinutes] = useState("60");
+  const [duration, setDuration] = useState(60);
   // Черновик берётся у той строки, которую открыли, и ровно один раз: пока
   // лист открыт, значениями владеют поля.
   const [seededFor, setSeededFor] = useState<string | null>(null);
@@ -62,10 +59,12 @@ export function EventTypeSheet({
     setColor(type?.color ?? DEFAULT_COLOR);
     setIcon(type?.icon ?? "tag");
     setAllDay(type?.allDay ?? false);
-    setMinutes(String(type?.defaultDuration ?? 60));
+    setDuration(type?.defaultDuration ?? 60);
   }
 
-  const parsed = Math.max(5, Math.min(24 * 60, Number(minutes) || 60));
+  // Барабан свободно доезжает до 00:00 — на записи это чинится одним
+  // сравнением, а не прыжком колеса из-под пальца.
+  const parsed = Math.max(MIN_DURATION, Math.min(24 * 60, duration));
 
   return (
     <BottomSheet
@@ -103,72 +102,33 @@ export function EventTypeSheet({
       {/* СВОЁ ВРЕМЯ У КАЖДОГО ТИПА (владелец 2026-09-08: «на каждом типе
           событий нужно выставлять своё время: выбираю обед — оно
           автоматически подстраивает время»). Это СТАНДАРТ: время, выбранное
-          в самом событии руками, сильнее — так и написано под лентой типов. */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingVertical: 6,
-        }}
-      >
-        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 16, color: t.ink }}>
-          Весь день
-        </Text>
-        <Switch value={allDay} onValueChange={setAllDay} trackColor={{ true: t.accent }} />
-      </View>
+          в самом событии руками, сильнее — так и написано под лентой типов.
 
+          СТРОКА, А НЕ ГОЛЫЙ ТУМБЛЕР (2026-09-10): здесь стоял `Switch` в
+          самодельной строке, и тап по слову «Весь день» не переключал ничего
+          — попасть надо было точно в тумблер. `SwitchRow` для этого и
+          существует (LOCKED 2026-08-17). */}
+      <SwitchRow label="Весь день" value={allDay} onChange={setAllDay} />
+
+      {/* ДЛИТЕЛЬНОСТЬ — БАРАБАНОМ (владелец 2026-09-10: «барабан везде»).
+          Здесь было поле «Длительность, мин» с цифровой клавиатурой и лента
+          пресетов 15/30/45/60/90/120/180/240 — ровно то, что канон запрещает
+          дословно: «любая продолжительность — TimeWheelPair; никаких
+          пресетов, никаких полей ввода минут, никаких степперов». Подписи
+          «ч» и «мин» под колонками обязательны: «00 : 30» без них читается
+          как полпервого ночи. */}
       {!allDay ? (
-        <>
-          <Field
-            label="Длительность, мин"
-            value={minutes}
-            onChangeText={setMinutes}
-            placeholder="60"
-            keyboardType="number-pad"
-            trailing={
-              <Text style={{ fontSize: 13, color: t.sub }}>
-                {durationLabel(parsed)}
-              </Text>
-            }
+        <View style={{ paddingTop: 8, paddingBottom: 12 }}>
+          <FieldLabel text="Длительность" />
+          <TimeWheelPair
+            hour={Math.floor(duration / 60)}
+            minute={duration % 60}
+            onChangeHour={(h) => setDuration(h * 60 + (duration % 60))}
+            onChangeMinute={(m) => setDuration(Math.floor(duration / 60) * 60 + m)}
+            labelPrefix="Длительность"
+            units
           />
-          <FieldLabel text="Чаще всего" />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {QUICK_MINUTES.map((value) => {
-              const on = parsed === value;
-              return (
-                <Pressable
-                  key={value}
-                  onPress={() => {
-                    haptics.tap();
-                    setMinutes(String(value));
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={durationLabel(value)}
-                  style={({ pressed }) => ({
-                    minHeight: 34,
-                    justifyContent: "center",
-                    paddingHorizontal: 12,
-                    borderRadius: t.radius.pill,
-                    backgroundColor: on ? color : pressed ? t.pressed : t.rowFill,
-                  })}
-                >
-                  <Text
-                    maxFontSizeMultiplier={1.2}
-                    style={{
-                      fontSize: 14,
-                      fontWeight: on ? "700" : "500",
-                      color: on ? "#fff" : t.body,
-                    }}
-                  >
-                    {durationLabel(value)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </>
+        </View>
       ) : null}
     </BottomSheet>
   );
