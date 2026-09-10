@@ -1207,7 +1207,7 @@ export default function BookScreen() {
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
-    router.push({ pathname: "/book/client", params: { id: clientId } });
+    router.push({ pathname: "/client", params: { id: clientId } });
   };
 
   const pickLocation = (id: string) => {

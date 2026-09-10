@@ -96,7 +96,14 @@ export default function ClientDetailScreen() {
   // клиента записи и уходит «назад», а не на карточку созданного. Режим
   // читается по маршруту, а не по флагу в памяти: флаг пережил бы уход с
   // экрана и подставил бы следующего клиента, заведённого уже из списка.
-  const forBooking = isDraft && pathname.startsWith("/book");
+  // ОТДАТЬ СОЗДАННОГО ТОМУ, КТО ПОЗВАЛ. Карточка, открытая общим адресом
+  // `/client`, лежит ПОВЕРХ звавшего (запись, шторка долга): «Готово» кладёт id
+  // в ящик и уходит «назад», а не на карточку нового клиента. Открытая своим
+  // маршрутом внутри вкладки «Клиенты» — ведёт себя как обычно.
+  //
+  // Читается по маршруту, а не по флагу в памяти: флаг пережил бы уход с
+  // экрана и подставил бы следующего клиента, заведённого уже из списка.
+  const handBack = isDraft && pathname === "/client";
   const clientQuery = useClient(isDraft ? "" : id);
   const {
     data: client,
@@ -147,7 +154,7 @@ export default function ClientDetailScreen() {
     onPhoneChange: onDraftPhoneChange,
     save: saveDraft,
   } = useClientDraft(isDraft, {
-    forBooking,
+    forBooking: handBack,
     name: prefillName,
     phone: prefillPhone,
   });
@@ -511,9 +518,9 @@ export default function ClientDetailScreen() {
                       error={createError}
                       // Из записи дубль не открывают, а ВЫБИРАЮТ: это и есть
                       // тот клиент, ради которого пришли.
-                      openLabel={forBooking ? "Выбрать" : "Открыть"}
+                      openLabel={handBack ? "Выбрать" : "Открыть"}
                       onOpenDuplicate={(duplicateId) => {
-                        if (forBooking) {
+                        if (handBack) {
                           deliverCreatedClient(duplicateId);
                           router.back();
                           return;

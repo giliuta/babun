@@ -213,7 +213,7 @@ export function useDebtDraft({
   const leaveForClient = (prefill: { name?: string; phone?: string }) => {
     wentForClient.current = true;
     afterExit.current = () =>
-      router.push({ pathname: "/book/client", params: { id: "new", ...prefill } });
+      router.push({ pathname: "/client", params: { id: "new", ...prefill } });
     onClose();
   };
 

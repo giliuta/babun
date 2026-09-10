@@ -241,7 +241,7 @@ export function ClientPicker({
     afterExit.current = () =>
       onCreate
         ? onCreate(prefill)
-        : router.push({ pathname: "/book/client", params: { id: "new", ...prefill } });
+        : router.push({ pathname: "/client", params: { id: "new", ...prefill } });
     close();
   };
 
