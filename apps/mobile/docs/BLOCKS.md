@@ -25,7 +25,7 @@
 | `RowGroup` | `src/components/ui/card-rows.tsx` | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
 | `ChooseRow` | `src/components/ui/ChooseRow.tsx` | Пустое состояние блока — дверь: кружок со значком, синяя подпись, серый хинт |
 | `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx`, `src/components/ui/ValueRow.tsx` | Строки внутри блока |
-| `SwipeRow` | `src/components/ui/SwipeRow.tsx` | Разрушительное на кромке: свайп влево «Удалить», `leading` «Скрыть» |
+| `SwipeRow` | `src/components/ui/SwipeRow.tsx` | Кромки закреплены за смыслом: ПРАВАЯ (`label`) — «Удалить»/«Убрать», ЛЕВАЯ (`leading`) — «Скрыть»/«Показать»/«Вернуть». Нечего удалять — правой кромки нет (`label` необязателен) |
 | `SelectRow` · `SelectSearch` · `SelectList` | `src/components/ui/select-rows.tsx` | Строка, поиск и ритм ЛЮБОЙ шторки выбора |
 | `BottomSheet` | `src/components/ui/BottomSheet.tsx` | Шторка: `title`, `subtitle`, `headerAction`, `footer`, `maxHeightRatio` |
 | `TimeWheelPair` · `TimeRangePicker` | `src/components/ui/TimeWheel.tsx` | Время и длительность. Со страницы — листом (`HourRangeSheet`, `DateWheelSheet`), из шторки — раскрывашкой под строкой |
@@ -387,8 +387,20 @@
 
 **Справочники** — все по рецепту «Метки»
 (`src/features/reference/screens/LabelsScreen.tsx`): `BottomSheet`-редактор,
-`GradientButton` внизу, `ReorderList`, свайп влево «Удалить» с
-подтверждением, свайп вправо «Скрыть», `EmptyState`, `NameColorField`.
+`GradientButton` внизу, `ReorderList`, `EmptyState`, `NameColorField`.
+
+Кромки и тап у справочника — закон, а не вкус (владелец 2026-09-10):
+
+| Место | Что там | Почему |
+| --- | --- | --- |
+| ПРАВАЯ кромка (`label`) | «Удалить» с подтверждением | разрушительное живёт на постоянном месте |
+| ЛЕВАЯ кромка (`leading`) | «Скрыть» → «Показать» → «Вернуть»/«Открыть» | состояние строки, обратимое |
+| Строки, которую нельзя удалить | правой кромки НЕТ вовсе | подсунуть под тот же палец скрытие — соврать мышечной памяти |
+| ТАП по строке | ПРАВКА (имя, цвет) | «нажал — и оно скрылось» стоило владельцу стандартной категории |
+| Скрытая строка | гаснет и падает в КОНЕЦ списка | исчезнувшая читалась бы как удалённая |
+| Скрытая в листе выбора | её там нет — кроме уже выбранной в операции/шаблоне | иначе прошлая запись потеряет подпись |
+
+Держит `src/components/ui/swipe-edge-contract.test.ts`.
 
 ---
 
