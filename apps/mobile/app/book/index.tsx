@@ -1049,8 +1049,14 @@ export default function BookScreen() {
       allAppts.filter((a) => a.date === date && a.team_id === teamId),
     [allAppts, date, teamId],
   );
+  // ПРЕДУПРЕЖДЕНИЕ — ПРО КОМАНДУ, А НЕ ПРО ЖАНР (сведено 2026-09-10). Обе
+  // проверки были жёстко заперты на `kind === "work"`, и командное событие —
+  // «выезд в офис» бригадой — не предупреждало ни о двойном бронировании, ни
+  // о нерабочем дне: те же люди в то же время, но форма молчала. Личное
+  // событие молчит по-прежнему: у него нет команды, с чьим днём столкнуться,
+  // и `teamId` там null.
   const overlap = useMemo(() => {
-    if (kind !== "work" || !teamId) return null;
+    if (!teamId) return null;
     return findOverlap(
       {
         id: "book-draft",
@@ -1062,9 +1068,9 @@ export default function BookScreen() {
       } as unknown as Appointment,
       dayTeamAppts,
     );
-  }, [kind, teamId, date, timeStart, timeEnd, dayTeamAppts]);
+  }, [teamId, date, timeStart, timeEnd, dayTeamAppts]);
   const timeWarning = useMemo(() => {
-    if (kind !== "work" || !teamId) return null;
+    if (!teamId) return null;
     const startMinutes = absoluteMinutes(timeStart) ?? 0;
     const endMinutes = absoluteMinutes(timeEnd) ?? 0;
     const schedule = teamScheduleQuery.data;
@@ -1136,7 +1142,6 @@ export default function BookScreen() {
     teams,
     date,
     dayTeamAppts,
-    kind,
     teamId,
     teamScheduleQuery.data,
     timeEnd,
@@ -1750,14 +1755,16 @@ export default function BookScreen() {
   const timeMovedHere =
     openedAtRef.current != null &&
     (openedAtRef.current.date !== date || openedAtRef.current.time !== timeStart);
+  // ОДНО ПРЕДУПРЕЖДЕНИЕ НА ОБА ЖАНРА (сведено 2026-09-10): считается от
+  // КОМАНДЫ, а не от «записи». Слово про пересечение называет, с чем именно
+  // столкнулись — у события это может быть и запись клиента, и другое
+  // событие той же команды.
   const workWarning =
-    kind === "work"
-      ? overlap != null
-        ? "Пересекается с записью этой команды"
-        : timeMovedHere
-          ? timeWarning
-          : null
-      : null;
+    overlap != null
+      ? "Пересекается с работой этой команды"
+      : timeMovedHere
+        ? timeWarning
+        : null;
   useEffect(() => {
     if (!canSave && !bookingBusy && !referencesPending) {
       AccessibilityInfo.announceForAccessibility(missingHint);
@@ -2865,7 +2872,7 @@ export default function BookScreen() {
                 timeStart={timeStart}
                 timeEnd={timeEnd}
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
-                warning={null}
+                warning={workWarning}
                 onPress={() => {
                   setWhenOpen(true);
                   haptics.tap();
@@ -2912,6 +2919,11 @@ export default function BookScreen() {
                         <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
                           {client.full_name || "Без имени"}
                         </Text>
+                        {/* ВВОДНАЯ О ЧЕЛОВЕКЕ — И У СОБЫТИЯ (сведено
+                            2026-09-10). Долг, визиты, деньги, последний визит
+                            стояли только в записи: тот же клиент в событии
+                            выглядел незнакомым, хотя данные под рукой. */}
+                        <ClientHistoryLine client={client} stats={clientStats} />
                         <Text
                           style={{
                             fontSize: 13,
@@ -2964,6 +2976,18 @@ export default function BookScreen() {
                     onPress={() => setClientPickerOpen(true)}
                   />
                 )}
+                {/* ЗАМЕТКА КЛИЕНТА — И У СОБЫТИЯ (сведено 2026-09-10): то же
+                    поле, что в записи и в карточке, пишет в того же клиента.
+                    Один и тот же блок «Клиент» не может знать заметку на
+                    одном экране и не знать на другом. */}
+                {client ? (
+                  <InlineNoteField
+                    note={clientNote}
+                    placeholder="Заметка клиента"
+                    accessibilityLabel="Заметка клиента"
+                    maxLength={500}
+                  />
+                ) : null}
               </SectionCard>
 
               {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
@@ -3024,6 +3048,18 @@ export default function BookScreen() {
                   </>
                 ) : (
                   <>
+                    {/* «ЖДЁМ АДРЕС» — И У СОБЫТИЯ (сведено 2026-09-10). Ссылка
+                        клиенту уже отправлена, ответа ещё нет — в записи об
+                        этом говорила строка, а событие молчало: та же ссылка,
+                        тот же клиент, но узнать о ней было негде. */}
+                    {pendingRequests.map((request, i) => (
+                      <LocationRequestRow
+                        key={request.id}
+                        request={request}
+                        separated={i > 0}
+                        onPress={() => void requestActions.menu(request)}
+                      />
+                    ))}
                     {/* Вольный адрес прежнего события — только пока объекта
                         нет: у нового события поля не будет вовсе. */}
                     {eventAddress.trim() ? (
