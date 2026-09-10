@@ -30,7 +30,9 @@ import { PICKER_RADIUS } from "./picker-grid";
 // поэтому везде выглядят одинаково — в календаре, финансах, клиентах, кабинете.
 //
 // Выбор НЕ ЗАКРЫВАЕТ шторку: у сущности два свойства, и человек обычно ставит
-// сразу оба. Закрывает — «Готово» в футере, вне прокрутки.
+// сразу оба. Закрывает кнопка в футере, вне прокрутки, и слово на ней —
+// «Применить» из словаря AGENTS.md: «Готово» и «Сохранить» в этой роли в
+// продукте не бывает.
 
 export type AppearanceTab = "icon" | "color";
 
@@ -127,7 +129,7 @@ export function AppearanceSheet({
       maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
-          <Button label="Готово" onPress={onClose} />
+          <Button label="Применить" onPress={onClose} />
         </View>
       }
     >
