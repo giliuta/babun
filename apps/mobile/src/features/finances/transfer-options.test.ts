@@ -199,3 +199,41 @@ describe("defaultTransferTarget — только память", () => {
     );
   });
 });
+
+describe("получатель по умолчанию", () => {
+  const acc = (id: string, extra: Partial<TransferAccount> = {}) =>
+    ({ id, name: id, is_active: true, brigade_id: "t1", ...extra }) as TransferAccount;
+
+  test("единственный возможный получатель подставляется без шага «Куда»", () => {
+    const from = acc("a");
+    const to = acc("b");
+    assert.equal(
+      defaultTransferTarget({ accounts: [from, to], from, remembered: null })?.id,
+      "b",
+    );
+  });
+
+  test("когда счетов больше двух, выбор остаётся за человеком", () => {
+    const from = acc("a");
+    assert.equal(
+      defaultTransferTarget({
+        accounts: [from, acc("b"), acc("c")],
+        from,
+        remembered: null,
+      }),
+      null,
+    );
+  });
+
+  test("память о прошлом переводе сильнее единственной строки", () => {
+    const from = acc("a");
+    assert.equal(
+      defaultTransferTarget({
+        accounts: [from, acc("b"), acc("c")],
+        from,
+        remembered: "c",
+      })?.id,
+      "c",
+    );
+  });
+});

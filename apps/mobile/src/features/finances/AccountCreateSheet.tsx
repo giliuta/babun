@@ -3,13 +3,19 @@ import { Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
-import type { Account } from "@babun/shared/local/finance/account";
+import type {
+  Account,
+  AccountKind,
+} from "@babun/shared/local/finance/account";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Chip } from "@/components/ui/Chip";
 import { Field, FieldLabel } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { MoneyField } from "@/components/ui/MoneyField";
 import { AppearanceField } from "@/components/ui/picker-fields";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { ValueRow } from "@/components/ui/ValueRow";
+import { KINDS, KIND_ICON } from "./account-ui";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTenant } from "@/features/settings/tenant";
@@ -97,6 +103,9 @@ export function AccountCreateSheet({
    *  счёт рисуется глифом своего вида и без пигмента. */
   const [icon, setIcon] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
+  /** Тип счёта — наличные по умолчанию: касса заводится чаще карты. */
+  const [kind, setKind] = useState<AccountKind>("cash");
+  const [kindOpen, setKindOpen] = useState(false);
   /** Отказ сервера печатается ПОД кнопкой, а не алертом: набранное остаётся на
    *  экране, и повтор не начинается с чистой формы. */
   const [failure, setFailure] = useState<string | null>(null);
@@ -166,7 +175,16 @@ export function AccountCreateSheet({
         ? "Дайте счёту название"
         : openingCents == null
           ? "Проверьте сумму на счёте"
-          : null;
+          : // ДУБЛЬ ИМЕНИ ЛОВИМ ДО ОТПРАВКИ (аудит счетов 2026-09-10). Форма и
+            // так печатала предупреждение, но кнопка оставалась живой, и
+            // уникальный индекс базы (`ux_accounts_team_name`, он не смотрит на
+            // `is_active`) отвечал отказом уже после круга по сети. Клиент этот
+            // исход знает заранее — значит и говорит заранее.
+            duplicate
+            ? duplicate.is_active
+              ? "Такое название уже занято"
+              : "Название занято закрытым счётом"
+            : null;
   const canSave = reason == null && !insert.isPending;
   /** Строка над кнопкой: отказ сервера сильнее придирки к форме, а на время
    *  отправки замолкают обе — там уже говорит вертушка самой кнопки. */
@@ -187,9 +205,10 @@ export function AccountCreateSheet({
         scope: "team",
         brigade_id: teamId,
         name: name.trim(),
-        // Вид новому счёту не выбирают (см. шапку файла): заводим наличными,
-        // а поменять можно строкой «Вид» в настройках счёта.
-        kind: "cash",
+        // Тип спрашивается прямо в форме: строкой выше. До 2026-09-10 счёт
+        // всегда заводился наличными, и «Карта» требовала второго захода в
+        // настройки — а после первой операции тип уже не меняется.
+        kind,
         opening_balance: openingCents / 100,
         icon,
         color,
@@ -332,6 +351,30 @@ export function AccountCreateSheet({
             категорий. Своя палитра у счетов была бы четырнадцатым набором
             оттенков в одном приложении. Заголовки — местные `FieldLabel`, чтобы
             подписи листа звучали одним голосом. */}
+        {/* ТИП СЧЁТА СПРАШИВАЮТ ЗДЕСЬ (аудит счетов 2026-09-10). Форма всегда
+            заводила «Наличные», а тип менялся только в настройках — то есть
+            «Карта» требовала второго захода. Хуже: после первой же операции тип
+            замерзает навсегда, и счёт, названный «Карта», оставался наличными
+            до самого закрытия. */}
+        <ValueRow
+          label="Тип счёта"
+          value={KINDS.find((k) => k.value === kind)?.label ?? ""}
+          onPress={() => setKindOpen(true)}
+        />
+        <PickerSheet
+          visible={kindOpen}
+          title="Тип счёта"
+          items={KINDS.map((k) => ({
+            id: k.value,
+            label: k.label,
+            icon: KIND_ICON[k.value],
+            color: t.accent,
+            onPress: () => setKind(k.value),
+          }))}
+          selectedId={kind}
+          onClose={() => setKindOpen(false)}
+        />
+
         <AppearanceField
           color={color}
           // Цвет не снимается повторным тапом: он держит заливку строки.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Users } from "lucide-react-native";
@@ -8,6 +8,7 @@ import {
   moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -135,6 +136,9 @@ function AccountSettingsContent() {
   /** Счёт-ПОЛУЧАТЕЛЬ: заполняется только для минусового счёта, который
    *  пополняют, чтобы закрыть. Плюсовой уходит источником (`presetFromId`). */
   const [transferToId, setTransferToId] = useState<string | null>(null);
+  /** Перевод затеян РАДИ ЗАКРЫТИЯ: по возвращении из листа тот же вопрос
+   *  задаётся снова, уже с новым остатком. */
+  const closingAfterTransfer = useRef(false);
   // Сетки значка и цвета раскрываются под своей строкой (аккордеон, как цвет
   // команды в её настройках) — лист поверх страницы здесь был бы вторым
   // жанром для того же действия.
@@ -307,6 +311,7 @@ function AccountSettingsContent() {
         () => {
           setTransferAmount(Math.abs(account.balance));
           setTransferToId(negative ? account.id : null);
+          closingAfterTransfer.current = true;
           setTransferOpen(true);
         },
       );
@@ -647,7 +652,20 @@ function AccountSettingsContent() {
 
       <TransferSheet
         visible={transferOpen}
-        onClose={() => setTransferOpen(false)}
+        // ЗАКРЫТИЕ — ОДИН ЗАХОД, А НЕ ДВА (аудит счетов 2026-09-10). Раньше
+        // после перевода лист просто закрывался, и «Закрыть счёт» нужно было
+        // нажать ВТОРОЙ раз — без единой подсказки между шагами. Теперь, если
+        // перевод затевали ради закрытия, экран сам возвращается к тому же
+        // вопросу: остаток стал нулём — предложит закрыть, не стал —
+        // повторит, чего не хватает.
+        onClose={() => {
+          setTransferOpen(false);
+          if (!closingAfterTransfer.current) return;
+          closingAfterTransfer.current = false;
+          // Ждём, пока лист уедет и остаток перечитается: вопрос поверх
+          // уезжающего листа iOS не покажет («already presenting»).
+          setTimeout(() => closeOrDelete(), SHEET_EXIT_MS + 350);
+        }}
         accounts={activeAccounts}
         teamById={teamById}
         presetFromId={transferToId ? null : account.id}

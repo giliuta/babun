@@ -129,10 +129,15 @@ export function defaultTransferTarget<T extends TransferAccount>({
   from: T;
   remembered: string | null;
 }): T | null {
-  if (!remembered) return null;
-  return (
-    accounts.find(
-      (a) => a.id === remembered && a.is_active && a.id !== from.id,
-    ) ?? null
-  );
+  const others = accounts.filter((a) => a.is_active && a.id !== from.id);
+  // ЕДИНСТВЕННЫЙ ВОЗМОЖНЫЙ ПОЛУЧАТЕЛЬ — НЕ ВОПРОС (аудит счетов 2026-09-10).
+  // У тенанта с «Наличными» и «Картой» первый же перевод требовал открыть шаг
+  // «Куда», тапнуть единственную строку и вернуться: выбор без выбора.
+  // Память о прошлом переводе сильнее — она говорит о привычке, а не о числе
+  // строк.
+  const memory = remembered
+    ? (others.find((a) => a.id === remembered) ?? null)
+    : null;
+  if (memory) return memory;
+  return others.length === 1 ? others[0] : null;
 }
