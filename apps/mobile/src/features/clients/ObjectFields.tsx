@@ -338,8 +338,14 @@ export function ObjectFields({
           label: name,
           icon: Tag,
           color: getAvatarColor(name),
+          // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «можно создать
+          // объект без типа объекта»). Тот же жест, что у типа события, и
+          // тот случай, ради которого канон его и держит: снимаем там, где
+          // значение можно не иметь.
           onPress: () => {
-            onChange({ type: snapObjectType(name, typeOptions) });
+            onChange({
+              type: name === value.type ? "" : snapObjectType(name, typeOptions),
+            });
             onCommit?.();
           },
         }))}

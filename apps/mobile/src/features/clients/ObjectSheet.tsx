@@ -107,10 +107,26 @@ export function ObjectSheet({
   }, [visible, initialTarget]);
 
   const typeOptions = useObjectTypeOptions(draft.type);
-  // Тип ПРЕДЗАПОЛНЕН: обычный объект заводится, не касаясь этой строки.
-  // Считаем, а не сеем эффектом — после каждого добавления форма сбрасывается
-  // в пустую, и тип должен подставиться заново сам.
-  const type = draft.type.trim() || defaultObjectType(client, typeOptions);
+  // ТИП ПРЕДЗАПОЛНЕН, НО НЕ ОБЯЗАТЕЛЕН (владелец 2026-09-10: «выбор типа
+  // объекта необязательно — можно создать объект без типа, просто ссылку или
+  // адрес»). Раньше тип не хранился, а СЧИТАЛСЯ: `draft.type || default`, и
+  // снять его было нечем — пустое значение в ту же секунду снова становилось
+  // «Домом». Теперь подстановка сеется РОВНО ОДИН РАЗ на открытие, когда
+  // словарь приехал, и дальше значение принадлежит человеку: снял в шторке —
+  // объект запишется без типа. Пустой тип продукт уже умеет: списки печатают
+  // такой объект как «Объект» (`loc.label || "Объект"`).
+  const typeSeeded = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      typeSeeded.current = false;
+      return;
+    }
+    if (typeSeeded.current || typeOptions.length === 0) return;
+    typeSeeded.current = true;
+    setDraft((d) =>
+      d.type.trim() ? d : { ...d, type: defaultObjectType(client, typeOptions) },
+    );
+  }, [visible, typeOptions, client]);
 
   // Объект существует, когда есть адрес, части с «где» ИЛИ отмеченная точка:
   // по пину команда доедет даже без единого слова адреса — на кипрских виллах
@@ -134,7 +150,7 @@ export function ObjectSheet({
         draft.parts,
         draft.pin,
       );
-      const label = snapObjectType(type, typeOptions);
+      const label = snapObjectType(draft.type, typeOptions);
       const note = draft.note.trim() || undefined;
       const id = await writer.addLocation({
         label,
@@ -199,7 +215,7 @@ export function ObjectSheet({
         keyboardShouldPersistTaps="handled"
       >
         <ObjectFields
-          value={{ ...draft, type }}
+          value={draft}
           typeOptions={typeOptions}
           onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
           onTypeSettings={() => {
