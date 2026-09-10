@@ -41,12 +41,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { Archive, ChevronRight, Phone, RotateCcw } from "lucide-react-native";
+import { Archive, ChevronRight, Phone } from "lucide-react-native";
 import { Stack, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { STATUS_LABELS } from "@babun/shared/local/appointments";
 import { buildStats } from "@babun/shared/local/selectors/client-stats";
+import { Button } from "@/components/ui/Button";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -242,17 +243,9 @@ export default function ClientDetailScreen() {
         <Text className="mb-3 text-sm" style={{ color: t.sub }}>
           Клиент не найден
         </Text>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Назад к списку клиентов"
-          className="min-h-11 justify-center rounded-[10px] px-4 py-2 active:opacity-80"
-          style={{ backgroundColor: t.accent }}
-        >
-          <Text className="font-semibold" style={{ color: t.onAccent }}>
-            ← К списку
-          </Text>
-        </Pressable>
+        {/* КНОПКА ОДНА НА ПРОДУКТ (сведено 2026-09-10): здесь была своя,
+            44pt с радиусом числом. */}
+        <Button label="К списку" onPress={() => router.back()} />
       </Screen>
     );
   }
@@ -686,24 +679,14 @@ function ArchivedClientView({
         </SectionCard>
 
         <View className="px-4 pt-5">
-          <Pressable
+          {/* КНОПКА ОДНА НА ПРОДУКТ: была своя, 48pt со значком внутри.
+              Значка у канонической кнопки нет — слово и так называет
+              действие, а спиннер ожидания она умеет сама. */}
+          <Button
+            label="Восстановить клиента"
+            loading={restoring}
             onPress={() => void onRestore()}
-            disabled={restoring}
-            accessibilityRole="button"
-            accessibilityLabel="Восстановить клиента"
-            accessibilityState={{ disabled: restoring }}
-            className="min-h-12 flex-row items-center justify-center gap-2 rounded-[10px] active:opacity-70"
-            style={{ backgroundColor: t.accent, opacity: restoring ? 0.6 : 1 }}
-          >
-            {restoring ? (
-              <Spinner size={20} color={t.onAccent} label="Восстанавливаем" />
-            ) : (
-              <RotateCcw color={t.onAccent} size={18} />
-            )}
-            <Text className="text-[15px] font-semibold" style={{ color: t.onAccent }}>
-              {restoring ? "Восстанавливаем…" : "Восстановить клиента"}
-            </Text>
-          </Pressable>
+          />
         </View>
       </ScrollView>
     </Screen>

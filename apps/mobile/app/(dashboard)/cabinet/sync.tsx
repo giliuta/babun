@@ -22,6 +22,8 @@ import {
   dequeueAll,
   type QueuedOp,
 } from "@babun/shared/db/cache/sql";
+import { Button } from "@/components/ui/Button";
+import { GUTTER } from "@/components/ui/tokens";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -265,21 +267,14 @@ export default function SyncStatusScreen() {
         })}
 
         {operations.length > 1 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Повторить все изменения"
-            disabled={busyId !== null}
-            onPress={() => void retry()}
-            className="mx-3 mt-4 min-h-[50px] items-center justify-center rounded-[10px]"
-            style={({ pressed }) => ({
-              backgroundColor: t.accent,
-              opacity: busyId !== null ? 0.45 : pressed ? 0.82 : 1,
-            })}
-          >
-            <Text style={{ color: t.onAccent, fontSize: 16, fontWeight: "700" }}>
-              {failed > 0 ? "Повторить всё" : "Отправить сейчас"}
-            </Text>
-          </Pressable>
+          // КНОПКА ОДНА НА ПРОДУКТ: была своя, 50pt с кеглем 16/700.
+          <View style={{ marginHorizontal: GUTTER, marginTop: 16 }}>
+            <Button
+              label={failed > 0 ? "Повторить всё" : "Отправить сейчас"}
+              disabled={busyId !== null}
+              onPress={() => void retry()}
+            />
+          </View>
         ) : null}
       </ScrollView>
     </Screen>
