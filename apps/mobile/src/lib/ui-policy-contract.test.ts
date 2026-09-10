@@ -36,6 +36,28 @@ describe("mobile UI product policy", () => {
     assert.deepEqual(offenders, [], `используйте <Spinner />: ${offenders.join(", ")}`);
   });
 
+  test("альфа приписывается только к #RRGGBB, а не к токену темы", () => {
+    // `rgba(11,18,32,0.64)1f` — НЕ ЦВЕТ. RN не падает, а красит поверхность
+    // тёмным: так пустая «Метка» получила почти чёрный диск (владелец
+    // 2026-09-10: «серая иконка режет глаза»), и так же до этого чернели
+    // кружки плиток типов событий. Полупрозрачными в палитре записаны
+    // `body`, `sub`, `faint`, `placeholder`, `separator`, `rowFill` — им
+    // альфу дописывать нельзя; `accent`, `ink`, `success`, `danger`,
+    // `warning`, `fill` — hex, к ним можно.
+    const RGBA_TOKENS = ["body", "sub", "faint", "placeholder", "separator", "rowFill"];
+    const bad = new RegExp(
+      `\\$\\{(?:t|th|colors)\\.(?:${RGBA_TOKENS.join("|")})\\}[0-9a-fA-F]{2}`,
+    );
+    const offenders = sourceFiles(resolve(here, ".."))
+      .concat(sourceFiles(resolve(here, "../../app")))
+      .filter((path) => bad.test(readFileSync(path, "utf8")));
+    assert.deepEqual(
+      offenders,
+      [],
+      `альфа к полупрозрачному токену — тёмная плашка: ${offenders.join(", ")}`,
+    );
+  });
+
   test("контрол обновления отражает ЖЕСТ, а не фоновое дообновление", () => {
     // refreshing={isRefetching} показывал контрол ПРОГРАММНО при каждом
     // возврате на экран: список уезжал вниз сам. Источник — usePullRefresh.
