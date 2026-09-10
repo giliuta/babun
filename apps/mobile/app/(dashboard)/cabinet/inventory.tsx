@@ -21,7 +21,7 @@ import { Divider } from "@/components/ui/Divider";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
-import { ColorField } from "@/components/ui/picker-fields";
+import { AppearanceField } from "@/components/ui/picker-fields";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
@@ -388,7 +388,11 @@ export function InventoryList({
                 </View>
               </>
             ) : null}
-            <ColorField value={color || null} onChange={setColor} />
+            <AppearanceField
+              color={color || null}
+              onColorChange={setColor}
+              label="Цвет"
+            />
             <Field
               label="Заметки"
               value={notes}

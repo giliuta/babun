@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Users } from "lucide-react-native";
 import {
@@ -21,9 +21,10 @@ import {
   RowCaption,
   RowGroup,
 } from "@/components/ui/card-rows";
-import { ColorPicker } from "@/components/ui/ColorPicker";
-import { IconPicker } from "@/components/ui/IconPicker";
-import { ColorDot, IconGlyph } from "@/components/ui/picker-fields";
+import {
+  AppearanceSheet,
+  AppearanceTile,
+} from "@/components/ui/AppearanceSheet";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { chooseValue } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
@@ -119,8 +120,7 @@ function AccountSettingsContent() {
   // Сетки значка и цвета раскрываются под своей строкой (аккордеон, как цвет
   // команды в её настройках) — лист поверх страницы здесь был бы вторым
   // жанром для того же действия.
-  const [iconOpen, setIconOpen] = useState(false);
-  const [colorOpen, setColorOpen] = useState(false);
+  const [lookOpen, setLookOpen] = useState(false);
   // Лист «Отдать команде» для счёта-наследия без команды.
   const [handOverOpen, setHandOverOpen] = useState(false);
 
@@ -377,61 +377,47 @@ function AccountSettingsContent() {
             separated
             onPress={hasHistory ? undefined : pickKind}
           />
-          {/* ЗНАЧОК И ЦВЕТ — узнавание счёта в списке. Сетка и палитра те же,
-              что в листе создания; правятся всегда: сходимость истории от
-              них не зависит, и заморозка `hasHistory` им не нужна. Повторный
-              тап по выбранному снимает выбор — счёт возвращается к глифу
-              вида, как в листе создания. */}
-          {/* СПРАВА СТОИТ САМ ОТВЕТ, А НЕ ЕГО ИМЯ (владелец 2026-08-17): глиф и
-              точка цвета показывают себя, «Копилка» и «Голубой» словами были
-              шумом. Пусто = ничего не нарисовано: счёт рисуется глифом вида. */}
+          {/* ВИД СЧЁТА — ОДНА СТРОКА И ОДНА ШТОРКА (владелец 2026-09-10:
+              «сделать блок цветовой и вставлять его во все, где это может
+              использоваться; точно такой же блок с иконками… и там сразу
+              переключатель — иконка или цвет»). Здесь стояли две строки со
+              своими раскрывающимися решётками — «Значок» и «Цвет», — хотя
+              вопрос у них один: как узнать этот счёт в списке.
+              Повторный тап по выбранному по-прежнему снимает выбор: счёт
+              возвращается к глифу вида. */}
           <NavRow
-            label="Значок"
-            accessory={<IconGlyph value={account.icon} color={account.color} />}
+            label="Вид"
+            accessory={
+              <AppearanceTile color={account.color} icon={account.icon} size={28} />
+            }
             separated
-            onPress={() => setIconOpen((open) => !open)}
+            onPress={() => setLookOpen(true)}
           />
-          {iconOpen ? (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-              <IconPicker
-                label={null}
-                value={account.icon}
-                tint={account.color}
-                onChange={(slug) =>
-                  update.mutate(
-                    {
-                      id: account.id,
-                      patch: { icon: account.icon === slug ? null : slug },
-                    },
-                    { onError: alertError("Не удалось изменить значок") },
-                  )
-                }
-              />
-            </View>
-          ) : null}
-          <NavRow
-            label="Цвет"
-            accessory={<ColorDot value={account.color} />}
-            separated
-            onPress={() => setColorOpen((open) => !open)}
+          <AppearanceSheet
+            visible={lookOpen}
+            onClose={() => setLookOpen(false)}
+            color={account.color}
+            onColorChange={(hex) =>
+              update.mutate(
+                {
+                  id: account.id,
+                  patch: { color: account.color === hex ? null : hex },
+                },
+                { onError: alertError("Не удалось изменить цвет") },
+              )
+            }
+            icon={account.icon}
+            onIconChange={(slug) =>
+              update.mutate(
+                {
+                  id: account.id,
+                  patch: { icon: account.icon === slug ? null : slug },
+                },
+                { onError: alertError("Не удалось изменить значок") },
+              )
+            }
+            initial="icon"
           />
-          {colorOpen ? (
-            <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-              <ColorPicker
-                label={null}
-                value={account.color}
-                onChange={(hex) =>
-                  update.mutate(
-                    {
-                      id: account.id,
-                      patch: { color: account.color === hex ? null : hex },
-                    },
-                    { onError: alertError("Не удалось изменить цвет") },
-                  )
-                }
-              />
-            </View>
-          ) : null}
           {/* ЧЕЙ ЭТО СЧЁТ — здесь, а не отдельной группой «Команды». Группа
               существовала ради общего счёта: в ней подключали и отключали
               команды чек-листом в нижнем листе. Счёт принадлежит ОДНОЙ команде

@@ -1,26 +1,23 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { readableTextOnColor } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
 import { ICON_PRESETS, type IconPreset } from "./icon-set";
-import { PICKER_CELL, PICKER_COLUMNS } from "./picker-grid";
+import { PICKER_COLUMNS, PICKER_GAP, PICKER_RADIUS } from "./picker-grid";
 
-// Блок выбора ЗНАЧКА — брат-близнец `ColorPicker`: та же решётка в восемь
-// столбцов, тот же шаг клетки (`picker-grid`), потому что в форме они стоят
-// друг под другом и отвечают на один вопрос — «как узнать это в списке».
+// Блок выбора ЗНАЧКА — брат-близнец `ColorPicker`: та же решётка квадратов, тот
+// же зазор (`picker-grid`), потому что оба живут в ОДНОЙ шторке под общим
+// переключателем «Значок · Цвет» и отвечают на один вопрос — «как узнать это в
+// списке» (владелец 2026-09-10: «сделать 40 иконок, то же самое, что цвет…
+// сразу переключатель — иконка или цвет»).
 //
-// Выбранное — заливка кружком в цвете сущности (`tint`), а не обводка: у
-// значка внутри уже есть свои линии, и кольцо вокруг них превращается в кашу.
-// Незанятые значки живут без подложки — сорок серых кружков читались бы как
-// сорок кнопок.
-const TILE = 32;
-// Глиф 20 и полная громкость чернил: на 18pt в цвете `sub` ряд значков рядом с
-// решёткой цветных точек читался бледной сноской, хотя это тот же по важности
-// вопрос.
-const GLYPH = 20;
+// Выбранное — плитка, залитая цветом сущности; глиф на ней берёт читаемый тон.
+// Незанятые стоят на тихой подложке `fill`: сорок ярких плиток спорили бы с
+// решёткой цветов на соседней вкладке, а вопрос здесь другой.
+const GLYPH = 22;
 
 export function IconPicker({
   value,
   onChange,
-  label = "Значок",
   tint,
   icons,
   disabled,
@@ -28,9 +25,7 @@ export function IconPicker({
   value: string | null | undefined;
   /** Слаг нажатого значка. Снятие выбора решает вызывающий: он знает `value`. */
   onChange: (slug: string) => void;
-  /** Eyebrow above the grid; pass null to render none. */
-  label?: string | null;
-  /** Цвет заливки выбранного — по умолчанию акцент. */
+  /** Цвет заливки выбранного — обычно цвет самой сущности. */
   tint?: string | null;
   /** Набор-переопределение; по умолчанию общие сорок. */
   icons?: readonly IconPreset[];
@@ -41,52 +36,52 @@ export function IconPicker({
   const fill = tint ?? t.accent;
 
   return (
-    <View className="mb-4">
-      {label ? (
-        <Text className="mb-2 text-xs font-medium" style={{ color: t.sub }}>
-          {label}
-        </Text>
-      ) : null}
-      <View className="flex-row flex-wrap">
-        {set.map(({ value: slug, label: name, icon: Glyph }) => {
-          const selected = value === slug;
-          return (
-            <Pressable
-              key={slug}
-              onPress={disabled ? undefined : () => onChange(slug)}
-              disabled={disabled}
-              hitSlop={3}
-              accessibilityRole="button"
-              accessibilityLabel={`Значок ${name}`}
-              accessibilityState={{ selected, disabled: !!disabled }}
-              style={({ pressed }) => ({
-                width: `${100 / PICKER_COLUMNS}%`,
-                height: PICKER_CELL,
+    <View
+      accessibilityRole="radiogroup"
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        marginHorizontal: -PICKER_GAP / 2,
+      }}
+    >
+      {set.map(({ value: slug, label: name, icon: Glyph }) => {
+        const selected = value === slug;
+        return (
+          <Pressable
+            key={slug}
+            onPress={disabled ? undefined : () => onChange(slug)}
+            disabled={disabled}
+            accessibilityRole="radio"
+            accessibilityLabel={`Значок ${name}`}
+            accessibilityState={{ selected, disabled: !!disabled }}
+            style={({ pressed }) => ({
+              width: `${100 / PICKER_COLUMNS}%`,
+              aspectRatio: 1,
+              padding: PICKER_GAP / 2,
+              opacity: pressed ? 0.7 : disabled ? 0.4 : 1,
+            })}
+          >
+            <View
+              style={{
+                flex: 1,
+                borderRadius: PICKER_RADIUS,
+                borderCurve: "continuous",
                 alignItems: "center",
                 justifyContent: "center",
-                opacity: pressed ? 0.6 : disabled ? 0.4 : 1,
-              })}
+                backgroundColor: selected ? fill : t.fill,
+              }}
             >
-              <View
-                style={{
-                  width: TILE,
-                  height: TILE,
-                  borderRadius: 999,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: selected ? fill : "transparent",
-                }}
-              >
-                <Glyph
-                  color={selected ? t.onAccent : t.body}
-                  size={GLYPH}
-                  strokeWidth={2}
-                />
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+              <Glyph
+                color={
+                  selected ? readableTextOnColor(fill, t.ink, "#FFFFFF") : t.body
+                }
+                size={GLYPH}
+                strokeWidth={2}
+              />
+            </View>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

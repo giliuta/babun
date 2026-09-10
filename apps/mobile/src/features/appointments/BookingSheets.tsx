@@ -230,12 +230,7 @@ export function ColorSheet({
           />
         </View>
         ) : null}
-        <ColorPicker
-          label={null}
-          colors={EVENT_COLORS}
-          value={value}
-          onChange={onPick}
-        />
+        <ColorPicker colors={EVENT_COLORS} value={value} onChange={onPick} />
       </View>
     </BottomSheet>
   );

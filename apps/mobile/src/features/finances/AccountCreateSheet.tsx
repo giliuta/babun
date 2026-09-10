@@ -9,7 +9,7 @@ import { Chip } from "@/components/ui/Chip";
 import { Field, FieldLabel } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { MoneyField } from "@/components/ui/MoneyField";
-import { ColorField, IconField } from "@/components/ui/picker-fields";
+import { AppearanceField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTenant } from "@/features/settings/tenant";
@@ -332,15 +332,11 @@ export function AccountCreateSheet({
             категорий. Своя палитра у счетов была бы четырнадцатым набором
             оттенков в одном приложении. Заголовки — местные `FieldLabel`, чтобы
             подписи листа звучали одним голосом. */}
-        <IconField
-          value={icon}
-          tint={color}
-          onChange={(slug) => setIcon(icon === slug ? null : slug)}
-        />
-
-        <ColorField
-          value={color}
-          onChange={(hex) => setColor(color === hex ? null : hex)}
+        <AppearanceField
+          color={color}
+          onColorChange={(hex: string) => setColor(color === hex ? null : hex)}
+          icon={icon}
+          onIconChange={(slug: string) => setIcon(icon === slug ? null : slug)}
         />
 
         {/* 4. ЧЕЙ ЭТО СЧЁТ — ровно ОДНА команда (владелец 2026-08-15: «счёт

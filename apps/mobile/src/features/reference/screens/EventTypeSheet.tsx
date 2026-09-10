@@ -5,7 +5,7 @@ import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { FieldLabel } from "@/components/ui/Field";
-import { IconField, NameColorField } from "@/components/ui/picker-fields";
+import { NameColorField } from "@/components/ui/picker-fields";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { EVENT_TYPE_ICON_PRESETS } from "@/features/calendar/event-type-icons";
@@ -84,19 +84,18 @@ export function EventTypeSheet({
         />
       }
     >
-      {/* Имя и цвет одной строкой — тот же блок, что у услуги, метки и тега. */}
+      {/* Имя, цвет и значок одной строкой — тот же блок, что у услуги, метки,
+          тега и категории. Значок был отдельным полем со своей решёткой; с
+          2026-09-10 цвет и значок — один вопрос и одна шторка. */}
       <NameColorField
         name={label}
         onNameChange={setLabel}
         color={color}
         onColorChange={setColor}
-        autoFocus={!type}
-      />
-      <IconField
-        value={icon}
-        onChange={(slug) => setIcon(slug as PersonalEventTypeIcon)}
-        tint={color}
+        icon={icon}
+        onIconChange={(slug) => setIcon(slug as PersonalEventTypeIcon)}
         icons={EVENT_TYPE_ICON_PRESETS}
+        autoFocus={!type}
       />
 
       {/* СВОЁ ВРЕМЯ У КАЖДОГО ТИПА (владелец 2026-09-08: «на каждом типе
