@@ -1,15 +1,19 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { View } from "react-native";
+import { Trash2 } from "lucide-react-native";
 import {
   timeToMinutes,
   minutesToTime,
   type ScheduleBreak,
 } from "@babun/shared/local/schedule";
 import { AddRow } from "@/components/ui/AddRow";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { ValueRow } from "@/components/ui/ValueRow";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
+import { confirmThen } from "@/lib/confirm";
 import { useThemeColors } from "@/theme/colors";
 
 // Перерывы дня (обед и т.п.) — секция редактора ОСОБОГО ДНЯ (страница с датой).
@@ -85,57 +89,43 @@ export function BreaksSection({
       <SectionEyebrow>Перерывы</SectionEyebrow>
       <SectionCard>
         {breaks.map((b, i) => (
-          <View key={i}>
+          <View key={`${b.start}-${b.end}-${i}`}>
             {i > 0 ? <Divider inset={16} /> : null}
-            <View
-              style={{
-                minHeight: 48,
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: 16,
-                paddingVertical: 6,
-              }}
+            {/* СТРОКА ПЕРЕРЫВА — ТА ЖЕ, ЧТО В ЛИСТЕ НЕДЕЛЬНОГО ГРАФИКА
+                (сведено 2026-09-10): значение справа, свайп влево — «Убрать»,
+                долгое нажатие — видимый дублёр жеста словом. Здесь стояли два
+                компактных нативных пикера в строке и текстовая кнопка
+                «Убрать»: тот же перерыв выглядел на двух экранах двумя
+                разными способами, а разрушительное жило кнопкой, хотя канон
+                держит его на кромке жеста. */}
+            <SwipeRow
+              label="Убрать"
+              color={t.danger}
+              icon={Trash2}
+              accessibilityLabel={`Убрать перерыв ${b.start} – ${b.end}`}
+              onAction={() => commit(breaks.filter((_, j) => j !== i))}
             >
-              {/* Пара границ — одним тапом по строке. Значение и есть подпись:
-                  «Перерыв» слева, часы справа, как в любой строке-двери. */}
-              <Pressable
+              <ValueRow
+                label="Перерыв"
+                value={`${b.start} – ${b.end}`}
+                longPressLabel="Убрать перерыв"
                 onPress={() => setEditing(i)}
-                accessibilityRole="button"
-                accessibilityLabel={`Перерыв ${b.start} – ${b.end}, изменить`}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  minHeight: 44,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text style={{ flex: 1, fontSize: 16, color: t.ink }}>
-                  Перерыв
-                </Text>
-                <Text style={{ fontSize: 16, color: t.body }}>
-                  {`${b.start} – ${b.end}`}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => commit(breaks.filter((_, j) => j !== i))}
-                accessibilityRole="button"
-                accessibilityLabel="Убрать перерыв"
-                hitSlop={10}
-                style={({ pressed }) => ({
-                  marginLeft: 14,
-                  minHeight: 44,
-                  justifyContent: "center",
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Text
-                  style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-                >
-                  Убрать
-                </Text>
-              </Pressable>
-            </View>
+                // Долгое нажатие ПЕРЕСПРАШИВАЕТ, свайп — нет: жест кромки
+                // сам по себе прицельный, а длинное нажатие легко поймать
+                // случайно, листая страницу (тот же расклад в листе графика).
+                onLongPress={() =>
+                  confirmThen(
+                    "Убрать перерыв?",
+                    {
+                      message: `${b.start} – ${b.end}`,
+                      confirmLabel: "Убрать",
+                      destructive: true,
+                    },
+                    () => commit(breaks.filter((_, j) => j !== i)),
+                  )
+                }
+              />
+            </SwipeRow>
           </View>
         ))}
         <AddRow
