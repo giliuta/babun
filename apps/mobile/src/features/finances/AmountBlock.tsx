@@ -20,14 +20,12 @@ export function AmountBlock({
   color,
   title = "Сумма",
   accessibilityLabel,
-  autoFocus,
 }: {
   value: string;
   onChange: (next: string) => void;
   color: string;
   title?: string;
   accessibilityLabel: string;
-  autoFocus?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -56,7 +54,6 @@ export function AmountBlock({
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
           keyboardAppearance="light"
-          autoFocus={autoFocus}
           maxFontSizeMultiplier={1.2}
           className="flex-1 text-[28px] font-bold"
           style={{
