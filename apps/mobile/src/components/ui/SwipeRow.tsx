@@ -27,6 +27,14 @@ import { useThemeColors } from "@/theme/colors";
 // смыслу разрушительному: уносит вправо-налево, отмечает слева-направо. Обе
 // кромки никогда не открыты одновременно.
 //
+// СТОРОНА ЗАКРЕПЛЕНА ЗА СМЫСЛОМ, А НЕ ЗА «САМЫМ СИЛЬНЫМ ИЗ ДОСТУПНОГО»
+// (владелец 2026-09-10: «свайп вправо это удалить, а не скрыть»). Правая
+// кромка — ВСЕГДА «Удалить»; левая — «Скрыть»/«Показать»/«Вернуть». Если
+// строку удалить нельзя (стандартная категория защищена RLS), правой кромки
+// у неё просто НЕТ — палец упирается в ноль, а не находит там чужое
+// действие. Иначе мышечная память врёт: на одной строке справа удаление, на
+// соседней — скрытие.
+//
 // Почему не крестик в строке: 32pt кнопка живёт в строке ВСЕГДА и отбирает
 // место у содержания, а её зона смыкается с соседними кнопками (у номеров
 // это уже приводило к ошибочным удалениям, аудит 2026-07-27). Свайп ничего
@@ -60,12 +68,14 @@ export function SwipeRow({
   leading,
   children,
 }: {
-  /** Подпись кнопки. Одна кромка — одно слово: она не зависит от того, какая
-   *  именно строка смахнута. */
-  label: string;
+  /** Подпись кнопки ПРАВОЙ кромки — разрушительного действия. Одна кромка —
+   *  одно слово: она не зависит от того, какая именно строка смахнута.
+   *  БЕЗ `label` и `onAction` правой кромки нет вовсе: так у строк, которые
+   *  удалить нельзя. */
+  label?: string;
   /** Цвет подложки = смысл действия: `t.danger` — уносит, `t.accent` — ведёт
    *  дальше (открывает лист, переходит). */
-  color: string;
+  color?: string;
   icon?: LucideIcon;
   /** Озвучка действия: «Удалить объект Вилла». */
   accessibilityLabel?: string;
@@ -74,7 +84,7 @@ export function SwipeRow({
    *  «свайп не носит разрушительного» в DESIGN-SYSTEM.md. По умолчанию
    *  выключен: у «Удалить» промах пальца стоил бы объекта. */
   fullSwipe?: boolean;
-  onAction: () => void;
+  onAction?: () => void;
   /** ВТОРАЯ КРОМКА — потянуть СЛЕВА НАПРАВО (владелец 2026-08-17: «если слева
    *  вправо потянуть, то только тогда можно открыть звёздочку и сделать её
    *  выбранной»). Правило то же: одна сторона — одно действие. Кромки
@@ -121,7 +131,7 @@ export function SwipeRow({
   latest.current = onAction;
   const fire = useCallback(() => {
     close();
-    latest.current();
+    latest.current?.();
   }, [close]);
 
   const latestLead = useRef(leading?.onAction);
@@ -132,6 +142,8 @@ export function SwipeRow({
   }, [close]);
 
   const hasLeading = !!leading;
+  /** Правая кромка существует только вместе со своим действием. */
+  const hasTrailing = !!onAction && !!label;
   const pan = Gesture.Pan()
     // По горизонтали: вертикальный скролл списка должен побеждать.
     .activeOffsetX([-12, 12])
@@ -140,7 +152,11 @@ export function SwipeRow({
       const base = opened.value * ACTION_W;
       // Ход в сторону, где действия нет, упирается в ноль. Размашистый свайп
       // должен доезжать до порога, поэтому у него ход длиннее.
-      const low = fullSwipe ? -FULL_AT - 24 : -ACTION_W - 24;
+      const low = !hasTrailing
+        ? 0
+        : fullSwipe
+          ? -FULL_AT - 24
+          : -ACTION_W - 24;
       const high = hasLeading ? ACTION_W + 24 : 0;
       x.value = Math.min(high, Math.max(base + e.translationX, low));
     })
@@ -174,41 +190,43 @@ export function SwipeRow({
           ДЛЯ РОТОРА ЕЁ НЕ СУЩЕСТВУЕТ. Кромка — часть жеста, а не элемент
           списка: то же действие строка отдаёт через `accessibilityActions`, и
           без этого VoiceOver читал под каждым счётом фантомную кнопку. */}
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: ACTION_W,
-          alignItems: "stretch",
-        }}
-      >
-        <Pressable
-          onPress={fire}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel ?? label}
-          style={({ pressed }) => ({
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            backgroundColor: color,
-            opacity: pressed ? 0.8 : 1,
-          })}
+      {hasTrailing ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            position: "absolute",
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: ACTION_W,
+            alignItems: "stretch",
+          }}
         >
-          {Icon ? <Icon color="#fff" size={18} strokeWidth={2.2} /> : null}
-          <Text
-            maxFontSizeMultiplier={1.2}
-            numberOfLines={1}
-            style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}
+          <Pressable
+            onPress={fire}
+            accessibilityRole="button"
+            accessibilityLabel={accessibilityLabel ?? label}
+            style={({ pressed }) => ({
+              flex: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              backgroundColor: color,
+              opacity: pressed ? 0.8 : 1,
+            })}
           >
-            {label}
-          </Text>
-        </Pressable>
-      </View>
+            {Icon ? <Icon color="#fff" size={18} strokeWidth={2.2} /> : null}
+            <Text
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={{ fontSize: 15, fontWeight: "600", color: "#fff" }}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {leading ? (
         <View
