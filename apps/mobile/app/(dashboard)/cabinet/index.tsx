@@ -51,6 +51,7 @@ import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
@@ -68,22 +69,29 @@ type IconType = ComponentType<{
   strokeWidth?: number;
 }>;
 
-// Палитра icon-тайлов — веб-токены --tile-* (apps/web globals.css),
-// один к одному, как в iOS Settings: цвет различает пункты, не несёт
-// смысловой нагрузки.
 // Личные события включены в единую страницу /book; их типы и метки должны
 // оставаться настраиваемыми из кабинета, а не жить скрытым deep link.
 const PERSONAL_CALENDAR_ENABLED = true;
 
+// ПАЛИТРА ПЛИТОК — ОБЩАЯ (владелец 2026-09-10: «свести к фирменному»).
+//
+// Здесь лежала своя палитра из восьми хексов, скопированная из веб-токенов, и
+// ни один не совпадал с общей: `#2F6FD6` рядом с кобальтом бренда `#2c5be0`
+// давал ДВА близких синих на одной странице, а с фиолетовым градиентом
+// герой-карты — три источника цвета на одном экране.
+//
+// Соответствие по смыслу и по семье оттенка: mint → green (`#087A52` против
+// `#1F7A44` — один тон), cyan → teal, yellow остался собой и переехал в общую
+// палитру. Различимость пунктов сохранена, палитра в продукте одна.
 const TILE = {
-  blue: "#2F6FD6",
-  green: "#2E7D32",
-  yellow: "#9A6400",
-  orange: "#B45309",
-  purple: "#8E44AD",
-  mint: "#087A52",
-  cyan: "#007A99",
-  indigo: "#4B55C7",
+  blue: SETTINGS_TILE.blue,
+  green: SETTINGS_TILE.green,
+  yellow: SETTINGS_TILE.yellow,
+  orange: SETTINGS_TILE.orange,
+  purple: SETTINGS_TILE.purple,
+  mint: SETTINGS_TILE.green,
+  cyan: SETTINGS_TILE.teal,
+  indigo: SETTINGS_TILE.indigo,
 } as const;
 
 // Строка меню — анатомия веб-ряда: тайл 30, заголовок 15 medium,
@@ -188,11 +196,15 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
     >
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
-          {/* 135° как в вебе: var(--accent) → --system-indigo 60% → --system-purple */}
+          {/* ГРАДИЕНТ ОДИН НА ПРОДУКТ — ФИРМЕННЫЙ КОБАЛЬТОВЫЙ (владелец
+              2026-09-10). Здесь герой-карта уходила через индиго `#5E5CE6` в
+              фиолетовый `#9B3DCB` — второй бренд-оттенок, прямо запрещённый
+              каноном («единственный градиент — accentFrom → accentTo», «не
+              добавляй второй акцент или фиолетовый бренд-оттенок»). Корень
+              «Кабинета» был единственным экраном со своим бренд-цветом. */}
           <LinearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={t.accent} />
-            <Stop offset="0.6" stopColor="#5E5CE6" />
-            <Stop offset="1" stopColor="#9B3DCB" />
+            <Stop offset="0" stopColor={t.accentFrom} />
+            <Stop offset="1" stopColor={t.accentTo} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero)" />
