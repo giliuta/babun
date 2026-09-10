@@ -170,7 +170,6 @@ export function TeamLabelRow({
         color={label ? (labelColor ?? t.accent) : t.sub}
         title={label ?? labelPlaceholder ?? "Метка"}
         muted={!label}
-        compact={!label}
         quiet={!!label && !!labelFromDay}
         onPress={onEditLabel}
         accessibilityLabel={
@@ -204,7 +203,6 @@ function IdentityCard({
   sub,
   muted,
   quiet,
-  compact,
   onPress,
   accessibilityLabel,
   accessibilityHint,
@@ -217,12 +215,6 @@ function IdentityCard({
   muted?: boolean;
   /** Значение не своё, а взятое у дня: тише, но на том же месте. */
   quiet?: boolean;
-  /** ПУСТАЯ ПЛИТКА НЕ БЕРЁТ ПОЛОВИНУ СТРОКИ (владелец 2026-09-10: «сделай
-   *  метку короче… она сейчас очень сильно выделяется»). Пока значения нет,
-   *  плитка шириной по слову, а соседняя — команда, которая всегда есть, —
-   *  забирает остаток. Выбрали метку — плитка снова делит строку пополам:
-   *  имени метки нужно место. */
-  compact?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
   accessibilityHint: string;
@@ -235,7 +227,11 @@ function IdentityCard({
   // сильно выделяется») — то же, что уже ловили на плитках типов событий.
   const fill = /^#[0-9a-f]{6}$/i.test(color) ? `${color}1f` : t.rowFill;
   return (
-    <Card style={compact ? undefined : { flex: 1 }}>
+    // ШИРИНА НЕ ЗАВИСИТ ОТ СОДЕРЖИМОГО: плитки делят строку РОВНО ПОПОЛАМ
+    // (владелец 2026-09-10: «ты не должен был менять ширину… оно должно быть
+    // ровно пополам»). Я сузил пустую метку по слову, и от этого поехала
+    // команда — соседняя плитка не имеет права дышать чужим состоянием.
+    <Card style={{ flex: 1 }}>
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
@@ -252,18 +248,25 @@ function IdentityCard({
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
     >
-      <View
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: 13,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: fill,
-        }}
-      >
-        <Icon color={color} size={15} strokeWidth={2.2} />
-      </View>
+      {/* ЗНАЧОК СТОИТ ТАМ, ГДЕ ЧТО-ТО ГОВОРИТ (владелец 2026-09-10: «убери
+          вот эту вот хуйню» — про серый диск с булавкой у невыбранной
+          метки). У команды кружок носит её цвет, у выбранной метки — цвет
+          метки; у пустой цвета нет, и диск не сообщал ничего, кроме шума.
+          Пустая плитка — одно слово по центру, как пустое поле. */}
+      {muted ? null : (
+        <View
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: fill,
+          }}
+        >
+          <Icon color={color} size={15} strokeWidth={2.2} />
+        </View>
+      )}
       <View style={{ flexShrink: 1 }}>
         <Text
           numberOfLines={1}
