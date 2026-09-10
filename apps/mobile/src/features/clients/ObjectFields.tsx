@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { MapPinned, Send, Settings2 } from "lucide-react-native";
-import type { AddressParts, Client } from "@babun/shared/local/clients";
+import type { AddressParts } from "@babun/shared/local/clients";
 import { ChoiceRow, FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { MapPicker } from "@/features/clients/MapPicker";
