@@ -163,7 +163,7 @@ describe("библиотека блоков указывает на живой �
       ["app/book/index.tsx", "UserRound", "клиент"],
       ["app/book/index.tsx", "Briefcase", "услуга"],
       ["src/features/clients/ObjectPickerSheet.tsx", "MapPin", "объект"],
-      ["src/features/reference/LabelPickerSheet.tsx", "MapPin", "метка"],
+      ["src/features/reference/LabelPickerSheet.tsx", "Bookmark", "метка"],
       ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],
       ["src/features/clients/ObjectFields.tsx", "MapPinned", "точка на карте"],
       ["src/features/clients/ObjectFields.tsx", "Send", "попросить адрес"],

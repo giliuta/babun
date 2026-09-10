@@ -77,7 +77,8 @@
 | Сущность или действие | Иконка (lucide) |
 |---|---|
 | Клиент | `UserRound` |
-| Объект, адрес, метка | `MapPin` |
+| Объект, адрес | `MapPin` |
+| Метка | `Bookmark` |
 | Точка на карте | `MapPinned` |
 | Попросить адрес у клиента | `Send` |
 | Услуга | `Briefcase` |
@@ -343,7 +344,7 @@
 <TeamLabelRow
   teamName={teamName} teamColor={teamColor} masterName={masterName}
   label={effectiveLabel} labelColor={labelColor} labelFromDay={labelFromDay}
-  showLabel labelIcon={MapPin} labelPlaceholder="Метка"
+  showLabel labelIcon={Bookmark} labelPlaceholder="Метка"
   onEditTeam={() => setTeamSheetOpen(true)}
   onEditLabel={() => setLabelSheetOpen(true)}
 />

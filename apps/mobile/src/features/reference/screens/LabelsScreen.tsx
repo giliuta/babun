@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { getStorage } from "@babun/shared/storage";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { EyeOff, MapPin, RotateCcw, Trash2, X } from "lucide-react-native";
+import { Bookmark, EyeOff, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
@@ -368,7 +368,7 @@ export function LabelsScreen() {
       ) : cities.length === 0 ? (
         <EmptyState
           fill
-          icon={<MapPin color={t.accent} size={28} />}
+          icon={<Bookmark color={t.accent} size={28} />}
           title="Меток пока нет"
         />
       ) : (

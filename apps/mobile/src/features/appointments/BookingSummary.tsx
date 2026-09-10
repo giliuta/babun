@@ -4,7 +4,7 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { AlertTriangle, ChevronRight, MapPin, Users } from "lucide-react-native";
+import { AlertTriangle, Bookmark, ChevronRight, Users } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 
 import { ICON } from "@/components/ui/tokens";
@@ -164,7 +164,12 @@ export function TeamLabelRow({
       />
       {showLabel ? (
       <IdentityCard
-        icon={labelIcon ?? MapPin}
+        // ЗАКЛАДКА, А НЕ БУЛАВКА (владелец 2026-09-10, выбор глазами из
+        // шести значков: «вот это идеально подходит, как закладочки»).
+        // Булавку носит ОБЪЕКТ — адрес на карте, — и метка с тем же значком
+        // читалась как второй адрес. Метка не место, а ярлык выезда: её
+        // вешают на день и на запись, чтобы отличать одно от другого.
+        icon={labelIcon ?? Bookmark}
         // ПУСТАЯ МЕТКА — ПРИГЛАШЕНИЕ, А НЕ ТЕНЬ. Владелец 2026-09-10 выбрал
         // на экране сравнения вариант 4 из четырёх: булавка акцентом в
         // голубом кружке, как у «Выбрать клиента». Серую булавку (`t.sub`) он

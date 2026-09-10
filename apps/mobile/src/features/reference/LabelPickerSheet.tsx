@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { MapPin } from "lucide-react-native";
+import { Bookmark } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
 import {
@@ -102,7 +102,7 @@ export function LabelPickerSheet({
             return (
               <SelectRow
                 key={option.name}
-                icon={MapPin}
+                icon={Bookmark}
                 title={option.name}
                 color={option.color}
                 selected={chosen}
