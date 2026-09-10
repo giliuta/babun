@@ -7,6 +7,7 @@ import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -75,6 +76,8 @@ export function DebtSheet({
 }) {
   const th = useThemeColors();
   const doorway = useSheetDoorway();
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const categoriesHref = useReferenceHref().categories;
   const router = useRouter();
   const {
     isEdit,
@@ -345,7 +348,7 @@ export function DebtSheet({
         }))}
         selectedId={categoryId}
         // Та же дверь и та же парковка, что у листа операции.
-        onSettings={() => doorway.open(() => router.push("/categories"))}
+        onSettings={() => doorway.open(() => router.push(categoriesHref))}
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}
       />

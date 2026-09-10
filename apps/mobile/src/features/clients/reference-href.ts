@@ -26,9 +26,12 @@ export function useReferenceHref() {
     channels: inClientsTab
       ? ("/clients/channels" as const)
       : ("/channels" as const),
-    // Услуги и типы событий живут в Кабинете; общий адрес нужен по той же
-    // причине, что и остальным: экран над табами не может уходить во вкладку.
+    // Услуги, типы событий и категории живут в Кабинете; общий адрес нужен по
+    // той же причине, что и остальным: экран над табами не может уходить во
+    // вкладку. Категории добавлены 2026-09-10 — их дверь из листа операции
+    // уводила на календарь (`/cabinet/categories` — это вкладка «Кабинет»).
     services: ("/services" as const),
     eventTypes: ("/event-types" as const),
+    categories: ("/categories" as const),
   };
 }

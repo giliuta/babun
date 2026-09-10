@@ -7,6 +7,7 @@ import type {
 } from "@babun/shared/local/finance/transaction";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
@@ -435,6 +436,8 @@ export function OperationSheet({
     Math.round(refundedTotal * 100) > 0 &&
     Math.round(vatBreakdown.gross * 100) < Math.round(refundedTotal * 100);
   const doorway = useSheetDoorway();
+  // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
+  const categoriesHref = useReferenceHref().categories;
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
   const canSave =
@@ -1012,7 +1015,7 @@ export function OperationSheet({
         selectedId={categoryId}
         // Дверь паркует лист операции: иначе страница категорий открывается
         // ПОД ним и до неё не дотянуться (владелец 2026-09-10).
-        onSettings={() => doorway.open(() => router.push("/categories"))}
+        onSettings={() => doorway.open(() => router.push(categoriesHref))}
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
       />
