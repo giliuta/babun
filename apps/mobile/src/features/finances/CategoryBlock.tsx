@@ -57,9 +57,12 @@ export function CategoryBlock({
   }
 
   const tint = category.color ?? t.accent;
-  const Preset = iconPreset(category.icon);
-  // В справочнике значок лежит либо именем из словаря, либо эмодзи как есть.
-  const emoji = !Preset && category.icon ? category.icon : null;
+  // ЗНАЧОК — ТОЛЬКО ИЗ СЛОВАРЯ, БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай
+  // категории так же, как события; эмодзи убираем»). В базе у категорий лежат
+  // ⛽ 🍔 📦, и блок печатал их вперемешку со значками словаря — строка
+  // категории была единственной в продукте, которая выглядела иначе, чем
+  // строка команды, метки и типа события. Различает категории цвет.
+  const Glyph = iconPreset(category.icon) ?? Tag;
 
   return (
     <SectionCard title={title} dense>
@@ -88,15 +91,7 @@ export function CategoryBlock({
             backgroundColor: `${tint}1f`,
           }}
         >
-          {emoji ? (
-            <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 16 }}>
-              {emoji}
-            </Text>
-          ) : Preset ? (
-            <Preset color={tint} size={ICON.sm} strokeWidth={2.2} />
-          ) : (
-            <Tag color={tint} size={ICON.sm} strokeWidth={2.2} />
-          )}
+          <Glyph color={tint} size={ICON.sm} strokeWidth={2.2} />
         </View>
         <Text
           maxFontSizeMultiplier={1.2}
