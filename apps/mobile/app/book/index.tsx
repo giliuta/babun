@@ -1864,7 +1864,8 @@ export default function BookScreen() {
   // Заметки клиента и объекта — тоже «введённое»: диалог «Введённое не
   // сохранится» обязан говорить правду, поэтому их черновики считаются здесь
   // и выбрасываются по явному «Закрыть» (см. `discardNotes`).
-  const notesDirty = clientNote.dirty || objectNote.dirty;
+  const notesDirty =
+    clientNote.dirty || objectNote.dirty || eventObjectNote.dirty;
   const dirty = isEdit
     ? notesDirty ||
       (editBaselineRef.current != null && editSignature !== editBaselineRef.current)
@@ -1872,7 +1873,18 @@ export default function BookScreen() {
     // внутри формы больше нечем, и при создании `kind !== initialKind`
     // ложно всегда.
     : (kind === "event"
-      ? eventTitle.trim().length > 0 ||
+      // СОБЫТИЕ СЧИТАЕТ ТО ЖЕ, ЧТО И ЗАПИСЬ (аудит 2026-09-10). Список
+      // события отставал от списка записи: выбранный клиент, выбранный
+      // объект, выбранный тип, прикреплённые файлы и заметка объекта в него
+      // не входили. Значит «Отмена» и системный свайп назад уходили МОЛЧА —
+      // без вопроса «Введённое не сохранится», — и выбранный клиент с
+      // фотографиями пропадал вместе с формой.
+      ? notesDirty ||
+        clientId != null ||
+        locationId != null ||
+        eventTypeId != null ||
+        pendingFiles.length > 0 ||
+        eventTitle.trim().length > 0 ||
         eventNotes.trim().length > 0 ||
         eventAddress.trim().length > 0 ||
         eventUrl.trim().length > 0 ||
@@ -1882,7 +1894,8 @@ export default function BookScreen() {
         allDay ||
         dateTouchedRef.current ||
         durationTouched
-      : clientId != null ||
+      : notesDirty ||
+        clientId != null ||
         serviceIds.length > 0 ||
         comment.trim().length > 0 ||
         address.trim().length > 0 ||
