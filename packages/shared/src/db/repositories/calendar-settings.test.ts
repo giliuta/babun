@@ -39,18 +39,24 @@ describe("operational calendar settings repository", () => {
       // а не выдумывает значение. Рельс мастера встаёт на целый час.
       startMinute: 0,
       endMinute: 0,
-      gridStep: 15,
-      weekStart: "sunday",
       timezone: "Asia/Dubai",
       bufferMinutes: 20,
       hideCancelled: true,
-      allowOvertime: true,
       workStartHour: 8,
       workEndHour: 19,
-      scrollOpenHour: 8,
     });
     expect(settings).not.toHaveProperty("personalLabels");
     expect(settings).not.toHaveProperty("personalDefaultLabel");
+    // СНЕСЁННЫЕ НАСТРОЙКИ НЕ ВОСКРЕСАЮТ ЧЕРЕЗ СЕРВЕР. Колонки в базе остались
+    // (`not null default`), и RPC их по-прежнему отдаёт — видно по
+    // OPERATIONAL_ROW выше. Проекция обязана их игнорировать, иначе поле
+    // вернётся в модель через заднюю дверь и снова начнёт обещать настройку,
+    // которой нет (владелец 2026-09-10: сетка всегда 30, неделя всегда с
+    // понедельника, «за пределами часов» — предупреждением, а не флагом).
+    expect(settings).not.toHaveProperty("gridStep");
+    expect(settings).not.toHaveProperty("weekStart");
+    expect(settings).not.toHaveProperty("allowOvertime");
+    expect(settings).not.toHaveProperty("scrollOpenHour");
   });
 
   // КОНТРАКТ НА ДЕНЬ, КОГДА RPC НАУЧИТСЯ МИНУТАМ. Фолбэк `?? 0` обязан

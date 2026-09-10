@@ -1546,7 +1546,8 @@ export function DayView({
   /** Buffer after each appointment (team ?? global), minutes. */
   bufferMinutes?: number;
   nowMinutes?: number | null;
-  /** Auto-scroll target on open (settings.scrollOpenHour). */
+  /** Час, на котором календарь открывается: начало графика команды в этот
+   *  день (см. `deriveScrollHour`). */
   scrollToHour?: number;
   /** Метка дня по дате (undefined — у команды нет меток, шапки чистые). */
   labelFor?: (dateYmd: string) => { name: string; color: string } | null;

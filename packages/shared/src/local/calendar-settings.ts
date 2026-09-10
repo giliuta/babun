@@ -1,6 +1,20 @@
 export { TIMEZONE_OPTIONS } from "./timezones";
 // Calendar display settings. Persisted via the storage seam (WebKVStorage
-// on web, MMKV on RN). Drives auto-scroll start position and grid range.
+// on web, MMKV on RN).
+//
+// ЧЕТЫРЕ ПОЛЯ СНЕСЕНЫ 2026-09-10 ПО СЛОВУ ВЛАДЕЛЬЦА — все четыре не читал
+// НИКТО, то есть обещали настройку, которой не было:
+//   `gridStep`   — «сетка всегда 30 минут, не больше и не меньше»;
+//   `weekStart`  — «всегда с понедельника по воскресенье»;
+//   `allowOvertime` — «если человек хочет записать за пределами часов, он
+//                   тапает, сверху появляется уведомление с кнопкой
+//                   „Записать"» (это и есть живое поведение — `CalendarNotice`);
+//   `scrollOpenHour` — календарь открывается на часе НАЧАЛА ГРАФИКА КОМАНДЫ
+//                   («график с 18:00 — открывается в 18:00»); это уже делает
+//                   `deriveScrollHour`, беря рабочую полосу дня.
+// Колонки в базе (`grid_step`, `week_start`, `allow_overtime`,
+// `scroll_open_hour`) остались: они `not null default`, и запись без них
+// проходит. Сносить их — отдельная миграция и отдельное решение.
 
 import { getStorage } from "../storage/provider";
 
@@ -19,8 +33,6 @@ export interface CalendarSettings {
   /** Минуты границы «До». При `endHour === 24` всегда 0 — 1440-й минуты в
    *  сутках нет, и барабан минут на этом часе молчит. */
   endMinute?: number;
-  gridStep: 15 | 30 | 60;    // minutes, default 30
-  weekStart: "monday" | "sunday";
   /** Зона IANA. ВСЕГДА валидная строка — никаких null и sentinel-ов: её
    *  читают три десятка мест и сразу отдают в `Intl`, который на null падает. */
   timezone: string;
@@ -37,8 +49,6 @@ export interface CalendarSettings {
    *  видимую неделю не набиралось денег, — и выглядело это как пропавшая из
    *  продукта функция (владелец 2026-08-17). Теперь ответ даёт человек. */
   showDayFinance?: boolean;
-  /** Allow an appointment to end past endHour (overflow). */
-  allowOvertime?: boolean;
   // v438 — separate working hours from the visible range.
   /** Working-day start hour. The grid between work-start and work-end
    *  is highlighted (lighter background) so the user sees their work
@@ -46,9 +56,6 @@ export interface CalendarSettings {
   workStartHour?: number;
   /** Working-day end hour. Falls back to endHour when undefined. */
   workEndHour?: number;
-  /** Hour the calendar auto-scrolls to on open. When undefined we
-   *  use workStartHour, then startHour. */
-  scrollOpenHour?: number;
   /** v492 — personal calendar labels. Subset of the global `cities`
    *  library that the user wants to surface on the personal calendar's
    *  per-day chip + label picker. Same shape as brigade `team.cities`,
@@ -95,9 +102,6 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   endMinute: 0,
   workStartHour: 6,
   workEndHour: 20,
-  scrollOpenHour: 9,
-  gridStep: 30,
-  weekStart: "monday",
   // ЗОНА ТЕЛЕФОНА, А НЕ КИПР (2026-08-27). До этого здесь была прибита
   // Europe/Nicosia, а `Intl.DateTimeFormat().resolvedOptions().timeZone` не
   // вызывался в продукте НИ РАЗУ: мастер в Варшаве жил по кипрским суткам,
@@ -107,7 +111,6 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   bufferMinutes: 0,
   hideCancelled: false,
   showDayFinance: true,
-  allowOvertime: false,
 };
 
 // ЧАСОВЫЕ ПОЯСА. Было одиннадцать (владелец 2026-08-27: «добавь больше
@@ -149,13 +152,8 @@ function sanitizeCalendarSettings(s: CalendarSettings): CalendarSettings {
   // Expand visible to fit work / scroll-open — they win.
   const ws = next.workStartHour ?? next.startHour;
   const we = next.workEndHour ?? next.endHour;
-  const open = next.scrollOpenHour ?? ws;
   if (Number.isFinite(ws) && ws < next.startHour) next.startHour = Math.max(0, ws);
   if (Number.isFinite(we) && we > next.endHour) next.endHour = Math.min(24, we);
-  if (Number.isFinite(open)) {
-    if (open < next.startHour) next.startHour = Math.max(0, open);
-    if (open > next.endHour) next.endHour = Math.min(24, open);
-  }
 
   // Final clamp — work / scroll-open inside the (possibly expanded)
   // visible range, with a 1-hour minimum work band.
@@ -166,14 +164,6 @@ function sanitizeCalendarSettings(s: CalendarSettings): CalendarSettings {
   next.workEndHour = Math.min(
     next.endHour,
     Math.max(we, next.startHour + 1),
-  );
-  // endHour - 1, а не endHour: «Открывается на» — час, который встаёт СВЕРХУ
-  // сетки при входе. На endHour сетка проскроллена в самый низ и показывает
-  // пустой край. Раньше здесь стоял endHour, а форма предлагала максимум
-  // endHour-1 — экран рисовал одно, база хранила другое.
-  next.scrollOpenHour = Math.max(
-    next.startHour,
-    Math.min(open, next.endHour - 1),
   );
 
   return next;
@@ -191,15 +181,11 @@ export function toOperationalCalendarSettings(
   return {
     startHour: settings.startHour,
     endHour: settings.endHour,
-    gridStep: settings.gridStep,
-    weekStart: settings.weekStart,
     timezone: settings.timezone,
     bufferMinutes: settings.bufferMinutes,
     hideCancelled: settings.hideCancelled,
-    allowOvertime: settings.allowOvertime,
     workStartHour: settings.workStartHour,
     workEndHour: settings.workEndHour,
-    scrollOpenHour: settings.scrollOpenHour,
   };
 }
 

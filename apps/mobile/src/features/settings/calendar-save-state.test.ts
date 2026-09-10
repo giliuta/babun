@@ -33,15 +33,15 @@ describe("calendar settings optimistic saves", () => {
   test("rejecting every request restores the last confirmed value", () => {
     const state = createCalendarSaveState("tenant:owner", {
       ...DEFAULT_CALENDAR_SETTINGS,
-      gridStep: 30,
+      bufferMinutes: 30,
     });
-    const first = beginCalendarSave(state, { gridStep: 15 });
-    const second = beginCalendarSave(state, { gridStep: 60 });
+    const first = beginCalendarSave(state, { bufferMinutes: 15 });
+    const second = beginCalendarSave(state, { bufferMinutes: 60 });
 
     rejectCalendarSave(state, second);
     rejectCalendarSave(state, first);
 
-    assert.equal(currentCalendarSaveValue(state).gridStep, 30);
+    assert.equal(currentCalendarSaveValue(state).bufferMinutes, 30);
     assert.equal(state.pending.size, 0);
   });
 });

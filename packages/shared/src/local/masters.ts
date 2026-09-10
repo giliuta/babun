@@ -195,7 +195,8 @@ export interface Team {
   /** Sprint 033 Phase I28 — default duration (minutes) when the
    *  dispatcher taps an empty calendar slot on this brigade's
    *  column to create a blank appointment. Undefined = fall back
-   *  to global calendarSettings.gridStep. */
+   *  to 30 minutes — шаг сетки в продукте один и не настраивается
+   *  (владелец 2026-09-10). */
   default_slot_minutes?: number;
   /** Sprint 033 Phase I39 — per-brigade overrides of the global
    *  «Поведение календаря». Undefined = inherit from global

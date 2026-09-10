@@ -48,7 +48,6 @@ function repositoryError(
 function rowToSettings(r: Row): CalendarSettings {
   // Validate grid_step at the type boundary — the DB check constraint
   // already restricts to 15/30/60, so the cast is safe.
-  const grid = r.grid_step as 15 | 30 | 60;
   // v493 — personal_labels round-trip. Old rows (pre-migration
   // 20260513_001) lack the column; the typed Row may not even have
   // it. Read defensively via an indexed cast so the repo still works
@@ -79,12 +78,9 @@ function rowToSettings(r: Row): CalendarSettings {
     startMinute: (r as any).start_minute ?? 0,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     endMinute: (r as any).end_minute ?? 0,
-    gridStep: grid,
-    weekStart: r.week_start as "monday" | "sunday",
     timezone: r.timezone,
     bufferMinutes: r.buffer_minutes,
     hideCancelled: r.hide_cancelled,
-    allowOvertime: r.allow_overtime,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     showDayFinance: (r as any).show_day_finance ?? true,
     // v449 — round-trip work / scroll-open hours through Supabase.
@@ -98,8 +94,6 @@ function rowToSettings(r: Row): CalendarSettings {
     workStartHour: (r as any).work_start_hour ?? undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     workEndHour: (r as any).work_end_hour ?? undefined,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    scrollOpenHour: (r as any).scroll_open_hour ?? undefined,
     personalLabels,
     personalDefaultLabel,
   };
@@ -150,19 +144,15 @@ export async function getOperationalCalendarSettings(
     startMinute: (row as any).start_minute ?? 0,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     endMinute: (row as any).end_minute ?? 0,
-    gridStep: row.grid_step as 15 | 30 | 60,
-    weekStart: row.week_start as "monday" | "sunday",
     timezone: row.timezone,
     bufferMinutes: row.buffer_minutes,
     hideCancelled: row.hide_cancelled,
-    allowOvertime: row.allow_overtime,
     // `showDayFinance` здесь НЕТ намеренно: полоса «Доход / Расход» — surface
     // владельца (гейт `role === "owner"`), и мастерской проекции она не нужна
     // ни для чего. Тест `maps the safe RPC without introducing private
     // settings` ловит любую попытку протащить сюда лишнее поле — он и поймал.
     workStartHour: row.work_start_hour ?? undefined,
     workEndHour: row.work_end_hour ?? undefined,
-    scrollOpenHour: row.scroll_open_hour ?? undefined,
   };
 }
 
@@ -185,15 +175,12 @@ export async function updateCalendarSettings(
   if (patch.endMinute !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).end_minute = patch.endMinute;
-  if (patch.gridStep !== undefined) insert.grid_step = patch.gridStep;
-  if (patch.weekStart !== undefined) insert.week_start = patch.weekStart;
   if (patch.timezone !== undefined) insert.timezone = patch.timezone;
   if (patch.bufferMinutes !== undefined) insert.buffer_minutes = patch.bufferMinutes;
   if (patch.hideCancelled !== undefined) insert.hide_cancelled = patch.hideCancelled;
   if (patch.showDayFinance !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).show_day_finance = patch.showDayFinance;
-  if (patch.allowOvertime !== undefined) insert.allow_overtime = patch.allowOvertime;
   // Cast through any — see rowToSettings comment for context.
   if (patch.workStartHour !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,9 +188,6 @@ export async function updateCalendarSettings(
   if (patch.workEndHour !== undefined)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (insert as any).work_end_hour = patch.workEndHour;
-  if (patch.scrollOpenHour !== undefined)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (insert as any).scroll_open_hour = patch.scrollOpenHour;
   // v493 — round-trip personalLabels / personalDefaultLabel. Written
   // through an indexed cast since older builds of `database.types`
   // may not have the columns yet.
