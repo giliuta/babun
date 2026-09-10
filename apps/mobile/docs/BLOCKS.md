@@ -376,7 +376,7 @@
       label: type.label,
       icon: eventTypeIcon(type.icon),
       color: type.color,
-      hint: chosen ? "Тап снимает тип" : `${durationLabel(type.defaultDuration)} по умолчанию`,
+      hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
       onPress: chosen ? clearEventType : () => applyEventType(type.id),
     };
   })}
