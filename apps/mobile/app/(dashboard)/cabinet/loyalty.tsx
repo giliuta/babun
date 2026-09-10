@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Trash2 } from "lucide-react-native";
+import { confirmThen } from "@/lib/confirm";
 import {
   DEFAULT_LOYALTY,
   generateLoyaltyTierId,
@@ -105,8 +106,23 @@ export default function LoyaltyScreen() {
     setOpen(false);
   };
 
-  const removeTier = (id: string) =>
-    patch({ tiers: s.tiers.filter((t) => t.id !== id) });
+  // РАЗРУШИТЕЛЬНОЕ ПЕРЕСПРАШИВАЕТ (аудит 2026-09-10). Уровень удалялся с
+  // первого тапа по мусорке — ни вопроса, ни свайпа, ни отмены; при законе
+  // «ни одно денежное действие не существует только в жесте». Скидка уровня
+  // считается в записях, и восстановить стёртый порог было нечем.
+  const removeTier = (id: string) => {
+    const tier = s.tiers.find((t) => t.id === id);
+    if (!tier) return;
+    confirmThen(
+      "Удалить уровень?",
+      {
+        message: `«${tier.label}» — от ${tier.threshold} визитов, −${tier.percent}%. Клиенты этого уровня перестанут получать скидку.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () => patch({ tiers: s.tiers.filter((t) => t.id !== id) }),
+    );
+  };
 
   // Гейт загрузки — иначе до прихода данных мигает выключенный дефолт.
   if (loyaltyQuery.isLoading) {
