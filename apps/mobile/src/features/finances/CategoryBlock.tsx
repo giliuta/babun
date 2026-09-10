@@ -44,7 +44,7 @@ export function CategoryBlock({
 
   if (!category) {
     return (
-      <SectionCard title={title}>
+      <SectionCard title={title} dense>
         <ChooseRow
           icon={Tag}
           label={emptyLabel}
@@ -62,7 +62,7 @@ export function CategoryBlock({
   const emoji = !Preset && category.icon ? category.icon : null;
 
   return (
-    <SectionCard title={title}>
+    <SectionCard title={title} dense>
       <Pressable
         onPress={onPress}
         accessibilityRole="button"

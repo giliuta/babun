@@ -14,6 +14,7 @@ export function SectionCard({
   title,
   action,
   padded,
+  dense,
   className = "",
   eyebrowColor,
   children,
@@ -21,6 +22,11 @@ export function SectionCard({
   title?: string;
   action?: { label: string; onPress: () => void };
   padded?: boolean;
+  /** ПЛОТНЫЙ СЛУЧАЙ — ФОРМА В ШТОРКЕ (владелец 2026-09-10: «сделай всё
+   *  компактно»). На странице блоков два-три и им есть куда дышать; в шторке
+   *  их шесть, и просвет с воздухом под шапкой набегают в полсотни точек.
+   *  Шапка и содержимое те же — тише только воздух. */
+  dense?: boolean;
   className?: string;
   /** Identity-tint override for the eyebrow (defaults to neutral faint). The
    *  caller passes an already-AA-guarded colour; falls back to faint. */
@@ -29,10 +35,17 @@ export function SectionCard({
 }) {
   const t = useThemeColors();
   return (
-    <View className={`mt-2 ${className}`} style={{ marginHorizontal: GUTTER }}>
+    <View
+      className={`${dense ? "mt-1.5" : "mt-2"} ${className}`}
+      style={{ marginHorizontal: GUTTER }}
+    >
       <Card>
         {title ? (
-          <View className="flex-row items-center justify-between px-4 pb-0.5 pt-2.5">
+          <View
+            className={`flex-row items-center justify-between px-4 ${
+              dense ? "pb-0 pt-1.5" : "pb-0.5 pt-2.5"
+            }`}
+          >
             <Text
               accessibilityRole="header"
               // Caption tier (DS §2: 11/700/+0.6 uppercase) — same recipe as

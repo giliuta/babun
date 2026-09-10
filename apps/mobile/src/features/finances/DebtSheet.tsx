@@ -173,7 +173,7 @@ export function DebtSheet({
           ]}
           value={direction}
           onChange={(next) => setDirection(next as DebtDirection)}
-          style={{ marginHorizontal: GUTTER, marginTop: 12 }}
+          style={{ marginHorizontal: GUTTER, marginTop: 8 }}
         />
 
         {/* 2. КОГДА — ТОТ ЖЕ БЛОК, ЧТО В ДОХОДЕ (владелец 2026-09-10: «время
@@ -202,7 +202,7 @@ export function DebtSheet({
 
             ЗАКОН: «блок клиента», «блок объекта», «блок услуги», «блок оплаты»
             означают ИМЕННО блоки записи, а не что-то похожее на них. */}
-        <SectionCard title="Клиент">
+        <SectionCard title="Клиент" dense>
           <DebtWhoBlock
             client={client}
             stats={client ? statsById.get(client.id) : undefined}
@@ -236,7 +236,7 @@ export function DebtSheet({
             «€195» — знак идёт первым; в поле он один стоял у правой кромки, и
             глаз шёл к нему через пустое поле. Теперь «€ 0» читается одним
             предметом, а курсор встаёт сразу за знаком. */}
-        <SectionCard title="Сумма">
+        <SectionCard title="Сумма" dense>
           <View className="flex-row items-center gap-1.5 px-4 py-1">
             <Text
               maxFontSizeMultiplier={1.2}
@@ -277,7 +277,7 @@ export function DebtSheet({
             «Заметка долга» в поле — одно слово дважды; владелец в ту же минуту
             поправил: «я тебе не говорил убирать сверху „заметка“, главное вот
             это вот остаётся». Шапка называет БЛОК, подсказка — поле. */}
-        <SectionCard title="Заметка">
+        <SectionCard title="Заметка" dense>
           <InlineNoteField
             note={{
               draft: note,
@@ -292,7 +292,7 @@ export function DebtSheet({
         </SectionCard>
 
         {isEdit && debt ? (
-          <SectionCard title="Ещё">
+          <SectionCard title="Ещё" dense>
             {/* ГАСИТСЯ ДОЛГ ОБЫЧНОЙ ОПЕРАЦИЕЙ. Своей кнопки «оплачено» у него
                 нет нарочно: она поставила бы галочку, не сдвинув ни одного
                 евро, — счёт и прибыль остались бы без денег, которые
