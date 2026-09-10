@@ -45,6 +45,7 @@ import {
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
@@ -162,7 +163,6 @@ import {
   TeamMasterSheet,
 } from "@/features/appointments/BookingSheets";
 import {
-  ClientPicker,
   ServicePicker,
 } from "@/features/appointments/BookingPickers";
 import {
@@ -3282,18 +3282,31 @@ export default function BookScreen() {
           onClose={() => setObjectEdit(false)}
         />
       ) : null}
-      <ClientPicker
-        statsById={statsById}
+      {/* ОДНА ШТОРКА КЛИЕНТА НА ПРОДУКТ (2026-09-10). Здесь стояла её вторая
+          копия из `BookingPickers`; вся разница — недавние наверх, вводная о
+          человеке и создание из набранного — стала пропами общей шторки. */}
+      <ClientPickerSheet
         visible={clientPickerOpen}
+        statsById={statsById}
+        clients={clients}
+        recentIds={recentClientIds}
+        onSelect={(pickedClient) => {
+          pickClient(pickedClient);
+          setClientPickerOpen(false);
+        }}
+        // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ
+        // ЗАПИСИ (`/book/client`, 2026-09-03): быстрое создание одним тапом
+        // заводило клиента с именем без телефона или наоборот. Набранное в
+        // поиске уезжает в карточку параметром.
+        onCreate={(prefill) =>
+          router.push({
+            pathname: "/book/client",
+            params: { id: "new", ...prefill },
+          })
+        }
         onClose={() => setClientPickerOpen(false)}
         onExited={() => {
           if (chainStep === "clientClosing") setChainStep("services");
-        }}
-        clients={clients}
-        recentIds={recentClientIds}
-        onPick={(pickedClient) => {
-          pickClient(pickedClient);
-          setClientPickerOpen(false);
         }}
       />
       <ServicePicker
