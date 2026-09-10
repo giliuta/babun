@@ -211,7 +211,7 @@ export default function MasterHubScreen() {
         <EmptyState
           fill
           title="Мастер не найден"
-          action={{ label: "К списку", onPress: () => router.replace("/cabinet/masters") }}
+          action={{ label: "К списку", onPress: () => router.replace("/calendar/masters") }}
         />
       </Screen>
     );
@@ -283,7 +283,7 @@ export default function MasterHubScreen() {
               {
                 onError: (e) =>
                   notify("Ошибка", (e as Error).message),
-                onSettled: () => router.replace("/cabinet/masters"),
+                onSettled: () => router.replace("/calendar/masters"),
               },
             ),
           onError: (e) => notify("Ошибка", (e as Error).message),
@@ -416,7 +416,7 @@ export default function MasterHubScreen() {
               tone="#2f6fd6"
               title="Информация"
               value={infoPreview(contacts, profile.whatsapp, profile.telegram, contacts.email, status)}
-              onPress={() => router.push(`/cabinet/masters/${master.id}/info`)}
+              onPress={() => router.push(`/calendar/masters/${master.id}/info`)}
             />
             <Divider inset={60} />
             <NavRow
@@ -424,7 +424,7 @@ export default function MasterHubScreen() {
               tone="#c9372c"
               title="Доступы"
               value={accessPreview}
-              onPress={() => router.push(`/cabinet/masters/${master.id}/access`)}
+              onPress={() => router.push(`/calendar/masters/${master.id}/access`)}
             />
             <Divider inset={60} />
             <NavRow
@@ -436,7 +436,7 @@ export default function MasterHubScreen() {
                   ? `${perf.total} ${pluralVisits(perf.total)} в этом месяце`
                   : "нет визитов в этом месяце"
               }
-              onPress={() => router.push(`/cabinet/masters/${master.id}/visits`)}
+              onPress={() => router.push(`/calendar/masters/${master.id}/visits`)}
             />
             <Divider inset={60} />
             <NavRow
@@ -448,7 +448,7 @@ export default function MasterHubScreen() {
                   ? `${perf.completed} закрыто · ${formatEUR(perf.revenue)}`
                   : "пока без данных"
               }
-              onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
+              onPress={() => router.push(`/calendar/masters/${master.id}/stats`)}
             />
           </Card>
         </View>
@@ -483,7 +483,7 @@ export default function MasterHubScreen() {
         {assignedTeams.length > 0 ? (
           <View className="mx-3 mt-4">
             <Pressable
-              onPress={() => router.push(`/cabinet/masters/${master.id}/stats`)}
+              onPress={() => router.push(`/calendar/masters/${master.id}/stats`)}
               accessibilityRole="button"
               accessibilityLabel="Открыть статистику за этот месяц"
               className="active:opacity-80"

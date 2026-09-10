@@ -43,10 +43,18 @@ describe("role policy", () => {
     assert.equal(canAccessCabinetPath("owner", "/cabinet/accounts"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/recurring"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/unclosed"), true);
-    assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/masters"), false);
     assert.equal(canAccessCabinetPath("master", "/cabinet/business/"), true);
-    assert.equal(canAccessCabinetPath("master", "/cabinet/masters/master-1"), false);
     assert.equal(canAccessCabinetPath(null, "/cabinet"), false);
+  });
+
+  // МАСТЕРА УЕХАЛИ ИЗ КАБИНЕТА В НАСТРОЙКИ КАЛЕНДАРЯ (2026-09-10). Путь
+  // /cabinet/masters больше не существует, поэтому проверять его в списке
+  // кабинета нечего — но право обязано остаться владельческим: стек
+  // /calendar закрыт капабилити `manage-calendar-settings`.
+  test("мастера остались владельческими и на новом месте", () => {
+    assert.equal(can("owner", "manage-calendar-settings"), true);
+    assert.equal(can("dispatcher", "manage-calendar-settings"), false);
+    assert.equal(can("master", "manage-calendar-settings"), false);
   });
 
   test("every cabinet link rendered for dispatcher and master is reachable", () => {
@@ -73,10 +81,8 @@ describe("role policy", () => {
       "/cabinet/insights",
       "/cabinet/labels",
       "/cabinet/loyalty",
-      "/cabinet/masters",
       "/cabinet/services",
       "/cabinet/team-access",
-      "/cabinet/masters",
       "/cabinet/templates",
     ];
 

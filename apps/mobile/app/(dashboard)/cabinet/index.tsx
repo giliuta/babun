@@ -38,7 +38,6 @@ import {
   Tag,
   UserCog,
   Wallet,
-  Wrench,
 } from "lucide-react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
@@ -512,14 +511,13 @@ export default function CabinetHome() {
                 desc="Владелец, диспетчер, бригадир / мастер"
                 href={"/cabinet/team-access" as Href}
               />
-              <Divider inset={58} />
-          <MenuRow
-            icon={Wrench}
-            tone={TILE.indigo}
-            title="Мастера"
-            desc="Сотрудники и их команды"
-            href="/cabinet/masters"
-          />
+              {/* «Мастера» УЕХАЛИ В НАСТРОЙКИ КАЛЕНДАРЯ (владелец 2026-09-10:
+                  «мастера — окей, перенеси её туда, и это будет основное»).
+                  Состав команды — свойство календаря, а не кабинета; сам
+                  кабинет владелец собирается разбирать, и настройки уходят
+                  туда, где ими пользуются. Право не изменилось: стек
+                  /calendar закрыт `manage-calendar-settings`, оно только у
+                  владельца — как и весь /cabinet. */}
             </SectionCard>
           </>
         ) : null}

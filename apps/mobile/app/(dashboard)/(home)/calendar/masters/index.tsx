@@ -101,7 +101,7 @@ export default function MastersScreen() {
       });
       setOpen(false);
       // Цепочка «дозаполнить»: сразу открываем хаб нового мастера.
-      router.push(`/cabinet/masters/${m.id}`);
+      router.push(`/calendar/masters/${m.id}`);
     } catch (e) {
       notify("Ошибка", (e as Error).message);
     } finally {
@@ -164,7 +164,7 @@ export default function MastersScreen() {
               tint={
                 item.team_id ? teamColorById.get(item.team_id) ?? t.faint : t.faint
               }
-              onPress={() => router.push(`/cabinet/masters/${item.id}`)}
+              onPress={() => router.push(`/calendar/masters/${item.id}`)}
             />
           )}
           ItemSeparatorComponent={() => <Divider inset={64} />}
