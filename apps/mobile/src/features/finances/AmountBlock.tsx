@@ -32,7 +32,14 @@ export function AmountBlock({
   const t = useThemeColors();
   return (
     <SectionCard title={title} dense>
-      <View className="flex-row items-center gap-1.5 px-4 py-1">
+      {/* ВЫСОТА СТРОКИ ЗАДАНА ЯВНО. У поля 28-го кегля своя строка шрифта
+          выше, чем даёт вертикальный отступ в четыре точки: карточка режет
+          её по краю, и ноль-подсказка выходил обрезанным сверху — «€ ᴗ»
+          вместо «€ 0» (поймано на экране 2026-09-10). */}
+      <View
+        className="flex-row items-center gap-1.5 px-4"
+        style={{ minHeight: 46 }}
+      >
         <Text
           maxFontSizeMultiplier={1.2}
           className="text-[28px] font-bold"
@@ -52,7 +59,14 @@ export function AmountBlock({
           autoFocus={autoFocus}
           maxFontSizeMultiplier={1.2}
           className="flex-1 text-[28px] font-bold"
-          style={{ color, fontVariant: ["tabular-nums"] }}
+          style={{
+            color,
+            fontVariant: ["tabular-nums"],
+            // Своя высота у поля: iOS меряет TextInput тесно и режет верх
+            // глифа, если строку не задать.
+            height: 38,
+            padding: 0,
+          }}
         />
       </View>
     </SectionCard>
