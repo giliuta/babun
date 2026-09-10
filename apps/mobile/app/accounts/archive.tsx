@@ -155,11 +155,20 @@ export default function AccountsArchiveScreen() {
                 <View key={account.id}>
                   {index > 0 ? <Divider inset={48} /> : null}
                   <SwipeRow
-                    label="Открыть"
-                    color={t.accent}
-                    icon={RotateCcw}
-                    accessibilityLabel={`Открыть счёт ${account.name} снова`}
-                    onAction={() => openAgain(account, left)}
+                    // ВОЗВРАТ — НА ЛЕВОЙ КРОМКЕ (владелец 2026-09-10: «свайп
+                    // вправо — это удалить, а не скрыть»). Правая закреплена
+                    // за разрушительным; закрытый счёт удалить нельзя — на нём
+                    // висит история операций, — поэтому правой кромки у строки
+                    // нет вовсе, и ход влево упирается в ноль. «Открыть» — то
+                    // же по смыслу, что «Показать» у скрытой услуги или метки,
+                    // и живёт там же, где они, тем же зелёным.
+                    leading={{
+                      label: "Открыть",
+                      color: t.success,
+                      icon: RotateCcw,
+                      accessibilityLabel: `Открыть счёт ${account.name} снова`,
+                      onAction: () => openAgain(account, left),
+                    }}
                   >
                     <SettingsRow
                       // Выбранные значок и цвет — те же, что в живом списке:
