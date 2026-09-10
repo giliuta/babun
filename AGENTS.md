@@ -164,6 +164,46 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
    правого края, в который надо попасть вторым тапом. Полей ввода минут,
    пресетов длительности и степперов времени не бывает.
 
+5.2 **АНАТОМИЯ ШТОРКИ ВЫБОРА — ОДНА НА ПРОДУКТ (LOCKED 2026-09-10).**
+   Владелец: «если я прошу „выбрать клиента", снизу поднимается шторка —
+   архитектура этой шторки должна быть везде одинаковая; нельзя такого, чтоб
+   оно было где-то одно, где-то другое… и неважно, где я это использую: в
+   календаре, финансах, клиентах — всё одинаковое».
+
+   Порядок сверху вниз, и он не меняется:
+
+   ```
+   BottomSheet title[+subtitle][+headerAction]   ← шапка ТОЛЬКО пропом
+     SelectSearch                                ← если строк больше десятка
+     SelectList
+       SelectRow · SelectRow · …                 ← 52pt, кружок 28pt, имя 15/600
+       EmptyState                                ← когда пусто
+     footer: одна кнопка                          ← вне прокрутки, слово из словаря
+   ```
+
+   Строку и поиск рисуют ТОЛЬКО `src/components/ui/select-rows.tsx`
+   (`SelectRow`, `SelectSearch`, `SelectList`). Своя вёрстка строки запрещена:
+   именно так в продукте выросли три высоты строки (44/48/52), три поля
+   поиска и три способа нарисовать заголовок. `SelectRow` умеет всё, ради чего
+   их разводили: кружок значком, буквой или цветом сущности, вторая и третья
+   строки, число справа, свой орган вместо галки (степпер количества),
+   погашенная строка.
+
+   **ОДИНОЧНЫЙ ВЫБОР — БЕЗ КНОПКИ:** тап выбирает и закрывает, тап по уже
+   выбранному снимает там, где значение можно не иметь. Кнопка в футере
+   появляется только у МНОГОВЫБОРНОЙ шторки («Применить») либо когда из
+   шторки можно завести сущность («Создать N», «Добавить N»).
+
+   **СЛОВАРЬ КНОПОК — ОДНО СЛОВО НА СМЫСЛ, ВЕЗДЕ:**
+
+   | Смысл | Слово |
+   |---|---|
+   | применить выбранное и закрыть | **«Применить»** |
+   | завести сущность из шторки | **«Создать N»** («Создать клиента») |
+   | добавить в справочник или список | **«Добавить N»** («Добавить объект») |
+   | снять выбранное | **«Убрать»** |
+   | «Готово», «Сохранить», «Выбрать» в этой роли | НЕ бывает |
+
 6. **РЯД — ТОЛЬКО `card-rows` И `SectionCard`.** `FieldRow`, `ChoiceRow`,
    `NavRow`, `ChooseRow`, `ActionRow`, `SwipeRow`, `ReorderList`. Подпись
    ВНУТРИ карточки — `SectionCard`; подпись НАД карточкой — `RowGroup`. В
@@ -199,13 +239,9 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 |---|---|---|
 | Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/book/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
-| Выбор клиента | `src/features/clients/ClientPickerSheet.tsx` | — |
-| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` | — |
-| Выбор объекта | `src/features/clients/ObjectPickerSheet.tsx` | — |
+| Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
 | Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx` |
-| Выбор метки | `src/features/appointments/LabelSheet.tsx` | — |
-| Услуги (справочник + форма) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx` |
-| Выбор услуг | `src/features/appointments/BookingPickers.tsx` (`ServicePicker`) | — |
+| Услуги (справочник + форма) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `book/services.tsx` |
 | Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `book/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `book/` |
 | Запись и событие (форма) | `app/book/index.tsx` | — |
@@ -213,6 +249,25 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/book/channels.tsx` |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/book/maps.tsx` |
+
+**Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**
+«Добавь блок с услугой» значит именно эту строку: блок оттуда, шторка оттуда,
+слово оттуда. Ничего не придумывать.
+
+| Что выбирают | Блок на странице | Шторка | Кнопка в футере |
+|---|---|---|---|
+| Клиента | `SectionCard title="Клиент"` + `ChooseRow` «Выбрать клиента» | `clients/ClientPickerSheet` | «Создать клиента» |
+| Объект | `SectionCard title="Объект"` + `ChooseRow` «Выбрать объект» | `clients/ObjectPickerSheet` | «Добавить объект» |
+| Услуги (много) | `SectionCard title="Услуги"` + `ChooseRow` «Выбрать услугу» | `appointments/BookingPickers` → `ServicePicker` | «Применить» |
+| Метку | строка метки в докете команды | `reference/LabelPickerSheet` | нет — тап выбирает |
+| Метку дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
+| Теги (много) | строка «Теги» в блоке «Личное» | `clients/TagPickerSheet` | «Применить» |
+| Тип объекта | `SectionCard title="Тип объекта"` + `ChoiceRow` | ленты чипов в блоке, шторки нет | — |
+| Тип события | `appointments/EventTypeBlock` | ленты плиток в блоке, шторки нет | — |
+| Категорию, счёт, значение | строка со значением | `ui/ValuePickerSheet` | нет |
+| Клиента или заявку инвойса | строка со значением | `invoices/EntityPickerSheet` | нет |
+| Команду и мастера | докет команды | `appointments/BookingSheets` → `TeamMasterSheet` | «Применить» |
+| Действие («Добавить», «Как связаться») | строка-дверь | `ui/PickerSheet` | нет |
 
 ## Architecture
 
