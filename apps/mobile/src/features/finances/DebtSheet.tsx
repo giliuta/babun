@@ -20,6 +20,7 @@ import { ClientPicker } from "@/features/appointments/BookingPickers";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useRouter } from "expo-router";
+import { formatHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { useDebtDraft } from "./use-debt-draft";
@@ -83,6 +84,8 @@ export function DebtSheet({
     setAmount,
     date,
     setDate,
+    time,
+    setTime,
     categoryId,
     setCategoryId,
     category,
@@ -173,13 +176,22 @@ export function DebtSheet({
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
-        {/* 2. КОГДА — та же строка и та же полоса недель, что у записи и у
-            операции. Часа у долга нет: он возник в день, и в базе у него
-            только дата. */}
-        <WhenRow date={date} timeStart="" dateOnly onPress={() => {
-          setWhenOpen(true);
-          haptics.tap();
-        }} />
+        {/* 2. КОГДА — ТОТ ЖЕ БЛОК, ЧТО В ДОХОДЕ (владелец 2026-09-10: «время
+            должно быть такое же, как в доходе»). Строка печатала только день,
+            потому что у долга не было часа в базе; час завела миграция
+            20260910020000, и блок стал тем же — «день · час», полоса недель и
+            одни барабаны. */}
+        <WhenRow
+          date={date}
+          timeStart={time ?? formatHM(new Date())}
+          onPress={() => {
+            // Час подставляем в момент открытия, а не в рендере: иначе барабан
+            // родился бы со значением первого кадра и застыл на нём.
+            if (time == null) setTime(formatHM(new Date()));
+            setWhenOpen(true);
+            haptics.tap();
+          }}
+        />
 
         {/* 3. КЛИЕНТ — СВОЙ БЛОК, ТОТ ЖЕ, ЧТО В ЗАПИСИ (владелец 2026-09-10:
             «блок с выбором клиента сделай такой же, как в записи»). Он стоял
@@ -300,12 +312,15 @@ export function DebtSheet({
         open={whenOpen}
         onClose={() => setWhenOpen(false)}
         date={date}
-        timeStart="12:00"
-        timeEnd="12:00"
+        timeStart={time ?? formatHM(new Date())}
+        timeEnd={time ?? formatHM(new Date())}
         allDay={false}
         allowAllDay={false}
-        dateOnly
-        onCommit={(next) => setDate(next.date)}
+        singleTime
+        onCommit={(next) => {
+          setDate(next.date);
+          setTime(next.timeStart);
+        }}
       />
 
       <PickerSheet
