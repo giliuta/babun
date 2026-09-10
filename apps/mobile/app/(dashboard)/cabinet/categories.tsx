@@ -1,26 +1,27 @@
 import { useMemo, useState } from "react";
 import {
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
+  type AccessibilityActionEvent,
 } from "react-native";
-import { EyeOff, Trash2 } from "lucide-react-native";
-import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
+import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
+import type {
+  FinanceCategory,
+  FinanceCategoryKind,
+} from "@babun/shared/db/repositories/finance-categories";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
-import { ColorField } from "@/components/ui/picker-fields";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Divider } from "@/components/ui/Divider";
-import { AddRow } from "@/components/ui/AddRow";
-import { Field } from "@/components/ui/Field";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { NameColorField } from "@/components/ui/picker-fields";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -31,6 +32,40 @@ import {
   useSetCategoryHidden,
   useUpdateCategory,
 } from "@/features/finances/queries";
+
+// КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
+//
+// Экран рисовал себя сам: редактор — сырой `Modal animationType="slide"` со
+// своей шапкой и своим нижним отступом, имя и цвет — двумя раздельными
+// полями, удаление и скрытие — двумя кнопками ВНУТРИ строки (голая мусорка и
+// «Скрыть» словом), кнопка добавления — строкой внутри списка, а под списком
+// стоял объясняющий абзац.
+//
+// Теперь то же, что у меток, типов объектов, типов событий и тегов: строка
+// 52pt с кружком цвета, действия — на кромках свайпа, редактор —
+// канонический `BottomSheet` с `NameColorField`, главное действие — кнопкой
+// внизу экрана.
+//
+// СПРАВА — «УДАЛИТЬ», СЛЕВА — «СКРЫТЬ» (владелец 2026-09-10: «свайп вправо —
+// это удалить, а не скрыть»; «чтобы её скрыть, надо свайпнуть, и оно
+// открывается с левой стороны»). Сторона закреплена за СМЫСЛОМ, а не за
+// «самым сильным из доступного этой строке»: у стандартной категории удалять
+// нечего (она общая на весь продукт, её защищает RLS), и правой кромки у неё
+// просто НЕТ — палец упирается в ноль, а не находит там скрытие. Иначе
+// мышечная память врёт: на одной строке справа удаление, на соседней — нет.
+//
+// ТАП — ВСЕГДА ПРАВКА (владелец 2026-09-10: «тап на категорию — это идёт
+// редактирование, а не оно скрыто»). Раньше тап по стандартной строке её
+// скрывал: одно касание молча убирало категорию из списка — так у владельца
+// пропали «Налоги и сборы». Теперь правку открывает только своя строка, а
+// стандартная на тап не отвечает вовсе: скрыть её можно лишь намеренным
+// жестом, у которого на кромке написано, что будет.
+//
+// СКРЫТАЯ ПАДАЕТ ВНИЗ (владелец 2026-09-10: «она больше не показывается в
+// выборе категории и падает вниз»). В листах выбора её нет совсем — кроме
+// той, что уже стоит в операции или шаблоне, иначе прошлая запись потеряла бы
+// подпись. Здесь она остаётся, но в конце списка: исчезнувшая строка
+// читалась бы как «категория удалена».
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // tailwind-hued SWATCHES are gone — default stays индиго.
@@ -45,7 +80,10 @@ export default function CategoriesScreen() {
   const del = useDeleteCategory();
   const setHidden = useSetCategoryHidden();
 
-  const [type, setType] = useState<"expense" | "income">("expense");
+  // Третья ступень — долги (владелец 2026-09-10: «под расход свои категории,
+  // под доход свои, под долги свои, они не смешиваются»). В списке
+  // поставщиков и займов «Бензину» делать нечего.
+  const [type, setType] = useState<FinanceCategoryKind>("expense");
   const [open, setOpen] = useState(false);
   // Правка своей категории (rename/цвет) — раньше единственным «редактором»
   // был деструктивный обход «удалить+создать», обнулявший category_id у
@@ -56,7 +94,12 @@ export default function CategoriesScreen() {
   const [color, setColor] = useState(DEFAULT_COLOR);
 
   const filtered = useMemo(
-    () => cats.filter((c) => c.type === type),
+    // Порядок внутри групп — как пришёл из справочника; sort стабилен, так
+    // что скрытые лишь опускаются в конец, ничего между собой не меняя.
+    () =>
+      cats
+        .filter((c) => c.type === type)
+        .sort((a, b) => Number(a.hidden) - Number(b.hidden)),
     [cats, type],
   );
 
@@ -68,7 +111,8 @@ export default function CategoriesScreen() {
   };
   // СТАНДАРТНУЮ КАТЕГОРИЮ НЕЛЬЗЯ ПЕРЕИМЕНОВАТЬ — она общая на весь продукт,
   // и правка задела бы чужие компании. Зато её можно убрать из СВОЕГО списка:
-  // владелец 2026-08-09 просил, чтобы список менялся полностью.
+  // владелец 2026-08-09 просил, чтобы список менялся полностью. Убирает
+  // только левая кромка — тапом это не делается (см. закон в шапке).
   const toggleHidden = (c: FinanceCategory) => {
     setHidden.mutate(
       { id: c.id, hidden: !c.hidden },
@@ -128,6 +172,7 @@ export default function CategoriesScreen() {
         options={[
           { value: "expense", label: "Расходы", color: th.danger },
           { value: "income", label: "Доходы", color: th.success },
+          { value: "debt", label: "Долги", color: th.warning },
         ]}
         value={type}
         onChange={setType}
@@ -138,136 +183,201 @@ export default function CategoriesScreen() {
         <EmptyState state="loading" fill />
       ) : isError ? (
         <EmptyState
-          fill
           state="error"
+          fill
           subtitle={error instanceof Error ? error.message : undefined}
           action={{ label: "Повторить", onPress: () => void refetch() }}
         />
-      ) : (
-        <FlatList
-          style={{ flex: 1 }}
-          data={filtered}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
-          renderItem={({ item }) => (
-            <View className="flex-row items-stretch" style={{ opacity: item.hidden ? 0.45 : 1 }}>
-              <Pressable
-                onPress={
-                  item.hidden
-                    ? () => toggleHidden(item)
-                    : item.tenant_id
-                      ? () => openEdit(item)
-                      : () => toggleHidden(item)
-                }
-                accessibilityRole="button"
-                accessibilityLabel={
-                  item.hidden
-                    ? `Категория ${item.name}, скрыта — вернуть в список`
-                    : item.tenant_id
-                      ? `Категория ${item.name}, редактировать`
-                      : `Категория ${item.name}, убрать из списка`
-                }
-                className="min-h-[52px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60"
-              >
-                <View
-                  className="mr-3 h-7 w-7 rounded-full"
-                  style={{ backgroundColor: item.color ?? th.faint }}
-                />
-                <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
-              </Pressable>
-              {item.hidden ? (
-                <View className="min-h-[52px] flex-row items-center gap-1.5 pr-4">
-                  <EyeOff color={th.faint} size={ICON.sm} />
-                  <Text className="text-xs" style={{ color: th.faint }}>скрыта</Text>
-                </View>
-              ) : item.tenant_id ? (
-                <Pressable
-                  onPress={() => confirmDelete(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Удалить ${item.name}`}
-                  className="min-h-[52px] min-w-11 items-center justify-center pr-2 active:opacity-60"
-                >
-                  <Trash2 color={th.danger} size={ICON.sm} />
-                </Pressable>
-              ) : (
-                <View className="min-h-[52px] justify-center pr-4">
-                  <Text className="text-xs" style={{ color: th.faint }}>станд.</Text>
-                </View>
-              )}
-            </View>
-          )}
-          ItemSeparatorComponent={() => <Divider inset={56} />}
-          ListFooterComponent={
-            filtered.length > 0 ? (
-              <>
-                <Divider inset={56} />
-                <AddRow label="Добавить категорию" onPress={openCreate} />
-                <Text
-                  className="px-4 pb-6 pt-2 text-xs"
-                  style={{ color: th.faint }}
-                >
-                  Свою категорию можно переименовать или удалить. Стандартную —
-                  убрать из списка: нажмите на неё, и она перестанет
-                  предлагаться. Прошлые операции сохранят своё название.
-                </Text>
-              </>
-            ) : null
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          fill
+          title={
+            type === "expense"
+              ? "Нет категорий расходов"
+              : type === "income"
+                ? "Нет категорий доходов"
+                : "Нет категорий долгов"
           }
-          ListEmptyComponent={
-            <EmptyState
-              fill
-              title={type === "expense" ? "Нет категорий расходов" : "Нет категорий доходов"}
-              subtitle="Категории группируют операции — «Бензин», «Аренда», «Выручка»"
-              action={{ label: "Добавить категорию", onPress: openCreate }}
-            />
+          subtitle={
+            type === "debt"
+              ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
+              : "Категории группируют операции — «Бензин», «Аренда», «Выручка»"
           }
+          action={{ label: "Добавить категорию", onPress: openCreate }}
         />
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
+        >
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {filtered.map((item) => {
+              const own = !!item.tenant_id;
+              return (
+                <SwipeRow
+                  key={item.id}
+                  label={own ? "Удалить" : undefined}
+                  color={own ? th.danger : undefined}
+                  icon={own ? Trash2 : undefined}
+                  accessibilityLabel={
+                    own ? `Удалить категорию ${item.name}` : undefined
+                  }
+                  onAction={own ? () => confirmDelete(item) : undefined}
+                  leading={{
+                    label: item.hidden ? "Показать" : "Скрыть",
+                    color: item.hidden ? th.success : th.warning,
+                    icon: item.hidden ? RotateCcw : EyeOff,
+                    accessibilityLabel: `${
+                      item.hidden ? "Показать" : "Скрыть"
+                    } категорию ${item.name}`,
+                    onAction: () => toggleHidden(item),
+                  }}
+                >
+                  <CategoryRow
+                    item={item}
+                    onEdit={own ? () => openEdit(item) : undefined}
+                    onToggleHidden={() => toggleHidden(item)}
+                    onDelete={own ? () => confirmDelete(item) : undefined}
+                  />
+                </SwipeRow>
+              );
+            })}
+          </View>
+        </ScrollView>
       )}
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+      {!isLoading && !isError && filtered.length > 0 ? (
+        <View
+          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
-        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: th.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
-            {editing
-              ? "Категория"
-              : `Новая категория · ${type === "expense" ? "расход" : "доход"}`}
-          </Text>
-          <Field
-            label="Название"
-            value={name}
-            onChangeText={setName}
-            placeholder="Напр. Бензин"
-            autoFocus
-          />
-          <ColorField value={color} onChange={setColor} />
-          <Button
-            label={editing ? "Сохранить" : "Создать"}
-            onPress={submit}
-            disabled={!name.trim() || insert.isPending || update.isPending}
-            loading={insert.isPending || update.isPending}
-          />
-          {editing ? (
-            <Pressable
-              onPress={() => {
-                setOpen(false);
-                confirmDelete(editing);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Удалить категорию ${editing.name}`}
-              className="mt-1 items-center py-3 active:opacity-70"
-            >
-              <Text style={{ fontSize: 16, fontWeight: "500", color: th.danger }}>
-                Удалить категорию
-              </Text>
-            </Pressable>
-          ) : null}
+          <GradientButton label="Добавить категорию" onPress={openCreate} />
         </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      ) : null}
+
+      <BottomSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        title={
+          editing
+            ? "Категория"
+            : `Новая категория · ${
+                type === "expense" ? "расход" : type === "income" ? "доход" : "долг"
+              }`
+        }
+        avoidKeyboard
+        footer={
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <Button
+              label={editing ? "Сохранить" : "Создать категорию"}
+              disabled={!name.trim()}
+              onPress={() => void submit()}
+            />
+          </View>
+        }
+      >
+        <NameColorField
+          name={name}
+          onNameChange={setName}
+          color={color}
+          onColorChange={setColor}
+          autoFocus={!editing}
+        />
+      </BottomSheet>
     </Screen>
+  );
+}
+
+/** Строка категории — 52pt, кружок цвета, имя. Скрытая гаснет, но остаётся на
+ *  месте: исчезнувшая строка читалась бы как «категория пропала».
+ *
+ *  ТАП ОТКРЫВАЕТ ПРАВКУ — и только её. У стандартной категории правки нет,
+ *  поэтому строка не нажимается вовсе: «нажал — и оно скрылось» человек
+ *  прочитает как поломку. Кромкам это не мешает, а ротор получает те же
+ *  действия словами — подложка свайпа от него спрятана (см. SwipeRow). */
+function CategoryRow({
+  item,
+  onEdit,
+  onToggleHidden,
+  onDelete,
+}: {
+  item: FinanceCategory;
+  /** Правка своей категории; `undefined` — стандартная, править нечего. */
+  onEdit?: () => void;
+  onToggleHidden: () => void;
+  onDelete?: () => void;
+}) {
+  const th = useThemeColors();
+  const actions = [
+    { name: "hide", label: item.hidden ? "Показать" : "Скрыть" },
+    ...(onDelete ? [{ name: "delete", label: "Удалить" }] : []),
+  ];
+  const onAccessibilityAction = (e: AccessibilityActionEvent) => {
+    if (e.nativeEvent.actionName === "hide") onToggleHidden();
+    if (e.nativeEvent.actionName === "delete") onDelete?.();
+  };
+  const label = item.hidden
+    ? `Категория ${item.name}, скрыта`
+    : onEdit
+      ? `Категория ${item.name}`
+      : `Категория ${item.name}, стандартная`;
+  const box = (pressed: boolean) =>
+    ({
+      height: 52,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingLeft: 16,
+      paddingRight: 12,
+      borderRadius: th.radius.card,
+      backgroundColor: pressed ? th.pressed : th.surface,
+      opacity: item.hidden ? 0.45 : 1,
+    }) as const;
+  const face = (
+    <>
+      <View
+        style={{
+          height: 12,
+          width: 12,
+          borderRadius: th.radius.pill,
+          backgroundColor: item.color ?? th.faint,
+        }}
+      />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+        style={{ flex: 1, marginLeft: 12, fontSize: 16, color: th.ink }}
+      >
+        {item.name}
+      </Text>
+      {item.hidden ? (
+        <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, color: th.faint }}>
+          скрыта
+        </Text>
+      ) : null}
+    </>
+  );
+
+  return onEdit ? (
+    <Pressable
+      onPress={onEdit}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint="Открывает имя и цвет"
+      accessibilityActions={actions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={({ pressed }) => box(pressed)}
+    >
+      {face}
+    </Pressable>
+  ) : (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={label}
+      accessibilityActions={actions}
+      onAccessibilityAction={onAccessibilityAction}
+      style={box(false)}
+    >
+      {face}
+    </View>
   );
 }

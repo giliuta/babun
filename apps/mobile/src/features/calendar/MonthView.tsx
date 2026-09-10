@@ -333,10 +333,9 @@ function MoneyRow({
   if (skipZero && v === 0) return null;
   return (
     <Text
-      className="tabular-nums"
       numberOfLines={1}
       maxFontSizeMultiplier={1.3}
-      style={{ fontSize: 10, fontWeight: "600", lineHeight: 13, color }}
+      style={{ fontVariant: ["tabular-nums"], fontSize: 10, fontWeight: "600", lineHeight: 13, color }}
     >
       {formatEUR(v)}
     </Text>

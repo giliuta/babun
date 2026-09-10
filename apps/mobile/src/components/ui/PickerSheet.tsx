@@ -1,7 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { Pressable } from "react-native";
 import { Settings } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -21,7 +22,9 @@ import { useThemeColors } from "@/theme/colors";
 export interface PickerSheetItem {
   id: string;
   label: string;
-  icon: LucideIcon;
+  /** Значок строки: компонент из общего словаря (`icon-set`) либо эмодзи
+   *  строкой — категории операций хранят именно его. */
+  icon: LucideIcon | string;
   color: string;
   onPress: () => void;
 }
@@ -30,6 +33,7 @@ export function PickerSheet({
   visible,
   title,
   items,
+  selectedId,
   onSettings,
   settingsLabel = "Настроить список",
   onClose,
@@ -37,6 +41,9 @@ export function PickerSheet({
   visible: boolean;
   title: string;
   items: PickerSheetItem[];
+  /** Что выбрано сейчас. У выбора «с нуля» (тип события новой записи) его
+   *  нет; у правки существующей операции без него не видно, что стоит. */
+  selectedId?: string | null;
   /** Шестерёнка справа от заголовка — вход на страницу этого списка. */
   onSettings?: () => void;
   settingsLabel?: string;
@@ -44,35 +51,16 @@ export function PickerSheet({
 }) {
   const t = useThemeColors();
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 20,
-          paddingRight: 12,
-          paddingTop: 8,
-          paddingBottom: 12,
-        }}
-      >
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{
-            flex: 1,
-            fontSize: 17,
-            fontWeight: "600",
-            color: t.ink,
-            // Заголовок центрируется относительно ЛИСТА, а не остатка строки:
-            // шестерёнка справа иначе сдвигала бы его влево.
-            marginLeft: onSettings ? 32 : 0,
-            textAlign: "center",
-          }}
-        >
-          {title}
-        </Text>
-        {onSettings ? (
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      // ШАПКА — ОБЩАЯ (2026-09-10). Здесь она была нарисована своей строкой с
+      // ручным центрированием заголовка «на ширину шестерёнки»; `BottomSheet`
+      // умеет это сам, и умеет одинаково для всех шторок продукта.
+      title={title}
+      headerAction={
+        onSettings ? (
           <Pressable
             onPress={() => {
               haptics.tap();
@@ -92,13 +80,19 @@ export function PickerSheet({
           >
             <Settings color={t.sub} size={20} strokeWidth={2} />
           </Pressable>
-        ) : null}
-      </View>
-
-      <View style={{ paddingHorizontal: 20, paddingBottom: 28, gap: 8 }}>
+        ) : undefined
+      }
+    >
+      {/* СТРОКА — ОБЩАЯ. Диалект тот же, что у выбора клиента, объекта и
+          метки; галки нет по смыслу жанра: это ДЕЙСТВИЕ, а не значение. */}
+      <SelectList>
         {items.map((item) => (
-          <Pressable
+          <SelectRow
             key={item.id}
+            icon={item.icon}
+            color={item.color}
+            title={item.label}
+            selected={item.id === selectedId}
             onPress={() => {
               haptics.tap();
               onClose();
@@ -110,40 +104,9 @@ export function PickerSheet({
               // забывает его там, где лист второй раз не нужен.
               setTimeout(item.onPress, SHEET_EXIT_MS);
             }}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              minHeight: 52,
-              paddingHorizontal: 14,
-              borderRadius: t.radius.input,
-              backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-            })}
-          >
-            <View
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: `${item.color}1a`,
-              }}
-            >
-              <item.icon color={item.color} size={16} strokeWidth={2.2} />
-            </View>
-            <Text
-              maxFontSizeMultiplier={1.3}
-              numberOfLines={1}
-              style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-            >
-              {item.label}
-            </Text>
-          </Pressable>
+          />
         ))}
-      </View>
+      </SelectList>
     </BottomSheet>
   );
 }

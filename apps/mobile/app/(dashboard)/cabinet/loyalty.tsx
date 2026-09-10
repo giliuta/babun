@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
-  Switch,
   Text,
   View,
 } from "react-native";
 import { Trash2 } from "lucide-react-native";
+import { confirmThen } from "@/lib/confirm";
 import {
   DEFAULT_LOYALTY,
   generateLoyaltyTierId,
@@ -20,12 +17,15 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { AddRow } from "@/components/ui/AddRow";
-import { Divider } from "@/components/ui/Divider";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { SwitchRow } from "@/components/ui/SwitchRow";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useLoyalty, useSaveLoyalty } from "@/features/settings/local-settings";
 import { notify } from "@/lib/notify";
@@ -105,8 +105,23 @@ export default function LoyaltyScreen() {
     setOpen(false);
   };
 
-  const removeTier = (id: string) =>
-    patch({ tiers: s.tiers.filter((t) => t.id !== id) });
+  // РАЗРУШИТЕЛЬНОЕ ПЕРЕСПРАШИВАЕТ (аудит 2026-09-10). Уровень удалялся с
+  // первого тапа по мусорке — ни вопроса, ни свайпа, ни отмены; при законе
+  // «ни одно денежное действие не существует только в жесте». Скидка уровня
+  // считается в записях, и восстановить стёртый порог было нечем.
+  const removeTier = (id: string) => {
+    const tier = s.tiers.find((t) => t.id === id);
+    if (!tier) return;
+    confirmThen(
+      "Удалить уровень?",
+      {
+        message: `«${tier.label}» — от ${tier.threshold} визитов, −${tier.percent}%. Клиенты этого уровня перестанут получать скидку.`,
+        confirmLabel: "Удалить",
+        destructive: true,
+      },
+      () => patch({ tiers: s.tiers.filter((t) => t.id !== id) }),
+    );
+  };
 
   // Гейт загрузки — иначе до прихода данных мигает выключенный дефолт.
   if (loyaltyQuery.isLoading) {
@@ -144,91 +159,90 @@ export default function LoyaltyScreen() {
       <ScreenHeader title="Лояльность" />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        <SectionCard padded>
-          <View className="flex-row items-center justify-between px-1 py-1">
-            <Text className="text-base" style={{ color: th.ink }}>Программа лояльности</Text>
-            <Switch
-              value={s.enabled}
-              onValueChange={(v) => patch({ enabled: v })}
-              trackColor={{ true: th.accent }}
-            />
-          </View>
+        {/* ТУМБЛЕР — СТРОКОЙ (сведено 2026-09-10). Здесь стоял голый
+            `Switch` в самодельном ряду: тап по слову «Программа лояльности»
+            не переключал ничего, попасть надо было точно в тумблер.
+            `SwitchRow` для этого и существует (LOCKED 2026-08-17). Абзац под
+            карточкой снят: объяснялок под карточками канон не допускает. */}
+        <SectionCard>
+          <SwitchRow
+            label="Программа лояльности"
+            value={s.enabled}
+            onChange={(v: boolean) => patch({ enabled: v })}
+          />
         </SectionCard>
-        <Text className="px-5 pt-2 text-xs" style={{ color: th.faint }}>
-          Скидка уровня применяется автоматически при создании записи и видна
-          в карточке клиента (раздел «Финансы»). Ручная скидка всегда важнее.
-        </Text>
 
-        <SectionCard title="Уровни — по числу визитов">
-          {s.tiers.length === 0 ? (
-            <View className="px-4 py-4">
-              <Text className="text-sm" style={{ color: th.faint }}>
-                Уровней пока нет. Клиент со столькими-то выполненными визитами
-                получает скидку.
-              </Text>
-              <View className="mt-2 flex-row items-center gap-4">
+        <SectionEyebrow>Уровни — по числу визитов</SectionEyebrow>
+        {s.tiers.length === 0 ? (
+          <EmptyState
+            title="Уровней пока нет"
+            action={{
+              label: "Загрузить пример",
+              onPress: () =>
+                patch({ tiers: STARTER_LOYALTY_TIERS, enabled: true }),
+            }}
+          />
+        ) : (
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {s.tiers.map((tier) => (
+              // РАЗРУШИТЕЛЬНОЕ — НА КРОМКЕ ЖЕСТА (сведено 2026-09-10): здесь
+              // стояла голая мусорка в строке, и до сегодняшнего дня она
+              // удаляла уровень вообще без вопроса.
+              <SwipeRow
+                key={tier.id}
+                label="Удалить"
+                color={th.danger}
+                icon={Trash2}
+                accessibilityLabel={`Удалить уровень ${tier.label}`}
+                onAction={() => removeTier(tier.id)}
+              >
                 <Pressable
-                  onPress={() =>
-                    patch({ tiers: STARTER_LOYALTY_TIERS, enabled: true })
-                  }
+                  onPress={() => openTier(tier)}
                   accessibilityRole="button"
-                  accessibilityLabel="Загрузить пример уровней"
-                  className="active:opacity-70"
+                  accessibilityLabel={`Уровень ${tier.label}, изменить`}
+                  style={({ pressed }) => ({
+                    minHeight: 52,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                    borderRadius: th.radius.card,
+                    backgroundColor: pressed ? th.pressed : th.surface,
+                  })}
                 >
-                  <Text className="text-sm font-medium" style={{ color: th.accent }}>
-                    Загрузить пример (3 / 10 / 25 визитов)
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={openNewTier}
-                  accessibilityRole="button"
-                  accessibilityLabel="Добавить уровень"
-                  className="active:opacity-70"
-                >
-                  <Text className="text-sm font-medium" style={{ color: th.accent }}>
-                    Добавить свой
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          ) : (
-            <>
-              {s.tiers.map((t, i) => (
-                <View key={t.id}>
-                  {i > 0 ? <Divider inset={16} /> : null}
-                  <View className="flex-row items-center px-4 py-1">
-                    <Pressable
-                      onPress={() => openTier(t)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Редактировать уровень ${t.label}`}
-                      className="flex-1 py-2 active:opacity-60"
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.3}
+                      style={{ fontSize: 16, fontWeight: "600", color: th.ink }}
                     >
-                      <Text className="text-base font-semibold" style={{ color: th.ink }}>
-                        {t.label}
-                      </Text>
-                      <Text className="text-sm" style={{ color: th.sub }}>
-                        от {t.threshold} визитов
-                      </Text>
-                    </Pressable>
-                    <Text className="mr-3 text-base font-bold" style={{ color: th.success }}>
-                      −{t.percent}%
+                      {tier.label}
                     </Text>
-                    <Pressable
-                      onPress={() => removeTier(t.id)}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Удалить ${t.label}`}
+                    <Text
+                      maxFontSizeMultiplier={1.3}
+                      style={{ fontSize: 13, color: th.sub }}
                     >
-                      <Trash2 color={th.danger} size={ICON.sm} />
-                    </Pressable>
+                      {`от ${tier.threshold} визитов`}
+                    </Text>
                   </View>
-                </View>
-              ))}
-              <Divider inset={16} />
-              <AddRow label="Добавить уровень" onPress={openNewTier} />
-            </>
-          )}
-        </SectionCard>
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: th.success,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {`−${tier.percent}%`}
+                  </Text>
+                </Pressable>
+              </SwipeRow>
+            ))}
+            <View style={{ paddingTop: 4 }}>
+              <GradientButton label="Добавить уровень" onPress={openNewTier} />
+            </View>
+          </View>
+        )}
 
         <View className="mx-3 mt-5">
           <Button
@@ -245,45 +259,50 @@ export default function LoyaltyScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
-        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: th.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
-            {editingId ? "Редактирование уровня" : "Новый уровень"}
-          </Text>
-          <Field label="Название" value={label} onChangeText={setLabel} placeholder="Серебро" autoFocus />
-          <View className="flex-row gap-3">
-            <View className="flex-1">
-              <Field
-                label="От N визитов"
-                value={threshold}
-                onChangeText={setThreshold}
-                placeholder="10"
-                keyboardType="number-pad"
-              />
-            </View>
-            <View className="flex-1">
-              <Field
-                label="Скидка %"
-                value={percent}
-                onChangeText={setPercent}
-                placeholder="10"
-                keyboardType="number-pad"
-              />
-            </View>
+      <BottomSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        title={editingId ? "Уровень" : "Новый уровень"}
+        avoidKeyboard
+        footer={
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <Button
+              label={editingId ? "Сохранить" : "Добавить уровень"}
+              onPress={saveTier}
+              disabled={!threshold.trim() || !percent.trim()}
+            />
           </View>
-          <Button
-            label={editingId ? "Сохранить изменения" : "Добавить"}
-            onPress={saveTier}
-            disabled={!threshold.trim() || !percent.trim()}
-          />
+        }
+      >
+        <Field
+          label="Название"
+          value={label}
+          onChangeText={setLabel}
+          placeholder="Серебро"
+          autoFocus
+        />
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Field
+              label="От N визитов"
+              value={threshold}
+              onChangeText={setThreshold}
+              placeholder="10"
+              keyboardType="number-pad"
+            />
+          </View>
+          <View className="flex-1">
+            <Field
+              label="Скидка %"
+              value={percent}
+              onChangeText={setPercent}
+              placeholder="10"
+              keyboardType="number-pad"
+            />
+          </View>
         </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </BottomSheet>
+
     </Screen>
   );
 }

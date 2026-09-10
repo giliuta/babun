@@ -11,6 +11,8 @@ import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 import { RAIL_W } from "@/features/calendar/DayView";
 import { useDayExtras, useFinanceServices } from "@/features/calendar/queries";
+import { ledgerExtrasByDay } from "@/features/calendar/day-ledger";
+import { useTransactions } from "@/features/finances/queries";
 
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
@@ -39,6 +41,20 @@ export function DayFinanceFooter({
   const t = useThemeColors();
   const sharedServices = useFinanceServices();
   const { data: extrasMap = {} } = useDayExtras();
+  // Ручные проводки леджера за видимые дни: чаевые и заправка, добавленные
+  // на вкладке «Финансы», обязаны стоять и здесь (владелец 2026-09-07:
+  // «чтобы доход/расход внизу заработал»). Авто-проводки записей не нужны —
+  // их деньги computeDayFinance считает по самим записям.
+  const rangeFrom = days.length > 0 ? formatYMD(days[0]) : "";
+  const rangeTo = days.length > 0 ? formatYMD(days[days.length - 1]) : "";
+  const ledgerQuery = useTransactions(rangeFrom, rangeTo, {
+    brigadeIds: teamId ? [teamId] : undefined,
+    enabled: days.length > 0,
+  });
+  const ledgerExtras = useMemo(
+    () => ledgerExtrasByDay(ledgerQuery.data ?? []),
+    [ledgerQuery.data],
+  );
 
   const byDate = useMemo(() => {
     const m = new Map<string, Appointment[]>();
@@ -59,7 +75,7 @@ export function DayFinanceFooter({
         const totals = computeDayFinance(
           byDate.get(ymd) ?? [],
           sharedServices,
-          getDayExtras(extrasMap, teamId, ymd),
+          [...getDayExtras(extrasMap, teamId, ymd), ...(ledgerExtras.get(ymd) ?? [])],
         );
         return {
           d,
@@ -78,7 +94,7 @@ export function DayFinanceFooter({
           }),
         };
       }),
-    [days, byDate, sharedServices, extrasMap, teamId, todayYmd],
+    [days, byDate, sharedServices, extrasMap, ledgerExtras, teamId, todayYmd],
   );
 
   // САМА ПОЛОСА БОЛЬШЕ НЕ РЕШАЕТ, ПОКАЗЫВАТЬСЯ ЛИ ЕЙ. Здесь стояло «пустая
@@ -124,16 +140,14 @@ export function DayFinanceFooter({
             {/* €0 — приглушённый t.faint: зелёный/красный только там, где
                 есть реальные деньги (цвет = смысл). */}
             <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
-              className="tabular-nums"
+              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
               {formatEUR(income)}
             </Text>
             <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
-              className="tabular-nums"
+              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >

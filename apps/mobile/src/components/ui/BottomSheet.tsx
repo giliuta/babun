@@ -60,6 +60,10 @@ export function BottomSheet({
   /** Заголовок листа — под грабером и ВНУТРИ его жеста. Помечен как
    *  `header`: без этого ротор VoiceOver внутри листа пуст. */
   title,
+  /** Вторая строка шапки, под именем: чей это лист — дата дня, имя клиента.
+   *  Самодельные шапки из-за её отсутствия и заводились (метка дня рисовала
+   *  свою строку 44│центр│44 с датой). */
+  subtitle,
   /** Кнопка листа. Живёт ВНЕ прокрутки тела и платит нижний безопасный
    *  отступ — иначе «Перевести» стоит на полосе home-индикатора и вместо
    *  перевода даёт системный свайп на домашний экран. */
@@ -93,6 +97,10 @@ export function BottomSheet({
   banner?: ReactNode;
   children: ReactNode;
   title?: string;
+  /** Тихая строка под именем листа: чей это лист — команда, счёт, клиент.
+   *  Такое подписывают, а не выбирают, и отдельной строкой-полем оно
+   *  выглядело нажимаемым, хотя не нажимается (2026-09-09). */
+  subtitle?: string;
   footer?: ReactNode;
   scroll?: boolean;
   /** ССЫЛКА НА ПРОКРУТКУ ТЕЛА (2026-08-21). Лист с таблицей обязан САМ
@@ -283,20 +291,35 @@ export function BottomSheet({
                     ширины, что действие справа, иначе имя уезжает влево тем
                     сильнее, чем крупнее системный шрифт. */}
                 <View style={{ width: 44 }} />
-                <Text
-                  accessibilityRole="header"
-                  maxFontSizeMultiplier={1.2}
-                  numberOfLines={1}
-                  style={{
-                    flex: 1,
-                    fontSize: 17,
-                    fontWeight: "600",
-                    textAlign: "center",
-                    color: t.ink,
-                  }}
-                >
-                  {title}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0, alignItems: "center" }}>
+                  <Text
+                    accessibilityRole="header"
+                    maxFontSizeMultiplier={1.2}
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 17,
+                      fontWeight: "600",
+                      textAlign: "center",
+                      color: t.ink,
+                    }}
+                  >
+                    {title}
+                  </Text>
+                  {subtitle ? (
+                    <Text
+                      maxFontSizeMultiplier={1.2}
+                      numberOfLines={1}
+                      style={{
+                        marginTop: 2,
+                        fontSize: 13,
+                        textAlign: "center",
+                        color: t.sub,
+                      }}
+                    >
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                </View>
                 <View
                   style={{
                     width: 44,

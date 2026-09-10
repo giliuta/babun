@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { ScrollView } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DEFAULT_CALENDAR_SETTINGS } from "@babun/shared/local/calendar-settings";
 import {
@@ -14,27 +13,23 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { TimeField } from "@/components/ui/TimeField";
+import { ValueRow } from "@/components/ui/ValueRow";
+import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useThemeColors } from "@/theme/colors";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import {
   useTeamSchedule,
   useUpsertTeamSchedule,
 } from "@/features/reference/team-schedule";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
-import {
-  addHourHM,
-  isDateKey,
-  specialDayLabel,
-  subHourHM,
-} from "@/features/calendar/schedule-days";
+import { parseYMD } from "@/features/appointments/helpers";
+import { isDateKey, specialDayLabel } from "@/features/calendar/schedule-days";
 import {
   effectiveWorkHours,
   hourLabel,
 } from "@/features/calendar/setting-options";
 import { BreaksSection } from "@/features/calendar/BreaksSection";
+import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { notify } from "@/lib/notify";
 
@@ -49,7 +44,6 @@ import { notify } from "@/lib/notify";
 // там»).
 
 export default function SpecialDayEditorScreen() {
-  const t = useThemeColors();
   const router = useRouter();
   const { teamId, date } = useLocalSearchParams<{
     teamId: string;
@@ -59,6 +53,8 @@ export default function SpecialDayEditorScreen() {
   const { data: schedule, isLoading } = useTeamSchedule(teamId);
   const upsert = useUpsertTeamSchedule();
   const [savedTick, setSavedTick] = useState(0);
+  const [dateOpen, setDateOpen] = useState(false);
+  const [hoursOpen, setHoursOpen] = useState(false);
 
   const g = settings ?? DEFAULT_CALENDAR_SETTINGS;
 
@@ -118,12 +114,6 @@ export default function SpecialDayEditorScreen() {
   const patch = (p: Partial<DaySchedule>) =>
     commit(setDateOverride(base, date, { ...day, ...p }));
 
-  // Конец обязан быть позже начала — та же минимальная починка пары, что в
-  // редакторе дня недели: двигаем границу, которую сейчас не трогают.
-  const setStart = (v: string) =>
-    patch({ start: v, end: day.end <= v ? addHourHM(v) : day.end });
-  const setEnd = (v: string) =>
-    patch({ start: v <= day.start ? subHourHM(v) : day.start, end: v });
 
   const moveTo = (nextDate: string) => {
     if (nextDate === date) return;
@@ -152,31 +142,17 @@ export default function SpecialDayEditorScreen() {
       />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         <SectionCard className="mt-4">
-          {/* Дата — компактным нативным пикером прямо в строке, как ставится
-              любая дата в продукте (операция, инвойс). Пикер рождается со
-              значением из URL — ловушка «1 янв. 1970» (см. InvoiceDateRow)
-              сюда не достаёт: без валидного ключа экран не рендерится. */}
-          <View
-            style={{
-              minHeight: 48,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: 16,
-              paddingVertical: 6,
-            }}
-          >
-            <Text style={{ fontSize: 16, color: t.ink }}>Дата</Text>
-            <DateTimeInput
-              value={parseYMD(date)}
-              mode="date"
-              display="compact"
-              themeVariant="light"
-              locale="ru-RU"
-              accessibilityLabel="Дата особого дня"
-              onChange={(_, d) => d && moveTo(formatYMD(d))}
-            />
-          </View>
+          {/* ДАТА И ЧАСЫ — БАРАБАНОМ (владелец 2026-09-10: «барабан везде»).
+              Здесь стоял компактный нативный пикер прямо в строке, а часы —
+              двумя такими же: тап по «Указать» не открывал ничего, он лишь
+              дорисовывал второй крошечный контрол у правого края, в который
+              надо было попасть вторым тапом. Одной рукой в машине это два
+              прицельных касания по 30pt вместо одного понятного. */}
+          <ValueRow
+            label="Дата"
+            value={specialDayLabel(date)}
+            onPress={() => setDateOpen(true)}
+          />
           <Divider inset={16} />
           <SwitchRow
             label="Рабочий день"
@@ -186,9 +162,14 @@ export default function SpecialDayEditorScreen() {
           {day.is_working ? (
             <>
               <Divider inset={16} />
-              <TimeField label="Начало" value={day.start} onChange={setStart} />
-              <Divider inset={16} />
-              <TimeField label="Конец" value={day.end} onChange={setEnd} />
+              {/* Пара границ одной строкой и одним листом — тот же
+                  `HourRangeSheet`, что у часов календаря и у перерыва. Две
+                  строки «Начало» и «Конец» спрашивали дважды об одном. */}
+              <ValueRow
+                label="Рабочие часы"
+                value={`${day.start} – ${day.end}`}
+                onPress={() => setHoursOpen(true)}
+              />
             </>
           ) : null}
         </SectionCard>
@@ -211,6 +192,44 @@ export default function SpecialDayEditorScreen() {
           </SectionCard>
         ) : null}
       </ScrollView>
+
+      <DateWheelSheet
+        visible={dateOpen}
+        title="Дата особого дня"
+        value={date}
+        onApply={(ymd) => {
+          setDateOpen(false);
+          moveTo(ymd);
+        }}
+        onClose={() => setDateOpen(false)}
+      />
+      <HourRangeSheet
+        visible={hoursOpen}
+        title="Рабочие часы"
+        value={{
+          start: hourOf(day.start),
+          startMinute: minuteOf(day.start),
+          end: hourOf(day.end),
+          endMinute: minuteOf(day.end),
+        }}
+        // Смена заканчивается часом суток, а не их концом.
+        allowEndOfDay={false}
+        onApply={({ start, end, startMinute, endMinute }) =>
+          patch({ start: hm(start, startMinute), end: hm(end, endMinute) })
+        }
+        onClose={() => setHoursOpen(false)}
+      />
     </Screen>
   );
+}
+
+/** «HH:MM» → части и обратно. Наружу нужны только строки. */
+function hourOf(value: string): number {
+  return Number(value.slice(0, 2)) || 0;
+}
+function minuteOf(value: string): number {
+  return Number(value.slice(3, 5)) || 0;
+}
+function hm(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }

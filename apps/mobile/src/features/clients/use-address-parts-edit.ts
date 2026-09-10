@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { AddressParts, Location } from "@babun/shared/local/clients";
-import { haptics } from "@/lib/haptics";
 import {
   composeDetails,
   objectPlacePatch,
@@ -58,18 +57,15 @@ export function useAddressPartsEdit(
     patchLocation(loc.id, next);
   };
 
-  const toggle = () => {
-    haptics.tap();
-    setOpen((v) => !v);
-  };
-
+  // Хаптика раскрытия живёт в `ObjectFields` — одна на создание и на правку;
+  // своя здесь давала бы двойной тик.
   return {
     details,
     setDetails,
     pin,
     setPin,
     open,
-    toggle,
+    setOpen,
     commit,
     summary: composeDetails(details),
   };

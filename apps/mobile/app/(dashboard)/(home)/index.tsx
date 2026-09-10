@@ -51,6 +51,10 @@ import {
 } from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
 import {
+  resolveReturnTo,
+  returnToParam,
+} from "@/features/appointments/return-to";
+import {
   DayView,
   type FreeSlotRange,
   type WorkBand,
@@ -118,7 +122,7 @@ import {
   effectiveCalendarWindow,
   hmToMinutes,
 } from "@/features/calendar/window";
-import { DayFinanceModal } from "@/features/calendar/DayFinanceModal";
+import { DayFinanceSheet } from "@/features/calendar/DayFinanceSheet";
 import { DayFinanceFooter } from "@/features/calendar/DayFinanceFooter";
 import { ModePlaque } from "@/features/calendar/ModePlaque";
 import { CANCEL_REASONS } from "@/features/calendar/cancel-reasons";
@@ -673,21 +677,18 @@ export default function CalendarTab() {
           setTeamChoice(target.team_id);
         }
         // Запомнили дорогу назад ДО гашения параметров: сами параметры живут
-        // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог:
-        // «finances» — вкладка денег; «invoice:<id>» / «account:<id>» —
-        // страница, с чьей проводки запись открыли (инвойс, карточка счёта).
-        returnToRef.current =
-          params.from === "finances"
-            ? "/finances"
-            : params.from?.startsWith("invoice:")
-              ? `/invoices/${params.from.slice("invoice:".length)}`
-              : params.from?.startsWith("account:")
-                ? `/accounts/${params.from.slice("account:".length)}`
-                : null;
+        // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог —
+        // `resolveReturnTo`, один на весь продукт.
+        returnToRef.current = resolveReturnTo(params.from);
         // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
-        // старый лист правки здесь больше не открывается.
+        // старый лист правки здесь больше не открывается. Дорогу назад отдаём
+        // ей же: `returnToRef` читает только лист бригадира, а страница —
+        // отдельное окно и про наш ref не знает (2026-09-08).
         if (isCrew || !canMutateAppointment(target)) setCrewViewing(target);
-        else router.push(`/book?appointmentId=${target.id}` as Href);
+        else
+          router.push(
+            `/book?appointmentId=${target.id}${returnToParam(params.from)}` as Href,
+          );
       } else {
         toast("Заявка не найдена или больше недоступна");
       }
@@ -2444,16 +2445,18 @@ export default function CalendarTab() {
           2026-09-06: «это ненужная штука — и так всё видно»): долг стоит
           янтарём в самой строке, а незакрытые — в «Закрыть день». */}
 
-      {/* Разбор финансов дня — тап по футеру Доход/Расход. */}
+      {/* Разбор финансов дня — лист снизу по тапу на футер Доход/Расход
+          (владелец 2026-09-07: «чтобы снизу вверх поднималась плашка»). */}
       {canViewCompanyFinance ? (
-        <DayFinanceModal
+        <DayFinanceSheet
           dateYmd={finModalYmd}
           appointments={finModalYmd ? financeFor(finModalYmd) : []}
           teamId={activeTeamId}
+          businessToday={todayYmd}
           onClose={() => setFinModalYmd(null)}
-          // Тап по строке «Ожидается» открывает запись — контракт с волной
-          // day-extras (проп появляется там же).
           onEditAppointment={openEdit}
+          // После формы операции человек возвращается в разбор того же дня.
+          onReopen={(ymd) => setFinModalYmd(ymd)}
         />
       ) : null}
 

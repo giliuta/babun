@@ -118,14 +118,13 @@ export function CalendarHeader({
               like the iOS Calendar icon; the clock-variant crowded the digit. */}
           <Calendar color={t.accent} size={22} strokeWidth={2} />
           <Text
-            style={{
+            style={{ fontVariant: ["tabular-nums"],
               position: "absolute",
               fontSize: 10,
               fontWeight: "800",
               color: t.accent,
               transform: [{ translateY: 3.5 }],
             }}
-            className="tabular-nums"
           >
             {todayNumber}
           </Text>

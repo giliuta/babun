@@ -1,7 +1,9 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Check, Settings } from "lucide-react-native";
+import { Circle, Settings } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
 // ВЫБОР ОДНОГО ЗНАЧЕНИЯ ИЗ ДЛИННОГО СПИСКА.
@@ -61,120 +63,37 @@ export function ValueOptionList({
 }) {
   const t = useThemeColors();
   return (
+    // СТРОКА — ОБЩАЯ (2026-09-10). Здесь она была своей: высота 48, точка
+    // 10pt вместо кружка сущности, подпись 16/400 и значение 15/600 — то есть
+    // ЗНАЧЕНИЕ ГРОМЧЕ ПОДПИСИ, вопреки закону одиночного выбора, — и всё это
+    // внутри склеенной карточки с волосяными разделителями, тогда как выбор
+    // клиента, объекта, услуги и метки рисует строки на подложке с зазором.
+    // Один и тот же вопрос «выбери одно» выглядел двумя способами.
     <View>
-      <View
-        style={{
-          borderRadius: t.radius.card,
-          overflow: "hidden",
-          backgroundColor: t.surface,
-        }}
-      >
+      <SelectList>
         {options.length === 0 ? (
-          <Text
-            maxFontSizeMultiplier={1.3}
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 18,
-              fontSize: 15,
-              color: t.faint,
-              textAlign: "center",
-            }}
-          >
-            {emptyLabel}
-          </Text>
+          <EmptyState title={emptyLabel} />
         ) : (
-          options.map((o, i) => {
-            const active = o.id === selectedId;
-            return (
-              <View key={o.id}>
-                {i > 0 ? (
-                  <View
-                    style={{
-                      height: 1,
-                      marginLeft: 16,
-                      backgroundColor: t.separator,
-                    }}
-                  />
-                ) : null}
-                <Pressable
-                  onPress={() => {
-                    haptics.tap();
-                    onPick(active && clearable ? null : o.id);
-                  }}
-                  disabled={o.disabled}
-                  accessibilityRole="radio"
-                  accessibilityState={{
-                    selected: active,
-                    disabled: !!o.disabled,
-                  }}
-                  accessibilityLabel={[o.label, o.hint, o.value]
-                    .filter(Boolean)
-                    .join(", ")}
-                  style={({ pressed }) => ({
-                    minHeight: 48,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 10,
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    opacity: o.disabled ? 0.4 : 1,
-                    backgroundColor: pressed ? t.pressed : "transparent",
-                  })}
-                >
-                  {o.color ? (
-                    <View
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: 999,
-                        backgroundColor: o.color,
-                      }}
-                    />
-                  ) : null}
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      numberOfLines={1}
-                      style={{ fontSize: 16, color: t.ink }}
-                    >
-                      {o.label}
-                    </Text>
-                    {o.hint ? (
-                      <Text
-                        maxFontSizeMultiplier={1.3}
-                        numberOfLines={1}
-                        style={{ fontSize: 13, color: t.faint, marginTop: 1 }}
-                      >
-                        {o.hint}
-                      </Text>
-                    ) : null}
-                  </View>
-                  {o.value ? (
-                    <Text
-                      maxFontSizeMultiplier={1.3}
-                      numberOfLines={1}
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 15,
-                        fontWeight: "600",
-                        color: t.ink,
-                        // ТОЛЬКО СТИЛЕМ: `tabular-nums` в className в этом
-                        // стеке — пустышка (src/lib/nativewind-traps.test.ts).
-                        fontVariant: ["tabular-nums"],
-                      }}
-                    >
-                      {o.value}
-                    </Text>
-                  ) : null}
-                  {active ? (
-                    <Check color={t.accent} size={18} strokeWidth={2.5} />
-                  ) : null}
-                </Pressable>
-              </View>
-            );
-          })
+          options.map((o) => (
+            <SelectRow
+            key={o.id}
+            title={o.label}
+            subtitle={o.hint}
+            color={o.color ?? undefined}
+            icon={o.color ? Circle : undefined}
+            value={o.value}
+            disabled={o.disabled}
+            selected={o.id === selectedId}
+            accessibilityRole="radio"
+            accessibilityLabel={[o.label, o.hint, o.value].filter(Boolean).join(", ")}
+            onPress={() => {
+              haptics.tap();
+              onPick(o.id === selectedId && clearable ? null : o.id);
+            }}
+          />
+          ))
         )}
-      </View>
+      </SelectList>
       {footer ? (
         <Text
           maxFontSizeMultiplier={1.3}
@@ -219,33 +138,17 @@ export function ValuePickerSheet({
   const t = useThemeColors();
 
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose} maxHeightRatio={0.8}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          paddingLeft: 20,
-          paddingRight: 12,
-          paddingTop: 8,
-          paddingBottom: 12,
-        }}
-      >
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{
-            flex: 1,
-            fontSize: 17,
-            fontWeight: "600",
-            color: t.ink,
-            marginLeft: onSettings ? 32 : 0,
-            textAlign: "center",
-          }}
-        >
-          {title}
-        </Text>
-        {onSettings ? (
+    <BottomSheet
+      padded={false}
+      visible={visible}
+      onClose={onClose}
+      maxHeightRatio={0.8}
+      // ШАПКА — ОБЩАЯ (2026-09-10). Была нарисована своей строкой с ручным
+      // центрированием «на ширину шестерёнки»; `BottomSheet` делает это сам и
+      // одинаково для всех шторок продукта.
+      title={title}
+      headerAction={
+        onSettings ? (
           <Pressable
             onPress={() => {
               haptics.tap();
@@ -267,12 +170,12 @@ export function ValuePickerSheet({
           >
             <Settings color={t.sub} size={20} strokeWidth={2} />
           </Pressable>
-        ) : null}
-      </View>
-
+        ) : undefined
+      }
+    >
       <ScrollView
         style={{ flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 28 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
         <ValueOptionList
           options={options}

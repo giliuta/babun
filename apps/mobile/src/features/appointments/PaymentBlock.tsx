@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import { FileText, Split } from "lucide-react-native";
+import { FileText, History, Split } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import type {
   Appointment,
@@ -17,7 +17,10 @@ import { haptics } from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { appointmentOverpaidCents } from "@babun/shared/local/finance/appointment-calc";
+import { getPaidAmount } from "@babun/shared/local/appointments";
 import { accountIcon } from "@/features/finances/account-ui";
+import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
 import { useInvoices } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
@@ -137,6 +140,13 @@ export function PaymentBlock({
     { date: visit.date, time_start: visit.timeStart },
     businessNow(),
   );
+  const overpaid = appointment
+    ? appointmentOverpaidCents(
+        appointment.total_amount,
+        getPaidAmount(appointment),
+        appointment.payment_status,
+      )
+    : 0;
   const outstanding = appointment
     ? outstandingCents(appointment)
     : Math.round(totalDraft * 100);
@@ -296,6 +306,8 @@ export function PaymentBlock({
     started,
     hasPending: Boolean(pending),
     outstandingLabel: formatEURExact(outstanding / 100),
+    overpaid,
+    overpaidLabel: formatEURExact(overpaid / 100),
   });
   const captionColor =
     caption?.tone === "success"
@@ -303,6 +315,11 @@ export function PaymentBlock({
       : caption?.tone === "warning"
         ? t.warning
         : undefined;
+
+  // ИСТОРИЯ ПЛАТЕЖЕЙ — ЗДЕСЬ, А НЕ В ЛЕНТЕ КОМПАНИИ (владелец 2026-09-09).
+  // Главная показывает запись одной строкой; сколько раз платили и что
+  // снимали — вопрос про ЭТОГО клиента, и открывается он из его записи.
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const showAmountField = amountMode && outstanding > 0;
 
@@ -333,6 +350,7 @@ export function PaymentBlock({
             <>
               <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
               <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
+              <ModeIconButton icon={History} label="История платежей" onPress={() => setHistoryOpen(true)} />
             </>
           ) : null
         }
@@ -394,6 +412,11 @@ export function PaymentBlock({
         teams={teams}
         accounts={accountRows.data ?? []}
         presetTeamId={teamId}
+      />
+      <PaymentHistorySheet
+        visible={historyOpen}
+        appointmentId={appointment?.id ?? null}
+        onClose={() => setHistoryOpen(false)}
       />
     </SectionCard>
   );

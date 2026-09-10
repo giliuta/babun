@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useRouter, type Href } from "expo-router";
-import { NavRow, RowGroup } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { useClientAppointments } from "@/features/clients/appointments";
 import { useClientAttachments } from "@/features/clients/card-attachments";
 import {
@@ -67,7 +68,7 @@ export default function DocumentationBlock({ clientId }: { clientId: string }) {
   };
 
   return (
-    <RowGroup title="Документация">
+    <SectionCard title="Документация">
       {shown.map((group, i) => (
         <NavRow
           key={group.key}
@@ -110,6 +111,6 @@ export default function DocumentationBlock({ clientId }: { clientId: string }) {
           router.push({ pathname: "/documents", params: { clientId } });
         }}
       />
-    </RowGroup>
+    </SectionCard>
   );
 }

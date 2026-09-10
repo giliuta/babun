@@ -176,8 +176,7 @@ function StepRow({
           <Check color={t.success} size={16} strokeWidth={2.6} />
         ) : (
           <Text
-            className="tabular-nums"
-            style={{ fontSize: 14, fontWeight: "700", color: t.accent }}
+            style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "700", color: t.accent }}
           >
             {n}
           </Text>

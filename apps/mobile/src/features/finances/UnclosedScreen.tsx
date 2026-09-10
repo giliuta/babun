@@ -19,6 +19,8 @@ import {
   getCurrentTimeInZone,
 } from "@babun/shared/common/utils/date-utils";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { GUTTER } from "@/components/ui/tokens";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { Screen } from "@/components/ui/Screen";
@@ -379,38 +381,20 @@ function CancelReasonSheet({
       onClose={onClose}
       title="Отменить визит"
       avoidKeyboard
+      // ВНИЗУ ЛИСТА РОВНО ОДНА КНОПКА (канон анатомии листа): выход — скрим и
+      // свайп, как у всех листов продукта. Здесь стояли две, и обе были
+      // нарисованы руками: 44pt, радиус 999 литералом, кегль 15 — третья
+      // геометрия «главного действия» в продукте. Заливка красная потому, что
+      // действие разрушительное, а не для украшения.
       footer={
-        <View className="flex-row px-5" style={{ gap: 10 }}>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Назад"
-            className="flex-1 items-center justify-center rounded-full active:opacity-60"
-            style={{ height: 44, borderWidth: 1, borderColor: t.separator }}
-          >
-            <Text className="text-[15px] font-medium" style={{ color: t.sub }}>
-              Назад
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => onConfirm(reasonToSubmit)}
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button
+            label="Отменить визит"
+            variant="filled"
+            tone="danger"
             disabled={!canSubmit}
-            accessibilityRole="button"
-            accessibilityLabel="Отменить визит"
-            className="flex-1 items-center justify-center rounded-full active:opacity-80"
-            style={{
-              height: 44,
-              backgroundColor: t.danger,
-              opacity: canSubmit ? 1 : 0.5,
-            }}
-          >
-            <Text
-              className="text-[15px] font-semibold"
-              style={{ color: t.onAccent }}
-            >
-              Отменить визит
-            </Text>
-          </Pressable>
+            onPress={() => onConfirm(reasonToSubmit)}
+          />
         </View>
       }
     >

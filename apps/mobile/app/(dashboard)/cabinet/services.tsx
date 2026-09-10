@@ -45,8 +45,7 @@ import {
   type Service,
   type ServiceInput,
 } from "@/features/services/queries";
-import { ColorDot, NameColorField } from "@/components/ui/picker-fields";
-import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
+import { NameField } from "@/components/ui/picker-fields";
 import { durationLabel, roundToStep } from "@/features/services/format";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { notify } from "@/lib/notify";
@@ -201,14 +200,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
       ...mine.filter((s) => !s.is_active),
     ];
   }, [everyService, activeTeamId]);
-  /** Цвета, уже занятые в прайсе ЭТОЙ команды: новая услуга садится на первый
-   *  свободный из цикла — тот же приём, которым красится новый календарь. Без
-   *  него весь прайс сидит на одном Голубом, и правило «цвет по услуге» в день
-   *  включения выглядит сломанным. */
-  const usedColors = useMemo(
-    () => services.map((s) => s.color).filter(Boolean),
-    [services],
-  );
   /** Убранные услуги ЭТОЙ команды — полный справочник минус живой. */
 
   const alertError = (e: unknown) =>
@@ -495,9 +486,8 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                           backgroundColor: pressed ? t.pressed : t.surface,
                         })}
                       >
-                        <ColorDot value={svc.color} size={12} />
                         <View
-                          style={{ flex: 1, paddingLeft: 12, paddingRight: 12 }}
+                          style={{ flex: 1, paddingRight: 12 }}
                         >
                           <Text
                             maxFontSizeMultiplier={1.3}
@@ -583,7 +573,6 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 
       <ServiceSheet
         editing={editing}
-        usedColors={usedColors}
         lockedTeamId={activeTeamId ?? undefined}
         busy={busy}
         onClose={() => setEditing(null)}
@@ -601,15 +590,12 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
 // метках 2026-08-17.
 function ServiceSheet({
   editing,
-  usedColors,
   lockedTeamId,
   busy,
   onClose,
   onSave,
 }: {
   editing: ServiceEditing | null;
-  /** Цвета, занятые в этом прайсе, — чтобы новая услуга не села на чужой. */
-  usedColors?: readonly string[];
   /** Per-team-контекст: новая услуга сразу привязана к этой команде. */
   lockedTeamId?: string;
   busy: boolean;
@@ -632,7 +618,6 @@ function ServiceSheet({
   /** Расход за одну у первой строки — колонка `cost_per_unit`. Пустым не
    *  бывает: он не доходит до клиента и живёт только в прибыли. */
   const [cost, setCost] = useState("0");
-  const [color, setColor] = useState<string>(PRESET_COLOR_CYCLE[0].value);
   const [description, setDescription] = useState("");
   /** Карточка описания заведена: пустая строка и «нет описания» — разные вещи,
    *  и снятое описание уезжает в базу явным `null`. */
@@ -745,14 +730,6 @@ function ServiceSheet({
     // Владелец: у правки — свой, у дубля — тот же, у новой из хаба команды —
     // эта команда, иначе первая в списке. Услуга без команды не существует.
     //
-    // ЦВЕТ: у правки свой, у дубля цвет источника, у НОВОЙ — первый свободный
-    // в этом прайсе. Пока здесь стоял `PRESET_COLOR_CYCLE[0]`, весь прайс
-    // садился на один Голубой, и день читался бы одним оттенком.
-    const used = new Set(usedColors ?? []);
-    const nextFree =
-      PRESET_COLOR_CYCLE.find((c) => !used.has(c.value))?.value ??
-      PRESET_COLOR_CYCLE[0].value;
-    setColor(from?.color || nextFree);
     setDescription(from?.description ?? "");
     setHasDescription(!!from?.description?.trim());
     setBufferAfter(String(from?.buffer_after_min ?? 0));
@@ -889,7 +866,6 @@ function ServiceSheet({
       {
         name: name.trim(),
         team_id: ownerTeam as string,
-        color,
         description: description.trim() || null,
         cost_per_unit: Math.max(0, Number(cost.trim().replace(",", ".")) || 0),
         price: parsedPrice,
@@ -996,12 +972,14 @@ function ServiceSheet({
           строку. Подпись честно называет последствие — а формулировку для
           конкретного счёта правят в самом счёте, где она и замерзает. */}
       <View style={{ paddingHorizontal: GUTTER }}>
-        <NameColorField
+        {/* ЦВЕТА У УСЛУГИ БОЛЬШЕ НЕТ (владелец 2026-09-08: «в настройках и
+            создании услуг убираем полностью цвет — я понял, что он вообще не
+            нужен»). Он заводился ради точки в строке записи, а точка ничего
+            не различала: услуг в записи немного, и каждая названа словом. */}
+        <NameField
           label="Название"
           name={name}
           onNameChange={setName}
-          color={color}
-          onColorChange={setColor}
           autoFocus={!service}
           // «＋ Описание» переехало К ПОДПИСИ (владелец 2026-08-24: «название,
           // а с правой стороны — плюс описание; топаю — и внизу открывается

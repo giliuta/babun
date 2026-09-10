@@ -458,8 +458,8 @@ function TemplateEditor({
                   Текст сообщения
                 </Text>
                 <Text
-                  className="text-xs tabular-nums"
-                  style={{
+                  className="text-xs"
+                  style={{ fontVariant: ["tabular-nums"],
                     color: encInfo.segments > 1 ? t.warning : t.faint,
                     fontWeight: encInfo.segments > 1 ? "600" : "400",
                   }}
