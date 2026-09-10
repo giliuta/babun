@@ -13,6 +13,7 @@ export function AddRow({
   onPress,
   disabled,
   separated,
+  compact,
 }: {
   /** Полная подпись действия: «Добавить счёт», «Добавить услугу»… */
   label: string;
@@ -20,6 +21,12 @@ export function AddRow({
   disabled?: boolean;
   /** Верхняя линия — когда строка идёт под списком, а не одна в группе. */
   separated?: boolean;
+  /** ПЛОТНЫЙ СЛУЧАЙ — ФОРМА В ШТОРКЕ (владелец 2026-09-10: «улучшить этот
+   *  бокс, сделай немного компактнее, как и другие»). В списках кабинета
+   *  строка стоит под перечнем и держит 52 точки; в форме она одна в блоке
+   *  рядом с блоками по 46, и лишние шесть точек видно. Ниже минимума Apple
+   *  не опускаемся: 46 > 44. */
+  compact?: boolean;
 }) {
   const t = useThemeColors();
   return (
@@ -42,7 +49,7 @@ export function AddRow({
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 16,
-        minHeight: 52,
+        minHeight: compact ? 46 : 52,
         opacity: disabled ? 0.4 : 1,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
