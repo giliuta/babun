@@ -95,6 +95,77 @@ describe("библиотека блоков указывает на живой �
     }
   });
 
+  // ЧИСЛА ГЕОМЕТРИИ — ГЛАВНОЕ, ЧТО КОПИРУЮТ (владелец 2026-09-10: «мне
+  // главное, чтоб была выполнена полностью эта же архитектура: отступ от
+  // блоков, отступ от надписи, полностью выбор иконки, всё»). Каталог
+  // называет их числами; если код поедет, а каталог останется, копировать по
+  // нему станет вредно. Поэтому каждое число проверяется в источнике.
+  test("отступы и кегли блока в коде те же, что в каталоге", () => {
+    const card = readFileSync(resolve(APP, "src/components/ui/SectionCard.tsx"), "utf8");
+    assert.match(card, /className=\{`mt-2 \$\{className\}`\}/, "промежуток между блоками больше не 8");
+    assert.match(card, /marginHorizontal: GUTTER/, "боковое поле блока больше не GUTTER");
+    assert.match(card, /className="relative flex-row items-center px-4 pb-0\.5 pt-2\.5"/, "отступы подписи блока поехали");
+    assert.match(card, /fontSize: 11,/, "кегль подписи блока больше не 11");
+    assert.match(card, /letterSpacing: 0\.6,/, "трекинг подписи блока поехал");
+    // Команда блока стоит АБСОЛЮТОМ — иначе подпись съезжает на 6px у блоков
+    // с иконкой, и «по пикселям одинаково» перестаёт быть правдой.
+    assert.match(card, /position: "absolute"/, "команда блока вернулась в поток");
+    assert.match(card, /right: 16/);
+    assert.match(card, /top: 6/);
+    assert.match(card, /gap: 16/);
+    assert.match(card, /className="p-4 pt-2"/, "внутренние отступы тела блока поехали");
+
+    const tokens = readFileSync(resolve(APP, "src/components/ui/tokens.ts"), "utf8");
+    assert.match(tokens, /ICON = \{ lg: 24, md: 22, sm: 18, xs: 14 \}/, "размеры иконок поехали");
+    assert.match(tokens, /GUTTER = 16/, "гуттер больше не 16");
+
+    const circle = readFileSync(resolve(APP, "src/components/ui/IconCircle.tsx"), "utf8");
+    assert.match(circle, /size = 34/, "кружок двери блока больше не 34pt");
+
+    const choose = readFileSync(resolve(APP, "src/components/ui/ChooseRow.tsx"), "utf8");
+    assert.match(choose, /className="flex-row items-center px-4 py-3\.5"/, "высота двери блока поехала");
+    assert.match(choose, /marginLeft: 12,/, "отступ подписи от кружка поехал");
+    assert.match(choose, /fontSize: 17,/, "кегль двери блока больше не 17");
+
+    const note = readFileSync(resolve(APP, "src/features/appointments/InlineNoteField.tsx"), "utf8");
+    assert.match(note, /marginHorizontal: 12,/);
+    assert.match(note, /paddingVertical: 7,/);
+    assert.match(note, /fontSize: 13,/);
+
+    const rows = readFileSync(resolve(APP, "src/components/ui/select-rows.tsx"), "utf8");
+    assert.match(rows, /minHeight: 52,/, "строка шторки больше не 52pt");
+    assert.match(rows, /paddingHorizontal: 14,/);
+    assert.match(rows, /gap: 12,/);
+    assert.match(rows, /const CIRCLE = 28/, "кружок строки шторки больше не 28pt");
+    assert.match(rows, /minHeight: 40,/, "поле поиска шторки больше не 40pt");
+  });
+
+  test("иконка сущности та же, что обещает каталог", () => {
+    const expected: [string, string, string][] = [
+      ["app/book/index.tsx", "UserRound", "клиент"],
+      ["app/book/index.tsx", "Briefcase", "услуга"],
+      ["src/features/clients/ObjectPickerSheet.tsx", "MapPin", "объект"],
+      ["src/features/reference/LabelPickerSheet.tsx", "MapPin", "метка"],
+      ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],
+      ["src/features/clients/ObjectFields.tsx", "MapPinned", "точка на карте"],
+      ["src/features/clients/ObjectFields.tsx", "Send", "попросить адрес"],
+      // Настройки БЛОКА — ползунки; настройки СПИСКА в шапке шторки —
+      // шестерёнка. Владелец присылал картинкой именно ползунки.
+      ["src/features/clients/ObjectFields.tsx", "Settings2", "настройки блока"],
+      ["src/features/appointments/EventTypeBlock.tsx", "Settings2", "настройки блока"],
+      ["src/components/ui/PickerSheet.tsx", "Settings", "настройки списка"],
+      ["src/components/ui/ValuePickerSheet.tsx", "Settings", "настройки списка"],
+    ];
+    for (const [path, icon, role] of expected) {
+      const source = readFileSync(resolve(APP, path), "utf8");
+      assert.match(
+        source,
+        new RegExp(`\\b${icon}\\b`),
+        `${path}: пропала иконка ${icon} (${role}) — каталог обещает её`,
+      );
+    }
+  });
+
   test("каталог назван в правилах, иначе его никто не откроет", () => {
     const agents = readFileSync(resolve(ROOT, "AGENTS.md"), "utf8");
     assert.match(agents, /BLOCKS\.md/);
