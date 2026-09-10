@@ -368,18 +368,18 @@
   visible={eventTypeSheetOpen}
   title="Тип события"
   selectedId={eventTypeId}
-  items={[
-    // «Без типа» — только когда снимать есть что
-    ...(eventTypeId ? [{ id: "none", label: "Без типа", icon: CircleSlash, color: t.faint, hint: "…", onPress: clearEventType }] : []),
-    ...eventTypes.map((type) => ({
+  // ТАП ПО ВЫБРАННОЙ СТРОКЕ СНИМАЕТ ВЫБОР — служебной строки «Без типа» нет
+  items={eventTypes.map((type) => {
+    const chosen = type.id === eventTypeId;
+    return {
       id: type.id,
       label: type.label,
       icon: eventTypeIcon(type.icon),
       color: type.color,
-      hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
-      onPress: () => applyEventType(type.id),
-    })),
-  ]}
+      hint: chosen ? "Тап снимает тип" : `${durationLabel(type.defaultDuration)} по умолчанию`,
+      onPress: chosen ? clearEventType : () => applyEventType(type.id),
+    };
+  })}
   onSettings={() => router.push("/event-types")}
   settingsLabel="Типы событий"
   onClose={() => setEventTypeSheetOpen(false)}
@@ -413,7 +413,7 @@
 | Метка клиента | строка в блоке «Личное» | `reference/LabelPickerSheet` | нет |
 | Теги клиента | строка в блоке «Личное» | `clients/TagPickerSheet` | «Применить» |
 | Категория операции | `finances/CategoryBlock` (в листе операции — плотная строка в общей карточке с суммой) | `ui/PickerSheet` | нет |
-| Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet` (+ строка «Без типа») | нет |
+| Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet`; тап по выбранной строке снимает тип | нет |
 | Счёт | `PaymentTiles` либо `ValueRow` | `ui/ValuePickerSheet` | нет |
 | Клиент или заявка инвойса | `ValueRow` | `invoices/EntityPickerSheet` | нет |
 | Команда и мастер | докет `TeamLabelRow` | `appointments/BookingSheets` → `TeamMasterSheet` | «Применить» |
