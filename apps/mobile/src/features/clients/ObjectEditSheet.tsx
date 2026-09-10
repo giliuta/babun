@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client, Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ActionRow } from "@/components/ui/card-rows";
@@ -69,6 +70,7 @@ export function ObjectEditSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const typesHref = useReferenceHref().objectTypes;
   const insets = useSafeAreaInsets();
@@ -183,7 +185,7 @@ export function ObjectEditSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
+      visible={visible && !doorway.parked}
       // Закрытие скримом/свайпом — тоже уход со строки: без этого набранный
       // адрес пропадал вместе с листом (onEditEnd при размонтировании не
       // приходит, а live-строки коммит на размонтировании пропускают).
@@ -242,11 +244,12 @@ export function ObjectEditSheet({
               : undefined
           }
           onTypeSettings={() => {
-            // Уход в настройки — такой же уход со строки, как скрим: без
-            // коммита набранный адрес пропадал по дороге.
+            // Коммит набранного остаётся: адрес, недописанный в строке, иначе
+            // теряется по дороге. А вот ЗАКРЫВАТЬ лист больше не надо —
+            // он паркуется и возвращается по «назад» (владелец 2026-09-10:
+            // «сделай стандарт, как и везде», AGENTS 5.4).
             commitAll();
-            onClose();
-            router.push(typesHref);
+            doorway.open(() => router.push(typesHref));
           }}
         />
 

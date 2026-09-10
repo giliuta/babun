@@ -121,6 +121,7 @@ describe("выписка по счёту", () => {
         icon: null,
         color: null,
         hidden: false,
+        position: 0,
       },
     ];
     const result = accountStatementToCsv({

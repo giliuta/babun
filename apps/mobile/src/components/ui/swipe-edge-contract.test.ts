@@ -192,7 +192,9 @@ describe("кромки свайпа", () => {
       join(app, "app/(dashboard)/cabinet/categories.tsx"),
       "utf8",
     );
-    assert.match(screen, /sort\(\(a, b\) => Number\(a\.hidden\) - Number\(b\.hidden\)\)/);
+    // Сортировка НАЧИНАЕТСЯ со скрытых — что идёт дальше (порядок тенанта,
+    // имя), закон не касается; важно, что скрытая падает вниз.
+    assert.match(screen, /Number\(a\.hidden\) - Number\(b\.hidden\)/);
     for (const [file, hint] of [
       ["src/features/finances/OperationSheet.tsx", "лист операции"],
       ["app/(dashboard)/cabinet/templates.tsx", "шаблоны операций"],

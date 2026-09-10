@@ -16,6 +16,7 @@ import {
   deleteFinanceCategory,
   insertFinanceCategory,
   setFinanceCategoryHidden,
+  setFinanceCategoryOrder,
   listFinanceCategories,
   updateFinanceCategory,
   type FinanceCategoryPatch,
@@ -228,6 +229,20 @@ export function useUpdateCategory() {
 /** Скрыть/вернуть категорию в списке этого тенанта. Стандартные строки
  *  нельзя ни переименовать, ни удалить (они общие на весь продукт) — зато
  *  можно убрать из своего списка. */
+/** ПОРЯДОК СПРАВОЧНИКА КАТЕГОРИЙ — по тенанту (владелец 2026-09-10: «шесть
+ *  точек справа для передвижения… везде это добавь»). Пишем всю пачку разом:
+ *  перетаскивание меняет позиции всех видимых строк. */
+export function useReorderFinanceCategories() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      setFinanceCategoryOrder(supabase, tenantId as string, orderedIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-categories"] }),
+    meta: { errorHandled: true },
+  });
+}
+
 export function useSetCategoryHidden() {
   const tenantId = useTenantId();
   const qc = useQueryClient();

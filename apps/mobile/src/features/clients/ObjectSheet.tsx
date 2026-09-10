@@ -4,6 +4,7 @@ import { AccessibilityInfo, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
 import type { LocationWriter } from "@/features/clients/use-location-writer";
 import {
@@ -78,6 +79,7 @@ export function ObjectSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
+  const doorway = useSheetDoorway();
   // Куда ведёт шестерёнка — решает маршрут (см. `useReferenceHref`).
   const typesHref = useReferenceHref().objectTypes;
   const insets = useSafeAreaInsets();
@@ -190,7 +192,7 @@ export function ObjectSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
+      visible={visible && !doorway.parked}
       onClose={onClose}
       // ЗАГОЛОВОК — КАНОНИЧЕСКИЙ, БЕЗ «ГОТОВО» В УГЛУ (владелец 2026-09-04:
       // «нет такого у нас по архитектуре, что справа „Готово“ — у нас нижняя
@@ -219,9 +221,13 @@ export function ObjectSheet({
           typeOptions={typeOptions}
           onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
           onTypeSettings={() => {
-            // Настройки ЗАКРЫВАЮТ лист: страница не может жить под ним.
-            onClose();
-            router.push(typesHref);
+            // ДВЕРЬ ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ ЕГО (владелец 2026-09-10:
+            // «это точно такое же, как выбор категории — сделай стандарт, как
+            // и везде»). Раньше лист закрывался: страница открывалась
+            // нормально, но «назад» приводил на карточку, а начатый объект
+            // приходилось заводить заново. Теперь лист уезжает вниз и
+            // возвращается с набранным (`use-sheet-doorway`, AGENTS 5.4).
+            doorway.open(() => router.push(typesHref));
           }}
           onRequestFromClient={
             onRequestFromClient

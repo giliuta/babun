@@ -67,6 +67,7 @@ const CATEGORIES: FinanceCategory[] = [
     icon: null,
     color: null,
     hidden: false,
+    position: 0,
   },
   {
     id: "cat-service",
@@ -77,6 +78,7 @@ const CATEGORIES: FinanceCategory[] = [
     icon: null,
     color: null,
     hidden: false,
+    position: 0,
   },
 ];
 

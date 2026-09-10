@@ -23,12 +23,21 @@ export interface FinanceCategory {
   color: string | null;
   /** Тенант убрал строку из своего списка (finance_category_hidden). */
   hidden: boolean;
+  /** Место в списке ЭТОГО тенанта (finance_category_order). Строки нет — ноль,
+   *  дальше разводит имя: справочник, который не перетаскивали, выглядит как
+   *  раньше. Позиция живёт отдельной таблицей, потому что сами категории
+   *  глобальные и колонка в них переставила бы список всем компаниям. */
+  position: number;
 }
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["finance_categories"]["Row"];
 
-function rowToCategory(r: Row, hidden = false): FinanceCategory {
+function rowToCategory(
+  r: Row,
+  hidden = false,
+  position = 0,
+): FinanceCategory {
   return {
     id: r.id,
     tenant_id: r.tenant_id,
@@ -38,6 +47,7 @@ function rowToCategory(r: Row, hidden = false): FinanceCategory {
     icon: r.icon,
     color: r.color,
     hidden,
+    position,
   };
 }
 
@@ -48,7 +58,7 @@ export async function listFinanceCategories(
   supabase: DbSupabase,
   tenantId: string,
 ): Promise<FinanceCategory[]> {
-  const [list, hidden] = await Promise.all([
+  const [list, hidden, order] = await Promise.all([
     supabase
       .from("finance_categories")
       .select("*")
@@ -59,11 +69,22 @@ export async function listFinanceCategories(
       .from("finance_category_hidden")
       .select("category_id")
       .eq("tenant_id", tenantId),
+    supabase
+      .from("finance_category_order")
+      .select("category_id, position")
+      .eq("tenant_id", tenantId),
   ]);
   if (list.error) throw new Error(`listFinanceCategories: ${list.error.message}`);
   if (hidden.error) throw new Error(`listFinanceCategories: ${hidden.error.message}`);
+  // Порядок необязателен: у справочника, который никто не перетаскивал, строк
+  // нет вовсе, и это не ошибка чтения.
+  const at = new Map(
+    (order.data ?? []).map((r) => [r.category_id, r.position] as const),
+  );
   const off = new Set((hidden.data ?? []).map((r) => r.category_id));
-  return ((list.data ?? []) as Row[]).map((r) => rowToCategory(r, off.has(r.id)));
+  return ((list.data ?? []) as Row[]).map((r) =>
+    rowToCategory(r, off.has(r.id), at.get(r.id) ?? 0),
+  );
 }
 
 /** Прячет/возвращает категорию в списке этого тенанта. */
@@ -165,4 +186,25 @@ export async function deleteFinanceCategory(
   if (error || !data) {
     throw new Error(error?.message ?? "Категория не найдена или недоступна");
   }
+}
+
+/** ПОРЯДОК СПРАВОЧНИКА — РУКОЙ ВЛАДЕЛЬЦА И ТОЛЬКО ЕГО ТЕНАНТА. Пишем разом:
+ *  перетаскивание меняет позиции всей видимой пачки, и построчная запись
+ *  оставила бы список наполовину переставленным при обрыве связи. */
+export async function setFinanceCategoryOrder(
+  supabase: DbSupabase,
+  tenantId: string,
+  orderedIds: readonly string[],
+): Promise<void> {
+  if (orderedIds.length === 0) return;
+  const { error } = await supabase.from("finance_category_order").upsert(
+    orderedIds.map((category_id, position) => ({
+      tenant_id: tenantId,
+      category_id,
+      position,
+      updated_at: new Date().toISOString(),
+    })),
+    { onConflict: "tenant_id,category_id" },
+  );
+  if (error) throw new Error(`setFinanceCategoryOrder: ${error.message}`);
 }

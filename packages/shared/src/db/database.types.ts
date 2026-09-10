@@ -1301,6 +1301,42 @@ export type Database = {
           },
         ]
       }
+      finance_category_order: {
+        Row: {
+          category_id: string
+          position: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category_id: string
+          position?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string
+          position?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "finance_category_order_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "finance_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "finance_category_order_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_categories: {
         Row: {
           color: string | null

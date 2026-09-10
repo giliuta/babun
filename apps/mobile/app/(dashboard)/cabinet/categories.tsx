@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -20,6 +20,11 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
+import { ReorderList } from "@/components/ui/ReorderList";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -31,6 +36,7 @@ import {
   useInsertCategory,
   useSetCategoryHidden,
   useUpdateCategory,
+  useReorderFinanceCategories,
 } from "@/features/finances/queries";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
@@ -79,6 +85,7 @@ export default function CategoriesScreen() {
   const update = useUpdateCategory();
   const del = useDeleteCategory();
   const setHidden = useSetCategoryHidden();
+  const reorderCats = useReorderFinanceCategories();
 
   // Третья ступень — долги (владелец 2026-09-10: «под расход свои категории,
   // под доход свои, под долги свои, они не смешиваются»). В списке
@@ -92,14 +99,20 @@ export default function CategoriesScreen() {
   const [editing, setEditing] = useState<FinanceCategory | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [icon, setIcon] = useState<string | null>(null);
 
   const filtered = useMemo(
-    // Порядок внутри групп — как пришёл из справочника; sort стабилен, так
-    // что скрытые лишь опускаются в конец, ничего между собой не меняя.
+    // Скрытые в конец, дальше — ПОРЯДОК ТЕНАНТА (перетаскивание), дальше имя.
+    // До 2026-09-10 порядка не было вовсе: список шёл как пришёл из базы.
     () =>
       cats
         .filter((c) => c.type === type)
-        .sort((a, b) => Number(a.hidden) - Number(b.hidden)),
+        .sort(
+          (a, b) =>
+            Number(a.hidden) - Number(b.hidden) ||
+            a.position - b.position ||
+            a.name.localeCompare(b.name, "ru", { sensitivity: "base" }),
+        ),
     [cats, type],
   );
 
@@ -107,12 +120,23 @@ export default function CategoriesScreen() {
     setEditing(null);
     setName("");
     setColor(DEFAULT_COLOR);
+    setIcon(null);
     setOpen(true);
   };
   // СТАНДАРТНУЮ КАТЕГОРИЮ НЕЛЬЗЯ ПЕРЕИМЕНОВАТЬ — она общая на весь продукт,
   // и правка задела бы чужие компании. Зато её можно убрать из СВОЕГО списка:
   // владелец 2026-08-09 просил, чтобы список менялся полностью. Убирает
   // только левая кромка — тапом это не делается (см. закон в шапке).
+  const [dragging, setDragging] = useState(false);
+
+  // ПОРЯДОК — РУКА ВЛАДЕЛЬЦА И ТОЛЬКО ЕГО КОМПАНИИ: сами категории общие на
+  // продукт, поэтому позиции лежат отдельной таблицей на тенант.
+  const reorder = (ids: string[]) =>
+    reorderCats.mutate(ids, {
+      onError: (e: Error) =>
+        notify("Не удалось сохранить порядок", e.message),
+    });
+
   const toggleHidden = (c: FinanceCategory) => {
     setHidden.mutate(
       { id: c.id, hidden: !c.hidden },
@@ -124,6 +148,7 @@ export default function CategoriesScreen() {
     setEditing(c);
     setName(c.name);
     setColor(c.color ?? DEFAULT_COLOR);
+    setIcon(c.icon ?? null);
     setOpen(true);
   };
 
@@ -209,13 +234,22 @@ export default function CategoriesScreen() {
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
+          scrollEnabled={!dragging}
         >
-          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
-            {filtered.map((item) => {
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <ReorderList
+              items={filtered}
+              rowHeight={52}
+              spaced
+              labelFor={(item) => item.name}
+              handleInside
+              onReorder={reorder}
+              onDraggingChange={setDragging}
+            >
+              {(item, _index, handle) => {
               const own = !!item.tenant_id;
               return (
                 <SwipeRow
-                  key={item.id}
                   label={own ? "Удалить" : undefined}
                   color={own ? th.danger : undefined}
                   icon={own ? Trash2 : undefined}
@@ -235,13 +269,15 @@ export default function CategoriesScreen() {
                 >
                   <CategoryRow
                     item={item}
+                    handle={handle}
                     onEdit={own ? () => openEdit(item) : undefined}
                     onToggleHidden={() => toggleHidden(item)}
                     onDelete={own ? () => confirmDelete(item) : undefined}
                   />
                 </SwipeRow>
               );
-            })}
+              }}
+            </ReorderList>
           </View>
         </ScrollView>
       )}
@@ -280,6 +316,8 @@ export default function CategoriesScreen() {
           onNameChange={setName}
           color={color}
           onColorChange={setColor}
+          icon={icon}
+          onIconChange={setIcon}
           autoFocus={!editing}
         />
       </BottomSheet>
@@ -296,11 +334,14 @@ export default function CategoriesScreen() {
  *  действия словами — подложка свайпа от него спрятана (см. SwipeRow). */
 function CategoryRow({
   item,
+  handle,
   onEdit,
   onToggleHidden,
   onDelete,
 }: {
   item: FinanceCategory;
+  /** Ручка перетаскивания — СНАРУЖИ нажимаемой области строки. */
+  handle: ReactNode;
   /** Правка своей категории; `undefined` — стандартная, править нечего. */
   onEdit?: () => void;
   onToggleHidden: () => void;
@@ -328,19 +369,17 @@ function CategoryRow({
       paddingLeft: 16,
       paddingRight: 12,
       borderRadius: th.radius.card,
-      backgroundColor: pressed ? th.pressed : th.surface,
+      backgroundColor: appearanceRowFill(item.color, pressed, {
+        rest: th.surface,
+        pressed: th.pressed,
+      }),
       opacity: item.hidden ? 0.45 : 1,
     }) as const;
   const face = (
     <>
-      <View
-        style={{
-          height: 12,
-          width: 12,
-          borderRadius: th.radius.pill,
-          backgroundColor: item.color ?? th.faint,
-        }}
-      />
+      {/* ПЛИТКА ВИДА — как у тега, метки, услуги и типа объекта. Точка 12pt
+          умела показать только цвет, а у категории есть и значок. */}
+      <AppearanceTile color={item.color} icon={item.icon} size={28} />
       <Text
         numberOfLines={1}
         maxFontSizeMultiplier={1.3}
@@ -353,6 +392,7 @@ function CategoryRow({
           скрыта
         </Text>
       ) : null}
+      {handle}
     </>
   );
 
