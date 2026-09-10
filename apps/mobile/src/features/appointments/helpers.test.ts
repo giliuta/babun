@@ -16,6 +16,7 @@ function makeService(patch: Partial<Service> = {}): Service {
     brigade_ids: [],
     bulk_price: 0,
     bulk_threshold: 0,
+    icon: null,
     description: null,
     category_id: null,
     color: "#2C5BE0",

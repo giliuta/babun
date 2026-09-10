@@ -5,6 +5,7 @@ import {
   generatePersonalEventTypeId,
   type PersonalEventType,
 } from "@babun/shared/local/personal-event-types";
+import { appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -217,7 +218,10 @@ export function EventTypesScreen() {
                       alignItems: "center",
                       // Скрытый не исчезает и не кричит — просто тише живых.
                       opacity: type.hidden ? 0.45 : 1,
-                      backgroundColor: t.surface,
+                      backgroundColor: appearanceRowFill(type.color, false, {
+                        rest: t.surface,
+                        pressed: t.pressed,
+                      }),
                     }}
                   >
                     <Pressable
@@ -231,7 +235,9 @@ export function EventTypesScreen() {
                         alignItems: "center",
                         gap: 12,
                         paddingLeft: 16,
-                        backgroundColor: pressed ? t.pressed : t.surface,
+                        // Заливку держит вся строка (см. выше); здесь
+                        // остаётся только отклик на палец.
+                        backgroundColor: pressed ? t.pressed : "transparent",
                       })}
                     >
                       <TypeMark color={type.color} icon={type.icon} />

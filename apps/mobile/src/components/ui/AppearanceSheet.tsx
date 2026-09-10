@@ -34,6 +34,21 @@ import { PICKER_RADIUS } from "./picker-grid";
 // «Применить» из словаря AGENTS.md: «Готово» и «Сохранить» в этой роли в
 // продукте не бывает.
 
+/** ПОДСВЕТКА СТРОКИ СПРАВОЧНИКА — ТА ЖЕ, ЧТО У СТРОКИ ВЫБОРА (владелец
+ *  2026-09-10: «сделай подсветку блоков, мне кажется, это более интересное»).
+ *  Строка в шторке выбора уже заливается цветом сущности на 8 %, а строка того
+ *  же справочника в кабинете стояла белой — один и тот же тег выглядел в двух
+ *  местах по-разному. Числа те же, что в `select-rows`: 8 % покоя, 14 % под
+ *  пальцем; без цвета строка остаётся на своей подложке. */
+export function appearanceRowFill(
+  color: string | null | undefined,
+  pressed: boolean,
+  fallback: { rest: string; pressed: string },
+): string {
+  if (!color) return pressed ? fallback.pressed : fallback.rest;
+  return `${color}${pressed ? "24" : "14"}`;
+}
+
 export type AppearanceTab = "icon" | "color";
 
 /** Образец: квадрат цвета сущности, внутри — её значок. Тот же язык, что у

@@ -120,6 +120,9 @@ export function masterServiceJsonToService(value: Json): Service {
     // Описание мастеру НЕ отдаётся: оно печатается в счёте, а бумаг мастер не
     // выставляет — проекция его и не возвращает.
     description: null,
+    // Вид — не экономика: значок и цвет мастеру нужны, чтобы узнать услугу в
+    // наряде тем же способом, что и все остальные.
+    icon: nullableString(row, "icon"),
     // Команда-владелец нужна мастеру не ради прав, а ради каталога: услуга
     // принадлежит ровно одной команде (2026-08-17).
     team_id: requiredString(row, "team_id"),
@@ -178,6 +181,7 @@ export function dispatcherServiceJsonToService(value: Json): Service {
     team_id: requiredString(row, "team_id"),
     // Диспетчер собирает счёт — описание ему нужно.
     description: nullableString(row, "description"),
+    icon: nullableString(row, "icon"),
     category_id: null,
     name: requiredString(row, "name"),
     price: requiredNumber(row, "price"),

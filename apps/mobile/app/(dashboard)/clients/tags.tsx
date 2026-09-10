@@ -12,7 +12,10 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { ReorderList } from "@/components/ui/ReorderList";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -232,7 +235,10 @@ export default function ClientTagsScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      backgroundColor: t.surface,
+                      backgroundColor: appearanceRowFill(tag.color, false, {
+                        rest: t.surface,
+                        pressed: t.pressed,
+                      }),
                       opacity: tag.hidden ? 0.45 : 1,
                     }}
                   >
@@ -248,7 +254,11 @@ export default function ClientTagsScreen() {
                         alignItems: "center",
                         gap: 12,
                         paddingLeft: 16,
-                        backgroundColor: pressed ? t.pressed : t.surface,
+                        // ЗАЛИВКУ ДЕРЖИТ ВСЯ СТРОКА, А НЕ ЕЁ ПОЛОВИНА: цвет
+                        // стоит на внешней строке, здесь остаётся только
+                        // отклик на палец. Иначе две заливки складывались, и
+                        // колонка ручки выходила светлее остального.
+                        backgroundColor: pressed ? t.pressed : "transparent",
                       })}
                     >
                       {/* ПЛИТКА ВИДА, А НЕ ТОЧКА 12pt: у тега с 2026-09-10 есть

@@ -45,7 +45,12 @@ import {
   type Service,
   type ServiceInput,
 } from "@/features/services/queries";
-import { NameField } from "@/components/ui/picker-fields";
+import { NameColorField } from "@/components/ui/picker-fields";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
+import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { durationLabel, roundToStep } from "@/features/services/format";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
 import { notify } from "@/lib/notify";
@@ -464,10 +469,13 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                         flexDirection: "row",
                         alignItems: "center",
                         // Выключенная не исчезает и не кричит — она просто
-                        // тише живых. Полупрозрачность гасит и цветную точку
-                        // услуги, и цену: строка целиком уходит на второй план.
+                        // тише живых. Полупрозрачность гасит и заливку услуги,
+                        // и цену: строка целиком уходит на второй план.
                         opacity: off ? 0.45 : 1,
-                        backgroundColor: t.surface,
+                        backgroundColor: appearanceRowFill(svc.color, false, {
+                          rest: t.surface,
+                          pressed: t.pressed,
+                        }),
                       }}
                     >
                       <Pressable
@@ -482,10 +490,22 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
                           height: ROW_H,
                           flexDirection: "row",
                           alignItems: "center",
+                          gap: 12,
                           paddingLeft: 16,
-                          backgroundColor: pressed ? t.pressed : t.surface,
+                          // ЗАЛИВКУ ДЕРЖИТ ВСЯ СТРОКА, А НЕ ЕЁ ПОЛОВИНА: цвет
+                          // стоит на внешней строке, здесь остаётся только
+                          // отклик на палец. Иначе две заливки складывались, и
+                          // колонка ручки выходила светлее остального.
+                          backgroundColor: pressed ? t.pressed : "transparent",
                         })}
                       >
+                        {/* ПЛИТКА ВИДА — как у тега, метки и типа объекта:
+                            услуга узнаётся в прайсе тем же способом. */}
+                        <AppearanceTile
+                          color={svc.color || null}
+                          icon={svc.icon}
+                          size={28}
+                        />
                         <View
                           style={{ flex: 1, paddingRight: 12 }}
                         >
@@ -613,6 +633,8 @@ function ServiceSheet({
   const source = editing?.mode === "create" ? editing.from : undefined;
 
   const [name, setName] = useState("");
+  const [color, setColor] = useState<string | null>(null);
+  const [icon, setIcon] = useState<string | null>(null);
   const [price, setPrice] = useState("");
   const [duration, setDuration] = useState("60");
   /** Расход за одну у первой строки — колонка `cost_per_unit`. Пустым не
@@ -717,6 +739,11 @@ function ServiceSheet({
             : `${source.name} копия`
           : "",
     );
+    // ВИД БЕРЁТСЯ У ТОЙ ЖЕ СТРОКИ, ЧТО ОСТАЛЬНОЕ: у правки — свой, у копии —
+    // исходной услуги, у новой — следующий свободный цвет автомата, чтобы
+    // строка в справочнике не родилась бесцветной.
+    setColor(from?.color || PRESET_COLOR_CYCLE[0].value);
+    setIcon(from?.icon ?? null);
     setPrice(from ? String(Number(from.price)) : "");
     // ОКРУГЛЕНИЕ К ПЯТИМИНУТКЕ ИДЁТ В ЧЕРНОВИК, А НЕ НА ВИД. Барабан ходит
     // шагом 5, и услуга с 47 минутами покажется как 45 — значит 45 и должно
@@ -866,6 +893,8 @@ function ServiceSheet({
       {
         name: name.trim(),
         team_id: ownerTeam as string,
+        ...(color ? { color } : {}),
+        icon,
         description: description.trim() || null,
         cost_per_unit: Math.max(0, Number(cost.trim().replace(",", ".")) || 0),
         price: parsedPrice,
@@ -972,14 +1001,20 @@ function ServiceSheet({
           строку. Подпись честно называет последствие — а формулировку для
           конкретного счёта правят в самом счёте, где она и замерзает. */}
       <View style={{ paddingHorizontal: GUTTER }}>
-        {/* ЦВЕТА У УСЛУГИ БОЛЬШЕ НЕТ (владелец 2026-09-08: «в настройках и
-            создании услуг убираем полностью цвет — я понял, что он вообще не
-            нужен»). Он заводился ради точки в строке записи, а точка ничего
-            не различала: услуг в записи немного, и каждая названа словом. */}
-        <NameField
+        {/* ВИД ВЕРНУЛСЯ ВМЕСТЕ С БЛОКОМ (владелец 2026-09-10: «кинь,
+            пожалуйста, этот же на услуги» — про общий блок «Вид», и «сделай
+            подсветку блоков»). 8 сентября цвет был снят как бесполезный —
+            «он заводился ради точки в строке записи, а точка ничего не
+            различала». Теперь он различает: строка справочника ЗАЛИВАЕТСЯ
+            цветом услуги, как строка выбора, и рядом стоит её значок. */}
+        <NameColorField
           label="Название"
           name={name}
           onNameChange={setName}
+          color={color}
+          onColorChange={setColor}
+          icon={icon}
+          onIconChange={setIcon}
           autoFocus={!service}
           // «＋ Описание» переехало К ПОДПИСИ (владелец 2026-08-24: «название,
           // а с правой стороны — плюс описание; топаю — и внизу открывается

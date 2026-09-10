@@ -12,7 +12,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { AppearanceTile } from "@/components/ui/AppearanceSheet";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { ReorderList } from "@/components/ui/ReorderList";
@@ -235,7 +238,10 @@ export function ObjectTypesScreen() {
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
-                      backgroundColor: t.surface,
+                      backgroundColor: appearanceRowFill(label.color, false, {
+                        rest: t.surface,
+                        pressed: t.pressed,
+                      }),
                     }}
                   >
                     <Pressable
@@ -249,7 +255,11 @@ export function ObjectTypesScreen() {
                         alignItems: "center",
                         gap: 12,
                         paddingLeft: 16,
-                        backgroundColor: pressed ? t.pressed : t.surface,
+                        // ЗАЛИВКУ ДЕРЖИТ ВСЯ СТРОКА, А НЕ ЕЁ ПОЛОВИНА: цвет
+                        // стоит на внешней строке, здесь остаётся только
+                        // отклик на палец. Иначе две заливки складывались, и
+                        // колонка ручки выходила светлее остального.
+                        backgroundColor: pressed ? t.pressed : "transparent",
                       })}
                     >
                       {/* ПЛИТКА ВИДА — как у типа события и категории: тип

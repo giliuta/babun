@@ -20,6 +20,9 @@ export interface Service {
   duration_minutes: number;
   price: number;
   color: string; // hex — custom calendar tint
+  /** Значок из общего словаря (`ICON_PRESETS`); пусто — услуга живёт цветом.
+   *  Появился 2026-09-10 вместе с блоком «Вид». */
+  icon?: string | null;
   available_weekdays: Weekday[]; // empty = any day
   online_enabled: boolean;
   material_costs: ServiceMaterialCost[];

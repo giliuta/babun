@@ -7,6 +7,7 @@ import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
 
+import { appearanceRowFill } from "@/components/ui/AppearanceSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
@@ -474,7 +475,10 @@ export function LabelsScreen() {
                       alignItems: "center",
                       // Скрытая не исчезает и не кричит — просто тише живых.
                       opacity: deleted ? 0.3 : hidden ? 0.45 : 1,
-                      backgroundColor: t.surface,
+                      backgroundColor: appearanceRowFill(city.color, false, {
+                        rest: t.surface,
+                        pressed: t.pressed,
+                      }),
                     }}
                   >
                   <Pressable
@@ -487,7 +491,9 @@ export function LabelsScreen() {
                       flexDirection: "row",
                       alignItems: "center",
                       paddingLeft: 16,
-                      backgroundColor: pressed ? t.pressed : t.surface,
+                      // Заливку держит вся строка (см. выше); здесь остаётся
+                      // только отклик на палец.
+                      backgroundColor: pressed ? t.pressed : "transparent",
                     })}
                   >
                     <View

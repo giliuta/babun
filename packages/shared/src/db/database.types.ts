@@ -2602,6 +2602,7 @@ export type Database = {
           description: string | null
           duration_minutes: number
           duration_tiers: Json | null
+          icon: string | null
           id: string
           is_active: boolean
           material_costs: Json
@@ -2638,6 +2639,7 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           duration_tiers?: Json | null
+          icon?: string | null
           id: string
           is_active?: boolean
           material_costs?: Json
@@ -2674,6 +2676,7 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           duration_tiers?: Json | null
+          icon?: string | null
           id?: string
           is_active?: boolean
           material_costs?: Json

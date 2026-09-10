@@ -147,6 +147,8 @@ export interface ServiceInput {
    *  точка в каталоге выбора и подстановка в цвет записи, когда человек не
    *  выбрал свой. Без читателя цвет заводить нельзя — так он и был убран. */
   color?: string;
+  /** Значок услуги из общего словаря — вторая половина вида (2026-09-10). */
+  icon?: string | null;
   /** КАТЕГОРИИ У УСЛУГИ НЕТ (владелец 2026-08-17): `category_id` жива ради
    *  легаси-веба, продукт её не пишет — категория была коробкой ради коробки,
    *  ноль строк у всех тенантов за пять месяцев.
@@ -225,6 +227,7 @@ export function useCreateService() {
           price: input.price,
           duration_minutes: input.duration_minutes,
           ...(input.color ? { color: input.color } : {}),
+          ...(input.icon !== undefined ? { icon: input.icon } : {}),
           ...(input.description !== undefined
             ? { description: input.description }
             : {}),
