@@ -1,11 +1,9 @@
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
-import { Check, MapPin } from "lucide-react-native";
+import { MapPin } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GUTTER } from "@/components/ui/tokens";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
 
 // ВЫБОР МЕТКИ — ОДИН ЛИСТ НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
 // показываю в одном месте, значит то же самое будет показывать в другом
@@ -69,7 +67,6 @@ export function LabelPickerSheet({
   extra?: ReactNode;
   onClose: () => void;
 }) {
-  const t = useThemeColors();
 
   const pick = (name: string) => {
     haptics.tap();
@@ -93,65 +90,29 @@ export function LabelPickerSheet({
       scroll
       maxHeightRatio={0.7}
     >
-      <View style={{ paddingHorizontal: GUTTER, paddingTop: 4, paddingBottom: 12, gap: 8 }}>
+      <SelectList>
         {extra}
         {options.length > 0 ? (
           options.map((option) => {
             const chosen = option.name === value;
             return (
-              <Pressable
+              <SelectRow
                 key={option.name}
-                onPress={() => pick(option.name)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
+                icon={MapPin}
+                title={option.name}
+                color={option.color}
+                selected={chosen}
                 accessibilityLabel={
                   chosen && onClear ? `${option.name} — снять метку` : option.name
                 }
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  minHeight: 52,
-                  paddingHorizontal: 14,
-                  borderRadius: t.radius.input,
-                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-                })}
-              >
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: t.radius.pill,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    // Выбранная залита цветом метки, остальные — той же
-                    // краской в тинте (правило плиток типа события).
-                    backgroundColor: chosen ? option.color : `${option.color}26`,
-                  }}
-                >
-                  <MapPin
-                    color={chosen ? t.onAccent : option.color}
-                    size={16}
-                    strokeWidth={2.2}
-                  />
-                </View>
-                <Text
-                  numberOfLines={1}
-                  maxFontSizeMultiplier={1.3}
-                  style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {option.name}
-                </Text>
-                {chosen ? (
-                  <Check color={t.accent} size={18} strokeWidth={2.4} />
-                ) : null}
-              </Pressable>
+                onPress={() => pick(option.name)}
+              />
             );
           })
         ) : (
           <EmptyState title="У команды пока нет меток" />
         )}
-      </View>
+      </SelectList>
     </BottomSheet>
   );
 }

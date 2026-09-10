@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
-import { ScrollView, TextInput, View } from "react-native";
-import { Search } from "lucide-react-native";
+import { ScrollView } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { ICON } from "@/components/ui/tokens";
+import { SelectSearch } from "@/components/ui/select-rows";
 import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
-import { useThemeColors } from "@/theme/colors";
 
 // ВЫБОР КЛИЕНТА / ЗАЯВКИ / КОМАНДЫ В РЕДАКТОРЕ ИНВОЙСА.
 //
@@ -41,7 +39,6 @@ export function EntityPickerSheet({
   onPick: (id: string | null) => void;
   onClose: () => void;
 }) {
-  const t = useThemeColors();
   const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase("ru");
@@ -81,35 +78,21 @@ export function EntityPickerSheet({
       maxHeightRatio={0.9}
       avoidKeyboard
     >
-      <View
-        style={{
-          marginHorizontal: 12,
-          marginBottom: 10,
-          minHeight: 44,
-          flexDirection: "row",
-          alignItems: "center",
-          paddingHorizontal: 12,
-          borderRadius: t.radius.input,
-          backgroundColor: t.fill,
-        }}
-      >
-        <Search color={t.faint} size={ICON.sm} />
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Поиск"
-          placeholderTextColor={t.placeholder}
-          selectionColor={t.accent}
-          keyboardAppearance="light"
-          autoCorrect={false}
-          accessibilityLabel={`Поиск: ${title}`}
-          style={{ marginLeft: 8, flex: 1, fontSize: 16, color: t.ink }}
-        />
-      </View>
+      {/* ПОИСК — ОБЩИЙ (2026-09-10). Здесь стояло своё второе поле: высота
+          44 вместо 40, кегль 16 вместо 15, отступ 12 вместо GUTTER и без
+          кнопки очистки. Одно и то же поле поиска в продукте жило тремя
+          копиями. */}
+      <SelectSearch
+        value={query}
+        onChange={setQuery}
+        placeholder="Поиск"
+        accessibilityLabel={`Поиск: ${title}`}
+        onClear={() => setQuery("")}
+      />
       <ScrollView
         style={{ flexShrink: 1 }}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 28 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
       >
         <ValueOptionList
           options={rows}
