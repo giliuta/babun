@@ -8,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   Text as NativeText,
-  TextInput,
   View,
   type TextProps,
 } from "react-native";
@@ -3107,49 +3106,36 @@ export default function BookScreen() {
               </SectionCard>
               ) : null}
 
-              {/* ЗАМЕТКА СОБЫТИЯ — БОЛЬШОЕ ПОЛЕ СВОЕЙ ГРУППОЙ (владелец
-                  2026-09-08: «заметки надо сделать как было до этого —
-                  отдельно группа „Заметка“, и поставить туда как можно
-                  больше места, потому что в событиях заметка считается более
-                  правильной»).
+              {/* ЗАМЕТКА СОБЫТИЯ — ТО ЖЕ ПОЛЕ, ЧТО ЗАМЕТКА КЛИЕНТА (владелец
+                  2026-09-10: «сделай заметку в событиях такую же, как заметка
+                  в клиентах»). Та же плашка `t.fill`, тот же кегль 13/18, те
+                  же отступы: голое белое поле на белой карточке не читалось
+                  как поле вовсе — было видно только пустое место.
 
-                  Я успел свести её к однострочной плашке `InlineNoteField`
-                  ради единообразия с заметками клиента и объекта — и это
-                  было ошибкой по существу: у записи заметка это приписка к
-                  работе, а у события она сама и есть содержание встречи. */}
+                  ВЫСОКОЕ ОНО ОСТАЛОСЬ (`tall`): владелец 2026-09-08 просил
+                  «поставить туда как можно больше места, потому что в
+                  событиях заметка считается более правильной» — у записи
+                  заметка приписка к работе, а у события она сама и есть
+                  содержание встречи. Материал общий, простор свой.
+
+                  Подсказки в поле нет (владелец 2026-09-09: «эта подсказка
+                  мне намозолила глаза») — блок назван «Заметка». */}
               {showNote ? (
               <SectionCard title="Заметка">
-                <TextInput
-                  keyboardAppearance="light"
-                  maxFontSizeMultiplier={1.3}
-                  accessibilityLabel="Заметка события"
-                  value={eventNotes}
-                  onChangeText={setEventNotes}
-                  onFocus={() =>
-                    setTimeout(
-                      () => scrollRef.current?.scrollToEnd({ animated: true }),
-                      KEYBOARD_SETTLE_MS,
-                    )
-                  }
-                  // ПОДСКАЗКИ В ПОЛЕ НЕТ (владелец 2026-09-09: «эта подсказка
-                  // мне намозолила глаза»). Блок назван «Заметка», и второго
-                  // объяснения ему не нужно — а стояло оно в каждом пустом
-                  // событии, то есть чаще всего.
-                  multiline
-                  className="px-4 py-3"
-                  // СРЕДНИЙ БЛОК, КОТОРЫЙ РАСТЁТ ПОД ТЕКСТ (владелец
-                  // 2026-09-08: «сделай средний блок, допустим как объект, но
-                  // если я пишу много информации, то оно так подудлиняется»).
-                  // Было 200pt всегда: у пустого события треть экрана занимала
-                  // пустая рамка. Высоты сверху нет — многострочный ввод на
-                  // iOS растёт сам, а страница и так прокручивается.
-                  style={{
-                    minHeight: 88,
-                    fontSize: 15,
-                    lineHeight: 21,
-                    color: t.ink,
-                    textAlignVertical: "top",
+                <InlineNoteField
+                  tall
+                  note={{
+                    draft: eventNotes,
+                    setDraft: setEventNotes,
+                    onFocus: () =>
+                      setTimeout(
+                        () => scrollRef.current?.scrollToEnd({ animated: true }),
+                        KEYBOARD_SETTLE_MS,
+                      ),
+                    onBlur: () => {},
                   }}
+                  placeholder=""
+                  accessibilityLabel="Заметка события"
                 />
               </SectionCard>
               ) : null}
@@ -3456,9 +3442,10 @@ export default function BookScreen() {
       {/* ВЫБОР ТИПА — ТОТ ЖЕ ЛИСТ, ЧТО У КАТЕГОРИИ ОПЕРАЦИИ (владелец
           2026-09-10: «тип события выбирается точно так же, как категория»).
           Строка — значок и цвет типа, тихая подпись — длительность, которую
-          тип поставит. ТАП ПО ВЫБРАННОЙ СТРОКЕ СНИМАЕТ ТИП, и подпись у неё
-          говорит именно это: служебной строки «Без типа» в списке нет —
-          снятие живёт там же, где выбор. Дверь в справочник — значок настроек
+          тип поставит, и она одна на все строки: «Тап снимает тип» у
+          выбранной владелец забраковал («это бред») — галка и без слов
+          говорит, что строка выбрана. ТАП ПО ВЫБРАННОЙ СНИМАЕТ ТИП; служебной
+          строки «Без типа» в списке нет — снятие живёт там же, где выбор. Дверь в справочник — значок настроек
           в шапке листа: тем же сиблингом формы, а не экраном чужой вкладки,
           иначе «назад» уводит на календарь и теряет набранное событие
           (владелец 2026-09-08: «нажимаю назад — оно вылетает»). */}
@@ -3466,19 +3453,17 @@ export default function BookScreen() {
         visible={eventTypeSheetOpen}
         title="Тип события"
         selectedId={eventTypeId}
-        items={eventTypes.map((type) => {
-          const chosen = type.id === eventTypeId;
-          return {
-            id: type.id,
-            label: type.label,
-            icon: eventTypeIcon(type.icon),
-            color: type.color,
-            hint: chosen
-              ? "Тап снимает тип"
-              : `${durationLabel(type.defaultDuration)} по умолчанию`,
-            onPress: chosen ? clearEventType : () => applyEventType(type.id),
-          };
-        })}
+        items={eventTypes.map((type) => ({
+          id: type.id,
+          label: type.label,
+          icon: eventTypeIcon(type.icon),
+          color: type.color,
+          hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
+          onPress:
+            type.id === eventTypeId
+              ? clearEventType
+              : () => applyEventType(type.id),
+        }))}
         onSettings={() => router.push("/event-types" as Href)}
         settingsLabel="Типы событий"
         onClose={() => setEventTypeSheetOpen(false)}
