@@ -437,6 +437,13 @@ export function OperationSheet({
   const dateInFuture = date > businessToday;
   const canSave =
     amountCents != null &&
+    // КАТЕГОРИЯ ОБЯЗАТЕЛЬНА (владелец 2026-09-10: «чтобы создать операцию,
+    // нужно обязательно выбрать категорию»). Кнопка её не спрашивала, и деньги
+    // без категории выпадали из разбивки — одна такая операция в базе уже
+    // лежит. Снятия повторным тапом у категории нет и не заводим: у типа
+    // события оно законно (событие без типа существует и называется
+    // «Событие»), а расход без категории врёт «Прибыли».
+    !!categoryId &&
     !!teamId &&
     !!accountId &&
     !accountMismatch &&
@@ -643,7 +650,12 @@ export function OperationSheet({
                           text: "Выберите счёт, на который записать операцию",
                           error: true,
                         }
-                      : null;
+                      : amountCents != null && !categoryId
+                        ? {
+                            text: "Выберите категорию операции",
+                            error: true,
+                          }
+                        : null;
 
   return (
     <BottomSheet
