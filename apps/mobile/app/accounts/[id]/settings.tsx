@@ -409,10 +409,9 @@ function AccountSettingsContent() {
             icon={account.icon}
             onIconChange={(slug) =>
               update.mutate(
-                {
-                  id: account.id,
-                  patch: { icon: account.icon === slug ? null : slug },
-                },
+                // Повторный тап по выбранному приходит сюда как `null` — счёт
+                // возвращается к глифу вида.
+                { id: account.id, patch: { icon: slug } },
                 { onError: alertError("Не удалось изменить значок") },
               )
             }

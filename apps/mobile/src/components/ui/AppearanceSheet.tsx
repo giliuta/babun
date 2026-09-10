@@ -120,7 +120,8 @@ export function AppearanceSheet({
   /** Значок сущности. Без `onIconChange` шторка спрашивает только про цвет —
    *  так у сущностей, у которых значка нет (метка города, тег клиента). */
   icon?: string | null;
-  onIconChange?: (slug: string) => void;
+  /** `null` приходит, когда тапнули по УЖЕ выбранному значку: он снимается. */
+  onIconChange?: (slug: string | null) => void;
   icons?: readonly IconPreset[];
   initial?: AppearanceTab;
 }) {

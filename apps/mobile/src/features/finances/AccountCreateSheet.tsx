@@ -336,7 +336,8 @@ export function AccountCreateSheet({
           color={color}
           onColorChange={(hex: string) => setColor(color === hex ? null : hex)}
           icon={icon}
-          onIconChange={(slug: string) => setIcon(icon === slug ? null : slug)}
+          // Снятие делает сама решётка: повторный тап отдаёт `null`.
+          onIconChange={(slug: string | null) => setIcon(slug)}
         />
 
         {/* 4. ЧЕЙ ЭТО СЧЁТ — ровно ОДНА команда (владелец 2026-08-15: «счёт

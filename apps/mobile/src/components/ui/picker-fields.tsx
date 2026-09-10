@@ -63,7 +63,7 @@ export function AppearanceField({
   color: string | null | undefined;
   onColorChange: (hex: string) => void;
   icon?: string | null;
-  onIconChange?: (slug: string) => void;
+  onIconChange?: (slug: string | null) => void;
   icons?: readonly IconPreset[];
   colors?: readonly string[];
   label?: string;
@@ -237,7 +237,7 @@ export function NameColorField({
    *  2026-09-10: «точно такой же блок я хочу сделать с иконками»). Сущности без
    *  значка этих пропов не передают — переключателя в шторке тогда нет. */
   icon?: string | null;
-  onIconChange?: (slug: string) => void;
+  onIconChange?: (slug: string | null) => void;
   icons?: readonly IconPreset[];
 }) {
   const t = useThemeColors();

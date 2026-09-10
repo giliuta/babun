@@ -93,7 +93,9 @@ export function EventTypeSheet({
         color={color}
         onColorChange={setColor}
         icon={icon}
-        onIconChange={(slug) => setIcon(slug as PersonalEventTypeIcon)}
+        // У типа события значок обязателен по модели, поэтому снятие
+        // возвращает нейтральный ярлычок, а не пустоту.
+        onIconChange={(slug) => setIcon((slug ?? "tag") as PersonalEventTypeIcon)}
         icons={eventTypeIconPresets(icon)}
         autoFocus={!type}
       />

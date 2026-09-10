@@ -23,8 +23,11 @@ export function IconPicker({
   disabled,
 }: {
   value: string | null | undefined;
-  /** Слаг нажатого значка. Снятие выбора решает вызывающий: он знает `value`. */
-  onChange: (slug: string) => void;
+  /** Слаг нажатого значка либо `null` — СНЯТИЕ. Повторный тап по выбранному
+   *  снимает значок здесь, в решётке, а не у каждого вызывающего по-своему
+   *  (владелец 2026-09-10: «я могу ещё раз нажать на значок и отменить его —
+   *  значок это не обязательная штука»). Так же снимается тип события. */
+  onChange: (slug: string | null) => void;
   /** Цвет заливки выбранного — обычно цвет самой сущности. */
   tint?: string | null;
   /** Набор-переопределение; по умолчанию общие сорок. */
@@ -49,7 +52,9 @@ export function IconPicker({
         return (
           <Pressable
             key={slug}
-            onPress={disabled ? undefined : () => onChange(slug)}
+            onPress={
+              disabled ? undefined : () => onChange(selected ? null : slug)
+            }
             disabled={disabled}
             accessibilityRole="radio"
             accessibilityLabel={`Значок ${name}`}
