@@ -536,7 +536,7 @@ export function LabelsScreen() {
         />
       </View>
 
-      <LabelSheet
+      <LabelEditSheet
         editing={editing}
         takenBy={takenBy}
         daysOff={companyDaysOff}
@@ -549,7 +549,7 @@ export function LabelsScreen() {
   );
 }
 
-function LabelSheet({
+function LabelEditSheet({
   editing,
   takenBy,
   daysOff,

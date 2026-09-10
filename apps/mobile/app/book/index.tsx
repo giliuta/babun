@@ -48,7 +48,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
-import { LabelSheet } from "@/features/appointments/LabelSheet";
+import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
@@ -3334,7 +3334,7 @@ export default function BookScreen() {
         customTotal={customTotal}
         onResetTotal={() => setCustomTotal(false)}
       />
-      <LabelSheet
+      <LabelPickerSheet
         visible={labelSheetOpen}
         title={kind === "event" ? "Метка события" : "Метка записи"}
         options={teamCities.map((c) => ({ name: c.name, color: c.color ?? t.accent }))}
