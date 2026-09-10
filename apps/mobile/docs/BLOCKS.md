@@ -422,15 +422,22 @@
 
 ## 9.3 Расхождения, которые каталог знает и НЕ выдаёт за канон
 
-Честно, чтобы никто не скопировал неправильное:
+Честно, чтобы никто не скопировал неправильное. Закрытые вычеркнуты.
 
 | Где | Что не так | Как правильно |
 |---|---|---|
-| `src/features/clients/blocks/ObjectsBlock.tsx` — «Добавить объект» | `AddRow` (без кружка, с волоском) | `ChooseRow`, как в записи |
-| `src/features/appointments/BookingSheets.tsx` — «Команда и мастер» | единственная шторка выбора вне `select-rows` | строка `SelectRow` |
-| `cabinet/recurring.tsx` — дата «Последнего ТО» | компактный нативный пикер | `DateWheelSheet`; сперва экран должен уйти с сырого `Modal` |
-| Справочники `tags`, `categories`, `loyalty`, `inventory`, `templates`, `sms-templates` | сырой `Modal`, голая мусорка, имя и цвет двумя полями | рецепт «Метки»: `BottomSheet`, `SwipeRow`, `NameColorField`, `ReorderList` |
-| 16 самописных залитых кнопок | своя `Pressable` с заливкой | `Button`; залитый семантический вид ещё не построен |
+| ~~`ObjectsBlock` — «Добавить объект»~~ | ~~`AddRow`~~ | закрыто 2026-09-10 |
+| ~~`BookingSheets` — «Команда и мастер»~~ | ~~вне `select-rows`~~ | закрыто 2026-09-10 |
+| ~~Теги, категории, лояльность~~ | ~~сырой лист, мусорка, два поля~~ | закрыто 2026-09-10 |
+| ~~16 самописных залитых кнопок~~ | ~~своя `Pressable`~~ | пять закрыто, `variant="filled"` построен |
+| `src/features/clients/ClientDraftNotice.tsx` | компактное действие внутри плашки: 44pt с радиусом числом | жанр канон не описывает — 52pt в строку плашки не встанет, а превращать в ссылку значит решать за владельца. **Ждёт его слова** |
+| `src/features/clients/ClientRow.tsx` | свайп собран на сырой библиотеке; на ЛЕВОЙ кромке ДВЕ кнопки; ротор VoiceOver не видит ни один глагол | `SwipeRow`, одно действие на кромку, второе — в меню долгого нажатия |
+| `app/(dashboard)/cabinet/`: `app/(dashboard)/cabinet/inventory.tsx`, `app/(dashboard)/cabinet/templates.tsx`, `app/(dashboard)/cabinet/sms-templates.tsx`, `app/(dashboard)/cabinet/recurring.tsx`, `app/(dashboard)/cabinet/masters/index.tsx`, `app/(dashboard)/cabinet/team-access.tsx`, `app/(dashboard)/cabinet/account.tsx` | сырой `Modal animationType="slide"` вместо `BottomSheet` | рецепт «Метки» |
+| `app/(dashboard)/chats/[id].tsx` | два сырых листа: выбор клиента написан заново | `ClientPickerSheet` |
+| `src/features/clients/BulkSmsSheet.tsx` · `src/features/clients/import/ImportWizardSheet.tsx` · `src/features/appointments/CrewAppointmentSheet.tsx` | сырые листы; у первого своя «✕» в шапке | `BottomSheet`, закрытие скримом |
+| `app/(dashboard)/cabinet/recurring.tsx` — дата «Последнего ТО» | компактный нативный пикер | `DateWheelSheet`; **сперва экран должен уйти с сырого `Modal`** — лист в листе iOS не покажет |
+| 9 мест | `borderRadius` числом (12, 20, 13, 15, 9, 36) | `t.radius.card` / `t.radius.pill` |
+| 27 мест | `borderRadius: 999` литералом | `t.radius.pill` |
 
 Полный список и порядок работ — `docs/audit/UNIFICATION-2026-09-10.md`
 (в корне репозитория).
