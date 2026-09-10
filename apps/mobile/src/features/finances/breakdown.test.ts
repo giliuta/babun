@@ -29,10 +29,12 @@ function tx(
   return {
     tenant_id: "t",
     currency: "EUR",
+    reversal_kind: null,
     category_id: null,
     account_id: "acc-1",
     appointment_id: null,
     appointment_payment_kind: null,
+    debt_id: null,
     client_id: null,
     team_id: null,
     master_id: null,

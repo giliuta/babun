@@ -188,8 +188,19 @@ export function blockCaption(input: {
   started: boolean;
   hasPending: boolean;
   outstandingLabel: string;
+  /** Лишние деньги: заплатили больше, чем стоит запись. */
+  overpaid?: number;
+  overpaidLabel?: string;
 }): { text: string; tone: CaptionTone } | null {
   if (!input.hasTeam) return { text: "Выберите команду", tone: "neutral" };
+  // ПЕРЕПЛАТА ВАЖНЕЕ «ОПЛАЧЕНО» (владелец 2026-09-10: «а он-то уже
+  // зафиксирован, что оплатил, а я потом могу поменять итоговую сумму»).
+  // Опустив итог ниже оплаченного, запись показывала «Оплачено», и лишние
+  // деньги молча лежали на счёте: долг зажат через max(0, …), а переплаты у
+  // записи не было вовсе. Теперь она называет себя и ждёт решения.
+  if ((input.overpaid ?? 0) > 0 && input.overpaidLabel) {
+    return { text: `Переплата ${input.overpaidLabel}`, tone: "warning" };
+  }
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {
       text: input.visitCompleted ? "Оплачено" : "Оплачено заранее",

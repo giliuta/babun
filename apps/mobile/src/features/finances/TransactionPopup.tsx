@@ -143,6 +143,8 @@ export function TransactionPopup({
   // и сверхбыстрый двойной тап «Возврат» успевал записать возврат дважды —
   // тот же класс бага, что savingRef в OperationSheet.
   const savingRef = useRef(false);
+  /** Отложенное до полного ухода листа: вопрос об удалении (см. handleDelete). */
+  const afterExit = useRef<(() => void) | null>(null);
   const currency = useTenant().data?.currency;
   const { data: counterpartAccountId } = useTransferCounterpartAccountId(
     visible ? transaction : null,
@@ -228,9 +230,16 @@ export function TransactionPopup({
         ? deleteTransferAlert()
         : {
             title: "Удалить операцию?",
-            message: "Действие нельзя отменить.",
+            // ПОСЛЕДСТВИЕ, А НЕ «НЕЛЬЗЯ ОТМЕНИТЬ» (правила текстов
+            // account-alerts). Слово в слово как в листе операции: один
+            // вопрос об одном действии не должен звучать двумя голосами.
+            message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
             confirm: "Удалить",
           };
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29) — вопрос
+    // рисует хост приложения поверх окна листа, и iOS его не показывает.
+    // Ждём `onExited`; см. тот же приём в OperationSheet.remove.
+    afterExit.current = () => {
     confirmThen(
       text.title,
       {
@@ -239,21 +248,20 @@ export function TransactionPopup({
         destructive: true,
       },
       async () => {
-        if (savingRef.current || busy) return;
+        if (savingRef.current) return;
         savingRef.current = true;
-        setBusy(true);
         try {
           await onDelete(tx);
           haptics.success();
-          onClose();
         } catch (e) {
           notify("Ошибка", (e as Error).message);
         } finally {
           savingRef.current = false;
-          setBusy(false);
         }
       },
     );
+    };
+    onClose();
   };
 
   const handleRefund = async () => {
@@ -366,6 +374,11 @@ export function TransactionPopup({
       // Пока возврат/удаление в полёте, лист не закрывается ни свайпом, ни
       // тапом мимо: Alert об ошибке иначе прилетал поверх пустого экрана.
       onClose={busy ? () => {} : onClose}
+      onExited={() => {
+        const run = afterExit.current;
+        afterExit.current = null;
+        run?.();
+      }}
       title={TX_TYPE_LABEL[tx.type]}
       avoidKeyboard
       scroll

@@ -97,6 +97,9 @@ export function BottomSheet({
   banner?: ReactNode;
   children: ReactNode;
   title?: string;
+  /** Тихая строка под именем листа: чей это лист — команда, счёт, клиент.
+   *  Такое подписывают, а не выбирают, и отдельной строкой-полем оно
+   *  выглядело нажимаемым, хотя не нажимается (2026-09-09). */
   subtitle?: string;
   footer?: ReactNode;
   scroll?: boolean;

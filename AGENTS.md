@@ -147,7 +147,10 @@ CRM + скоро SaaS для сервисных бизнесов. Первый �
 3. **ВТОРАЯ ДВЕРЬ — РЕЭКСПОРТ, А НЕ КОПИЯ.** Если тот же экран нужен из другой
    вкладки (иначе «назад» уводит из сценария), заводится файл маршрута в
    5 строк: `export { X as default } from "@/features/…"`, и в комментарии —
-   НАВИГАЦИОННАЯ причина. Образцы: `app/book/client.tsx`,
+   НАВИГАЦИОННАЯ причина. Общий адрес НАД табами живёт в группе
+   `app/(shared)/` — она не про запись, а про «поверх позвавшего»: ту же
+   карточку клиента зовут и запись, и шторка долга в финансах. Образцы:
+   `app/(shared)/client.tsx`,
    `app/(dashboard)/clients/object-types.tsx`,
    `app/(dashboard)/(home)/calendar/services.tsx`. Ни строки формы в двери.
 4. **БЛОК ВЫГЛЯДИТ ОДИНАКОВО ВЕЗДЕ.** Блок «Клиент», «Объект», «Заметка»,
@@ -246,18 +249,18 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 
 | Сущность | Единственное тело | Двери (реэкспорт) |
 |---|---|---|
-| Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/book/client.tsx` |
+| Клиент (карточка = создание) | `app/(dashboard)/clients/[id].tsx` | `app/(shared)/client.tsx` |
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
 | Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
 | Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx` |
-| Услуги (справочник + форма) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `book/services.tsx` |
-| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `book/` |
-| Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `book/` |
+| Услуги (справочник + форма) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
+| Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `(shared)/` |
+| Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` | — |
 | Настройки страницы записи | `app/(dashboard)/cabinet/booking-record.tsx` | `calendar/booking-record.tsx` |
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
-| Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/book/channels.tsx` |
-| Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/book/maps.tsx` |
+| Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
+| Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
 
 **Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**
 «Добавь блок с услугой» значит именно эту строку: блок оттуда, шторка оттуда,

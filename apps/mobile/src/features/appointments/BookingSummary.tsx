@@ -281,8 +281,12 @@ export function WhenRow({
 }: {
   date: string;
   timeStart: string;
-  timeEnd: string;
-  duration: number;
+  /** Конец и длительность есть у ЗАПИСИ — она занимает отрезок. У операции
+   *  время одно: деньги случились в момент, а не длились полтора часа. Без
+   *  них строка печатает «день · время» (владелец 2026-09-09: блок времени в
+   *  операции — такой же, как в записи). */
+  timeEnd?: string;
+  duration?: number;
   allDay?: boolean;
   warning?: string | null;
   onPress: () => void;
@@ -307,7 +311,13 @@ export function WhenRow({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${allDay ? "весь день" : `с ${timeStart} до ${timeEnd}, ${durationLabel(duration)}`}`}
+          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${
+            allDay
+              ? "весь день"
+              : timeEnd
+                ? `с ${timeStart} до ${timeEnd}, ${durationLabel(duration ?? 0)}`
+                : timeStart
+          }`}
           accessibilityHint="Открывает выбор даты и времени"
         >
           {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
@@ -346,24 +356,26 @@ export function WhenRow({
                     fontVariant: ["tabular-nums"],
                   }}
                 >
-                  {`${timeStart} – ${timeEnd}`}
+                  {timeEnd ? `${timeStart} – ${timeEnd}` : timeStart}
                 </Text>
                 {/* ДЛИТЕЛЬНОСТЬ — ТИХОЙ ПИЛЮЛЕЙ: третья величина в строке
                     спорила с первыми двумя одинаковым весом, а она СЛЕДСТВИЕ
                     начала и конца. Серая подложка отделяет её от времени лучше
                     точки и делает строку ритмичной, а не сплошной. */}
-                <View
-                  style={{
-                    paddingHorizontal: 8,
-                    paddingVertical: 3,
-                    borderRadius: t.radius.pill,
-                    backgroundColor: t.fill,
-                  }}
-                >
-                  <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
-                    {durationLabel(duration)}
-                  </Text>
-                </View>
+                {timeEnd ? (
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: t.radius.pill,
+                      backgroundColor: t.fill,
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                      {durationLabel(duration ?? 0)}
+                    </Text>
+                  </View>
+                ) : null}
               </>
             )}
           </View>

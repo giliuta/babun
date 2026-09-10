@@ -6,6 +6,7 @@ import { createBlankService } from "../services";
 import {
   appointmentMaterialCost,
   appointmentMaterialCostLines,
+  appointmentOverpaidCents,
 } from "./appointment-calc";
 import { computeDayFinance } from "./day-summary";
 
@@ -139,5 +140,29 @@ describe("appointment material cost", () => {
     const day = computeDayFinance([appointment], [], []);
     assert.equal(day.byMethod.transfer, 11);
     assert.equal(day.byMethod.other, 7);
+  });
+});
+
+describe("appointmentOverpaidCents", () => {
+  test("оплатили ровно или недоплатили — переплаты нет", () => {
+    assert.equal(appointmentOverpaidCents(255, 255), 0);
+    assert.equal(appointmentOverpaidCents(255, 100), 0);
+  });
+
+  test("итог опустили ниже оплаченного — переплата видна", () => {
+    // Заплатили €255, потом итог стал €200: долга нет, но €55 лишние.
+    assert.equal(appointmentOverpaidCents(200, 255), 5500);
+  });
+
+  test("копейки считаются в центах, а не в плавающей точке", () => {
+    assert.equal(appointmentOverpaidCents(10.1, 10.35), 25);
+  });
+
+  test("возвращённая запись переплаты не показывает", () => {
+    assert.equal(appointmentOverpaidCents(200, 255, "refunded"), 0);
+  });
+
+  test("мусор вместо чисел не ломает счёт", () => {
+    assert.equal(appointmentOverpaidCents(Number.NaN, 255), 0);
   });
 });

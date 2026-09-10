@@ -124,8 +124,12 @@ export function SelectRow({
   subtitle?: ReactNode;
   /** Третья строка: чей это объект, когда список сквозной по клиентам. */
   hint?: string;
-  /** Значок в кружке. Без него и без `initial` кружка нет вовсе. */
-  icon?: LucideIcon;
+  /** Значок в кружке: компонент общего словаря (`icon-set`) ЛИБО эмодзи
+   *  строкой — категории операций хранят у владельца именно его (⛽ 🍔 🧰).
+   *  Рисуя только компонент, список молча ронял половину значков в запасной
+   *  ярлычок, хотя данные были (находка второй сессии 2026-09-09).
+   *  Без значка и без `initial` кружка нет вовсе. */
+  icon?: LucideIcon | string;
   /** Первая буква имени вместо значка — у клиента. */
   initial?: string;
   /** Цвет сущности: выбранная строка заливает им кружок, прочие — тинтом.
@@ -147,6 +151,7 @@ export function SelectRow({
   const tint = color ? `${color}26` : `${t.accent}1a`;
   const glyph = color ? (selected ? t.onAccent : color) : t.accent;
   const hasCircle = Boolean(Icon || initial);
+  const emoji = typeof Icon === "string" ? Icon : null;
   return (
     <Pressable
       onPress={onPress}
@@ -186,7 +191,11 @@ export function SelectRow({
             backgroundColor: selected && color ? color : tint,
           }}
         >
-          {Icon ? (
+          {emoji ? (
+            <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
+              {emoji}
+            </Text>
+          ) : Icon ? (
             <Icon color={glyph} size={16} strokeWidth={2.2} />
           ) : (
             <Text style={{ fontSize: 11, fontWeight: "700", color: glyph }}>

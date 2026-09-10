@@ -208,8 +208,6 @@ export function PeriodWheelsModal({
     );
   };
 
-  const shown: Period = { preset: "custom", from, to };
-
   return (
     <BottomSheet
       padded={false}
@@ -223,20 +221,20 @@ export function PeriodWheelsModal({
       }
     >
       <View className="px-5 pb-2">
-        <Text
-          className="mb-3 text-center text-base font-semibold"
-          style={{ color: t.sub, fontVariant: ["tabular-nums"] }}
-        >
-          {periodDates(shown)}
-        </Text>
-
-        {/* С | До endpoint segment */}
+        {/* СВОДНОЙ СТРОКИ ДИАПАЗОНА ЗДЕСЬ НЕТ (владелец 2026-09-10: «эта
+            строка лишняя, и так видно начало и конец»). Обе даты стоят прямо
+            под ней, на половинах сегмента, и печатать их вторым экземпляром
+            значит тратить строку на уже сказанное. */}
+        {/* НАЧАЛО | КОНЕЦ — ОДИН ЯЗЫК НА ПРОДУКТ (владелец 2026-09-10: «не с/до,
+            а начало-конец, так будет правильнее»). Тот же сегмент выбирает
+            половину у времени записи и у графика команды; «С»/«До» жили
+            только здесь и рядом читались как другой контрол. */}
         <View
           className="mb-3 flex-row p-1"
           style={{ backgroundColor: t.fill, gap: 4, borderRadius: t.radius.card }}
         >
-          {segment("from", "С", periodDates({ preset: "custom", from, to: from }))}
-          {segment("to", "До", periodDates({ preset: "custom", from: to, to }))}
+          {segment("from", "Начало", periodDates({ preset: "custom", from, to: from }))}
+          {segment("to", "Конец", periodDates({ preset: "custom", from: to, to }))}
         </View>
 
         {/* one wheel edits the active endpoint */}

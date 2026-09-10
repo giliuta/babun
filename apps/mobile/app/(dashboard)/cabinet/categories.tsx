@@ -9,7 +9,10 @@ import {
   View,
 } from "react-native";
 import { EyeOff, Trash2 } from "lucide-react-native";
-import type { FinanceCategory } from "@babun/shared/db/repositories/finance-categories";
+import type {
+  FinanceCategory,
+  FinanceCategoryKind,
+} from "@babun/shared/db/repositories/finance-categories";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ColorField } from "@/components/ui/picker-fields";
@@ -45,7 +48,10 @@ export default function CategoriesScreen() {
   const del = useDeleteCategory();
   const setHidden = useSetCategoryHidden();
 
-  const [type, setType] = useState<"expense" | "income">("expense");
+  // Третья ступень — долги (владелец 2026-09-10: «под расход свои категории,
+  // под доход свои, под долги свои, они не смешиваются»). В списке
+  // поставщиков и займов «Бензину» делать нечего.
+  const [type, setType] = useState<FinanceCategoryKind>("expense");
   const [open, setOpen] = useState(false);
   // Правка своей категории (rename/цвет) — раньше единственным «редактором»
   // был деструктивный обход «удалить+создать», обнулявший category_id у
@@ -128,6 +134,7 @@ export default function CategoriesScreen() {
         options={[
           { value: "expense", label: "Расходы", color: th.danger },
           { value: "income", label: "Доходы", color: th.success },
+          { value: "debt", label: "Долги", color: th.warning },
         ]}
         value={type}
         onChange={setType}
@@ -190,9 +197,22 @@ export default function CategoriesScreen() {
                   <Trash2 color={th.danger} size={ICON.sm} />
                 </Pressable>
               ) : (
-                <View className="min-h-[52px] justify-center pr-4">
-                  <Text className="text-xs" style={{ color: th.faint }}>станд.</Text>
-                </View>
+                // СТАНДАРТНУЮ КАТЕГОРИЮ НЕ УДАЛИТЬ, НО МОЖНО УБРАТЬ ИЗ СПИСКА.
+                // Здесь стояло немое «станд.»: строка выглядела неживой, и
+                // владелец не знал, что скрытие вообще есть — «сделай
+                // возможность удалять» (2026-09-10), хотя оно было тапом по
+                // строке. Действие обязано называть себя словом.
+                <Pressable
+                  onPress={() => toggleHidden(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Убрать ${item.name} из списка`}
+                  className="min-h-[52px] flex-row items-center gap-1.5 pr-4 active:opacity-60"
+                >
+                  <EyeOff color={th.sub} size={ICON.sm} />
+                  <Text className="text-xs" style={{ color: th.sub }}>
+                    Скрыть
+                  </Text>
+                </Pressable>
               )}
             </View>
           )}
@@ -206,9 +226,9 @@ export default function CategoriesScreen() {
                   className="px-4 pb-6 pt-2 text-xs"
                   style={{ color: th.faint }}
                 >
-                  Свою категорию можно переименовать или удалить. Стандартную —
-                  убрать из списка: нажмите на неё, и она перестанет
-                  предлагаться. Прошлые операции сохранят своё название.
+                  Свою категорию можно переименовать или удалить, стандартную —
+                  скрыть: она перестанет предлагаться. Прошлые операции сохранят
+                  своё название.
                 </Text>
               </>
             ) : null
@@ -216,8 +236,18 @@ export default function CategoriesScreen() {
           ListEmptyComponent={
             <EmptyState
               fill
-              title={type === "expense" ? "Нет категорий расходов" : "Нет категорий доходов"}
-              subtitle="Категории группируют операции — «Бензин», «Аренда», «Выручка»"
+              title={
+                type === "expense"
+                  ? "Нет категорий расходов"
+                  : type === "income"
+                    ? "Нет категорий доходов"
+                    : "Нет категорий долгов"
+              }
+              subtitle={
+                type === "debt"
+                  ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
+                  : "Категории группируют операции — «Бензин», «Аренда», «Выручка»"
+              }
               action={{ label: "Добавить категорию", onPress: openCreate }}
             />
           }
@@ -234,7 +264,9 @@ export default function CategoriesScreen() {
           <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
             {editing
               ? "Категория"
-              : `Новая категория · ${type === "expense" ? "расход" : "доход"}`}
+              : `Новая категория · ${
+                  type === "expense" ? "расход" : type === "income" ? "доход" : "долг"
+                }`}
           </Text>
           <Field
             label="Название"

@@ -181,6 +181,25 @@ export function globalDiscountAmount(
  *  «Возвращено» — терминальное состояние старого платёжного цикла: денег к
  *  зачёту и долга нет, повторное обслуживание начинается новой заявкой.
  */
+/**
+ * ПЕРЕПЛАТА ПО ЗАПИСИ В ЦЕНТАХ — зеркало долга, и она обязана быть видимой.
+ *
+ * Владелец 2026-09-10: «человек уже оплатил, а я меняю итоговую сумму — как
+ * тогда быть». Вверх всё считалось само: подняли итог, разница стала долгом.
+ * А вниз — нет: долг зажат через `max(0, …)`, и запись показывала «Оплачено»,
+ * пока лишние деньги молча лежали на счёте. У инвойсов переплата есть
+ * (`invoice-ledger.overpaid`), у записей её просто не сделали.
+ */
+export function appointmentOverpaidCents(
+  total: number,
+  paid: number,
+  paymentStatus?: string | null,
+): number {
+  if (paymentStatus === "refunded") return 0;
+  if (!Number.isFinite(total) || !Number.isFinite(paid)) return 0;
+  return Math.max(0, Math.round(paid * 100) - Math.round(total * 100));
+}
+
 export function appointmentDebtCents(
   total: number,
   paid: number,

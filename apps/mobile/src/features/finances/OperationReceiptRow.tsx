@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { Camera, FileText, FileUp, Images, Paperclip, X } from "lucide-react-native";
+import { Camera, FileText, FileUp, Images, X } from "lucide-react-native";
+import { AddRow } from "@/components/ui/AddRow";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { Spinner } from "@/components/ui/Spinner";
 import { useTenantId } from "@/lib/tenant";
@@ -188,33 +189,15 @@ export function OperationReceiptRow({
 
   return (
     <>
-      <Pressable
-        onPress={() => setPickerOpen(true)}
+      {/* СТРОКА «ДОБАВИТЬ» — ТА ЖЕ, ЧТО У ФАЙЛОВ ЗАПИСИ (владелец 2026-09-10:
+          «посмотри, как выполнены файлы в записи, сделай так же»). Здесь была
+          своя строка со скрепкой и подписью «чек, инвойс» — третий диалект
+          одного действия: у объектов и файлов записи это `AddRow`. */}
+      <AddRow
+        label="Добавить"
         disabled={disabled}
-        accessibilityRole="button"
-        accessibilityLabel="Приложить документ к операции"
-        className="min-h-[48px] flex-row items-center gap-2 px-4 py-3"
-        style={({ pressed }) => ({
-          opacity: disabled ? 0.4 : 1,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-      >
-        <Paperclip color={t.accent} size={18} strokeWidth={2} />
-        <Text
-          className="text-base font-semibold"
-          maxFontSizeMultiplier={1.3}
-          style={{ color: t.accent }}
-        >
-          Приложить документ
-        </Text>
-        <Text
-          className="ml-auto text-xs"
-          maxFontSizeMultiplier={1.3}
-          style={{ color: t.faint }}
-        >
-          чек, инвойс
-        </Text>
-      </Pressable>
+        onPress={() => setPickerOpen(true)}
+      />
 
       <PickerSheet
         visible={pickerOpen}

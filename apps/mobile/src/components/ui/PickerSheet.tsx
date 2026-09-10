@@ -22,7 +22,9 @@ import { useThemeColors } from "@/theme/colors";
 export interface PickerSheetItem {
   id: string;
   label: string;
-  icon: LucideIcon;
+  /** Значок строки: компонент из общего словаря (`icon-set`) либо эмодзи
+   *  строкой — категории операций хранят именно его. */
+  icon: LucideIcon | string;
   color: string;
   onPress: () => void;
 }
@@ -31,6 +33,7 @@ export function PickerSheet({
   visible,
   title,
   items,
+  selectedId,
   onSettings,
   settingsLabel = "Настроить список",
   onClose,
@@ -38,6 +41,9 @@ export function PickerSheet({
   visible: boolean;
   title: string;
   items: PickerSheetItem[];
+  /** Что выбрано сейчас. У выбора «с нуля» (тип события новой записи) его
+   *  нет; у правки существующей операции без него не видно, что стоит. */
+  selectedId?: string | null;
   /** Шестерёнка справа от заголовка — вход на страницу этого списка. */
   onSettings?: () => void;
   settingsLabel?: string;
@@ -86,6 +92,7 @@ export function PickerSheet({
             icon={item.icon}
             color={item.color}
             title={item.label}
+            selected={item.id === selectedId}
             onPress={() => {
               haptics.tap();
               onClose();

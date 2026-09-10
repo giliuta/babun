@@ -38,14 +38,15 @@
 
 | Что | Число | Откуда |
 |---|---|---|
-| Боковое поле блока | **16** (`GUTTER`) | `src/components/ui/SectionCard.tsx:47` |
-| Промежуток между блоками | **8** (`mt-2`) | `src/components/ui/SectionCard.tsx:47` |
+| Боковое поле блока | **16** (`GUTTER`) | `src/components/ui/SectionCard.tsx` |
+| Промежуток между блоками | **8** (`mt-2`) | `src/components/ui/SectionCard.tsx` |
 | Радиус блока и любой поверхности | **10** (`t.radius.card`) | `src/theme/colors.ts` |
 | Подпись блока: слева | **16** (`px-4`) | `src/components/ui/SectionCard.tsx:58` |
 | Подпись блока: сверху / снизу | **10** / **2** (`pt-2.5` / `pb-0.5`) | там же |
 | Подпись блока: кегль | **11 / 700**, трекинг **+0.6**, UPPERCASE, цвет `faint` | `src/components/ui/SectionCard.tsx:64` |
 | Команда блока (иконка справа) | абсолютом `right: 16`, `top: 6`, между иконками **16**, `hitSlop 12`, размер **18** (`ICON.sm`) | `src/components/ui/SectionCard.tsx:82` |
-| Тело блока с `padded` | **16** по краям, **8** сверху (`p-4 pt-2`) | `src/components/ui/SectionCard.tsx:115` |
+| Тело блока с `padded` | **16** по краям, **8** сверху (`p-4 pt-2`) | `src/components/ui/SectionCard.tsx` |
+| **Плотный случай** — форма в ШТОРКЕ (`dense` у `SectionCard`, `compact` у `ChooseRow`) | промежуток **6** (`mt-1.5`), подпись **6** сверху / **0** снизу, дверь `py-2`, кружок **30pt** | вторая сессия 2026-09-10 |
 
 **Почему команда блока абсолютом.** В потоке её `minHeight: 44` задирал высоту
 шапки, и подпись у блока с иконкой стояла на 6px ниже, чем у соседей (владелец
@@ -172,7 +173,7 @@
   selectedId={client?.id}
   excludeId={self?.id}           // «кто привёл»: себя не предлагать
   onSelect={pickClient}
-  onCreate={(prefill) => router.push({ pathname: "/book/client", params: { id: "new", ...prefill } })}
+  onCreate={(prefill) => router.push({ pathname: "/client", params: { id: "new", ...prefill } })}
   onClear={() => setClient(null)}   // необязателен
   clearLabel="Убрать"
   onClose={() => setClientPickerOpen(false)}
@@ -181,7 +182,7 @@
 ```
 
 Кнопка футера — **«Создать клиента»**. Создание всегда уходит карточкой
-клиента (`/book/client` поверх записи или `/clients/new`), быстрого создания
+клиента (`/client` поверх позвавшего или `/clients/new`), быстрого создания
 одним тапом не бывает: заводило клиента с именем без телефона.
 
 **Не делать:** второй шторки клиента (была, свели 2026-09-10); строки
@@ -226,7 +227,7 @@
 
 **Дополнительные страницы:** типы объектов —
 `src/features/reference/screens/ObjectTypesScreen.tsx`, двери
-`clients/object-types.tsx`, `cabinet/object-types.tsx`, `book/object-types.tsx`.
+`clients/object-types.tsx`, `cabinet/object-types.tsx`, `(shared)/object-types.tsx`.
 
 **Не делать:** второй формы объекта (была, свели 2026-09-10 — сторожит
 `src/features/clients/client-persistence-contract.test.ts`); `AddRow` вместо `ChooseRow`; строки
@@ -263,13 +264,13 @@
 `src/features/appointments/BookingPickers.tsx`: поиск, строки со значком
 услуги, количество степпером у взятой, кнопка **«Применить · N · €сумма»**.
 Пустой каталог не тупик: `EmptyState` с дверью «Добавить услугу» в
-`/book/services`.
+`/services`.
 
 **Шторка «Итого»** — `src/features/appointments/TotalSheet.tsx`: таблица
 Услуга/Кол-во/Цена/Сумма, скидка в одной строке с итогом.
 
 **Страница услуг** — `app/(dashboard)/cabinet/services.tsx`, двери
-`calendar/services.tsx`, `book/services.tsx`. Цвета у услуги НЕТ (снят 2026-09-08).
+`calendar/services.tsx`, `(shared)/services.tsx`. Цвета у услуги НЕТ (снят 2026-09-08).
 
 **Не делать:** «Добавить услугу» строкой под выбранными; дублировать
 длительность в «Итого»; галку слева в строке шторки.
@@ -355,7 +356,7 @@
   selectedId={eventTypeId}
   loading={eventTypesQuery.isLoading}
   onSelect={toggleEventType}      // повторный тап снимает тип
-  onSettings={() => router.push("/book/event-types")}
+  onSettings={() => router.push("/event-types")}
 />
 ```
 
@@ -366,7 +367,7 @@
 **Страница типов** — `src/features/reference/screens/EventTypesScreen.tsx` +
 `src/features/reference/screens/EventTypeSheet.tsx` (имя с цветом, значок, «Весь день», длительность
 барабаном). Двери: `cabinet/event-types.tsx`, `calendar/event-types.tsx`,
-`book/event-types.tsx`.
+`(shared)/event-types.tsx`.
 
 ---
 

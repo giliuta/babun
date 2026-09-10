@@ -76,6 +76,7 @@ import { Screen } from "@/components/ui/Screen";
 import { Halo } from "@/components/ui/Halo";
 import { tintOver } from "@/components/ui/color-contrast";
 import { PageWash } from "@/features/appointments/PageWash";
+import { resolveReturnTo } from "@/features/appointments/return-to";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
 import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
@@ -308,6 +309,9 @@ export default function BookScreen() {
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
     appointmentId?: string;
+    /** Откуда пришли открывать запись: «finances», «invoice:<id>»,
+     *  «account:<id>». Словарь дорог — `resolveReturnTo`. */
+    from?: string;
   }>();
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
@@ -1225,14 +1229,14 @@ export default function BookScreen() {
 
   // КАРТОЧКА КЛИЕНТА ПОВЕРХ ЗАПИСИ (владелец 2026-09-04: «при тапе на клиента
   // должна открываться карточка клиента»). Тот же приём, что у создания
-  // клиента: маршрут корневого стека `/book/client`, а не вкладка «Клиенты»,
+  // клиента: общий маршрут `/client` над табами, а не вкладка «Клиенты»,
   // — иначе поверх записи ляжет вторая копия табов и «назад» уведёт на
   // календарь, потеряв набранное. Запись остаётся смонтированной под
   // карточкой, «назад» возвращает ровно в неё.
   const openClientCard = () => {
     if (!clientId) return;
     haptics.tap();
-    router.push({ pathname: "/book/client", params: { id: clientId } });
+    router.push({ pathname: "/client", params: { id: clientId } });
   };
 
   const pickLocation = (id: string) => {
@@ -1270,7 +1274,7 @@ export default function BookScreen() {
   const objectEditClient = kind === "event" ? eventLocationOwner : client;
 
   // КЛИЕНТ, ЗАВЕДЁННЫЙ РАДИ ЭТОЙ ЗАПИСИ. Карточка нового клиента открывается
-  // ПОВЕРХ формы (`/book/client`), после «Готово» кладёт id в ящик и уходит
+  // ПОВЕРХ формы (`/client`), после «Готово» кладёт id в ящик и уходит
   // «назад»; форма забирает его, получив фокус. Дальше — тот же `pickClient`,
   // что и тап по списку: объект, любимый мастер, цепочка услуг. Список
   // клиентов может ещё ехать после инвалидации — держим id, пока созданный
@@ -1766,8 +1770,18 @@ export default function BookScreen() {
 
   // A notification/deep link can open /book without a navigation history.
   // In that case router.back() is a dead action; return to the calendar tab.
+  //
+  // ДОРОГА НАЗАД СИЛЬНЕЕ ИСТОРИИ (2026-09-08). Запись из денег открывают через
+  // календарь, поэтому стек — «финансы → календарь → запись», и слепой
+  // `router.back()` клал человека на календарь. Если пришли с меткой `from`,
+  // уходим по ней, а не по истории.
   const leaveBook = () => {
     bypassGuardRef.current = true;
+    const returnTo = resolveReturnTo(params.from);
+    if (returnTo) {
+      router.replace(returnTo as Href);
+      return;
+    }
     if (router.canGoBack()) router.back();
     else router.replace("/");
   };
@@ -2873,7 +2887,7 @@ export default function BookScreen() {
                   // /cabinet/event-types клал поверх формы вторую копию табов,
                   // и «назад» уводил на календарь, теряя набранное событие
                   // (владелец 2026-09-08: «нажимаю назад — оно вылетает»).
-                  router.push("/book/event-types" as Href);
+                  router.push("/event-types" as Href);
                 }}
               />
 
@@ -3295,12 +3309,12 @@ export default function BookScreen() {
           setClientPickerOpen(false);
         }}
         // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ
-        // ЗАПИСИ (`/book/client`, 2026-09-03): быстрое создание одним тапом
+        // ЗАПИСИ (`/client`, 2026-09-03): быстрое создание одним тапом
         // заводило клиента с именем без телефона или наоборот. Набранное в
         // поиске уезжает в карточку параметром.
         onCreate={(prefill) =>
           router.push({
-            pathname: "/book/client",
+            pathname: "/client",
             params: { id: "new", ...prefill },
           })
         }

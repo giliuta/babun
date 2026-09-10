@@ -16,6 +16,7 @@ export function ChooseRow({
   label,
   hint,
   disabled,
+  compact,
   onPress,
 }: {
   icon: LucideIcon;
@@ -27,12 +28,18 @@ export function ChooseRow({
    *  этом месте стояла фраза «Сначала выберите клиента»: строка меняла и
    *  вид, и высоту, и блок прыгал под пальцем. */
   disabled?: boolean;
+  /** ПЛОТНЫЙ СЛУЧАЙ — ФОРМА В ШТОРКЕ (владелец 2026-09-10: «сделай все эти
+   *  блоки компактнее»). На странице записи у строки есть куда дышать: она
+   *  занимает экран целиком. В шторке блоков шесть, и те же 62 точки на
+   *  каждую пустую строку съедают треть листа. Устройство строки то же —
+   *  кружок, слово, шеврон, — тише только воздух. */
+  compact?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   return (
     <Pressable
-      className="flex-row items-center px-4 py-3.5"
+      className={`flex-row items-center px-4 ${compact ? "py-2" : "py-3.5"}`}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       accessibilityRole="button"
@@ -43,7 +50,7 @@ export function ChooseRow({
         backgroundColor: pressed && !disabled ? t.pressed : "transparent",
       })}
     >
-      <IconCircle icon={icon} muted={disabled} />
+      <IconCircle icon={icon} muted={disabled} size={compact ? 30 : 34} />
       <Text
         className="flex-1"
         style={{

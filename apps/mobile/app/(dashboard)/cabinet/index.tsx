@@ -490,7 +490,7 @@ export default function CabinetHome() {
             icon={Wallet}
             tone={TILE.green}
             title="Категории"
-            desc="Категории доходов и расходов"
+            desc="Доходы, расходы и долги"
             href="/cabinet/categories"
           />
           <Divider inset={58} />
