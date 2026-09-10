@@ -395,6 +395,17 @@ CI обязан повторять те же гейты, что и локаль�
 - При возврате к проекту: прочитай AGENTS.md → свежий `docs/HANDOFF-*.md` → docs/roadmap.md → текущую STORY → `git log --oneline -5`
 
 ## Critical Known Issues
+- **НАТИВНЫЙ МОДУЛЬ, ДОБАВЛЕННЫЙ ПОСЛЕ СБОРКИ КЛИЕНТА, РОНЯЕТ ЭКРАН ЦЕЛИКОМ.**
+  `react-native-maps` встал в `package.json`, JS требуется без жалоб, `MapView`
+  импортируется и выглядит живым — а нативной вьюхи `AIRMap` в уже собранном
+  дев-клиенте нет. Падает РЕНДЕР: «View config not found for component
+  `AIRMap`», ошибка не поймана, и вместо формы объекта владелец видит красный
+  экран (2026-09-10). `try/catch` вокруг `require` не спасает — он проверяет
+  JS. Перед рендером спрашивать САМУ СБОРКУ: `hasNativeView("AIRMap")` из
+  `src/lib/native-view.ts`; сторожит `src/lib/native-view.test.ts`. Сборки на
+  руках у владельца и у соседних сессий всегда старше ветки, поэтому правило
+  общее, а не разовое. Чтобы модуль заработал, дев-клиент пересобирают нативно
+  (`expo prebuild --platform ios` + `expo run:ios`, ~10 минут).
 - **Пинч-зум сетки календаря** живёт в `apps/mobile/src/features/calendar/zoom.tsx`
   (gesture-handler + reanimated). Высота часа `hourHSv` мутируется на UI-потоке в
   границах `HOUR_H_MIN=28` … `HOUR_H_MAX=200` (дефолт 64). НЕ переводить её в

@@ -3,6 +3,7 @@ import { Platform, Text, View } from "react-native";
 import Constants from "expo-constants";
 import { MapPin } from "lucide-react-native";
 import type { Coords } from "@/features/clients/location-request-form";
+import { hasNativeView } from "@/lib/native-view";
 import { useThemeColors } from "@/theme/colors";
 
 // КАРТА, НА КОТОРОЙ СТАВЯТ ТОЧКУ — НАТИВНАЯ (владелец 2026-09-10: «хочу
@@ -98,7 +99,12 @@ export function MapPicker({
       ? maps?.PROVIDER_GOOGLE
       : undefined;
 
-  if (!MapView) {
+  // ВЬЮХУ СПРАШИВАЕМ У ПРИЛОЖЕНИЯ, А НЕ У JS. `MapView` существует всегда:
+  // это JS-обёртка. Нет `AIRMap` в сборке — рендер обёртки роняет ЭКРАН
+  // целиком («View config not found»), поэтому до него дело доходить не
+  // должно. Проверка и есть разница между «карточка сказала, что карт нет» и
+  // красным экраном на месте формы.
+  if (!MapView || !hasNativeView("AIRMap")) {
     return (
       <View
         style={{
