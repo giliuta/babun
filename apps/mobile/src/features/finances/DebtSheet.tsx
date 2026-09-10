@@ -227,10 +227,24 @@ export function DebtSheet({
           }}
         />
 
-        {/* 5. СКОЛЬКО — своим блоком: сумма это ответ, ради которого лист и
-            открывают. */}
-        <SectionCard>
-          <View className="flex-row items-center px-4 py-1.5">
+        {/* 5. СУММА — БЛОК СО СВОЕЙ ШАПКОЙ, КАК ВСЕ ОСТАЛЬНЫЕ (владелец
+            2026-09-10: «там просто ноль показан; сверху подпись „сумма“,
+            чтобы было понимание, что это такое»). Он единственный стоял без
+            подписи между блоками с подписями и читался как отвалившийся.
+
+            ЕВРО СЛЕВА, ВПЛОТНУЮ К ЧИСЛУ. Везде в продукте деньги печатаются
+            «€195» — знак идёт первым; в поле он один стоял у правой кромки, и
+            глаз шёл к нему через пустое поле. Теперь «€ 0» читается одним
+            предметом, а курсор встаёт сразу за знаком. */}
+        <SectionCard title="Сумма">
+          <View className="flex-row items-center gap-1.5 px-4 py-1">
+            <Text
+              maxFontSizeMultiplier={1.2}
+              className="text-[28px] font-bold"
+              style={{ color: th.faint }}
+            >
+              €
+            </Text>
             <TextInput
               value={amount}
               accessibilityLabel="Сумма долга"
@@ -241,7 +255,7 @@ export function DebtSheet({
               selectionColor={th.accent}
               keyboardAppearance="light"
               maxFontSizeMultiplier={1.2}
-              className="flex-1 text-3xl font-bold"
+              className="flex-1 text-[28px] font-bold"
               style={{
                 // Цвет долга — янтарь, когда должны нам, и красный, когда
                 // должны мы: те же два цвета, что у строк в списке.
@@ -249,13 +263,6 @@ export function DebtSheet({
                 fontVariant: ["tabular-nums"],
               }}
             />
-            <Text
-              maxFontSizeMultiplier={1.2}
-              className="text-3xl font-bold"
-              style={{ color: th.faint }}
-            >
-              €
-            </Text>
           </View>
         </SectionCard>
 
