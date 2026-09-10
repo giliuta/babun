@@ -24,6 +24,7 @@
 | `SectionCard` | `src/components/ui/SectionCard.tsx` | Блок с ИМЕНЕМ: капс-подпись внутри белой карточки, её команды — иконками справа в той же строке (`action`, до двух) |
 | `RowGroup` | `src/components/ui/card-rows.tsx` | Секция с подытогом справа и пояснением под ней. **Только финансы.** Под именованный блок не брать |
 | `ChooseRow` | `src/components/ui/ChooseRow.tsx` | Пустое состояние блока — дверь: кружок со значком, синяя подпись, серый хинт |
+| `ReferenceBlock` | `src/components/ui/ReferenceBlock.tsx` | БЛОК ВЫБОРА ИЗ СПРАВОЧНИКА целиком: шапка → дверь «Выбрать …» → выбранное значком, цветом и именем. Одно тело у категории и у типа события |
 | `FieldRow` · `ChoiceRow` · `NavRow` · `ActionRow` · `ValueRow` | `src/components/ui/card-rows.tsx`, `src/components/ui/ValueRow.tsx` | Строки внутри блока |
 | `SwipeRow` | `src/components/ui/SwipeRow.tsx` | Кромки закреплены за смыслом: ПРАВАЯ (`label`) — «Удалить»/«Убрать», ЛЕВАЯ (`leading`) — «Скрыть»/«Показать»/«Вернуть». Нечего удалять — правой кромки нет (`label` необязателен) |
 | `SelectRow` · `SelectSearch` · `SelectList` | `src/components/ui/select-rows.tsx` | Строка, поиск и ритм ЛЮБОЙ шторки выбора |
@@ -348,21 +349,49 @@
 
 ## 8. Блок «Тип события» + страница типов
 
-**Канон:** `src/features/appointments/EventTypeBlock.tsx`.
+**Канон:** `src/features/appointments/EventTypeBlock.tsx` — тот же
+`ReferenceBlock`, что у блока категории (владелец 2026-09-10: «сделай его
+точно таким же, как в категории в финансах… тип события выбирается точно так
+же, как категория, вся архитектура как у категории»).
 
 ```tsx
 <EventTypeBlock
-  types={eventTypes}
+  type={eventType}                       // выбранный тип либо null
+  onPress={() => setEventTypeSheetOpen(true)}
+/>
+
+<PickerSheet
+  visible={eventTypeSheetOpen}
+  title="Тип события"
   selectedId={eventTypeId}
-  loading={eventTypesQuery.isLoading}
-  onSelect={toggleEventType}      // повторный тап снимает тип
+  items={[
+    // «Без типа» — только когда снимать есть что
+    ...(eventTypeId ? [{ id: "none", label: "Без типа", icon: CircleSlash, color: t.faint, hint: "…", onPress: clearEventType }] : []),
+    ...eventTypes.map((type) => ({
+      id: type.id,
+      label: type.label,
+      icon: eventTypeIcon(type.icon),
+      color: type.color,
+      hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
+      onPress: () => applyEventType(type.id),
+    })),
+  ]}
   onSettings={() => router.push("/event-types")}
+  settingsLabel="Типы событий"
+  onClose={() => setEventTypeSheetOpen(false)}
 />
 ```
 
-Лента плиток горизонтальная и компактная — тридцать типов не должны забивать
-экран. Шестерёнка `Settings2` справа в шапке блока. Тип красит событие;
-длительность типа — стандарт, выбранное руками время сильнее.
+**Чего здесь больше НЕТ и не заводить снова:** горизонтальной ленты плиток
+(кружок 40pt, подпись 11pt в две строки), выбора повторным тапом и значка
+ползунков в шапке блока. Это был второй диалект выбора: предмет в продукте
+выбирают блоком со шапкой и шторкой. Дверь в справочник — шестерёнка в шапке
+ШТОРКИ; за край она не уезжает, поэтому прежняя причина держать её в блоке
+исчезла вместе с лентой.
+
+Тип по-прежнему красит событие и даёт длительность: цвет события — цвет типа,
+длительность — стандарт, выбранное руками время сильнее. Живёт это в форме
+(`applyEventType`), а не в блоке, и названо в шторке тихой подписью строки.
 
 **Страница типов** — `src/features/reference/screens/EventTypesScreen.tsx` +
 `src/features/reference/screens/EventTypeSheet.tsx` (имя с цветом, значок, «Весь день», длительность
@@ -379,7 +408,8 @@
 | Метка дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
 | Метка клиента | строка в блоке «Личное» | `reference/LabelPickerSheet` | нет |
 | Теги клиента | строка в блоке «Личное» | `clients/TagPickerSheet` | «Применить» |
-| Категория операции | `ValueRow` со значением | `ui/ValuePickerSheet` | нет |
+| Категория операции | `finances/CategoryBlock` (в листе операции — плотная строка в общей карточке с суммой) | `ui/PickerSheet` | нет |
+| Тип события | `appointments/EventTypeBlock` — тот же `ReferenceBlock`, что у категории | `ui/PickerSheet` (+ строка «Без типа») | нет |
 | Счёт | `PaymentTiles` либо `ValueRow` | `ui/ValuePickerSheet` | нет |
 | Клиент или заявка инвойса | `ValueRow` | `invoices/EntityPickerSheet` | нет |
 | Команда и мастер | докет `TeamLabelRow` | `appointments/BookingSheets` → `TeamMasterSheet` | «Применить» |
@@ -473,5 +503,6 @@
 
 Уже компоненты и копируются одним тегом: `ObjectFields`, `ClientPickerSheet`,
 `ObjectPickerSheet`, `LabelPickerSheet`, `TagPickerSheet`, `ServicePicker`,
-`EventTypeBlock`, `PaymentBlock`, `AppointmentFilesBlock`, `InlineNoteField`,
-`TeamLabelRow`, `WhenRow`, `TotalRow`, `SelectRow`.
+`ReferenceBlock`, `CategoryBlock`, `EventTypeBlock`, `PaymentBlock`,
+`AppointmentFilesBlock`, `InlineNoteField`, `TeamLabelRow`, `WhenRow`,
+`TotalRow`, `SelectRow`.

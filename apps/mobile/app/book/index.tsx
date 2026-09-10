@@ -23,6 +23,7 @@ import { usePreventRemove } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
+  CircleSlash,
   MapPin,
   MoreHorizontal,
   UserRound,
@@ -124,6 +125,7 @@ import {
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { EventTypeBlock } from "@/features/appointments/EventTypeBlock";
+import { eventTypeIcon } from "@/features/calendar/event-type-icons";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { FieldRow } from "@/components/ui/card-rows";
 import { PickerSheet } from "@/components/ui/PickerSheet";
@@ -486,9 +488,11 @@ export default function BookScreen() {
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [whenOpen, setWhenOpen] = useState(false);
   const [teamSheetOpen, setTeamSheetOpen] = useState(false);
-  // Событие: команда («Личное» + команды) — листом выбора. Тип листа больше
-  // не имеет: он выбирается плитками прямо в форме (EventTypeBlock).
+  // Событие: команда («Личное» + команды) и ТИП — оба листом выбора. Тип до
+  // 2026-09-10 выбирался лентой плиток прямо в форме; владелец свёл его к
+  // архитектуре категории: блок со шапкой + каноническая шторка.
   const [eventTeamSheetOpen, setEventTeamSheetOpen] = useState(false);
+  const [eventTypeSheetOpen, setEventTypeSheetOpen] = useState(false);
   const [colorSheetOpen, setColorSheetOpen] = useState(false);
   const [colorOverride, setColorOverride] = useState<string | null>(null);
   const [objectSheet, setObjectSheet] = useState(false);
@@ -1469,9 +1473,11 @@ export default function BookScreen() {
     haptics.tap();
   };
 
-  // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «когда я выбрал тип
-  // события, я могу ещё раз нажать на него и оно отменится; и так же я могу
-  // создавать события без типа события»).
+  // СНЯТЬ ТИП МОЖНО ВСЕГДА (владелец 2026-09-10: «когда я выбрал тип события,
+  // я могу ещё раз нажать на него и оно отменится; и так же я могу создавать
+  // события без типа события»). Раньше это делал повторный тап по плитке;
+  // теперь — строка «Без типа» первой в шторке: у ленты плиток «нажать ещё
+  // раз» было единственным выходом, у списка выход называется словом.
   //
   // Событие без типа законно и было законно всегда: кнопка его не требует, а
   // называется такое событие словом «Событие». Не было только выхода — выбрав
@@ -1483,12 +1489,8 @@ export default function BookScreen() {
   //
   // ЦВЕТ: доставшийся от типа уходит с ним, выбранный рукой остаётся. Отличаем
   // их сравнением с цветом самого типа — другого следа «руки» у события нет.
-  const toggleEventType = (id: string) => {
-    if (id !== eventTypeId) {
-      applyEventType(id);
-      return;
-    }
-    const preset = eventTypes.find((candidate) => candidate.id === id);
+  const clearEventType = () => {
+    const preset = eventTypes.find((candidate) => candidate.id === eventTypeId);
     haptics.tap();
     setEventTypeId(null);
     setEventTitle("");
@@ -2881,20 +2883,13 @@ export default function BookScreen() {
               {/* ТИП СОБЫТИЯ — ПОД ВРЕМЕНЕМ (владелец 2026-09-06 завёл его
                   здесь; 2026-09-08 я поднял блок выше, и владелец вернул:
                   «нет, я неправильно объяснил — опусти на один блок ниже,
-                  время обратно»). Плитки, выбор в одно касание; цвет события
-                  и есть цвет типа. */}
+                  время обратно»). Тот же блок, что «Категория» в финансах:
+                  строка-дверь → шторка. Цвет события и есть цвет типа. */}
               <EventTypeBlock
-                types={eventTypes}
-                selectedId={eventTypeId}
-                loading={eventTypesQuery.isLoading}
-                onSelect={toggleEventType}
-                onSettings={() => {
+                type={eventType}
+                onPress={() => {
+                  setEventTypeSheetOpen(true);
                   haptics.tap();
-                  // СИБЛИНГ ФОРМЫ, А НЕ ЭКРАН ЧУЖОЙ ВКЛАДКИ: push в
-                  // /cabinet/event-types клал поверх формы вторую копию табов,
-                  // и «назад» уводил на календарь, теряя набранное событие
-                  // (владелец 2026-09-08: «нажимаю назад — оно вылетает»).
-                  router.push("/event-types" as Href);
                 }}
               />
 
@@ -3457,6 +3452,44 @@ export default function BookScreen() {
           })),
         ]}
         onClose={() => setEventTeamSheetOpen(false)}
+      />
+      {/* ВЫБОР ТИПА — ТОТ ЖЕ ЛИСТ, ЧТО У КАТЕГОРИИ ОПЕРАЦИИ (владелец
+          2026-09-10: «тип события выбирается точно так же, как категория»).
+          Строка — значок и цвет типа, тихая подпись — длительность, которую
+          тип поставит; «Без типа» стоит первой и только когда снимать есть
+          что. Дверь в справочник — шестерёнка в шапке листа: тем же
+          сиблингом формы, а не экраном чужой вкладки, иначе «назад» уводит на
+          календарь и теряет набранное событие (владелец 2026-09-08: «нажимаю
+          назад — оно вылетает»). */}
+      <PickerSheet
+        visible={eventTypeSheetOpen}
+        title="Тип события"
+        selectedId={eventTypeId}
+        items={[
+          ...(eventTypeId
+            ? [
+                {
+                  id: "none",
+                  label: "Без типа",
+                  icon: CircleSlash,
+                  color: t.faint,
+                  hint: "Событие останется просто «Событием»",
+                  onPress: clearEventType,
+                },
+              ]
+            : []),
+          ...eventTypes.map((type) => ({
+            id: type.id,
+            label: type.label,
+            icon: eventTypeIcon(type.icon),
+            color: type.color,
+            hint: `${durationLabel(type.defaultDuration)} по умолчанию`,
+            onPress: () => applyEventType(type.id),
+          })),
+        ]}
+        onSettings={() => router.push("/event-types" as Href)}
+        settingsLabel="Типы событий"
+        onClose={() => setEventTypeSheetOpen(false)}
       />
       <ColorSheet
         visible={colorSheetOpen}
