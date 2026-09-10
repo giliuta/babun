@@ -36,9 +36,12 @@ export function CategoryBlock({
   emptyHint?: string;
   onPress: () => void;
 }) {
-  // В справочнике значок лежит либо именем из словаря, либо эмодзи как есть.
-  const Preset = iconPreset(category?.icon);
-  const emoji = !Preset && category?.icon ? category.icon : null;
+  // ЗНАЧОК — ТОЛЬКО ИЗ СЛОВАРЯ, БЕЗ ЭМОДЗИ (владелец 2026-09-10: «переделай
+  // категории так же, как события; эмодзи убираем»). В базе у категорий лежат
+  // ⛽ 🍔 📦, и блок печатал их вперемешку со значками словаря — строка
+  // категории была единственной в продукте, которая выглядела иначе, чем
+  // строка команды, метки и типа события. Различает категории цвет.
+  const Glyph = iconPreset(category?.icon) ?? Tag;
 
   return (
     <ReferenceBlock
@@ -49,12 +52,7 @@ export function CategoryBlock({
       emptyHint={emptyHint}
       value={
         category
-          ? {
-              name: category.name,
-              color: category.color,
-              Icon: Preset,
-              emoji,
-            }
+          ? { name: category.name, color: category.color, Icon: Glyph }
           : null
       }
       onPress={onPress}

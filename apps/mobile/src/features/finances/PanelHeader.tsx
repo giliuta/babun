@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import type { ReactNode } from "react";
 import { Settings2 } from "lucide-react-native";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -16,11 +17,17 @@ import { useThemeColors } from "@/theme/colors";
  */
 export function PanelHeader({
   title,
+  right,
   onReset,
   onSettings,
   settingsLabel,
 }: {
   title: string;
+  /** Что стоит СПРАВА в эйбрау: у долгов это две кнопки сторон (владелец
+   *  2026-09-10: «сделай это маленькими кнопочками с правой стороны»).
+   *  Полноширинный сегмент над списком занимал строку экрана ради выбора из
+   *  двух слов. */
+  right?: ReactNode;
   /** «Все» — снять разрез и вернуть полную ленту. Есть только там, где разрез
    *  что-то прячет: панель, показывающая всё, сбрасывать не от чего. */
   onReset?: () => void;
@@ -43,12 +50,13 @@ export function PanelHeader({
       >
         {title}
       </Text>
+      {right ? <View className="ml-auto flex-row items-center gap-1.5">{right}</View> : null}
       {onReset ? (
         <Pressable
           onPress={onReset}
           accessibilityRole="button"
           accessibilityLabel="Показать все операции"
-          className="ml-auto min-h-11 justify-center px-2 active:opacity-60"
+          className={`${right ? "" : "ml-auto"} min-h-11 justify-center px-2 active:opacity-60`}
         >
           <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
             Все
@@ -63,7 +71,7 @@ export function PanelHeader({
           hitSlop={8}
           // `ml-auto` только когда слева ничего не заняло место: два элемента
           // с ним разъехались бы по краям и оставили дыру посередине.
-          className={`${onReset ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
+          className={`${onReset || right ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
         >
           <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
         </Pressable>
