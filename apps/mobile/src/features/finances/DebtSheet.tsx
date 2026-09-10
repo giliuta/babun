@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
-import { ChevronRight, Tag } from "lucide-react-native";
+import { Text, TextInput, View } from "react-native";
+import { Tag } from "lucide-react-native";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
@@ -17,6 +17,7 @@ import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPicker } from "@/features/appointments/BookingPickers";
+import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useRouter } from "expo-router";
 import { haptics } from "@/lib/haptics";
@@ -201,35 +202,22 @@ export function DebtSheet({
           />
         </SectionCard>
 
-        {/* 4. ЗА ЧТО И СКОЛЬКО — одной карточкой, как «категория и сумма» у
-            операции (владелец 2026-09-10: «форма слишком большая, давит»). */}
+        {/* 4. КАТЕГОРИЯ — СВОЙ БЛОК, ТОТ ЖЕ ВЕЗДЕ (владелец 2026-09-10:
+            «категории сверху, как написано „клиент“; ниже — выбор самой
+            категории»). Строка «Категория … Выбрать» с серым значением справа
+            была полем формы, а не блоком выбора: предмет прятался в хвосте
+            строки, хотя это второй вопрос долга после того, чей он. */}
+        <CategoryBlock
+          category={category}
+          onPress={() => {
+            setCategoryOpen(true);
+            haptics.tap();
+          }}
+        />
+
+        {/* 5. СКОЛЬКО — своим блоком: сумма это ответ, ради которого лист и
+            открывают. */}
         <SectionCard>
-          <Pressable
-            onPress={() => setCategoryOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Категория: ${category?.name ?? "не выбрана"}`}
-            className="min-h-[52px] flex-row items-center gap-3 px-4 py-2.5"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? th.pressed : "transparent",
-            })}
-          >
-            <Text className="text-base" style={{ color: th.ink }}>
-              Категория
-            </Text>
-            <View className="ml-auto flex-row items-center gap-1.5">
-              <Text
-                className="text-base"
-                style={{ color: category ? th.ink : th.faint }}
-                numberOfLines={1}
-              >
-                {category?.name ?? "Выбрать"}
-              </Text>
-              <ChevronRight color={th.chevron} size={17} strokeWidth={2.2} />
-            </View>
-          </Pressable>
-
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-
           <View className="flex-row items-center px-4 py-2.5">
             <TextInput
               value={amount}
