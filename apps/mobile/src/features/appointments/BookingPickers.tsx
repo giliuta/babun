@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import {
   Pressable,
   Text as NativeText,
@@ -399,6 +400,8 @@ export function ServicePicker({
   onQtyChange: (id: string, qty: number) => void;
 }) {
   const t = useThemeColors();
+  const router = useRouter();
+  const servicesHref = useReferenceHref().services;
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -571,8 +574,27 @@ export function ServicePicker({
             );
           })
         ) : (
+          // ПУСТОЙ ПРАЙС — НЕ ТУПИК (2026-09-10). У новой компании и у
+          // команды, которой при разделении ничего не досталось, лист был
+          // белым листом: выбрать нечего, а завести услугу можно было только
+          // уйдя в Кабинет — то есть потеряв набранную запись. Дверь ведёт в
+          // сиблинг записи (`/book/services`), поэтому «назад» из него
+          // возвращает ровно в запись. Второй формы услуги не появляется:
+          // сущность-владелец правится своей страницей.
           <EmptyState
             title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
+            action={
+              q.trim()
+                ? undefined
+                : {
+                    label: "Добавить услугу",
+                    onPress: () => {
+                      // Страница не может жить под нижним листом.
+                      close();
+                      router.push(servicesHref);
+                    },
+                  }
+            }
           />
         )}
       </View>

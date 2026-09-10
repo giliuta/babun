@@ -27,5 +27,9 @@ export function useReferenceHref() {
     channels: inBooking
       ? ("/book/channels" as const)
       : ("/clients/channels" as const),
+    // Услуги живут в Кабинете, поэтому вне записи ведём прямо туда.
+    services: inBooking
+      ? ("/book/services" as const)
+      : ("/cabinet/services" as const),
   };
 }
