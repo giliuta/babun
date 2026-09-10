@@ -125,21 +125,16 @@ export function useDebtDraft({
 
   const cents = parseMoneyInputToCents(amount);
   // ИМЯ ХРАНИТСЯ ВСЕГДА, даже когда долг за клиентом: клиента могут удалить, а
-  // долг остаётся, и строка обязана продолжать называть человека.
-  const who =
-    direction === "incoming"
-      ? (client?.full_name ?? "").trim()
-      : counterparty.trim();
+  // долг остаётся, и строка обязана продолжать называть человека. Поэтому имя
+  // из карточки СНИМАЕТСЯ в долг, а не читается из неё каждый раз.
+  const who = (client?.full_name || counterparty).trim();
   const named = who.length > 0;
   const canSave = online && !busy && named && cents != null && cents > 0;
 
   const reason = !online
     ? { text: OFFLINE, error: true }
     : !named
-      ? {
-          text: direction === "incoming" ? "Выберите клиента" : "Укажите, кто должен",
-          error: false,
-        }
+      ? { text: "Выберите клиента", error: false }
       : cents == null || cents <= 0
         ? { text: "Введите сумму долга", error: false }
         : null;
@@ -152,8 +147,7 @@ export function useDebtDraft({
         direction,
         counterparty: who,
         amount: (cents as number) / 100,
-        // «Я должен» справочником клиентов не пользуется: поставщика в нём нет.
-        client_id: direction === "incoming" ? clientId : null,
+        client_id: clientId,
         occurred_on: date,
         category_id: categoryId,
         note: note.trim() || null,

@@ -168,15 +168,7 @@ export function DebtSheet({
             },
           ]}
           value={direction}
-          onChange={(next) => {
-            // Имя выбранного клиента переезжает в свободное поле: сторону
-            // меняют, ошибившись сегментом, и заставлять набирать заново то,
-            // что уже названо, незачем.
-            if (next === "outgoing" && client && !counterparty.trim()) {
-              setCounterparty(client.full_name || "");
-            }
-            setDirection(next as DebtDirection);
-          }}
+          onChange={(next) => setDirection(next as DebtDirection)}
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
@@ -193,11 +185,9 @@ export function DebtSheet({
             давит»). */}
         <SectionCard>
           <DebtWhoBlock
-            direction={direction}
             client={client}
             stats={client ? statsById.get(client.id) : undefined}
             counterparty={counterparty}
-            onCounterparty={setCounterparty}
             onOpenPicker={() => {
               setClientOpen(true);
               haptics.tap();

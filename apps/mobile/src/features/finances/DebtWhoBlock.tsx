@@ -1,68 +1,46 @@
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { UserRound } from "lucide-react-native";
 import type { Client } from "@babun/shared/local/clients";
 import type { ClientStats } from "@babun/shared/local/selectors/client-stats";
-import type { DebtDirection } from "@babun/shared/local/finance/debt";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { ClientHistoryLine } from "@/features/clients/history-line";
 import { useThemeColors } from "@/theme/colors";
 
-// КТО ДОЛЖЕН — ЗАВИСИТ ОТ СТОРОНЫ, И ЭТО НЕ ПРИХОТЬ ВЁРСТКИ.
+// КТО ДОЛЖЕН — ВСЕГДА КЛИЕНТ ИЗ СПРАВОЧНИКА, В ОБЕ СТОРОНЫ.
 //
-// «МНЕ ДОЛЖНЫ» — это всегда человек из справочника клиентов (владелец
-// 2026-09-10: «сделай возможность добавить клиента, именно такой же блок, как
-// в записи; если клиента нет — открывается всё то же самое, и там просто
-// внесу, кто он»). Раньше здесь было свободное поле «Клиент или имя»: долг
-// записывался на строку текста, и связи с карточкой не возникало — ни истории,
-// ни телефона, ни «сколько он уже должен». Теперь блок тот же, что в записи:
-// выбранный клиент показывает вводную о себе, тап открывает выбор заново.
+// Здесь стояло свободное поле «Клиент или имя», а «я должен» я оставил
+// текстом с доводом «поставщику в списке клиентов не место». Владелец
+// поправил (2026-09-10): «это телефонная база — у клиента просто не будет
+// записи, вот и всё; в другой CRM у нас около восьмидесяти клиентов, которые
+// ни разу не заказали услуги; можно заводить клиента через того, кто должен,
+// и при этом иметь право к нему не выезжать».
 //
-// «Я ДОЛЖЕН» — это поставщик, магазин, сосед: в справочнике клиентов их нет и
-// заводить их там нельзя, иначе список клиентов перестанет быть списком тех,
-// кому мы ездим. Здесь остаётся свободное имя.
+// Значит справочник — это КОНТАКТЫ, а не список тех, кому мы ездим, и
+// поставщик в нём такой же контакт. Отсюда один блок на обе стороны: тот же,
+// что в записи, — выбранный показывает свою вводную, тап открывает выбор
+// заново, а «Создать клиента» заводит нового прямо по дороге.
+//
+// Имя БЕЗ карточки остаётся живым случаем: клиента могли удалить, а долг за
+// ним остаётся, и старые долги записывались текстом. Такую строку печатаем
+// как есть и предлагаем связать с карточкой.
 
 export function DebtWhoBlock({
-  direction,
   client,
   stats,
   counterparty,
-  onCounterparty,
   onOpenPicker,
 }: {
-  direction: DebtDirection;
-  /** Выбранный клиент — только для стороны «мне должны». */
+  /** Выбранный клиент. */
   client: Client | null;
   stats: ClientStats | undefined;
+  /** Имя, сохранённое в долге: у него может не быть карточки. */
   counterparty: string;
-  onCounterparty: (next: string) => void;
   onOpenPicker: () => void;
 }) {
   const t = useThemeColors();
+  const orphan = !client && counterparty.trim().length > 0;
 
-  if (direction === "outgoing") {
-    return (
-      <View className="min-h-[52px] flex-row items-center gap-3 px-4 py-2.5">
-        <Text className="text-base" style={{ color: t.ink }}>
-          Кто
-        </Text>
-        <TextInput
-          value={counterparty}
-          onChangeText={onCounterparty}
-          placeholder="Поставщик, магазин"
-          placeholderTextColor={t.placeholder}
-          selectionColor={t.accent}
-          keyboardAppearance="light"
-          maxFontSizeMultiplier={1.2}
-          accessibilityLabel="Кому мы должны"
-          maxLength={120}
-          className="flex-1 text-base"
-          style={{ color: t.ink, textAlign: "right" }}
-        />
-      </View>
-    );
-  }
-
-  if (!client) {
+  if (!client && !orphan) {
     return (
       <ChooseRow
         icon={UserRound}
@@ -83,7 +61,7 @@ export function DebtWhoBlock({
       className="flex-row items-center px-4 py-2.5"
       onPress={onOpenPicker}
       accessibilityRole="button"
-      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}`}
+      accessibilityLabel={`Клиент: ${client?.full_name || counterparty || "без имени"}`}
       accessibilityHint="Открывает выбор клиента"
       style={({ pressed }) => ({
         backgroundColor: pressed ? t.pressed : "transparent",
@@ -91,18 +69,18 @@ export function DebtWhoBlock({
     >
       <View className="flex-1">
         <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-          {client.full_name || "Без имени"}
+          {client?.full_name || counterparty || "Без имени"}
         </Text>
-        <ClientHistoryLine client={client} stats={stats} />
+        {client ? <ClientHistoryLine client={client} stats={stats} /> : null}
         <Text
           style={{
             fontSize: 13,
-            color: client.phone ? t.sub : t.placeholder,
+            color: client?.phone ? t.sub : t.placeholder,
             marginTop: 2,
           }}
           numberOfLines={1}
         >
-          {client.phone ?? "без телефона"}
+          {client ? (client.phone ?? "без телефона") : "имя без карточки"}
         </Text>
       </View>
     </Pressable>
