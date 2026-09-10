@@ -82,6 +82,8 @@ const tag = (id: string, name = id, color = "#000"): CachedTag => ({
   // строкой базы поле в поле, иначе сторож цикла видит разницу там, где её
   // нет, и ревалидация эмитит на каждом ровном ответе сервера.
   icon: null,
+  position: 0,
+  hidden: false,
 });
 
 beforeEach(() => {

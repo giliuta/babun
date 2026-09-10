@@ -473,6 +473,8 @@ export interface UpdateClientTagInput {
     name?: string;
     color?: string;
     icon?: string | null;
+    position?: number;
+    hidden?: boolean;
   };
 }
 
@@ -530,6 +532,43 @@ export function useUpdateClientTag() {
         throw new Error("Введите название тега.");
       }
       return updateClientTagCached(supabase, id, normalizedPatch, tenantId);
+    },
+    onSettled: () => invalidateClientTags(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+/** СКРЫТЬ И ПОКАЗАТЬ — левая кромка свайпа, как у категории и метки (владелец
+ *  2026-09-10: «свайп вправо — с левой стороны появляется „Скрыть“… везде во
+ *  всех одно и то же»). Скрытый тег остаётся у клиентов, которым уже
+ *  проставлен: скрытие — про справочник, а не про данные. */
+export function useSetClientTagHidden() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation<ClientTag, Error, { id: string; hidden: boolean }>({
+    mutationFn: ({ id, hidden }) => {
+      assertCanManageClientTags(tenantId, role);
+      return updateClientTagCached(supabase, id, { hidden }, tenantId);
+    },
+    onSettled: () => invalidateClientTags(qc),
+    meta: { errorHandled: true },
+  });
+}
+
+/** ПОРЯДОК СПРАВОЧНИКА — рукой за ручку. Пишем построчно: тегов у бизнеса
+ *  единицы, а один upsert потребовал бы отправлять имя и цвет каждой строки,
+ *  то есть шанс затереть чужую правку, пришедшую между чтением и записью. */
+export function useReorderClientTags() {
+  const tenantId = useTenantId();
+  const role = useCurrentRole().data;
+  const qc = useQueryClient();
+  return useMutation<void, Error, string[]>({
+    mutationFn: async (orderedIds) => {
+      assertCanManageClientTags(tenantId, role);
+      for (const [position, id] of orderedIds.entries()) {
+        await updateClientTagCached(supabase, id, { position }, tenantId);
+      }
     },
     onSettled: () => invalidateClientTags(qc),
     meta: { errorHandled: true },

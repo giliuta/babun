@@ -100,6 +100,10 @@ async function listClientTagRows(
       .from("client_tags")
       .select("*")
       .eq("tenant_id", tenantId)
+      // ПОРЯДОК СПРАВОЧНИКА — РУКА ВЛАДЕЛЬЦА, а имя лишь разводит равные:
+      // до 2026-09-10 список шёл по алфавиту, потому что колонки порядка не
+      // было вовсе.
+      .order("position", { ascending: true })
       .order("name", { ascending: true })
       .order("id", { ascending: true })
       .range(offset, offset + CLIENT_PAGE_SIZE - 1);
@@ -674,7 +678,14 @@ export async function findClientByPhoneE164(
 // ─── Tag CRUD ──────────────────────────────────────────────────
 
 function rowToTag(r: TagRow): ClientTag {
-  return { id: r.id, name: r.name, color: r.color, icon: r.icon ?? null };
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    icon: r.icon ?? null,
+    position: r.position ?? 0,
+    hidden: r.hidden ?? false,
+  };
 }
 
 export async function listClientTags(
@@ -707,7 +718,13 @@ export async function createClientTag(
 export async function updateClientTag(
   supabase: DbSupabase,
   id: string,
-  patch: { name?: string; color?: string; icon?: string | null },
+  patch: {
+    name?: string;
+    color?: string;
+    icon?: string | null;
+    position?: number;
+    hidden?: boolean;
+  },
   tenantId: string,
 ): Promise<ClientTag> {
   const { data, error } = await supabase

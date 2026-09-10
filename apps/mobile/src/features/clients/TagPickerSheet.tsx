@@ -41,6 +41,10 @@ export function TagPickerSheet({
   onToggle: (id: string) => void;
   onClose: () => void;
 }) {
+  // СКРЫТОГО ТЕГА В ВЫБОРЕ НЕТ — кроме уже проставленного этому клиенту: иначе
+  // прошлая карточка потеряет подпись, а человек решит, что тег удалили.
+  // Закон общий для справочников (`swipe-edge-contract.test`).
+  const shown = tags.filter((tag) => !tag.hidden || selected.includes(tag.id));
   return (
     <BottomSheet
       visible={visible}
@@ -56,8 +60,8 @@ export function TagPickerSheet({
       }
     >
       <SelectList>
-        {tags.length > 0 ? (
-          tags.map((tag) => (
+        {shown.length > 0 ? (
+          shown.map((tag) => (
             <SelectRow
               key={tag.id}
               // ЗНАЧОК ТЕГА — ЕГО СОБСТВЕННЫЙ. Ярлычок на всех строках был

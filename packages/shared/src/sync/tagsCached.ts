@@ -123,6 +123,8 @@ async function refreshCacheFromSupabase(
     name: tag.name,
     color: tag.color,
     icon: tag.icon ?? null,
+    position: tag.position ?? 0,
+    hidden: tag.hidden ?? false,
   }));
   const before = cacheSignature(await safeCacheReadTags(tenantId));
   await cacheReplaceTenant("tags", tenantId, rows);
@@ -131,14 +133,29 @@ async function refreshCacheFromSupabase(
 }
 
 function rowToTag(r: CachedTag): ClientTag {
-  return { id: r.id, name: r.name, color: r.color };
+  // ВСЕ ПОЛЯ СТРОКИ, А НЕ ТРИ. Читатель кэша возвращал только имя и цвет, и
+  // экран получал тег без значка, порядка и скрытия — при том что в базе они
+  // уже лежали: значок «Проблемного» просто не доезжал до списка.
+  return {
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    icon: r.icon ?? null,
+    position: r.position ?? 0,
+    hidden: r.hidden ?? false,
+  };
 }
 
 // ─── Write ────────────────────────────────────────────────────────
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { name: string; color: string; icon?: string | null },
+  input: {
+    name: string;
+    color: string;
+    icon?: string | null;
+    position?: number;
+  },
   tenantId: string,
 ): Promise<ClientTag> {
   const id = randomUuid();
@@ -148,6 +165,8 @@ export async function createClientTag(
     name: input.name,
     color: input.color,
     icon: input.icon ?? null,
+    position: input.position ?? 0,
+    hidden: false,
   };
   const insertOp = {
     table: "tags" as const,
@@ -175,6 +194,8 @@ export async function createClientTag(
         name: created.name,
         color: created.color,
         icon: created.icon ?? null,
+        position: created.position ?? 0,
+        hidden: created.hidden ?? false,
       });
       return created;
     } catch (err) {
@@ -185,19 +206,39 @@ export async function createClientTag(
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
       void kickReplayer({ supabase });
-      return { id, name: input.name, color: input.color, icon: input.icon ?? null };
+      return {
+        id,
+        name: input.name,
+        color: input.color,
+        icon: input.icon ?? null,
+        position: input.position ?? 0,
+        hidden: false,
+      };
     }
   }
 
   // Offline — ATOMIC optimistic upsert + enqueue (risk #6).
   await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
-  return { id, name: input.name, color: input.color, icon: input.icon ?? null };
+  return {
+    id,
+    name: input.name,
+    color: input.color,
+    icon: input.icon ?? null,
+    position: input.position ?? 0,
+    hidden: false,
+  };
 }
 
 export async function updateClientTag(
   supabase: DbSupabase,
   id: string,
-  patch: { name?: string; color?: string; icon?: string | null },
+  patch: {
+    name?: string;
+    color?: string;
+    icon?: string | null;
+    position?: number;
+    hidden?: boolean;
+  },
   tenantId: string,
 ): Promise<ClientTag> {
   const existing = await readCachedTag(id, tenantId);
@@ -223,6 +264,8 @@ export async function updateClientTag(
         name: updated.name,
         color: updated.color,
         icon: updated.icon ?? null,
+        position: updated.position ?? 0,
+        hidden: updated.hidden ?? false,
       });
       return updated;
     } catch (err) {
@@ -237,6 +280,8 @@ export async function updateClientTag(
         name: patch.name ?? existing?.name ?? "",
         color: patch.color ?? existing?.color ?? "",
         icon: patch.icon ?? existing?.icon ?? null,
+        position: patch.position ?? existing?.position ?? 0,
+        hidden: patch.hidden ?? existing?.hidden ?? false,
       };
     }
   }

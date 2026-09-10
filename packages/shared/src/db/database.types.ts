@@ -776,13 +776,16 @@ export type Database = {
       client_tags: {
         Row: {
           color: string
+          hidden: boolean
           icon: string | null
           id: string
           name: string
+          position: number
           tenant_id: string
         }
         Insert: {
           color: string
+          hidden?: boolean
           icon?: string | null
           id?: string
           name: string
@@ -790,9 +793,11 @@ export type Database = {
         }
         Update: {
           color?: string
+          hidden?: boolean
           icon?: string | null
           id?: string
           name?: string
+          position?: number
           tenant_id?: string
         }
         Relationships: [
