@@ -165,9 +165,12 @@ export function TeamLabelRow({
       {showLabel ? (
       <IdentityCard
         icon={labelIcon ?? MapPin}
-        // Пустая метка тише некуда: булавка `t.sub` на светлой подложке
-        // строки. Выбранная носит свой цвет — по нему её и узнают.
-        color={label ? (labelColor ?? t.accent) : t.sub}
+        // ПУСТАЯ МЕТКА — ПРИГЛАШЕНИЕ, А НЕ ТЕНЬ. Владелец 2026-09-10 выбрал
+        // на экране сравнения вариант 4 из четырёх: булавка акцентом в
+        // голубом кружке, как у «Выбрать клиента». Серую булавку (`t.sub`) он
+        // отверг дважды — она «режет глаза» и читается как испорченное
+        // значение. Выбранная метка носит СВОЙ цвет: по нему её и узнают.
+        color={label ? (labelColor ?? t.accent) : t.accent}
         title={label ?? labelPlaceholder ?? "Метка"}
         muted={!label}
         quiet={!!label && !!labelFromDay}
@@ -248,25 +251,25 @@ function IdentityCard({
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
     >
-      {/* ЗНАЧОК СТОИТ ТАМ, ГДЕ ЧТО-ТО ГОВОРИТ (владелец 2026-09-10: «убери
-          вот эту вот хуйню» — про серый диск с булавкой у невыбранной
-          метки). У команды кружок носит её цвет, у выбранной метки — цвет
-          метки; у пустой цвета нет, и диск не сообщал ничего, кроме шума.
-          Пустая плитка — одно слово по центру, как пустое поле. */}
-      {muted ? null : (
-        <View
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 13,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: fill,
-          }}
-        >
-          <Icon color={color} size={15} strokeWidth={2.2} />
-        </View>
-      )}
+      {/* ЗНАЧОК СТОИТ ВСЕГДА, И ЭТО ТРЕТИЙ ЗАХОД. Сначала у пустой метки был
+          диск, посчитанный из rgba-токена, — RN красил его почти чёрным, и
+          владелец потребовал «убрать вот эту вот хуйню»; я снёс значок
+          целиком. Он вернулся с «сделай со значком, по правильному» и выбрал
+          глазами вариант 4: тот же кружок 26 с той же тонировкой `1f`, но в
+          акценте. Значит виноват был ЧЁРНЫЙ ДИСК, а не сам значок — плитка
+          без него читалась как пустое место, а не как «нажми и выбери». */}
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: fill,
+        }}
+      >
+        <Icon color={color} size={15} strokeWidth={2.2} />
+      </View>
       <View style={{ flexShrink: 1 }}>
         <Text
           numberOfLines={1}
