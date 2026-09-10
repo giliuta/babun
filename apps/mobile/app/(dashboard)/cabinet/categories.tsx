@@ -1,29 +1,21 @@
 import { useMemo, useState } from "react";
-import {
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
-import { EyeOff, Trash2 } from "lucide-react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type {
   FinanceCategory,
   FinanceCategoryKind,
 } from "@babun/shared/db/repositories/finance-categories";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
-import { ColorField } from "@/components/ui/picker-fields";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Divider } from "@/components/ui/Divider";
-import { AddRow } from "@/components/ui/AddRow";
-import { Field } from "@/components/ui/Field";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
-import { ICON } from "@/components/ui/tokens";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { NameColorField } from "@/components/ui/picker-fields";
+import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -34,6 +26,24 @@ import {
   useSetCategoryHidden,
   useUpdateCategory,
 } from "@/features/finances/queries";
+
+// КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
+//
+// Экран рисовал себя сам: редактор — сырой `Modal animationType="slide"` со
+// своей шапкой и своим нижним отступом, имя и цвет — двумя раздельными
+// полями, удаление и скрытие — двумя кнопками ВНУТРИ строки (голая мусорка и
+// «Скрыть» словом), кнопка добавления — строкой внутри списка, а под списком
+// стоял объясняющий абзац.
+//
+// Теперь то же, что у меток, типов объектов, типов событий и тегов: строка
+// 52pt с кружком цвета, действия — на кромках свайпа, редактор —
+// канонический `BottomSheet` с `NameColorField`, главное действие — кнопкой
+// внизу экрана.
+//
+// ПРАВАЯ КРОМКА НЕСЁТ САМОЕ СИЛЬНОЕ ИЗ ДОСТУПНОГО ЭТОЙ СТРОКЕ. У своей
+// категории это «Удалить», у стандартной удалять нечего (она общая на весь
+// продукт, её защищает RLS) — и справа стоит «Скрыть». Слово на кромке всегда
+// называет то, что произойдёт: немых кромок не бывает.
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // tailwind-hued SWATCHES are gone — default stays индиго.
@@ -145,161 +155,161 @@ export default function CategoriesScreen() {
         <EmptyState state="loading" fill />
       ) : isError ? (
         <EmptyState
-          fill
           state="error"
+          fill
           subtitle={error instanceof Error ? error.message : undefined}
           action={{ label: "Повторить", onPress: () => void refetch() }}
         />
-      ) : (
-        <FlatList
-          style={{ flex: 1 }}
-          data={filtered}
-          keyExtractor={(c) => c.id}
-          contentContainerStyle={{ flexGrow: 1, paddingTop: 8 }}
-          renderItem={({ item }) => (
-            <View className="flex-row items-stretch" style={{ opacity: item.hidden ? 0.45 : 1 }}>
-              <Pressable
-                onPress={
-                  item.hidden
-                    ? () => toggleHidden(item)
-                    : item.tenant_id
-                      ? () => openEdit(item)
-                      : () => toggleHidden(item)
-                }
-                accessibilityRole="button"
-                accessibilityLabel={
-                  item.hidden
-                    ? `Категория ${item.name}, скрыта — вернуть в список`
-                    : item.tenant_id
-                      ? `Категория ${item.name}, редактировать`
-                      : `Категория ${item.name}, убрать из списка`
-                }
-                className="min-h-[52px] flex-1 flex-row items-center py-3 pl-4 active:opacity-60"
-              >
-                <View
-                  className="mr-3 h-7 w-7 rounded-full"
-                  style={{ backgroundColor: item.color ?? th.faint }}
-                />
-                <Text className="flex-1 text-base" style={{ color: th.ink }}>{item.name}</Text>
-              </Pressable>
-              {item.hidden ? (
-                <View className="min-h-[52px] flex-row items-center gap-1.5 pr-4">
-                  <EyeOff color={th.faint} size={ICON.sm} />
-                  <Text className="text-xs" style={{ color: th.faint }}>скрыта</Text>
-                </View>
-              ) : item.tenant_id ? (
-                <Pressable
-                  onPress={() => confirmDelete(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Удалить ${item.name}`}
-                  className="min-h-[52px] min-w-11 items-center justify-center pr-2 active:opacity-60"
-                >
-                  <Trash2 color={th.danger} size={ICON.sm} />
-                </Pressable>
-              ) : (
-                // СТАНДАРТНУЮ КАТЕГОРИЮ НЕ УДАЛИТЬ, НО МОЖНО УБРАТЬ ИЗ СПИСКА.
-                // Здесь стояло немое «станд.»: строка выглядела неживой, и
-                // владелец не знал, что скрытие вообще есть — «сделай
-                // возможность удалять» (2026-09-10), хотя оно было тапом по
-                // строке. Действие обязано называть себя словом.
-                <Pressable
-                  onPress={() => toggleHidden(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Убрать ${item.name} из списка`}
-                  className="min-h-[52px] flex-row items-center gap-1.5 pr-4 active:opacity-60"
-                >
-                  <EyeOff color={th.sub} size={ICON.sm} />
-                  <Text className="text-xs" style={{ color: th.sub }}>
-                    Скрыть
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
-          ItemSeparatorComponent={() => <Divider inset={56} />}
-          ListFooterComponent={
-            filtered.length > 0 ? (
-              <>
-                <Divider inset={56} />
-                <AddRow label="Добавить категорию" onPress={openCreate} />
-                <Text
-                  className="px-4 pb-6 pt-2 text-xs"
-                  style={{ color: th.faint }}
-                >
-                  Свою категорию можно переименовать или удалить, стандартную —
-                  скрыть: она перестанет предлагаться. Прошлые операции сохранят
-                  своё название.
-                </Text>
-              </>
-            ) : null
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          fill
+          title={
+            type === "expense"
+              ? "Нет категорий расходов"
+              : type === "income"
+                ? "Нет категорий доходов"
+                : "Нет категорий долгов"
           }
-          ListEmptyComponent={
-            <EmptyState
-              fill
-              title={
-                type === "expense"
-                  ? "Нет категорий расходов"
-                  : type === "income"
-                    ? "Нет категорий доходов"
-                    : "Нет категорий долгов"
-              }
-              subtitle={
-                type === "debt"
-                  ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
-                  : "Категории группируют операции — «Бензин», «Аренда», «Выручка»"
-              }
-              action={{ label: "Добавить категорию", onPress: openCreate }}
-            />
+          subtitle={
+            type === "debt"
+              ? "Категории называют, за что висят деньги — «Поставщик», «Займ», «Аренда»"
+              : "Категории группируют операции — «Бензин», «Аренда», «Выручка»"
           }
+          action={{ label: "Добавить категорию", onPress: openCreate }}
         />
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
+        >
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {filtered.map((item) => {
+              const own = !!item.tenant_id;
+              const hide = {
+                label: item.hidden ? "Показать" : "Скрыть",
+                color: item.hidden ? th.success : th.warning,
+                icon: item.hidden ? RotateCcw : EyeOff,
+                accessibilityLabel: `${item.hidden ? "Показать" : "Скрыть"} категорию ${item.name}`,
+                onAction: () => toggleHidden(item),
+              };
+              return (
+                <SwipeRow
+                  key={item.id}
+                  {...(own
+                    ? {
+                        label: "Удалить",
+                        color: th.danger,
+                        icon: Trash2,
+                        accessibilityLabel: `Удалить категорию ${item.name}`,
+                        onAction: () => confirmDelete(item),
+                        leading: hide,
+                      }
+                    : hide)}
+                >
+                  <CategoryRow
+                    item={item}
+                    onPress={own ? () => openEdit(item) : () => toggleHidden(item)}
+                  />
+                </SwipeRow>
+              );
+            })}
+          </View>
+        </ScrollView>
       )}
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+      {!isLoading && !isError && filtered.length > 0 ? (
+        <View
+          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
         >
-        <Pressable className="flex-1" style={{ backgroundColor: th.scrim }} onPress={() => setOpen(false)} accessible={false} />
-        <View className="rounded-t-[10px] p-5 pb-8" style={{ backgroundColor: th.surface }}>
-          <Text className="mb-3 text-lg font-bold" style={{ color: th.ink }}>
-            {editing
-              ? "Категория"
-              : `Новая категория · ${
-                  type === "expense" ? "расход" : type === "income" ? "доход" : "долг"
-                }`}
-          </Text>
-          <Field
-            label="Название"
-            value={name}
-            onChangeText={setName}
-            placeholder="Напр. Бензин"
-            autoFocus
-          />
-          <ColorField value={color} onChange={setColor} />
-          <Button
-            label={editing ? "Сохранить" : "Создать"}
-            onPress={submit}
-            disabled={!name.trim() || insert.isPending || update.isPending}
-            loading={insert.isPending || update.isPending}
-          />
-          {editing ? (
-            <Pressable
-              onPress={() => {
-                setOpen(false);
-                confirmDelete(editing);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Удалить категорию ${editing.name}`}
-              className="mt-1 items-center py-3 active:opacity-70"
-            >
-              <Text style={{ fontSize: 16, fontWeight: "500", color: th.danger }}>
-                Удалить категорию
-              </Text>
-            </Pressable>
-          ) : null}
+          <GradientButton label="Добавить категорию" onPress={openCreate} />
         </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      ) : null}
+
+      <BottomSheet
+        visible={open}
+        onClose={() => setOpen(false)}
+        title={
+          editing
+            ? "Категория"
+            : `Новая категория · ${
+                type === "expense" ? "расход" : type === "income" ? "доход" : "долг"
+              }`
+        }
+        avoidKeyboard
+        footer={
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <Button
+              label={editing ? "Сохранить" : "Создать категорию"}
+              disabled={!name.trim()}
+              onPress={() => void submit()}
+            />
+          </View>
+        }
+      >
+        <NameColorField
+          name={name}
+          onNameChange={setName}
+          color={color}
+          onColorChange={setColor}
+          autoFocus={!editing}
+        />
+      </BottomSheet>
     </Screen>
+  );
+}
+
+/** Строка категории — 52pt, кружок цвета, имя. Скрытая гаснет, но остаётся на
+ *  месте: исчезнувшая строка читалась бы как «категория пропала». */
+function CategoryRow({
+  item,
+  onPress,
+}: {
+  item: FinanceCategory;
+  onPress: () => void;
+}) {
+  const th = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={
+        item.hidden
+          ? `Категория ${item.name}, скрыта — вернуть в список`
+          : item.tenant_id
+            ? `Категория ${item.name}, переименовать`
+            : `Категория ${item.name}, убрать из списка`
+      }
+      style={({ pressed }) => ({
+        height: 52,
+        flexDirection: "row",
+        alignItems: "center",
+        paddingLeft: 16,
+        paddingRight: 12,
+        borderRadius: th.radius.card,
+        backgroundColor: pressed ? th.pressed : th.surface,
+        opacity: item.hidden ? 0.45 : 1,
+      })}
+    >
+      <View
+        style={{
+          height: 12,
+          width: 12,
+          borderRadius: th.radius.pill,
+          backgroundColor: item.color ?? th.faint,
+        }}
+      />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+        style={{ flex: 1, marginLeft: 12, fontSize: 16, color: th.ink }}
+      >
+        {item.name}
+      </Text>
+      {item.hidden ? (
+        <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 12, color: th.faint }}>
+          скрыта
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
