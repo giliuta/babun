@@ -179,7 +179,7 @@ Deno.serve(async (req: Request) => {
   // в двух тенантах она возвращает ошибку, и подписка молча получала 503.
   const { data: members, error: memberErr } = await sb
     .from("tenant_members")
-    .select("tenant_id")
+    .select("tenant_id, role, master_id")
     .eq("user_id", id)
     .order("joined_at", { ascending: true })
     .order("tenant_id", { ascending: true })
@@ -195,22 +195,36 @@ Deno.serve(async (req: Request) => {
   const ahead = new Date(now);
   ahead.setDate(ahead.getDate() + 180);
 
-  const { data: rows, error: aptErr } = await sb
+  // ОБЪЁМ ЛЕНТЫ РЕШАЕТ РОЛЬ, А НЕ ЗНАНИЕ АДРЕСА. До этого лента отдавала ВЕСЬ
+  // рабочий календарь компании любому, кто знает UUID пользователя, — а он
+  // приходит мастеру в каждой записи полем `created_by`
+  // (list_master_appointments_safe, 20260720210010). То есть «адрес — это
+  // секрет» держалось на значении, которое продукт сам же и раздаёт: мастер
+  // подставлял UUID владельца и забирал расписание фирмы без единой
+  // авторизации. Мастер получает СВОЮ работу, ровно как в приложении;
+  // владелец и диспетчер — календарь компании.
+  const masterOnly = member.role === "master";
+  if (masterOnly && !member.master_id) return notFound();
+
+  let feed = sb
     .from("appointments")
     // `kind` не выбираем: он нужен только как фильтр ниже, в тело ленты не идёт.
     .select("id, date, time_start, time_end, status, address, comment")
     .eq("tenant_id", member.tenant_id)
     // ЛИЧНОЕ НЕ ОТДАЁМ. kind in ('event','personal') — это приватные события
     // конкретного человека, ради которых написана 20260508_001_personal_event_rls.
-    // Лента ходит под service_role, RLS её не сдерживает, а фильтра по
-    // ролям здесь нет вовсе — значит по ссылке любого мастера утекал ВЕСЬ
-    // календарь тенанта вместе с чужой личной жизнью. Пока роль не резолвится
-    // на сервере, отдаём только рабочие записи.
+    // Лента ходит под service_role, RLS её не сдерживает — значит рабочий
+    // фильтр здесь единственная защита личной жизни, и роль (выше) режет
+    // объём уже внутри рабочего.
     .eq("kind", "work")
     .neq("status", "cancelled")
     .gte("date", ymd(back))
     .lte("date", ymd(ahead))
     .order("date", { ascending: true });
+
+  if (masterOnly) feed = feed.eq("master_id", member.master_id);
+
+  const { data: rows, error: aptErr } = await feed;
   if (aptErr) return new Response("Service Unavailable", { status: 503 });
 
   const body = buildIcs((rows ?? []) as AptRow[], id);
