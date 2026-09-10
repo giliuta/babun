@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { MapPinned, Send, Settings2 } from "lucide-react-native";
+import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
-import { ChoiceRow, FieldRow } from "@/components/ui/card-rows";
+import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
+import { FieldRow } from "@/components/ui/card-rows";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { MapPicker } from "@/features/clients/MapPicker";
 import {
@@ -103,6 +106,8 @@ export function ObjectFields({
   const t = useThemeColors();
   /** Раскрыта ли карта под адресом. */
   const [mapOpen, setMapOpen] = useState(false);
+  /** Поднят ли список типов объекта. */
+  const [typeSheetOpen, setTypeSheetOpen] = useState(false);
   /** Куда переехать карте: адрес словами, найденный геокодером. */
   const [found, setFound] = useState<Coords | null>(null);
 
@@ -136,20 +141,33 @@ export function ObjectFields({
 
   return (
     <>
-      <SectionCard
+      {/* ТИП ОБЪЕКТА — ТА ЖЕ АРХИТЕКТУРА, ЧТО КАТЕГОРИЯ И ТИП СОБЫТИЯ
+          (владелец 2026-09-10: «переделываем вот этот вот в архитектуру, то же
+          самое, как выглядит тип события или же категория в финансах: нажал
+          „добавить тип объекта“ — снизу поднимается список; и эти строчки,
+          которые сейчас справа в блоке, переносим в саму шторку»).
+
+          ЧТО УБРАНО. Здесь стояла ЛЕНТА ЧИПОВ `ChoiceRow`: все типы разом,
+          выбор одним касанием, а дверь в справочник — ползунками в шапке
+          блока. Это был третий диалект выбора в продукте — после того как
+          категория и тип события уже свелись к «блок + шторка». Лента ещё и
+          росла: типы заводит сам бизнес, и с десятком их приходилось листать
+          вбок, не видя, что за краем.
+
+          ПОЛЗУНКИ ПЕРЕЕХАЛИ В ШАПКУ ШТОРКИ — там же, где они у типа события.
+          В шапке блока они держались потому, что лента не оставляла им места
+          внутри; ленты нет — причина исчезла. */}
+      <ReferenceBlock
         title="Тип объекта"
-        action={{
-          label: "Настроить типы объектов",
-          icon: Settings2,
-          onPress: onTypeSettings,
+        emptyIcon={Tag}
+        emptyLabel="Выбрать тип объекта"
+        emptyHint="Открывает список типов объектов"
+        value={value.type.trim() ? { name: value.type } : null}
+        onPress={() => {
+          haptics.tap();
+          setTypeSheetOpen(true);
         }}
-      >
-        <ChoiceRow
-          options={typeOptions}
-          value={value.type}
-          onSelect={(v) => onChange({ type: snapObjectType(v, typeOptions) })}
-        />
-      </SectionCard>
+      />
 
       <SectionCard
         title="Адрес"
@@ -305,6 +323,30 @@ export function ObjectFields({
           />
         </View>
       </SectionCard>
+
+      {/* СПИСОК ТИПОВ — КАНОНИЧЕСКАЯ ШТОРКА, ПОДНЯТАЯ ИЗ ЛИСТА ОБЪЕКТА. Лист
+          в листе здесь законен и в продукте уже есть: так из листа операции
+          открывается категория. Строки — значок словаря и свой цвет, как у
+          категории; цвет считается от имени, потому что у типа объекта своего
+          цвета в справочнике нет, а различают строки именно им. */}
+      <PickerSheet
+        visible={typeSheetOpen}
+        title="Тип объекта"
+        selectedId={value.type.trim() || null}
+        items={typeOptions.map((name) => ({
+          id: name,
+          label: name,
+          icon: Tag,
+          color: getAvatarColor(name),
+          onPress: () => {
+            onChange({ type: snapObjectType(name, typeOptions) });
+            onCommit?.();
+          },
+        }))}
+        onSettings={onTypeSettings}
+        settingsLabel="Типы объектов"
+        onClose={() => setTypeSheetOpen(false)}
+      />
     </>
   );
 }

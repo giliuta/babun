@@ -293,8 +293,8 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Метку | строка метки в докете команды | `reference/LabelPickerSheet` | нет — тап выбирает |
 | Метку дня | тап по числу в календаре | `calendar/DayLabelSheet` (обёртка над той же) | нет |
 | Теги (много) | строка «Теги» в блоке «Личное» | `clients/TagPickerSheet` | «Применить» |
-| Тип объекта | `SectionCard title="Тип объекта"` + `ChoiceRow` | ленты чипов в блоке, шторки нет | — |
-| Тип события | `appointments/EventTypeBlock` | ленты плиток в блоке, шторки нет | — |
+| Тип объекта | `ReferenceBlock` в форме объекта | `ui/PickerSheet` | нет — тап выбирает |
+| Тип события | `appointments/EventTypeBlock` (`ReferenceBlock`) | `ui/PickerSheet` | нет — тап выбирает |
 | Категорию, счёт, значение | строка со значением | `ui/ValuePickerSheet` | нет |
 | Клиента или заявку инвойса | строка со значением | `invoices/EntityPickerSheet` | нет |
 | Команду и мастера | докет команды | `appointments/BookingSheets` → `TeamMasterSheet` | «Применить» |
