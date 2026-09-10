@@ -16,9 +16,9 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
-import { AddRow } from "@/components/ui/AddRow";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 import { notify } from "@/lib/notify";
@@ -168,24 +168,28 @@ export default function MastersScreen() {
             />
           )}
           ItemSeparatorComponent={() => <Divider inset={64} />}
-          ListFooterComponent={
-            allMasters.length > 0 ? (
-              <>
-                <Divider inset={64} />
-                <AddRow label="Добавить мастера" onPress={openCreate} />
-              </>
-            ) : null
-          }
           ListEmptyComponent={
             <EmptyState
               fill
               title={search.trim() ? "Ничего не найдено" : "Нет мастеров"}
               subtitle={search.trim() ? "Измените имя, телефон или email в поиске." : undefined}
-              action={search.trim() ? undefined : { label: "Добавить мастера", onPress: openCreate }}
             />
           }
         />
       )}
+
+      {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ ЭКРАНА (владелец 2026-09-10: «кнопка должна
+          быть внизу, как и всё у нас»). Тот же футер, что у списка клиентов:
+          20 по бокам, 8 сверху, 10 снизу, `GradientButton` во всю ширину.
+
+          ЗДЕСЬ БЫЛО ДВЕ РАЗНЫХ ДВЕРИ: строка `AddRow` в конце списка, когда
+          мастера есть, и кнопка ПОСЕРЕДИНЕ пустого экрана, когда их нет. То
+          есть одно действие в двух местах и двух видах, и ни одно из них не
+          там, где человек его ищет. Футер стоит ВСЕГДА — список пуст или нет,
+          место действия не переезжает. */}
+      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+        <GradientButton label="Добавить мастера" onPress={openCreate} />
+      </View>
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
         <KeyboardAvoidingView
