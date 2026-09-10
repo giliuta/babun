@@ -129,4 +129,35 @@ describe("ловушки nativewind", () => {
     }
     assert.deepEqual(offenders, []);
   });
+
+  // КРУПНОЕ ПОЛЕ ВВОДА БЕЗ `lineHeight` ТЕРЯЕТ ВЕРХ ГЛИФОВ.
+  //
+  // В этом стеке TextInput без явного межстрочного интервала получает строку
+  // НИЖЕ своего кегля, и iOS срезает верхнюю половину знаков. На поле суммы
+  // (28pt) «€ 0» рисовалось как «€ ᴗ»; проба подсказкой «0 8 5 X» дала
+  // «ᴜ ȣ Ɔ ʌ» — резало ВСЕ знаки одинаково, а соседний «€» обычным `Text`
+  // при том же кегле оставался цел (2026-09-10).
+  //
+  // Именованный класс (`text-3xl`) несёт интервал с собой, поэтому прежний код
+  // работал случайно; арбитрарный `text-[28px]` и `fontSize` в стиле — нет.
+  // Порог 20pt: мелкие поля живут без интервала годами и ничего не теряют.
+  test("у крупного поля ввода задан lineHeight", () => {
+    const root = join(__dirname, "..", "..");
+    const offenders: string[] = [];
+    for (const file of [...walk(join(root, "src")), ...walk(join(root, "app"))]) {
+      const src = readFileSync(file, "utf8");
+      for (const m of src.matchAll(/<TextInput\b[\s\S]{0,2500}?\/>/g)) {
+        const block = m[0];
+        const size = /fontSize:\s*(\d+)/.exec(block);
+        const big =
+          (size && Number(size[1]) >= 20) || /text-\[(2[0-9]|[3-9][0-9])px\]/.test(block);
+        if (!big || /lineHeight/.test(block)) continue;
+        const line = src.slice(0, m.index).split("\n").length;
+        offenders.push(
+          `${file.replace(root + "/", "")}:${line} — крупное поле без lineHeight: iOS срежет верх глифов`,
+        );
+      }
+    }
+    assert.deepEqual(offenders, []);
+  });
 });
