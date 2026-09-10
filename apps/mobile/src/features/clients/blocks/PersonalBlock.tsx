@@ -14,7 +14,7 @@
 //
 // Email уехал в «Ещё» — вместе с мессенджерами: их не заполняют каждый день.
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AcquisitionSource,
   Client,
@@ -33,12 +33,13 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react-native";
-import { NavRow, RowGroup } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { LabelPickerSheet } from "@/features/clients/LabelPickerSheet";
+import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { TagPickerSheet } from "@/features/clients/TagPickerSheet";
 import { normalizeYMD } from "@/features/clients/OptionalDateField";
 import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
@@ -82,6 +83,20 @@ export function PersonalBlock({
 }: PersonalBlockProps) {
   const t = useThemeColors();
   const { data: cities = [] } = useCities();
+  // ОДНО ИМЯ — ОДНА СТРОКА. Метка принадлежит команде (2026-08-29), и у каждой
+  // своя запись; у КЛИЕНТА команды нет, его метка — просто имя. Без схлопывания
+  // список показывал бы «Лимассол» по разу на календарь.
+  const labelOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return cities
+      .filter((c) => {
+        const key = c.name.trim().toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((c) => ({ name: c.name, color: c.color ?? getAvatarColor(c.name) }));
+  }, [cities]);
   const [labelOpen, setLabelOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [birthdayOpen, setBirthdayOpen] = useState(false);
@@ -146,7 +161,7 @@ export function PersonalBlock({
 
   return (
     <>
-      <RowGroup title="Личное">
+      <SectionCard title="Личное">
         <NavRow
           label="Метка"
           value={label || null}
@@ -208,7 +223,7 @@ export function PersonalBlock({
             }}
           />
         ) : null}
-      </RowGroup>
+      </SectionCard>
 
       {/* Источник — тот же лист со значками, что «Добавить» и «Как связаться».
           Раньше это был безликий системный выбор, стоявший вплотную к «Метке»
@@ -258,10 +273,17 @@ export function PersonalBlock({
         onClose={() => setReferrerOpen(false)}
       />
 
+      {/* Метка клиента — ТОТ ЖЕ ЛИСТ, что у записи и у дня (2026-09-10).
+          Свой лист рисовал точку 10pt вместо плитки, строку 44pt вместо 52 и
+          кегль 14 вместо 15 — один и тот же список меток выглядел третьим
+          способом. «Убрать метку» строкой больше нет: снимает тап по активной,
+          как в метке дня, и это возвращает клиента в АВТО-режим. */}
       <LabelPickerSheet
         visible={labelOpen}
-        current={client.city}
-        onSelect={(name) => update({ city: name, city_manual: true })}
+        title="Метка клиента"
+        options={labelOptions}
+        value={client.city.trim() || null}
+        onPick={(name) => update({ city: name, city_manual: true })}
         onClear={() => update({ city: "", city_manual: false })}
         onClose={() => setLabelOpen(false)}
       />

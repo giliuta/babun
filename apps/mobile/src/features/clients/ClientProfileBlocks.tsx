@@ -23,6 +23,20 @@ interface ClientProfileBlocksProps {
   update: (patch: Partial<Client>) => Promise<boolean>;
 }
 
+// БЛОКИ КАРТОЧКИ — НА `SectionCard`, КАК НА СТРАНИЦЕ ЗАПИСИ (владелец
+// 2026-09-10: «в клиентах блок выглядит немного по-другому от того, как
+// выглядит в календаре»).
+//
+// «Объекты», «Заметка клиента», «Личное» и «Документация» стояли на
+// `RowGroup`, у которого капс-подпись живёт НАД карточкой, на прохладном
+// фоне; блоки записи давно на `SectionCard` — подпись внутри белого, там же
+// справа её команда. Один и тот же блок читался двумя способами в
+// зависимости от того, с какого экрана на него смотрят.
+//
+// Подложки совпадают: `Card` и `RowGroupBody` рисуют одну поверхность, и
+// боковой отступ у обеих `GUTTER`. Менялось ровно место подписи и промежуток
+// между карточками (12 → 8, как на записи).
+
 export function ClientProfileBlocks({
   client,
   appointments,
@@ -71,6 +85,9 @@ export function ClientProfileBlocks({
         locationId={sheet?.id ?? null}
         askDelete={sheet?.askDelete}
         writer={locationWriter}
+        onRequestFromClient={
+          canRequestAddress ? () => void requestActions.request(client.id) : undefined
+        }
         onClose={() => setSheet(null)}
       />
       {/* Добавление объекта — лист снизу (владелец 2026-07-27). Живёт рядом с
@@ -78,7 +95,6 @@ export function ClientProfileBlocks({
       <ObjectSheet
         visible={objectsOpen}
         client={client}
-        update={update}
         writer={locationWriter}
         onRequestFromClient={
           canRequestAddress ? () => void requestActions.request(client.id) : undefined

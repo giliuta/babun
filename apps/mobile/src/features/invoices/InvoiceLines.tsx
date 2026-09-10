@@ -117,9 +117,8 @@ export function InvoiceLines({
                   onInc={() => onChange({ ...line, qty: String(qty + 1) })}
                 />
                 <Text
-                  className="tabular-nums"
                   maxFontSizeMultiplier={1.2}
-                  style={{
+                  style={{ fontVariant: ["tabular-nums"],
                     minWidth: 74,
                     textAlign: "right",
                     fontSize: 15,
@@ -223,9 +222,8 @@ function Stepper({
       {btn("down", onDec)}
       <Text
         numberOfLines={1}
-        className="tabular-nums"
         maxFontSizeMultiplier={1.2}
-        style={{
+        style={{ fontVariant: ["tabular-nums"],
           minWidth: 22,
           textAlign: "center",
           fontSize: 14,
@@ -314,8 +312,7 @@ function LineSheet({
           <View className="mb-4 flex-row items-baseline justify-between px-1">
             <Text style={{ fontSize: 13, color: t.sub }}>Сумма позиции</Text>
             <Text
-              className="tabular-nums"
-              style={{ fontSize: 17, fontWeight: "700", color: t.ink }}
+              style={{ fontVariant: ["tabular-nums"], fontSize: 17, fontWeight: "700", color: t.ink }}
             >
               {formatInvoiceMoney(invoiceLineTotal(qty, price), currency)}
             </Text>
@@ -466,8 +463,7 @@ function CatalogSheet({
                 </Text>
               </View>
               <Text
-                className="tabular-nums"
-                style={{ fontSize: 15, fontWeight: "700", color: t.ink }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: 15, fontWeight: "700", color: t.ink }}
               >
                 {formatInvoiceMoney(Number(service.price), currency)}
               </Text>

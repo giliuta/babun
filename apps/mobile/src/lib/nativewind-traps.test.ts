@@ -58,14 +58,27 @@ const TRAPS: { tag: string; danger: RegExp; hint: string }[] = [
 // клиенты, календарь, склад). Они правятся общей уборкой отдельной
 // задачей; пока правило держит только экраны счетов, где деньги
 // пересчитываются чаще всего.
-const TABULAR_SCOPE = [
-  "app/accounts",
-  "src/features/finances/AccountCreateSheet.tsx",
-  "src/features/finances/TransferSheet.tsx",
-];
+// ОБЛАСТЬ РАСШИРЕНА ДО ВСЕГО ПРИЛОЖЕНИЯ (2026-09-10). Прежде тест сторожил
+// только счета и переводы — там долг закрыли раньше, — а в остальном продукте
+// оставалось 31 такое место в 12 файлах: сетка дня, лента списка, шапка
+// календаря, финансы дня, строки инвойса, разрез прибыли, шаблоны. Долг закрыт
+// целиком, и сторожить теперь есть смысл везде: класс, который ничего не
+// делает, не должен вернуться ни в один файл.
+const TABULAR_SCOPE = ["app", "src"];
+
+/** Комментарии — не код. Про эти самые ловушки в файлах написано словами
+ *  («className="tabular-nums" ничего не делает»), и без вычистки тест ловил
+ *  собственные объяснения. Режем блочные комментарии и строчные, начинающиеся
+ *  с начала строки: `//` внутри значения атрибута так не стоит никогда. */
+function withoutComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/^[ \t]*\/\/.*$/gm, "");
+}
 
 /** Классы всех `className` файла вместе с номером строки. */
-function classNamesOf(src: string): { cls: string; line: number }[] {
+function classNamesOf(raw: string): { cls: string; line: number }[] {
+  const src = withoutComments(raw);
   const out: { cls: string; line: number }[] = [];
   for (const m of src.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
     out.push({

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MoreHorizontal } from "lucide-react-native";
+import { MapPin, MoreHorizontal } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
-import { RowGroup } from "@/components/ui/card-rows";
-import { AddRow } from "@/components/ui/AddRow";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
 import { LocationRequestRow } from "@/features/clients/blocks/LocationRequestRow";
@@ -81,7 +81,7 @@ export default function ObjectsBlock({
   );
 
   return (
-    <RowGroup title="Объекты">
+    <SectionCard title="Объекты">
       {ordered.map((loc, i) => (
         <SwipeRow
           key={loc.id}
@@ -109,12 +109,12 @@ export default function ObjectsBlock({
           onPress={() => void requestActions.menu(request)}
         />
       ))}
-      <AddRow
-        label="Добавить объект"
-        separated={ordered.length + shownRequests.length > 0}
-        onPress={onAdd}
-      />
-    </RowGroup>
+      {/* ТА ЖЕ ДВЕРЬ, ЧТО В ЗАПИСИ (сведено 2026-09-10). Здесь стоял `AddRow`:
+          без кружка со значком и с волоском сверху. Владелец 2026-09-09,
+          поймав это на записи: «почему тут изменилась архитектура, если она
+          должна быть другой — как у нас принято». Один вопрос — одна дверь. */}
+      <ChooseRow icon={MapPin} label="Добавить объект" onPress={onAdd} />
+    </SectionCard>
   );
 }
 

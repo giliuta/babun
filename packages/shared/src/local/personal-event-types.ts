@@ -41,16 +41,21 @@ export interface PersonalEventType {
   allDay: boolean;
   /** Lower number sorts first in the picker grid. */
   order: number;
+  /** Скрытый тип не предлагается в форме события, но остаётся в справочнике
+   *  и возвращается одним касанием (владелец 2026-09-08: «свайп вправо —
+   *  удалить, влево — скрыть», как у услуг и меток). Удалённый тип не
+   *  приезжает с сервера вовсе — у него своя колонка `deleted_at`. */
+  hidden: boolean;
 }
 
 const STORAGE_KEY = "babun2:settings:personal-event-types";
 
 export const SEED_PERSONAL_EVENT_TYPES: PersonalEventType[] = [
-  { id: "ev-lunch",    label: "Обед",         icon: "coffee",     color: "#FF9500", defaultDuration: 60,  allDay: false, order: 0 },
-  { id: "ev-meeting",  label: "Встреча",      icon: "briefcase",  color: "#007AFF", defaultDuration: 60,  allDay: false, order: 1 },
-  { id: "ev-office",   label: "Выезд в офис", icon: "navigation", color: "#AF52DE", defaultDuration: 90,  allDay: false, order: 2 },
-  { id: "ev-dayoff",   label: "Выходной",     icon: "moon",       color: "#8E8E93", defaultDuration: 720, allDay: true,  order: 3 },
-  { id: "ev-vacation", label: "Отпуск",       icon: "plane",      color: "#34C759", defaultDuration: 720, allDay: true,  order: 4 },
+  { id: "ev-lunch",    label: "Обед",         icon: "coffee",     color: "#FF9500", defaultDuration: 60,  allDay: false, order: 0, hidden: false },
+  { id: "ev-meeting",  label: "Встреча",      icon: "briefcase",  color: "#007AFF", defaultDuration: 60,  allDay: false, order: 1, hidden: false },
+  { id: "ev-office",   label: "Выезд в офис", icon: "navigation", color: "#AF52DE", defaultDuration: 90,  allDay: false, order: 2, hidden: false },
+  { id: "ev-dayoff",   label: "Выходной",     icon: "moon",       color: "#8E8E93", defaultDuration: 720, allDay: true,  order: 3, hidden: false },
+  { id: "ev-vacation", label: "Отпуск",       icon: "plane",      color: "#34C759", defaultDuration: 720, allDay: true,  order: 4, hidden: false },
 ];
 
 export function loadPersonalEventTypes(): PersonalEventType[] {
@@ -83,6 +88,8 @@ export function loadPersonalEventTypes(): PersonalEventType[] {
           : 60,
         allDay: Boolean(p.allDay),
         order: Number.isFinite(p.order) ? Number(p.order) : i,
+        // Старый кэш поля не знает: тип из него — видимый.
+        hidden: Boolean(p.hidden),
       }))
       .sort((a, b) => a.order - b.order);
 }

@@ -140,16 +140,14 @@ export function DayFinanceFooter({
             {/* €0 — приглушённый t.faint: зелёный/красный только там, где
                 есть реальные деньги (цвет = смысл). */}
             <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
-              className="tabular-nums"
+              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: income !== 0 ? t.success : t.faint }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >
               {formatEUR(income)}
             </Text>
             <Text
-              style={{ fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
-              className="tabular-nums"
+              style={{ fontVariant: ["tabular-nums"], fontSize: days.length > 3 ? 11 : 12, fontWeight: "600", color: spent !== 0 ? t.danger : t.faint }}
               numberOfLines={1}
               maxFontSizeMultiplier={1.3}
             >

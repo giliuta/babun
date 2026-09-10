@@ -21,7 +21,7 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronDown, ChevronUp, X } from "lucide-react-native";
 import type { Client, ClientNote } from "@babun/shared/local/clients";
 import { randomUuid } from "@babun/shared/sync/uuid";
-import { RowGroup } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { applyNoteEdit } from "@/features/appointments/client-note-journal";
@@ -96,7 +96,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
   const earlierCount = earlier.length + (importedEarlier ? 1 : 0);
 
   return (
-    <RowGroup title="Заметка клиента">
+    <SectionCard title="Заметка клиента">
       <InlineNoteField
         note={note}
         placeholder="Заметка клиента"
@@ -159,7 +159,7 @@ export default function NotesBlock({ client, update }: NotesBlockProps) {
             />
           ))
         : null}
-    </RowGroup>
+    </SectionCard>
   );
 }
 

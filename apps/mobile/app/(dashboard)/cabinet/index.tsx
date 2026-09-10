@@ -36,7 +36,6 @@ import {
   Shield,
   Star,
   Tag,
-  Tags,
   UserCog,
   Wallet,
   Wrench,
@@ -51,13 +50,8 @@ import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
-import {
-  AUTO_COLOR_RULES,
-  BOOKING_BLOCKS,
-  useAutoColorRule,
-  useBookingBlocks,
-} from "@/features/appointments/booking-prefs";
 import { Divider } from "@/components/ui/Divider";
+import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
@@ -75,22 +69,29 @@ type IconType = ComponentType<{
   strokeWidth?: number;
 }>;
 
-// Палитра icon-тайлов — веб-токены --tile-* (apps/web globals.css),
-// один к одному, как в iOS Settings: цвет различает пункты, не несёт
-// смысловой нагрузки.
 // Личные события включены в единую страницу /book; их типы и метки должны
 // оставаться настраиваемыми из кабинета, а не жить скрытым deep link.
 const PERSONAL_CALENDAR_ENABLED = true;
 
+// ПАЛИТРА ПЛИТОК — ОБЩАЯ (владелец 2026-09-10: «свести к фирменному»).
+//
+// Здесь лежала своя палитра из восьми хексов, скопированная из веб-токенов, и
+// ни один не совпадал с общей: `#2F6FD6` рядом с кобальтом бренда `#2c5be0`
+// давал ДВА близких синих на одной странице, а с фиолетовым градиентом
+// герой-карты — три источника цвета на одном экране.
+//
+// Соответствие по смыслу и по семье оттенка: mint → green (`#087A52` против
+// `#1F7A44` — один тон), cyan → teal, yellow остался собой и переехал в общую
+// палитру. Различимость пунктов сохранена, палитра в продукте одна.
 const TILE = {
-  blue: "#2F6FD6",
-  green: "#2E7D32",
-  yellow: "#9A6400",
-  orange: "#B45309",
-  purple: "#8E44AD",
-  mint: "#087A52",
-  cyan: "#007A99",
-  indigo: "#4B55C7",
+  blue: SETTINGS_TILE.blue,
+  green: SETTINGS_TILE.green,
+  yellow: SETTINGS_TILE.yellow,
+  orange: SETTINGS_TILE.orange,
+  purple: SETTINGS_TILE.purple,
+  mint: SETTINGS_TILE.green,
+  cyan: SETTINGS_TILE.teal,
+  indigo: SETTINGS_TILE.indigo,
 } as const;
 
 // Строка меню — анатомия веб-ряда: тайл 30, заголовок 15 medium,
@@ -195,11 +196,15 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
     >
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
-          {/* 135° как в вебе: var(--accent) → --system-indigo 60% → --system-purple */}
+          {/* ГРАДИЕНТ ОДИН НА ПРОДУКТ — ФИРМЕННЫЙ КОБАЛЬТОВЫЙ (владелец
+              2026-09-10). Здесь герой-карта уходила через индиго `#5E5CE6` в
+              фиолетовый `#9B3DCB` — второй бренд-оттенок, прямо запрещённый
+              каноном («единственный градиент — accentFrom → accentTo», «не
+              добавляй второй акцент или фиолетовый бренд-оттенок»). Корень
+              «Кабинета» был единственным экраном со своим бренд-цветом. */}
           <LinearGradient id="hero" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor={t.accent} />
-            <Stop offset="0.6" stopColor="#5E5CE6" />
-            <Stop offset="1" stopColor="#9B3DCB" />
+            <Stop offset="0" stopColor={t.accentFrom} />
+            <Stop offset="1" stopColor={t.accentTo} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#hero)" />
@@ -245,16 +250,11 @@ export default function CabinetHome() {
   // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
   // которая молчит о своём состоянии, заставляет открывать её, чтобы
   // вспомнить, что в ней стоит.
-  const bookingBlocks = useBookingBlocks();
-  const bookingRule = useAutoColorRule();
-  const bookingDesc = [
-    AUTO_COLOR_RULES.find((r) => r.id === bookingRule)?.label ?? "Цвет команды",
-    bookingBlocks.length === BOOKING_BLOCKS.length
-      ? "все блоки"
-      : BOOKING_BLOCKS.filter((b) => bookingBlocks.includes(b.id))
-          .map((b) => b.label)
-          .join(" · ") || "ни одного блока",
-  ].join(" · ");
+  // ЗА ДВЕРЬЮ ТЕПЕРЬ РАЗВИЛКА, А НЕ НАСТРОЙКИ (2026-09-08): подпись называет
+  // обе страницы, а состояние каждой печатает уже сама развилка. Прежняя
+  // строка перечисляла правило цвета и блоки — то есть половину того, что за
+  // дверью, и молчала про вторую половину.
+  const bookingDesc = "Страница записи · страница события";
   const owner = role === "owner";
   const dispatcher = role === "dispatcher";
   const master = role === "master";
@@ -428,17 +428,12 @@ export default function CabinetHome() {
               />
             </>
           ) : null}
-          {/* Типы применяются на /book; метки используются в календаре. */}
+          {/* Метки используются в календаре. ТИПЫ СОБЫТИЙ ОТСЮДА УЕХАЛИ
+              (владелец 2026-09-08: «настройку типов событий переносим в
+              „Запись“»): они настраивают форму события, а не живут сами по
+              себе, и теперь стоят за «Запись» → «Страница события». */}
           {owner && PERSONAL_CALENDAR_ENABLED ? (
             <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={Tags}
-                tone={TILE.purple}
-                title="Типы событий"
-                desc="Чипы быстрого применения: Обед, Встреча…"
-                href="/cabinet/event-types"
-              />
               <Divider inset={58} />
               <MenuRow
                 icon={Tag}
@@ -465,8 +460,8 @@ export default function CabinetHome() {
             href={"/clients/settings" as Href}
           />
           <Divider inset={58} />
-          {/* Настройка САМОЙ формы записи: какие блоки нужны этому бизнесу и
-              чем красить запись автоматически (владелец 2026-09-05). */}
+          {/* Настройка САМИХ форм календаря: за дверью развилка — страница
+              записи (цвет, блоки) и страница события (типы, блоки). */}
           <MenuRow
             icon={CalendarCheck}
             tone={TILE.blue}

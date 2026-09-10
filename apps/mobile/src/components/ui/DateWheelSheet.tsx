@@ -29,6 +29,8 @@ export function DateWheelSheet({
   /** С какой даты начинать, когда значения ещё нет (у дня рождения сегодня —
    *  бессмысленная отправная точка). */
   seed,
+  maximumDate,
+  minimumDate,
   clearLabel,
   onApply,
   onClear,
@@ -38,6 +40,11 @@ export function DateWheelSheet({
   title: string;
   value: string | null;
   seed?: string;
+  /** Дальше этой даты не пускаем («YYYY-MM-DD»): операция не бывает в
+   *  будущем, и запрет должен стоять в самом барабане, а не в отказе после. */
+  maximumDate?: string;
+  /** Раньше этой даты не пускаем: срок оплаты не бывает до выставления. */
+  minimumDate?: string;
   clearLabel?: string;
   onApply: (ymd: string) => void;
   onClear?: () => void;
@@ -76,6 +83,8 @@ export function DateWheelSheet({
             mode="date"
             display="spinner"
             locale="ru-RU"
+            maximumDate={maximumDate ? parseYMD(maximumDate) : undefined}
+            minimumDate={minimumDate ? parseYMD(minimumDate) : undefined}
             onChange={(_, d) => {
               if (d) setDraft(formatYMD(d));
             }}

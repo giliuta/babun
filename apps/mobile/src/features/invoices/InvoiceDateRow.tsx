@@ -1,29 +1,32 @@
-import { Pressable, Text, View } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { formatYMD, parseYMD } from "@/features/appointments/helpers";
-import { useThemeColors } from "@/theme/colors";
+import { useState } from "react";
+import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
+import { ValueRow } from "@/components/ui/ValueRow";
+import { formatShortDateRu } from "@/features/clients/format";
 import { todayYmd } from "./format";
 
-// ДАТА ДОКУМЕНТА СТАВИТСЯ ТАК ЖЕ, КАК У ДОХОДА И РАСХОДА (владелец 2026-08-15).
+// ДАТА ДОКУМЕНТА — БАРАБАНОМ, КАК ВСЁ ВРЕМЯ И ВСЕ ДАТЫ В ПРОДУКТЕ
+// (владелец 2026-09-10: «барабан везде»).
 //
-// Было: строка-значение, открывающая СВОЙ модал с барабаном и кнопкой
-// «Выбрать дату» — три тапа и отдельное окно ради одного числа. В листе
-// операции дата всегда стояла компактным нативным пикером прямо в строке:
-// тап → календарь-поповер → готово. Теперь то же самое и в документах —
-// одно движение на весь продукт.
+// История этой строки — про то, как канон догонял сам себя. Сперва здесь был
+// свой модал с барабаном и кнопкой «Выбрать дату» — три тапа и отдельное окно
+// ради одного числа. Потом (владелец 2026-08-15) её свели с листом операции,
+// где дата стояла компактным нативным пикером прямо в строке: «одно движение
+// на весь продукт». Движение и правда стало одним, но пикером в строке —
+// а он не открывает лист, он дорисовывает второй крошечный контрол у правого
+// края, в который надо попасть вторым тапом.
 //
-// ⚠️ ПИКЕР ОБЯЗАН РОЖДАТЬСЯ СО ЗНАЧЕНИЕМ. Компактный `DateTimeInput` (на
-// нативе это тот же самый компонент пакета, без обёртки),
-// смонтированный до того, как дата известна, НАВСЕГДА запоминает «1 янв.
-// 1970» — Fast Refresh это не чинит. Поэтому пустой необязательный срок
-// рисуется НЕ пикером, а кнопкой «Поставить срок»: пикер появляется уже с
-// датой. По той же причине экран редактора монтируется только после загрузки
-// (`new.tsx` держит его за `loading`).
+// Теперь операция и документ снова сведены — но на канонический
+// `DateWheelSheet`: строка-дверь со значением справа, лист снизу с барабаном,
+// «Применить». Тот же диалект, что у «Своего периода» финансов.
+//
+// Ловушка «1 янв. 1970» вместе с нативным пикером ушла: барабан живёт в листе
+// и рождается со значением при каждом открытии, а не один раз при монтаже.
 export function InvoiceDateRow({
   label,
   value,
   optional,
   minimum,
+  separated,
   onChange,
 }: {
   label: string;
@@ -33,61 +36,43 @@ export function InvoiceDateRow({
   optional?: boolean;
   /** Нижняя граница (для «Оплатить до» — день выставления). */
   minimum?: string;
+  /** Шов сверху, когда строка стоит не первой в группе. */
+  separated?: boolean;
   onChange: (value: string | null) => void;
 }) {
-  const t = useThemeColors();
+  const [open, setOpen] = useState(false);
   return (
-    <View className="flex-row items-center justify-between px-4 py-2.5">
-      <Text className="text-base" style={{ color: t.ink }}>
-        {label}
-      </Text>
-      {value ? (
-        <View className="flex-row items-center" style={{ gap: 4 }}>
-          <DateTimeInput
-            value={parseYMD(value)}
-            minimumDate={minimum ? parseYMD(minimum) : undefined}
-            mode="date"
-            display="compact"
-            themeVariant="light"
-            locale="ru-RU"
-            onChange={(_, date) => date && onChange(formatYMD(date))}
-          />
-          {optional ? (
-            <Pressable
-              onPress={() => onChange(null)}
-              accessibilityRole="button"
-              accessibilityLabel={`Убрать ${label.toLowerCase()}`}
-              hitSlop={10}
-              style={({ pressed }) => ({
-                paddingHorizontal: 6,
-                minHeight: 44,
-                justifyContent: "center",
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 15, fontWeight: "600", color: t.accent }}>
-                Убрать
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : (
-        <Pressable
-          onPress={() => onChange(minimum ?? todayYmd())}
-          accessibilityRole="button"
-          accessibilityLabel={`Поставить ${label.toLowerCase()}`}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            minHeight: 44,
-            justifyContent: "center",
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Text style={{ fontSize: 16, fontWeight: "600", color: t.accent }}>
-            Поставить срок
-          </Text>
-        </Pressable>
-      )}
-    </View>
+    <>
+      <ValueRow
+        label={label}
+        value={value ? formatShortDateRu(value) : "не поставлен"}
+        muted={!value}
+        separated={separated}
+        onPress={() => setOpen(true)}
+      />
+      <DateWheelSheet
+        visible={open}
+        title={label}
+        value={value}
+        // Значения ещё нет — начинаем с дня выставления, а не с сегодня:
+        // «Оплатить до» раньше выставления не бывает.
+        seed={minimum ?? todayYmd()}
+        minimumDate={minimum}
+        clearLabel={optional && value ? `Убрать ${label.toLowerCase()}` : undefined}
+        onApply={(ymd) => {
+          onChange(ymd);
+          setOpen(false);
+        }}
+        onClear={
+          optional
+            ? () => {
+                onChange(null);
+                setOpen(false);
+              }
+            : undefined
+        }
+        onClose={() => setOpen(false)}
+      />
+    </>
   );
 }

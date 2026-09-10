@@ -174,7 +174,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
                 minHeight: 52,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: t.radius.cta,
+                borderRadius: t.radius.card,
                 borderCurve: "continuous",
                 backgroundColor: pressed ? t.rowFillPressed : t.fill,
               })}
@@ -199,7 +199,7 @@ export function ChoiceSheetHost({ children }: { children?: ReactNode }) {
                 minHeight: 52,
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: t.radius.cta,
+                borderRadius: t.radius.card,
                 borderCurve: "continuous",
                 backgroundColor: request.choices[0].destructive
                   ? t.danger
