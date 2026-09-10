@@ -345,7 +345,7 @@ export function DebtSheet({
         }))}
         selectedId={categoryId}
         // Та же дверь и та же парковка, что у листа операции.
-        onSettings={() => doorway.open(() => router.push("/cabinet/categories"))}
+        onSettings={() => doorway.open(() => router.push("/categories"))}
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}
       />

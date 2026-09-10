@@ -1012,7 +1012,7 @@ export function OperationSheet({
         selectedId={categoryId}
         // Дверь паркует лист операции: иначе страница категорий открывается
         // ПОД ним и до неё не дотянуться (владелец 2026-09-10).
-        onSettings={() => doorway.open(() => router.push("/cabinet/categories"))}
+        onSettings={() => doorway.open(() => router.push("/categories"))}
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
       />
