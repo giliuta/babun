@@ -154,7 +154,9 @@ export function manualDebtRows(
         ...(what ? { subtitle: what } : {}),
         amount: remainder / 100,
         date: d.occurred_on,
-        time: null,
+        // Час у долга есть с 2026-09-10 — по нему лента и сортирует внутри
+        // дня. У заведённых раньше его нет, и выдумывать нельзя.
+        time: d.occurred_time,
         caption: debtAge(d.occurred_on, window.today),
         count: 1,
         tone: "debt",

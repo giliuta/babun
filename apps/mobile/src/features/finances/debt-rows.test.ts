@@ -164,6 +164,7 @@ const debt = (over: Partial<Debt> = {}): Debt => ({
   category_id: "cat-1",
   note: null,
   occurred_on: "2026-09-01",
+  occurred_time: null,
   team_id: null,
   created_at: "2026-09-01T10:00:00Z",
   ...over,

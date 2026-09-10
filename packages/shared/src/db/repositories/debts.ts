@@ -27,6 +27,9 @@ function rowToDebt(r: Row): Debt {
     category_id: r.category_id,
     note: r.note,
     occurred_on: r.occurred_on,
+    // Postgres отдаёт time как «HH:MM:SS» — в модели живёт «HH:MM»
+    // (тот же закон, что у операции журнала).
+    occurred_time: r.occurred_time ? r.occurred_time.slice(0, 5) : null,
     team_id: r.team_id,
     created_at: r.created_at,
   };
@@ -107,6 +110,8 @@ export interface NewDebt {
   counterparty: string;
   amount: number;
   occurred_on: string;
+  /** «HH:MM» по часам компании; null — без часа. */
+  occurred_time?: string | null;
   client_id?: string | null;
   category_id?: string | null;
   note?: string | null;
@@ -154,6 +159,7 @@ export async function insertDebt(
       counterparty: draft.counterparty.trim(),
       amount: draft.amount,
       occurred_on: draft.occurred_on,
+      occurred_time: draft.occurred_time ?? null,
       client_id: draft.client_id ?? null,
       category_id: draft.category_id ?? null,
       note: draft.note?.trim() || null,
@@ -196,6 +202,7 @@ export async function updateDebt(
     }
     update.occurred_on = patch.occurred_on;
   }
+  if (patch.occurred_time !== undefined) update.occurred_time = patch.occurred_time;
   if (patch.client_id !== undefined) update.client_id = patch.client_id;
   if (patch.category_id !== undefined) update.category_id = patch.category_id;
   if (patch.note !== undefined) update.note = patch.note?.trim() || null;

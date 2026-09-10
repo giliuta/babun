@@ -1091,6 +1091,7 @@ export type Database = {
           id: string
           note: string | null
           occurred_on: string
+          occurred_time: string | null
           team_id: string | null
           tenant_id: string
           updated_at: string
@@ -1107,6 +1108,7 @@ export type Database = {
           id?: string
           note?: string | null
           occurred_on: string
+          occurred_time: string | null
           team_id?: string | null
           tenant_id: string
           updated_at?: string
@@ -1123,6 +1125,7 @@ export type Database = {
           id?: string
           note?: string | null
           occurred_on?: string
+          occurred_time?: string | null
           team_id?: string | null
           tenant_id?: string
           updated_at?: string

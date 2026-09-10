@@ -30,6 +30,9 @@ export interface Debt {
   category_id: string | null;
   note: string | null;
   occurred_on: string;
+  /** Час по часам компании, «HH:MM». NULL — час неизвестен: у долгов,
+   *  заведённых до появления колонки, его нет, и выдумывать нельзя. */
+  occurred_time: string | null;
   team_id: string | null;
   created_at: string;
 }

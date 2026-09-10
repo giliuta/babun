@@ -4,6 +4,7 @@ import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { debtRemainderCents } from "@babun/shared/local/finance/debt";
 import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
+import { formatHM } from "@/features/appointments/helpers";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
@@ -53,6 +54,10 @@ export function useDebtDraft({
   const [clientId, setClientId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(todayYmd());
+  // ЧАС — КАК У ОПЕРАЦИИ (владелец 2026-09-10: «время должно быть такое же,
+  // как в доходе»). У нового долга это «сейчас»; у заведённого до появления
+  // колонки часа нет, и подставлять выдуманный нельзя.
+  const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   // Открытость листов (когда, категория, клиент) — забота вёрстки, не данных.
@@ -87,6 +92,7 @@ export function useDebtDraft({
     setClientId(debt?.client_id ?? null);
     setAmount(debt ? String(debt.amount) : "");
     setDate(debt?.occurred_on ?? todayYmd());
+    setTime(debt ? debt.occurred_time : formatHM(new Date()));
     setCategoryId(debt?.category_id ?? null);
     setNote(debt?.note ?? "");
     setBusy(false);
@@ -149,6 +155,7 @@ export function useDebtDraft({
         amount: (cents as number) / 100,
         client_id: clientId,
         occurred_on: date,
+        occurred_time: time,
         category_id: categoryId,
         note: note.trim() || null,
         team_id: teamId ?? null,
@@ -231,6 +238,8 @@ export function useDebtDraft({
     setAmount,
     date,
     setDate,
+    time,
+    setTime,
     categoryId,
     setCategoryId,
     category,

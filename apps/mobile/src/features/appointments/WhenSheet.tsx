@@ -92,7 +92,6 @@ export function WhenSheet({
   allDay,
   allowAllDay = true,
   singleTime = false,
-  dateOnly = false,
   onCommit,
 }: {
   open: boolean;
@@ -107,9 +106,6 @@ export function WhenSheet({
    *  ничем не управляет. Полоса недель, барабаны и язык листа при этом те же,
    *  что у записи (владелец 2026-09-09: блоки операции — как в записи). */
   singleTime?: boolean;
-  /** У ДОЛГА ЧАСА НЕТ: в базе только дата. Барабаны собирали бы величину,
-   *  которую некуда положить, — остаётся полоса недель. */
-  dateOnly?: boolean;
   onCommit: (next: Draft) => void;
 }) {
   const t = useThemeColors();
@@ -304,7 +300,7 @@ export function WhenSheet({
 
         {/* ОДИН ТУМБЛЕР — «ВЕСЬ ДЕНЬ», и только у события: у работы весь день
             не бывает, её длительность считают услуги. */}
-        {allowAllDay && !dateOnly ? (
+        {allowAllDay ? (
           <SwitchRow
             label="Весь день"
             value={draft.allDay}
@@ -317,7 +313,7 @@ export function WhenSheet({
             что у периода в финансах и у графика команды. Двух пар рядом
             больше нет: на полэкрана они не помещаются, и человек всё равно
             крутит по одной. */}
-        {!draft.allDay && !dateOnly ? (
+        {!draft.allDay ? (
           <TimeRangePicker
             start={{ hour: sh, minute: sm }}
             end={{ hour: eh, minute: em }}

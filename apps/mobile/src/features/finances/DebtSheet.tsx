@@ -153,7 +153,7 @@ export function DebtSheet({
         </View>
       }
     >
-      <View style={{ backgroundColor: th.canvas, paddingBottom: 24 }}>
+      <View style={{ backgroundColor: th.canvas, paddingBottom: 16 }}>
         {/* 1. НАПРАВЛЕНИЕ — ПЕРВЫМ ВОПРОСОМ (владелец 2026-09-10: «там две
             ступени: я должен или мне должны, я могу между ними выбирать»).
             Одна сущность на оба случая: форма и арифметика у них одна,
@@ -230,7 +230,7 @@ export function DebtSheet({
         {/* 5. СКОЛЬКО — своим блоком: сумма это ответ, ради которого лист и
             открывают. */}
         <SectionCard>
-          <View className="flex-row items-center px-4 py-2.5">
+          <View className="flex-row items-center px-4 py-1.5">
             <TextInput
               value={amount}
               accessibilityLabel="Сумма долга"
