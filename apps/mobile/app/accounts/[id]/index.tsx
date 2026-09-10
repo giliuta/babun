@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Settings } from "lucide-react-native";
+import { Settings2 } from "lucide-react-native";
+import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { useIsFetching } from "@tanstack/react-query";
 import {
   formatSignedMoneyExact,
@@ -18,7 +19,6 @@ import { Divider } from "@/components/ui/Divider";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { ActionRow, NavRow, RowCaption, RowGroup } from "@/components/ui/card-rows";
-import { NEUTRAL_GLYPH } from "@/components/ui/SettingsRow";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
 import { GUTTER, ICON } from "@/components/ui/tokens";
@@ -672,7 +672,7 @@ function AccountDetailContent() {
               backgroundColor: pressed ? t.pressed : "transparent",
             })}
           >
-            <Settings color={t.body} size={ICON.sm} />
+            <Settings2 color={t.body} size={ICON.sm} />
           </Pressable>
         }
       />
@@ -724,27 +724,16 @@ function AccountDetailContent() {
               .join(", ")}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              {account.color ? (
-                // Диск цвета счёта — та же плитка, что в `SettingsRow`.
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: t.radius.pill,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: account.color,
-                  }}
-                >
-                  <Icon color="#fff" size={16} strokeWidth={2} />
-                </View>
-              ) : (
-                <Icon
-                  color={t.ink}
-                  size={NEUTRAL_GLYPH.size}
-                  strokeWidth={NEUTRAL_GLYPH.strokeWidth}
-                />
-              )}
+              {/* ВИД СЧЁТА — ТА ЖЕ ПЛИТКА, ЧТО В СТРОКЕ СПИСКА. Здесь стоял
+                  свой круг с белым глифом литералом `#fff`: на светлых цветах
+                  палитры это ~2:1, то есть значка не видно. Общая плитка сама
+                  считает читаемый тон (`readableTextOnColor`). */}
+              <AppearanceTile
+                color={account.color}
+                icon={account.icon}
+                fallback={Icon}
+                size={28}
+              />
               <Text
                 maxFontSizeMultiplier={1.3}
                 style={{

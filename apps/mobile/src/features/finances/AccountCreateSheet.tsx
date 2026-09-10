@@ -334,7 +334,8 @@ export function AccountCreateSheet({
             подписи листа звучали одним голосом. */}
         <AppearanceField
           color={color}
-          onColorChange={(hex: string) => setColor(color === hex ? null : hex)}
+          // Цвет не снимается повторным тапом: он держит заливку строки.
+          onColorChange={(hex: string) => setColor(hex)}
           icon={icon}
           // Снятие делает сама решётка: повторный тап отдаёт `null`.
           onIconChange={(slug: string | null) => setIcon(slug)}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
-import { Tag } from "lucide-react-native";
+import { Tag, type LucideIcon } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ColorPicker } from "@/components/ui/ColorPicker";
@@ -57,18 +57,24 @@ export function AppearanceTile({
   color,
   icon,
   icons,
+  fallback,
   size = 34,
 }: {
   color?: string | null;
   icon?: string | null;
   icons?: readonly IconPreset[];
+  /** Глиф, когда своего значка нет ИЛИ слаг незнаком словарю. У счёта это
+   *  значок его вида: в базе с 2026-08 лежат ещё и эмодзи («💵»), которых
+   *  словарь не знает, а строка обязана оставаться узнаваемой. */
+  fallback?: LucideIcon;
   size?: number;
 }) {
   const t = useThemeColors();
   const fill = color ?? t.fill;
-  const Glyph = icons
-    ? icons.find((i) => i.value === icon)?.icon ?? null
-    : iconPreset(icon);
+  const Glyph =
+    (icons ? icons.find((i) => i.value === icon)?.icon : iconPreset(icon)) ??
+    fallback ??
+    null;
   return (
     <View
       style={{

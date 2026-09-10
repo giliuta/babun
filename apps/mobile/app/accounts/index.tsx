@@ -337,10 +337,11 @@ export default function AccountsScreen() {
         }}
       >
         <SettingsRow
-          // Значок и цвет счёта — то, чем его узнают пальцем; не выбраны —
-          // глиф по виду счёта и без цветного диска.
-          icon={accountIcon(a)}
-          tile={a.color ?? "neutral"}
+          // ВИД СЧЁТА — ТОТ ЖЕ БЛОК, ЧТО У ВСЕХ (владелец 2026-09-10:
+          // «исправлять виды полностью всё»). Квадратная плитка и заливка
+          // строки цветом счёта; значка нет или он из старого набора (в базе
+          // лежат эмодзи) — рисуется глиф вида счёта.
+          appearance={{ color: a.color, icon: a.icon, fallback: accountIcon(a) }}
           title={a.name}
           value={money(a.balance)}
           valueColor={negative ? t.danger : undefined}

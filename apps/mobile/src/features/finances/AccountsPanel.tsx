@@ -73,10 +73,13 @@ export function AccountsPanel({
             <View key={account.id} style={{ marginBottom: 8 }}>
               <RowGroupBody first last>
                 <SettingsRow
-                  // Значок и цвет счёта — то, чем его узнают пальцем. Не
-                  // выбраны: глиф по виду и без диска (`"neutral"`).
-                  icon={accountIcon(account)}
-                  tile={account.color ?? "neutral"}
+                  // ВИД СЧЁТА — общий блок: плитка и заливка строки, как в
+                  // списке счетов и во всех справочниках (2026-09-10).
+                  appearance={{
+                    color: account.color,
+                    icon: account.icon,
+                    fallback: accountIcon(account),
+                  }}
                   title={account.name}
                   value={money(account.balance)}
                   valueColor={

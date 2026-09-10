@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { RecordMark } from "./RecordMark";
+import { AppearanceTile, appearanceRowFill } from "./AppearanceSheet";
 
 // СТРОКА-ДВЕРЬ С ПЛИТКОЙ — ОДНА НА ВЕСЬ ПРОДУКТ.
 //
@@ -44,6 +45,7 @@ export const NEUTRAL_GLYPH = { size: 20, strokeWidth: 1.75 } as const;
 export function SettingsRow({
   tile = "neutral",
   swatch,
+  appearance,
   icon: Icon,
   title,
   sub,
@@ -72,6 +74,12 @@ export function SettingsRow({
    *  в `sub`: на 18 % «Оранжевый» и «Медный» — одно пятно. При `swatch` значок
    *  не рисуется, поэтому `icon` в таких строках не передают. */
   swatch?: string | null;
+  /** ВИД СУЩНОСТИ ВМЕСТО ПЛИТКИ-ДИСКА (2026-09-10). Квадратная плитка блока
+   *  «Вид» и заливка всей строки цветом — то же, что у метки, тега, категории
+   *  и услуги. Прежний аргумент «на денежном экране цвет занят смыслом» снят
+   *  владельцем: категория финансов уже заливается своим цветом, а счёт
+   *  оставался единственной сущностью с пятью разными обликами. */
+  appearance?: { color?: string | null; icon?: string | null; fallback?: IconType };
   icon?: IconType;
   title: string;
   /** Текущее значение настройки / состояние счёта, не описание кнопки. */
@@ -119,7 +127,14 @@ export function SettingsRow({
   const lines = stacked ? 2 : 1;
   const scale = stacked ? 1.6 : 1.2;
 
-  const tileNode = swatch !== undefined ? (
+  const tileNode = appearance ? (
+    <AppearanceTile
+      color={appearance.color}
+      icon={appearance.icon}
+      fallback={appearance.fallback as never}
+      size={28}
+    />
+  ) : swatch !== undefined ? (
     <RecordMark hue={swatch} />
   ) : neutral ? (
     // Голый глиф в боксе 20×28: та же высота, что у цветной плитки, поэтому
@@ -274,7 +289,16 @@ export function SettingsRow({
       style={({ pressed }) => ({
         ...layout,
         // Нажатие УГЛУБЛЯЕТ материал, а не гасит строку прозрачностью.
-        backgroundColor: pressed ? t.pressed : "transparent",
+        // У строки с ВИДОМ фон держит цвет сущности — те же 8 % / 14 %, что у
+        // строки справочника и строки шторки выбора.
+        backgroundColor: appearance
+          ? appearanceRowFill(appearance.color, pressed, {
+              rest: "transparent",
+              pressed: t.pressed,
+            })
+          : pressed
+            ? t.pressed
+            : "transparent",
       })}
     >
       {body}

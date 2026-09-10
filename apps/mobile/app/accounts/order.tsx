@@ -201,11 +201,12 @@ export default function AccountsOrderScreen() {
               >
                 {(account) => (
                   <SettingsRow
-                    // Выбранные значок и цвет — как в списке счетов: страница
-                    // порядка обязана показывать те же строки, что человек
-                    // увидит на «Счетах».
-                    icon={accountIcon(account)}
-                    tile={account.color ?? "neutral"}
+                    // Те же строки, что на «Счетах»: общий блок вида.
+                    appearance={{
+                      color: account.color,
+                      icon: account.icon,
+                      fallback: accountIcon(account),
+                    }}
                     title={account.name}
                     // Единственная подпись на странице — и она про то самое
                     // правило, которое объясняет подпись под списком.
