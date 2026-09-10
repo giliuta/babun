@@ -20,7 +20,10 @@ import {
 import { getStorage } from "@babun/shared/storage";
 import { useIsOnline } from "@babun/shared/sync";
 import type { AccountWithBalance } from "@/features/finances/accounts";
-import { useAccountsWithBalances } from "@/features/finances/accounts";
+import {
+  useAccountsWithBalances,
+  useUnassignedMoney,
+} from "@/features/finances/accounts";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
 import { TransferSheet } from "@/features/finances/TransferSheet";
 import { CashCountSheet } from "@/features/finances/CashCountSheet";
@@ -111,6 +114,7 @@ export default function AccountsScreen() {
   const tenantId = useTenantId();
   const online = useIsOnline();
   const accountsQuery = useAccountsWithBalances({ includeInactive: true });
+  const unassigned = useUnassignedMoney();
   // ВСЕ команды, включая архивные: счёт живёт дольше своей команды, и её имя
   // нужно и листу перевода, и подписи пересчёта.
   const teamsQuery = useTeams({ includeInactive: true });
@@ -581,6 +585,17 @@ export default function AccountsScreen() {
               {swipeLearned ? null : (
                 <RowCaption text="Проведите по строке влево, чтобы перевести деньги." />
               )}
+              {/* ДЕНЬГИ БЕЗ СЧЁТА — СТРОКОЙ, А НЕ МОЛЧАНИЕМ (аудит 2026-09-10).
+                  Сервер считает операции, у которых счёта нет вовсе; экран их
+                  выбрасывал, и «Счета» с «Финансами» расходились с реальностью
+                  без единого слова. Строка появляется только когда такие
+                  деньги есть, и в остаток команды не подмешивается: команды у
+                  них нет. */}
+              {unassigned !== 0 ? (
+                <RowCaption
+                  text={`Без счёта: ${money(unassigned)}. Эти операции не попадают в остатки — откройте их в «Финансах» и выберите счёт.`}
+                />
+              ) : null}
               {/* СОЗДАНИЕ — ОДНА ДВЕРЬ И ВНИЗУ. Плюса в шапке нет: там уже два
                   значка, а универсального глифа «плюс» в продукте не заведено
                   вовсе — создание везде выглядит строкой со словом (AddRow).

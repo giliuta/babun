@@ -96,6 +96,7 @@ export function TransferSheet({
   accounts,
   teamById,
   presetFromId,
+  presetToId,
   presetAmount,
 }: {
   visible: boolean;
@@ -106,6 +107,12 @@ export function TransferSheet({
   teamById: Map<string, Team>;
   /** Источник, с которого пришли (свайп по строке, карточка счёта). */
   presetFromId?: string | null;
+  /** ПОЛУЧАТЕЛЬ ИЗ ВЫЗЫВАЮЩЕГО СЦЕНАРИЯ. Нужен ровно там, где деньги идут В
+   *  счёт, а не из него: счёт в минусе закрыть нельзя, и единственный выход —
+   *  пополнить его с другого (аудит счетов 2026-09-10). Раньше такому счёту
+   *  показывали только текст «сначала проведите приход», и человек шёл искать
+   *  перевод сам, вручную выбирая направление. */
+  presetToId?: string | null;
   /** Сумма из вызывающего сценария («Сдать остаток» при закрытии счёта).
    *  Без неё подставляется весь остаток источника. */
   presetAmount?: number | null;
@@ -153,23 +160,36 @@ export function TransferSheet({
     if (wasVisible.current) return;
     wasVisible.current = true;
     const source = presetFromId ? (accounts.find((a) => a.id === presetFromId) ?? null) : null;
-    const target = source
-      ? defaultTransferTarget({
-          accounts,
-          from: source,
-          remembered: loadLastTransferTarget(source.id),
-        })
+    const preselected = presetToId
+      ? (accounts.find((a) => a.id === presetToId) ?? null)
       : null;
+    // ПОЛУЧАТЕЛЬ НАЗВАН СНАРУЖИ — источник тогда ищем сами: это самый полный
+    // счёт из остальных, то есть тот, с которого перевод вообще возможен.
+    const donor =
+      !source && preselected
+        ? (accounts
+            .filter((a) => a.id !== preselected.id && a.balance > 0)
+            .sort((a, b) => b.balance - a.balance)[0] ?? null)
+        : null;
+    const target = preselected
+      ? preselected
+      : source
+        ? defaultTransferTarget({
+            accounts,
+            from: source,
+            remembered: loadLastTransferTarget(source.id),
+          })
+        : null;
     const preset = presetAmount ?? source?.balance ?? 0;
     setStep("form");
-    setFromId(source?.id ?? null);
+    setFromId(source?.id ?? donor?.id ?? null);
     setSourceLocked(!!source);
     setToId(target?.id ?? null);
     setAmount(moneySign(preset) > 0 ? formatMoneyForInput(preset) : "");
     setNote("");
     setOccurredOn(businessToday);
     setFailure(null);
-  }, [visible, presetFromId, presetAmount, accounts, businessToday]);
+  }, [visible, presetFromId, presetToId, presetAmount, accounts, businessToday]);
 
   const teamName = useMemo(
     () => (id: string | null) => (id ? (teamById.get(id)?.name ?? null) : null),

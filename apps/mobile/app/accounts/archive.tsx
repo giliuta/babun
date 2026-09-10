@@ -78,7 +78,7 @@ export default function AccountsArchiveScreen() {
             : {
                 label: "Отменить",
                 onPress: () =>
-                  close.mutate(account.id, {
+                  close.mutate({ id: account.id }, {
                     onError: (e) =>
                       toast(`Не удалось закрыть счёт: ${e.message}`, "error"),
                   }),

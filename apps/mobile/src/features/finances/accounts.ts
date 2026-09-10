@@ -81,6 +81,31 @@ export interface AccountsWithBalances {
 }
 
 /**
+ * ДЕНЬГИ БЕЗ СЧЁТА — строка, которую сервер считает специально, а экран
+ * выбрасывал (аудит счетов 2026-09-10).
+ *
+ * `account_balances` возвращает строку с `account_id = null`: это операции, у
+ * которых счёта нет вовсе. `useAccountsWithBalances` раскладывает баланс по
+ * счетам и такую строку отбрасывает — иначе её некуда положить. Пока её никто
+ * не показывал, «Счета» и «Финансы» расходились с реальностью МОЛЧА: сумма на
+ * экране меньше настоящей ровно на эти деньги, и сказать об этом было некому.
+ *
+ * Хук отдаёт ноль, когда всё в порядке (обычный случай), и живое число, когда
+ * такие операции есть, — экран показывает его отдельной строкой, а не
+ * подмешивает в остаток команды: у этих денег команды нет.
+ */
+export function useUnassignedMoney(): number {
+  const tenantId = useTenantId();
+  const balancesQuery = useQuery({
+    queryKey: ["accounts", tenantId, "balances"],
+    enabled: !!tenantId,
+    queryFn: () => listAccountBalances(supabase, tenantId as string),
+  });
+  const orphan = (balancesQuery.data ?? []).find((b) => !b.account_id);
+  return orphan?.delta ?? 0;
+}
+
+/**
  * Счета и живой остаток по каждому: balance = opening_balance + серверная
  * дельта. Сумму движений считает `account_balances` — раньше клиент ради
  * одного числа вычитывал весь журнал тенанта постранично.
@@ -322,11 +347,38 @@ export function useSetPrimaryAccount() {
   });
 }
 
+/**
+ * Закрытие счёта. `successor` — кому передать флаг «основной», если закрываем
+ * ИМЕННО ОСНОВНОЙ счёт команды (владелец 2026-09-10, аудит счетов).
+ *
+ * Почему это важно: `softCloseAccount` снимает `is_primary`, но никому его не
+ * отдаёт. Команда оставалась вовсе без основного счёта, и резолверы оплаты
+ * молча возвращались к сортировке по позиции — то есть деньги бригадира падали
+ * не туда, куда владелец назначал, и сказать ему об этом было некому.
+ *
+ * Передача идёт вторым запросом, как и обычная смена основного
+ * (`setPrimaryAccount`): у продукта нет транзакции на два счёта, и заводить её
+ * ради этого шага — отдельное решение. Обрыв между шагами оставляет команду
+ * без основного — ровно то состояние, что было ДО правки, и оно чинится одним
+ * тумблером в настройках.
+ */
 export function useSoftCloseAccount() {
+  const tenantId = useTenantId();
   const qc = useQueryClient();
   return useMutation({
     ...NEVER_PAUSE,
-    mutationFn: (id: string) => softCloseAccount(supabase, id),
+    mutationFn: async ({
+      id,
+      successor,
+    }: {
+      id: string;
+      successor?: Pick<Account, "id" | "brigade_id"> | null;
+    }) => {
+      await softCloseAccount(supabase, id);
+      if (successor) {
+        await setPrimaryAccount(supabase, tenantId as string, successor);
+      }
+    },
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
   });

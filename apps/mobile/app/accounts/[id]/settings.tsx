@@ -95,6 +95,21 @@ function AccountSettingsContent() {
     () => accounts.filter((a) => a.is_active),
     [accounts],
   );
+  // КОМУ ПЕРЕЙДЁТ «ОСНОВНОЙ», ЕСЛИ ЗАКРЫВАЕМ ИМЕННО ЕГО. Берём следующий живой
+  // счёт той же команды в её же порядке — тот, который человек и так видит
+  // первым в списке. Некому передать (единственный счёт команды) — `null`, и
+  // тогда команда осталась без основного осознанно, а не молча.
+  const primarySuccessor = useMemo(() => {
+    if (!account?.is_primary || !account.brigade_id) return null;
+    return (
+      accounts.find(
+        (a) =>
+          a.is_active &&
+          a.id !== account.id &&
+          a.brigade_id === account.brigade_id,
+      ) ?? null
+    );
+  }, [account, accounts]);
 
   const teamsQuery = useTeams();
   const allTeamsQuery = useTeams({ includeInactive: true });
@@ -117,6 +132,9 @@ function AccountSettingsContent() {
 
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState<number | null>(null);
+  /** Счёт-ПОЛУЧАТЕЛЬ: заполняется только для минусового счёта, который
+   *  пополняют, чтобы закрыть. Плюсовой уходит источником (`presetFromId`). */
+  const [transferToId, setTransferToId] = useState<string | null>(null);
   // Сетки значка и цвета раскрываются под своей строкой (аккордеон, как цвет
   // команды в её настройках) — лист поверх страницы здесь был бы вторым
   // жанром для того же действия.
@@ -269,7 +287,12 @@ function AccountSettingsContent() {
       return;
     }
     if (hasBalance) {
-      const canTransfer = account.balance > 0 && hasTransferTarget;
+      // Минус лечится переводом В счёт, плюс — переводом ИЗ него. Обе ветки
+      // ведут в один и тот же лист, разным направлением.
+      const negative = account.balance < 0;
+      const canTransfer = negative
+        ? activeAccounts.some((a) => a.id !== account.id && a.balance > 0)
+        : account.balance > 0 && hasTransferTarget;
       const text = accountNotEmptyAlert(account.name, account.balance, canTransfer);
       if (!canTransfer || !text.confirm) {
         // Увести остаток некуда (минус или единственный счёт) — тогда это не
@@ -282,13 +305,14 @@ function AccountSettingsContent() {
         text.title,
         { message: text.message, confirmLabel: text.confirm },
         () => {
-          setTransferAmount(account.balance);
+          setTransferAmount(Math.abs(account.balance));
+          setTransferToId(negative ? account.id : null);
           setTransferOpen(true);
         },
       );
       return;
     }
-    const text = closeAccountAlert(account.name);
+    const text = closeAccountAlert(account.name, primarySuccessor?.name ?? null);
     confirmThen(
       text.title,
       {
@@ -297,7 +321,7 @@ function AccountSettingsContent() {
         destructive: true,
       },
       () =>
-        closeAcc.mutate(account.id, {
+        closeAcc.mutate({ id: account.id, successor: primarySuccessor }, {
           onSuccess: () => router.back(),
           onError: alertError("Не удалось закрыть счёт"),
         }),
@@ -626,7 +650,8 @@ function AccountSettingsContent() {
         onClose={() => setTransferOpen(false)}
         accounts={activeAccounts}
         teamById={teamById}
-        presetFromId={account.id}
+        presetFromId={transferToId ? null : account.id}
+        presetToId={transferToId}
         presetAmount={transferAmount}
       />
 
