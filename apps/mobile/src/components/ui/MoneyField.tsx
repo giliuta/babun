@@ -102,6 +102,10 @@ export function MoneyField({
             flex: 1,
             padding: 0,
             fontSize: 30,
+            // БЕЗ ИНТЕРВАЛА iOS СРЕЖЕТ ВЕРХ ГЛИФОВ: в этом стеке TextInput
+            // получает строку ниже кегля (найдено на поле суммы 2026-09-10,
+            // держится тестом ловушек nativewind).
+            lineHeight: 38,
             fontWeight: "700",
             color: t.ink,
             // ТОЛЬКО СТИЛЕМ: `className="tabular-nums"` в этом стеке —

@@ -591,6 +591,9 @@ export function TransferSheet({
                 style={{
                   minWidth: 96,
                   fontSize: 28,
+                  // БЕЗ ИНТЕРВАЛА iOS СРЕЖЕТ ВЕРХ ГЛИФОВ (см. тест ловушек
+                  // nativewind): строка поля выходит ниже кегля.
+                  lineHeight: 36,
                   fontWeight: "700",
                   textAlign: "right",
                   color: amount ? t.ink : t.placeholder,
