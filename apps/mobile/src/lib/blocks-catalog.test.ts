@@ -52,6 +52,8 @@ describe("библиотека блоков указывает на живой �
       "src/features/reference/LabelPickerSheet.tsx",
       "src/features/clients/TagPickerSheet.tsx",
       "src/features/appointments/BookingPickers.tsx",
+      "src/components/ui/ReferenceBlock.tsx",
+      "src/features/finances/CategoryBlock.tsx",
       "src/features/appointments/EventTypeBlock.tsx",
       "src/features/appointments/PaymentBlock.tsx",
       "src/features/appointments/AppointmentFilesBlock.tsx",
@@ -129,6 +131,20 @@ describe("библиотека блоков указывает на живой �
     assert.match(choose, /fontSize: 17,/, "кегль двери блока больше не 17");
     assert.match(choose, /size=\{compact \? 30 : 34\}/, "плотный кружок двери поехал");
 
+    // ВЫБРАННОЕ В БЛОКЕ — те же числа, что у двери: кружок 34 (30 в плотном),
+    // 12pt до имени, кегль 17/600. Иначе при выборе блок «прыгает».
+    const ref = readFileSync(resolve(APP, "src/components/ui/ReferenceBlock.tsx"), "utf8");
+    assert.match(ref, /const size = dense \? 30 : 34;/, "кружок выбранного разошёлся с дверью");
+    assert.match(ref, /paddingHorizontal: 16,/, "боковой отступ строки блока поехал");
+    assert.match(ref, /gap: 12,/, "отступ имени от кружка поехал");
+    assert.match(ref, /minHeight: dense \? 60 : 62,/, "высота строки выбранного поехала");
+    assert.match(ref, /fontSize: 17, fontWeight: "600"/, "кегль имени в блоке поехал");
+    assert.match(
+      ref,
+      /\/\^#\[0-9a-f\]\{6\}\$\/i\.test\(tint\)/,
+      "пропала защита от rgba-токена: подложка кружка станет чёрной",
+    );
+
     const note = readFileSync(resolve(APP, "src/features/appointments/InlineNoteField.tsx"), "utf8");
     assert.match(note, /marginHorizontal: 12,/);
     assert.match(note, /paddingVertical: 7,/);
@@ -154,7 +170,11 @@ describe("библиотека блоков указывает на живой �
       // Настройки БЛОКА — ползунки; настройки СПИСКА в шапке шторки —
       // шестерёнка. Владелец присылал картинкой именно ползунки.
       ["src/features/clients/ObjectFields.tsx", "Settings2", "настройки блока"],
-      ["src/features/appointments/EventTypeBlock.tsx", "Settings2", "настройки блока"],
+      // Тип события выбирается блоком со шапкой и шторкой, как категория:
+      // ползунков в шапке блока больше нет — дверь в справочник живёт
+      // шестерёнкой в шапке ШТОРКИ (владелец 2026-09-10).
+      ["src/features/appointments/EventTypeBlock.tsx", "Tag", "тип события"],
+      ["src/features/finances/CategoryBlock.tsx", "Tag", "категория"],
       ["src/components/ui/PickerSheet.tsx", "Settings", "настройки списка"],
       ["src/components/ui/ValuePickerSheet.tsx", "Settings", "настройки списка"],
     ];

@@ -26,6 +26,10 @@ export interface PickerSheetItem {
    *  строкой — категории операций хранят именно его. */
   icon: LucideIcon | string;
   color: string;
+  /** Тихая подпись под именем: «30 мин» у типа события. Не украшение —
+   *  выбор типа МЕНЯЕТ длительность события, и сказать об этом надо до
+   *  нажатия, а не после. */
+  hint?: string;
   onPress: () => void;
 }
 
@@ -92,6 +96,7 @@ export function PickerSheet({
             icon={item.icon}
             color={item.color}
             title={item.label}
+            hint={item.hint}
             selected={item.id === selectedId}
             onPress={() => {
               haptics.tap();
