@@ -323,8 +323,22 @@ export function PaymentBlock({
 
   const showAmountField = amountMode && outstanding > 0;
 
+  // ЗНАЧОК ЖИВЁТ, ПОКА ЕМУ ЕСТЬ ЧТО ДЕЛАТЬ (владелец 2026-09-10: «блок оплаты
+  // занимает слишком много места… некрасиво»). На НОВОЙ записи все три не
+  // могли ничего: «часть суммы» не от чего отсчитывать при нуле, инвойс не на
+  // что выписывать, история платежей пуста. Три мёртвых тапа — и полоса в
+  // сорок точек, в которой нет ни слова, только они, прижатые вправо.
+  const canSplit = outstanding > 0;
+  const canInvoice = Boolean(invoice) || outstanding > 0;
+  const hasHistory = rows.length > 0;
+  const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
+  // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
+  // хоть одно живое действие. Иначе блок начинается сразу со счетов.
+  const showStateRow = Boolean(caption?.text) || showAmountField || anyAction;
+
   return (
     <SectionCard title="Оплата">
+      {showStateRow ? (
       <PaymentStateRow
         caption={caption?.text}
         captionColor={captionColor}
@@ -346,15 +360,22 @@ export function PaymentBlock({
             : undefined
         }
         right={
-          teamId ? (
+          anyAction ? (
             <>
-              <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
-              <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
-              <ModeIconButton icon={History} label="История платежей" onPress={() => setHistoryOpen(true)} />
+              {canSplit ? (
+                <ModeIconButton icon={Split} label={started ? "Часть суммы" : "Предоплата"} active={amountMode} onPress={handleAmountToggle} />
+              ) : null}
+              {canInvoice ? (
+                <ModeIconButton icon={FileText} label="Инвойс" active={Boolean(invoice)} onPress={handleInvoice} />
+              ) : null}
+              {hasHistory ? (
+                <ModeIconButton icon={History} label="История платежей" onPress={() => setHistoryOpen(true)} />
+              ) : null}
             </>
           ) : null
         }
       />
+      ) : null}
       {invoice ? (
         <InvoiceRow
           number={invoice.number}
