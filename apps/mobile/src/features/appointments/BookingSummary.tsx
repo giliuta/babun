@@ -165,9 +165,12 @@ export function TeamLabelRow({
       {showLabel ? (
       <IdentityCard
         icon={labelIcon ?? MapPin}
-        color={label ? (labelColor ?? t.accent) : t.faint}
+        // Пустая метка тише некуда: булавка `t.sub` на светлой подложке
+        // строки. Выбранная носит свой цвет — по нему её и узнают.
+        color={label ? (labelColor ?? t.accent) : t.sub}
         title={label ?? labelPlaceholder ?? "Метка"}
         muted={!label}
+        compact={!label}
         quiet={!!label && !!labelFromDay}
         onPress={onEditLabel}
         accessibilityLabel={
@@ -201,6 +204,7 @@ function IdentityCard({
   sub,
   muted,
   quiet,
+  compact,
   onPress,
   accessibilityLabel,
   accessibilityHint,
@@ -213,13 +217,25 @@ function IdentityCard({
   muted?: boolean;
   /** Значение не своё, а взятое у дня: тише, но на том же месте. */
   quiet?: boolean;
+  /** ПУСТАЯ ПЛИТКА НЕ БЕРЁТ ПОЛОВИНУ СТРОКИ (владелец 2026-09-10: «сделай
+   *  метку короче… она сейчас очень сильно выделяется»). Пока значения нет,
+   *  плитка шириной по слову, а соседняя — команда, которая всегда есть, —
+   *  забирает остаток. Выбрали метку — плитка снова делит строку пополам:
+   *  имени метки нужно место. */
+  compact?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
   accessibilityHint: string;
 }) {
   const t = useThemeColors();
+  // ЦВЕТ ЗАПИСИ — ТОЛЬКО #RRGGBB. Токены темы записаны в `rgba()`, и приписать
+  // к ним альфу строкой нельзя: `rgba(11,18,32,0.64)1f` — не цвет, и RN красит
+  // кружок ТЁМНЫМ. Именно так пустая «Метка» получила почти чёрный диск с
+  // белой булавкой (владелец 2026-09-10: «серая иконка режет глаза, она очень
+  // сильно выделяется») — то же, что уже ловили на плитках типов событий.
+  const fill = /^#[0-9a-f]{6}$/i.test(color) ? `${color}1f` : t.rowFill;
   return (
-    <Card style={{ flex: 1 }}>
+    <Card style={compact ? undefined : { flex: 1 }}>
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
@@ -243,7 +259,7 @@ function IdentityCard({
           borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: `${color}1f`,
+          backgroundColor: fill,
         }}
       >
         <Icon color={color} size={15} strokeWidth={2.2} />
