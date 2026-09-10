@@ -7,9 +7,16 @@ type Variant = "primary" | "secondary";
 type Tone = "default" | "danger";
 
 // App-wide button — «Halo Cobalt» (apps/mobile/docs/DESIGN-SYSTEM.md).
-// primary → cobalt gradient pill (halo sheen + press dip).
-// secondary → clean outline pill on surface; tone="danger" tints the label
+// primary → cobalt gradient (halo sheen + press dip).
+// secondary → clean outline on surface; tone="danger" tints the label
 // (e.g. «Выйти») without shouting.
+//
+// ОДИН РАДИУС НА ОБА ВИДА (владелец 2026-09-10: «у нас квадратная кнопка
+// „Клиент", круглая „Событие" — зачем, надо сводить всё к одному»). Второй
+// вид держал `pill` (999) и стоял пилюлей ровно над прямоугольной главной
+// кнопкой в одном и том же листе (BookSlotSheet). Закон LOCKED 2026-08-22
+// («любое скругление одинаково во всём продукте») не знает исключения для
+// кнопки, поэтому здесь тот же `radius.card`, что и у GradientButton.
 export function Button({
   label,
   onPress,
@@ -58,7 +65,7 @@ export function Button({
         // GradientButton / PillButton — same recipe).
         minHeight: 52,
         paddingVertical: 14,
-        borderRadius: t.radius.pill,
+        borderRadius: t.radius.card,
         alignItems: "center",
         justifyContent: "center",
         borderWidth: 1,

@@ -55,7 +55,7 @@ export type ThemeColors = {
   haloOpacity: number;
   // auth social chips
   // radii (scheme-invariant — colocated so one import drives a screen)
-  radius: { card: number; input: number; cta: number; pill: number };
+  radius: { card: number; input: number; pill: number };
 };
 
 // ОДИН РАДИУС НА ВСЁ (владелец 2026-07-27: «закругление краёв должно быть
@@ -102,7 +102,11 @@ export type ThemeColors = {
 // кнопки; заводить третье число нельзя.
 //
 // Круглые ПО СМЫСЛУ вещи (аватар, точка, чип-пилюля, Spinner) — `pill`.
-const RADIUS = { card: 10, input: 10, cta: 16, pill: 999 } as const;
+// `cta` (16) здесь был третьим радиусом кнопок и жил в одном месте —
+// кнопках листа подтверждения, чей собственный комментарий обещал «тот же
+// радиус, что у главной CTA». Снят 2026-09-10 вместе с `pill` у кнопки
+// второго вида: у кнопки в продукте одна геометрия.
+const RADIUS = { card: 10, input: 10, pill: 999 } as const;
 
 export const light: ThemeColors = {
   statusBar: "dark",
