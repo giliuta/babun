@@ -7,7 +7,10 @@ import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { FieldLabel } from "@/components/ui/Field";
 
-import { appearanceRowFill } from "@/components/ui/AppearanceSheet";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { GUTTER } from "@/components/ui/tokens";
@@ -496,13 +499,12 @@ export function LabelsScreen() {
                       backgroundColor: pressed ? t.pressed : "transparent",
                     })}
                   >
-                    <View
-                      style={{
-                        height: 12,
-                        width: 12,
-                        borderRadius: 6,
-                        backgroundColor: city.color ?? FALLBACK_COLOR,
-                      }}
+                    {/* ПЛИТКА ВИДА — как у тега, категории, услуги и типа
+                        объекта. Точка 12pt была единственным пятном цвета в
+                        продукте, которое не умеет показать значок. */}
+                    <AppearanceTile
+                      color={city.color ?? FALLBACK_COLOR}
+                      size={28}
                     />
                     <Text
                       numberOfLines={1}

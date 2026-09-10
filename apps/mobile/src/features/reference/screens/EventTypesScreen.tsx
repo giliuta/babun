@@ -5,7 +5,10 @@ import {
   generatePersonalEventTypeId,
   type PersonalEventType,
 } from "@babun/shared/local/personal-event-types";
-import { appearanceRowFill } from "@/components/ui/AppearanceSheet";
+import {
+  AppearanceTile,
+  appearanceRowFill,
+} from "@/components/ui/AppearanceSheet";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -14,7 +17,7 @@ import { ReorderList } from "@/components/ui/ReorderList";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
-import { eventTypeIcon } from "@/features/calendar/event-type-icons";
+import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
 import { durationLabel } from "@/features/services/format";
 import {
   usePersonalEventTypes,
@@ -293,22 +296,19 @@ export function EventTypesScreen() {
   );
 }
 
-/** Кружок типа: цвет и значок — те же, что стоят в ленте формы события. */
+/** Вид типа: цвет и значок — те же, что стоят в форме события. КВАДРАТ, а не
+ *  кружок (владелец 2026-09-10: «выбор цвета квадратика, не круг… везде одно и
+ *  то же»): это тот же `AppearanceTile`, что у тега, метки, услуги, категории и
+ *  типа объекта. Свой набор значков у типа события остался — старые слаги
+ *  живут картой совместимости, — поэтому набор передаётся плитке. */
 function TypeMark({ color, icon }: { color: string; icon: string }) {
-  const Icon = eventTypeIcon(icon);
   return (
-    <View
-      style={{
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: color,
-      }}
-    >
-      <Icon color="#fff" size={16} strokeWidth={2.2} />
-    </View>
+    <AppearanceTile
+      color={color}
+      icon={icon}
+      icons={eventTypeIconPresets(icon)}
+      size={30}
+    />
   );
 }
 
