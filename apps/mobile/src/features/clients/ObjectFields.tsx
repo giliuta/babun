@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { MapPinned, Send, Tag } from "lucide-react-native";
 import type { AddressParts } from "@babun/shared/local/clients";
-import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { FieldRow } from "@/components/ui/card-rows";
+import { iconPreset } from "@/components/ui/icon-set";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -24,7 +24,11 @@ import {
 } from "@/features/clients/object-address";
 import { geocodeAddress } from "@/features/clients/geocode";
 import { isLikelyUrl, parseAddress } from "@babun/shared/common/utils/map-links";
-import { snapObjectType, useFrozenObjectTypes } from "@/features/clients/object-types";
+import {
+  objectTypeKey,
+  snapObjectType,
+  useFrozenObjectTypes,
+} from "@/features/clients/object-types";
 import { useClients } from "@/features/clients/queries";
 import { useLocationLabels } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
@@ -108,6 +112,21 @@ export function ObjectFields({
   const [mapOpen, setMapOpen] = useState(false);
   /** Поднят ли список типов объекта. */
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  // ВИД ТИПА — ИЗ СПРАВОЧНИКА, А НЕ ПРИДУМАННЫЙ ЗДЕСЬ. С 2026-09-10 у типа
+  // объекта есть свои цвет и значок (`location_labels.color/icon`), и кабинет
+  // рисует «Дом» синим домиком. Час назад их ещё не было, и строки шторки
+  // красились `getAvatarColor(name)` — случайным цветом по имени: тот же тип
+  // выглядел в кабинете одним, а в выборе другим. Ищем по КЛЮЧУ имени: типы
+  // приходят из фактических данных и расходятся с справочником регистром и
+  // пробелами. Нет записи (тип живёт только в данных) — общий значок сущности
+  // и акцент: пустой цвет в справочнике значит «не красить», а не «покрасить
+  // во что-нибудь».
+  const { data: labelPresets = [] } = useLocationLabels();
+  const presetByKey = useMemo(
+    () => new Map(labelPresets.map((preset) => [objectTypeKey(preset.name), preset])),
+    [labelPresets],
+  );
+  const typePreset = presetByKey.get(objectTypeKey(value.type));
   /** Куда переехать карте: адрес словами, найденный геокодером. */
   const [found, setFound] = useState<Coords | null>(null);
 
@@ -162,7 +181,15 @@ export function ObjectFields({
         emptyIcon={Tag}
         emptyLabel="Выбрать тип объекта"
         emptyHint="Открывает список типов объектов"
-        value={value.type.trim() ? { name: value.type } : null}
+        value={
+          value.type.trim()
+            ? {
+                name: value.type,
+                color: typePreset?.color ?? null,
+                Icon: iconPreset(typePreset?.icon),
+              }
+            : null
+        }
         onPress={() => {
           haptics.tap();
           setTypeSheetOpen(true);
@@ -327,8 +354,7 @@ export function ObjectFields({
       {/* СПИСОК ТИПОВ — КАНОНИЧЕСКАЯ ШТОРКА, ПОДНЯТАЯ ИЗ ЛИСТА ОБЪЕКТА. Лист
           в листе здесь законен и в продукте уже есть: так из листа операции
           открывается категория. Строки — значок словаря и свой цвет, как у
-          категории; цвет считается от имени, потому что у типа объекта своего
-          цвета в справочнике нет, а различают строки именно им. */}
+          категории: и то и другое лежит в самой записи справочника. */}
       <PickerSheet
         visible={typeSheetOpen}
         title="Тип объекта"
@@ -336,8 +362,8 @@ export function ObjectFields({
         items={typeOptions.map((name) => ({
           id: name,
           label: name,
-          icon: Tag,
-          color: getAvatarColor(name),
+          icon: iconPreset(presetByKey.get(objectTypeKey(name))?.icon) ?? Tag,
+          color: presetByKey.get(objectTypeKey(name))?.color ?? t.accent,
           // ПОВТОРНЫЙ ТАП СНИМАЕТ ТИП (владелец 2026-09-10: «можно создать
           // объект без типа объекта»). Тот же жест, что у типа события, и
           // тот случай, ради которого канон его и держит: снимаем там, где
