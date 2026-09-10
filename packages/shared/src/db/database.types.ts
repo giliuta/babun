@@ -776,18 +776,21 @@ export type Database = {
       client_tags: {
         Row: {
           color: string
+          icon: string | null
           id: string
           name: string
           tenant_id: string
         }
         Insert: {
           color: string
+          icon?: string | null
           id?: string
           name: string
           tenant_id: string
         }
         Update: {
           color?: string
+          icon?: string | null
           id?: string
           name?: string
           tenant_id?: string

@@ -464,6 +464,7 @@ export function useClientTags() {
 export interface CreateClientTagInput {
   name: string;
   color: string;
+  icon?: string | null;
 }
 
 export interface UpdateClientTagInput {
@@ -471,6 +472,7 @@ export interface UpdateClientTagInput {
   patch: {
     name?: string;
     color?: string;
+    icon?: string | null;
   };
 }
 
@@ -498,13 +500,13 @@ export function useCreateClientTag() {
   const role = useCurrentRole().data;
   const qc = useQueryClient();
   return useMutation<ClientTag, Error, CreateClientTagInput>({
-    mutationFn: ({ name, color }) => {
+    mutationFn: ({ name, color, icon }) => {
       assertCanManageClientTags(tenantId, role);
       const normalizedName = name.trim();
       if (!normalizedName) throw new Error("Введите название тега.");
       return createClientTagCached(
         supabase,
-        { name: normalizedName, color },
+        { name: normalizedName, color, icon: icon ?? null },
         tenantId,
       );
     },

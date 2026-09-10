@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { NameColorField } from "@/components/ui/picker-fields";
+import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { useThemeColors } from "@/theme/colors";
@@ -68,18 +69,26 @@ export default function ClientTagsScreen() {
   const busy =
     createTag.isPending || updateTag.isPending || deleteTag.isPending;
 
-  const submit = async (draft: { name: string; color: string }) => {
+  const submit = async (draft: {
+    name: string;
+    color: string;
+    icon: string | null;
+  }) => {
     const name = draft.name.trim();
     if (!name || busy || !editing) return;
     try {
       if (editing.mode === "edit") {
         await updateTag.mutateAsync({
           id: editing.tag.id,
-          patch: { name, color: draft.color },
+          patch: { name, color: draft.color, icon: draft.icon },
         });
         toast("Тег обновлён", "success");
       } else {
-        await createTag.mutateAsync({ name, color: draft.color });
+        await createTag.mutateAsync({
+          name,
+          color: draft.color,
+          icon: draft.icon,
+        });
         toast("Тег создан", "success");
       }
       setEditing(null);
@@ -173,14 +182,10 @@ export default function ClientTagsScreen() {
                     backgroundColor: pressed ? t.pressed : t.surface,
                   })}
                 >
-                  <View
-                    style={{
-                      height: 12,
-                      width: 12,
-                      borderRadius: t.radius.pill,
-                      backgroundColor: tag.color || t.faint,
-                    }}
-                  />
+                  {/* ПЛИТКА ВИДА, А НЕ ТОЧКА 12pt: у тега с 2026-09-10 есть и
+                      значок, и он тот же, что у метки, услуги и типа объекта.
+                      Точка умела показать только цвет. */}
+                  <AppearanceTile color={tag.color || null} icon={tag.icon} size={28} />
                   <Text
                     numberOfLines={1}
                     maxFontSizeMultiplier={1.3}
@@ -233,11 +238,12 @@ function TagSheet({
   editing: Editing | null;
   busy: boolean;
   onClose: () => void;
-  onSubmit: (draft: { name: string; color: string }) => void;
+  onSubmit: (draft: { name: string; color: string; icon: string | null }) => void;
 }) {
   const isEdit = editing?.mode === "edit";
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [icon, setIcon] = useState<string | null>(null);
   // key-remount через editing==null → null; локальный стейт инициализируем от
   // editing при каждом открытии (паттерн «render-time reset», как у меток).
   const [seeded, setSeeded] = useState<Editing | null>(null);
@@ -245,6 +251,7 @@ function TagSheet({
     setSeeded(editing);
     setName(isEdit ? editing.tag.name : "");
     setColor(isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR);
+    setIcon(isEdit ? (editing.tag.icon ?? null) : null);
   }
 
   return (
@@ -259,7 +266,7 @@ function TagSheet({
             label={isEdit ? "Сохранить" : "Создать тег"}
             disabled={!name.trim() || busy}
             loading={busy}
-            onPress={() => onSubmit({ name, color })}
+            onPress={() => onSubmit({ name, color, icon })}
           />
         </View>
       }
@@ -269,6 +276,8 @@ function TagSheet({
         onNameChange={setName}
         color={color}
         onColorChange={setColor}
+        icon={icon}
+        onIconChange={setIcon}
         autoFocus={!isEdit}
       />
     </BottomSheet>

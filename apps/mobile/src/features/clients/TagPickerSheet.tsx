@@ -1,5 +1,6 @@
 import { View } from "react-native";
 import { Tag } from "lucide-react-native";
+import { iconPreset } from "@/components/ui/icon-set";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -59,7 +60,10 @@ export function TagPickerSheet({
           tags.map((tag) => (
             <SelectRow
               key={tag.id}
-              icon={Tag}
+              // ЗНАЧОК ТЕГА — ЕГО СОБСТВЕННЫЙ. Ярлычок на всех строках был
+              // честен, пока значка у тега не было (2026-09-10 появился):
+              // теперь строка выбора обязана показывать то же, что кабинет.
+              icon={iconPreset(tag.icon) ?? Tag}
               title={tag.name}
               color={tag.color || getAvatarColor(tag.name)}
               selected={selected.includes(tag.id)}

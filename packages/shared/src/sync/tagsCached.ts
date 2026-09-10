@@ -122,6 +122,7 @@ async function refreshCacheFromSupabase(
     tenant_id: tenantId,
     name: tag.name,
     color: tag.color,
+    icon: tag.icon ?? null,
   }));
   const before = cacheSignature(await safeCacheReadTags(tenantId));
   await cacheReplaceTenant("tags", tenantId, rows);
@@ -137,7 +138,7 @@ function rowToTag(r: CachedTag): ClientTag {
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { name: string; color: string },
+  input: { name: string; color: string; icon?: string | null },
   tenantId: string,
 ): Promise<ClientTag> {
   const id = randomUuid();
@@ -146,6 +147,7 @@ export async function createClientTag(
     tenant_id: tenantId,
     name: input.name,
     color: input.color,
+    icon: input.icon ?? null,
   };
   const insertOp = {
     table: "tags" as const,
@@ -172,6 +174,7 @@ export async function createClientTag(
         tenant_id: tenantId,
         name: created.name,
         color: created.color,
+        icon: created.icon ?? null,
       });
       return created;
     } catch (err) {
@@ -182,19 +185,19 @@ export async function createClientTag(
       // Network blip — ATOMIC optimistic upsert + enqueue (risk #6).
       await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
       void kickReplayer({ supabase });
-      return { id, name: input.name, color: input.color };
+      return { id, name: input.name, color: input.color, icon: input.icon ?? null };
     }
   }
 
   // Offline — ATOMIC optimistic upsert + enqueue (risk #6).
   await enqueueOpWithCacheUpsertAndEmit(insertOp, "tags", optimisticRow);
-  return { id, name: input.name, color: input.color };
+  return { id, name: input.name, color: input.color, icon: input.icon ?? null };
 }
 
 export async function updateClientTag(
   supabase: DbSupabase,
   id: string,
-  patch: { name?: string; color?: string },
+  patch: { name?: string; color?: string; icon?: string | null },
   tenantId: string,
 ): Promise<ClientTag> {
   const existing = await readCachedTag(id, tenantId);
@@ -219,6 +222,7 @@ export async function updateClientTag(
         tenant_id: tenantId,
         name: updated.name,
         color: updated.color,
+        icon: updated.icon ?? null,
       });
       return updated;
     } catch (err) {
@@ -232,6 +236,7 @@ export async function updateClientTag(
         id,
         name: patch.name ?? existing?.name ?? "",
         color: patch.color ?? existing?.color ?? "",
+        icon: patch.icon ?? existing?.icon ?? null,
       };
     }
   }

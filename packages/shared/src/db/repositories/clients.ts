@@ -674,7 +674,7 @@ export async function findClientByPhoneE164(
 // ─── Tag CRUD ──────────────────────────────────────────────────
 
 function rowToTag(r: TagRow): ClientTag {
-  return { id: r.id, name: r.name, color: r.color };
+  return { id: r.id, name: r.name, color: r.color, icon: r.icon ?? null };
 }
 
 export async function listClientTags(
@@ -686,7 +686,7 @@ export async function listClientTags(
 
 export async function createClientTag(
   supabase: DbSupabase,
-  input: { id?: string; name: string; color: string },
+  input: { id?: string; name: string; color: string; icon?: string | null },
   tenantId: string,
 ): Promise<ClientTag> {
   const { data, error } = await supabase
@@ -696,6 +696,7 @@ export async function createClientTag(
       tenant_id: tenantId,
       name: input.name,
       color: input.color,
+      icon: input.icon ?? null,
     })
     .select("*")
     .single();
@@ -706,7 +707,7 @@ export async function createClientTag(
 export async function updateClientTag(
   supabase: DbSupabase,
   id: string,
-  patch: { name?: string; color?: string },
+  patch: { name?: string; color?: string; icon?: string | null },
   tenantId: string,
 ): Promise<ClientTag> {
   const { data, error } = await supabase
