@@ -91,9 +91,15 @@ export default function TemplatesScreen() {
   const [brigadeId, setBrigadeId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
 
+  // Скрытой категории в выборе нет (владелец 2026-09-10: «когда идёт скрыть,
+  // она больше не показывается в выборе категории»). Исключение — та, что уже
+  // стоит в этом шаблоне: иначе правка шаблона молча обнулила бы категорию.
   const cats = useMemo(
-    () => categories.filter((c) => c.type === kind),
-    [categories, kind],
+    () =>
+      categories.filter(
+        (c) => c.type === kind && (!c.hidden || c.id === categoryId),
+      ),
+    [categories, kind, categoryId],
   );
   // Чипы счёта появляются после выбора команды: её собственные счета плюс
   // счета компании, к которым команда подключена.
@@ -272,8 +278,8 @@ export default function TemplatesScreen() {
                   </Text>
                   </View>
                   <Text
-                    className="mr-2 text-base font-bold tabular-nums"
-                    style={{ color: item.kind === "expense" ? t.danger : t.success }}
+                    className="mr-2 text-base font-bold"
+                    style={{ fontVariant: ["tabular-nums"], color: item.kind === "expense" ? t.danger : t.success }}
                   >
                     {formatEUR(Number(item.amount))}
                   </Text>

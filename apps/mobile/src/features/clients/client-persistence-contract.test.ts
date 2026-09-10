@@ -56,13 +56,26 @@ describe("client native persistence contract", () => {
     assert.match(sheet, /if \(!id\) \{/);
     // Отказ записи выходит РАНЬШЕ очистки формы: сама очистка (сброс адреса и
     // заметки с сохранением выбранного типа) стоит уже за этой веткой.
-    // Поля листа ОБЯЗАНЫ быть live: кнопка живёт в футере и фокус не снимает,
+    // ФОРМА ОБЪЕКТА ОДНА НА СОЗДАНИЕ И НА ПРАВКУ (2026-09-10). Блоки живут в
+    // `ObjectFields`, листы — тонкие двери со своим способом записи. Второй
+    // формы того же объекта в продукте быть не должно: именно так «добавить» и
+    // «править» разошлись до этого — до разных примитивов, разной подписи типа
+    // и карты только в одном из двух.
+    const fields = read("ObjectFields.tsx");
+    assert.match(sheet, /<ObjectFields/);
+    assert.match(objectSheet, /<ObjectFields/);
+    for (const door of [sheet, objectSheet]) {
+      assert.doesNotMatch(door, /<FieldRow/);
+      assert.doesNotMatch(door, /<AddressDetailsToggle/);
+      assert.doesNotMatch(door, /<ChoiceRow/);
+    }
+    // Поля формы ОБЯЗАНЫ быть live: кнопка живёт в футере и фокус не снимает,
     // поэтому коммит по blur не наступает — набранный адрес не доезжал до
     // черновика, кнопка оставалась серой, «Готово» молча выбрасывало работу
     // (регресс 2026-07-27, найден прогоном персонажей).
-    const addressRow = sheet.slice(
-      sheet.indexOf('label="Адрес"'),
-      sheet.indexOf("<AddressDetailsToggle"),
+    const addressRow = fields.slice(
+      fields.indexOf('label="Адрес"'),
+      fields.indexOf("<AddressDetailsToggle"),
     );
     assert.match(addressRow, /\n\s+live\n/);
     const afterGate = sheet.slice(sheet.indexOf("if (!id) {"));

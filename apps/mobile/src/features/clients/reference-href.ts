@@ -26,5 +26,9 @@ export function useReferenceHref() {
     channels: inClientsTab
       ? ("/clients/channels" as const)
       : ("/channels" as const),
+    // Услуги и типы событий живут в Кабинете; общий адрес нужен по той же
+    // причине, что и остальным: экран над табами не может уходить во вкладку.
+    services: ("/services" as const),
+    eventTypes: ("/event-types" as const),
   };
 }

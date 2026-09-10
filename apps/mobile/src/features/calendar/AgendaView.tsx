@@ -368,14 +368,12 @@ function AgendaRow({
           ) : (
             <>
               <Text
-                className="tabular-nums"
-                style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+                style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
               >
                 {apt.time_start}
               </Text>
               <Text
-                className="tabular-nums"
-                style={{ marginTop: 2, fontSize: 11, color: t.faint }}
+                style={{ fontVariant: ["tabular-nums"], marginTop: 2, fontSize: 11, color: t.faint }}
               >
                 {apt.time_end}
               </Text>
@@ -445,14 +443,12 @@ function AgendaRow({
     >
       <View style={{ width: 56 }}>
         <Text
-          className="tabular-nums"
-          style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+          style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
         >
           {apt.time_start}
         </Text>
         <Text
-          className="tabular-nums"
-          style={{ marginTop: 2, fontSize: 11, color: t.faint }}
+          style={{ fontVariant: ["tabular-nums"], marginTop: 2, fontSize: 11, color: t.faint }}
         >
           {apt.time_end}
         </Text>
@@ -534,20 +530,18 @@ function AgendaRow({
       {showAmounts && total > 0 ? (
         <View style={{ alignItems: "flex-end" }}>
           <Text
-            className="tabular-nums"
-            style={{ fontSize: 14, fontWeight: "600", color: t.ink }}
+            style={{ fontVariant: ["tabular-nums"], fontSize: 14, fontWeight: "600", color: t.ink }}
           >
             {formatEUR(total)}
           </Text>
           {debt > 0 ? (
             <Text
-              className="tabular-nums"
               // ДОЛГ — ТОЛЬКО ПОСЛЕ ВИЗИТА (STORY-067): пока визит впереди,
               // неоплаченная сумма — просто «к оплате», серым; выполненный или
               // просроченный без денег — «долг», янтарём, как в финансах и в
               // записи (владелец: «если долг, то оранжевым»). Красный в
               // продукте — только «не вышло».
-              style={{
+              style={{ fontVariant: ["tabular-nums"],
                 marginTop: 2,
                 fontSize: 11,
                 color: apt.status === "completed" || overdue ? t.warning : t.sub,

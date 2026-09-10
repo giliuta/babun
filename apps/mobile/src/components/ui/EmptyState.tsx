@@ -1,6 +1,7 @@
 import { type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "./Button";
 import { useThemeColors } from "@/theme/colors";
 
 // Consistent empty / loading / error surface. `fill` centers full-screen
@@ -68,25 +69,14 @@ export function EmptyState({
         </Text>
       ) : null}
       {action ? (
-        <Pressable
-          onPress={action.onPress}
-          accessibilityRole="button"
-          accessibilityLabel={action.label}
-          style={({ pressed }) => ({
-            marginTop: 16,
-            minHeight: 44,
-            borderRadius: 999,
-            backgroundColor: t.accent,
-            paddingHorizontal: 20,
-            paddingVertical: 10,
-            justifyContent: "center",
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "600", color: t.onAccent }}>
-            {action.label}
-          </Text>
-        </Pressable>
+        // КНОПКА ОДНА НА ПРОДУКТ (сведено 2026-09-10). Здесь была своя:
+        // 44pt, радиус 999 литералом, кегль 14 — то есть третья геометрия
+        // «главного действия» рядом с 52pt/10/17 у `Button` и `GradientButton`.
+        // Компактной она остаётся сама: обёртка пустого состояния центрирует
+        // детей (`items-center`), и кнопка равна своему слову плюс поля.
+        <View style={{ marginTop: 16 }}>
+          <Button label={action.label} onPress={action.onPress} />
+        </View>
       ) : null}
     </View>
   );

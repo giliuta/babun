@@ -1,21 +1,26 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
-import { Check } from "lucide-react-native";
+import { View } from "react-native";
+import { Tag } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { getAvatarColor } from "@babun/shared/common/utils/avatar-color";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { GUTTER } from "@/components/ui/tokens";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
-import { useThemeColors } from "@/theme/colors";
 
-// ПИКЕР ТЕГОВ — тот же лист, что у метки (владелец 2026-07-26: «теги должны
-// быть на уровне „Личное“ как метки… туда же добавь теги, сделай одинаковое
-// как метки, чтоб внизу так вот вылазило красиво»).
+// ПИКЕР ТЕГОВ — ТА ЖЕ ШТОРКА, ЧТО У МЕТКИ (владелец 2026-07-26: «теги должны
+// быть на уровне „Личное“ как метки… сделай одинаковое как метки»).
+//
+// Так и было записано в этом файле — и не было сделано: строка стояла 44pt
+// вместо 52, вместо кружка сущности — точка 10pt, выбранное обводилось рамкой,
+// заголовок рисовался своим `<Text>` в теле, кнопка «Готово» была плоской
+// заливкой руками, а пустое состояние — абзацем с объяснением, которого канон
+// не допускает вовсе. Сведено 2026-09-10 на общие `select-rows`.
 //
 // Отличие от метки одно и оно смысловое: метка у клиента ОДНА (тап выбирает и
-// закрывает), тегов может быть несколько — поэтому лист остаётся открытым, а
-// выбранные помечаются галкой. Закрывает «Готово».
-//
-// Чипы из карточки убраны: они были единственным местом, где выбор жил прямо
-// на странице, и разъезжались с диалектом строк.
+// закрывает), тегов может быть несколько — поэтому шторка остаётся открытой, а
+// закрывает её «Применить», как и выбор услуг.
 
 export function TagPickerSheet({
   visible,
@@ -31,99 +36,40 @@ export function TagPickerSheet({
   onToggle: (id: string) => void;
   onClose: () => void;
 }) {
-  const t = useThemeColors();
-
   return (
-    <BottomSheet padded={false} visible={visible} onClose={onClose}>
-      <View className="items-center pb-2 pt-2">
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.2}
-          className="text-[17px] font-semibold"
-          style={{ color: t.ink }}
-        >
-          Теги
-        </Text>
-      </View>
-
-      {/* px через contentContainerStyle — className на ScrollView
-          NativeWind молча роняет. */}
-      <ScrollView
-        style={{ flexShrink: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
-      >
-        <View className="gap-2 pb-2">
-          {tags.map((tag) => {
-            const on = selected.includes(tag.id);
-            const dot = tag.color || getAvatarColor(tag.name);
-            return (
-              <Pressable
-                key={tag.id}
-                onPress={() => {
-                  haptics.tap();
-                  onToggle(tag.id);
-                }}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: on }}
-                accessibilityLabel={tag.name}
-                className="h-11 flex-row items-center gap-2.5 border px-3 active:opacity-70"
-                style={{
-                  borderRadius: t.radius.input,
-                  borderColor: on ? t.accent : "transparent",
-                  backgroundColor: on ? `${t.accent}1F` : t.fill,
-                }}
-              >
-                <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: dot,
-                  }}
-                />
-                <Text
-                  maxFontSizeMultiplier={1.3}
-                  numberOfLines={1}
-                  className="flex-1 text-sm font-medium"
-                  style={{ color: on ? t.accent : t.ink }}
-                >
-                  {tag.name}
-                </Text>
-                {on ? (
-                  <Check color={t.accent} size={16} strokeWidth={2.6} />
-                ) : null}
-              </Pressable>
-            );
-          })}
-
-          {tags.length === 0 ? (
-            <Text
-              maxFontSizeMultiplier={1.3}
-              className="px-1 py-2 text-[13px]"
-              style={{ color: t.faint }}
-            >
-              В каталоге пока нет тегов — создайте их в настройках клиентов,
-              раздел «Теги клиентов».
-            </Text>
-          ) : null}
+    <BottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Теги"
+      padded={false}
+      scroll
+      maxHeightRatio={0.7}
+      footer={
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button label="Применить" onPress={onClose} />
         </View>
-
-        <Pressable
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Готово"
-          className="mb-6 mt-1 h-12 items-center justify-center active:opacity-80"
-          style={{ borderRadius: t.radius.input, backgroundColor: t.accent }}
-        >
-          <Text
-            maxFontSizeMultiplier={1.2}
-            className="text-[15px] font-semibold"
-            style={{ color: t.onAccent }}
-          >
-            Готово
-          </Text>
-        </Pressable>
-      </ScrollView>
+      }
+    >
+      <SelectList>
+        {tags.length > 0 ? (
+          tags.map((tag) => (
+            <SelectRow
+              key={tag.id}
+              icon={Tag}
+              title={tag.name}
+              color={tag.color || getAvatarColor(tag.name)}
+              selected={selected.includes(tag.id)}
+              accessibilityRole="checkbox"
+              onPress={() => {
+                haptics.tap();
+                onToggle(tag.id);
+              }}
+            />
+          ))
+        ) : (
+          <EmptyState title="В каталоге пока нет тегов" />
+        )}
+      </SelectList>
     </BottomSheet>
   );
 }

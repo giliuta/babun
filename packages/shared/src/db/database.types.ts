@@ -2196,6 +2196,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           default_duration: number
+          deleted_at: string | null
           icon: string
           id: string
           is_active: boolean
@@ -2210,6 +2211,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_duration?: number
+          deleted_at?: string | null
           icon?: string
           id: string
           is_active?: boolean
@@ -2224,6 +2226,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           default_duration?: number
+          deleted_at?: string | null
           icon?: string
           id?: string
           is_active?: boolean

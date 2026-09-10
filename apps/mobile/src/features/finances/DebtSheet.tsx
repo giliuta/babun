@@ -17,7 +17,7 @@ import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { OperationReceiptRow } from "./OperationReceiptRow";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
-import { ClientPicker } from "@/features/appointments/BookingPickers";
+import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { AmountBlock } from "./AmountBlock";
 import { CategoryBlock } from "./CategoryBlock";
 import { DebtWhoBlock } from "./DebtWhoBlock";
@@ -347,7 +347,7 @@ export function DebtSheet({
           виден: поэтому лист долга на это время уезжает и возвращается сам,
           когда клиент заведён (см. `wentForClient`). Набранное переживает
           поход — `keepDraft` запрещает пересев. */}
-      <ClientPicker
+      <ClientPickerSheet
         visible={clientOpen}
         onClose={() => setClientOpen(false)}
         onCreate={(prefill) => {
@@ -359,7 +359,7 @@ export function DebtSheet({
         clients={clients as Client[]}
         recentIds={recentIds}
         statsById={statsById}
-        onPick={(picked) => {
+        onSelect={(picked) => {
           setClientId(picked.id);
           setCounterparty(picked.full_name || "");
           setClientOpen(false);

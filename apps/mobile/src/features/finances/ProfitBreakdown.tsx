@@ -95,8 +95,8 @@ export function ProfitBreakdown({
             </Text>
           ) : null}
           <Text
-            className="ml-auto pl-2.5 text-[15px] font-semibold tabular-nums"
-            style={{ color }}
+            className="ml-auto pl-2.5 text-[15px] font-semibold"
+            style={{ fontVariant: ["tabular-nums"], color }}
           >
             {sign}
             {formatEUR(Math.abs(r.amount))}
@@ -141,8 +141,8 @@ export function ProfitBreakdown({
             Что принесло денег
           </Text>
           <Text
-            className="ml-auto text-[13px] font-bold tabular-nums"
-            style={{ color: income >= 0 ? th.success : th.danger }}
+            className="ml-auto text-[13px] font-bold"
+            style={{ fontVariant: ["tabular-nums"], color: income >= 0 ? th.success : th.danger }}
           >
             {income >= 0 ? "" : "−"}
             {formatEUR(Math.abs(income))}
@@ -171,8 +171,8 @@ export function ProfitBreakdown({
             Куда ушёл расход
           </Text>
           <Text
-            className="ml-auto text-[13px] font-bold tabular-nums"
-            style={{ color: th.danger }}
+            className="ml-auto text-[13px] font-bold"
+            style={{ fontVariant: ["tabular-nums"], color: th.danger }}
           >
             −{formatEUR(expense)}
           </Text>
