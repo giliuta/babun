@@ -6,6 +6,7 @@ import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -73,6 +74,7 @@ export function DebtSheet({
   onReopen?: () => void;
 }) {
   const th = useThemeColors();
+  const doorway = useSheetDoorway();
   const router = useRouter();
   const {
     isEdit,
@@ -124,7 +126,7 @@ export function DebtSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
+      visible={visible && !doorway.parked}
       onClose={onClose}
       onExited={runAfterExit}
       title={isEdit ? "Долг" : "Новый долг"}
@@ -342,7 +344,8 @@ export function DebtSheet({
           onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        onSettings={() => router.push("/cabinet/categories")}
+        // Та же дверь и та же парковка, что у листа операции.
+        onSettings={() => doorway.open(() => router.push("/cabinet/categories"))}
         settingsLabel="Категории долгов"
         onClose={() => setCategoryOpen(false)}
       />

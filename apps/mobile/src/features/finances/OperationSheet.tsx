@@ -6,6 +6,7 @@ import type {
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
@@ -433,6 +434,7 @@ export function OperationSheet({
     amountCents != null &&
     Math.round(refundedTotal * 100) > 0 &&
     Math.round(vatBreakdown.gross * 100) < Math.round(refundedTotal * 100);
+  const doorway = useSheetDoorway();
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
   const canSave =
@@ -660,7 +662,7 @@ export function OperationSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible}
+      visible={visible && !doorway.parked}
       onClose={guardedClose}
       // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
       // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
@@ -1008,7 +1010,9 @@ export function OperationSheet({
           onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        onSettings={() => router.push("/cabinet/categories")}
+        // Дверь паркует лист операции: иначе страница категорий открывается
+        // ПОД ним и до неё не дотянуться (владелец 2026-09-10).
+        onSettings={() => doorway.open(() => router.push("/cabinet/categories"))}
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
       />
