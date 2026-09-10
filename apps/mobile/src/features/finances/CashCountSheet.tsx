@@ -207,7 +207,9 @@ export function CashCountSheet({
                 : OFFLINE_REASON}
             </Text>
             <GradientButton
-              label="Готово"
+              // «Готово» словаря нет (AGENTS 5.2): кнопка называет ДЕЙСТВИЕ —
+              // она считает разницу между кассой и учётом.
+              label="Посчитать разницу"
               onPress={() => setStep("result")}
               disabled={countedCents === null || !online}
             />

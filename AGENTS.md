@@ -352,6 +352,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Запись и событие (форма) | `app/book/index.tsx` | — |
 | Настройки страницы записи | `app/(dashboard)/cabinet/booking-record.tsx` | `calendar/booking-record.tsx` |
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
+| Счёт | `app/accounts/index.tsx` + `[id]/index.tsx` + `[id]/settings.tsx`, лист создания `finances/AccountCreateSheet.tsx` | Вид — общий блок, порядок и архив своими страницами; закрытие мягкое |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
 

@@ -964,7 +964,10 @@ function AccountDetailContent() {
         }}
         onClientOpen={(clientId) => {
           setPopupTx(null);
-          router.push(`/clients/${clientId}`);
+          // Карточка клиента ПОВЕРХ позвавшего: `/clients/*` живёт во
+          // вкладке «Клиенты», и push туда со счёта (корневой стек) кладёт
+          // вторую копию табов — «назад» уводит из счёта (AGENTS 5.4).
+          router.push(`/client?id=${clientId}` as Href);
         }}
         onDelete={async (tx) => {
           await delTx.mutateAsync(tx.id);
@@ -988,7 +991,10 @@ function AccountDetailContent() {
         }}
         onClientOpen={(clientId) => {
           setOpOpen(false);
-          router.push(`/clients/${clientId}`);
+          // Карточка клиента ПОВЕРХ позвавшего: `/clients/*` живёт во
+          // вкладке «Клиенты», и push туда со счёта (корневой стек) кладёт
+          // вторую копию табов — «назад» уводит из счёта (AGENTS 5.4).
+          router.push(`/client?id=${clientId}` as Href);
         }}
         onRefund={(tx) => {
           setOpOpen(false);

@@ -380,7 +380,8 @@ export function TransferSheet({
         footer={
           <View style={{ paddingHorizontal: 20 }}>
             <GradientButton
-              label="Выбрать день"
+              // Слово из словаря AGENTS 5.2: «Выбрать» кнопкой шторки не бывает.
+              label="Применить"
               onPress={() => {
                 setOccurredOn(dateDraft);
                 setStep("form");
