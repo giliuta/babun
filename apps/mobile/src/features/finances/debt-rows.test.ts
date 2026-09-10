@@ -163,6 +163,7 @@ const debt = (over: Partial<Debt> = {}): Debt => ({
   currency: "EUR",
   category_id: "cat-1",
   note: null,
+  receipt_url: null,
   occurred_on: "2026-09-01",
   occurred_time: null,
   team_id: null,

@@ -29,6 +29,9 @@ export interface Debt {
   currency: string;
   category_id: string | null;
   note: string | null;
+  /** Документ под долгом — путь в том же приватном бакете, что у операции:
+   *  накладная поставщика, расписка, счёт. */
+  receipt_url: string | null;
   occurred_on: string;
   /** Час по часам компании, «HH:MM». NULL — час неизвестен: у долгов,
    *  заведённых до появления колонки, его нет, и выдумывать нельзя. */

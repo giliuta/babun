@@ -26,6 +26,7 @@ function rowToDebt(r: Row): Debt {
     currency: r.currency,
     category_id: r.category_id,
     note: r.note,
+    receipt_url: r.receipt_url,
     occurred_on: r.occurred_on,
     // Postgres отдаёт time как «HH:MM:SS» — в модели живёт «HH:MM»
     // (тот же закон, что у операции журнала).
@@ -115,6 +116,7 @@ export interface NewDebt {
   client_id?: string | null;
   category_id?: string | null;
   note?: string | null;
+  receipt_url?: string | null;
   team_id?: string | null;
   /** Рабочая дата компании — для проверки «не будущим числом». */
   business_today?: string;
@@ -163,6 +165,7 @@ export async function insertDebt(
       client_id: draft.client_id ?? null,
       category_id: draft.category_id ?? null,
       note: draft.note?.trim() || null,
+      receipt_url: draft.receipt_url ?? null,
       team_id: draft.team_id ?? null,
     })
     .select("*")
@@ -206,6 +209,7 @@ export async function updateDebt(
   if (patch.client_id !== undefined) update.client_id = patch.client_id;
   if (patch.category_id !== undefined) update.category_id = patch.category_id;
   if (patch.note !== undefined) update.note = patch.note?.trim() || null;
+  if (patch.receipt_url !== undefined) update.receipt_url = patch.receipt_url;
   if (patch.team_id !== undefined) update.team_id = patch.team_id;
 
   const { data, error } = await supabase
