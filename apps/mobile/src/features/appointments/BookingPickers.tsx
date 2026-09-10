@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
 import {
+  SELECT_SHEET_RATIO,
   SelectList,
   SelectRow,
   SelectSearch,
@@ -55,7 +56,10 @@ const OFF_DAY_WORD: Record<number, string> = {
 // поиск → список строк 52pt на подложке → одна кнопка в футере вне прокрутки.
 // Строка — тот же диалект, что у выбора объекта и клиента на карточке:
 // кружок 28pt слева, имя 15/600, подпись 13, отметка справа.
-const SHEET_RATIO = 0.5;
+//
+// Само число уехало к анатомии (`SELECT_SHEET_RATIO` в `select-rows`): решение
+// про половину экрана оказалось общим для всех шторок выбора, а не свойством
+// услуг (владелец 2026-09-10).
 
 
 export function ServicePicker({
@@ -151,7 +155,7 @@ export function ServicePicker({
       padded={false}
       scroll
       avoidKeyboard
-      maxHeightRatio={SHEET_RATIO}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       // ФУТЕР СТОИТ ВСЕГДА, даже когда ничего не выбрано. Появляясь после
       // первого тапа, он забирал у списка ~70pt — и ВТОРОЙ тап по той же
       // строке попадал уже в кнопку «Готово» (поймано на симуляторе

@@ -2,7 +2,11 @@ import type { ReactNode } from "react";
 import { MapPin } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 
 // ВЫБОР МЕТКИ — ОДИН ЛИСТ НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
@@ -88,7 +92,7 @@ export function LabelPickerSheet({
       headerAction={onSettings}
       padded={false}
       scroll
-      maxHeightRatio={0.7}
+      maxHeightRatio={SELECT_SHEET_RATIO}
     >
       <SelectList>
         {extra}

@@ -5,7 +5,11 @@ import type { Location } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { GUTTER } from "@/components/ui/tokens";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { objectTarget } from "@/features/clients/object-address";
 
 // ВЫБОР ОБЪЕКТА ДЛЯ ЗАПИСИ — лист, как выбор клиента (владелец 2026-09-03:
@@ -64,7 +68,7 @@ export function ObjectPickerSheet({
       visible={visible}
       onClose={onClose}
       title="Объект"
-      maxHeightRatio={0.5}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       scroll
       onExited={() => {
         const run = afterExit.current;

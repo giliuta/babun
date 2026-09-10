@@ -13,6 +13,7 @@ import {
   searchCurrencies,
   type CurrencyDef,
 } from "@babun/shared/common/utils/currencies";
+import { SELECT_SHEET_RATIO } from "@/components/ui/select-rows";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ITEM_H, LoopWheelColumn } from "@/components/ui/TimeWheel";
@@ -109,7 +110,7 @@ export function CurrencySheet({
       visible={visible}
       onClose={onClose}
       title="Валюта"
-      maxHeightRatio={0.66}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View className="px-5">
           <Button

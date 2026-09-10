@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { SelectSearch } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectSearch,
+} from "@/components/ui/select-rows";
 import { ValueOptionList } from "@/components/ui/ValuePickerSheet";
 
 // ВЫБОР КЛИЕНТА / ЗАЯВКИ / КОМАНДЫ В РЕДАКТОРЕ ИНВОЙСА.
@@ -75,7 +78,7 @@ export function EntityPickerSheet({
       visible={visible}
       onClose={close}
       title={title}
-      maxHeightRatio={0.9}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       avoidKeyboard
     >
       {/* ПОИСК — ОБЩИЙ (2026-09-10). Здесь стояло своё второе поле: высота

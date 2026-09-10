@@ -2,7 +2,11 @@ import { Pressable } from "react-native";
 import { Settings2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -59,6 +63,13 @@ export function PickerSheet({
       padded={false}
       visible={visible}
       onClose={onClose}
+      // ПОЛЭКРАНА И ПРОКРУТКА ВНУТРИ. Лист задумывался под «что сделать» —
+      // пять-шесть строк, которые всегда влезали, — и потому жил без потолка
+      // и без `scroll`. Потом им стали выбирать категорию операции: строк
+      // пятнадцать, на экран влезает двенадцать, и три последние нельзя было
+      // ни увидеть, ни выбрать.
+      maxHeightRatio={SELECT_SHEET_RATIO}
+      scroll
       // ШАПКА — ОБЩАЯ (2026-09-10). Здесь она была нарисована своей строкой с
       // ручным центрированием заголовка «на ширину шестерёнки»; `BottomSheet`
       // умеет это сам, и умеет одинаково для всех шторок продукта.

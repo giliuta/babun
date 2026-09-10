@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
 import {
+  SELECT_SHEET_RATIO,
   SelectList,
   SelectRow,
   SelectSearch,
@@ -173,7 +174,7 @@ export function ClientPickerSheet({
       padded={false}
       scroll
       avoidKeyboard
-      maxHeightRatio={0.5}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         onCreate || (onClear && selectedId) ? (
           <View style={{ paddingHorizontal: GUTTER }}>

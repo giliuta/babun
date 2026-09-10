@@ -3,13 +3,17 @@ import { Circle, Settings2 } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
 // ВЫБОР ОДНОГО ЗНАЧЕНИЯ ИЗ ДЛИННОГО СПИСКА.
 //
 // Третий случай выбора, которого не покрывали первые два примитива:
-//   PickerSheet — «что сделать» (5-6 крупных плиток, без галочки, не скроллится);
+//   PickerSheet — «что сделать» (5-6 крупных плиток, без галочки);
 //   ToggleListScreen — страница-набор, где галочек много.
 // А тут значений бывает двадцать (категории расходов), выбирается ровно одно,
 // и у списка есть СВОЯ страница, где эти значения заводят. Раньше такое
@@ -142,7 +146,7 @@ export function ValuePickerSheet({
       padded={false}
       visible={visible}
       onClose={onClose}
-      maxHeightRatio={0.8}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       // ШАПКА — ОБЩАЯ (2026-09-10). Была нарисована своей строкой с ручным
       // центрированием «на ширину шестерёнки»; `BottomSheet` делает это сам и
       // одинаково для всех шторок продукта.

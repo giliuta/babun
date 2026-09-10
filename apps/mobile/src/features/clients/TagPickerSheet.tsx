@@ -6,7 +6,11 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 
 // ПИКЕР ТЕГОВ — ТА ЖЕ ШТОРКА, ЧТО У МЕТКИ (владелец 2026-07-26: «теги должны
@@ -43,7 +47,7 @@ export function TagPickerSheet({
       title="Теги"
       padded={false}
       scroll
-      maxHeightRatio={0.7}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
           <Button label="Применить" onPress={onClose} />

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Search } from "lucide-react-native";
 import { ZONE_GROUPS } from "@babun/shared/local/timezones";
+import { SELECT_SHEET_RATIO } from "@/components/ui/select-rows";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { ITEM_H, LoopWheelColumn } from "@/components/ui/TimeWheel";
@@ -198,7 +199,7 @@ export function TimezoneSheet({
       title="Часовой пояс"
       // Семь строк барабана (280pt) + поиск + кнопка. Список на 86% высоты
       // стоял здесь до 27 августа — от него владелец отказался.
-      maxHeightRatio={0.66}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View className="px-5">
           <Button

@@ -11,7 +11,11 @@ import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SelectList, SelectRow } from "@/components/ui/select-rows";
+import {
+  SELECT_SHEET_RATIO,
+  SelectList,
+  SelectRow,
+} from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -66,7 +70,7 @@ export function TeamMasterSheet({
       title="Команда"
       padded={false}
       scroll
-      maxHeightRatio={0.5}
+      maxHeightRatio={SELECT_SHEET_RATIO}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
           <Button label="Применить" onPress={onClose} />
