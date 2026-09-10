@@ -146,6 +146,7 @@ export function ClientPicker({
   clients,
   recentIds,
   statsById,
+  onCreate,
   onPick,
 }: {
   visible: boolean;
@@ -162,6 +163,11 @@ export function ClientPicker({
    *  информация, как это написано в клиентах»). Считает форма: карта на весь
    *  список строится один раз, а не по клиенту на строку. */
   statsById?: Map<string, ClientStats>;
+  /** КТО УВОДИТ НА КАРТОЧКУ НОВОГО КЛИЕНТА. По умолчанию — сам лист. Но форма,
+   *  открытая ИЗ окна `Modal` (шторка долга), обязана сперва закрыть СВОЁ окно:
+   *  маршрут под ним не виден вовсе. Такая форма передаёт сюда свой уход и
+   *  возвращается сама, когда клиент заведён. */
+  onCreate?: (prefill: { name?: string; phone?: string }) => void;
   onPick: (client: Client) => void;
 }) {
   const t = useThemeColors();
@@ -233,7 +239,9 @@ export function ClientPicker({
         ? { phone: quickDraft.phone }
         : { name: quickDraft.full_name };
     afterExit.current = () =>
-      router.push({ pathname: "/book/client", params: { id: "new", ...prefill } });
+      onCreate
+        ? onCreate(prefill)
+        : router.push({ pathname: "/book/client", params: { id: "new", ...prefill } });
     close();
   };
 
