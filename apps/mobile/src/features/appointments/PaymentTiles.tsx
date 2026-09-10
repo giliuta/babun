@@ -30,6 +30,7 @@ export function PaymentTile({
   tint,
   width,
   state,
+  selected,
   amount,
   disabled,
   onPress,
@@ -44,6 +45,11 @@ export function PaymentTile({
   tint?: string | null;
   width: number;
   state: PaymentTileState;
+  /** ВЫБРАН, А НЕ ОПЛАЧЕН. В записи плитка — действие: тап принимает деньги,
+   *  и «выбранного» состояния у неё нет. В форме операции счёт ВЫБИРАЮТ, и
+   *  метка выбора обязана оставить плитке её собственный цвет: перекрашенная
+   *  в акцент, она теряла то, чем счёт узнают (владелец 2026-09-10). */
+  selected?: boolean;
   /** Полученная на этот счёт сумма (только для `paid`). */
   amount?: string;
   disabled?: boolean;
@@ -59,7 +65,10 @@ export function PaymentTile({
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: Boolean(disabled), selected: pending }}
+      accessibilityState={{
+        disabled: Boolean(disabled),
+        selected: pending || Boolean(selected),
+      }}
       style={({ pressed }) => ({
         width,
         height: paid ? TILE_HEIGHT_PAID : TILE_HEIGHT,
@@ -71,8 +80,8 @@ export function PaymentTile({
             : tint
               ? `${tint}1a`
               : t.fill,
-        borderWidth: paid || pending ? 1 : 0,
-        borderColor: paid ? t.success : t.accent,
+        borderWidth: paid || pending || selected ? (selected ? 2 : 1) : 0,
+        borderColor: paid ? t.success : selected ? (tint ?? t.accent) : t.accent,
         alignItems: "center",
         justifyContent: "center",
         gap: 2,

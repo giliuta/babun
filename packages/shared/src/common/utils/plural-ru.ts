@@ -61,3 +61,4 @@ export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
 export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
 export const FORMS_KASSA: PluralFormsRu = ["касса", "кассы", "касс"];
 export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];
+export const FORMS_PLATEZH: PluralFormsRu = ["платёж", "платежа", "платежей"];

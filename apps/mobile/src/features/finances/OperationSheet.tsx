@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
-import { ChevronRight } from "lucide-react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { ChevronRight, Tag } from "lucide-react-native";
 import type {
   FinanceTransaction,
   PaymentMethod,
@@ -20,6 +13,15 @@ import { OperationReceiptRow } from "./OperationReceiptRow";
 import { paymentMethodForAccountKind } from "@/features/appointments/payment";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { WhenRow } from "@/features/appointments/BookingSummary";
+import { WhenSheet } from "@/features/appointments/WhenSheet";
+import {
+  PaymentTile,
+  TILE_GAP,
+  useTileWidth,
+} from "@/features/appointments/PaymentTiles";
+
 import {
   applyTxVat,
   defaultTxVatMode,
@@ -32,7 +34,8 @@ import {
   useTeamVatOverrides,
   useVatSettings,
 } from "./vat-queries";
-import { ValuePickerSheet } from "@/components/ui/ValuePickerSheet";
+import { PickerSheet } from "@/components/ui/PickerSheet";
+import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
@@ -49,7 +52,7 @@ import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
-import { formatHM, formatYMD, parseHM, parseYMD } from "@/features/appointments/helpers";
+import { formatHM } from "@/features/appointments/helpers";
 import { useRouter } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -59,7 +62,7 @@ import {
   useUpdateTransaction,
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
-import { accountPickerLabel } from "./account-ui";
+import { accountIcon } from "./account-ui";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -88,6 +91,7 @@ export function OperationSheet({
   defaultDate = null,
   businessToday,
   transaction,
+  debtPayment,
   onInvoice,
   onClientOpen,
   onRefund,
@@ -111,6 +115,17 @@ export function OperationSheet({
   /** Tenant-local YYYY-MM-DD, shared with the database business-day rules. */
   businessToday: string;
   transaction?: FinanceTransaction | null;
+  /** ПЛАТЁЖ ПО ДОЛГУ. Долг сам по себе не деньги: движением денег становится
+   *  ровно эта операция, поэтому платить по нему нечем, кроме обычной формы.
+   *  Что известно заранее — кому, сколько осталось и в какую сторону, —
+   *  форма не переспрашивает; человеку остаётся счёт. */
+  debtPayment?: {
+    debtId: string;
+    counterparty: string;
+    /** Остаток долга: сумма минус уже уплаченное. */
+    amount: number;
+    clientId: string | null;
+  } | null;
   /** Действия существующей операции — живут внизу той же формы, а не в
    *  отдельной витрине: владелец 2026-08-10 «всё сразу в редакции». */
   onInvoice?: (tx: FinanceTransaction) => void;
@@ -124,6 +139,7 @@ export function OperationSheet({
   onExited?: () => void;
 }) {
   const th = useThemeColors();
+  const tileWidth = useTileWidth();
   const online = useIsOnline();
   const { data: categories = [] } = useFinanceCategories();
   const { data: teams = [] } = useTeams();
@@ -165,6 +181,8 @@ export function OperationSheet({
   // Категория выбирается ЛИСТОМ, а не лентой чипов: категорий бывает два
   // десятка, и половина ленты всегда за краем экрана.
   const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  // Дата и время правятся ТЕМ ЖЕ листом, что у записи.
+  const [whenOpen, setWhenOpen] = useState(false);
   // Три клавиши НДС на самой операции. Владелец 2026-08-09: «не всегда надо
   // указывать НДС — иногда есть оплаты без него, это надо самому
   // регулировать». Пока не тронули руками, режим следует за настройкой
@@ -181,6 +199,8 @@ export function OperationSheet({
   // Идемпотентность вставки: клиентский PK, новый после каждого успеха.
   const [requestId, setRequestId] = useState(randomUuid);
   const savingRef = useRef(false);
+  /** Отложенное до полного ухода листа: см. `remove` и `runAfterExit`. */
+  const afterExit = useRef<(() => void) | null>(null);
 
   // Гидрация ТОЛЬКО по фронту открытия/смене операции: смена businessToday
   // в полночь или фоновый рефетч не должны стирать заполняемую форму.
@@ -190,7 +210,8 @@ export function OperationSheet({
       hydratedFor.current = null;
       return;
     }
-    const key = transaction?.id ?? "new";
+    const key =
+      transaction?.id ?? (debtPayment ? `debt:${debtPayment.debtId}` : "new");
     if (hydratedFor.current === key) return;
     hydratedFor.current = key;
     setRequestId(randomUuid());
@@ -221,7 +242,9 @@ export function OperationSheet({
     } else {
       setType(defaultType);
       setVatTouched(false);
-      setAmount("");
+      // Остаток долга подставлен, но не заперт: отдать можно и часть — тогда
+      // долг останется висеть на разницу, как и должен.
+      setAmount(debtPayment ? String(debtPayment.amount) : "");
       setCategoryId(null);
       setTeamId(defaultTeamId ?? null);
       setAccountId(null);
@@ -229,12 +252,20 @@ export function OperationSheet({
       // поэтому дальше сегодняшнего не уходим.
       setDate(defaultDate && defaultDate <= businessToday ? defaultDate : businessToday);
       setTime(formatHM(new Date()));
-      setNotes("");
+      setNotes(debtPayment ? `Долг: ${debtPayment.counterparty}` : "");
       setReceiptUrl(null);
     }
     // Hydrate once per opened transaction id (guarded by hydratedFor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, defaultTeamId, defaultType, defaultDate, transaction?.id, businessToday]);
+  }, [
+    visible,
+    defaultTeamId,
+    defaultType,
+    defaultDate,
+    transaction?.id,
+    businessToday,
+    debtPayment,
+  ]);
 
   const cats = useMemo(
     () =>
@@ -418,6 +449,18 @@ export function OperationSheet({
     online &&
     !busy;
   const isExpense = type === "expense";
+  // Категория говорит собой: иконка и цвет из справочника, как у типа события
+  // в записи. Не выбрана — нейтральный ярлычок, а не пустое место.
+  const category = categoryId
+    ? categories.find((c) => c.id === categoryId) ?? null
+    : null;
+  // Значок категории: слаг словаря даёт компонент, эмодзи печатается как
+  // текст. У владельца в базе лежат эмодзи — рисовать только компонент значило
+  // бы показать ярлычок-заглушку там, где значок есть.
+  const categoryGlyph = iconPreset(category?.icon) ?? null;
+  const categoryEmoji = !categoryGlyph && category?.icon ? category.icon : null;
+  const CategoryIcon = categoryGlyph ?? Tag;
+  const categoryTint = category?.color ?? th.faint;
 
   const save = async () => {
     // Синхронный гард: isPending включается только после ре-рендера,
@@ -473,6 +516,11 @@ export function OperationSheet({
         occurred_time: time,
         receipt_url: receiptUrl,
         business_today: businessToday,
+        // Связь с долгом — она и делает операцию его погашением: остаток
+        // считается по привязанным платежам, а не колонкой в долге.
+        ...(debtPayment
+          ? { debt_id: debtPayment.debtId, client_id: debtPayment.clientId }
+          : {}),
       };
       if (isEdit && transaction) {
         await update.mutateAsync({ id: transaction.id, patch: draft });
@@ -494,25 +542,35 @@ export function OperationSheet({
 
   const remove = () => {
     if (!transaction) return;
-    // Тело — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
+    const target = transaction;
+    // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос
+    // рисует хост приложения, а лист — отдельное окно `Modal`. Открытый в тот
+    // же кадр, вопрос получал от iOS «already presenting» и не появлялся
+    // вовсе: кнопка «Удалить» молчала, и это была единственная дверь к откату
+    // денег с экрана (2026-09-08). Сперва уезжаем, спрашиваем по `onExited` —
+    // тем же способом, что «Удалить объект» в листе правки объекта.
+    //
+    // Тело вопроса — ПОСЛЕДСТВИЕ, а не «нельзя отменить» (правила текстов
     // account-alerts): человек решает по тому, что произойдёт с деньгами.
-    confirmThen(
-      "Удалить операцию?",
-      {
-        message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
-        confirmLabel: "Удалить",
-        destructive: true,
-      },
-      async () => {
-        try {
-          await del.mutateAsync(transaction.id);
-          haptics.success();
-          onClose();
-        } catch (e) {
-          notify("Ошибка", (e as Error).message);
-        }
-      },
-    );
+    afterExit.current = () => {
+      confirmThen(
+        "Удалить операцию?",
+        {
+          message: "Операция исчезнет из ленты, остаток счёта пересчитается.",
+          confirmLabel: "Удалить",
+          destructive: true,
+        },
+        async () => {
+          try {
+            await del.mutateAsync(target.id);
+            haptics.success();
+          } catch (e) {
+            notify("Ошибка", (e as Error).message);
+          }
+        },
+      );
+    };
+    onClose();
   };
 
   // Пока мутация в полёте, лист не закрывается ни скримом, ни свайпом:
@@ -520,6 +578,17 @@ export function OperationSheet({
   // закрытой ленты, где набранное потеряно.
   const guardedClose = () => {
     if (!busy) onClose();
+  };
+
+  /** Что сделать, когда окно листа СНЯТО. Вопрос об удалении живёт здесь: см.
+   *  `remove` и закон `BottomSheet.onExited`. Возвращает `true`, если что-то
+   *  выполнилось, — по нему решается, звать ли `onExited` вызывающего. */
+  const runAfterExit = (): boolean => {
+    const run = afterExit.current;
+    afterExit.current = null;
+    if (!run) return false;
+    run();
+    return true;
   };
 
   // Строки «Ещё»: разделители считаются от реально показанных соседей.
@@ -583,11 +652,30 @@ export function OperationSheet({
 
   return (
     <BottomSheet
-      onExited={onExited}
       padded={false}
       visible={visible}
       onClose={guardedClose}
-      title={isEdit ? "Операция" : "Новая операция"}
+      // ДВА ХОЗЯИНА У ОДНОГО СОБЫТИЯ, И ЗВАТЬ ИХ ВМЕСТЕ НЕЛЬЗЯ (слияние
+      // 2026-09-10). Своё отложенное — это вопрос об удалении, ЧУЖОЕ — возврат
+      // шторки дня. Открытые в один кадр, они дают iOS «already presenting», и
+      // вопрос не появляется вовсе: ровно тот баг, который чинили у «Удалить
+      // операцию» 2026-09-08. Поэтому свой вопрос имеет приоритет, а шторка дня
+      // возвращается только когда спрашивать нечего.
+      //
+      // СЛЕДСТВИЕ, КОТОРОЕ НАДО РЕШИТЬ ХОЗЯИНУ ШТОРКИ ДНЯ: после удаления
+      // операции день сам не открывается. Здесь это выбрано как меньшее зло —
+      // молчащая кнопка удаления хуже незакрывшегося круга.
+      onExited={() => {
+        if (!runAfterExit()) onExited?.();
+      }}
+      title={
+        debtPayment ? "Оплата долга" : isEdit ? "Операция" : "Новая операция"
+      }
+      // Команда не выбирается — она приехала чипом с экрана финансов. Строкой
+      // поля она выглядела нажимаемой; здесь она просто подписана.
+      subtitle={
+        teamId ? (teams.find((t) => t.id === teamId)?.name ?? undefined) : "Компания"
+      }
       scroll
       avoidKeyboard
       maxHeightRatio={0.86}
@@ -609,11 +697,13 @@ export function OperationSheet({
           ) : null}
           <Button
             label={
-              isEdit
-                ? "Сохранить"
-                : isExpense
-                  ? "Добавить расход"
-                  : "Добавить доход"
+              debtPayment
+                ? "Записать оплату"
+                : isEdit
+                  ? "Сохранить"
+                  : isExpense
+                    ? "Добавить расход"
+                    : "Добавить доход"
             }
             onPress={save}
             disabled={!canSave}
@@ -643,83 +733,63 @@ export function OperationSheet({
             setType(seg);
             setCategoryId(null);
           }}
-          disabled={isEdit}
+          // У платежа по долгу направление уже решено самим долгом: «мне
+          // должны» гасят доходом, «я должен» — расходом. Переключатель здесь
+          // только называет сторону.
+          disabled={isEdit || !!debtPayment}
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
-        {/* 2. Команда и дата ОДНОЙ карточкой. Команда не выбирается: она
-            уже выбрана чипом на экране финансов, и второй выбор того же —
-            лишний вопрос. Здесь она просто подписана. */}
-        <SectionCard>
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.sub }}>
-              Команда
-            </Text>
-            <Text
-              className="text-base font-semibold"
-              style={{ color: th.ink }}
-              numberOfLines={1}
-            >
-              {teamId
-                ? (teams.find((t) => t.id === teamId)?.name ?? "Команда")
-                : "Компания"}
-            </Text>
-          </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
-            <DateTimeInput
-              value={parseYMD(date)}
-              maximumDate={parseYMD(businessToday)}
-              mode="date"
-              display="compact"
-              themeVariant="light"
-              locale="ru-RU"
-              onChange={(_, d) => d && setDate(formatYMD(d))}
-            />
-          </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Время</Text>
-            {time == null ? (
-              <Pressable
-                onPress={() => setTime(formatHM(new Date()))}
-                accessibilityRole="button"
-                accessibilityLabel="Указать время операции"
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              >
-                <Text className="text-base" style={{ color: th.accent }}>Указать</Text>
-              </Pressable>
-            ) : (
-              <DateTimeInput
-                value={parseHM(time)}
-                mode="time"
-                display="compact"
-                minuteInterval={5}
-                themeVariant="light"
-                locale="ru-RU"
-                accessibilityLabel="Время операции"
-                onChange={(_, d) => d && setTime(formatHM(d))}
-              />
-            )}
-          </View>
-        </SectionCard>
+        {/* 2. КОГДА — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ (владелец 2026-09-09: «посмотри
+            по архитектуре, как мы делаем блок время»). Строка «день · время»
+            открывает тот же лист с полосой недель и барабанами, каким
+            назначают визит. Разница одна: у операции время — МОМЕНТ, а не
+            отрезок, поэтому сегмент «Начало | Конец» в листе спрятан.
 
-        {/* 3. Категория — СТРОКА, а не полоса чипов: категорий бывает
-            два десятка, и горизонтальная лента прячет половину за краем.
-            Свои категории заводятся в настройках, и дорога туда лежит
-            внутри выбора — там, где рука уже находится. */}
+            Здесь стоял системный пикер iOS внутри строки — чужой продукту
+            контрол и второй способ сказать то же самое. */}
+        <WhenRow
+          date={date}
+          timeStart={time ?? formatHM(new Date())}
+          onPress={() => {
+            if (time == null) setTime(formatHM(new Date()));
+            setWhenOpen(true);
+            haptics.tap();
+          }}
+        />
+
+        {/* 3–4. КАТЕГОРИЯ И СУММА — ОДНОЙ КАРТОЧКОЙ (владелец 2026-09-10: «форма
+            слишком большая, давит»). Семь карточек с капс-ярлыками занимали
+            экран целиком; «за что» и «сколько» — один вопрос, и ярлык «СУММА»
+            над трёхкратным числом с евро не сообщал ничего. */}
         <SectionCard>
           <Pressable
             onPress={() => setCategoryPickerOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={`Категория: ${categoryName ?? "не выбрана"}`}
-            className="min-h-[48px] flex-row items-center px-4 py-2.5"
+            className="min-h-[52px] flex-row items-center gap-3 px-4 py-2.5"
             style={({ pressed }) => ({
               backgroundColor: pressed ? th.pressed : "transparent",
             })}
           >
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: `${categoryTint}1a`,
+              }}
+            >
+              {categoryEmoji ? (
+                <Text maxFontSizeMultiplier={1.2} style={{ fontSize: 15 }}>
+                  {categoryEmoji}
+                </Text>
+              ) : (
+                <CategoryIcon color={categoryTint} size={16} strokeWidth={2.2} />
+              )}
+            </View>
             <Text className="text-base" style={{ color: th.ink }}>
               Категория
             </Text>
@@ -734,10 +804,7 @@ export function OperationSheet({
               <ChevronRight color={th.chevron} size={17} strokeWidth={2.2} />
             </View>
           </Pressable>
-        </SectionCard>
-
-        {/* 4. Сумма */}
-        <SectionCard title="Сумма">
+                  <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
           <View className="flex-row items-center px-4 py-2.5">
             <TextInput
               value={amount}
@@ -764,7 +831,7 @@ export function OperationSheet({
               €
             </Text>
           </View>
-        </SectionCard>
+                </SectionCard>
 
         {/* 4a. НДС — ТРИ КЛАВИШИ НА КАЖДОЙ ОПЕРАЦИИ. Появляются только у тех,
             кто с налогом работает: выключили тумблер компании — слова «НДС» в
@@ -805,36 +872,51 @@ export function OperationSheet({
           </SectionCard>
         ) : null}
 
-        {/* 5. Счёт — только кассы выбранной команды. Способ оплаты
-            выводится из вида счёта: отдельного выбора «нал/карта» здесь
-            нет, он повторял бы кассу. */}
-        {teamAccounts.length > 0 ? (
+        {/* 5. Счёт — ПЛИТКАМИ, КАК В ЗАПИСИ (владелец 2026-09-09: «счёт делаем
+            так же, как в записи клиента: иконки полноценные, наличные или
+            карта»). Лента чипов называла счёт словом; плитка несёт его значок
+            и цвет — те же, что человек задал счёту в финансах, и тот же
+            контрол, которым принимают оплату на записи. */}
+        {accountsFailed ? (
           <SectionCard title="Счёт">
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                gap: 8,
+            <Text className="px-4 py-3 text-sm" style={{ color: th.faint }}>
+              Счета не загрузились. Обновите экран финансов и откройте форму
+              заново.
+            </Text>
+          </SectionCard>
+        ) : teamAccounts.length > 0 ? (
+          <SectionCard title="Счёт">
+            <View
+              className="flex-row flex-wrap"
+              style={{
+                paddingHorizontal: 16,
+                paddingTop: 8,
+                paddingBottom: 10,
+                gap: TILE_GAP,
               }}
             >
               {teamAccounts.map((a) => (
-                <Chip
+                <PaymentTile
                   key={a.id}
-                  label={accountPickerLabel(a)}
-                  radio
+                  icon={accountIcon(a)}
+                  label={a.name}
+                  color={a.color ?? th.ink}
+                  tint={a.color}
+                  width={tileWidth}
+                  // Плитка держит СВОЙ цвет и в покое, и выбранной — им счёт
+                  // и узнают. Radio-семантика: счёт обязателен, повторный тап
+                  // выбор не снимает.
+                  state="idle"
                   selected={accountId === a.id}
-                  // Radio-семантика: «ничего не выбрано» здесь не значение,
-                  // а тупик (счёт обязателен) — повторный тап по выбранному
-                  // чипу выбор не снимает.
+                  disabled={busy}
                   onPress={() => {
                     setAccountTouched(true);
                     setAccountId(a.id);
                   }}
+                  accessibilityLabel={`Счёт: ${a.name}`}
                 />
               ))}
-            </ScrollView>
+            </View>
           </SectionCard>
         ) : (
           <SectionCard title="Счёт">
@@ -846,25 +928,28 @@ export function OperationSheet({
           </SectionCard>
         )}
 
-        {/* 6. Заметка */}
-        <SectionCard title="Заметка">
-          <TextInput
-            value={notes}
+        {/* 6–7. ЗАМЕТКА И ФАЙЛЫ — ОДНОЙ КАРТОЧКОЙ. И то и другое прикладывают
+            к операции; двумя карточками они занимали вдвое больше воздуха, чем
+            стоят. Строка «Добавить» — та же, что у файлов записи. */}
+        <SectionCard title="Заметка и файлы">
+          <InlineNoteField
+            note={{
+              draft: notes,
+              setDraft: setNotes,
+              onFocus: () => {},
+              onBlur: () => {},
+            }}
+            // Подсказка идёт за направлением: на доходе «бензин, материалы»
+            // предлагали записать трату в приход (2026-09-08).
+            placeholder={
+              type === "income"
+                ? "Напр. чаевые, доплата…"
+                : "Напр. бензин, материалы…"
+            }
             accessibilityLabel="Заметка к операции"
-            onChangeText={setNotes}
-            placeholder="Напр. бензин, материалы…"
-            placeholderTextColor={th.placeholder}
-            selectionColor={th.accent}
-            keyboardAppearance="light"
-            className="px-4 py-3 text-base"
-            style={{ color: th.ink }}
+            maxLength={500}
           />
-        </SectionCard>
-
-        {/* 7. Документ, подтверждающий операцию: скан чека или накладная.
-            Бухгалтеру нужна не сумма, а бумага под ней. Стоит ДО действий:
-            документ — поле самой операции, и поля идут подряд. */}
-        <SectionCard title="Документ">
+                  <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
           <OperationReceiptRow
             receiptUrl={receiptUrl}
             onPick={setReceiptUrl}
@@ -928,21 +1013,37 @@ export function OperationSheet({
       {/* Выбор категории — тот же лист, что и везде. Шестерёнка внутри
           ведёт на страницу категорий: свои категории заводятся там, а не
           выдумываются заметкой в поле «Заметка». */}
-      <ValuePickerSheet
+      {/* ВЫБОР КАТЕГОРИИ — ТОТ ЖЕ ЛИСТ, ЧТО «ТИП СОБЫТИЯ» В ЗАПИСИ (владелец
+          2026-09-09). Значок и цвет у категорий лежат в справочнике, а прежний
+          лист рисовал только точку цвета: список читался как столбик слов.
+          Ничего нового не заводим — берём готовый примитив продукта. */}
+      {/* Полоса недель, барабаны и язык — те же, что у записи; сегмент
+          «Начало | Конец» спрятан: у операции время одно. */}
+      <WhenSheet
+        open={whenOpen}
+        onClose={() => setWhenOpen(false)}
+        date={date}
+        timeStart={time ?? formatHM(new Date())}
+        timeEnd={time ?? formatHM(new Date())}
+        allDay={false}
+        allowAllDay={false}
+        singleTime
+        onCommit={(next) => {
+          setDate(next.date);
+          setTime(next.timeStart);
+        }}
+      />
+      <PickerSheet
         visible={categoryPickerOpen}
         title={isExpense ? "Категория расхода" : "Категория дохода"}
-        options={cats.map((c) => ({
+        items={cats.map((c) => ({
           id: c.id,
           label: c.name,
-          color: c.color,
+          icon: iconPreset(c.icon) ?? c.icon ?? Tag,
+          color: c.color ?? th.accent,
+          onPress: () => setCategoryId(c.id),
         }))}
         selectedId={categoryId}
-        emptyLabel={
-          isExpense
-            ? "Пока нет ни одной категории расходов"
-            : "Пока нет ни одной категории доходов"
-        }
-        onPick={setCategoryId}
         onSettings={() => router.push("/cabinet/categories")}
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}

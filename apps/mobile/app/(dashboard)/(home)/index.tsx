@@ -51,6 +51,10 @@ import {
 } from "@/features/appointments/helpers";
 import { CrewAppointmentSheet } from "@/features/appointments/CrewAppointmentSheet";
 import {
+  resolveReturnTo,
+  returnToParam,
+} from "@/features/appointments/return-to";
+import {
   DayView,
   type FreeSlotRange,
   type WorkBand,
@@ -673,21 +677,18 @@ export default function CalendarTab() {
           setTeamChoice(target.team_id);
         }
         // Запомнили дорогу назад ДО гашения параметров: сами параметры живут
-        // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог:
-        // «finances» — вкладка денег; «invoice:<id>» / «account:<id>» —
-        // страница, с чьей проводки запись открыли (инвойс, карточка счёта).
-        returnToRef.current =
-          params.from === "finances"
-            ? "/finances"
-            : params.from?.startsWith("invoice:")
-              ? `/invoices/${params.from.slice("invoice:".length)}`
-              : params.from?.startsWith("account:")
-                ? `/accounts/${params.from.slice("account:".length)}`
-                : null;
+        // один кадр, а вернуться нужно, когда лист закроют. Словарь дорог —
+        // `resolveReturnTo`, один на весь продукт.
+        returnToRef.current = resolveReturnTo(params.from);
         // Владельцу и диспетчеру — СТРАНИЦА записи (STORY-064: форма одна);
-        // старый лист правки здесь больше не открывается.
+        // старый лист правки здесь больше не открывается. Дорогу назад отдаём
+        // ей же: `returnToRef` читает только лист бригадира, а страница —
+        // отдельное окно и про наш ref не знает (2026-09-08).
         if (isCrew || !canMutateAppointment(target)) setCrewViewing(target);
-        else router.push(`/book?appointmentId=${target.id}` as Href);
+        else
+          router.push(
+            `/book?appointmentId=${target.id}${returnToParam(params.from)}` as Href,
+          );
       } else {
         toast("Заявка не найдена или больше недоступна");
       }

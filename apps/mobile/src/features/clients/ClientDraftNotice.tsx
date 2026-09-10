@@ -22,7 +22,13 @@ export function ClientDraftNotice({
   return (
     <View
       className="mt-2 border-t pt-2.5"
-      style={{ borderColor: t.separator }}
+      // Отступы СВОИ: слот в карточке пуст, пока подсказки нет, и обёртка с
+      // отступами оставляла бы под номером пустую полосу.
+      style={{
+        borderColor: t.separator,
+        paddingHorizontal: 16,
+        paddingBottom: 8,
+      }}
       accessibilityRole="alert"
     >
       {duplicate ? (

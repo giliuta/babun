@@ -3,12 +3,15 @@
 // Rows with tenant_id IS NULL are global defaults seeded in the
 // 20260517_001 migration; per-tenant rows can override the slug.
 // The list call returns BOTH so the UI can pick whichever is most
-// specific. type ('income' / 'expense') is the primary filter.
+// specific. type ('income' / 'expense' / 'debt') is the primary filter.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../database.types";
 
-export type FinanceCategoryKind = "income" | "expense";
+// Третий вид — «debt». Владелец 2026-09-10: «под расход свои категории, под
+// доход свои, под долги свои, они не смешиваются»: в списке поставщиков и
+// займов «Бензину» делать нечего.
+export type FinanceCategoryKind = "income" | "expense" | "debt";
 
 export interface FinanceCategory {
   id: string;

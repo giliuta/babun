@@ -1078,6 +1078,82 @@ export type Database = {
           },
         ]
       }
+      debts: {
+        Row: {
+          amount: number
+          category_id: string | null
+          client_id: string | null
+          counterparty: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          direction: string
+          id: string
+          note: string | null
+          occurred_on: string
+          occurred_time: string | null
+          team_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category_id?: string | null
+          client_id?: string | null
+          counterparty: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          direction: string
+          id?: string
+          note?: string | null
+          occurred_on: string
+          occurred_time: string | null
+          team_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string | null
+          client_id?: string | null
+          counterparty?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          direction?: string
+          id?: string
+          note?: string | null
+          occurred_on?: string
+          occurred_time?: string | null
+          team_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "finance_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       edge_cron_secrets: {
         Row: {
           created_at: string
@@ -1373,6 +1449,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          debt_id: string | null
           id: string
           invoice_id: string | null
           master_id: string | null
@@ -1404,6 +1481,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          debt_id?: string | null
           id?: string
           invoice_id?: string | null
           master_id?: string | null
@@ -1435,6 +1513,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          debt_id?: string | null
           id?: string
           invoice_id?: string | null
           master_id?: string | null
@@ -1456,6 +1535,13 @@ export type Database = {
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "finance_transactions_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "finance_transactions_account_id_fkey"
             columns: ["account_id"]
