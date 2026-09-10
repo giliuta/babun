@@ -14,6 +14,7 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { OperationReceiptRow } from "./OperationReceiptRow";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPicker } from "@/features/appointments/BookingPickers";
@@ -92,6 +93,8 @@ export function DebtSheet({
     cats,
     note,
     setNote,
+    receiptUrl,
+    setReceiptUrl,
     busy,
     clients,
     statsById,
@@ -288,6 +291,19 @@ export function DebtSheet({
             placeholder="Заметка долга"
             accessibilityLabel="Заметка долга"
             maxLength={500}
+          />
+        </SectionCard>
+
+        {/* ФАЙЛ — ТА ЖЕ СТРОКА, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «добавь
+            блок файл в долги»). Под долгом чаще всего лежит бумага —
+            накладная, расписка, счёт, — и без неё через месяц не вспомнить, за
+            что висят деньги. Хранилище, загрузчик и чистка сирот те же:
+            второго способа приложить бумагу в продукте быть не должно. */}
+        <SectionCard title="Файл" dense>
+          <OperationReceiptRow
+            receiptUrl={receiptUrl}
+            onPick={setReceiptUrl}
+            disabled={busy}
           />
         </SectionCard>
 
