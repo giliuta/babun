@@ -6,7 +6,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { DateTimeInput } from "@/components/ui/DateTimeInput";
 import { ChevronRight } from "lucide-react-native";
 import type {
   FinanceTransaction,
@@ -49,7 +48,11 @@ import {
   accountServesTeam,
   isPaymentAccountCompatible,
 } from "@babun/shared/local/finance/integrity";
-import { formatHM, formatYMD, parseHM, parseYMD } from "@/features/appointments/helpers";
+import { formatHM, formatYMD, parseYMD } from "@/features/appointments/helpers";
+import { DateTimeInput } from "@/components/ui/DateTimeInput";
+import { TimeWheelPair } from "@/components/ui/TimeWheel";
+import { formatShortDateRu } from "@/features/clients/format";
+import { ValueRow } from "@/components/ui/ValueRow";
 import { useRouter } from "expo-router";
 import { useTeams } from "@/features/reference/queries";
 import {
@@ -151,6 +154,8 @@ export function OperationSheet({
   // сейчас; у старой строки времени может не быть — тогда его предлагают
   // указать, а не подставляют выдуманное.
   const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
+  const [dateOpen, setDateOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   const [notes, setNotes] = useState("");
   // Документ, подтверждающий операцию (путь в приватном бакете).
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -654,45 +659,84 @@ export function OperationSheet({
                 : "Компания"}
             </Text>
           </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Дата</Text>
-            <DateTimeInput
-              value={parseYMD(date)}
-              maximumDate={parseYMD(businessToday)}
-              mode="date"
-              display="compact"
-              themeVariant="light"
-              locale="ru-RU"
-              onChange={(_, d) => d && setDate(formatYMD(d))}
-            />
-          </View>
-          <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
-          <View className="flex-row items-center justify-between px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>Время</Text>
-            {time == null ? (
-              <Pressable
-                onPress={() => setTime(formatHM(new Date()))}
-                accessibilityRole="button"
-                accessibilityLabel="Указать время операции"
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              >
-                <Text className="text-base" style={{ color: th.accent }}>Указать</Text>
-              </Pressable>
-            ) : (
+          {/* ДАТА И ВРЕМЯ — БАРАБАНОМ (владелец 2026-09-10: «барабан везде»).
+              Здесь стояли компактные нативные пикеры прямо в строках, а у
+              времени было ещё и два шага: тап по «Указать» ничего не
+              открывал — он лишь дорисовывал второй крошечный контрол у
+              правого края, в который надо было попасть вторым тапом. Ровно
+              этот путь `DateWheelSheet` и отменил у дня рождения полтора
+              месяца назад; операция за ним не пошла.
+
+              Строка-дверь со значением справа, лист снизу с барабаном,
+              «Применить» — тот же диалект, что у «Своего периода» финансов и
+              у часов календаря. */}
+          <ValueRow
+            label="Дата"
+            value={formatShortDateRu(date)}
+            expanded={dateOpen}
+            separated
+            onPress={() => setDateOpen((v) => !v)}
+          />
+          {dateOpen ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
               <DateTimeInput
-                value={parseHM(time)}
-                mode="time"
-                display="compact"
-                minuteInterval={5}
                 themeVariant="light"
+                value={parseYMD(date)}
+                // Операция не бывает в будущем — потолок стоит в барабане.
+                maximumDate={parseYMD(businessToday)}
+                mode="date"
+                display="spinner"
                 locale="ru-RU"
-                accessibilityLabel="Время операции"
-                onChange={(_, d) => d && setTime(formatHM(d))}
+                onChange={(_, d) => d && setDate(formatYMD(d))}
               />
-            )}
-          </View>
+            </View>
+          ) : null}
+          <ValueRow
+            label="Время"
+            value={time ?? "не указано"}
+            muted={time == null}
+            expanded={timeOpen}
+            separated
+            onPress={() => {
+              // Барабан обязан раскрыться на осмысленном значении: пока
+              // времени нет, начинаем с текущего часа.
+              if (time == null) setTime(formatHM(new Date()));
+              setTimeOpen((v) => !v);
+            }}
+          />
+          {timeOpen && time != null ? (
+            <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+              <TimeWheelPair
+                hour={Number(time.slice(0, 2)) || 0}
+                minute={Number(time.slice(3, 5)) || 0}
+                onChangeHour={(h) =>
+                  setTime(hmOf(h, Number(time.slice(3, 5)) || 0))
+                }
+                onChangeMinute={(m) =>
+                  setTime(hmOf(Number(time.slice(0, 2)) || 0, m))
+                }
+                labelPrefix="Время операции"
+              />
+              <Pressable
+                onPress={() => {
+                  setTime(null);
+                  setTimeOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Убрать время операции"
+                style={({ pressed }) => ({
+                  minHeight: 44,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: th.accent }}>
+                  Убрать время
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
         </SectionCard>
 
         {/* 3. Категория — СТРОКА, а не полоса чипов: категорий бывает
@@ -938,4 +982,9 @@ export function OperationSheet({
       />
     </BottomSheet>
   );
+}
+
+/** Часы и минуты в «HH:MM». Барабан отдаёт числа, база хранит строку. */
+function hmOf(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
