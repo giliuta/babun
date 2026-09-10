@@ -44,6 +44,7 @@ export function ObjectEditSheet({
   locationId,
   writer,
   askDelete,
+  onRequestFromClient,
   onDeleted,
   onClose,
 }: {
@@ -56,6 +57,11 @@ export function ObjectEditSheet({
   writer: LocationWriter;
   /** Открыт свайпом «Удалить» — спрашиваем сразу, форму не показываем. */
   askDelete?: boolean;
+  /** «Попросить адрес у клиента» — та же иконка, что у листа создания
+   *  (2026-09-10). Объект часто заводят по названию улицы и уточняют точку
+   *  при первом выезде: дослать ссылку УЖЕ созданному объекту надо чаще, чем
+   *  новому. Нет обработчика — иконки нет (черновик клиента, роль мастера). */
+  onRequestFromClient?: () => void;
   /** Объект удалён. Форма записи по этому сигналу снимает выбор, если выбран
    *  был именно он: иначе в запись уехал бы id удалённого объекта. */
   onDeleted?: (id: string) => void;
@@ -224,6 +230,17 @@ export function ObjectEditSheet({
             if (p.note !== undefined) setNote(p.note);
           }}
           onCommit={commitAll}
+          onRequestFromClient={
+            onRequestFromClient
+              ? () => {
+                  // Системный «Поделиться» поверх уходящего окна листа iOS
+                  // закрывает вместе с ним — сперва уезжаем.
+                  afterExit.current = onRequestFromClient;
+                  commitAll();
+                  onClose();
+                }
+              : undefined
+          }
           onTypeSettings={() => {
             // Уход в настройки — такой же уход со строки, как скрим: без
             // коммита набранный адрес пропадал по дороге.

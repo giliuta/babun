@@ -3273,6 +3273,11 @@ export default function BookScreen() {
           client={objectEditClient}
           locationId={objectEdit ? locationId : null}
           writer={kind === "event" ? eventLocationWriter : locationWriter}
+          onRequestFromClient={
+            canRequestAddress && objectEditClient
+              ? () => void requestActions.request(objectEditClient.id)
+              : undefined
+          }
           onDeleted={forgetLocation}
           onClose={() => setObjectEdit(false)}
         />

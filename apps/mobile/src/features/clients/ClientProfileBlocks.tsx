@@ -85,6 +85,9 @@ export function ClientProfileBlocks({
         locationId={sheet?.id ?? null}
         askDelete={sheet?.askDelete}
         writer={locationWriter}
+        onRequestFromClient={
+          canRequestAddress ? () => void requestActions.request(client.id) : undefined
+        }
         onClose={() => setSheet(null)}
       />
       {/* Добавление объекта — лист снизу (владелец 2026-07-27). Живёт рядом с
