@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MoreHorizontal } from "lucide-react-native";
 import type { Client, Location } from "@babun/shared/local/clients";
-import { RowGroup } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { AddRow } from "@/components/ui/AddRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import ObjectRouteButton from "@/features/clients/ObjectRouteButton";
@@ -81,7 +81,7 @@ export default function ObjectsBlock({
   );
 
   return (
-    <RowGroup title="Объекты">
+    <SectionCard title="Объекты">
       {ordered.map((loc, i) => (
         <SwipeRow
           key={loc.id}
@@ -114,7 +114,7 @@ export default function ObjectsBlock({
         separated={ordered.length + shownRequests.length > 0}
         onPress={onAdd}
       />
-    </RowGroup>
+    </SectionCard>
   );
 }
 

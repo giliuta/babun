@@ -33,7 +33,8 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react-native";
-import { NavRow, RowGroup } from "@/components/ui/card-rows";
+import { NavRow } from "@/components/ui/card-rows";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { formatShortDateRu } from "@/features/clients/format";
@@ -160,7 +161,7 @@ export function PersonalBlock({
 
   return (
     <>
-      <RowGroup title="Личное">
+      <SectionCard title="Личное">
         <NavRow
           label="Метка"
           value={label || null}
@@ -222,7 +223,7 @@ export function PersonalBlock({
             }}
           />
         ) : null}
-      </RowGroup>
+      </SectionCard>
 
       {/* Источник — тот же лист со значками, что «Добавить» и «Как связаться».
           Раньше это был безликий системный выбор, стоявший вплотную к «Метке»
