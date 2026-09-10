@@ -8,28 +8,17 @@
 
 import { getStorage } from "../storage/provider";
 
-export type PersonalEventTypeIcon =
-  | "coffee"
-  | "briefcase"
-  | "navigation"
-  | "moon"
-  | "plane"
-  | "bell"
-  | "heart"
-  | "star"
-  | "dumbbell"
-  | "book"
-  | "music"
-  | "graduation-cap"
-  | "stethoscope"
-  | "car"
-  | "home"
-  | "users"
-  | "phone"
-  | "shopping-bag"
-  | "gift"
-  | "calendar"
-  | "tag";
+/** СЛАГ ЗНАЧКА — ЭТО ДАННЫЕ, А НЕ ПЕРЕЧИСЛЕНИЕ (2026-09-10). Здесь стоял союз
+ *  из двадцати одного имени — собственного словаря типов событий. Владелец
+ *  попросил один набор на продукт («сделать 40 иконок, то же самое, что цвет»),
+ *  и союз стал стеной: слаг из общих сорока в него не проходил, а расширять
+ *  его каждым новым значком значит держать словарь в двух местах.
+ *
+ *  Что защищает от мусора теперь: выбор идёт из общего набора (`ICON_PRESETS`),
+ *  а показ проходит через `eventTypeIcon()` — незнакомое имя рисуется ярлычком,
+ *  а не падает. Старые слаги («coffee», «moon», «dumbbell») продолжают жить:
+ *  их держит карта совместимости в `event-type-icons.ts`. */
+export type PersonalEventTypeIcon = string;
 
 export interface PersonalEventType {
   id: string;

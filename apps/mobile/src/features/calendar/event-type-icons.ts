@@ -22,8 +22,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react-native";
-import type { PersonalEventTypeIcon } from "@babun/shared/local/personal-event-types";
-import type { IconPreset } from "@/components/ui/icon-set";
+import { ICON_PRESETS, iconPreset, type IconPreset } from "@/components/ui/icon-set";
 
 // ЗНАЧКИ ТИПОВ СОБЫТИЙ — ОДИН СПИСОК НА ПРОДУКТ. Карта жила внутри экрана
 // Кабинет → «Типы событий», и форма события знать её не могла: в её плитке
@@ -34,8 +33,11 @@ import type { IconPreset } from "@/components/ui/icon-set";
  *  ждёт общий `IconPicker`, и своя подпись рассыпала бы пресеты. */
 export type EventTypeIconCmp = LucideIcon;
 
-/** Полный набор иконок модели `PersonalEventTypeIcon` (веб-паритет пикера). */
-export const EVENT_TYPE_ICONS: Record<PersonalEventTypeIcon, EventTypeIconCmp> = {
+/** КАРТА СОВМЕСТИМОСТИ, А НЕ НАБОР ДЛЯ ВЫБОРА (2026-09-10). Выбирают теперь из
+ *  общих сорока (`ICON_PRESETS`), но у типов, заведённых раньше, в базе лежат
+ *  СВОИ слаги — «coffee», «moon», «dumbbell», «graduation-cap». Здесь они и
+ *  живут: без этой карты «Обед» превратился бы в безымянный ярлычок. */
+export const EVENT_TYPE_ICONS: Record<string, EventTypeIconCmp> = {
   coffee: Coffee,
   briefcase: Briefcase,
   navigation: Navigation,
@@ -59,45 +61,27 @@ export const EVENT_TYPE_ICONS: Record<PersonalEventTypeIcon, EventTypeIconCmp> =
   tag: Tag,
 };
 
-/** Ключи в порядке объявления — сетка выбора значка в Кабинете. */
-export const EVENT_TYPE_ICON_KEYS = Object.keys(
-  EVENT_TYPE_ICONS,
-) as PersonalEventTypeIcon[];
-
-/** Значок типа; незнакомое имя (старая строка из базы) читается как «метка». */
+/** Значок типа. Сначала общий словарь продукта, затем карта совместимости со
+ *  старыми слагами; незнакомое имя читается как «метка». */
 export function eventTypeIcon(icon: string | null | undefined): EventTypeIconCmp {
-  return EVENT_TYPE_ICONS[(icon ?? "tag") as PersonalEventTypeIcon] ?? Tag;
+  const slug = icon ?? "tag";
+  return iconPreset(slug) ?? EVENT_TYPE_ICONS[slug] ?? Tag;
 }
 
-/** Тот же набор для общего `IconPicker`: слаг, русское имя для озвучки, глиф.
- *  Свой у типов событий потому, что слаги хранятся в базе (`icon`) и не
- *  совпадают со слагами общих сорока значков. */
-export const EVENT_TYPE_ICON_PRESETS: IconPreset[] = (
-  [
-    ["coffee", "Кофе"],
-    ["briefcase", "Портфель"],
-    ["navigation", "Навигация"],
-    ["moon", "Луна"],
-    ["plane", "Самолёт"],
-    ["bell", "Колокольчик"],
-    ["heart", "Сердце"],
-    ["star", "Звезда"],
-    ["dumbbell", "Гантель"],
-    ["book", "Книга"],
-    ["music", "Музыка"],
-    ["graduation-cap", "Учёба"],
-    ["stethoscope", "Врач"],
-    ["car", "Машина"],
-    ["home", "Дом"],
-    ["users", "Люди"],
-    ["phone", "Телефон"],
-    ["shopping-bag", "Покупки"],
-    ["gift", "Подарок"],
-    ["calendar", "Календарь"],
-    ["tag", "Метка"],
-  ] as const
-).map(([value, label]) => ({
-  value,
-  label,
-  icon: EVENT_TYPE_ICONS[value],
-}));
+/** Набор для шторки «Вид»: общие СОРОК значков — тот же, что у счёта, категории
+ *  и типа объекта (владелец 2026-09-10: «сделать 40 иконок… абсолютно во всех»).
+ *  Если у типа уже стоит старый слаг, он ДОПИСЫВАЕТСЯ отдельной плиткой в конец
+ *  — иначе решётка открывалась бы с пустым выбором при заполненном значке, ровно
+ *  как это было у цвета вне палитры. */
+export function eventTypeIconPresets(
+  current?: string | null,
+): IconPreset[] {
+  const slug = (current ?? "").trim();
+  if (!slug || ICON_PRESETS.some((preset) => preset.value === slug)) {
+    return ICON_PRESETS;
+  }
+  const legacy = EVENT_TYPE_ICONS[slug];
+  if (!legacy) return ICON_PRESETS;
+  return [...ICON_PRESETS, { value: slug, label: "Прежний значок", icon: legacy }];
+}
+

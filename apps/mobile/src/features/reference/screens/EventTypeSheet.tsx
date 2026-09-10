@@ -8,7 +8,7 @@ import { FieldLabel } from "@/components/ui/Field";
 import { NameColorField } from "@/components/ui/picker-fields";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { TimeWheelPair } from "@/components/ui/TimeWheel";
-import { EVENT_TYPE_ICON_PRESETS } from "@/features/calendar/event-type-icons";
+import { eventTypeIconPresets } from "@/features/calendar/event-type-icons";
 
 // ПРАВКА ТИПА СОБЫТИЯ — КАНОНИЧЕСКИЙ ЛИСТ, как «Новая метка» и «Услуга».
 // Заведение и правка — один лист: поля у них одни и те же, а два разных окна
@@ -94,7 +94,7 @@ export function EventTypeSheet({
         onColorChange={setColor}
         icon={icon}
         onIconChange={(slug) => setIcon(slug as PersonalEventTypeIcon)}
-        icons={EVENT_TYPE_ICON_PRESETS}
+        icons={eventTypeIconPresets(icon)}
         autoFocus={!type}
       />
 
