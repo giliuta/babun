@@ -65,7 +65,7 @@ export function Field({
           minHeight: 48,
           paddingHorizontal: trailing ? 0 : 16,
           paddingVertical: 12,
-          fontSize: 16,
+          fontSize: 15,
           color: t.ink,
           ...(trailing ? { flex: 1 } : null),
         },
@@ -107,7 +107,7 @@ export function Field({
         <Text
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
-          style={{ marginTop: 4, fontSize: 14, color: t.danger }}
+          style={{ marginTop: 4, fontSize: 13, color: t.danger }}
         >
           {error}
         </Text>

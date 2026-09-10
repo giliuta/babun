@@ -62,7 +62,7 @@ export function SwitchRow({
         importantForAccessibility="no-hide-descendants"
         style={{ flex: 1, paddingRight: 12 }}
       >
-        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 16, color: disabled ? t.faint : t.ink }}>{label}</Text>
+        <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 15, color: disabled ? t.faint : t.ink }}>{label}</Text>
         {hint ? (
           <Text maxFontSizeMultiplier={1.3} style={{ fontSize: 13, color: t.faint, marginTop: 1 }}>{hint}</Text>
         ) : null}

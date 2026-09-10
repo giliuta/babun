@@ -65,7 +65,7 @@ export function AddRow({
         // Классовый `text-base` доходит до текста другим путём, алгоритм сжатия
         // считает диапазон без него — и подпись «Добавить счёт» ужималась до
         // нечитаемых ~7pt, хотя `minimumFontScale` обещает не ниже 12.
-        style={{ flex: 1, fontSize: 16, fontWeight: "500", color: t.accent }}
+        style={{ flex: 1, fontSize: 17, fontWeight: "600", color: t.accent }}
         numberOfLines={1}
       >
         {label}

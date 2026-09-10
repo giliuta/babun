@@ -42,7 +42,7 @@ export function ScreenHeader({
             {title}
           </Text>
           {subtitle ? (
-            <Text style={{ fontSize: 14, color: t.sub }}>{subtitle}</Text>
+            <Text style={{ fontSize: 13, color: t.sub }}>{subtitle}</Text>
           ) : null}
         </View>
         {right ? <View className="pb-1">{right}</View> : null}

@@ -125,7 +125,7 @@ export function DisclosureField({
           <Text
             maxFontSizeMultiplier={1.3}
             numberOfLines={1}
-            style={{ fontSize: 16, color: open ? t.accent : t.ink }}
+            style={{ fontSize: 15, color: open ? t.accent : t.ink }}
           >
             {label}
           </Text>
@@ -134,7 +134,7 @@ export function DisclosureField({
             <Text
               maxFontSizeMultiplier={1.3}
               numberOfLines={1}
-              style={{ flexShrink: 1, fontSize: 16, color: t.faint }}
+              style={{ flexShrink: 1, fontSize: 15, color: t.faint }}
             >
               {valueText}
             </Text>
@@ -380,7 +380,7 @@ export function NameField({
             minHeight: 48,
             paddingRight: 16,
             paddingVertical: 12,
-            fontSize: 16,
+            fontSize: 15,
             color: t.ink,
           }}
         />

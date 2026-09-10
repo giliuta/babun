@@ -82,7 +82,7 @@ export function OptionSheet<V extends string>({
                 <View style={{ flex: 1 }}>
                   <Text
                     maxFontSizeMultiplier={1.3}
-                    style={{ fontSize: 16, color: t.ink }}
+                    style={{ fontSize: 15, color: t.ink }}
                     numberOfLines={1}
                   >
                     {o.label}

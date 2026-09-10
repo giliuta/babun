@@ -1039,7 +1039,7 @@ export function RowCaption({
         marginHorizontal: 16,
         marginTop: 6,
         // Пояснение приглушается РАЗМЕРОМ, а не серостью (закон 2026-07-27).
-        fontSize: 12,
+        fontSize: 13,
         color:
           tone === "danger" ? t.danger : tone === "warning" ? t.warning : t.sub,
       }}

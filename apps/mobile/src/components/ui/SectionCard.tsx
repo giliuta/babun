@@ -118,7 +118,7 @@ export function SectionCard({
                       <item.icon color={t.sub} size={20} strokeWidth={2} />
                     ) : (
                       <Text
-                        style={{ fontSize: 14, fontWeight: "500", color: t.accent }}
+                        style={{ fontSize: 13, fontWeight: "500", color: t.accent }}
                       >
                         {item.label}
                       </Text>

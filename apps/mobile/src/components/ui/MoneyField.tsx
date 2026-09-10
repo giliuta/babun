@@ -76,7 +76,7 @@ export function MoneyField({
           // иначе VoiceOver делает на «€» отдельную остановку перед полем.
           accessible={false}
           maxFontSizeMultiplier={1.2}
-          style={{ fontSize: 30, fontWeight: "700", color: t.faint }}
+          style={{ fontSize: 28, lineHeight: 36, fontWeight: "700", color: t.faint }}
         >
           {moneySymbol(currency)}
         </Text>
@@ -101,11 +101,11 @@ export function MoneyField({
           style={{
             flex: 1,
             padding: 0,
-            fontSize: 30,
+            fontSize: 28,
             // БЕЗ ИНТЕРВАЛА iOS СРЕЖЕТ ВЕРХ ГЛИФОВ: в этом стеке TextInput
             // получает строку ниже кегля (найдено на поле суммы 2026-09-10,
             // держится тестом ловушек nativewind).
-            lineHeight: 38,
+            lineHeight: 36,
             fontWeight: "700",
             color: t.ink,
             // ТОЛЬКО СТИЛЕМ: `className="tabular-nums"` в этом стеке —
@@ -119,7 +119,7 @@ export function MoneyField({
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
           maxFontSizeMultiplier={1.2}
-          style={{ marginTop: 4, fontSize: 14, color: t.danger }}
+          style={{ marginTop: 4, fontSize: 13, color: t.danger }}
         >
           {error}
         </Text>

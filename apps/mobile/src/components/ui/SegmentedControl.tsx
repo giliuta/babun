@@ -66,7 +66,7 @@ export function SegmentedControl<V extends string>({
               adjustsFontSizeToFit
               minimumFontScale={0.75}
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: "600",
                 color: active ? (opt.color ?? t.ink) : t.sub,
               }}

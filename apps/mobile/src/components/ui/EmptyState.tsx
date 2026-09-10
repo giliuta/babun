@@ -38,7 +38,7 @@ export function EmptyState({
             style={{
               marginTop: 12,
               textAlign: "center",
-              fontSize: 14,
+              fontSize: 13,
               color: t.sub,
             }}
           >
@@ -56,15 +56,15 @@ export function EmptyState({
         accessibilityRole="header"
         style={{
           textAlign: "center",
-          fontSize: 16,
-          fontWeight: "500",
+          fontSize: 17,
+          fontWeight: "600",
           color: state === "error" ? t.danger : t.sub,
         }}
       >
         {title ?? (state === "error" ? "Что-то пошло не так" : "Пусто")}
       </Text>
       {subtitle ? (
-        <Text style={{ marginTop: 4, textAlign: "center", fontSize: 14, color: t.faint }}>
+        <Text style={{ marginTop: 4, textAlign: "center", fontSize: 13, color: t.faint }}>
           {subtitle}
         </Text>
       ) : null}
