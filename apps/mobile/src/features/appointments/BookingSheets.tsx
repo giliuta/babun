@@ -1,5 +1,5 @@
-import { Text as NativeText, Pressable, View, type TextProps } from "react-native";
-import { Check } from "lucide-react-native";
+import { Text as NativeText, View, type TextProps } from "react-native";
+import { Circle } from "lucide-react-native";
 import {
   PRESET_COLOR_VALUES,
   colorName,
@@ -10,6 +10,8 @@ import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ColorPicker } from "@/components/ui/ColorPicker";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -75,58 +77,30 @@ export function TeamMasterSheet({
           52pt на подложке, цвет команды точкой слева, галка у выбранной.
           Пилюли-чипы здесь были единственным местом в продукте, где сущность
           выбирают лентой, — а выбирают её ровно так же, как клиента. */}
-      <View style={{ paddingHorizontal: SIDE, paddingTop: 4, paddingBottom: 12, gap: 8 }}>
+      <SelectList>
         {teams.length > 0 ? (
-          teams.map((team) => {
-            const chosen = teamId === team.id;
-            return (
-              <Pressable
-                key={team.id}
-                onPress={() => onPickTeam(team.id)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: chosen }}
-                accessibilityLabel={`Команда ${team.name}`}
-                style={({ pressed }) => ({
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12,
-                  minHeight: 52,
-                  paddingHorizontal: 14,
-                  borderRadius: t.radius.input,
-                  backgroundColor: pressed ? t.rowFillPressed : t.rowFill,
-                })}
-              >
-                <View
-                  style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: t.radius.pill,
-                    backgroundColor: team.color ?? t.accent,
-                  }}
-                />
-                <Text
-                  numberOfLines={1}
-                  style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-                >
-                  {team.name}
-                </Text>
-                {chosen ? (
-                  <Check color={t.accent} size={18} strokeWidth={2.4} />
-                ) : null}
-              </Pressable>
-            );
-          })
+          teams.map((team) => (
+            // СТРОКА — ОБЩАЯ (сведено 2026-09-10). Диалект был тот же, но
+            // разметка своя: точка 10pt вместо кружка сущности и копия
+            // строки. Последняя шторка выбора вне общего примитива.
+            <SelectRow
+              key={team.id}
+              icon={Circle}
+              color={team.color ?? undefined}
+              title={team.name}
+              selected={teamId === team.id}
+              accessibilityRole="radio"
+              accessibilityLabel={`Команда ${team.name}`}
+              onPress={() => onPickTeam(team.id)}
+            />
+          ))
         ) : (
-          <View style={{ paddingVertical: 8 }}>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
-              Команд пока нет
-            </Text>
-            <Text style={{ marginTop: 4, fontSize: 13, lineHeight: 18, color: t.sub }}>
-              Сначала создайте команду в кабинете, затем вернитесь к заявке.
-            </Text>
-          </View>
+          <EmptyState
+            title="Команд пока нет"
+            subtitle="Создайте команду в кабинете и вернитесь к заявке"
+          />
         )}
-      </View>
+      </SelectList>
 
       {/* МАСТЕР — необязательный и редкий выбор (1 запись из 30), поэтому
           лентой чипов под командой, а не вторым списком строк. */}
