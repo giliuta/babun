@@ -232,6 +232,7 @@ function FinancesContent() {
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   // Платёж по долгу открывает ТУ ЖЕ форму операции, что и всё остальное:
   // движение денег в продукте одно, и второй его формы быть не должно.
+  const reopenDebtSheet = useCallback(() => setDebtOpen(true), []);
   const [debtPayment, setDebtPayment] = useState<{
     debtId: string;
     counterparty: string;
@@ -1313,6 +1314,9 @@ function FinancesContent() {
       <DebtSheet
         visible={debtOpen}
         debt={editingDebt}
+        // Лист уезжает на время похода за новым клиентом — маршрут карточки
+        // под окном шторки не виден — и возвращается этим.
+        onReopen={reopenDebtSheet}
         paid={editingDebt ? debtPaid.get(editingDebt.id) ?? 0 : 0}
         onPay={(payment) => {
           // Одна шторка закрывается, следом открывается другая: два окна в

@@ -1,15 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { ChevronRight, Tag, UserRound } from "lucide-react-native";
+import { ChevronRight, Tag } from "lucide-react-native";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
-import {
-  debtRemainderCents,
-  DEBT_DIRECTION_LABEL,
-} from "@babun/shared/local/finance/debt";
-import {
-  formatEURExact as formatEUR,
-  parseMoneyInputToCents,
-} from "@babun/shared/common/utils/money";
+import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
+import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
 import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -18,21 +12,16 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
-import { GUTTER, ICON } from "@/components/ui/tokens";
+import { GUTTER } from "@/components/ui/tokens";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { WhenRow } from "@/features/appointments/BookingSummary";
 import { WhenSheet } from "@/features/appointments/WhenSheet";
 import { ClientPicker } from "@/features/appointments/BookingPickers";
-import { useClients } from "@/features/clients/queries";
-import { useToast } from "@/components/ui/Toast";
+import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useRouter } from "expo-router";
-import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
-import { notify } from "@/lib/notify";
-import { useIsOnline } from "@babun/shared/sync";
 import { useThemeColors } from "@/theme/colors";
-import { useFinanceCategories } from "./queries";
-import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
+import { useDebtDraft } from "./use-debt-draft";
 
 // ФОРМА ДОЛГА — ТЕ ЖЕ БЛОКИ, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «почему,
 // когда я нажимаю „Добавить долг“, открывается форма записи? Там должна
@@ -45,15 +34,6 @@ import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 // в момент его появления со счёта ничего не уходит и ничего не приходит.
 // Счёт спросят в момент ПЛАТЕЖА по долгу — это уже обычная операция.
 
-const OFFLINE = "Долг записывается только онлайн: нет сети";
-
-function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
-
 export function DebtSheet({
   visible,
   debt,
@@ -63,6 +43,7 @@ export function DebtSheet({
   paid = 0,
   onPay,
   onClose,
+  onReopen,
 }: {
   visible: boolean;
   /** Правка заведённого долга. `null` — новый. */
@@ -82,147 +63,62 @@ export function DebtSheet({
     direction: DebtDirection;
   }) => void;
   onClose: () => void;
+  /** Открыть лист заново после похода за новым клиентом: карточка клиента —
+   *  отдельный маршрут, а под открытым окном `Modal` его не видно, поэтому
+   *  лист на это время уезжает и возвращается с готовым клиентом. */
+  onReopen?: () => void;
 }) {
   const th = useThemeColors();
   const router = useRouter();
-  const toast = useToast();
-  const online = useIsOnline();
-  const isEdit = !!debt;
+  const {
+    isEdit,
+    direction,
+    setDirection,
+    counterparty,
+    setCounterparty,
+    setClientId,
+    client,
+    amount,
+    setAmount,
+    date,
+    setDate,
+    categoryId,
+    setCategoryId,
+    category,
+    cats,
+    note,
+    setNote,
+    busy,
+    clients,
+    statsById,
+    recentIds,
+    remainder,
+    canSave,
+    reason,
+    save,
+    destroy,
+    leaveForClient,
+    runAfterExit,
+  } = useDebtDraft({
+    visible,
+    debt,
+    initialDirection,
+    teamId,
+    paid,
+    onClose,
+    onReopen,
+  });
 
-  const [direction, setDirection] = useState<DebtDirection>(initialDirection);
-  const [counterparty, setCounterparty] = useState("");
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(todayYmd());
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [note, setNote] = useState("");
   const [whenOpen, setWhenOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  /** Отложенное до полного ухода листа: см. `destroy`. */
-  const afterExit = useRef<(() => void) | null>(null);
-
-  const clients = useClients().data ?? [];
-  const categoriesQuery = useFinanceCategories();
-  const insert = useInsertDebt();
-  const update = useUpdateDebt();
-  const remove = useDeleteDebt();
-
-  // Шторка остаётся смонтированной между открытиями: без пересева она
-  // показала бы прошлый долг поверх нового (закон формы операции).
-  useEffect(() => {
-    if (!visible) return;
-    setDirection(debt?.direction ?? initialDirection);
-    setCounterparty(debt?.counterparty ?? "");
-    setClientId(debt?.client_id ?? null);
-    setAmount(debt ? String(debt.amount) : "");
-    setDate(debt?.occurred_on ?? todayYmd());
-    setCategoryId(debt?.category_id ?? null);
-    setNote(debt?.note ?? "");
-    setBusy(false);
-  }, [visible, debt, initialDirection]);
-
-  // Категории долгов НЕ смешиваются с доходными и расходными (владелец
-  // 2026-09-10): в списке поставщиков и займов «Бензину» делать нечего.
-  const cats = useMemo(
-    () =>
-      (categoriesQuery.data ?? []).filter((c) => c.type === "debt" && !c.hidden),
-    [categoriesQuery.data],
-  );
-  const category = cats.find((c) => c.id === categoryId);
-
-  // Остаток по СОХРАНЁННОМУ долгу, а не по тому, что сейчас в поле: платят по
-  // тому, что записано, и правка суммы в поле до сохранения не меняет долга.
-  const remainder = debt ? debtRemainderCents(debt.amount, paid) / 100 : 0;
-
-  const cents = parseMoneyInputToCents(amount);
-  const named = counterparty.trim().length > 0;
-  const canSave = online && !busy && named && cents != null && cents > 0;
-
-  const reason = !online
-    ? { text: OFFLINE, error: true }
-    : !named
-      ? { text: "Укажите, кто должен", error: false }
-      : cents == null || cents <= 0
-        ? { text: "Введите сумму долга", error: false }
-        : null;
-
-  const save = async () => {
-    if (!canSave) return;
-    setBusy(true);
-    try {
-      const payload = {
-        direction,
-        counterparty: counterparty.trim(),
-        amount: (cents as number) / 100,
-        occurred_on: date,
-        client_id: clientId,
-        category_id: categoryId,
-        note: note.trim() || null,
-        team_id: teamId ?? null,
-        business_today: todayYmd(),
-      };
-      if (isEdit && debt) {
-        await update.mutateAsync({ id: debt.id, patch: payload });
-      } else {
-        await insert.mutateAsync(payload);
-      }
-      haptics.success();
-      toast(isEdit ? "Долг сохранён" : "Долг записан");
-      onClose();
-    } catch (e) {
-      notify("Не удалось сохранить", (e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // УДАЛЕНИЕ ДОЛГА НЕ ТРОГАЕТ ДЕНЬГИ. Платежи по нему остаются на счёте и в
-  // прибыли — они случились; связь просто снимается. Об этом и предупреждаем:
-  // «удалить долг» человек читает как «стереть всё, что с ним связано».
-  //
-  // ИЗ ОТКРЫТОГО ЛИСТА СПРОСИТЬ НЕЛЬЗЯ (DS, LOCKED 2026-08-29): вопрос рисует
-  // хост приложения, а лист — отдельное окно `Modal`, и открытый в тот же кадр
-  // вопрос получает от iOS «already presenting». Кнопка молчала — проверено на
-  // симуляторе 2026-09-10, ровно как это уже было у «Удалить операцию».
-  // Сперва уезжаем, спрашиваем по `onExited`.
-  const destroy = () => {
-    if (!debt) return;
-    const target = debt;
-    afterExit.current = () => {
-      confirmThen(
-        "Удалить долг?",
-        {
-          message:
-            "Платежи по нему останутся в журнале и на счёте — они уже случились. Пропадёт только сам долг.",
-          confirmLabel: "Удалить",
-          destructive: true,
-        },
-        async () => {
-          try {
-            await remove.mutateAsync(target.id);
-            haptics.success();
-            toast("Долг удалён");
-          } catch (e) {
-            notify("Не удалось удалить", (e as Error).message);
-          }
-        },
-      );
-    };
-    onClose();
-  };
 
   return (
     <BottomSheet
       padded={false}
       visible={visible}
       onClose={onClose}
-      onExited={() => {
-        const run = afterExit.current;
-        afterExit.current = null;
-        run?.();
-      }}
+      onExited={runAfterExit}
       title={isEdit ? "Долг" : "Новый долг"}
       subtitle={teamName ?? "Компания"}
       scroll
@@ -272,7 +168,15 @@ export function DebtSheet({
             },
           ]}
           value={direction}
-          onChange={(next) => setDirection(next as DebtDirection)}
+          onChange={(next) => {
+            // Имя выбранного клиента переезжает в свободное поле: сторону
+            // меняют, ошибившись сегментом, и заставлять набирать заново то,
+            // что уже названо, незачем.
+            if (next === "outgoing" && client && !counterparty.trim()) {
+              setCounterparty(client.full_name || "");
+            }
+            setDirection(next as DebtDirection);
+          }}
           style={{ marginHorizontal: GUTTER, marginTop: 12 }}
         />
 
@@ -288,53 +192,17 @@ export function DebtSheet({
             сумма» у операции (владелец 2026-09-10: «форма слишком большая,
             давит»). */}
         <SectionCard>
-          <View className="min-h-[52px] flex-row items-center gap-3 px-4 py-2.5">
-            <Text className="text-base" style={{ color: th.ink }}>
-              Кто
-            </Text>
-            <TextInput
-              value={counterparty}
-              onChangeText={(next) => {
-                setCounterparty(next);
-                // Имя правят руками — связь с карточкой клиента больше не
-                // верна: «Петров» мог стать «Петров-сосед», и это другой
-                // человек. Молча оставленный client_id повесил бы чужой долг
-                // на карточку клиента.
-                setClientId(null);
-              }}
-              placeholder={direction === "incoming" ? "Клиент или имя" : "Поставщик, магазин"}
-              placeholderTextColor={th.placeholder}
-              selectionColor={th.accent}
-              keyboardAppearance="light"
-              maxFontSizeMultiplier={1.2}
-              accessibilityLabel="Кто должен"
-              // Первый вопрос к долгу — чей он. Клавиатура открывается на нём
-              // сразу: у операции так же ведёт себя сумма, ради которой лист и
-              // открывают. Здесь ради имени.
-              autoFocus={!isEdit}
-              maxLength={120}
-              className="flex-1 text-base"
-              style={{ color: th.ink, textAlign: "right" }}
-            />
-            {/* Ярлык к справочнику, а не второй способ ввести имя: выбранный
-                клиент связывает долг с карточкой, свободное имя — нет. */}
-            <Pressable
-              onPress={() => {
-                setClientOpen(true);
-                haptics.tap();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Выбрать из клиентов"
-              hitSlop={8}
-              className="active:opacity-60"
-            >
-              <UserRound
-                color={clientId ? th.accent : th.chevron}
-                size={ICON.sm}
-                strokeWidth={2.2}
-              />
-            </Pressable>
-          </View>
+          <DebtWhoBlock
+            direction={direction}
+            client={client}
+            stats={client ? statsById.get(client.id) : undefined}
+            counterparty={counterparty}
+            onCounterparty={setCounterparty}
+            onOpenPicker={() => {
+              setClientOpen(true);
+              haptics.tap();
+            }}
+          />
 
           <View className="ml-4 h-px" style={{ backgroundColor: th.separator }} />
 
@@ -470,14 +338,27 @@ export function DebtSheet({
         onClose={() => setCategoryOpen(false)}
       />
 
+      {/* ТОТ ЖЕ ВЫБОР КЛИЕНТА, ЧТО В ЗАПИСИ — со вводной о каждом и недавними
+          первыми. «Создать клиента» внутри него уходит на карточку нового
+          клиента отдельным маршрутом, а маршрут под открытым окном `Modal` не
+          виден: поэтому лист долга на это время уезжает и возвращается сам,
+          когда клиент заведён (см. `wentForClient`). Набранное переживает
+          поход — `keepDraft` запрещает пересев. */}
       <ClientPicker
         visible={clientOpen}
         onClose={() => setClientOpen(false)}
+        onCreate={(prefill) => {
+          // Уходим МЫ, а не лист выбора: под открытым окном шторки долга
+          // маршрут карточки не виден. Сперва уезжаем сами, потом пуш.
+          setClientOpen(false);
+          leaveForClient(prefill);
+        }}
         clients={clients as Client[]}
-        recentIds={[]}
-        onPick={(client) => {
-          setClientId(client.id);
-          setCounterparty(client.full_name || "");
+        recentIds={recentIds}
+        statsById={statsById}
+        onPick={(picked) => {
+          setClientId(picked.id);
+          setCounterparty(picked.full_name || "");
           setClientOpen(false);
         }}
       />
