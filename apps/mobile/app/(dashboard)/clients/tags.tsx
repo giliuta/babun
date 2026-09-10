@@ -1,29 +1,18 @@
-import { Fragment, useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
-import { ChevronRight, Tags } from "lucide-react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { Trash2 } from "lucide-react-native";
 import type { ClientTag } from "@babun/shared/local/clients";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
-import { SectionCard } from "@/components/ui/SectionCard";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Divider } from "@/components/ui/Divider";
-import { AddRow } from "@/components/ui/AddRow";
-import { Field } from "@/components/ui/Field";
-import { ColorField } from "@/components/ui/picker-fields";
+import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SwipeRow } from "@/components/ui/SwipeRow";
+import { NameColorField } from "@/components/ui/picker-fields";
+import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
@@ -34,21 +23,40 @@ import {
   useUpdateClientTag,
 } from "@/features/clients/queries";
 
+// ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
+//
+// Экран был последним справочником со своей вёрсткой: редактор — сырой
+// `Modal animationType="slide"` со своим грабером `h-1 w-9` и своим нижним
+// отступом, удаление — текстовой кнопкой внутри этого листа, имя и цвет —
+// двумя раздельными полями, пустое состояние — самодельным блоком с
+// объясняющим абзацем («Создайте теги для сегментов: VIP…»), которого канон
+// не допускает вовсе, а кнопка добавления стояла строкой ВНУТРИ списка.
+//
+// Теперь всё то же, что у «Меток», «Типов объектов» и «Типов событий»:
+// строка 52pt с точкой цвета, свайп влево — «Удалить» с подтверждением,
+// редактор — канонический `BottomSheet` с `NameColorField`, главное действие
+// — кнопкой внизу экрана (LOCKED 2026-08-27: теги заводят пачкой, и после
+// первого не должно приходиться доскролливать список ради второго).
+//
+// ПЕРЕТАСКИВАНИЯ ЗДЕСЬ НЕТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ: у `client_tags` нет
+// колонки порядка (проверено по схеме — id, name, color, tenant_id), а
+// заводить её ради сортировки — отдельное решение владельца с миграцией на
+// боевую базу. Пока список идёт по алфавиту, и это честно.
+
 const DEFAULT_COLOR = PRESET_COLOR_CYCLE[2].value;
+const ROW_H = 52;
+
+type Editing = { mode: "create" } | { mode: "edit"; tag: ClientTag };
 
 export default function ClientTagsScreen() {
   const t = useThemeColors();
-  const insets = useSafeAreaInsets();
   const toast = useToast();
   const tagsQuery = useClientTags();
   const createTag = useCreateClientTag();
   const updateTag = useUpdateClientTag();
   const deleteTag = useDeleteClientTag();
 
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<ClientTag | null>(null);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [editing, setEditing] = useState<Editing | null>(null);
 
   const tags = useMemo(
     () =>
@@ -60,55 +68,32 @@ export default function ClientTagsScreen() {
   const busy =
     createTag.isPending || updateTag.isPending || deleteTag.isPending;
 
-  const openCreate = () => {
-    setEditing(null);
-    setName("");
-    setColor(DEFAULT_COLOR);
-    setOpen(true);
-  };
-
-  const openEdit = (tag: ClientTag) => {
-    setEditing(tag);
-    setName(tag.name);
-    setColor(tag.color || DEFAULT_COLOR);
-    setOpen(true);
-  };
-
-  const closeEditor = () => {
-    if (busy) return;
-    setOpen(false);
-    setEditing(null);
-  };
-
-  const submit = async () => {
-    const normalizedName = name.trim();
-    if (!normalizedName || busy) return;
+  const submit = async (draft: { name: string; color: string }) => {
+    const name = draft.name.trim();
+    if (!name || busy || !editing) return;
     try {
-      if (editing) {
+      if (editing.mode === "edit") {
         await updateTag.mutateAsync({
-          id: editing.id,
-          patch: { name: normalizedName, color },
+          id: editing.tag.id,
+          patch: { name, color: draft.color },
         });
         toast("Тег обновлён", "success");
       } else {
-        await createTag.mutateAsync({ name: normalizedName, color });
+        await createTag.mutateAsync({ name, color: draft.color });
         toast("Тег создан", "success");
       }
-      setOpen(false);
       setEditing(null);
-      setName("");
     } catch (error) {
       notify(
         "Не удалось сохранить тег",
-        (error as Error).message ||
-          "Проверьте соединение и попробуйте ещё раз.",
+        (error as Error).message || "Проверьте соединение и попробуйте ещё раз.",
       );
     }
   };
 
-  const confirmDelete = () => {
-    if (!editing || busy) return;
-    const tag = editing;
+  // РАЗРУШИТЕЛЬНОЕ ЖИВЁТ НА КРОМКЕ ЖЕСТА И ПЕРЕСПРАШИВАЕТ: тег исчезает из
+  // карточек всех клиентов, и вернуть его нечем.
+  const remove = (tag: ClientTag) =>
     confirmThen(
       "Удалить тег?",
       {
@@ -119,8 +104,6 @@ export default function ClientTagsScreen() {
       async () => {
         try {
           await deleteTag.mutateAsync(tag.id);
-          setOpen(false);
-          setEditing(null);
           toast("Тег удалён", "success");
         } catch (error) {
           notify(
@@ -131,7 +114,6 @@ export default function ClientTagsScreen() {
         }
       },
     );
-  };
 
   return (
     <Screen edges={["top"]}>
@@ -153,154 +135,142 @@ export default function ClientTagsScreen() {
             onPress: () => void tagsQuery.refetch(),
           }}
         />
+      ) : tags.length === 0 ? (
+        <EmptyState
+          fill
+          title="Тегов пока нет"
+          action={{
+            label: "Добавить тег",
+            onPress: () => setEditing({ mode: "create" }),
+          }}
+        />
       ) : (
         <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 12 }}
         >
-          <SectionEyebrow>Справочник</SectionEyebrow>
-          <SectionCard>
-            {tags.length > 0 ? (
-              <>
-                {tags.map((tag, index) => (
-                  <Fragment key={tag.id}>
-                    {index > 0 ? <Divider inset={60} /> : null}
-                    <Pressable
-                      onPress={() => openEdit(tag)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Тег ${tag.name}, изменить`}
-                      accessibilityHint="Открывает название и выбор цвета"
-                      className="min-h-[56px] flex-row items-center px-4 py-2"
-                      style={({ pressed }) => ({
-                        backgroundColor: pressed ? t.pressed : "transparent",
-                      })}
-                    >
-                      <View
-                        className="mr-3 h-8 w-8 rounded-full border-2"
-                        style={{
-                          backgroundColor: tag.color || t.faint,
-                          borderColor: t.surface,
-                        }}
-                      />
-                      <Text
-                        className="flex-1 text-base font-medium"
-                        style={{ color: t.ink }}
-                        numberOfLines={2}
-                      >
-                        {tag.name}
-                      </Text>
-                      <ChevronRight
-                        color={t.chevron}
-                        size={ICON.sm}
-                        strokeWidth={2.2}
-                      />
-                    </Pressable>
-                  </Fragment>
-                ))}
-                <Divider inset={16} />
-                <AddRow label="Добавить тег" onPress={openCreate} />
-              </>
-            ) : (
-              <View>
-                <View className="items-center px-6 pb-4 pt-6">
+          <View style={{ paddingHorizontal: GUTTER, gap: 8 }}>
+            {tags.map((tag) => (
+              <SwipeRow
+                key={tag.id}
+                label="Удалить"
+                color={t.danger}
+                icon={Trash2}
+                accessibilityLabel={`Удалить тег ${tag.name}`}
+                onAction={() => remove(tag)}
+              >
+                <Pressable
+                  onPress={() => setEditing({ mode: "edit", tag })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Тег ${tag.name}, переименовать`}
+                  accessibilityHint="Открывает название и выбор цвета"
+                  style={({ pressed }) => ({
+                    height: ROW_H,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingLeft: 16,
+                    borderRadius: t.radius.card,
+                    backgroundColor: pressed ? t.pressed : t.surface,
+                  })}
+                >
                   <View
-                    className="mb-3 h-12 w-12 items-center justify-center rounded-[10px]"
-                    style={{ backgroundColor: `${t.accent}14` }}
-                  >
-                    <Tags color={t.accent} size={ICON.md} strokeWidth={2} />
-                  </View>
+                    style={{
+                      height: 12,
+                      width: 12,
+                      borderRadius: t.radius.pill,
+                      backgroundColor: tag.color || t.faint,
+                    }}
+                  />
                   <Text
-                    className="text-center text-base font-semibold"
-                    style={{ color: t.ink }}
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.3}
+                    style={{
+                      flexShrink: 1,
+                      marginLeft: 12,
+                      fontSize: 16,
+                      color: t.ink,
+                    }}
                   >
-                    Тегов пока нет
+                    {tag.name}
                   </Text>
-                  <Text
-                    className="mt-1 text-center text-[13px] leading-5"
-                    style={{ color: t.sub }}
-                  >
-                    Создайте теги для сегментов: VIP, постоянные клиенты или
-                    особые условия обслуживания.
-                  </Text>
-                </View>
-                <Divider inset={16} />
-                <AddRow label="Добавить тег" onPress={openCreate} />
-              </View>
-            )}
-          </SectionCard>
+                </Pressable>
+              </SwipeRow>
+            ))}
+          </View>
         </ScrollView>
       )}
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="slide"
-        onRequestClose={closeEditor}
-      >
-        <KeyboardAvoidingView
-          className="flex-1"
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+      {!tagsQuery.isLoading && !tagsQuery.isError && tags.length > 0 ? (
+        <View
+          style={{ paddingHorizontal: GUTTER, paddingTop: 8, paddingBottom: 16 }}
         >
-          <Pressable
-            className="flex-1"
-            style={{ backgroundColor: t.scrim }}
-            onPress={closeEditor}
-            accessible={false}
+          <GradientButton
+            label="Добавить тег"
+            onPress={() => setEditing({ mode: "create" })}
           />
-          <View
-            accessibilityViewIsModal
-            className="rounded-t-[10px] px-5 pt-4"
-            style={{
-              backgroundColor: t.surface,
-              paddingBottom: Math.max(insets.bottom, 24),
-            }}
-          >
-            <View
-              className="mx-auto mb-4 h-1 w-9 rounded-full"
-              style={{ backgroundColor: t.separator }}
-            />
-            <Text className="mb-4 text-xl font-bold" style={{ color: t.ink }}>
-              {editing ? "Изменить тег" : "Новый тег"}
-            </Text>
-            <Field
-              label="Название"
-              value={name}
-              onChangeText={setName}
-              placeholder="Например, Постоянный клиент"
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={() => void submit()}
-              editable={!busy}
-              maxLength={80}
-            />
-            <ColorField value={color} onChange={setColor} disabled={busy} />
-            <Button
-              label={editing ? "Сохранить" : "Создать тег"}
-              onPress={() => void submit()}
-              disabled={!name.trim() || busy}
-              loading={createTag.isPending || updateTag.isPending}
-            />
-            {editing ? (
-              <Pressable
-                onPress={confirmDelete}
-                disabled={busy}
-                accessibilityRole="button"
-                accessibilityLabel={`Удалить тег ${editing.name}`}
-                className="mt-1 min-h-11 items-center justify-center px-4"
-                style={{ opacity: busy ? 0.45 : 1 }}
-              >
-                <Text
-                  className="text-base font-medium"
-                  style={{ color: t.danger }}
-                >
-                  Удалить тег
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        </View>
+      ) : null}
+
+      <TagSheet
+        editing={editing}
+        busy={busy}
+        onClose={() => (busy ? undefined : setEditing(null))}
+        onSubmit={submit}
+      />
     </Screen>
+  );
+}
+
+/** Редактор тега — канонический лист: имя с цветом одной строкой, одна
+ *  кнопка внизу. Удаление здесь не живёт: оно на кромке свайпа (закон о двух
+ *  окнах — вопрос, заданный из листа, не показался бы вовсе). */
+function TagSheet({
+  editing,
+  busy,
+  onClose,
+  onSubmit,
+}: {
+  editing: Editing | null;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (draft: { name: string; color: string }) => void;
+}) {
+  const isEdit = editing?.mode === "edit";
+  const [name, setName] = useState("");
+  const [color, setColor] = useState(DEFAULT_COLOR);
+  // key-remount через editing==null → null; локальный стейт инициализируем от
+  // editing при каждом открытии (паттерн «render-time reset», как у меток).
+  const [seeded, setSeeded] = useState<Editing | null>(null);
+  if (editing !== seeded) {
+    setSeeded(editing);
+    setName(isEdit ? editing.tag.name : "");
+    setColor(isEdit ? editing.tag.color || DEFAULT_COLOR : DEFAULT_COLOR);
+  }
+
+  return (
+    <BottomSheet
+      visible={editing !== null}
+      onClose={onClose}
+      title={isEdit ? "Тег" : "Новый тег"}
+      avoidKeyboard
+      footer={
+        <View style={{ paddingHorizontal: GUTTER }}>
+          <Button
+            label={isEdit ? "Сохранить" : "Создать тег"}
+            disabled={!name.trim() || busy}
+            loading={busy}
+            onPress={() => onSubmit({ name, color })}
+          />
+        </View>
+      }
+    >
+      <NameColorField
+        name={name}
+        onNameChange={setName}
+        color={color}
+        onColorChange={setColor}
+        autoFocus={!isEdit}
+      />
+    </BottomSheet>
   );
 }
