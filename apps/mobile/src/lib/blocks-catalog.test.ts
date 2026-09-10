@@ -151,12 +151,15 @@ describe("библиотека блоков указывает на живой �
       ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],
       ["src/features/clients/ObjectFields.tsx", "MapPinned", "точка на карте"],
       ["src/features/clients/ObjectFields.tsx", "Send", "попросить адрес"],
-      // Настройки БЛОКА — ползунки; настройки СПИСКА в шапке шторки —
-      // шестерёнка. Владелец присылал картинкой именно ползунки.
+      // ЗНАЧОК НАСТРОЙКИ ОДИН — ползунки. Здесь стояло «настройки блока —
+      // ползунки, настройки списка — шестерёнка»; владелец снял это различие
+      // 2026-09-10, глядя на лист категорий: «не шестерёнка, а вот эти
+      // маленькие тумблеры». Обе двери ведут на страницу справочника, и
+      // разный значок обещал разницу, которой нет.
       ["src/features/clients/ObjectFields.tsx", "Settings2", "настройки блока"],
       ["src/features/appointments/EventTypeBlock.tsx", "Settings2", "настройки блока"],
-      ["src/components/ui/PickerSheet.tsx", "Settings", "настройки списка"],
-      ["src/components/ui/ValuePickerSheet.tsx", "Settings", "настройки списка"],
+      ["src/components/ui/PickerSheet.tsx", "Settings2", "настройки списка"],
+      ["src/components/ui/ValuePickerSheet.tsx", "Settings2", "настройки списка"],
     ];
     for (const [path, icon, role] of expected) {
       const source = readFileSync(resolve(APP, path), "utf8");

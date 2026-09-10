@@ -1,5 +1,5 @@
 import { Pressable } from "react-native";
-import { Settings } from "lucide-react-native";
+import { Settings2 } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";
@@ -44,7 +44,7 @@ export function PickerSheet({
   /** Что выбрано сейчас. У выбора «с нуля» (тип события новой записи) его
    *  нет; у правки существующей операции без него не видно, что стоит. */
   selectedId?: string | null;
-  /** Шестерёнка справа от заголовка — вход на страницу этого списка. */
+  /** Значок справа от заголовка — вход на страницу этого списка. */
   onSettings?: () => void;
   settingsLabel?: string;
   onClose: () => void;
@@ -78,7 +78,11 @@ export function PickerSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings color={t.sub} size={20} strokeWidth={2} />
+            {/* ТОТ ЖЕ ЗНАЧОК, ЧТО В ШАПКАХ ПАНЕЛЕЙ (владелец 2026-08-15:
+                «справа поставь эти две палочки с кружочками»; 2026-09-10:
+                «не шестерёнка, а вот эти маленькие тумблеры»). Шестерёнка
+                в продукте больше нигде не значит «настроить список». */}
+            <Settings2 color={t.sub} size={20} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }

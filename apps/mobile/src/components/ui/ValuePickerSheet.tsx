@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Circle, Settings } from "lucide-react-native";
+import { Circle, Settings2 } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -168,7 +168,7 @@ export function ValuePickerSheet({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Settings color={t.sub} size={20} strokeWidth={2} />
+            <Settings2 color={t.sub} size={20} strokeWidth={2} />
           </Pressable>
         ) : undefined
       }
