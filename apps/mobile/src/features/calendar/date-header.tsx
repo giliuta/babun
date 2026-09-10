@@ -86,9 +86,8 @@ export function DateCell({
           {dow}
         </Text>
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             height: 28,
             fontSize: 24,
             lineHeight: 28,
@@ -136,9 +135,8 @@ export function DateCell({
           {dow}
         </Text>
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             height: 27,
             fontSize: 22,
             lineHeight: 27,
@@ -160,9 +158,8 @@ export function DateCell({
       </View>
       {count > 0 ? (
         <Text
-          className="tabular-nums"
           maxFontSizeMultiplier={1.2}
-          style={{
+          style={{ fontVariant: ["tabular-nums"],
             position: "absolute",
             top: 2,
             right: 4,

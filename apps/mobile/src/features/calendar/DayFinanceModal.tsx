@@ -305,9 +305,8 @@ export function DayFinanceModal({
                         ]}
                       >
                         <Text
-                          className="tabular-nums"
                           maxFontSizeMultiplier={1.3}
-                          style={{ fontSize: 13, color: t.sub }}
+                          style={{ fontVariant: ["tabular-nums"], fontSize: 13, color: t.sub }}
                         >
                           {a.time_start}
                         </Text>
@@ -320,9 +319,8 @@ export function DayFinanceModal({
                           {clientName(a)}
                         </Text>
                         <Text
-                          className="tabular-nums"
                           maxFontSizeMultiplier={1.3}
-                          style={{
+                          style={{ fontVariant: ["tabular-nums"],
                             fontSize: 15,
                             fontWeight: "600",
                             color: t.warning,
@@ -390,9 +388,8 @@ function ExtrasSection({
                   {e.name}
                 </Text>
                 <Text
-                  className="tabular-nums"
                   maxFontSizeMultiplier={1.3}
-                  style={{ fontSize: 15, fontWeight: "600", color: tone }}
+                  style={{ fontVariant: ["tabular-nums"], fontSize: 15, fontWeight: "600", color: tone }}
                 >
                   {isIncome ? "" : "−"}
                   {formatEUR(e.amount)}
@@ -512,8 +509,7 @@ function AddExtraForm({
           placeholder="0,00"
           placeholderTextColor={t.placeholder}
           keyboardType="decimal-pad"
-          className="tabular-nums"
-          style={{ ...inputStyle, width: 88, textAlign: "right" }}
+          style={{ fontVariant: ["tabular-nums"], ...inputStyle, width: 88, textAlign: "right" }}
         />
       </View>
       <View className="mt-2 flex-row" style={{ gap: 8 }}>
@@ -607,9 +603,8 @@ function Row({
         {label}
       </Text>
       <Text
-        className="tabular-nums"
         maxFontSizeMultiplier={1.3}
-        style={{ fontSize: 15, fontWeight: "600", color }}
+        style={{ fontVariant: ["tabular-nums"], fontSize: 15, fontWeight: "600", color }}
       >
         {formatEUR(v)}
       </Text>

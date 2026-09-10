@@ -272,8 +272,8 @@ export default function TemplatesScreen() {
                   </Text>
                   </View>
                   <Text
-                    className="mr-2 text-base font-bold tabular-nums"
-                    style={{ color: item.kind === "expense" ? t.danger : t.success }}
+                    className="mr-2 text-base font-bold"
+                    style={{ fontVariant: ["tabular-nums"], color: item.kind === "expense" ? t.danger : t.success }}
                   >
                     {formatEUR(Number(item.amount))}
                   </Text>

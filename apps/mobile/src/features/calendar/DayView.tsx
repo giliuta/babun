@@ -876,8 +876,10 @@ export function TimeRail({
         <View key={h} style={{ flex: 1 }}>
           {nearNow(h) ? null : (
             <Text
-              style={[labelStyle, { top: h === startHour ? 0 : -7 }]}
-              className="tabular-nums"
+              style={[
+                labelStyle,
+                { top: h === startHour ? 0 : -7, fontVariant: ["tabular-nums"] },
+              ]}
               maxFontSizeMultiplier={1.3}
             >
               {`${pad2(h % 24)}:00`}
@@ -889,8 +891,7 @@ export function TimeRail({
       <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 0 }}>
         {nearNow(endHour) ? null : (
           <Text
-            style={[labelStyle, { top: -7 }]}
-            className="tabular-nums"
+            style={[labelStyle, { top: -7, fontVariant: ["tabular-nums"] }]}
             maxFontSizeMultiplier={1.3}
           >
             {endHour === 24 ? "24:00" : `${pad2(endHour % 24)}:00`}
@@ -914,9 +915,13 @@ export function TimeRail({
           }}
         >
           <Text
-            className="tabular-nums"
             maxFontSizeMultiplier={1.2}
-            style={{ fontSize: 10, fontWeight: "700", color: t.onAccent }}
+            style={{
+              fontSize: 10,
+              fontWeight: "700",
+              color: t.onAccent,
+              fontVariant: ["tabular-nums"],
+            }}
           >
             {minToHM(nowInWin)}
           </Text>
