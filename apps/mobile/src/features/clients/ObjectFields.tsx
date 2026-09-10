@@ -278,8 +278,13 @@ export function ObjectFields({
             onChangeText={(v) => onChange({ note: v })}
             onBlur={onCommit}
             multiline
-            accessibilityLabel="Заметка об объекте"
-            placeholder="Как войти, код, кто встречает…"
+            accessibilityLabel="Заметка объекта"
+            // ПОДСКАЗКА НАЗЫВАЕТ ПОЛЕ, А НЕ ОБЪЯСНЯЕТ ПРИМЕРОМ (владелец
+            // 2026-09-10: «тут должно быть „заметка", а внизу — „заметка
+            // объекта"»). Пример «как войти, код, кто встречает…» читался как
+            // уже введённый текст. В записи это поле давно подписано так же —
+            // лист объекта был единственным местом с примером.
+            placeholder="Заметка объекта"
             placeholderTextColor={t.placeholder}
             selectionColor={t.accent}
             keyboardAppearance="light"
