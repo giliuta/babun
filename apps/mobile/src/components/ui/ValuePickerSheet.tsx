@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { Circle, Settings2 } from "lucide-react-native";
+import { Circle, Settings2, type LucideIcon } from "lucide-react-native";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -43,6 +43,11 @@ export interface ValueOption {
   disabled?: boolean;
   /** Точка-метка слева: цвет категории/счёта. Без цвета точки нет. */
   color?: string | null;
+  /** ЗНАЧОК СУЩНОСТИ вместо безымянной точки. Счёт узнают по значку и цвету
+   *  в списке, в панели и в карточке — а в шаге «Откуда/Куда» он до
+   *  2026-09-12 превращался в строку текста (аудит счетов). Без значка строка
+   *  с цветом по-прежнему рисует кружок. */
+  icon?: LucideIcon;
 }
 
 /** Список вариантов одной карточкой. Правило под ней объясняет погашенное. */
@@ -84,7 +89,7 @@ export function ValueOptionList({
             title={o.label}
             subtitle={o.hint}
             color={o.color ?? undefined}
-            icon={o.color ? Circle : undefined}
+            icon={o.icon ?? (o.color ? Circle : undefined)}
             value={o.value}
             disabled={o.disabled}
             selected={o.id === selectedId}

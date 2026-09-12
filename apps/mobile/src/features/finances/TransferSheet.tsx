@@ -13,6 +13,7 @@ import { transferValidationError } from "@babun/shared/local/finance/integrity";
 import { todayYmd } from "@/features/invoices/format";
 import { formatYMD, parseYMD } from "@/features/appointments/helpers";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { accountIcon } from "./account-ui";
 import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -480,6 +481,11 @@ export function TransferSheet({
                   id: account.id,
                   label: account.name,
                   value: money(account.balance, currency),
+                  // ВИД СЧЁТА ЕДЕТ В ВЫБОР. В списке и в карточке счёт
+                  // узнаётся цветом и значком, а в шаге «куда уходят деньги»
+                  // он был голой строкой — единственное место, где вид терялся.
+                  color: account.color,
+                  icon: accountIcon(account),
                 }))}
                 selectedId={step === "from" ? fromId : toId}
                 // «Ничего не выбрано» здесь не значение, а тупик: повторный тап
