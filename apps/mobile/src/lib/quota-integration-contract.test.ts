@@ -48,11 +48,26 @@ describe("mobile create quota integration", () => {
     assert.match(runtime, /tenantId:\s*opts\.tenantId/);
     assert.match(providers, /startSyncRuntime\(tenantId\)/);
     assert.match(providers, /\[role, tenantId\]/);
-    assert.match(switching, /if \(!switched\) \{\s*resumeRuntime\(\)/);
-    // Пауза синхронизации, чистка и сверка токена — всё в одном месте.
-    ordered(switching, "pauseSyncRuntimeForTenantSwitch", "await wipeTenantScopedData");
-    ordered(switching, "activate_tenant", "refreshSession");
-    ordered(switching, "refreshSession", "Сессия не переключилась");
+
+    // КОМПАНИЯ МЕНЯЕТСЯ БЕЗ СЕТИ, И ПОРЯДОК ЗДЕСЬ СТОРОЖИТ СМЫСЛ.
+    //
+    // Прежние строки караулили механику, которой больше нет: паузу
+    // синхронизации, `refreshSession` и сверку «сессия не переключилась».
+    // Всё трое существовали потому, что активная компания жила в токене и
+    // менялась двумя поездками на сервер. Теперь компанию называет заголовок
+    // запроса, а сервер подтверждает её членством — ждать нечего, и паузы не
+    // нужны: местный кэш не сносится, а строки в нём разложены по компаниям.
+    //
+    // Сторожим то, что осталось важным:
+    ordered(switching, "setActiveTenantId", "await wipeTenantScopedData");
+    assert.match(switching, /keepLocalCache:\s*true/);
+    // `activate_tenant` живёт, но ТОЛЬКО в фоне: стоит вернуть его на путь
+    // экрана — и пять секунд ожидания возвращаются вместе с ним.
+    assert.match(switching, /void catchUpTokenClaim\(/);
+    assert.ok(
+      !/await catchUpTokenClaim\(/.test(switching),
+      "догоняющий claim не должен задерживать экран — он в фоне",
+    );
     assert.match(invitations, /await switchTenant\(tenantId\)/);
     assert.ok(
       !invitations.includes("activate_tenant"),

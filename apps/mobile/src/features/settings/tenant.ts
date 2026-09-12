@@ -140,13 +140,21 @@ function withRoleLookupTimeout<T>(work: PromiseLike<T>): Promise<T> {
   ]).finally(() => clearTimeout(timer));
 }
 
+/** Ключ роли — ОДНО ТЕЛО НА ПРОДУКТ. Переход в другую компанию кладёт роль
+ *  сюда заранее (она приезжает вместе с лентой календарей), иначе каждый экран
+ *  с правами показывает крутилку, пока `current_user_role` летит на сервер.
+ *  Набирать тот же массив второй раз в `switch-tenant.ts` нельзя: разъехавшийся
+ *  ключ запроса выглядит как «роль не применилась» и ловится неделю. */
+export const currentRoleQueryKey = (tenantId: string | null) =>
+  ["current-role", tenantId] as const;
+
 // Role of the signed-in user within the active tenant (tenant_members via
 // the current_user_role() RPC from 20260430_008). RLS gates tenants UPDATE
 // to owner only — screens use this to disable what would fail anyway.
 export function useCurrentRole() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["current-role", tenantId],
+    queryKey: currentRoleQueryKey(tenantId),
     enabled: !!tenantId,
     // Security gates need a terminal result even on a cold offline start.
     // Default networkMode would park this query in pending/paused forever;

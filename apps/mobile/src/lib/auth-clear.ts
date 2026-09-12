@@ -5,6 +5,12 @@ import { queryClient } from "@/lib/query-client";
 import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
 import {
+  ACTIVE_TENANT_KEY_PREFIX,
+  forgetActiveTenantId,
+  restoreActiveTenantId,
+  setActiveTenantId,
+} from "@/lib/active-tenant";
+import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
 } from "@/lib/notifications";
@@ -39,6 +45,12 @@ const TENANT_PREFIXES = ["babun-", "babun2:", "babun:", "calendar."];
 const LAST_USER_KEY = "babun:auth:last-user-id";
 const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
 
+// Выбранная компания тоже переживает чистку: при переходе она и есть то, ради
+// чего переход случился, — стереть её значит вернуть человека туда, откуда он
+// ушёл. Аккаунт при этом меняется РЕДКО, и тогда ключ уносит ветка ниже
+// (`handleAuthEvent`), а не общий подмёт.
+const KEEP_PREFIXES = [ACTIVE_TENANT_KEY_PREFIX];
+
 // Supabase publishes SIGNED_OUT before an awaiting UI handler necessarily
 // finishes its local cleanup. SessionProvider waits on this barrier so the
 // login tree cannot mount (and another account cannot sign in) while the old
@@ -65,6 +77,7 @@ function wipeFastStores(keepSubscribers: boolean): void {
   const storage = getStorage();
   for (const key of storage.list()) {
     if (KEEP_KEYS.has(key)) continue;
+    if (KEEP_PREFIXES.some((p) => key.startsWith(p))) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
   if (keepSubscribers) void queryClient.resetQueries();
@@ -77,13 +90,51 @@ function wipeFastStores(keepSubscribers: boolean): void {
  *
  *  `keepSubscribers` обязателен, когда чистка идёт ПОСРЕДИ работающей сессии
  *  (тот самый переход): иначе смонтированные экраны застынут на «загрузке»
- *  навсегда — объяснение над `wipeFastStores`. */
+ *  навсегда — объяснение над `wipeFastStores`.
+ *
+ *  `keepLocalCache` — ТОЖЕ про переход, и это про сохранность работы. Разбор
+ *  над `cacheClearAll` ниже. */
 export async function wipeTenantScopedData(
-  opts: { keepSubscribers?: boolean } = {},
+  opts: { keepSubscribers?: boolean; keepLocalCache?: boolean } = {},
 ): Promise<void> {
   await queryClient.cancelQueries();
-  await clearAllBabunNotifications();
+
+  // НАТИВНЫЕ УВЕДОМЛЕНИЯ ГАСНУТ ПЕРВЫМИ — иначе на локскрине остаются имена
+  // клиентов компании, из которой человек уже ушёл. Это условие не обсуждается
+  // и держится контрактом `notification-privacy-contract.test.ts`.
+  //
+  // А вот СПИСОК напоминаний при переходе остаётся жив, и это правка бага:
+  // `clearAllBabunNotifications` уносит реестр целиком, то есть переключение в
+  // другую компанию безвозвратно стирало напоминания, выставленные руками, — у
+  // ОБЕИХ компаний сразу. Человек возвращался к себе, а «позвонить клиенту в
+  // 9:00» больше не существовало. `suspend` снимает доставку, но оставляет
+  // список, и он восстанавливается, как только компания снова открыта.
+  if (opts.keepLocalCache) await suspendAllBabunNotifications();
+  else await clearAllBabunNotifications();
+
   wipeFastStores(opts.keepSubscribers ?? false);
+
+  // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
+  //
+  // `cacheClearAll()` бьёт по ВСЕМ пяти таблицам разом, а строки в них уже
+  // разложены по компаниям: `clients`, `appointments` и `tags` несут колонку
+  // `tenant_id` с индексом, и запрос другой компании их и так не читает.
+  // Значит снос ничего не защищает — он только заставляет заново скачать всё
+  // при возврате назад. Именно это владелец чувствует как «лаг» на ВТОРОМ
+  // переключении: первое качает одну компанию, второе — снова обе.
+  //
+  // Отдельно про `sync_queue`, и это уже не про скорость, а про потерю
+  // работы. Очередь несохранённых операций ГЛОБАЛЬНА, и снос уносил из неё всё
+  // подряд, включая то, что человек только что набрал в прежней компании.
+  // Защитой это не было никогда: `sync/replayer.ts` сам сверяет
+  // `payload.tenant_id` с активной компанией и чужие операции не выгружает, а
+  // ОСТАВЛЯЕТ в очереди (tenant-gate, offline-plan risk #1). То есть граница
+  // между компаниями держится у выгрузки, а чистка лишь уничтожала работу до
+  // того, как её успели отправить.
+  //
+  // На выходе из аккаунта снос остаётся обязательным: там устройство не имеет
+  // права помнить ни строки — это и есть межтенантная защита.
+  if (opts.keepLocalCache) return;
   try {
     await cacheClearAll();
   } catch {
@@ -165,6 +216,11 @@ export async function handleAuthEvent(
   session: Session | null,
 ): Promise<void> {
   if (event === "SIGNED_OUT") {
+    // Выбор компании гасится в ПАМЯТИ немедленно, ещё до чистки: следующий
+    // запрос не имеет права уйти с заголовком компании вышедшего человека.
+    // Сам ключ в MMKV переживает подмёт намеренно (`KEEP_PREFIXES`) — он
+    // именной, и вернувшийся в свой аккаунт попадает туда, где был.
+    forgetActiveTenantId();
     await suspendAllBabunNotifications();
     await waitForIntentionalSignOutWipe();
     return;
@@ -178,6 +234,32 @@ export async function handleAuthEvent(
   if (!next) return;
   const storage = getStorage();
   const prev = storage.getRaw(LAST_USER_KEY);
-  if (prev && prev !== next) await wipeTenantScopedData();
+  if (prev && prev !== next) {
+    // СМЕНИЛСЯ ЧЕЛОВЕК — не компания. Здесь чистится всё, включая SQLite и
+    // очередь: устройство не имеет права помнить ни строки прежнего аккаунта.
+    // И выбор компании прежнего человека тоже уходит — его ключ именной,
+    // поэтому подметается адресно, а не общим префиксом.
+    forgetActiveTenantId();
+    for (const key of storage.list(ACTIVE_TENANT_KEY_PREFIX)) {
+      if (key !== `${ACTIVE_TENANT_KEY_PREFIX}${next}`) storage.remove(key);
+    }
+    await wipeTenantScopedData();
+  }
   if (prev !== next) storage.setRaw(LAST_USER_KEY, next);
+
+  // УСТРОЙСТВО ЗАПОМИНАЕТ СВОЙ ВЫБОР С ПЕРВОГО ЖЕ ЗАПУСКА.
+  //
+  // Без этой строки телефон, который ещё ни разу не переключался, не имеет
+  // своего выбора и читает компанию из токена — а токен один на аккаунт.
+  // Значит переключение на планшете уводило бы и телефон: ровно та жалоба, от
+  // которой мы уходим. Поэтому первый вход закрепляет на устройстве ту
+  // компанию, которая в токене сейчас, и дальше устройство живёт само.
+  if (!restoreActiveTenantId(next)) {
+    const claimed = (
+      session?.user?.app_metadata as { tenant_id?: unknown } | undefined
+    )?.tenant_id;
+    if (typeof claimed === "string" && claimed) {
+      setActiveTenantId(next, claimed);
+    }
+  }
 }

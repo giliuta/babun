@@ -9,11 +9,22 @@ const here = dirname(fileURLToPath(import.meta.url));
 describe("notification privacy contract", () => {
   test("clears native notifications before tenant-scoped caches", () => {
     const source = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
-    // Порядок, а не сигнатура: у `wipeFastStores` появился режим
-    // (`keepSubscribers`) для чистки посреди сессии, и жёсткие скобки в
-    // образце ловили бы имя, а не смысл. Смысл один: нативные уведомления
-    // гаснут ДО того, как уходят кэши — иначе на локскрине остаются имена
-    // клиентов компании, из которой человек уже вышел.
+    // Порядок, а не сигнатура: у `wipeFastStores` появились режимы
+    // (`keepSubscribers`, `keepLocalCache`) для чистки посреди сессии, и
+    // жёсткие скобки в образце ловили бы имя, а не смысл. Смысл один:
+    // нативные уведомления гаснут ДО того, как уходят кэши — иначе на
+    // локскрине остаются имена клиентов компании, из которой человек уже вышел.
+    //
+    // ГАСИТ ЛЮБАЯ ИЗ ДВУХ, и разница между ними НЕ про приватность: `clear`
+    // ещё и уносит список напоминаний, `suspend` — только доставку. На выходе
+    // из аккаунта нужен `clear`, при переходе в другую компанию — `suspend`,
+    // иначе переключение стирает выставленные руками напоминания обеих
+    // компаний навсегда. Контракт сторожит ОЧЕРЁДНОСТЬ, а выбор режима —
+    // в `wipeTenantScopedData`.
+    assert.match(
+      source,
+      /await suspendAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
+    );
     assert.match(
       source,
       /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
