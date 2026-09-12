@@ -3,7 +3,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { switchTenant } from "./switch-tenant";
-import { useTenant } from "./tenant";
 import { USER_ROLES, type UserRole } from "./role-policy";
 
 // КАЛЕНДАРИ ЧЕЛОВЕКА ВО ВСЕХ ЕГО КОМПАНИЯХ.
@@ -159,14 +158,22 @@ export function useCalendarChips(opts: {
   pendingId: string | null;
 } {
   const { data: myCalendars = [] } = useMyCalendars();
-  const tenant = useTenant();
   const switching = useSwitchWorkspace();
   // Имя активной компании нужно, чтобы поставить СВОИ чипы на их место в общем
-  // порядке. Лента знает его сама; запасной путь — сама компания, на случай
-  // когда в активной компании нет ни одного неархивного календаря и в ленте
-  // её строки нет вовсе.
+  // порядке. Берём его из ленты, которая и так загружена.
+  //
+  // ЗАПАСНОГО ПУТИ ЧЕРЕЗ `useTenant()` ЗДЕСЬ НАМЕРЕННО НЕТ. Он выглядел
+  // безобидно, а стоил поездки на сервер (`current_tenant_profile_safe`) на
+  // ДВУХ экранах сразу — календаре и финансах, — причём именно на пути смены
+  // компании, где каждый лишний запрос человек чувствует. Платить сетью на
+  // горячем пути ради имени, которое нужно лишь когда в активной компании нет
+  // ни одного неархивного календаря, — плохая цена.
+  //
+  // Имени нет — свои чипы встают в начало ряда (пустая строка сортируется
+  // первой). Это ровно то поведение, что было до правки порядка, и наступает
+  // оно только в компании, где все календари архивные.
   const activeTenantName =
-    myCalendars.find((c) => c.isActive)?.tenantName ?? tenant.data?.name ?? "";
+    myCalendars.find((c) => c.isActive)?.tenantName ?? "";
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const foreign = myCalendars.filter((c) => !c.isActive);
