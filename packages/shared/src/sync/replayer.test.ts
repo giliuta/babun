@@ -634,7 +634,7 @@ describe("replayer — гейт по компании", () => {
 
     await kickReplayer({ supabase: asSupabase(client), currentTenantId });
 
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
     expect(await queueDepth()).toBe(1);
   });
 
@@ -650,7 +650,75 @@ describe("replayer — гейт по компании", () => {
 
     await kickReplayer({ supabase: asSupabase(client) });
 
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
     expect(await queueDepth()).toBe(0);
+  });
+});
+
+// ─── Удаление отчитывается строками ───────────────────────────────────
+// `delete()` без `select()` возвращает ошибку только когда сервер ОТВЕТИЛ
+// ошибкой. «Политика не дала удалить» ошибкой не считается: под RLS строка
+// просто не находится. Ноль затронутых строк приезжал как успех — операция
+// уходила из очереди, а запись оставалась жить. С правами по календарям
+// (`view` без `edit_all`) этот случай стал обычным, а не экзотикой.
+
+describe("replayer — удаление отчитывается строками", () => {
+  test("строка удалена — успех, лишней проверки не делаем", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [{ id: UUID_A }], error: null }
+        : { data: null, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls.filter((c) => c.op === "select")).toHaveLength(0);
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("ноль строк и строки не видно — идемпотентно, это успех", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    // Удалили с другого устройства: удалять нечего и видеть нечего.
+    const { client } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    // Тревоги быть не должно: два устройства у одного человека — норма.
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("ноль строк, а строка ВИДНА — сервер отказал, операция остаётся", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [], error: null }
+        : { data: { id: UUID_A }, error: null },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].attempts).toBe(1);
+    expect(left[0].last_error ?? "").toContain("нет прав");
   });
 });
