@@ -12,6 +12,7 @@ import {
 } from "@/lib/active-tenant";
 import { isTenantScopedKey } from "@/lib/tenant-prefs";
 import { keyNamesKnownTenant } from "@/lib/tenant-query-keys";
+import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
@@ -161,7 +162,20 @@ export async function wipeTenantScopedData(
     knownTenantIds?: readonly string[];
   } = {},
 ): Promise<void> {
-  await queryClient.cancelQueries();
+  // ОТМЕНА НЕ ЖДЁТСЯ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ ПЕРЕХОДА.
+  //
+  // `cancelQueries()` возвращает обещание, которое исполняется, когда УЖЕ
+  // ОТПРАВЛЕННЫЕ запросы отменятся или доедут. Запросы supabase сигнала отмены
+  // не принимают, поэтому «отменятся» для них означает «доедут»: `await` здесь
+  // держал переход до конца летящих сейчас поездок. Замер на симуляторе —
+  // 695 мс из 981 мс всего перехода, и это на быстрой сети; на телефоне в поле
+  // столько же будет стоить одна поездка.
+  //
+  // Ждать незачем. Поздний ответ компании, которую мы покидаем, ложится в
+  // ключ, НАЗЫВАЮЩИЙ её, — под новой компанией такой ключ никто не читает, а
+  // мы его теперь и не сносим. Ключи без компании сносятся ниже, и поздний
+  // ответ в снесённый запрос никто не отрисует.
+  void queryClient.cancelQueries();
 
   // НАТИВНЫЕ УВЕДОМЛЕНИЯ ГАСНУТ ПЕРВЫМИ — иначе на локскрине остаются имена
   // клиентов компании, из которой человек уже ушёл. Это условие не обсуждается
@@ -173,8 +187,9 @@ export async function wipeTenantScopedData(
   // ОБЕИХ компаний сразу. Человек возвращался к себе, а «позвонить клиенту в
   // 9:00» больше не существовало. `suspend` снимает доставку, но оставляет
   // список, и он восстанавливается, как только компания снова открыта.
-  if (opts.keepLocalCache) await suspendAllBabunNotifications();
-  else await clearAllBabunNotifications();
+  if (notificationsForWipe(opts) === "clear") {
+    await clearAllBabunNotifications();
+  }
 
   wipeFastStores(
     opts.keepSubscribers ?? false,

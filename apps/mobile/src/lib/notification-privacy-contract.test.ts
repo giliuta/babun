@@ -4,31 +4,38 @@ import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { notificationsForWipe } from "./wipe-plan";
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 describe("notification privacy contract", () => {
-  test("clears native notifications before tenant-scoped caches", () => {
+  test("ВЫХОД ИЗ АККАУНТА: нативные гаснут ДО кэшей, и список тоже уходит", () => {
     const source = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
-    // Порядок, а не сигнатура: у `wipeFastStores` появились режимы
-    // (`keepSubscribers`, `keepLocalCache`) для чистки посреди сессии, и
-    // жёсткие скобки в образце ловили бы имя, а не смысл. Смысл один:
-    // нативные уведомления гаснут ДО того, как уходят кэши — иначе на
-    // локскрине остаются имена клиентов компании, из которой человек уже вышел.
-    //
-    // ГАСИТ ЛЮБАЯ ИЗ ДВУХ, и разница между ними НЕ про приватность: `clear`
-    // ещё и уносит список напоминаний, `suspend` — только доставку. На выходе
-    // из аккаунта нужен `clear`, при переходе в другую компанию — `suspend`,
-    // иначе переключение стирает выставленные руками напоминания обеих
-    // компаний навсегда. Контракт сторожит ОЧЕРЁДНОСТЬ, а выбор режима —
-    // в `wipeTenantScopedData`.
-    assert.match(
-      source,
-      /await suspendAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
-    );
+    // ЭТО ЕДИНСТВЕННОЕ, РАДИ ЧЕГО КОНТРАКТ ПИСАЛСЯ: на устройстве может
+    // оказаться ДРУГОЙ человек, и имена чужих клиентов не имеют права остаться
+    // на локскрине. Гасить надо ДО того, как уйдут кэши, иначе между двумя
+    // шагами остаётся окно.
     assert.match(
       source,
       /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
     );
+  });
+
+  test("ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ уведомления НЕ трогает", () => {
+    // Требование снято ОСОЗНАННО, и это не ослабление приватности: человек тот
+    // же и состоит в обеих компаниях. Напоминание про клиента одной фирмы,
+    // пришедшее пока он смотрит другую, — его собственное напоминание.
+    //
+    // Стоило оно двух вещей: 272 мс из 981 мс перехода (три нативных вызова в
+    // общей очереди планировщика) и снятых с расписания напоминаний ОБЕИХ
+    // компаний, которые возвращались только у той, чьи данные потом
+    // загрузились.
+    //
+    // Проверяется РЕШЕНИЕМ, а не текстом файла: правило вынесено в лист
+    // `wipe-plan.ts` именно для того, чтобы его можно было вызвать в тесте.
+    assert.equal(notificationsForWipe({ keepLocalCache: true }), "none");
+    assert.equal(notificationsForWipe({ keepLocalCache: false }), "clear");
+    assert.equal(notificationsForWipe({}), "clear");
   });
 
   test("suspends native PII delivery for every signed-out startup without erasing transient state", () => {
