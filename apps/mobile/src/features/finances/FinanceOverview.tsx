@@ -10,6 +10,8 @@ import {
   pluralRu,
 } from "@babun/shared/common/utils/plural-ru";
 import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useToast } from "@/components/ui/Toast";
+import { useCalendarChips } from "@/features/settings/workspaces";
 import { useThemeColors } from "@/theme/colors";
 import type { Team } from "@/features/reference/queries";
 import { periodDates, periodTitle, type Period } from "./period";
@@ -182,6 +184,13 @@ export function FinanceOverview({
   // именно — говорит выбранный чип прямо над плиткой.
   const accountsTitle = "Счета";
 
+  const toast = useToast();
+  const calendarChips = useCalendarChips({
+    own: teams,
+    onPickOwn: onScopeChange,
+    onSwitchError: (message) => toast(message, "error"),
+  });
+
   return (
     <View>
       {/* ОДНА ЛЕНТА НА ПРОДУКТ (`ScopeChips`, DESIGN-SYSTEM.md §5). Здесь
@@ -194,15 +203,16 @@ export function FinanceOverview({
           Чипа «Все» лента не показывает вовсе (владелец 2026-08-10/08-11):
           деньги в продукте всегда чьи-то, а итог по компании живёт в сводках
           Кабинета. Общий чип показывал сумму, за которую никто не отвечает. */}
+      {/* КАЛЕНДАРИ ДРУГИХ КОМПАНИЙ СТОЯТ В ТОМ ЖЕ РЯДУ (владелец 2026-09-12:
+          «в финансах соответственно то же самое»). Правила ленты — общие с
+          календарём, одним телом (`useCalendarChips`): что считать чужим, как
+          склеен идентификатор и что делает тап. Две копии этих правил разошлись
+          бы на первой же правке, и деньги разъехались бы с расписанием. */}
       <ScopeChips
-        items={teams.map((team) => ({
-          id: team.id,
-          name: team.name,
-          color: team.color,
-        }))}
+        items={calendarChips.items}
         activeId={scopeTeamId}
         seam={false}
-        onSelect={onScopeChange}
+        onSelect={calendarChips.pick}
       />
 
       {/* period row — NAME opens the preset list, DATES open the wheels */}

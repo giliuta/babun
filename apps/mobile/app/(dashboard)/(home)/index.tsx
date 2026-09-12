@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Linking, Pressable, Text, View } from "react-native";
+import { Linking, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -152,11 +152,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
-import {
-  hasForeignCalendars,
-  useMyCalendars,
-} from "@/features/settings/workspaces";
-import { WorkspaceSheet } from "@/features/calendar/WorkspaceSheet";
+import { useCalendarChips } from "@/features/settings/workspaces";
 import {
   useCities,
   useCreateTeam,
@@ -517,14 +513,13 @@ export default function CalendarTab() {
   // Стабильная ссылка для колбэков с пустыми зависимостями.
   const rememberViewRef = useRef(rememberView);
   rememberViewRef.current = rememberView;
-  // КАЛЕНДАРИ ДРУГИХ КОМПАНИЙ. Человек может состоять не только в своей:
-  // «устроился к кому-то — ему добавляют календарь компании, и у него два
-  // календаря: свой и рабочий» (владелец 2026-09-12). Лента показывает
-  // календари АКТИВНОЙ компании, а дверь в остальные появляется только у
-  // того, у кого они есть: орган, которому нечего показать, не рисуется.
-  const { data: myCalendars = [] } = useMyCalendars();
-  const hasOtherWorkspaces = hasForeignCalendars(myCalendars);
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  // КАЛЕНДАРИ ДРУГИХ КОМПАНИЙ СТОЯТ В ТОЙ ЖЕ ЛЕНТЕ (владелец 2026-09-12:
+  // «не кнопкой „другие“ — в ряд добавляется, и я уже выбираю»).
+  //
+  // Человек думает календарями, а не компаниями: свой, рабочий, ещё один —
+  // один ряд, один выбор. Что под чужим чипом лежит переход в другую
+  // компанию (пауза синхронизации, чистка кэша, новый токен) — наша работа,
+  // и человеку про неё знать незачем.
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
@@ -558,6 +553,19 @@ export default function CalendarTab() {
     );
     return retired.length > 0 ? [...teams, ...retired] : teams;
   }, [teams, allTeamsForCalendar, appts]);
+
+  // Лента календарей: свои плюс чужие, одним рядом. Правила склейки и
+  // переход в другую компанию живут в `useCalendarChips` — та же лента стоит
+  // над финансами, и двух её копий быть не должно.
+  const { items: chipItems, pick: pickCalendar } = useCalendarChips({
+    own: calendarTeams,
+    onPickOwn: (teamId) => {
+      setMoving(null);
+      setTeamChoice(teamId);
+      rememberView({ teamId });
+    },
+    onSwitchError: (message) => toast(message, "error"),
+  });
 
   // Active team calendar. Derived (not stored) so it self-heals: falls back
   // to the first team until the user picks one, and re-anchors if the chosen
@@ -2187,41 +2195,18 @@ export default function CalendarTab() {
     // «Создать календарь» из-за упавшего запроса (риск дубля команды).
     return (
       <Screen>
-        {/* ДВЕРЬ В ДРУГИЕ КОМПАНИИ ОСТАЁТСЯ НА МЕСТЕ ДАЖЕ ЗДЕСЬ. Мастер, у
-            которого в этой компании ещё нет календаря, иначе оказывается в
-            тупике: экран говорит «попросите владельца», и выйти из компании
-            нечем — переключатель живёт в ленте, а ленты на этом экране нет.
-            Поймано на себе 2026-09-12 при первой же проверке перехода.
-            Лента показывается ПУСТОЙ (чипов нет, календарей тоже) — она здесь
-            не список, а место, где у человека всегда лежит выход. */}
-        {hasOtherWorkspaces ? (
+        {/* ЛЕНТА ОСТАЁТСЯ И ЗДЕСЬ. Мастер, которому в этой компании ещё не
+            выдали календарь, иначе оказывается в тупике: экран говорит
+            «попросите владельца», а выйти нечем — свои календари живут в
+            ленте, а ленты на этом экране не было. Поймано на себе 2026-09-12
+            при первой же проверке перехода. Здесь в ленте стоят только чужие
+            чипы (своих в этой компании нет) — и это ровно то, что человеку
+            нужно: дорога к своему календарю. */}
+        {chipItems.length > 0 ? (
           <ScopeChips
-            items={[]}
+            items={chipItems}
             activeId={null}
-            trailing={
-              <Pressable
-                onPress={() => {
-                  haptics.tap();
-                  setWorkspaceOpen(true);
-                }}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="Календари других компаний"
-                style={({ pressed }: { pressed: boolean }) => ({
-                  minHeight: 44,
-                  justifyContent: "center",
-                  opacity: pressed ? 0.5 : 1,
-                })}
-              >
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-                >
-                  Другие
-                </Text>
-              </Pressable>
-            }
-            onSelect={() => {}}
+            onSelect={pickCalendar}
           />
         ) : null}
         {teamsLoading ? (
@@ -2265,18 +2250,6 @@ export default function CalendarTab() {
           // человек пришёл в календарь, и ждать он должен календарь.
           <CalendarSkeleton mode="week" />
         )}
-
-        {/* Шторка монтируется и здесь: этот экран уходит ранним return-ом, и
-            без неё «Другие» выше были бы кнопкой в никуда. */}
-        <WorkspaceSheet
-          visible={workspaceOpen}
-          activeTeamId={null}
-          onClose={() => setWorkspaceOpen(false)}
-          onPick={(teamId) => {
-            setTeamChoice(teamId);
-            rememberView({ teamId });
-          }}
-        />
       </Screen>
     );
   }
@@ -2335,45 +2308,9 @@ export default function CalendarTab() {
       ) : null}
 
       <ScopeChips
-        items={calendarTeams}
+        items={chipItems}
         activeId={activeTeamId}
-        // ДВЕРЬ В ЧУЖИЕ КОМПАНИИ — ТЕКСТОМ И СПРАВА, как «Добавить» в
-        // настройках календаря. В саму ленту эти календари не кладём: тап по
-        // чипу обязан быть мгновенным, а переход в другую компанию — это
-        // пауза синхронизации, чистка кэша и новый токен. Такое прячут за
-        // явным шагом, а не за случайным касанием соседнего чипа.
-        trailing={
-          hasOtherWorkspaces ? (
-            <Pressable
-              onPress={() => {
-                haptics.tap();
-                setWorkspaceOpen(true);
-              }}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Календари других компаний"
-              style={({ pressed }: { pressed: boolean }) => ({
-                minHeight: 44,
-                justifyContent: "center",
-                opacity: pressed ? 0.5 : 1,
-              })}
-            >
-              <Text
-                maxFontSizeMultiplier={1.2}
-                style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
-              >
-                Другие
-              </Text>
-            </Pressable>
-          ) : undefined
-        }
-        onSelect={(id) => {
-          // Смена команды выходит из переноса: зелень другой команды обещала
-          // бы её свободное время чужой записи.
-          setMoving(null);
-          setTeamChoice(id);
-          rememberView({ teamId: id });
-        }}
+        onSelect={pickCalendar}
       />
 
       {/* Фоновое дообновление календаря: полоса под шапкой вместо контрола,
@@ -2583,21 +2520,6 @@ export default function CalendarTab() {
         }}
       />
 
-      {/* Календари всех моих компаний. Открывается «Другими» в ленте и
-          показывается только тому, у кого компаний больше одной. Выбор
-          чужого календаря переключает контур целиком — этим занимается
-          `switchTenant`, а экран лишь ставит выбранный календарь активным,
-          когда переход уже состоялся. */}
-      <WorkspaceSheet
-        visible={workspaceOpen}
-        activeTeamId={activeTeamId}
-        onClose={() => setWorkspaceOpen(false)}
-        onPick={(teamId) => {
-          setMoving(null);
-          setTeamChoice(teamId);
-          rememberView({ teamId });
-        }}
-      />
 
       {/* Метка дня — нижний лист (web parity CityPickerModal); тап по
           активной строке снимает метку. Целевую дату задаёт открывшая

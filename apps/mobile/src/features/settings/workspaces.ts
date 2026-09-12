@@ -81,21 +81,75 @@ export function useMyCalendars() {
   });
 }
 
-/** Есть ли куда переключаться: хоть один календарь ЗА пределами активной
- *  компании.
- *
- *  Считать компании (`new Set(tenantId).size > 1`) нельзя, и это не вкус:
- *  человек, оказавшийся в компании, где ему ещё не выдали ни одного
- *  календаря, увидел бы список из одной своей компании — и дверь исчезла бы
- *  ровно там, где она нужнее всего. Так я сам застрял при первой проверке
- *  перехода: экран «Календарь ещё не назначен» и ни одного способа выйти. */
-export function hasForeignCalendars(calendars: MyCalendar[]): boolean {
-  return calendars.some((c) => !c.isActive);
-}
-
 export function useSwitchWorkspace() {
   return useMutation({
     networkMode: "always",
     mutationFn: (tenantId: string) => switchTenant(tenantId),
   });
+}
+
+// ЛЕНТА КАЛЕНДАРЕЙ — ОДНО ТЕЛО НА ПРОДУКТ.
+//
+// Владелец 2026-09-12: «не кнопкой „другие“ — в ряд добавляется: Y&D, личный,
+// ещё, ещё, и я уже выбираю; в финансах соответственно то же самое».
+//
+// Лент в продукте две — над календарём и над финансами, — и обе показывают
+// один и тот же список. Держать в них две копии правил (что чужое, как
+// склеен идентификатор, что делать по тапу) значит получить два разных
+// поведения на одной неделе.
+
+/** Чужой чип носит компанию в идентификаторе: пара (компания, календарь) —
+ *  настоящий ключ, в базе у команд именно такой первичный ключ. Без компании
+ *  два календаря с одинаковым id из разных компаний слиплись бы в один. */
+const FOREIGN_PREFIX = "@";
+
+export interface CalendarChip {
+  id: string;
+  name: string;
+  color?: string | null;
+}
+
+export function useCalendarChips(opts: {
+  /** Календари АКТИВНОЙ компании — как их знает экран. */
+  own: readonly { id: string; name: string; color?: string | null }[];
+  /** Выбран свой календарь: экран сам решает, что это значит. */
+  onPickOwn: (teamId: string) => void;
+  /** Переход не состоялся — человек остаётся там, где был, и знает почему. */
+  onSwitchError: (message: string) => void;
+}): { items: CalendarChip[]; pick: (chipId: string) => void } {
+  const { data: myCalendars = [] } = useMyCalendars();
+  const switching = useSwitchWorkspace();
+
+  const foreign = myCalendars.filter((c) => !c.isActive);
+  const items: CalendarChip[] = foreign.length
+    ? [
+        ...opts.own.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
+        ...foreign.map((c) => ({
+          id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
+          name: c.teamName,
+          color: c.teamColor,
+        })),
+      ]
+    : opts.own.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }));
+
+  const pick = (chipId: string) => {
+    if (!chipId.startsWith(FOREIGN_PREFIX)) {
+      opts.onPickOwn(chipId);
+      return;
+    }
+    const separator = chipId.indexOf(":");
+    const tenantId = chipId.slice(FOREIGN_PREFIX.length, separator);
+    const teamId = chipId.slice(separator + 1);
+    // Пока идёт переход, экран сам показывает «Открываем компанию» — гейт
+    // поднимается от смены токена, своей крутилки ленте не нужно.
+    switching.mutate(tenantId, {
+      onSuccess: () => opts.onPickOwn(teamId),
+      onError: (error) =>
+        opts.onSwitchError(
+          error instanceof Error ? error.message : "Не удалось открыть календарь",
+        ),
+    });
+  };
+
+  return { items, pick };
 }
