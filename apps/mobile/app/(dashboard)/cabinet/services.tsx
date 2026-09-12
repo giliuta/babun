@@ -27,7 +27,8 @@ import {
   type LadderStep,
 } from "@/features/services/ServiceLadder";
 import { useThemeColors } from "@/theme/colors";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import { useToast } from "@/components/ui/Toast";
 import {
   useDeleteService,
@@ -100,7 +101,7 @@ import {
 /** Тот же ключ, которым календарь помнит свою активную команду. ЧИТАЕМ, но
  *  НИКОГДА не пишем: из шестерёнки календаря человек приходит настраивать ту
  *  команду, которую там и смотрит. */
-const CAL_VIEW_KEY = "calendar.view";
+const CAL_VIEW_LEGACY_KEY = "calendar.view";
 
 /** Высота строки фиксирована: по ней перетаскивание считает, через сколько
  *  соседей перелетел палец. Две строки текста + воздух. */
@@ -160,13 +161,20 @@ export function ServicesList({ teamId }: { teamId?: string } = {}) {
   // та, у которой ноль услуг: человек, только что назвавший команду в
   // календаре, попадал на чужой пустой прайс и делал вывод «у меня нет услуг».
   //
+  const tenantId = useTenantId();
   // Порядок читается сверху вниз как «чей это выбор»: адрес команды → команда,
   // открытая в календаре (её же человек и настраивает, входя сюда) → и только
   // последней, когда не выбрано ничего, — команда, у которой прайс есть.
   // Памяти «что выбирали в прошлый раз» здесь больше нет: выбирать на этом
   // экране нечем, лента снесена 2026-08-24.
   const fromCalendar =
-    getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId ?? null;
+    (tenantId
+      ? readTenantPref<{ teamId?: string | null }>(
+          "calendar.view",
+          tenantId,
+          CAL_VIEW_LEGACY_KEY,
+        )?.teamId
+      : null) ?? null;
   const calendarTeam =
     fromCalendar && teams.some((tm) => tm.id === fromCalendar)
       ? fromCalendar

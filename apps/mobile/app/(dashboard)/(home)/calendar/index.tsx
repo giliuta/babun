@@ -12,7 +12,8 @@ import {
   Users,
   Banknote,
 } from "lucide-react-native";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import {
   AUTO_COLOR_RULES,
   BOOKING_BLOCKS,
@@ -86,7 +87,10 @@ import { zoneCities } from "@/features/calendar/zone-label";
 // (возвращал в календарь вместо настроек). Управление командой живёт в
 // Кабинет → Команды — там ему и место, а этот экран про календарь.
 
-const CAL_VIEW_KEY = "calendar.view";
+/** Ключ, под которым вид календаря лежал ДО переезда настроек на компанию.
+ *  Передаётся в `readTenantPref` третьим аргументом: он забирает старое
+ *  значение один раз и сносит, иначе в день правки у всех сбросился бы вид. */
+const CAL_VIEW_LEGACY_KEY = "calendar.view";
 
 // ИМЯ И ЦВЕТ КАЛЕНДАРЯ ПРАВЯТСЯ ПРЯМО В СТРОКЕ (владелец 2026-08-18: «не хочу,
 // чтоб снизу выплывало — можно было прям сразу так и менять»).
@@ -198,10 +202,17 @@ export default function CalendarSettingsScreen() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
+  const tenantId = useTenantId();
   // Какой календарь настраиваем: параметр из шестерёнки → тот, что открыт в
   // самом календаре (MMKV, тот же ключ) → первый. Экран всегда показывает
   // календарь, в котором человек работает, а не абстрактный «первый».
-  const persisted = getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId;
+  const persisted = tenantId
+    ? readTenantPref<{ teamId?: string | null }>(
+        "calendar.view",
+        tenantId,
+        CAL_VIEW_LEGACY_KEY,
+      )?.teamId
+    : undefined;
   const activeId = params.team ?? persisted ?? teams[0]?.id;
   const team = teams.find((x) => x.id === activeId) ?? teams[0];
   // Метки ЭТОГО календаря: подпись строки обязана перечислять его собственные.

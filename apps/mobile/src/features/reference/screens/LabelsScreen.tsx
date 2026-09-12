@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Bookmark, EyeOff, RotateCcw, Trash2, X } from "lucide-react-native";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
@@ -104,9 +105,15 @@ export function LabelsScreen() {
   // экрана настроек). Абстрактной «первой» здесь быть не может: человек
   // правит метки того календаря, в котором работает.
   const params = useLocalSearchParams<{ team?: string }>();
-  const persistedTeam = getStorage().get<{ teamId?: string | null }>(
-    "calendar.view",
-  )?.teamId;
+  const tenantId = useTenantId();
+  const persistedTeam = tenantId
+    ? readTenantPref<{ teamId?: string | null }>(
+        "calendar.view",
+        tenantId,
+        // Ключ до переезда настроек на компанию; забирается один раз.
+        "calendar.view",
+      )?.teamId
+    : undefined;
   const t = useThemeColors();
   const toast = useToast();
   const teamsQuery = useTeams();

@@ -26,7 +26,8 @@ import {
   isColdOfflineCacheMissError,
   randomUuid,
 } from "@babun/shared/sync";
-import { getStorage } from "@babun/shared/storage";
+import { readTenantPref, writeTenantPref } from "@/lib/tenant-prefs";
+import { useTenantId } from "@/lib/tenant";
 import { freeSlotsForDay } from "@/features/calendar/free-slots";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
 import {
@@ -175,10 +176,13 @@ import { useSession } from "@/providers/SessionProvider";
 
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 const AGENDA_HORIZON_DAYS = 60;
-// Персист выбранного вида и команды (mode/teamId) между запусками.
-const CAL_VIEW_KEY = "calendar.view";
+// Персист выбранного вида и команды (mode/teamId) между запусками — ПО
+// КОМПАНИИ. Ключи ниже — те, под которыми настройка лежала ДО переезда:
+// `readTenantPref` забирает их ровно один раз и сносит, иначе в день этой
+// правки у всех сбросился бы вид календаря — то самое, что мы и чиним.
+const CAL_VIEW_LEGACY_KEY = "calendar.view";
 // Онбординг-карточка: «✕» переживает перезапуск (web parity: localStorage).
-const ONBOARDING_DISMISSED_KEY = "calendar.onboardingDismissed";
+const ONBOARDING_DISMISSED_LEGACY_KEY = "calendar.onboardingDismissed";
 
 function startOfMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -469,8 +473,15 @@ export default function CalendarTab() {
   // Дата сознательно НЕ персистится — холодный старт всегда «сегодня».
   // Дефолт для нового пользователя — «Неделя» (стандарт по решению
   // владельца 2026-07-13; дальше вид запоминается за пользователем).
+  const tenantId = useTenantId();
   const [mode, setMode] = useState<CalMode>(() => {
-    const saved = getStorage().get<{ mode?: CalMode }>(CAL_VIEW_KEY)?.mode;
+    const saved = tenantId
+      ? readTenantPref<{ mode?: CalMode }>(
+          "calendar.view",
+          tenantId,
+          CAL_VIEW_LEGACY_KEY,
+        )?.mode
+      : undefined;
     return saved === "day" || saved === "month" || saved === "agenda"
       ? saved
       : "week";
@@ -497,7 +508,14 @@ export default function CalendarTab() {
   // `activeTeamId` falls back to the first team until they choose and
   // re-anchors if the chosen team is deleted / deactivated.
   const [teamChoice, setTeamChoice] = useState<string | null>(
-    () => getStorage().get<{ teamId?: string | null }>(CAL_VIEW_KEY)?.teamId ?? null,
+    () =>
+      (tenantId
+        ? readTenantPref<{ teamId?: string | null }>(
+            "calendar.view",
+            tenantId,
+            CAL_VIEW_LEGACY_KEY,
+          )?.teamId
+        : null) ?? null,
   );
   // ПЕРСИСТ ТОЛЬКО ПО ВОЛЕ ЧЕЛОВЕКА. Раньше вид и активная команда писались
   // в MMKV эффектом на ЛЮБОЕ изменение — включая переходы ПО ПАРАМЕТРАМ
@@ -508,7 +526,7 @@ export default function CalendarTab() {
   const prefRef = useRef({ mode, teamId: teamChoice });
   const rememberView = (next: { mode?: CalMode; teamId?: string | null }) => {
     prefRef.current = { ...prefRef.current, ...next };
-    getStorage().set(CAL_VIEW_KEY, prefRef.current);
+    if (tenantId) writeTenantPref("calendar.view", tenantId, prefRef.current);
   };
   // Стабильная ссылка для колбэков с пустыми зависимостями.
   const rememberViewRef = useRef(rememberView);
@@ -525,12 +543,55 @@ export default function CalendarTab() {
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
   // once data appears).
   const [onboardingDismissed, setOnboardingDismissed] = useState(
-    () => getStorage().get<boolean>(ONBOARDING_DISMISSED_KEY) ?? false,
+    () =>
+      (tenantId
+        ? readTenantPref<boolean>(
+            "calendar.onboardingDismissed",
+            tenantId,
+            ONBOARDING_DISMISSED_LEGACY_KEY,
+          )
+        : null) ?? false,
   );
   const dismissOnboarding = () => {
-    getStorage().set(ONBOARDING_DISMISSED_KEY, true);
+    if (tenantId) {
+      writeTenantPref("calendar.onboardingDismissed", tenantId, true);
+    }
     setOnboardingDismissed(true);
   };
+
+  // ПЕРЕСЕВ ПРИ СМЕНЕ КОМПАНИИ. Прочитать настройку при монтировании мало:
+  // переход в другую компанию этот экран НЕ размонтирует, и без пересева
+  // человек увидел бы в новой компании вид ПРЕЖНЕЙ — а первое же его действие
+  // записало бы этот чужой вид сюда как «свой». Та же протечка, только на шаг
+  // позже и труднее в поиске.
+  //
+  // Старый ключ здесь намеренно НЕ передаётся: он принадлежал прежней
+  // компании и был забран при монтировании. Отдать его второй компании
+  // значило бы приписать ей чужую привычку.
+  const seededTenantRef = useRef(tenantId);
+  useEffect(() => {
+    if (seededTenantRef.current === tenantId) return;
+    seededTenantRef.current = tenantId;
+    const saved = tenantId
+      ? readTenantPref<{ mode?: CalMode; teamId?: string | null }>(
+          "calendar.view",
+          tenantId,
+        )
+      : null;
+    const nextMode: CalMode =
+      saved?.mode === "day" || saved?.mode === "month" || saved?.mode === "agenda"
+        ? saved.mode
+        : "week";
+    const nextTeam = saved?.teamId ?? null;
+    prefRef.current = { mode: nextMode, teamId: nextTeam };
+    setMode(nextMode);
+    setTeamChoice(nextTeam);
+    setOnboardingDismissed(
+      (tenantId
+        ? readTenantPref<boolean>("calendar.onboardingDismissed", tenantId)
+        : null) ?? false,
+    );
+  }, [tenantId]);
   const [crewViewing, setCrewViewing] = useState<Appointment | null>(null);
   // РЕЖИМ ПЕРЕНОСА — запись, для которой сетка показывает зелёные кубики
   // (владелец 2026-09-06: «нажимаю Перенести — и кубики появляются зелёные,
