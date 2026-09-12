@@ -143,3 +143,78 @@ export function canAccessClientPath(
   if (role === "owner" || role === "dispatcher") return true;
   return role === "master" && ASSIGNED_CLIENT_DETAIL_PATH.test(path);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// ТАРИФ — ВТОРАЯ ПОЛОВИНА ДВЕРИ.
+//
+// Роль отвечает на вопрос «кто ты в этой компании», тариф — «за что заплачено».
+// Это РАЗНЫЕ вопросы, и путать их нельзя: владелец бесплатного контура имеет
+// все права владельца и всё равно не записывает клиентов.
+//
+// Владелец 2026-09-12: «самое главное — новому человеку личный календарь и
+// личные финансы; писать туда клиентские записи он не может, а покупает план —
+// тогда уже тариф». Отсюда граница: бесплатно живут события, финансы целиком и
+// база контактов; закрыты работа с клиентами, услуги, мастера и документы.
+//
+// ИСТИНА НА СЕРВЕРЕ, А НЕ ЗДЕСЬ. Те же четыре ограничения стоят триггером
+// `enforce_plan_limits` (миграция free_plan_limits): экран обязан не показывать
+// то, чего нельзя, но проверка живёт в базе — иначе любой другой путь (deep
+// link, старая сборка, офлайн-очередь) обходит замок. Канон, правило 10.
+
+export type PlanCapability =
+  | "book-clients"
+  | "services"
+  | "masters"
+  | "documents";
+
+/** Что бесплатный уровень НЕ умеет. Перечислено закрытое, а не открытое:
+ *  новая функция продукта по умолчанию бесплатна, и закрывать её — отдельное
+ *  осознанное решение, а не следствие забытой строки в списке. */
+const FREE_PLAN_CLOSED: ReadonlySet<PlanCapability> = new Set<PlanCapability>([
+  "book-clients",
+  "services",
+  "masters",
+  "documents",
+]);
+
+/** Действующий тариф: ручная выдача (`plan_override`) всегда сильнее
+ *  оплаченного. Повторяет `public.tenant_effective_plan` — если правило
+ *  меняется, оно меняется в обоих местах одним заходом. */
+export function effectivePlan(
+  tenant: { plan?: string | null; plan_override?: string | null } | null | undefined,
+): string | null {
+  if (!tenant) return null;
+  const override = tenant.plan_override?.trim();
+  if (override) return override;
+  const plan = tenant.plan?.trim();
+  return plan ? plan : null;
+}
+
+/** Разрешает ли ТАРИФ это действие.
+ *
+ *  Неизвестный тариф считается платным. Так задумано: ошибка в данных или
+ *  новое название тарифа не имеют права запереть работающему человеку
+ *  продукт — запирает только явный `free`. Пока тариф не загружен (`null`),
+ *  экран тоже не режет: мигание «нельзя → можно» на холодном старте выглядит
+ *  как сломанный продукт. */
+export function planAllows(
+  plan: string | null | undefined,
+  capability: PlanCapability,
+): boolean {
+  if (plan !== "free") return true;
+  return !FREE_PLAN_CLOSED.has(capability);
+}
+
+/** Единственная дверь: действие разрешено, только если его пускают И роль,
+ *  И тариф. Вызывающему не нужно помнить, какая половина за что отвечает. */
+export function allow(
+  ctx: {
+    role: UserRole | null | undefined;
+    plan: string | null | undefined;
+  },
+  capability: AppCapability,
+  planCapability?: PlanCapability,
+): boolean {
+  if (!can(ctx.role, capability)) return false;
+  return planCapability ? planAllows(ctx.plan, planCapability) : true;
+}

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
+  allow,
   can,
   canAccessCabinetPath,
   canAccessClientPath,
+  effectivePlan,
   isUserRole,
+  planAllows,
 } from "./role-policy";
 
 describe("role policy", () => {
@@ -106,5 +109,61 @@ describe("role policy", () => {
     assert.equal(canAccessClientPath("master", "/clients/archive"), false);
     assert.equal(canAccessClientPath("master", `/clients/${id}/edit`), false);
     assert.equal(canAccessClientPath("dispatcher", "/clients/settings"), true);
+  });
+});
+
+describe("тариф", () => {
+  test("ручная выдача сильнее оплаченного тарифа", () => {
+    assert.equal(effectivePlan({ plan: "free", plan_override: "lifetime" }), "lifetime");
+    assert.equal(effectivePlan({ plan: "free", plan_override: null }), "free");
+    assert.equal(effectivePlan({ plan: "pro" }), "pro");
+    // Пустая строка — это «ничего не записано», а не тариф с пустым именем:
+    // `TENANT_SAFE_DEFAULTS` ставит именно её, пока профиль не приехал.
+    assert.equal(effectivePlan({ plan: "", plan_override: "" }), null);
+    assert.equal(effectivePlan(null), null);
+    assert.equal(effectivePlan(undefined), null);
+  });
+
+  test("бесплатный уровень закрывает работу с клиентами", () => {
+    assert.equal(planAllows("free", "book-clients"), false);
+    assert.equal(planAllows("free", "services"), false);
+    assert.equal(planAllows("free", "masters"), false);
+    assert.equal(planAllows("free", "documents"), false);
+  });
+
+  test("платный, ручной и НЕИЗВЕСТНЫЙ тариф пускают всё", () => {
+    for (const plan of ["pro", "business", "lifetime", "beta_unlimited", "solo-2027"]) {
+      assert.equal(planAllows(plan, "book-clients"), true, plan);
+      assert.equal(planAllows(plan, "documents"), true, plan);
+    }
+  });
+
+  test("незагруженный тариф не режет экран", () => {
+    // Пока профиль компании не приехал, экран обязан вести себя как обычно:
+    // мигание «нельзя → можно» на холодном старте читается как поломка, а
+    // настоящий замок всё равно стоит в базе (`enforce_plan_limits`).
+    assert.equal(planAllows(null, "book-clients"), true);
+    assert.equal(planAllows(undefined, "book-clients"), true);
+  });
+
+  test("дверь пускает, только когда согласны и роль, и тариф", () => {
+    // Роль запрещает, тариф разрешает.
+    assert.equal(
+      allow({ role: "master", plan: "lifetime" }, "view-finances"),
+      false,
+    );
+    // Роль разрешает, тариф запрещает.
+    assert.equal(
+      allow({ role: "owner", plan: "free" }, "create-appointment", "book-clients"),
+      false,
+    );
+    // Согласны оба.
+    assert.equal(
+      allow({ role: "owner", plan: "lifetime" }, "create-appointment", "book-clients"),
+      true,
+    );
+    // Без тарифного вопроса дверь спрашивает только роль — иначе каждый
+    // существующий вызов пришлось бы переписывать.
+    assert.equal(allow({ role: "dispatcher", plan: "free" }, "operate-calendar"), true);
   });
 });

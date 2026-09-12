@@ -7,7 +7,13 @@ import {
 import type { Database, Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { isUserRole, type UserRole } from "./role-policy";
+import {
+  effectivePlan,
+  isUserRole,
+  planAllows,
+  type PlanCapability,
+  type UserRole,
+} from "./role-policy";
 
 export type Tenant = Database["public"]["Tables"]["tenants"]["Row"];
 type TenantUpdate = Database["public"]["Tables"]["tenants"]["Update"];
@@ -176,6 +182,17 @@ function friendlyTenantError(message: string): string {
   return /row-level security/i.test(message)
     ? "Недостаточно прав: изменять профиль бизнеса может только владелец."
     : message;
+}
+
+/** Разрешает ли ТАРИФ это действие в активной компании.
+ *
+ *  Пока профиль не загружен, отвечает «да»: экран не имеет права мигать
+ *  «нельзя → можно» на холодном старте — для человека это выглядит как
+ *  сломанный продукт, а настоящий замок всё равно стоит на сервере
+ *  (`enforce_plan_limits`). Канон, правило 10: экран объясняет, база решает. */
+export function usePlanAllows(capability: PlanCapability): boolean {
+  const tenant = useTenant().data;
+  return planAllows(effectivePlan(tenant), capability);
 }
 
 export function useTenant() {

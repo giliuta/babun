@@ -17,6 +17,7 @@ import {
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { pad2, parseYMD } from "@/features/appointments/helpers";
+import { usePlanAllows } from "@/features/settings/tenant";
 import type { WorkBand } from "@/features/calendar/DayView";
 
 // Тап по пустому слоту сетки → этот лист (веб-паритет слот-попапа
@@ -100,6 +101,10 @@ export function BookSlotSheet({
 }) {
   const t = useThemeColors();
   const insets = useSafeAreaInsets();
+  // Записывать клиентов умеет платный тариф. Бесплатный личный календарь
+  // ведёт события и деньги — этого достаточно для своей жизни и недостаточно
+  // для чужих клиентов (владелец 2026-09-12).
+  const canBookClients = usePlanAllows("book-clients");
   const [draft, setDraft] = useState<SlotDraft | null>(slot);
 
   // Появление/затухание сигнала — только opacity, ничего не едет (закон
@@ -264,17 +269,38 @@ export function BookSlotSheet({
               Никогда не тонируются и не блокируются — вне часов запись
               разрешена, сигнал уже сказан колесом и подписью. */}
           <View style={{ gap: 10 }}>
+            {/* БЕЗ ПОДПИСКИ КНОПКИ «КЛИЕНТ» НЕТ ВОВСЕ, А НЕ «ЕСТЬ, НО РУГАЕТСЯ».
+                Канон, правило 10: человек без права либо не видит блок, либо
+                видит его только для чтения; третьего («видно, но при нажатии
+                ошибка») не бывает. Строка ниже называет закрытое и МОЛЧИТ ПРО
+                ДЕНЬГИ: ни цены, ни ссылки, ни «оплатите на сайте» — на этом
+                стоит основание, по которому приложение живёт в App Store без
+                встроенных покупок. Тариф решает не здесь: настоящий запрет —
+                триггер `enforce_plan_limits` в базе. */}
             <Button
               label="Событие"
-              variant="secondary"
+              variant={canBookClients ? "secondary" : "primary"}
               accessibilityHint="Откроет новое событие на выбранное время"
               onPress={() => pick("event")}
             />
-            <Button
-              label="Клиент"
-              accessibilityHint="Откроет новую запись клиенту на выбранное время"
-              onPress={() => pick("work")}
-            />
+            {canBookClients ? (
+              <Button
+                label="Клиент"
+                accessibilityHint="Откроет новую запись клиенту на выбранное время"
+                onPress={() => pick("work")}
+              />
+            ) : (
+              <Text
+                style={{
+                  color: t.faint,
+                  fontSize: 13,
+                  textAlign: "center",
+                  paddingHorizontal: 8,
+                }}
+              >
+                Запись клиента — в другом тарифе
+              </Text>
+            )}
           </View>
         </View>
       ) : null}
