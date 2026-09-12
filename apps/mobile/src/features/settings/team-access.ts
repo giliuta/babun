@@ -109,10 +109,14 @@ export function useCreateInvitation() {
       email,
       role,
       masterId,
+      teamId,
     }: {
       email: string;
       role: InvitableRole;
       masterId: string | null;
+      /** Календарь, в который зовут. `null` — приглашение без календаря:
+       *  человек войдёт по роли, строк прав ему не запишется. */
+      teamId?: string | null;
     }): Promise<CreatedInvitation> => {
       await requireOwner();
       if (role === "master" && !masterId) {
@@ -122,6 +126,7 @@ export function useCreateInvitation() {
         p_email: normalizeInvitationEmail(email),
         p_role: role,
         ...(role === "master" && masterId ? { p_master_id: masterId } : {}),
+        ...(teamId ? { p_team_id: teamId } : {}),
       });
       if (error) throw new Error(error.message);
       return parseCreatedInvitation(data);

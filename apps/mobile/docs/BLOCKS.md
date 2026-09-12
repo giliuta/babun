@@ -79,6 +79,7 @@
 | Клиент | `UserRound` |
 | Объект, адрес | `MapPin` |
 | Метка | `Bookmark` |
+| Календарь, команда | `CalendarRange` |
 | Точка на карте | `MapPinned` |
 | Попросить адрес у клиента | `Send` |
 | Услуга | `Briefcase` |

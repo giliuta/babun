@@ -9,7 +9,14 @@ import {
   View,
 } from "react-native";
 import * as Linking from "expo-linking";
-import { Check, ChevronRight, Link2, ShieldCheck, UserRound } from "lucide-react-native";
+import {
+  CalendarRange,
+  Check,
+  ChevronRight,
+  Link2,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -20,7 +27,7 @@ import { Button } from "@/components/ui/Button";
 import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useSession } from "@/providers/SessionProvider";
-import { useMasters } from "@/features/reference/queries";
+import { useMasters, useTeams } from "@/features/reference/queries";
 import {
   usePendingInvitations,
   useCreateInvitation,
@@ -59,9 +66,18 @@ export default function TeamAccessScreen() {
   const remove = useRemoveTenantMember();
   const revoke = useRevokeInvitation();
   const createInvitation = useCreateInvitation();
+  const teamsQuery = useTeams();
+  // Архивный календарь в приглашении не предлагаем: сервер его и не примет.
+  const inviteTeams = useMemo(
+    () => (teamsQuery.data ?? []).filter((team) => team.is_active),
+    [teamsQuery.data],
+  );
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<InvitableRole>("master");
   const [inviteMasterId, setInviteMasterId] = useState<string | null>(null);
+  // Календарь, в который зовут. `null` — «без календаря»: человек войдёт по
+  // роли, как до перехода на права по календарям.
+  const [inviteTeamId, setInviteTeamId] = useState<string | null>(null);
   const [editing, setEditing] = useState<TenantMember | null>(null);
   const [role, setRole] = useState<UserRole>("master");
   const [masterId, setMasterId] = useState<string | null>(null);
@@ -97,6 +113,17 @@ export default function TeamAccessScreen() {
     );
   }, [editing?.master_id, editing?.user_id, invitationsQuery.data, masters, membersQuery.data]);
   const owners = membersQuery.data?.filter((member) => member.role === "owner").length ?? 0;
+
+  // ВЫБОР САМОЛЕЧАЩИЙСЯ. Календарь могли заархивировать с другого устройства,
+  // пока форма открыта. Остаться на нём значило бы получить отказ сервера уже
+  // после того, как владелец нажал «Пригласить».
+  useEffect(() => {
+    setInviteTeamId((current) =>
+      current && !inviteTeams.some((team) => team.id === current)
+        ? null
+        : current,
+    );
+  }, [inviteTeams]);
 
   useEffect(() => {
     if (inviteRole !== "master") {
@@ -154,6 +181,7 @@ export default function TeamAccessScreen() {
         email: inviteEmail,
         masterId: inviteRole === "master" ? inviteMasterId : null,
         role: inviteRole,
+        teamId: inviteTeamId,
       });
       setInviteEmail("");
       try {
@@ -438,6 +466,80 @@ export default function TeamAccessScreen() {
               )}
             </View>
           ) : null}
+
+          {/* КУДА ЗОВЁМ. Владелец 2026-09-12: «если я приглашаю сотрудника в
+              календарь — он видит исключительно этот календарь». Выбранный
+              календарь уезжает В САМО приглашение, и права на него выдаются в
+              момент приёма — промежутка «уже вошёл, но ещё видит всё» нет.
+
+              ПРАВА (канон, правило 10): блок закрыт правом `manage-workforce`,
+              то есть виден только владельцу. Без права экрана нет вовсе, а не
+              «есть, но не нажимается». СЕРВЕР проверяет это сам, в
+              `create_invitation`: не владелец получает отказ 42501 независимо
+              от того, что нарисовано. Календарь сервер тоже проверяет — чужой
+              или архивный не примет. */}
+          <View style={{ marginTop: 14 }}>
+            <View className="mb-1 flex-row items-center gap-2">
+              <CalendarRange color={t.sub} size={ICON.sm} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: t.sub }}>
+                КАЛЕНДАРЬ
+              </Text>
+            </View>
+            {[null, ...inviteTeams].map((team) => {
+              const selected = inviteTeamId === (team?.id ?? null);
+              // Подпись «без календаря» ЧЕСТНА ПО РОЛИ: диспетчеру это
+              // означает всю компанию, мастеру — только его назначения. Одно
+              // слово на обоих соврало бы одному из них.
+              const label = team
+                ? team.name
+                : inviteRole === "dispatcher"
+                  ? "Все календари"
+                  : "Без календаря";
+              const hint = team
+                ? null
+                : inviteRole === "dispatcher"
+                  ? "Видит всю компанию, как раньше."
+                  : "Только заявки, назначенные на него.";
+              return (
+                <Pressable
+                  key={team?.id ?? "none"}
+                  onPress={() => setInviteTeamId(team?.id ?? null)}
+                  disabled={createInvitation.isPending}
+                  accessibilityRole="radio"
+                  accessibilityLabel={
+                    team ? `Календарь ${team.name}` : label
+                  }
+                  accessibilityState={{
+                    selected,
+                    disabled: createInvitation.isPending,
+                  }}
+                  className="min-h-11 flex-row items-center py-2 active:opacity-70"
+                >
+                  <View className="flex-1">
+                    <Text
+                      style={{ fontSize: 15, color: t.ink }}
+                      numberOfLines={1}
+                    >
+                      {label}
+                    </Text>
+                    {hint ? (
+                      <Text
+                        style={{
+                          marginTop: 2,
+                          fontSize: 12,
+                          lineHeight: 16,
+                          color: t.sub,
+                        }}
+                      >
+                        {hint}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {selected ? <Check color={t.accent} size={ICON.sm} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
 
           <View className="mt-4">
             <Button
