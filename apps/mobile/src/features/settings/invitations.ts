@@ -1,10 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
-import { queryClient } from "@/lib/query-client";
-import { wipeTenantScopedData } from "@/lib/auth-clear";
-import { pauseSyncBridgeForTenantSwitch } from "@/lib/sync-bridge";
-import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
+import { switchTenant } from "./switch-tenant";
 import {
   clearPendingInvitationToken,
   getPendingInvitationToken,
@@ -100,47 +97,12 @@ export async function acceptAndActivateInvitation(
     );
   }
 
-  const resumeOldBridge = pauseSyncBridgeForTenantSwitch();
-  const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
-  let switched = false;
-  try {
-    // First wipe removes old offline operations before the active JWT changes.
-    await wipeTenantScopedData();
-
-    const { error: activateError } = await supabase.rpc("activate_tenant", {
-      p_tenant_id: tenantId,
-    });
-    if (activateError) {
-      throw new Error(invitationErrorMessage(activateError.message));
-    }
-
-    const { data: refreshed, error: refreshError } =
-      await supabase.auth.refreshSession();
-    if (refreshError || !refreshed.session) {
-      throw new Error("Не удалось обновить вход. Проверьте интернет и повторите.");
-    }
-
-    const activeTenant = (
-      refreshed.session.user.app_metadata as { tenant_id?: unknown }
-    ).tenant_id;
-    if (activeTenant !== tenantId) {
-      throw new Error("Сессия не переключилась на приглашённую компанию.");
-    }
-
-    // Catch an old in-flight revalidation that may have completed after the
-    // first wipe, then leave every query stale for the fresh tenant.
-    await wipeTenantScopedData();
-    await queryClient.invalidateQueries();
-    await clearPendingInvitationToken(token);
-    switched = true;
-    return tenantId;
-  } finally {
-    if (!switched) {
-      resumeRuntime();
-      resumeOldBridge();
-    }
-    // On success SessionProvider observes TOKEN_REFRESHED and remounts both
-    // sync lifetimes with the new tenant id; resuming either old-tenant
-    // lifetime would be unsafe.
-  }
+  // Само переключение — общая транзакция `switchTenant`: её же зовёт
+  // переключатель контуров. Приём приглашения от обычного перехода отличается
+  // ровно одним — до него надо принять приглашение, после него погасить
+  // сохранённый токен. Держать здесь вторую копию шагов значило бы завести
+  // второй способ менять компанию, и они разошлись бы на первой же правке.
+  await switchTenant(tenantId);
+  await clearPendingInvitationToken(token);
+  return tenantId;
 }

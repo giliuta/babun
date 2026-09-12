@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Linking, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -152,6 +152,11 @@ import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
+import {
+  useMyCalendars,
+  workspaceCount,
+} from "@/features/settings/workspaces";
+import { WorkspaceSheet } from "@/features/calendar/WorkspaceSheet";
 import {
   useCities,
   useCreateTeam,
@@ -512,6 +517,14 @@ export default function CalendarTab() {
   // Стабильная ссылка для колбэков с пустыми зависимостями.
   const rememberViewRef = useRef(rememberView);
   rememberViewRef.current = rememberView;
+  // КАЛЕНДАРИ ДРУГИХ КОМПАНИЙ. Человек может состоять не только в своей:
+  // «устроился к кому-то — ему добавляют календарь компании, и у него два
+  // календаря: свой и рабочий» (владелец 2026-09-12). Лента показывает
+  // календари АКТИВНОЙ компании, а дверь в остальные появляется только у
+  // того, у кого они есть: орган, которому нечего показать, не рисуется.
+  const { data: myCalendars = [] } = useMyCalendars();
+  const hasOtherWorkspaces = workspaceCount(myCalendars) > 1;
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
   // (web parity: localStorage, STORY-060 §F1.1; the card also self-clears
@@ -2275,6 +2288,36 @@ export default function CalendarTab() {
       <ScopeChips
         items={calendarTeams}
         activeId={activeTeamId}
+        // ДВЕРЬ В ЧУЖИЕ КОМПАНИИ — ТЕКСТОМ И СПРАВА, как «Добавить» в
+        // настройках календаря. В саму ленту эти календари не кладём: тап по
+        // чипу обязан быть мгновенным, а переход в другую компанию — это
+        // пауза синхронизации, чистка кэша и новый токен. Такое прячут за
+        // явным шагом, а не за случайным касанием соседнего чипа.
+        trailing={
+          hasOtherWorkspaces ? (
+            <Pressable
+              onPress={() => {
+                haptics.tap();
+                setWorkspaceOpen(true);
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Календари других компаний"
+              style={({ pressed }: { pressed: boolean }) => ({
+                minHeight: 44,
+                justifyContent: "center",
+                opacity: pressed ? 0.5 : 1,
+              })}
+            >
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
+              >
+                Другие
+              </Text>
+            </Pressable>
+          ) : undefined
+        }
         onSelect={(id) => {
           // Смена команды выходит из переноса: зелень другой команды обещала
           // бы её свободное время чужой записи.
@@ -2488,6 +2531,22 @@ export default function CalendarTab() {
         onPick={(kind, s) => {
           setSlotDraft(null);
           bookAt({ date: s.date, time_start: s.time, kind });
+        }}
+      />
+
+      {/* Календари всех моих компаний. Открывается «Другими» в ленте и
+          показывается только тому, у кого компаний больше одной. Выбор
+          чужого календаря переключает контур целиком — этим занимается
+          `switchTenant`, а экран лишь ставит выбранный календарь активным,
+          когда переход уже состоялся. */}
+      <WorkspaceSheet
+        visible={workspaceOpen}
+        activeTeamId={activeTeamId}
+        onClose={() => setWorkspaceOpen(false)}
+        onPick={(teamId) => {
+          setMoving(null);
+          setTeamChoice(teamId);
+          rememberView({ teamId });
         }}
       />
 
