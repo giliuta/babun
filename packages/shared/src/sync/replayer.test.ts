@@ -568,3 +568,89 @@ describe("replayer — delete", () => {
     expect(await queueDepth()).toBe(0);
   });
 });
+
+// ─── Гейт по компании ─────────────────────────────────────────────────
+// Очередь ПЕРЕЖИВАЕТ переход в другую компанию, поэтому в ней лежат операции,
+// поставленные под другой. Вставку сервер отобьёт сам (`with check`), а вот
+// удаление отбить нечем: под чужой компанией оно не найдёт строку, вернёт ноль
+// строк БЕЗ ошибки — и операция уйдёт из очереди как выполненная. Человек
+// удалил запись, очередь пуста, запись на месте. Эти тесты держат гейт.
+
+describe("replayer — гейт по компании", () => {
+  const ДРУГАЯ = "22222222-2222-2222-2222-222222222222";
+
+  test("удаление ЧУЖОЙ компании не уходит на сервер и остаётся в очереди", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: ДРУГАЯ },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("операция БЕЗ компании не выгружается, пока гейт включён", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
+
+    // Отправить её значило бы отдать серверу решать, в какую компанию писать.
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("смена компании ПОСРЕДИ слива обрывает его, остаток ждёт", async () => {
+    for (const id of [UUID_A, UUID_B]) {
+      await enqueueOp({
+        table: "clients",
+        op: "delete",
+        row_id: id,
+        payload: { id, tenant_id: TENANT },
+        expected_updated_at: null,
+      });
+    }
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    // Живое чтение: гейт слива, первая операция — прежняя компания; ко второй
+    // человек уже перешёл в другую.
+    let читаний = 0;
+    const currentTenantId = (): string | null => {
+      читаний += 1;
+      return читаний >= 3 ? ДРУГАЯ : TENANT;
+    };
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    expect(calls).toHaveLength(1);
+    expect(await queueDepth()).toBe(1);
+  });
+
+  test("без гейта вовсе поведение прежнее — операция без компании уходит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    expect(calls).toHaveLength(1);
+    expect(await queueDepth()).toBe(0);
+  });
+});

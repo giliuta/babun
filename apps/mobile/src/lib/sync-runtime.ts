@@ -26,6 +26,7 @@ import {
   type QuotaGate,
 } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { getActiveTenantId } from "@/lib/active-tenant";
 import { notify } from "./notify";
 import { queryClient } from "@/lib/query-client";
 import { quotaGate } from "@/lib/quota-gate";
@@ -39,6 +40,10 @@ function buildReplayerOptions(
   return {
     supabase,
     tenantId,
+    // Снимок выше остаётся ради хостов без устройства-носителя компании, но
+    // решает ЖИВОЕ чтение: компания теперь свойство устройства и меняется без
+    // перезапуска рантайма.
+    currentTenantId: getActiveTenantId,
     quota,
     onConflict: (msg: string) => {
       notify("Конфликт синхронизации", msg);
@@ -76,6 +81,7 @@ export function startSyncRuntime(tenantId: string): () => void {
   // quota checks or permanent-failure feedback.
   setReplayerDefaults({
     tenantId: opts.tenantId,
+    currentTenantId: opts.currentTenantId,
     quota: opts.quota,
     onConflict: opts.onConflict,
     onChanged: opts.onChanged,

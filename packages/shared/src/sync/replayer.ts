@@ -108,6 +108,13 @@ export interface ReplayerOptions {
    *  rather than being discarded — the wipe on the next clean switch removes
    *  them. */
   tenantId?: string;
+  /** ЖИВОЕ чтение активной компании. `tenantId` — снимок, снятый при запуске
+   *  рантайма, и он врёт ровно в тот момент, когда это опаснее всего: компания
+   *  теперь свойство УСТРОЙСТВА и меняется без перезапуска, а заголовок
+   *  компании обёртка `fetch` ставит в момент ОТПРАВКИ. Значит остаток уже
+   *  начатого слива уедет с новым заголовком, о котором снимок не знает.
+   *  Отсутствует — работает прежний снимок. */
+  currentTenantId?: () => string | null;
   /** OPTIONAL quota gate — see QuotaGate. Absent = no gating. */
   quota?: QuotaGate;
   /** Called after the drain completes (success or error) so the UI
@@ -179,9 +186,19 @@ export async function kickReplayer(opts: ReplayerOptions): Promise<void> {
   }
 }
 
+/** Активная компания: живое чтение, если хост его дал, иначе прежний снимок. */
+function readTenantId(opts: ReplayerOptions): string | null {
+  return opts.currentTenantId?.() ?? opts.tenantId ?? null;
+}
+
 async function drain(opts: ReplayerOptions): Promise<void> {
   const ops = await dequeueAll(); // sorted by created_at ASC via index
   if (ops.length === 0) return;
+
+  // Компания, под которой слив НАЧАЛСЯ. Сверяется с живой перед каждой
+  // операцией: переход посреди слива обязан его прервать, а не дописать
+  // остаток уже в другую компанию.
+  const gateTenantId = readTenantId(opts);
 
   for (const op of ops) {
     if (op.attempts >= MAX_ATTEMPTS) {
@@ -190,21 +207,32 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       continue;
     }
 
-    // offline-plan risk #1 (second half) — tenant gate. If an active
-    // tenant is supplied and this op belongs to a DIFFERENT tenant, do
-    // NOT drain it under the current session (it would replay onto the
-    // server with the wrong tenant's auth). Leave it in the queue — the
-    // cacheClearAll wipe on a clean tenant switch is what removes it. No
-    // gate (tenantId unset) → skip this check entirely (behaviour as
-    // before). We read the tenant off the payload the wrapper enqueued.
-    if (opts.tenantId) {
+    // ГЕЙТ ПО КОМПАНИИ. Очередь ПЕРЕЖИВАЕТ переход в другую компанию —
+    // переход бережёт местный кэш, — поэтому здесь лежат операции, поставленные
+    // под другой компанией, и слить их под текущей нельзя.
+    //
+    // Чем это кончается, если не удержать. Вставку сервер отобьёт: у каждой
+    // стоит `with check (tenant_id = current_tenant_id())`. А вот УДАЛЕНИЕ
+    // отбить нечем — под чужой компанией оно просто не найдёт строку, вернёт
+    // ноль строк БЕЗ ошибки, и операция уйдёт из очереди как выполненная.
+    // Человек удалил запись, очередь пуста, запись на месте.
+    if (gateTenantId) {
+      const liveTenantId = readTenantId(opts);
+      if (liveTenantId !== gateTenantId) {
+        // Компания сменилась ПОСРЕДИ слива. Дальше не идём вовсе: остаток
+        // сольёт следующий kick — уже под новой компанией и под её заголовком.
+        break;
+      }
+
       const payloadTenant = (op.payload as { tenant_id?: unknown })?.tenant_id;
-      if (
-        typeof payloadTenant === "string" &&
-        payloadTenant !== opts.tenantId
-      ) {
+      if (typeof payloadTenant !== "string" || payloadTenant.length === 0) {
+        // ОПЕРАЦИЯ БЕЗ КОМПАНИИ НЕ ВЫГРУЖАЕТСЯ ВОВСЕ. Компанию кладут все
+        // обёртки, удаление в том числе (`{ id, tenant_id }`), так что сюда
+        // попадает только испорченная запись. Отправить её — значит отдать
+        // серверу решать, в какую компанию писать, а он возьмёт ТЕКУЩУЮ.
         continue;
       }
+      if (payloadTenant !== liveTenantId) continue;
     }
 
     // v452 — fail-fast for non-UUID row_ids targeting uuid id
