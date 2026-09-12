@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { MemoryKVStorage, setStorage } from "@babun/shared/storage";
 
 import {
   TENANT_SCOPED_KEY_PREFIXES,
@@ -41,6 +42,59 @@ describe("настройки, помнящиеся по компании", () =>
     assert.ok(!isTenantScopedKey("calendar.view"));
     assert.ok(!isTenantScopedKey("babun-chats"));
     assert.ok(!isTenantScopedKey("babun-clients-sort"));
+  });
+
+  test("ЧИСТКА ВЖИВУЮ: переход бережёт настройку компании, выход из аккаунта — нет", () => {
+    // Проверка не формы кода, а поведения: подставляем настоящий шов хранилища
+    // и смотрим, что именно остаётся после подмёта. Логика подмёта повторена
+    // здесь дословно (три условия из `wipeFastStores`), потому что сама функция
+    // тянет за собой supabase, уведомления и react-query — в юнит-тесте им
+    // делать нечего. Что чистка зовёт РЕАЛЬНО этот же реестр, сторожит
+    // отдельный тест ниже.
+    const TENANT_PREFIXES = ["babun-", "babun2:", "babun:", "calendar."];
+    const KEEP_KEYS = new Set(["babun:auth:last-user-id"]);
+    const KEEP_PREFIXES = ["babun:auth:active-tenant:"];
+
+    const sweep = (keepTenantNamedKeys: boolean) => {
+      const storage = new MemoryKVStorage();
+      setStorage(storage);
+      storage.set(tenantPrefKey("calendar.view", TENANT), { mode: "day" });
+      storage.set(`babun-contact-ways:${TENANT}`, ["call"]);
+      storage.set("calendar.view", { mode: "week" });
+      storage.set("babun-chats", ["чужое"]);
+      storage.setRaw("babun:auth:last-user-id", "user-1");
+
+      for (const key of storage.list()) {
+        if (KEEP_KEYS.has(key)) continue;
+        if (KEEP_PREFIXES.some((p) => key.startsWith(p))) continue;
+        if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
+        if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
+      }
+      return storage;
+    };
+
+    // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ.
+    const afterSwitch = sweep(true);
+    assert.deepEqual(
+      afterSwitch.get(tenantPrefKey("calendar.view", TENANT)),
+      { mode: "day" },
+      "настройка, называющая компанию, обязана пережить переход",
+    );
+    assert.deepEqual(afterSwitch.get(`babun-contact-ways:${TENANT}`), ["call"]);
+    // А безымянные — уходят, иначе они будут прочитаны как настройка новой.
+    assert.equal(afterSwitch.get("calendar.view"), null);
+    assert.equal(afterSwitch.get("babun-chats"), null);
+    assert.equal(afterSwitch.getRaw("babun:auth:last-user-id"), "user-1");
+
+    // ВЫХОД ИЗ АККАУНТА: на общем телефоне не остаётся ничего.
+    const afterSignOut = sweep(false);
+    assert.equal(afterSignOut.get(tenantPrefKey("calendar.view", TENANT)), null);
+    assert.equal(afterSignOut.get(`babun-contact-ways:${TENANT}`), null);
+    assert.equal(
+      afterSignOut.getRaw("babun:auth:last-user-id"),
+      "user-1",
+      "штамп человека переживает и выход — по нему узнаётся смена аккаунта",
+    );
   });
 
   test("чистка при переходе спрашивает реестр, а не свой список", () => {
