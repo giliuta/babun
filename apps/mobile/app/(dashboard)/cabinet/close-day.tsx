@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Check, ChevronRight } from "lucide-react-native";
@@ -9,7 +10,7 @@ import {
 } from "@babun/shared/local/appointments";
 import { getDayExtras, sumExtras } from "@babun/shared/local/day-extras";
 import { formatEURExact as formatEUR } from "@babun/shared/common/utils/money";
-import { isOnline, useIsOnline } from "@babun/shared/sync";
+import { isOnline, randomUuid, useIsOnline } from "@babun/shared/sync";
 import {
   FORMS_KASSA,
   FORMS_ZAPIS,
@@ -25,6 +26,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/Toast";
 import { haptics } from "@/lib/haptics";
+import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
@@ -34,7 +36,11 @@ import { useAppointments, useDayExtras } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
-import { buildDebtPaidPatch } from "@/features/appointments/payment";
+import { useRecordPayment } from "@/features/appointments/payment-mutations";
+import {
+  paymentAccountsQuery,
+  type PaymentAccountOption,
+} from "@/features/appointments/payment-accounts";
 import { unclosedAppointments } from "@babun/shared/local/selectors/unclosed";
 import {
   useCloseDay,
@@ -42,6 +48,7 @@ import {
   useReopenDay,
 } from "@/features/settings/day-closures";
 import { useCalendarSettings } from "@/features/settings/local-settings";
+import { useTenantId } from "@/lib/tenant";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { KIND_ICON } from "@/features/finances/account-ui";
 import {
@@ -125,6 +132,9 @@ export default function CloseDayScreen() {
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const calendarSettings = calendarSettingsQuery.data;
   const update = useUpdateAppointment();
+  const record = useRecordPayment();
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
   const toast = useToast();
   const t = useThemeColors();
   const router = useRouter();
@@ -253,29 +263,68 @@ export default function CloseDayScreen() {
     [appts, todayKey],
   );
 
-  // Success toasts fire only from onSuccess — a failed write must not
-  // pretend a money record landed (offline field use is the norm here).
+  // ДЕНЬГИ ИДУТ ОДНОЙ RPC, КАК В БЛОКЕ ОПЛАТЫ ЗАПИСИ (2026-09-12).
+  //
+  // Было: патч строки через `buildDebtPaidPatch` со ЖЁСТКО ЗАШИТЫМ «наличные»
+  // и БЕЗ СЧЁТА — на какой именно счёт легли деньги, решал серверный
+  // резолвер, и у команды с двумя кассами он угадывал. Вдобавок у заявки, по
+  // которой платёж уже был, сторож `protect_paid_appointment_finance` такой
+  // патч отбивает, а платёж без `request_id` не идемпотентен: повтор по
+  // потерянному ответу задваивал бы деньги.
+  //
+  // Сверка дня — про КАССУ, поэтому вид счёта по-прежнему только наличные
+  // (правило было записано здесь и остаётся). Касса одна — пишем сразу, тап
+  // остаётся одним; касс несколько — спрашиваем, в какую, потому что угадать
+  // за человека сверку кассы нельзя.
   const markPaidCash = (apt: Appointment) => {
     const debt = getDebtAmount(apt);
     if (debt <= 0) return;
-    // Пишем зеркальные колонки (payment_status → серверный триггер
-    // дохода), иначе оплата закрытия дня не создаёт finance_transactions
-    // и визит остаётся «неоплаченным» для веба. Сверка дня — про кассу,
-    // поэтому способ строго наличные.
-    update.mutate(
-      {
-        id: apt.id,
-        patch: buildDebtPaidPatch(apt, { method: "cash", amount: debt }),
-      },
-      {
-        onSuccess: () => {
-          haptics.success();
-          toast("Оплата отмечена");
-          void closureQuery.refetch();
+    void (async () => {
+      let cash: PaymentAccountOption[] = [];
+      try {
+        const all = await qc.fetchQuery(
+          paymentAccountsQuery(tenantId, apt.team_id),
+        );
+        cash = all.filter((a) => a.kind === "cash");
+      } catch (e) {
+        notify("Не удалось загрузить счета", (e as Error).message);
+        return;
+      }
+      if (cash.length === 0) {
+        notify(
+          "Некуда положить наличные",
+          "У команды нет активной кассы — заведите её в «Счетах»",
+        );
+        return;
+      }
+      let account = cash[0];
+      if (cash.length > 1) {
+        const index = await chooseOption(
+          `Клиент оплатил ${formatEUR(debt)} наличными`,
+          cash.map((a) => ({ label: a.name })),
+          { message: "В какую кассу легли деньги?" },
+        );
+        if (index === null) return;
+        account = cash[index];
+      }
+      record.mutate(
+        {
+          appointmentId: apt.id,
+          accountId: account.id,
+          amount: debt,
+          requestId: randomUuid(),
+          kind: "settlement",
         },
-        onError: (e) => notify("Ошибка", (e as Error).message),
-      },
-    );
+        {
+          onSuccess: () => {
+            haptics.success();
+            toast(`Оплата ${formatEUR(debt)} · ${account.name}`);
+            void closureQuery.refetch();
+          },
+          onError: (e) => notify("Ошибка", (e as Error).message),
+        },
+      );
+    })();
   };
 
   const moveToTomorrow = (apt: Appointment) => {

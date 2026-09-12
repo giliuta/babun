@@ -25,11 +25,17 @@ export interface PaymentAccountOption {
   position: number;
 }
 
-export function useTeamPaymentAccounts(teamId: string | null | undefined) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["payment-accounts", tenantId, teamId ?? "no-team"],
-    enabled: !!tenantId && !!teamId,
+/** Один запрос на продукт, отдельно от хука: список счетов нужен не только
+ *  открытому блоку оплаты, но и разбору незакрытых дней — там команда у каждой
+ *  строки своя, и спросить её счета надо ВНУТРИ обработчика
+ *  (`queryClient.fetchQuery`), а не хуком. Вторая копия ключа и RPC разошлась
+ *  бы на первой же правке. */
+export function paymentAccountsQuery(
+  tenantId: string | null,
+  teamId: string | null | undefined,
+) {
+  return {
+    queryKey: ["payment-accounts", tenantId, teamId ?? "no-team"] as const,
     // Набор счетов меняется раз в месяцы, а спрашивают его на каждом
     // открытии записи — держим свежим 5 минут. Правки счетов эти пять минут
     // не ждут: каждая мутация счёта сбрасывает ключ (см. invalidateAccounts
@@ -42,5 +48,13 @@ export function useTeamPaymentAccounts(teamId: string | null | undefined) {
       if (error) throw new Error(error.message);
       return (data ?? []) as unknown as PaymentAccountOption[];
     },
+  };
+}
+
+export function useTeamPaymentAccounts(teamId: string | null | undefined) {
+  const tenantId = useTenantId();
+  return useQuery({
+    ...paymentAccountsQuery(tenantId, teamId),
+    enabled: !!tenantId && !!teamId,
   });
 }

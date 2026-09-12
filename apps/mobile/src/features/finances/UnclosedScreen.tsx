@@ -32,10 +32,17 @@ import { notify } from "@/lib/notify";
 import { chooseOption } from "@/lib/choose";
 import { useThemeColors } from "@/theme/colors";
 import { formatYMD, humanDay } from "@/features/appointments/helpers";
+import { useQueryClient } from "@tanstack/react-query";
+import { randomUuid } from "@babun/shared/sync";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
-import { buildDebtPaidPatch } from "@/features/appointments/payment";
+import { useRecordPayment } from "@/features/appointments/payment-mutations";
+import {
+  paymentAccountsQuery,
+  type PaymentAccountOption,
+} from "@/features/appointments/payment-accounts";
+import { useTenantId } from "@/lib/tenant";
 import {
   unclosedAppointments,
   unclosedTotal,
@@ -66,6 +73,9 @@ export function UnclosedScreen() {
   const { data: clients = [] } = useClients();
   const { data: calendarSettings } = useCalendarSettings();
   const update = useUpdateAppointment();
+  const record = useRecordPayment();
+  const qc = useQueryClient();
+  const tenantId = useTenantId();
   const [cancelTarget, setCancelTarget] = useState<Appointment | null>(null);
   const readBusinessToday = useCallback(
     () =>
@@ -99,57 +109,94 @@ export function UnclosedScreen() {
   );
   const totalAtRisk = useMemo(() => unclosedTotal(unclosed), [unclosed]);
 
-  // Цепочка «после завершения — оплата»: визит с непогашенной суммой сразу
-  // спрашивает про деньги, иначе должник появился бы молча (Финансы → Долги).
-  // Способ оплаты влияет на сверку кассы, поэтому предлагаем нал/карту —
-  // как секция «Оплата» в AppointmentSheet, не только наличные. Общий builder
-  // пишет ledger и зеркальные колонки одним контрактом и не задваивает аванс.
-  const markPaid = (apt: Appointment, debt: number, method: "cash" | "card") => {
+  /** Закрыть визит без денег — долг, если он есть, остаётся долгом. */
+  const closeVisitOnly = (apt: Appointment, message: string) => {
     update.mutate(
-      {
-        id: apt.id,
-        patch: buildDebtPaidPatch(apt, { method, amount: debt }),
-      },
+      { id: apt.id, patch: { status: "completed" } },
       {
         onSuccess: () => {
           haptics.success();
-          toast("Оплата отмечена");
+          toast(message);
         },
         onError: (e) => notify("Ошибка", (e as Error).message),
       },
     );
   };
 
+  // ДЕНЬГИ ЗДЕСЬ ИДУТ ТЕМ ЖЕ ПУТЁМ, ЧТО В БЛОКЕ ОПЛАТЫ ЗАПИСИ — одной RPC
+  // `record_appointment_payment`, которая сама пишет леджер, зеркала, проводку
+  // и закрывает визит (`closeVisit`).
+  //
+  // Было: «Выполнена» патчила статус, а потом ВТОРЫМ запросом патчились
+  // `payments`/`paid_amount`/`payment_status` через `buildDebtPaidPatch`. Три
+  // беды в одном месте. Первая: СЧЁТ НЕ СПРАШИВАЛСЯ вовсе — спрашивался
+  // «способ», а на какой именно счёт легли деньги, решал серверный резолвер;
+  // у команды с двумя кассами он угадывал. Вторая: у заявки, по которой уже
+  // был платёж, сторож `protect_paid_appointment_finance` такой патч ОТБИВАЕТ
+  // («сначала отмените оплату»), и человек получал закрытый визит плюс отказ
+  // по деньгам — ровно то половинчатое состояние, которого канон не допускает.
+  // Третья: платёж без `request_id` не идемпотентен, повтор по потерянному
+  // ответу задваивал бы деньги.
+  //
+  // Поэтому спрашиваем СНАЧАЛА и одним вопросом: на какой счёт. Строки —
+  // сами счета команды, их именами, как плитки блока оплаты. Закрыть лист =
+  // прежняя кнопка «Долг — позже»: визит закрывается, долг остаётся.
   const handleComplete = (apt: Appointment) => {
-    update.mutate(
-      { id: apt.id, patch: { status: "completed" } },
-      {
-        onSuccess: () => {
-          const debt = getDebtAmount(apt);
-          if (debt > 0) {
-            void chooseOption(
-              "Закрыто как «Выполнено»",
-              [
-                { label: "Оплачено наличными" },
-                { label: "Оплачено картой" },
-              ],
-              {
-                // «Отмена» листа и есть бывшая кнопка «Долг — позже»: она
-                // ничего не записывала, долг просто оставался. Говорим это
-                // словами, раз подпись у отмены теперь общая.
-                message: `Клиент оплатил ${formatEUR(debt)}? Если нет — закройте лист, долг останется.`,
-              },
-            ).then((index) => {
-              if (index === null) return;
-              markPaid(apt, debt, index === 0 ? "cash" : "card");
-            });
-          } else {
-            toast("Закрыто как «Выполнено»");
-          }
+    const debt = getDebtAmount(apt);
+    if (debt <= 0) {
+      closeVisitOnly(apt, "Закрыто как «Выполнено»");
+      return;
+    }
+    void (async () => {
+      let accounts: PaymentAccountOption[] = [];
+      try {
+        accounts = await qc.fetchQuery(
+          paymentAccountsQuery(tenantId, apt.team_id),
+        );
+      } catch (e) {
+        notify("Не удалось загрузить счета", (e as Error).message);
+        return;
+      }
+      if (accounts.length === 0) {
+        // Положить деньги некуда — закрываем визит и говорим, куда идти.
+        closeVisitOnly(
+          apt,
+          "Закрыто как «Выполнено». Счёта для приёма денег нет — заведите его в «Счетах»",
+        );
+        return;
+      }
+      const index = await chooseOption(
+        `Клиент оплатил ${formatEUR(debt)}?`,
+        accounts.map((a) => ({ label: a.name })),
+        {
+          message:
+            "Выберите счёт, на который легли деньги. Закройте лист — визит"
+            + " закроется, а долг останется.",
         },
-        onError: (e) => notify("Ошибка", (e as Error).message),
-      },
-    );
+      );
+      if (index === null) {
+        closeVisitOnly(apt, "Закрыто как «Выполнено», долг остался");
+        return;
+      }
+      const account = accounts[index];
+      record.mutate(
+        {
+          appointmentId: apt.id,
+          accountId: account.id,
+          amount: debt,
+          requestId: randomUuid(),
+          kind: "settlement",
+          closeVisit: true,
+        },
+        {
+          onSuccess: () => {
+            haptics.success();
+            toast(`Оплата ${formatEUR(debt)} · ${account.name}`);
+          },
+          onError: (e) => notify("Ошибка", (e as Error).message),
+        },
+      );
+    })();
   };
 
   const handleConfirmCancel = (apt: Appointment, reason: string) => {
