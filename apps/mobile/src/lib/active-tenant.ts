@@ -59,6 +59,54 @@ export function getActiveTenantId(): string | null {
   return activeTenantId;
 }
 
+/** Человек, чей выбор сейчас держится в памяти. Нужен переходу: спрашивать
+ *  `getSession()` ради одного id нельзя — после часа офлайна токен истёк,
+ *  обновить его нечем, и `getSession` отвечает пустой сессией. Переход же сети
+ *  не требует вовсе. */
+export function getActiveUserId(): string | null {
+  return activeUserId;
+}
+
+// ДОЛГ ПО ТОКЕНУ: компания, которую claim в токене ещё не догнал.
+//
+// Переход мгновенен потому, что не ждёт `activate_tenant` + `refreshSession`.
+// Но realtime, storage и edge-функции заголовка не видят и живут по claim'у.
+// Если фоновый догон сорвался (сети нет, приложение свернули), claim остаётся
+// на прежней компании — и загрузка фото в новой отбивается, а realtime слушает
+// не ту. Долг записывается ДО попытки и гасится только успехом; кто его гасит
+// и когда — `lib/claim-catch-up.ts`.
+const pendingClaimKey = (userId: string) => `babun:auth:pending-claim:${userId}`;
+export const PENDING_CLAIM_KEY_PREFIX = "babun:auth:pending-claim:";
+
+export function rememberPendingClaim(userId: string, tenantId: string): void {
+  try {
+    getStorage().setRaw(pendingClaimKey(userId), tenantId);
+  } catch {
+    // см. setActiveTenantId
+  }
+}
+
+export function readPendingClaim(userId: string): string | null {
+  try {
+    return getStorage().getRaw(pendingClaimKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+export function settlePendingClaim(userId: string, tenantId: string): void {
+  try {
+    const storage = getStorage();
+    // Гасится только ТОТ долг, который оплачен: если человек успел уйти дальше,
+    // новый долг стоит уже на другую компанию.
+    if (storage.getRaw(pendingClaimKey(userId)) === tenantId) {
+      storage.remove(pendingClaimKey(userId));
+    }
+  } catch {
+    // см. setActiveTenantId
+  }
+}
+
 /** Ставит компанию на ЭТО устройство. Мгновенно: ни сети, ни ожидания —
  *  следующий же запрос уходит с новым заголовком. */
 export function setActiveTenantId(
@@ -81,20 +129,33 @@ export function setActiveTenantId(
 }
 
 /** Возвращает выбор с прошлого запуска. Зовётся, когда стала известна сессия:
- *  до неё непонятно, ЧЕЙ выбор читать. */
-export function restoreActiveTenantId(userId: string): string | null {
-  if (activeUserId === userId && activeTenantId) return activeTenantId;
+ *  до неё непонятно, ЧЕЙ выбор читать.
+ *
+ *  `readable: false` — хранилище НЕ ОТВЕТИЛО (MMKV открывается лениво и бросает,
+ *  пока Keychain заперт на прогреве iOS). Это не «выбора нет», и засевать
+ *  устройство из токена в этот момент нельзя: токен называет компанию,
+ *  выбранную на ДРУГОМ устройстве, и один такой засев закрепил бы её здесь
+ *  поверх настоящего выбора, который просто ещё не прочитался. */
+export function restoreActiveTenantId(userId: string): {
+  tenantId: string | null;
+  readable: boolean;
+} {
+  if (activeUserId === userId && activeTenantId) {
+    return { tenantId: activeTenantId, readable: true };
+  }
   let stored: string | null = null;
+  let readable = true;
   try {
     stored = getStorage().getRaw(activeTenantKey(userId));
   } catch {
     stored = null;
+    readable = false;
   }
   const changed = activeTenantId !== stored || activeUserId !== userId;
   activeUserId = userId;
   activeTenantId = stored;
   if (changed) emit();
-  return stored;
+  return { tenantId: stored, readable };
 }
 
 /** Человек вышел из аккаунта. Память гасится сразу: следующий запрос не имеет

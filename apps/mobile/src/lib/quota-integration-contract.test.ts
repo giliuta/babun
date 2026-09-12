@@ -74,11 +74,14 @@ describe("mobile create quota integration", () => {
     );
     // `activate_tenant` живёт, но ТОЛЬКО в фоне: стоит вернуть его на путь
     // экрана — и пять секунд ожидания возвращаются вместе с ним.
-    assert.match(switching, /void catchUpTokenClaim\(/);
+    assert.match(switching, /scheduleClaimCatchUp\(userId, tenantId\)/);
     assert.ok(
-      !/await catchUpTokenClaim\(/.test(switching),
-      "догоняющий claim не должен задерживать экран — он в фоне",
+      !/await scheduleClaimCatchUp\(|await settleClaimDebt\(/.test(switching),
+      "догоняющий claim не должен задерживать экран — он долг, а не ожидание",
     );
+    // Переход не ходит за личностью в сеть: после часа офлайна `getSession`
+    // отвечает пустой сессией, а переходу сеть не нужна.
+    assert.match(switching, /const userId = getActiveUserId\(\)/);
     // Скобка открыта, а закрыта или нет — неважно: сторож про то, что
     // приглашение зовёт ОБЩИЙ переход, а не про его аргументы.
     assert.match(invitations, /await switchTenant\(tenantId[,)]/);

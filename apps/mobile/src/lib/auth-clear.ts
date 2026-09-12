@@ -6,12 +6,14 @@ import { notify } from "./notify";
 import { supabase } from "@/lib/supabase";
 import {
   ACTIVE_TENANT_KEY_PREFIX,
+  PENDING_CLAIM_KEY_PREFIX,
   forgetActiveTenantId,
   restoreActiveTenantId,
   setActiveTenantId,
 } from "@/lib/active-tenant";
 import { isTenantScopedKey } from "@/lib/tenant-prefs";
-import { keyNamesKnownTenant } from "@/lib/tenant-query-keys";
+import { querySurvivesSwitch } from "@/lib/tenant-query-keys";
+import { settleClaimDebt } from "@/lib/claim-catch-up";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
   clearAllBabunNotifications,
@@ -52,7 +54,7 @@ const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
 // чего переход случился, — стереть её значит вернуть человека туда, откуда он
 // ушёл. Аккаунт при этом меняется РЕДКО, и тогда ключ уносит ветка ниже
 // (`handleAuthEvent`), а не общий подмёт.
-const KEEP_PREFIXES = [ACTIVE_TENANT_KEY_PREFIX];
+const KEEP_PREFIXES = [ACTIVE_TENANT_KEY_PREFIX, PENDING_CLAIM_KEY_PREFIX];
 
 // Supabase publishes SIGNED_OUT before an awaiting UI handler necessarily
 // finishes its local cleanup. SessionProvider waits on this barrier so the
@@ -130,7 +132,7 @@ function wipeFastStores(
   // пути, и владелец снова видел скелет. Поймано на симуляторе.
   if (knownTenantIds?.length) {
     queryClient.removeQueries({
-      predicate: (q) => !keyNamesKnownTenant(q.queryKey, knownTenantIds),
+      predicate: (q) => !querySurvivesSwitch(q.queryKey, knownTenantIds),
     });
     // `refetchType: "none"` — ПОМЕТИТЬ ПРОТУХШИМ, НО НЕ ПЕРЕЗАПРАШИВАТЬ, и это
     // правка потери данных, а не оптимизация.
@@ -339,8 +341,10 @@ export async function handleAuthEvent(
     // И выбор компании прежнего человека тоже уходит — его ключ именной,
     // поэтому подметается адресно, а не общим префиксом.
     forgetActiveTenantId();
-    for (const key of storage.list(ACTIVE_TENANT_KEY_PREFIX)) {
-      if (key !== `${ACTIVE_TENANT_KEY_PREFIX}${next}`) storage.remove(key);
+    for (const prefix of [ACTIVE_TENANT_KEY_PREFIX, PENDING_CLAIM_KEY_PREFIX]) {
+      for (const key of storage.list(prefix)) {
+        if (key !== `${prefix}${next}`) storage.remove(key);
+      }
     }
     // Настройки, помнящиеся по компании, здесь уходят вместе со всем
     // остальным: `wipeTenantScopedData` без `keepLocalCache` подметает по
@@ -357,7 +361,8 @@ export async function handleAuthEvent(
   // Значит переключение на планшете уводило бы и телефон: ровно та жалоба, от
   // которой мы уходим. Поэтому первый вход закрепляет на устройстве ту
   // компанию, которая в токене сейчас, и дальше устройство живёт само.
-  if (!restoreActiveTenantId(next)) {
+  const restored = restoreActiveTenantId(next);
+  if (!restored.tenantId && restored.readable) {
     const claimed = (
       session?.user?.app_metadata as { tenant_id?: unknown } | undefined
     )?.tenant_id;
@@ -365,4 +370,12 @@ export async function handleAuthEvent(
       setActiveTenantId(next, claimed);
     }
   }
+  // Хранилище не ответило (Keychain ещё заперт) — НЕ засеваем из токена: он
+  // называет компанию, выбранную на ДРУГОМ устройстве, и один такой засев
+  // закрепил бы её здесь поверх настоящего выбора, который просто ещё не
+  // прочитался. До следующего события сервер отвечает по токену, как раньше.
+
+  // ХОЛОДНЫЙ СТАРТ — ОДНА ИЗ ТОЧЕК, ГДЕ ГАСИТСЯ ДОЛГ ПО ТОКЕНУ: переход мог
+  // случиться без сети, и claim в токене всё ещё называет прежнюю компанию.
+  void settleClaimDebt();
 }

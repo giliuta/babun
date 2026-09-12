@@ -21,3 +21,25 @@ export function keyNamesKnownTenant(
     (part) => typeof part === "string" && tenantIds.includes(part),
   );
 }
+
+/** Запросы, которые принадлежат ЧЕЛОВЕКУ, а не компании, и потому переход
+ *  переживают, хотя компанию в ключе не называют.
+ *
+ *  Первый и главный — лента календарей: она ОДНА на все компании и она же
+ *  единственный переключатель. Снося её на каждом переходе, чистка оставляла
+ *  ряд чипов пустым до ответа сети, а без сети — вернуться в свою компанию было
+ *  нечем. Это нашёл аудит 2026-09-13, и это была моя же ошибка: предикат по
+ *  «называет компанию» честно не находил компании в ключе `["my-calendars",
+ *  userId]` и сносил его. */
+const PERSON_SCOPED_QUERY_HEADS: readonly string[] = ["my-calendars"];
+
+/** Переживает ли запрос переход в другую компанию. */
+export function querySurvivesSwitch(
+  key: readonly unknown[],
+  tenantIds: readonly string[],
+): boolean {
+  return (
+    keyNamesKnownTenant(key, tenantIds) ||
+    (typeof key[0] === "string" && PERSON_SCOPED_QUERY_HEADS.includes(key[0]))
+  );
+}

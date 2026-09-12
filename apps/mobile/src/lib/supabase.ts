@@ -34,6 +34,12 @@ if (!url || !key) {
 // запрос новой компании не вернулся и никто его не торопит».
 const REQUEST_TIMEOUT_MS = 12_000;
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
 function fetchWithActiveTenant(
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -46,6 +52,15 @@ function fetchWithActiveTenant(
   // (react-query умеет отменять запросы), оставляем его хозяином — два
   // контроллера на один запрос гасили бы друг друга.
   if (init?.signal) return fetch(input, { ...init, headers });
+
+  // ФАЙЛЫ ПОТОЛКА НЕ ИМЕЮТ. Двенадцать секунд — мера для запроса строк, а не
+  // для фото с объекта по мобильной связи: пять мегабайт на слабой сети идут
+  // дольше, и потолок превращал бы каждую такую загрузку в «не удалось».
+  // Storage ходит своим путём (`/storage/v1/`), и там ждём столько, сколько
+  // идёт файл.
+  if (requestUrl(input).includes("/storage/v1/")) {
+    return fetch(input, { ...init, headers });
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

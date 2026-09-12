@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { QueryClient } from "@tanstack/react-query";
 
-import { keyNamesKnownTenant } from "./tenant-query-keys";
+import { querySurvivesSwitch } from "./tenant-query-keys";
 
 // ЧТО ИМЕННО ЗДЕСЬ ДОКАЗЫВАЕТСЯ, И ЧЕГО ЗДЕСЬ НЕ ДОКАЗЫВАЕТСЯ.
 //
@@ -27,7 +27,7 @@ const GILIUTA = "11365a87-bef9-4f6c-a030-b15083fe646b";
  *  нечего, а предикат импортируется настоящий. */
 function sweepOnSwitch(qc: QueryClient, knownTenantIds: string[]): void {
   qc.removeQueries({
-    predicate: (q) => !keyNamesKnownTenant(q.queryKey, knownTenantIds),
+    predicate: (q) => !querySurvivesSwitch(q.queryKey, knownTenantIds),
   });
 }
 
@@ -39,6 +39,8 @@ function seedBothCompanies(): QueryClient {
   qc.setQueryData(["teams", GILIUTA, "master"], ["Команда 1"]);
   // Ключ БЕЗ компании: такой мог бы показать карточку клиента прежней фирмы.
   qc.setQueryData(["client", "c-1"], { name: "Клиент прежней компании" });
+  // Лента календарей — одна на все компании и единственный переключатель.
+  qc.setQueryData(["my-calendars", "user-1"], ["Y&D", "Команда 1"]);
   return qc;
 }
 
@@ -87,6 +89,16 @@ describe("переход не выбрасывает скачанное", () => 
     assert.deepEqual(
       fixed.getQueryData(["appointments", AIRFIX, "owner"]),
       ["запись AirFix"],
+    );
+  });
+
+  test("ЛЕНТА КАЛЕНДАРЕЙ переживает переход: это единственная дверь обратно", () => {
+    const qc = seedBothCompanies();
+    sweepOnSwitch(qc, [AIRFIX, GILIUTA]);
+    assert.deepEqual(
+      qc.getQueryData(["my-calendars", "user-1"]),
+      ["Y&D", "Команда 1"],
+      "без ленты ряд чипов пуст до ответа сети, а без сети вернуться нечем",
     );
   });
 

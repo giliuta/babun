@@ -2,7 +2,8 @@ import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { wipeTenantScopedData } from "@/lib/auth-clear";
 import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
-import { setActiveTenantId } from "@/lib/active-tenant";
+import { getActiveTenantId, getActiveUserId, setActiveTenantId } from "@/lib/active-tenant";
+import { scheduleClaimCatchUp } from "@/lib/claim-catch-up";
 import { markTenantOnboarded } from "@/lib/tenant";
 import { currentRoleQueryKey } from "./tenant";
 import type { UserRole } from "./role-policy";
@@ -28,42 +29,14 @@ import type { UserRole } from "./role-policy";
 //
 // `activate_tenant` НЕ СНЁСЕН, но уехал в фон: realtime, storage и
 // edge-функции ходят в базу мимо PostgREST и заголовка не видят — им нужен
-// прежний claim в токене. Он догоняет за пару секунд, и ни один экран его не
-// ждёт.
+// прежний claim в токене. Догон записывается как ДОЛГ и гасится, когда есть
+// сеть (`lib/claim-catch-up.ts`); ни один экран его не ждёт.
 //
 // И ЧИСТКИ ЗДЕСЬ БОЛЬШЕ НЕ ДВЕ, А ОДНА, И ОНА НЕ ТРОГАЕТ SQLite. Строки в кэше
 // разложены по компаниям, а очередь несохранённых операций защищена сверкой в
 // `sync/replayer.ts` — снос не давал безопасности, зато уничтожал набранную
 // работу и заставлял скачивать всё заново при возврате. Разбор — над
 // `cacheClearAll` в `lib/auth-clear.ts`.
-
-/** `activate_tenant` отдаёт jsonb: роль, карточку мастера и факт онбординга.
- *  Узкий разбор вместо `any` — сгенерированные типы знают только `Json`. */
-function isOnboardedResult(value: unknown): boolean {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    (value as { onboarded?: unknown }).onboarded === true
-  );
-}
-
-/** Догоняющая половина перехода: claim в токене для тех поверхностей, которые
- *  заголовка не видят. Экран её НЕ ЖДЁТ — отсюда и `void` у вызова.
- *
- *  Провал не откатывает переход: заголовок уже работает, данные компании уже
- *  на экране. Пострадают только realtime (сообщение с другого устройства
- *  приедет позже, по обычному refetch) и загрузка файлов — до следующей
- *  успешной попытки. Молчать об этом в консоли нельзя, врать человеку окном
- *  «не удалось переключиться» — тем более: он уже переключился. */
-async function catchUpTokenClaim(tenantId: string): Promise<void> {
-  const { data: activated, error } = await supabase.rpc("activate_tenant", {
-    p_tenant_id: tenantId,
-  });
-  if (error) return;
-  if (isOnboardedResult(activated)) markTenantOnboarded(tenantId);
-  await supabase.auth.refreshSession();
-}
 
 export interface SwitchTenantOptions {
   /** Факт с сервера: компания прошла онбординг. `list_my_calendars` отдаёт его
@@ -90,29 +63,34 @@ export async function switchTenant(
   const opts: SwitchTenantOptions =
     typeof options === "boolean" ? { onboarded: options } : options;
 
-  const { data } = await supabase.auth.getSession();
-  const userId = data.session?.user.id;
+  // ЛИЧНОСТЬ — ИЗ ПАМЯТИ УСТРОЙСТВА, А НЕ ИЗ `getSession()`. Переход сети не
+  // требует, и спрашивать её ради одного id нельзя: после часа офлайна токен
+  // истёк, обновить его нечем, и `getSession` отвечает пустой сессией —
+  // переход падал с «Войдите в аккаунт», хотя человек в аккаунте.
+  const userId = getActiveUserId();
   if (!userId) throw new Error("Войдите в аккаунт, чтобы сменить компанию.");
 
-  // СПИСОК КОМПАНИЙ ЧЕЛОВЕКА — из токена (`available_tenants`, его ведут
-  // `activate_tenant` и приём приглашения). Нужен чистке, чтобы отличить
-  // «запрос принадлежит одной из моих компаний» от «запрос ничей»: первые
-  // остаются тёплыми, вторые сносятся.
-  //
-  // Список берётся из токена, а не из ленты календарей, чтобы не заводить
-  // круговой импорт между переходом и лентой. Устареть он может только в
-  // сторону НЕДОСТАЧИ (компанию добавили только что) — и тогда её кэш просто
-  // снесётся лишний раз, то есть будет как раньше. Компанию назначения
-  // добавляем явно: в токене её может ещё не быть.
-  const claimed = (
-    data.session?.user.app_metadata as { available_tenants?: unknown } | undefined
-  )?.available_tenants;
-  const knownTenantIds = [
-    tenantId,
-    ...(Array.isArray(claimed)
-      ? claimed.filter((id): id is string => typeof id === "string")
-      : []),
-  ];
+  // СПИСОК КОМПАНИЙ ЧЕЛОВЕКА — нужен чистке, чтобы отличить «запрос принадлежит
+  // одной из моих компаний» от «запрос ничей»: первые остаются тёплыми, вторые
+  // сносятся. Берётся из токена (`available_tenants`, его ведут
+  // `activate_tenant` и приём приглашения), но токен — best-effort: без сети
+  // его может не быть, и тогда достаточно двух компаний, между которыми идёт
+  // сам переход. Лишнего список не сохранит: ключ без компании сносится.
+  const known = new Set<string>([tenantId]);
+  const leaving = getActiveTenantId();
+  if (leaving) known.add(leaving);
+  try {
+    const { data } = await supabase.auth.getSession();
+    const claimed = (
+      data.session?.user.app_metadata as { available_tenants?: unknown } | undefined
+    )?.available_tenants;
+    if (Array.isArray(claimed)) {
+      for (const id of claimed) if (typeof id === "string") known.add(id);
+    }
+  } catch {
+    // Сессия недоступна — переход всё равно состоится.
+  }
+  const knownTenantIds = [...known];
 
   // ШТАМП ВПЕРЁД, ЕСЛИ ФАКТ УЖЕ ИЗВЕСТЕН. Ставится ДО чистки — она сносит
   // ключи с префиксом `babun:`, поэтому порядок здесь не придирка. Дальше
@@ -182,6 +160,8 @@ export async function switchTenant(
     if (!switched) resumeRuntime();
   }
 
-  // Догоняющая половина — в фоне, экран её не ждёт.
-  void catchUpTokenClaim(tenantId);
+  // ДОГОНЯЮЩАЯ ПОЛОВИНА — В ФОНЕ, КАК ДОЛГ, А НЕ КАК ПОПЫТКА. Экран её не
+  // ждёт; сорвётся — долг останется записанным и погасится, когда вернётся
+  // сеть или приложение. Разбор — в `lib/claim-catch-up.ts`.
+  scheduleClaimCatchUp(userId, tenantId);
 }
