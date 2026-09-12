@@ -23,7 +23,17 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Родом из TeamChips календаря (web-parity TeamTabStrip).
 
-export type ScopeChip = { id: string; name: string; color?: string | null };
+export type ScopeChip = {
+  id: string;
+  name: string;
+  color?: string | null;
+  /** Чип ДРУГОЙ ПРИРОДЫ — обводкой вместо заливки. Заведено для календарей
+   *  чужих компаний: в одном ряду с ними два одинаковых с виду чипа делали
+   *  разное — свой переключает разрез внутри компании, чужой уводит в другую
+   *  (другие счета, долги, прибыль). Разница молчаливая и без единого слова:
+   *  владелец 2026-09-12 «подписи не надо — может, каким-то другим чипом». */
+  outline?: boolean;
+};
 
 export function ScopeChips({
   items,
@@ -133,7 +143,7 @@ export function ScopeChips({
           item.id,
           <Chip
             label={item.name}
-            variant="scope"
+            variant={item.outline ? "outline" : "scope"}
             color={item.color || undefined}
             radio
             selected={selected}
