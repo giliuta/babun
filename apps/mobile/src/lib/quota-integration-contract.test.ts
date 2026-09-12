@@ -61,6 +61,17 @@ describe("mobile create quota integration", () => {
     // Сторожим то, что осталось важным:
     ordered(switching, "setActiveTenantId", "await wipeTenantScopedData");
     assert.match(switching, /keepLocalCache:\s*true/);
+    // Очередь замирает ДО смены заголовка: заголовок — окружение запроса, и
+    // выгрузка, начатая в прежней компании, дошлёт остаток уже в новую.
+    ordered(switching, "pauseSyncRuntimeForTenantSwitch", "setActiveTenantId");
+    assert.match(switching, /if \(!switched\) resumeRuntime\(\)/);
+    // `resetQueries()` ВОЗВРАЩАЕТ волну перезапросов: ждать её значит держать
+    // переход, пока каждый экран не сходит в сеть. Волну уже запускает
+    // `wipeFastStores`, не дожидаясь, — второй здесь быть не должно.
+    assert.ok(
+      !/await queryClient\.resetQueries\(\)/.test(switching),
+      "ожидание resetQueries возвращает переходу полную перезагрузку экрана",
+    );
     // `activate_tenant` живёт, но ТОЛЬКО в фоне: стоит вернуть его на путь
     // экрана — и пять секунд ожидания возвращаются вместе с ним.
     assert.match(switching, /void catchUpTokenClaim\(/);
