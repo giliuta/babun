@@ -624,12 +624,14 @@ describe("replayer — гейт по компании", () => {
     }
     const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
 
-    // Живое чтение: гейт слива, первая операция — прежняя компания; ко второй
-    // человек уже перешёл в другую.
+    // Живое чтение. Компанию спрашивают трижды за операцию и ещё раз на гейт
+    // слива: 1 — гейт, 2 — начало круга по первой, 3 — перед её отправкой,
+    // 4 — начало круга по второй. Первая обязана доехать целиком, ко второй
+    // человек уже в другой компании.
     let читаний = 0;
     const currentTenantId = (): string | null => {
       читаний += 1;
-      return читаний >= 3 ? ДРУГАЯ : TENANT;
+      return читаний >= 4 ? ДРУГАЯ : TENANT;
     };
 
     await kickReplayer({ supabase: asSupabase(client), currentTenantId });
@@ -720,5 +722,36 @@ describe("replayer — удаление отчитывается строкам�
     expect(left).toHaveLength(1);
     expect(left[0].attempts).toBe(1);
     expect(left[0].last_error ?? "").toContain("нет прав");
+  });
+});
+
+// ─── Гейт держит и уже начатую операцию ────────────────────────────────
+// Между проверкой в начале круга и самой отправкой лежат ДВА ожидания: откат
+// попытки (до тридцати секунд) и сторож тарифа. За тридцать секунд человек
+// успевает сменить компанию, и операция уйдёт под чужим заголовком. Проверка
+// в начале нужна, чтобы не НАЧИНАТЬ; эта — чтобы не ДОотправить начатое.
+
+describe("replayer — гейт перепроверяется перед отправкой", () => {
+  test("компания сменилась после проверки — операция не уходит", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+
+    // Чтения: 1 — гейт слива, 2 — начало круга, 3 — перед самой отправкой.
+    let читаний = 0;
+    const currentTenantId = (): string | null => {
+      читаний += 1;
+      return читаний >= 3 ? "33333333-3333-3333-3333-333333333333" : TENANT;
+    };
+
+    await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
   });
 });

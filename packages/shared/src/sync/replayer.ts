@@ -287,6 +287,13 @@ async function drain(opts: ReplayerOptions): Promise<void> {
       }
     }
 
+    // ПЕРЕПРОВЕРКА ПЕРЕД САМОЙ ОТПРАВКОЙ. Между проверкой наверху и этой
+    // строкой прошли ДВА ожидания: откат попытки (до тридцати секунд) и
+    // сторож тарифа. За тридцать секунд человек успевает сменить компанию —
+    // и тогда операция уйдёт под чужим заголовком. Проверка наверху нужна,
+    // чтобы не начинать; эта — чтобы не доотправить начатое.
+    if (gateTenantId && readTenantId(opts) !== gateTenantId) break;
+
     try {
       const conflict = await dispatch(opts.supabase, op);
       if (conflict) {

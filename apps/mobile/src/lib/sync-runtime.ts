@@ -127,7 +127,12 @@ export function pauseSyncRuntimeForTenantSwitch(): () => void {
   unsubscribe = null;
   started = false;
   activeTenantId = null;
-  setReplayerDefaults(null);
+  // ПАУЗА ГАСИТ ВЫГРУЗКУ, НО НЕ ГЕЙТ. Обнуление умолчаний целиком снимало и
+  // проверку компании: обёртки кэша зовут `kickReplayer` НАПРЯМУЮ, и такой
+  // заход посреди паузы сливал очередь вообще без проверок — ровно в ту
+  // минуту, когда компания меняется. Живое чтение компании умолчаний не
+  // требует: оно смотрит на устройство, а не на рантайм.
+  setReplayerDefaults({ currentTenantId: getActiveTenantId });
   setSyncToast(() => {});
   return () => {
     if (wasStarted && previousTenantId && !started) {
