@@ -182,7 +182,13 @@ export function TransferSheet({
           })
         : null;
     const preset = presetAmount ?? source?.balance ?? 0;
-    setStep("form");
+    // ЛИСТ ОТКРЫВАЕТСЯ НА ПЕРВОМ НЕОТВЕЧЕННОМ ВОПРОСЕ (владелец 2026-09-12:
+    // «давай уменьшаем тапы»). Со строки счёта источник известен — значит,
+    // сразу форма с набранной суммой. Иконкой ⇄ из шапки не известно ничего, и
+    // форма встречала двумя «Выберите счёт» и цифровой клавиатурой под пустой
+    // суммой: три лишних тапа, чтобы добраться до единственного вопроса,
+    // который вообще можно задать первым.
+    setStep(source || donor ? "form" : "from");
     setFromId(source?.id ?? donor?.id ?? null);
     setSourceLocked(!!source);
     setToId(target?.id ?? null);
@@ -274,7 +280,22 @@ export function TransferSheet({
         moneySign(next.balance) > 0 ? formatMoneyForInput(next.balance) : "",
       );
     }
-    setStep("form");
+    // ПОЛУЧАТЕЛЬ ПОДСТАВЛЯЕТСЯ ТЕМ ЖЕ ПРАВИЛОМ, ЧТО И ПРИ ВХОДЕ СО СТРОКИ:
+    // прошлый адресат этого источника, а если счёт в паре всего один — он.
+    // Уже выбранного рукой получателя не трогаем: смена источника — не повод
+    // переигрывать чужое решение.
+    let target = to;
+    if (next && !target) {
+      target = defaultTransferTarget({
+        accounts,
+        from: next,
+        remembered: loadLastTransferTarget(next.id),
+      });
+      setToId(target?.id ?? null);
+    }
+    // Подставить нечего — спрашиваем сразу, а не показываем форму с погашенной
+    // кнопкой и надписью «Выберите, куда».
+    setStep(target ? "form" : "to");
     setFailure(null);
   };
 
