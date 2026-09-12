@@ -77,7 +77,11 @@ export default function FinanceSettingsScreen() {
             tile={SETTINGS_TILE.blue}
             icon={Wallet}
             title="Настройки счетов"
-            sub="Добавить счёт, порядок строк, закрытые счета"
+            // «Порядок строк» здесь больше нет: порядок переставляют ручкой
+            // в самом списке счетов, отдельной страницы не осталось
+            // (владелец 2026-09-12). Подпись перечисляет то, что за дверью
+            // ДЕЙСТВИТЕЛЬНО есть.
+            sub="Добавить счёт, закрытые счета"
             onPress={() => router.push("/accounts/settings")}
           />
           <Divider inset={56} />
@@ -103,7 +107,11 @@ export default function FinanceSettingsScreen() {
           <SettingsRow
             tile={SETTINGS_TILE.red}
             icon={Percent}
-            title="НДС и страна"
+            // ПРОСТО «НДС»: страны на этой странице нет и не было — она
+            // живёт в «Реквизитах компании» (`cabinet/business.tsx`), рядом с
+            // адресом и телефоном. Дверь обещала настройку, которой за ней
+            // нет, и человек шёл искать страну туда, где её никогда не стояло.
+            title="НДС"
             sub={vatSummaryLine(vat.data)}
             onPress={() => router.push("/finances/vat")}
           />
