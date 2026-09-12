@@ -225,6 +225,7 @@ export default function CalendarTab() {
   const {
     data: teams = [],
     isLoading: teamsLoading,
+    isPending: teamsPending,
     isFetching: teamsFetching,
     isError: teamsError,
     error: teamsQueryError,
@@ -622,6 +623,7 @@ export default function CalendarTab() {
     items: chipItems,
     pick: pickCalendar,
     pendingId: pendingChipId,
+    loading: chipsLoading,
   } = useCalendarChips({
     own: calendarTeams,
     onPickOwn: (teamId) => {
@@ -631,6 +633,17 @@ export default function CalendarTab() {
     },
     onSwitchError: (message) => toast(message, "error"),
   });
+
+  // ЕЩЁ НЕ ЗНАЕМ, ЕСТЬ ЛИ ЗДЕСЬ КАЛЕНДАРИ И КАКИЕ ЕСТЬ В ДРУГИХ КОМПАНИЯХ.
+  //
+  // `teamsPending`, а не `teamsLoading`: список команд ВЫКЛЮЧЕН, пока грузится
+  // роль, а у выключенного запроса `isLoading` равен false. Ответ «нет
+  // данных» тогда неотличим от «данных не спрашивали».
+  //
+  // Ошибка роли сюда НЕ входит намеренно: она своя и показывается своим
+  // экраном, а вечный скелет вместо неё — тупик хуже прежнего.
+  const calendarsUnknown =
+    !roleQuery.isError && (teamsPending || chipsLoading);
 
   // Active team calendar. Derived (not stored) so it self-heals: falls back
   // to the first team until the user picks one, and re-anchors if the chosen
@@ -2258,6 +2271,19 @@ export default function CalendarTab() {
   if (teams.length === 0) {
     // Сетевой сбой ≠ «команд нет»: настроенному тенанту нельзя показывать
     // «Создать календарь» из-за упавшего запроса (риск дубля команды).
+    //
+    // «ЕЩЁ НЕ ЗНАЕМ» ≠ «НЕТ», И ЭТО НЕ ПРИДИРКА. `useTeams` ВЫКЛЮЧЕН, пока
+    // грузится роль, а у выключенного запроса react-query держит `isLoading`
+    // равным false — данных нет, загрузки «нет», и экран уверенно объявлял
+    // «Календарь ещё не назначен», не начав его спрашивать. После полной
+    // перезагрузки бандла это видно глазом.
+    //
+    // Хуже самой надписи то, что вместе с ней ИСЧЕЗАЛА ЛЕНТА: чипов ещё нет,
+    // рисовать нечего — и человек оставался с «попросите владельца» без
+    // единственной двери отсюда. Читается как «меня выкинули из компании».
+    //
+    // Поэтому конечное пустое состояние показывается, только когда известно
+    // И что здесь календарей нет, И какие есть в других компаниях.
     return (
       <Screen>
         {/* ЛЕНТА ОСТАЁТСЯ И ЗДЕСЬ. Мастер, которому в этой компании ещё не
@@ -2274,7 +2300,7 @@ export default function CalendarTab() {
             onSelect={pickCalendar}
           />
         ) : null}
-        {teamsLoading ? (
+        {calendarsUnknown ? (
           // Скелет, а не голый спиннер: один экран — один язык ожидания.
           // Полосы чипов в скелете нет — команд ещё нет.
           <CalendarSkeleton mode="week" />

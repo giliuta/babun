@@ -156,8 +156,14 @@ export function useCalendarChips(opts: {
    *  подсвечивает ЕГО, а не тот, что был: экран обязан отвечать на касание
    *  сразу, иначе пять секунд сети читаются как «не нажалось». */
   pendingId: string | null;
+  /** Список календарей ещё не доехал — то есть мы НЕ ЗНАЕМ, есть ли у человека
+   *  другие календари. Экран обязан отличать это от «других нет»: лента —
+   *  единственная дверь из компании, и показать «календаря нет, попросите
+   *  владельца» без неё значит запереть человека на ровном месте. */
+  loading: boolean;
 } {
-  const { data: myCalendars = [] } = useMyCalendars();
+  const { data: myCalendars = [], isPending: calendarsPending } =
+    useMyCalendars();
   const switching = useSwitchWorkspace();
   // Имя активной компании нужно, чтобы поставить СВОИ чипы на их место в общем
   // порядке. Берём его из ленты, которая и так загружена.
@@ -267,5 +273,5 @@ export function useCalendarChips(opts: {
       });
   };
 
-  return { items, pick, pendingId };
+  return { items, pick, pendingId, loading: calendarsPending };
 }
