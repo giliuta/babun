@@ -23,6 +23,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Spinner } from "@/components/ui/Spinner";
 import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
+import { chooseOption } from "@/lib/choose";
 import { useAppointments } from "@/features/calendar/queries";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useClients } from "@/features/clients/queries";
@@ -180,42 +181,70 @@ export default function InvoiceDetailScreen() {
     }
   };
 
-  const voidInvoice = () =>
-    confirmThen(
-      "Аннулировать инвойс?",
-      {
-        message: "Документ останется в истории, но перестанет учитываться как ожидающий оплату.",
-        confirmLabel: "Аннулировать",
-        destructive: true,
-      },
-      () =>
-        setStatus.mutate("void", {
-          onError: (error) => notify("Ошибка", error.message),
-        }),
-    );
+  const runVoid = () =>
+    setStatus.mutate("void", {
+      onError: (error) => notify("Ошибка", error.message),
+    });
 
-  // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09): сервер выпускает встречную кредит-ноту,
-  // инвойс получает статус «Отменён» — у клиента остаются оба документа.
-  // Оплаченный инвойс сервер не отменит и попросит сначала оформить возврат —
-  // его формулировка показывается человеку как есть.
-  const cancelInvoice = () =>
-    confirmThen(
-      "Отменить инвойс?",
-      {
-        message: "Будет выпущена кредит-нота — встречный документ на ту же сумму. Инвойс получит статус «Отменён».",
-        confirmLabel: "Отменить инвойс",
-        destructive: true,
+  const runCreditNote = () =>
+    cancel.mutate(undefined, {
+      onSuccess: (note) => {
+        haptics.success();
+        // Показываем рождённую кредит-ноту — она и есть результат.
+        router.push(`/invoices/${note.id}` as Href);
       },
-      () =>
-        cancel.mutate(undefined, {
-          onSuccess: (note) => {
-            haptics.success();
-            // Показываем рождённую кредит-ноту — она и есть результат.
-            router.push(`/invoices/${note.id}` as Href);
-          },
-          onError: (error) => notify("Инвойс не отменён", error.message),
-        }),
+      onError: (error) => notify("Инвойс не отменён", error.message),
+    });
+
+  // ОТКАЗ ОТ ИНВОЙСА — ОДНА ДВЕРЬ (владелец 2026-09-12).
+  //
+  // Рядом стояли две красные кнопки: «Отменить инвойс» и «Аннулировать
+  // инвойс». По-русски это одно и то же слово дважды, а последствия разные —
+  // и разницу было видно только внутри подтверждения, то есть после того, как
+  // человек уже выбрал. Владелец выбрал: кнопка одна, выбор в подтверждении.
+  //
+  // КАНОННЫЙ ОТКАЗ (ТЗ 2026-08-09) — кредит-нота: сервер выпускает встречный
+  // документ на ту же сумму, инвойс получает статус «Отменён», у клиента
+  // остаются оба. Он возможен всегда и потому стоит первым.
+  //
+  // Аннулирование предлагается ТОЛЬКО пока по инвойсу ничего не получено: это
+  // путь для ошибочной бумаги, выставленной минуту назад, и оставлять след
+  // кредит-нотой там нечему. Оплаченный инвойс сервер и не отменит — попросит
+  // сначала оформить возврат, и его формулировка показывается как есть.
+  const cancelInvoice = async () => {
+    // Кнопка живёт только под загруженным документом; guard — на случай
+    // вызова не с неё (ротор VoiceOver).
+    if (!settlement) return;
+    if (settlement.paid > 0) {
+      confirmThen(
+        "Отменить инвойс?",
+        {
+          message:
+            "Будет выпущена кредит-нота — встречный документ на ту же сумму."
+            + " Инвойс получит статус «Отменён».",
+          confirmLabel: "Отменить инвойс",
+          destructive: true,
+        },
+        runCreditNote,
+      );
+      return;
+    }
+    const index = await chooseOption(
+      "Отменить инвойс?",
+      [
+        { label: "Выпустить кредит-ноту", destructive: true },
+        { label: "Аннулировать — документ ошибочный", destructive: true },
+      ],
+      {
+        message:
+          "Кредит-нота — встречный документ на ту же сумму: у клиента остаются"
+          + " оба, и отказ виден в истории. Аннулирование оставляет инвойс в"
+          + " истории, но он перестаёт ждать оплату и не попадает в документы.",
+      },
     );
+    if (index === 0) runCreditNote();
+    if (index === 1) runVoid();
+  };
 
   const loading =
     invoice.isLoading ||
@@ -617,22 +646,17 @@ export default function InvoiceDetailScreen() {
             />
           ) : null}
           {!isCreditNote && row.status === "issued" ? (
-            <>
-              {/* Канонный отказ: «отказ → credit note». Легаси-«Аннулировать»
-                  (void без встречного документа) пока живёт рядом — сносить ли
-                  его совсем, решает владелец. */}
-              <Button
-                label="Отменить инвойс"
-                variant="secondary"
-                tone="danger"
-                onPress={cancelInvoice}
-                loading={cancel.isPending}
-                disabled={cancel.isPending}
-              />
-              {settlement.paid === 0 ? (
-                <Button label="Аннулировать инвойс" variant="secondary" tone="danger" onPress={voidInvoice} />
-              ) : null}
-            </>
+            /* ОДНА КРАСНАЯ КНОПКА НА ОТКАЗ: что именно произойдёт —
+               кредит-нота или аннулирование — спрашивается подтверждением,
+               в момент решения и словами последствия (см. `cancelInvoice`). */
+            <Button
+              label="Отменить инвойс"
+              variant="secondary"
+              tone="danger"
+              onPress={() => void cancelInvoice()}
+              loading={cancel.isPending || setStatus.isPending}
+              disabled={cancel.isPending || setStatus.isPending}
+            />
           ) : null}
           <Button
             label="Поделиться PDF"
