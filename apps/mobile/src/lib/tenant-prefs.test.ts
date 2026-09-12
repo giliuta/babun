@@ -42,6 +42,10 @@ describe("настройки, помнящиеся по компании", () =>
     assert.ok(!isTenantScopedKey("calendar.view"));
     assert.ok(!isTenantScopedKey("babun-chats"));
     assert.ok(!isTenantScopedKey("babun-clients-sort"));
+    // РЕЕСТР НАПОМИНАНИЙ переживает переход, хотя компанию не называет: он
+    // принадлежит ЧЕЛОВЕКУ и хранит напоминания обеих компаний. Снося его,
+    // переход заставлял сверку погасить выставленные руками напоминания обеих.
+    assert.ok(isTenantScopedKey("babun:notifications:logical.v1"));
   });
 
   test("ЧИСТКА ВЖИВУЮ: переход бережёт настройку компании, выход из аккаунта — нет", () => {
