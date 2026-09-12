@@ -4,7 +4,10 @@
 
 import type { Appointment, Payment } from "@babun/shared/local/appointments";
 import { getPaidAmount } from "@babun/shared/local/appointments";
-import { appointmentDebtCents } from "@babun/shared/local/finance/appointment-calc";
+import {
+  appointmentDebtCents,
+  appointmentOverpaidCents,
+} from "@babun/shared/local/finance/appointment-calc";
 import { formatEURExact, parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { formatShortDateRu } from "@/features/clients/format";
 import { formatHM, formatYMD, humanDay } from "./helpers";
@@ -34,13 +37,53 @@ export function visitStarted(
   return apt.time_start <= now.hm;
 }
 
-/** Остаток по записи в центах — тем же счётом, что «Должники». */
+/** Остаток по СОХРАНЁННОЙ записи в центах — тем же счётом, что «Должники».
+ *  Внутри открытой формы этого мало: там итог живёт в полях, а не в базе, —
+ *  см. `paymentMath`. */
 export function outstandingCents(apt: Appointment): number {
   return appointmentDebtCents(
     apt.total_amount,
     getPaidAmount(apt),
     apt.payment_status,
   );
+}
+
+/**
+ * ДЕНЬГИ БЛОКА СЧИТАЮТСЯ ПО ИТОГУ ФОРМЫ, А НЕ ПО ИТОГУ ИЗ БАЗЫ.
+ *
+ * Владелец 2026-09-12: открыл оплаченную запись (160 из 160), дописал услуги —
+ * строка «Итого» стала €280, а блок «Оплата» по-прежнему говорил «Оплачено» и
+ * гасил все плитки, кроме уже оплаченной. Доплатить €120 на «Карту» было
+ * нечем: остаток считался от `appointment.total_amount`, а он обновляется
+ * только ПОСЛЕ сохранения. То есть блок отвечал на вопрос «сколько должны по
+ * прошлой версии записи», стоя вплотную к новой сумме.
+ *
+ * Итог формы — та самая цифра, что человек видит строкой выше, поэтому она и
+ * решает. Переплата считается ею же: опущенный ниже оплаченного итог обязан
+ * назваться переплатой сразу, а не после сохранения (правило заведено
+ * владельцем 2026-09-10, но жило только на сохранённом итоге).
+ *
+ * Уже полученные деньги берутся из записи: их не существует, пока запись не
+ * сохранена, — у новой записи остаток равен всему итогу.
+ */
+export function paymentMath(
+  appointment: Appointment | null,
+  /** Живой итог формы в валюте (не центах) — `effectiveTotal` страницы записи. */
+  totalDraft: number,
+): { outstanding: number; overpaid: number } {
+  if (!appointment) {
+    const cents = Math.round(totalDraft * 100);
+    return {
+      outstanding: Number.isFinite(cents) ? Math.max(0, cents) : 0,
+      overpaid: 0,
+    };
+  }
+  const paid = getPaidAmount(appointment);
+  const status = appointment.payment_status;
+  return {
+    outstanding: appointmentDebtCents(totalDraft, paid, status),
+    overpaid: appointmentOverpaidCents(totalDraft, paid, status),
+  };
 }
 
 /** Сумма из поля ввода — в центах; 0, если это не число. */
@@ -191,6 +234,9 @@ export function blockCaption(input: {
   /** Лишние деньги: заплатили больше, чем стоит запись. */
   overpaid?: number;
   overpaidLabel?: string;
+  /** Итог в форме уже не тот, что в базе: деньги принимает сервер, а он
+   *  считает долг по сохранённой записи. */
+  billUnsaved?: boolean;
 }): { text: string; tone: CaptionTone } | null {
   if (!input.hasTeam) return { text: "Выберите команду", tone: "neutral" };
   // ПЕРЕПЛАТА ВАЖНЕЕ «ОПЛАЧЕНО» (владелец 2026-09-10: «а он-то уже
@@ -200,6 +246,13 @@ export function blockCaption(input: {
   // записи не было вовсе. Теперь она называет себя и ждёт решения.
   if ((input.overpaid ?? 0) > 0 && input.overpaidLabel) {
     return { text: `Переплата ${input.overpaidLabel}`, tone: "warning" };
+  }
+  // ДЕНЬГИ ПРИНИМАЕТ СЕРВЕР, А ОН ЧИТАЕТ СОХРАНЁННУЮ ЗАПИСЬ. Дописали услуги —
+  // долг уже посчитан по новому итогу (`paymentMath`), но платёж на него
+  // сервер отобьёт: в базе ещё прошлая сумма. Строка просит ровно то, что
+  // нужно сделать, вместо отказа после тапа.
+  if (input.billUnsaved) {
+    return { text: "Итог изменился — сохраните запись", tone: "warning" };
   }
   if (input.hasAppointment && input.outstanding <= 0 && input.rowsCount > 0) {
     return {

@@ -14,6 +14,7 @@ import {
   outstandingCents,
   paidAtLabel,
   paidTileIntent,
+  paymentMath,
   paymentRows,
   recordedToast,
   visitStarted,
@@ -62,6 +63,86 @@ describe("outstanding and amount checks", () => {
   });
   test("refunded record owes nothing", () => {
     assert.equal(outstandingCents(apt({ payment_status: "refunded" })), 0);
+  });
+});
+
+describe("деньги блока считаются по итогу ФОРМЫ", () => {
+  // Владелец 2026-09-12: оплаченная запись (160 из 160), дописал услуги до
+  // €280 — блок продолжал говорить «Оплачено» и гасил все плитки, кроме уже
+  // оплаченной. Остаток брался из базы, а в базе лежит прошлая версия записи.
+  const paidFully = apt({
+    total_amount: 160,
+    paid_amount: 160,
+    payment_status: "paid",
+    payments: [
+      { id: "p1", method: "cash", amount: 160, paid_at: "2026-09-11T08:00:00.000Z" },
+    ],
+  });
+
+  test("дописали услуги — разница становится остатком СРАЗУ, до сохранения", () => {
+    assert.deepEqual(paymentMath(paidFully, 280), {
+      outstanding: 12000,
+      overpaid: 0,
+    });
+  });
+
+  test("итог не трогали — ответ тот же, что по сохранённой записи", () => {
+    assert.deepEqual(paymentMath(paidFully, 160), { outstanding: 0, overpaid: 0 });
+    assert.equal(paymentMath(apt(), 135).outstanding, outstandingCents(apt()));
+  });
+
+  test("опустили итог ниже оплаченного — переплата видна сразу", () => {
+    assert.deepEqual(paymentMath(paidFully, 100), {
+      outstanding: 0,
+      overpaid: 6000,
+    });
+  });
+
+  test("возвращённая запись не должна и не переплачена ни при каком итоге", () => {
+    const refunded = apt({ payment_status: "refunded", paid_amount: 160 });
+    assert.deepEqual(paymentMath(refunded, 280), { outstanding: 0, overpaid: 0 });
+  });
+
+  test("новая запись: остаток равен всему итогу формы, денег ещё нет", () => {
+    assert.deepEqual(paymentMath(null, 47.5), { outstanding: 4750, overpaid: 0 });
+    assert.deepEqual(paymentMath(null, 0), { outstanding: 0, overpaid: 0 });
+  });
+
+  test("пока итог не сохранён, строка просит сохранить, а не объявляет оплату", () => {
+    // Деньги принимает сервер, а он считает долг по СВОЕЙ строке: платёж на
+    // ещё не сохранённый остаток он отобьёт «По заявке нечего оплачивать».
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: true,
+      outstanding: 12000,
+      rowsCount: 1,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€120,00",
+      billUnsaved: true,
+    });
+    assert.deepEqual(caption, {
+      text: "Итог изменился — сохраните запись",
+      tone: "warning",
+    });
+  });
+
+  test("сохранённый итог — обычная жизнь строки: долг называется долгом", () => {
+    const caption = blockCaption({
+      hasTeam: true,
+      hasAppointment: true,
+      visitCompleted: true,
+      outstanding: 12000,
+      rowsCount: 1,
+      amountMode: false,
+      started: true,
+      hasPending: false,
+      outstandingLabel: "€120,00",
+      billUnsaved: false,
+    });
+    assert.deepEqual(caption, { text: "Долг €120,00", tone: "warning" });
   });
   test("input parses to cents and empty/garbage is zero", () => {
     assert.equal(amountCentsFromInput("135"), 13500);

@@ -17,8 +17,6 @@ import { haptics } from "@/lib/haptics";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { appointmentOverpaidCents } from "@babun/shared/local/finance/appointment-calc";
-import { getPaidAmount } from "@babun/shared/local/appointments";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
@@ -36,9 +34,9 @@ import {
   blockCaption,
   closesVisit,
   invoiceSubtitle,
-  outstandingCents,
   paidAtLabel,
   paidTileIntent,
+  paymentMath,
   paymentRows,
   recordedToast,
   visitStarted,
@@ -140,16 +138,16 @@ export function PaymentBlock({
     { date: visit.date, time_start: visit.timeStart },
     businessNow(),
   );
-  const overpaid = appointment
-    ? appointmentOverpaidCents(
-        appointment.total_amount,
-        getPaidAmount(appointment),
-        appointment.payment_status,
-      )
-    : 0;
-  const outstanding = appointment
-    ? outstandingCents(appointment)
-    : Math.round(totalDraft * 100);
+  // СЧИТАЕМ ПО ИТОГУ ФОРМЫ. У сохранённой записи итог в базе — прошлая версия:
+  // человек дописал услуги, «Итого» стало €280, а блок ещё жил числом 160 и
+  // объявлял запись оплаченной. Правило и его причина — в `paymentMath`.
+  const { outstanding, overpaid } = paymentMath(appointment, totalDraft);
+  // Итог формы разошёлся с сохранённым: долг уже настоящий, а вот принять по
+  // нему деньги сервер откажется — он считает остаток по своей строке. Пока
+  // запись не сохранена, плитки стоят погашенными и говорят почему.
+  const billUnsaved =
+    appointment !== null
+    && Math.round(appointment.total_amount * 100) !== Math.round(totalDraft * 100);
   const rows = useMemo(
     () => (appointment ? paymentRows(appointment) : []),
     [appointment],
@@ -169,7 +167,7 @@ export function PaymentBlock({
   const kindForTap: PaymentKind = started ? "settlement" : "prepayment";
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && (started || amountMode);
+  const acceptsMoney = outstanding > 0 && (started || amountMode) && !billUnsaved;
 
   const runCancel = (
     appointmentId: string,
@@ -195,6 +193,11 @@ export function PaymentBlock({
 
   const handleTileTap = (account: PaymentAccountOption) => {
     if (outstanding <= 0 || busy) return;
+    if (billUnsaved) {
+      haptics.warning();
+      toast("Итог изменился — сначала сохраните запись", "info");
+      return;
+    }
     if (!started && !amountMode) {
       haptics.warning();
       toast("Визит ещё не начался — предоплата через кнопку суммы или инвойс", "info");
@@ -308,6 +311,7 @@ export function PaymentBlock({
     outstandingLabel: formatEURExact(outstanding / 100),
     overpaid,
     overpaidLabel: formatEURExact(overpaid / 100),
+    billUnsaved,
   });
   const captionColor =
     caption?.tone === "success"
