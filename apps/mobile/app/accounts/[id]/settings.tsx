@@ -9,6 +9,7 @@ import {
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
+import { useReferenceHref } from "@/features/clients/reference-href";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -92,6 +93,7 @@ function AccountSettingsContent() {
     [accountsQuery.data],
   );
   const account = accounts.find((a) => a.id === id) ?? null;
+  const vatHref = useReferenceHref().vat;
   const activeAccounts = useMemo(
     () => accounts.filter((a) => a.is_active),
     [accounts],
@@ -605,7 +607,9 @@ function AccountSettingsContent() {
             <NavRow
               label="НДС"
               value="Компания не работает с НДС"
-              onPress={() => router.push("/finances/vat")}
+              // Общий адрес: `/finances/vat` — это ВКЛАДКА «Финансы», и push
+              // туда со счёта (корневой стек) уводил «назад» на календарь.
+              onPress={() => router.push(vatHref)}
             />
           </RowGroup>
         )}

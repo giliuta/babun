@@ -33,5 +33,7 @@ export function useReferenceHref() {
     services: ("/services" as const),
     eventTypes: ("/event-types" as const),
     categories: ("/categories" as const),
+    // НДС зовут из настроек счёта — экрана КОРНЕВОГО стека, над табами.
+    vat: ("/vat" as const),
   };
 }
