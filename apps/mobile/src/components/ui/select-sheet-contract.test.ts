@@ -76,10 +76,13 @@ describe("анатомия шторки выбора", () => {
     }
   });
 
-  test("примитив строки держит канон: 52pt, кружок 28, имя 15/600", () => {
+  test("примитив строки держит канон: 52pt, плитка 28, имя 15/600", () => {
     const row = read("./select-rows.tsx");
     assert.match(row, /minHeight: 52/);
-    assert.match(row, /const CIRCLE = 28/);
+    // Плитка КВАДРАТНАЯ и того же радиуса, что у блока «Вид»: круглым остался
+    // только аватар клиента с буквой.
+    assert.match(row, /const TILE = 28/);
+    assert.match(row, /borderRadius: avatar \? t\.radius\.pill : PICKER_RADIUS/);
     assert.match(row, /fontSize: 15, fontWeight: "600"/);
     // Галка у выбранной и тонировка строки — признак выбора, а не рамка.
     assert.match(row, /<Check color=\{t\.accent\}/);

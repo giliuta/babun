@@ -154,7 +154,7 @@ describe("библиотека блоков указывает на живой �
     assert.match(rows, /minHeight: 52,/, "строка шторки больше не 52pt");
     assert.match(rows, /paddingHorizontal: 14,/);
     assert.match(rows, /gap: 12,/);
-    assert.match(rows, /const CIRCLE = 28/, "кружок строки шторки больше не 28pt");
+    assert.match(rows, /const TILE = 28/, "плитка строки шторки больше не 28pt");
     assert.match(rows, /minHeight: 40,/, "поле поиска шторки больше не 40pt");
   });
 

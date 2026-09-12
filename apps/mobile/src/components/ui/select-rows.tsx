@@ -3,6 +3,8 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import { Check, Search, X } from "lucide-react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { GUTTER, ICON } from "@/components/ui/tokens";
+import { PICKER_RADIUS } from "@/components/ui/picker-grid";
+import { readableTextOnColor } from "@/components/ui/color-contrast";
 import { useThemeColors } from "@/theme/colors";
 
 // АНАТОМИЯ ШТОРКИ ВЫБОРА — ОДНА НА ВЕСЬ ПРОДУКТ (владелец 2026-09-10: «если я
@@ -115,8 +117,14 @@ export function SelectSearch({
 /** Отступ списка шторки — тот же `GUTTER`, что у всего продукта. Экспортируется,
  *  чтобы обёртка списка и строки стояли по одной линии. */
 export const SELECT_SIDE = GUTTER;
-/** Кружок строки. Круглый по смыслу — аватар, значок сущности, цвет метки. */
-const CIRCLE = 28;
+/** Плитка строки. КВАДРАТНАЯ, как весь продукт (владелец 2026-09-10: «сделай
+ *  не кругляшки, а квадратики — я заметил, что у нас всё в основном
+ *  квадратненькое»). Тот же квадрат и тот же радиус, что у плитки блока «Вид»
+ *  в списке справочника: один и тот же тег, счёт или категория обязаны
+ *  выглядеть одинаково и в списке, и в шторке выбора.
+ *  Круглым остаётся ровно одно — аватар клиента с буквой: аватары круглые
+ *  везде, и квадратный читался бы не как человек, а как ещё одна сущность. */
+const TILE = 28;
 
 export function SelectRow({
   title,
@@ -164,10 +172,20 @@ export function SelectRow({
   onPress: () => void;
 }) {
   const t = useThemeColors();
-  const tint = color ? `${color}26` : `${t.accent}1a`;
-  const glyph = color ? (selected ? t.onAccent : color) : t.accent;
-  const hasCircle = Boolean(Icon || initial);
+  const hasTile = Boolean(Icon || initial);
   const emoji = typeof Icon === "string" ? Icon : null;
+  // АВАТАР — СВОЙ СЛУЧАЙ: круг, тинт акцента, буква акцентом. Всё остальное —
+  // плитка сущности из блока «Вид»: цвет заливкой в полную силу, глиф поверх
+  // читаемыми чернилами. Прежний кружок заливался цветом на 15 %, а глиф
+  // красил сам цвет — та же сущность в списке (плитка) и в шторке (кружок)
+  // выглядела двумя разными вещами.
+  const avatar = !Icon && Boolean(initial);
+  const fill = avatar ? `${t.accent}1a` : (color ?? t.fill);
+  const glyph = avatar
+    ? t.accent
+    : color
+      ? readableTextOnColor(color, t.ink, "#FFFFFF")
+      : t.body;
   return (
     <Pressable
       onPress={onPress}
@@ -211,15 +229,16 @@ export function SelectRow({
               : t.rowFill,
       })}
     >
-      {hasCircle ? (
+      {hasTile ? (
         <View
           style={{
-            width: CIRCLE,
-            height: CIRCLE,
-            borderRadius: t.radius.pill,
+            width: TILE,
+            height: TILE,
+            borderRadius: avatar ? t.radius.pill : PICKER_RADIUS,
+            borderCurve: "continuous",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: selected && color ? color : tint,
+            backgroundColor: fill,
           }}
         >
           {emoji ? (
@@ -227,7 +246,7 @@ export function SelectRow({
               {emoji}
             </Text>
           ) : Icon ? (
-            <Icon color={glyph} size={16} strokeWidth={2.2} />
+            <Icon color={glyph} size={16} strokeWidth={2} />
           ) : (
             <Text style={{ fontSize: 11, fontWeight: "700", color: glyph }}>
               {(initial ?? "?").slice(0, 1).toUpperCase()}
