@@ -22,7 +22,7 @@ import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
 import { useInvoices } from "@/features/invoices/queries";
 import { useTeams } from "@/features/reference/queries";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { useBusinessNow } from "./business-now";
 import {
   useTeamPaymentAccounts,
@@ -113,6 +113,7 @@ export function PaymentBlock({
   const [createOpen, setCreateOpen] = useState(false);
 
   const canCreateAccount = role === "owner" || role === "dispatcher";
+  const canUseDocuments = usePlanAllows("documents");
   const { data: teams = [] } = useTeams();
   // Все счета тенанта — листу создания для проверки дубля имени (общий ключ).
   const accountRows = useQuery({
@@ -333,7 +334,11 @@ export function PaymentBlock({
   // что выписывать, история платежей пуста. Три мёртвых тапа — и полоса в
   // сорок точек, в которой нет ни слова, только они, прижатые вправо.
   const canSplit = outstanding > 0;
-  const canInvoice = Boolean(invoice) || outstanding > 0;
+  // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ: `enforce_plan_limits` отобьёт
+  // вставку инвойса, а канон запрещает живой контрол над запрещённым —
+  // значка «Инвойс» просто нет. Уже выписанный документ открыть можно: он
+  // существует, и прятать дорогу к нему значило бы потерять бумагу.
+  const canInvoice = Boolean(invoice) || (outstanding > 0 && canUseDocuments);
   const hasHistory = rows.length > 0;
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или

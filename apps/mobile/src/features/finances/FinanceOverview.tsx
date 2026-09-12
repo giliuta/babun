@@ -142,6 +142,7 @@ export function FinanceOverview({
   totals,
   accounts,
   invoices,
+  showDocuments = true,
   view,
   onTap,
 }: {
@@ -154,6 +155,10 @@ export function FinanceOverview({
   totals: OverviewTotals;
   accounts: AccountTileSummary;
   invoices: InvoiceTileSummary;
+  /** Документы есть в тарифе. Нет — плитки нет ВОВСЕ (канон: без права блок
+   *  не показывается либо только читается; «видно, но при нажатии ошибка» в
+   *  продукте не бывает). «Счета» занимают ряд целиком. */
+  showDocuments?: boolean;
   view: HomeView;
   onTap: (v: HomeView) => void;
 }) {
@@ -260,6 +265,7 @@ export function FinanceOverview({
               краснела на просрочку и превращала обычный рабочий счёт в тревогу;
               состояние документа названо словом в самой его строке
               («Просрочен»), и этого достаточно. */}
+          {showDocuments ? (
           <SummaryToggle
             label="Документы"
             color={t.ink}
@@ -273,6 +279,7 @@ export function FinanceOverview({
             )} оплаты`}
             onPress={() => onTap("documents")}
           />
+          ) : null}
         </View>
 
         {/* ПЕРЕКЛЮЧАТЕЛИ — ОДИН ОБЪЕКТ (владелец 2026-08-11: «компактно,

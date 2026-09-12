@@ -73,8 +73,10 @@ export function DebtorsList({
   /** Ручной долг правят в своей шторке: записи за ним нет, открывать нечего. */
   onEditDebt: (debtId: string) => void;
   /** Открыть «Документы» — единственная дорога к деньгам, которые ушли отсюда
-   *  под счёт. Без неё пустой экран прячет их молча. */
-  onOpenDocuments: () => void;
+   *  под счёт. Без неё пустой экран прячет их молча. Нет обработчика — нет и
+   *  двери: на бесплатном тарифе документов в продукте не существует, и
+   *  кнопка вела бы в экран, которого нет. */
+  onOpenDocuments?: () => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
   refreshControl?: ReactElement<RefreshControlProps>;
 }) {
@@ -242,7 +244,7 @@ export function DebtorsList({
           : undefined
       }
       emptyAction={
-        movedToInvoices
+        movedToInvoices && onOpenDocuments
           ? { label: "Открыть документы", onPress: onOpenDocuments }
           : undefined
       }

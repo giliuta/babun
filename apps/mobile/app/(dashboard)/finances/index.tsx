@@ -24,7 +24,7 @@ import { LoadingBar } from "@/components/ui/LoadingBar";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useTeams, type Team } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
@@ -207,11 +207,20 @@ function FinancesContent() {
   // без этого «Доход» сбрасывался на «Все» (2026-09-09). Ленивый инициализатор,
   // а не эффект: разрез должен стоять уже в первом кадре, иначе человек видит
   // вспышку общей ленты. Незнакомое значение из адреса игнорируем.
-  const [view, setView] = useState<HomeView>(() =>
+  const [viewState, setView] = useState<HomeView>(() =>
     params.view && VIEWS.has(params.view as HomeView)
       ? (params.view as HomeView)
       : "all",
   );
+  // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ — ни плитки, ни разреза, ни
+  // кнопки «Выставить инвойс» (канон: без права блок не показывается либо
+  // только читается; «видно, но при нажатии ошибка» в продукте не бывает).
+  // Настоящий запрет стоит триггером `enforce_plan_limits` в базе, здесь —
+  // вид на него. Гасим РАЗРЕЗ, а не только плитку: в «Документы» приходят и
+  // адресом `?view=documents`, и возвратом из записи.
+  const canUseDocuments = usePlanAllows("documents");
+  const view: HomeView =
+    !canUseDocuments && viewState === "documents" ? "all" : viewState;
   // Открыта панель документов: у шапки другой предмет поиска, и она обязана
   // сказать об этом словами подсказки.
   const documentsView = view === "documents";
@@ -988,6 +997,7 @@ function FinancesContent() {
           totals={totals}
           accounts={accountsSummary}
           invoices={invoiceSummary}
+          showDocuments={canUseDocuments}
           view={view}
           onTap={toggleView}
         />
@@ -1076,10 +1086,14 @@ function FinancesContent() {
               setEditingDebt(found);
               setDebtOpen(true);
             }}
-            onOpenDocuments={() => {
-              setDocFilter("invoice");
-              setView("documents");
-            }}
+            onOpenDocuments={
+              canUseDocuments
+                ? () => {
+                    setDocFilter("invoice");
+                    setView("documents");
+                  }
+                : undefined
+            }
             refreshControl={refreshControl}
           />
         ) : (
