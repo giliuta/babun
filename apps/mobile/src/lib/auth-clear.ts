@@ -77,7 +77,7 @@ let intentionalSignOutBarrier: Promise<void> | null = null;
 function wipeFastStores(
   keepSubscribers: boolean,
   keepTenantNamedKeys = false,
-  activeTenantId?: string,
+  knownTenantIds?: readonly string[],
 ): void {
   const storage = getStorage();
   for (const key of storage.list()) {
@@ -117,13 +117,18 @@ function wipeFastStores(
   // компанию (`["appointments", tenantId, role]`), а такой запрос чужого не
   // покажет по построению — под другой компанией у него другой ключ.
   //
-  // Поэтому: запросы новой компании остаются и рисуются НЕМЕДЛЕННО, а
-  // помечаются протухшими и досчитываются в фоне. Всё остальное сносится —
-  // сюда попадает и `["client", id]`, ключ которого компанию не называет и
-  // потому мог бы показать карточку клиента прежней фирмы.
-  if (activeTenantId) {
+  // Поэтому: запросы ЛЮБОЙ из компаний человека остаются и рисуются
+  // НЕМЕДЛЕННО, а помечаются протухшими и досчитываются в фоне. Всё остальное
+  // сносится — сюда попадает и `["client", id]`, ключ которого компанию не
+  // называет и потому мог бы показать карточку клиента прежней фирмы.
+  //
+  // ЛЮБОЙ, А НЕ ТОЛЬКО ТОЙ, КУДА ИДЁМ — это правка второй попытки. Первая
+  // берегла лишь компанию назначения и тем самым стирала кэш той, откуда
+  // уходим: круг «AirFix → Giliuta → AirFix» оставался холодным на обратном
+  // пути, и владелец снова видел скелет. Поймано на симуляторе.
+  if (knownTenantIds?.length) {
     queryClient.removeQueries({
-      predicate: (q) => !keyNamesTenant(q.queryKey, activeTenantId),
+      predicate: (q) => !keyNamesKnownTenant(q.queryKey, knownTenantIds),
     });
     void queryClient.invalidateQueries();
     return;
@@ -133,10 +138,21 @@ function wipeFastStores(
   void queryClient.resetQueries();
 }
 
-/** Ключ запроса НАЗЫВАЕТ компанию — значит принадлежит ей и чужого не покажет.
- *  Сравнение по строгому совпадению элемента: `["appointments", id, role]`. */
-function keyNamesTenant(key: readonly unknown[], tenantId: string): boolean {
-  return key.some((part) => part === tenantId);
+/** Ключ запроса НАЗЫВАЕТ КАКУЮ-ТО из компаний человека — значит принадлежит ей
+ *  и чужого не покажет: под другой компанией у запроса другой ключ.
+ *
+ *  Сверяем со ВСЕМИ компаниями, а не только с той, куда идём. Первая версия
+ *  берегла лишь компанию назначения — и тем самым стирала кэш той, откуда
+ *  уходим. Круг «AirFix → Giliuta → AirFix» оставался холодным на обратном
+ *  пути: возвращаясь, человек снова видел скелет, потому что данные AirFix
+ *  снесли на предыдущем шаге. Поймано на симуляторе, а не рассуждением. */
+function keyNamesKnownTenant(
+  key: readonly unknown[],
+  tenantIds: readonly string[],
+): boolean {
+  return key.some(
+    (part) => typeof part === "string" && tenantIds.includes(part),
+  );
 }
 
 /** Убирает с устройства всё, что помнило прежнюю компанию, и ЖДЁТ, пока это
@@ -154,9 +170,11 @@ export async function wipeTenantScopedData(
   opts: {
     keepSubscribers?: boolean;
     keepLocalCache?: boolean;
-    /** Компания, В КОТОРУЮ переходим. Её запросы не выбрасываются — см.
-     *  разбор ниже; без неё чистка ведёт себя как прежде. */
-    activeTenantId?: string;
+    /** ВСЕ компании человека. Запросы, чьи ключи их называют, не
+     *  выбрасываются — см. разбор выше; без списка чистка ведёт себя как
+     *  прежде. Беречь ТОЛЬКО компанию назначения нельзя: так стирается кэш
+     *  той, откуда уходим, и обратный путь снова холодный. */
+    knownTenantIds?: readonly string[];
   } = {},
 ): Promise<void> {
   await queryClient.cancelQueries();
@@ -177,7 +195,7 @@ export async function wipeTenantScopedData(
   wipeFastStores(
     opts.keepSubscribers ?? false,
     opts.keepLocalCache ?? false,
-    opts.activeTenantId,
+    opts.knownTenantIds,
   );
 
   // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
