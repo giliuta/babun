@@ -17,6 +17,11 @@ import {
 
 export interface InvitationPreview {
   tenantName: string;
+  /** Календарь, в который зовут. `null` — приглашение старой формы, без
+   *  календаря: человек войдёт по роли. Показываем ровно то, что приглашение
+   *  на самом деле даёт: назвать одну компанию, когда права выдаются на один
+   *  её календарь, значит пообещать больше, чем будет. */
+  teamName: string | null;
   role: InvitableRole;
   emailHint: string;
   expiresAt: string;
@@ -45,6 +50,7 @@ function parsePreview(value: Json | null): InvitationPreview {
   }
   return {
     tenantName: row.tenant_name,
+    teamName: typeof row.team_name === "string" ? row.team_name : null,
     role: row.role,
     emailHint: row.email_hint,
     expiresAt: row.expires_at,

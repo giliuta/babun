@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Building2, Mail, ShieldCheck } from "lucide-react-native";
+import {
+  Building2,
+  CalendarRange,
+  Mail,
+  ShieldCheck,
+} from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -153,6 +158,16 @@ export default function InvitationScreen() {
                 label="Роль"
                 value={ROLE_LABELS[preview.data.role]}
               />
+              {preview.data.teamName ? (
+                <>
+                  <Divider inset={52} />
+                  <InfoRow
+                    icon={<CalendarRange color={t.accent} size={ICON.sm} />}
+                    label="Календарь"
+                    value={preview.data.teamName}
+                  />
+                </>
+              ) : null}
               <Divider inset={52} />
               <InfoRow
                 icon={<Mail color={t.accent} size={ICON.sm} />}
