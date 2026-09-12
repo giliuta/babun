@@ -9,9 +9,14 @@ const here = dirname(fileURLToPath(import.meta.url));
 describe("notification privacy contract", () => {
   test("clears native notifications before tenant-scoped caches", () => {
     const source = readFileSync(resolve(here, "auth-clear.ts"), "utf8");
+    // Порядок, а не сигнатура: у `wipeFastStores` появился режим
+    // (`keepSubscribers`) для чистки посреди сессии, и жёсткие скобки в
+    // образце ловили бы имя, а не смысл. Смысл один: нативные уведомления
+    // гаснут ДО того, как уходят кэши — иначе на локскрине остаются имена
+    // клиентов компании, из которой человек уже вышел.
     assert.match(
       source,
-      /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(\)/,
+      /await clearAllBabunNotifications\(\);[\s\S]*wipeFastStores\(/,
     );
   });
 

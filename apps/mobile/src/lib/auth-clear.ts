@@ -45,22 +45,45 @@ const KEEP_KEYS = new Set<string>([LAST_USER_KEY]);
 // tenant's SQLite queue is still present.
 let intentionalSignOutBarrier: Promise<void> | null = null;
 
-function wipeFastStores(): void {
+// ДВА РЕЖИМА ЧИСТКИ, И ВЫБОР МЕЖДУ НИМИ — НЕ ВКУС.
+//
+// `queryClient.clear()` сносит САМИ запросы. Экран, подписанный на такой
+// запрос, остаётся с замороженным снимком «идёт загрузка» и никогда не узнаёт,
+// что загрузка кончилась: будить некого, объекта больше нет.
+//
+// Пока чистка случалась только на выходе из аккаунта, это не стреляло: дерево
+// уходит на логин, подписчиков не остаётся. Выстрелило, когда чистка пошла
+// СЕРЕДИНОЙ сессии — при переходе в другую компанию: гейт «Открываем
+// компанию» висел шестьдесят секунд при пяти секундах самой работы, потому
+// что ответ пришёл, а сказать о нём было некому (замер 2026-09-12).
+//
+// Поэтому чистка посреди работы СБРАСЫВАЕТ запросы, а не сносит: данных
+// прежней компании сброс так же не оставляет, но подписчики остаются живыми и
+// узнают, что данных больше нет. На выходе из аккаунта остаётся `clear()` —
+// там сброс означал бы залп запросов без сессии.
+function wipeFastStores(keepSubscribers: boolean): void {
   const storage = getStorage();
   for (const key of storage.list()) {
     if (KEEP_KEYS.has(key)) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
-  queryClient.clear();
+  if (keepSubscribers) void queryClient.resetQueries();
+  else queryClient.clear();
 }
 
-/** Awaitable tenant wipe used by the invitation tenant-switch transaction.
- * Unlike logout, switching must not allow the next JWT to render until the
- * old tenant's MMKV, React Query and SQLite/offline queue are all gone. */
-export async function wipeTenantScopedData(): Promise<void> {
+/** Убирает с устройства всё, что помнило прежнюю компанию, и ЖДЁТ, пока это
+ *  случится: при переходе в другую компанию следующий токен не имеет права
+ *  ничего нарисовать, пока живы MMKV, кэш запросов и офлайн-очередь прежней.
+ *
+ *  `keepSubscribers` обязателен, когда чистка идёт ПОСРЕДИ работающей сессии
+ *  (тот самый переход): иначе смонтированные экраны застынут на «загрузке»
+ *  навсегда — объяснение над `wipeFastStores`. */
+export async function wipeTenantScopedData(
+  opts: { keepSubscribers?: boolean } = {},
+): Promise<void> {
   await queryClient.cancelQueries();
   await clearAllBabunNotifications();
-  wipeFastStores();
+  wipeFastStores(opts.keepSubscribers ?? false);
   try {
     await cacheClearAll();
   } catch {
@@ -80,7 +103,7 @@ export async function wipeTenantScopedData(): Promise<void> {
  *  await the SQLite clear before another session can render. */
 export function wipeLocalData(): void {
   void clearAllBabunNotifications();
-  wipeFastStores();
+  wipeFastStores(false);
   void cacheClearAll().catch(() => {
     // Cache not injected yet (SqlAdapter set only on native bootstrap) or a
     // transient SQLite error — swallow. The cross-tenant leak this guards

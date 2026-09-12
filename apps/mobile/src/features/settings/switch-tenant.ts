@@ -4,7 +4,6 @@ import { wipeTenantScopedData } from "@/lib/auth-clear";
 import { pauseSyncBridgeForTenantSwitch } from "@/lib/sync-bridge";
 import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
 import { markTenantOnboarded } from "@/lib/tenant";
-import { cacheClearAll } from "@babun/shared/db/cache/sql";
 
 /** `activate_tenant` отдаёт jsonb: роль, карточку мастера и факт онбординга.
  *  Узкий разбор вместо `any` — сгенерированные типы знают только `Json`. */
@@ -59,7 +58,7 @@ export async function switchTenant(
   const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
   let switched = false;
   try {
-    await wipeTenantScopedData();
+    await wipeTenantScopedData({ keepSubscribers: true });
 
     // ШТАМП ВПЕРЁД, ЕСЛИ ФАКТ УЖЕ ИЗВЕСТЕН. Ставится ПОСЛЕ чистки — она сносит
     // ключи с префиксом `babun:`, и поставленный раньше был бы стёрт. Дальше
@@ -94,22 +93,11 @@ export async function switchTenant(
       throw new Error("Сессия не переключилась на выбранную компанию.");
     }
 
-    // ВТОРАЯ ЧИСТКА — БЕЗ `queryClient.clear()`, И ЭТО РЕШАЮЩЕЕ ОТЛИЧИЕ.
-    //
-    // Полная очистка кэша запросов сносит сами запросы, а подписанные на них
-    // экраны остаются с замороженным снимком «идёт загрузка» — и никогда не
-    // узнают, что загрузка кончилась: будить некого, объекта больше нет.
-    // Измерено: гейт «Открываем компанию» так и висел ШЕСТЬДЕСЯТ СЕКУНД при
-    // пяти секундах самой транзакции, отрисовавшись ровно один раз.
-    //
-    // Данные старой компании при этом всё равно не остаются: их уносит первая
-    // чистка ДО смены токена, а здесь мы добиваем офлайн-базу и СБРАСЫВАЕМ
-    // запросы — сброс оставляет подписчиков живыми и сам говорит им, что
-    // данных больше нет.
-    await cacheClearAll().catch(() => {
-      // SQLite может быть ещё не внедрён (web/до загрузки) — остальное уже
-      // вычищено первой чисткой.
-    });
+    // ВТОРАЯ ЧИСТКА — С СОХРАНЕНИЕМ ПОДПИСЧИКОВ. Она идёт посреди живой
+    // сессии, и снести запросы здесь значит заморозить смонтированные экраны
+    // на «загрузке» навсегда: ответ придёт, а сказать о нём будет некому.
+    // Почему так — в `lib/auth-clear.ts` над `wipeFastStores`.
+    await wipeTenantScopedData({ keepSubscribers: true });
 
     // ШТАМП СТАВИТСЯ ПОСЛЕ ЧИСТКИ, И ЭТО НЕ ПРИДИРКА К ПОРЯДКУ: чистка сносит
     // ключи с префиксом `babun:`, а штамп — один из них. Поставленный раньше,
