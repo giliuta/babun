@@ -79,7 +79,9 @@ describe("mobile create quota integration", () => {
       !/await catchUpTokenClaim\(/.test(switching),
       "догоняющий claim не должен задерживать экран — он в фоне",
     );
-    assert.match(invitations, /await switchTenant\(tenantId\)/);
+    // Скобка открыта, а закрыта или нет — неважно: сторож про то, что
+    // приглашение зовёт ОБЩИЙ переход, а не про его аргументы.
+    assert.match(invitations, /await switchTenant\(tenantId[,)]/);
     assert.ok(
       !invitations.includes("activate_tenant"),
       "приглашение не должно звать activate_tenant напрямую — только switchTenant",
