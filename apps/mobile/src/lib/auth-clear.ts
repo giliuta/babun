@@ -77,6 +77,7 @@ let intentionalSignOutBarrier: Promise<void> | null = null;
 function wipeFastStores(
   keepSubscribers: boolean,
   keepTenantNamedKeys = false,
+  activeTenantId?: string,
 ): void {
   const storage = getStorage();
   for (const key of storage.list()) {
@@ -95,8 +96,47 @@ function wipeFastStores(
     if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
-  if (keepSubscribers) void queryClient.resetQueries();
-  else queryClient.clear();
+  if (!keepSubscribers) {
+    queryClient.clear();
+    return;
+  }
+
+  // ПЕРЕХОД НЕ ВЫБРАСЫВАЕТ ДАННЫЕ КОМПАНИИ, В КОТОРУЮ ИДЁТ.
+  //
+  // Владелец 2026-09-12: «всё равно очень долго открывается, должно
+  // моментально — сразу топаю на Команду 1, и сразу видно записи». Замер
+  // показал не медленную сеть, а СКЕЛЕТ: после перехода календарь рисовал
+  // серые заглушки вместо дат и записей.
+  //
+  // Виноват был `resetQueries()`. Она стирает данные У ВСЕХ запросов — включая
+  // те, что принадлежат компании, КУДА мы переходим и которые лежали готовыми
+  // с прошлого захода. То есть каждое переключение делалось холодным на
+  // ровном месте: данные были, их выбрасывали, и человек ждал сеть.
+  //
+  // Выбрасывать всё подряд и не требовалось: 59 ключей из 69 НАЗЫВАЮТ
+  // компанию (`["appointments", tenantId, role]`), а такой запрос чужого не
+  // покажет по построению — под другой компанией у него другой ключ.
+  //
+  // Поэтому: запросы новой компании остаются и рисуются НЕМЕДЛЕННО, а
+  // помечаются протухшими и досчитываются в фоне. Всё остальное сносится —
+  // сюда попадает и `["client", id]`, ключ которого компанию не называет и
+  // потому мог бы показать карточку клиента прежней фирмы.
+  if (activeTenantId) {
+    queryClient.removeQueries({
+      predicate: (q) => !keyNamesTenant(q.queryKey, activeTenantId),
+    });
+    void queryClient.invalidateQueries();
+    return;
+  }
+
+  // Компания неизвестна (чистка не из перехода) — прежнее поведение.
+  void queryClient.resetQueries();
+}
+
+/** Ключ запроса НАЗЫВАЕТ компанию — значит принадлежит ей и чужого не покажет.
+ *  Сравнение по строгому совпадению элемента: `["appointments", id, role]`. */
+function keyNamesTenant(key: readonly unknown[], tenantId: string): boolean {
+  return key.some((part) => part === tenantId);
 }
 
 /** Убирает с устройства всё, что помнило прежнюю компанию, и ЖДЁТ, пока это
@@ -109,8 +149,15 @@ function wipeFastStores(
  *
  *  `keepLocalCache` — ТОЖЕ про переход, и это про сохранность работы. Разбор
  *  над `cacheClearAll` ниже. */
+
 export async function wipeTenantScopedData(
-  opts: { keepSubscribers?: boolean; keepLocalCache?: boolean } = {},
+  opts: {
+    keepSubscribers?: boolean;
+    keepLocalCache?: boolean;
+    /** Компания, В КОТОРУЮ переходим. Её запросы не выбрасываются — см.
+     *  разбор ниже; без неё чистка ведёт себя как прежде. */
+    activeTenantId?: string;
+  } = {},
 ): Promise<void> {
   await queryClient.cancelQueries();
 
@@ -127,7 +174,11 @@ export async function wipeTenantScopedData(
   if (opts.keepLocalCache) await suspendAllBabunNotifications();
   else await clearAllBabunNotifications();
 
-  wipeFastStores(opts.keepSubscribers ?? false, opts.keepLocalCache ?? false);
+  wipeFastStores(
+    opts.keepSubscribers ?? false,
+    opts.keepLocalCache ?? false,
+    opts.activeTenantId,
+  );
 
   // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
   //
