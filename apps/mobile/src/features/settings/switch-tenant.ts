@@ -44,13 +44,28 @@ function isOnboardedResult(value: unknown): boolean {
 // синхронизации уже с новым tenant id — поэтому на успехе старые НЕ
 // возобновляются: возобновить их значило бы дать им дописать в новый контур.
 
-/** Меняет активную компанию и вычищает всё, что помнило предыдущую. */
-export async function switchTenant(tenantId: string): Promise<void> {
+/** Меняет активную компанию и вычищает всё, что помнило предыдущую.
+ *
+ *  `knownOnboarded` — факт, полученный ЗАРАНЕЕ (`list_my_calendars` отдаёт его
+ *  вместе с лентой). С ним штамп ставится в первую же секунду, и гейт
+ *  «Открываем компанию» не показывается вовсе: к моменту, когда токен
+ *  сменится и экран перерисуется, ответ уже лежит. Без него всё работает как
+ *  прежде — штамп встанет в конце, по ответу сервера. */
+export async function switchTenant(
+  tenantId: string,
+  knownOnboarded = false,
+): Promise<void> {
   const resumeOldBridge = pauseSyncBridgeForTenantSwitch();
   const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
   let switched = false;
   try {
     await wipeTenantScopedData();
+
+    // ШТАМП ВПЕРЁД, ЕСЛИ ФАКТ УЖЕ ИЗВЕСТЕН. Ставится ПОСЛЕ чистки — она сносит
+    // ключи с префиксом `babun:`, и поставленный раньше был бы стёрт. Дальше
+    // токен меняется, экран перерисовывается и читает готовый ответ: гейта
+    // человек не видит вовсе, а ждёт только данные, и то под скелетом.
+    if (knownOnboarded) markTenantOnboarded(tenantId);
 
     const { data: activated, error: activateError } = await supabase.rpc(
       "activate_tenant",

@@ -557,7 +557,11 @@ export default function CalendarTab() {
   // Лента календарей: свои плюс чужие, одним рядом. Правила склейки и
   // переход в другую компанию живут в `useCalendarChips` — та же лента стоит
   // над финансами, и двух её копий быть не должно.
-  const { items: chipItems, pick: pickCalendar } = useCalendarChips({
+  const {
+    items: chipItems,
+    pick: pickCalendar,
+    pendingId: pendingChipId,
+  } = useCalendarChips({
     own: calendarTeams,
     onPickOwn: (teamId) => {
       setMoving(null);
@@ -2205,7 +2209,7 @@ export default function CalendarTab() {
         {chipItems.length > 0 ? (
           <ScopeChips
             items={chipItems}
-            activeId={null}
+            activeId={pendingChipId}
             onSelect={pickCalendar}
           />
         ) : null}
@@ -2309,7 +2313,9 @@ export default function CalendarTab() {
 
       <ScopeChips
         items={chipItems}
-        activeId={activeTeamId}
+        // Пока идёт переход, подсвечен ТОТ чип, в который тапнули: экран
+        // отвечает на касание сразу, а данные догоняют под скелетом.
+        activeId={pendingChipId ?? activeTeamId}
         onSelect={pickCalendar}
       />
 

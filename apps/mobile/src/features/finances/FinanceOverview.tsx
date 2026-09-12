@@ -210,7 +210,9 @@ export function FinanceOverview({
           бы на первой же правке, и деньги разъехались бы с расписанием. */}
       <ScopeChips
         items={calendarChips.items}
-        activeId={scopeTeamId}
+        // Пока идёт переход в другую компанию, подсвечен выбранный чип, а не
+        // прежний: касание обязано отвечать сразу.
+        activeId={calendarChips.pendingId ?? scopeTeamId}
         seam={false}
         onSelect={calendarChips.pick}
       />

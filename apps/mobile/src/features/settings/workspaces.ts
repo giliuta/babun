@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
@@ -24,6 +25,9 @@ export interface MyCalendar {
   grants: string[];
   /** Календарь активной компании — открывается без переключения. */
   isActive: boolean;
+  /** Компания прошла онбординг. Знаем ЗАРАНЕЕ, чтобы при переходе не
+   *  показывать гейт «Открываем компанию»: он выясняет ровно этот факт. */
+  onboarded: boolean;
 }
 
 interface MyCalendarRow {
@@ -35,6 +39,7 @@ interface MyCalendarRow {
   role: string;
   grants: string[] | null;
   is_active: boolean;
+  onboarded: boolean;
 }
 
 /** Сгенерированный `database.types.ts` отстаёт от базы и этой функции ещё не
@@ -57,6 +62,7 @@ function toCalendar(row: MyCalendarRow): MyCalendar {
     role: row.role,
     grants: row.grants ?? [],
     isActive: row.is_active,
+    onboarded: row.onboarded,
   };
 }
 
@@ -84,7 +90,8 @@ export function useMyCalendars() {
 export function useSwitchWorkspace() {
   return useMutation({
     networkMode: "always",
-    mutationFn: (tenantId: string) => switchTenant(tenantId),
+    mutationFn: (input: { tenantId: string; onboarded: boolean }) =>
+      switchTenant(input.tenantId, input.onboarded),
   });
 }
 
@@ -116,9 +123,17 @@ export function useCalendarChips(opts: {
   onPickOwn: (teamId: string) => void;
   /** Переход не состоялся — человек остаётся там, где был, и знает почему. */
   onSwitchError: (message: string) => void;
-}): { items: CalendarChip[]; pick: (chipId: string) => void } {
+}): {
+  items: CalendarChip[];
+  pick: (chipId: string) => void;
+  /** Чип, в который человек уже тапнул, пока переход ещё идёт. Лента
+   *  подсвечивает ЕГО, а не тот, что был: экран обязан отвечать на касание
+   *  сразу, иначе пять секунд сети читаются как «не нажалось». */
+  pendingId: string | null;
+} {
   const { data: myCalendars = [] } = useMyCalendars();
   const switching = useSwitchWorkspace();
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   const foreign = myCalendars.filter((c) => !c.isActive);
   const items: CalendarChip[] = foreign.length
@@ -150,16 +165,34 @@ export function useCalendarChips(opts: {
     const separator = chipId.indexOf(":");
     const tenantId = chipId.slice(FOREIGN_PREFIX.length, separator);
     const teamId = chipId.slice(separator + 1);
-    // Пока идёт переход, экран сам показывает «Открываем компанию» — гейт
-    // поднимается от смены токена, своей крутилки ленте не нужно.
-    switching.mutate(tenantId, {
-      onSuccess: () => opts.onPickOwn(teamId),
-      onError: (error) =>
-        opts.onSwitchError(
-          error instanceof Error ? error.message : "Не удалось открыть календарь",
-        ),
-    });
+    const target = foreign.find((c) => c.tenantId === tenantId);
+
+    // Лента подсвечивает выбранный чип СРАЗУ, не дожидаясь сети. Сам переход —
+    // две поездки на сервер (сменить компанию в токене и забрать новый токен),
+    // это пять секунд, и убрать их нельзя. Убрать можно ожидание с глаз: тап
+    // отвечает мгновенно, дальше экран показывает скелет своего календаря.
+    setPendingId(chipId);
+    switching.mutate(
+      { tenantId, onboarded: target?.onboarded ?? false },
+      {
+        onSuccess: () => {
+          opts.onPickOwn(teamId);
+          setPendingId(null);
+        },
+        onError: (error) => {
+          // Переход не состоялся — подсветка возвращается туда, где человек и
+          // остался. Оставить её на чужом чипе значило бы соврать про то, где
+          // он сейчас.
+          setPendingId(null);
+          opts.onSwitchError(
+            error instanceof Error
+              ? error.message
+              : "Не удалось открыть календарь",
+          );
+        },
+      },
+    );
   };
 
-  return { items, pick };
+  return { items, pick, pendingId };
 }
