@@ -153,8 +153,8 @@ import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
 import {
+  hasForeignCalendars,
   useMyCalendars,
-  workspaceCount,
 } from "@/features/settings/workspaces";
 import { WorkspaceSheet } from "@/features/calendar/WorkspaceSheet";
 import {
@@ -523,7 +523,7 @@ export default function CalendarTab() {
   // календари АКТИВНОЙ компании, а дверь в остальные появляется только у
   // того, у кого они есть: орган, которому нечего показать, не рисуется.
   const { data: myCalendars = [] } = useMyCalendars();
-  const hasOtherWorkspaces = workspaceCount(myCalendars) > 1;
+  const hasOtherWorkspaces = hasForeignCalendars(myCalendars);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [miniCalOpen, setMiniCalOpen] = useState(false);
   // First-run onboarding card — «✕» persists across restarts in MMKV
@@ -2187,6 +2187,43 @@ export default function CalendarTab() {
     // «Создать календарь» из-за упавшего запроса (риск дубля команды).
     return (
       <Screen>
+        {/* ДВЕРЬ В ДРУГИЕ КОМПАНИИ ОСТАЁТСЯ НА МЕСТЕ ДАЖЕ ЗДЕСЬ. Мастер, у
+            которого в этой компании ещё нет календаря, иначе оказывается в
+            тупике: экран говорит «попросите владельца», и выйти из компании
+            нечем — переключатель живёт в ленте, а ленты на этом экране нет.
+            Поймано на себе 2026-09-12 при первой же проверке перехода.
+            Лента показывается ПУСТОЙ (чипов нет, календарей тоже) — она здесь
+            не список, а место, где у человека всегда лежит выход. */}
+        {hasOtherWorkspaces ? (
+          <ScopeChips
+            items={[]}
+            activeId={null}
+            trailing={
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  setWorkspaceOpen(true);
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Календари других компаний"
+                style={({ pressed }: { pressed: boolean }) => ({
+                  minHeight: 44,
+                  justifyContent: "center",
+                  opacity: pressed ? 0.5 : 1,
+                })}
+              >
+                <Text
+                  maxFontSizeMultiplier={1.2}
+                  style={{ fontSize: 15, fontWeight: "600", color: t.accent }}
+                >
+                  Другие
+                </Text>
+              </Pressable>
+            }
+            onSelect={() => {}}
+          />
+        ) : null}
         {teamsLoading ? (
           // Скелет, а не голый спиннер: один экран — один язык ожидания.
           // Полосы чипов в скелете нет — команд ещё нет.
@@ -2228,6 +2265,18 @@ export default function CalendarTab() {
           // человек пришёл в календарь, и ждать он должен календарь.
           <CalendarSkeleton mode="week" />
         )}
+
+        {/* Шторка монтируется и здесь: этот экран уходит ранним return-ом, и
+            без неё «Другие» выше были бы кнопкой в никуда. */}
+        <WorkspaceSheet
+          visible={workspaceOpen}
+          activeTeamId={null}
+          onClose={() => setWorkspaceOpen(false)}
+          onPick={(teamId) => {
+            setTeamChoice(teamId);
+            rememberView({ teamId });
+          }}
+        />
       </Screen>
     );
   }

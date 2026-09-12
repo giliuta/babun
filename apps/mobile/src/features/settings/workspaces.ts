@@ -81,10 +81,16 @@ export function useMyCalendars() {
   });
 }
 
-/** В скольких компаниях человек состоит. Переключателю нечего показывать,
- *  пока она одна, — и он не показывается: пустой орган хуже отсутствующего. */
-export function workspaceCount(calendars: MyCalendar[]): number {
-  return new Set(calendars.map((c) => c.tenantId)).size;
+/** Есть ли куда переключаться: хоть один календарь ЗА пределами активной
+ *  компании.
+ *
+ *  Считать компании (`new Set(tenantId).size > 1`) нельзя, и это не вкус:
+ *  человек, оказавшийся в компании, где ему ещё не выдали ни одного
+ *  календаря, увидел бы список из одной своей компании — и дверь исчезла бы
+ *  ровно там, где она нужнее всего. Так я сам застрял при первой проверке
+ *  перехода: экран «Календарь ещё не назначен» и ни одного способа выйти. */
+export function hasForeignCalendars(calendars: MyCalendar[]): boolean {
+  return calendars.some((c) => !c.isActive);
 }
 
 export function useSwitchWorkspace() {
