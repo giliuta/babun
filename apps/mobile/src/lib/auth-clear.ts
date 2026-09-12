@@ -11,6 +11,7 @@ import {
   setActiveTenantId,
 } from "@/lib/active-tenant";
 import { isTenantScopedKey } from "@/lib/tenant-prefs";
+import { keyNamesKnownTenant } from "@/lib/tenant-query-keys";
 import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
@@ -136,23 +137,6 @@ function wipeFastStores(
 
   // Компания неизвестна (чистка не из перехода) — прежнее поведение.
   void queryClient.resetQueries();
-}
-
-/** Ключ запроса НАЗЫВАЕТ КАКУЮ-ТО из компаний человека — значит принадлежит ей
- *  и чужого не покажет: под другой компанией у запроса другой ключ.
- *
- *  Сверяем со ВСЕМИ компаниями, а не только с той, куда идём. Первая версия
- *  берегла лишь компанию назначения — и тем самым стирала кэш той, откуда
- *  уходим. Круг «AirFix → Giliuta → AirFix» оставался холодным на обратном
- *  пути: возвращаясь, человек снова видел скелет, потому что данные AirFix
- *  снесли на предыдущем шаге. Поймано на симуляторе, а не рассуждением. */
-function keyNamesKnownTenant(
-  key: readonly unknown[],
-  tenantIds: readonly string[],
-): boolean {
-  return key.some(
-    (part) => typeof part === "string" && tenantIds.includes(part),
-  );
 }
 
 /** Убирает с устройства всё, что помнило прежнюю компанию, и ЖДЁТ, пока это
