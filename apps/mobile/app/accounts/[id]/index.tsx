@@ -824,15 +824,19 @@ function AccountDetailContent() {
         {account.is_active ? (
           <>
             <RowGroup title="Действия">
+              {/* СПРАВА — СОСТОЯНИЕ, А НЕ ПОЯСНЕНИЕ К КНОПКЕ. Здесь стояло
+                  «Операция → Доход или расход» и «Перевести → Между счетами»:
+                  правая колонка строки во всём продукте показывает ТЕКУЩЕЕ
+                  значение (остаток, «Ни разу»), и VoiceOver читал её так же —
+                  «Операция: доход или расход», будто это выбранное значение.
+                  Действие называет себя само, одним словом из словаря. */}
               <NavRow
-                label="Операция"
-                value="Доход или расход"
+                label="Добавить операцию"
                 dimmed={!online}
                 onPress={online ? openOperation : undefined}
               />
               <NavRow
                 label="Перевести"
-                value="Между счетами"
                 separated
                 dimmed={!online}
                 onPress={online ? () => setTransferOpen(true) : undefined}
