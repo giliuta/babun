@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { switchTenant } from "./switch-tenant";
+import { USER_ROLES, type UserRole } from "./role-policy";
 
 // КАЛЕНДАРИ ЧЕЛОВЕКА ВО ВСЕХ ЕГО КОМПАНИЯХ.
 //
@@ -66,6 +67,16 @@ function toCalendar(row: MyCalendarRow): MyCalendar {
   };
 }
 
+/** Роль приезжает с сервера СТРОКОЙ, а в кэш прав кладётся типом. Незнакомую
+ *  роль не пропускаем вовсе: пусть экран спросит сервер, чем поверит в право,
+ *  которого продукт не знает. Сужение живёт здесь, на границе, а не в
+ *  `switch-tenant.ts` — туда роль обязана приходить уже проверенной. */
+function asUserRole(role: string): UserRole | undefined {
+  return (USER_ROLES as readonly string[]).includes(role)
+    ? (role as UserRole)
+    : undefined;
+}
+
 export const myCalendarsQueryKey = ["my-calendars"] as const;
 
 export function useMyCalendars() {
@@ -90,8 +101,19 @@ export function useMyCalendars() {
 export function useSwitchWorkspace() {
   return useMutation({
     networkMode: "always",
-    mutationFn: (input: { tenantId: string; onboarded: boolean }) =>
-      switchTenant(input.tenantId, input.onboarded),
+    // Роль и факт онбординга едут ВМЕСТЕ с переходом, потому что оба уже
+    // известны из ленты календарей. Без роли граница прав на той стороне
+    // показывает второй полноэкранный спиннер поверх уже открытого экрана:
+    // компания сменилась мгновенно, а `current_user_role` ещё летит.
+    mutationFn: (input: {
+      tenantId: string;
+      onboarded: boolean;
+      role?: UserRole;
+    }) =>
+      switchTenant(input.tenantId, {
+        onboarded: input.onboarded,
+        role: input.role,
+      }),
   });
 }
 
@@ -172,26 +194,35 @@ export function useCalendarChips(opts: {
     // это пять секунд, и убрать их нельзя. Убрать можно ожидание с глаз: тап
     // отвечает мгновенно, дальше экран показывает скелет своего календаря.
     setPendingId(chipId);
-    switching.mutate(
-      { tenantId, onboarded: target?.onboarded ?? false },
-      {
-        onSuccess: () => {
-          opts.onPickOwn(teamId);
-          setPendingId(null);
-        },
-        onError: (error) => {
-          // Переход не состоялся — подсветка возвращается туда, где человек и
-          // остался. Оставить её на чужом чипе значило бы соврать про то, где
-          // он сейчас.
-          setPendingId(null);
-          opts.onSwitchError(
-            error instanceof Error
-              ? error.message
-              : "Не удалось открыть календарь",
-          );
-        },
-      },
-    );
+
+    // ЗАВЕРШЕНИЕ ВИСИТ НА ПРОМИСЕ, А НЕ НА ПОДПИСКЕ ЭКРАНА. Колбэки, переданные
+    // в `mutate()`, react-query зовёт через наблюдателя мутации — а его
+    // размонтирование экрана уносит с собой. Переход как раз и перетряхивает
+    // дерево (чистка кэша, смена компании), поэтому здесь это не теория: не
+    // доехавший `onSuccess` означает, что открылся НЕ ТОТ календарь, в который
+    // тапнули, — компания сменилась, а разрез остался прежним. Промис
+    // `mutateAsync` живёт сам по себе и доводит выбор до конца.
+    void switching
+      .mutateAsync({
+        tenantId,
+        onboarded: target?.onboarded ?? false,
+        role: target ? asUserRole(target.role) : undefined,
+      })
+      .then(() => {
+        opts.onPickOwn(teamId);
+        setPendingId(null);
+      })
+      .catch((error: unknown) => {
+        // Переход не состоялся — подсветка возвращается туда, где человек и
+        // остался. Оставить её на чужом чипе значило бы соврать про то, где
+        // он сейчас.
+        setPendingId(null);
+        opts.onSwitchError(
+          error instanceof Error
+            ? error.message
+            : "Не удалось открыть календарь",
+        );
+      });
   };
 
   return { items, pick, pendingId };
