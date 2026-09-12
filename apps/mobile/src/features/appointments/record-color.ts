@@ -19,7 +19,15 @@
 // маникюра блок объекта выключен (Кабинет → «Запись»), и «нет объекта» для
 // него не дыра, а норма.
 
-export type ColorSituation = "noClient" | "noObject" | "noServices";
+import {
+  RECORD_COLOR_SITUATIONS,
+  type RecordColorSituation,
+} from "@babun/shared/local/calendar-settings";
+
+// Список ситуаций живёт в shared (`local/calendar-settings`): его же читает
+// маппер настроек из базы. Здесь остаются только ПОДПИСИ — то, чего база не
+// знает и знать не должна.
+export type ColorSituation = RecordColorSituation;
 
 export interface ColorSituationDef {
   id: ColorSituation;
@@ -32,11 +40,14 @@ export interface ColorSituationDef {
  *  которое до экрана не доехало ни разу: строка настройки показывает ИМЯ
  *  ЦВЕТА — то, чего не видно на бледном образце, — а сама ситуация названа
  *  заголовком и объяснять себя другими словами не нуждается. */
-export const COLOR_SITUATIONS: ColorSituationDef[] = [
-  { id: "noClient", label: "Нет клиента" },
-  { id: "noObject", label: "Нет объекта" },
-  { id: "noServices", label: "Нет услуг" },
-];
+const SITUATION_LABELS: Record<ColorSituation, string> = {
+  noClient: "Нет клиента",
+  noObject: "Нет объекта",
+  noServices: "Нет услуг",
+};
+
+export const COLOR_SITUATIONS: ColorSituationDef[] =
+  RECORD_COLOR_SITUATIONS.map((id) => ({ id, label: SITUATION_LABELS[id] }));
 
 /** ЧТО СЧИТАЕТСЯ ЗАПОЛНЕННЫМ — ОДНО МЕСТО НА ПРОДУКТ. Сетка и форма собирали
  *  это по отдельности, а закон говорит: один выезд выглядит одинаково там, где

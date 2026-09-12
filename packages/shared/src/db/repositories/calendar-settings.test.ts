@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getCalendarSettings,
   getOperationalCalendarSettings,
   updateCalendarSettings,
 } from "./calendar-settings";
@@ -53,6 +54,11 @@ describe("operational calendar settings repository", () => {
     // вернётся в модель через заднюю дверь и снова начнёт обещать настройку,
     // которой нет (владелец 2026-09-10: сетка всегда 30, неделя всегда с
     // понедельника, «за пределами часов» — предупреждением, а не флагом).
+    // ЦВЕТА ЗАПИСИ МАСТЕРУ НЕ ЕДУТ — пока RPC их не отдаёт, проекция обязана
+    // молчать, а не подставлять заводские под видом настройки компании.
+    expect(settings).not.toHaveProperty("recordColorRule");
+    expect(settings).not.toHaveProperty("recordColorPalette");
+    expect(settings).not.toHaveProperty("recordColorFallback");
     expect(settings).not.toHaveProperty("gridStep");
     expect(settings).not.toHaveProperty("weekStart");
     expect(settings).not.toHaveProperty("allowOvertime");
@@ -137,6 +143,143 @@ describe("operational calendar settings repository", () => {
     expect(upserts[0]).toMatchObject({
       tenant_id: "tenant-1",
       work_start_hour: 8,
+    });
+  });
+
+  // ЦВЕТА ЗАПИСИ ПЕРЕЕХАЛИ С ТЕЛЕФОНА В КОМПАНИЮ (2026-09-12). Строка базы
+  // приходит какой угодно — поэтому маппер обязан не пропустить ни чужой ключ,
+  // ни «синий» вместо hex: цвет уезжает прямо в стиль и в измеритель
+  // контраста, и мусор делает блок прозрачным молча.
+  test("цвета записи доезжают с сервера, а мусор отсекается", async () => {
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                        record_color_rule: "label",
+                        record_color_palette: {
+                          noClient: "#112233",
+                          noObject: "синий",
+                          noServices: null,
+                          somethingElse: "#ffffff",
+                        },
+                        record_color_fallback: "rgba(0,0,0,0.5)",
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const settings = await getCalendarSettings(supabase as never, "tenant-1");
+
+    expect(settings.recordColorRule).toBe("label");
+    expect(settings.recordColorPalette).toEqual({
+      noClient: "#112233",
+      // Не hex — значит «ситуация не красит», а не «покрасим чем попало».
+      noObject: null,
+      noServices: null,
+    });
+    // Чужой ключ в палитре не переживает маппер.
+    expect(settings.recordColorPalette).not.toHaveProperty("somethingElse");
+    // Запасной цвет с альфой — тот самый случай, ради которого писалась
+    // проверка: `rgba(...)` ломает и стиль, и измеритель.
+    expect(settings.recordColorFallback).toBeUndefined();
+  });
+
+  test("правило-самозванец не доезжает до модели", async () => {
+    const supabase = {
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  maybeSingle() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                        record_color_rule: "rainbow",
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const settings = await getCalendarSettings(supabase as never, "tenant-1");
+
+    expect(settings.recordColorRule).toBeUndefined();
+  });
+
+  // «СБРОСИТЬ К ЗАВОДСКОМУ» ОБЯЗАНО БЫТЬ ВЫРАЗИМЫМ. Пустая палитра и пустой
+  // запасной цвет пишутся именно NULL: иначе колонка навсегда осталась бы с
+  // последним выбором, и кнопки «как было» не существовало бы.
+  test("пустая палитра и пустой запасной цвет пишутся как NULL", async () => {
+    const upserts: Record<string, unknown>[] = [];
+    const supabase = {
+      from() {
+        return {
+          upsert(value: Record<string, unknown>) {
+            upserts.push(value);
+            return {
+              select() {
+                return {
+                  single() {
+                    return Promise.resolve({
+                      data: {
+                        start_hour: 0,
+                        end_hour: 24,
+                        timezone: "Europe/Nicosia",
+                        buffer_minutes: 0,
+                        hide_cancelled: false,
+                      },
+                      error: null,
+                    });
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    await updateCalendarSettings(supabase as never, "tenant-1", {
+      recordColorRule: "service",
+      recordColorPalette: {},
+      recordColorFallback: "",
+    });
+
+    expect(upserts[0]).toMatchObject({
+      tenant_id: "tenant-1",
+      record_color_rule: "service",
+      record_color_palette: null,
+      record_color_fallback: null,
     });
   });
 });

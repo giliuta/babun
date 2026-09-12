@@ -1,7 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getStorage } from "@babun/shared/storage";
-import { useTenantId } from "@/lib/tenant";
+import type {
+  RecordColorPalette,
+  RecordColorRule,
+} from "@babun/shared/local/calendar-settings";
 import { createEnabledPrefs } from "@/lib/enabled-prefs";
+import {
+  useCalendarSettings,
+  useSaveCalendarSettings,
+} from "@/features/settings/local-settings";
 import {
   COLOR_SITUATIONS,
   type ColorSituation,
@@ -95,7 +100,7 @@ export const useToggleBookingBlock = blocks.useToggle;
 // Правило называется вслух и живёт в одном месте: календарь и форма красят
 // запись одинаково, потому что спрашивают его.
 
-export type AutoColorRule = "team" | "label" | "service";
+export type AutoColorRule = RecordColorRule;
 
 export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "team", label: "Цвет команды" },
@@ -103,66 +108,25 @@ export const AUTO_COLOR_RULES: { id: AutoColorRule; label: string }[] = [
   { id: "service", label: "Цвет услуги" },
 ];
 
-const RULE_KEY = "babun-booking-auto-color";
-const ruleKey = (tenantId: string | null) =>
-  tenantId ? `${RULE_KEY}:${tenantId}` : RULE_KEY;
-
-function readRule(tenantId: string | null): AutoColorRule {
-  try {
-    // БЕЛЫЙ СПИСОК, А НЕ СРАВНЕНИЕ С ОДНИМ ЗНАЧЕНИЕМ. Пока здесь стояло
-    // `v === "label" ? "label" : "team"`, любое новое правило записывалось бы,
-    // но читалось как «Цвет команды» — и дефект выглядел бы как «настройка не
-    // сохраняется», причём только после перезапуска приложения.
-    const v = getStorage().get<string>(ruleKey(tenantId));
-    return AUTO_COLOR_RULES.some((r) => r.id === v)
-      ? (v as AutoColorRule)
-      : "team";
-  } catch {
-    return "team";
-  }
-}
-
-export function useAutoColorRule(): AutoColorRule {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-auto-color", tenantId],
-    queryFn: () => readRule(tenantId),
-    // MMKV читается синхронно: цвет известен на первом же кадре, иначе шапка
-    // мигала бы командным цветом поверх выбранного правила.
-    initialData: () => readRule(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
-}
-
-export function useSetAutoColorRule() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<AutoColorRule, Error, AutoColorRule>({
-    // Локальная запись не ждёт сети: в самолёте настройка тоже переключается.
-    networkMode: "always",
-    mutationFn: async (rule) => {
-      try {
-        getStorage().set(ruleKey(tenantId), rule);
-      } catch {
-        // Запись best-effort.
-      }
-      return rule;
-    },
-    onSuccess: (rule) =>
-      qc.setQueryData(["booking-auto-color", tenantId], rule),
-  });
-}
-
-// ЦВЕТОВАЯ ПАЛИТРА ЗАПИСИ — «ЧЕГО НЕ ХВАТАЕТ» (владелец 2026-09-05: «ещё один
-// блок — цветовая палитра; если нет клиента, тогда цвет такой-то, тапаю, могу
-// выбрать любой; если нет объекта — такой-то… чтобы человек один раз настроил,
-// и всё»).
+// ЦВЕТА ЗАПИСИ ЖИВУТ В КОМПАНИИ, А НЕ В ТЕЛЕФОНЕ (2026-09-12).
 //
-// Правило разрешения живёт в `record-color` под тестами; здесь только хранение
-// выбранных цветов. Умолчания сочные и разные: серый — «даже неизвестно, кому
-// едем», оранжевый — «неизвестно куда», жёлтый — «неизвестно что делаем».
-// Дырам полагается бросаться в глаза, иначе сигнала нет.
+// Правило, палитра ситуаций и запасной цвет лежали в MMKV — по ключам
+// `babun-booking-auto-color|palette|fallback-color:<tenant>`, без сервера
+// вовсе. Стоило открыть приложение на двух симуляторах владельца — ОДИН
+// аккаунт, ОДНА компания, ОДИН бандл — и записи оказались выкрашены
+// по-разному. Из того же корня: переустановка стирала настройку, а
+// приглашённый сотрудник получал заводские цвета вместо настроенных.
+//
+// Теперь это поля `calendar_settings` (мигация record_color_settings), и
+// читаются они той же дверью, что остальные настройки компании:
+// `useCalendarSettings` (сервер + офлайн-кэш + роль) и
+// `useSaveCalendarSettings` (патч, только владелец). Своего кэша, своего
+// ключа и своей мутации у цветов больше нет — второй двери к одной настройке
+// не бывает.
+//
+// ЗАВОДСКИЕ ЗНАЧЕНИЯ ЗНАЕТ ЭКРАН, А НЕ ХРАНИЛИЩЕ. В базе `undefined` значит
+// «владелец не выбирал»: только так «сбросить к заводскому» отличимо от
+// «владелец выбрал ровно этот серый».
 
 const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
   noClient: "#8E8E93",
@@ -170,107 +134,65 @@ const SITUATION_DEFAULTS: Record<ColorSituation, string> = {
   noServices: "#FFCC00",
 };
 
-const PALETTE_KEY = "babun-booking-palette";
-const paletteKey = (tenantId: string | null) =>
-  tenantId ? `${PALETTE_KEY}:${tenantId}` : PALETTE_KEY;
+const FALLBACK_DEFAULT = "#005BD3";
 
 export type SituationPalette = Record<ColorSituation, string | null>;
 
-function readPalette(tenantId: string | null): SituationPalette {
+function paletteWithDefaults(
+  stored: RecordColorPalette | undefined,
+): SituationPalette {
   const out = { ...SITUATION_DEFAULTS } as SituationPalette;
-  try {
-    const raw = getStorage().get<Record<string, string | null>>(
-      paletteKey(tenantId),
-    );
-    if (raw && typeof raw === "object") {
-      for (const def of COLOR_SITUATIONS) {
-        // `null` — «не красить»; отсутствие ключа — умолчание.
-        if (def.id in raw) out[def.id] = raw[def.id] ?? null;
-      }
-    }
-  } catch {
-    // Хранилище ещё не поднялось — работаем на умолчаниях.
+  if (!stored) return out;
+  for (const def of COLOR_SITUATIONS) {
+    if (def.id in stored) out[def.id] = stored[def.id] ?? null;
   }
   return out;
 }
 
-export function useSituationPalette(): SituationPalette {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-palette", tenantId],
-    queryFn: () => readPalette(tenantId),
-    initialData: () => readPalette(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
+export function useAutoColorRule(): AutoColorRule {
+  return useCalendarSettings().data?.recordColorRule ?? "team";
 }
 
-// ЗАПАСНОЙ ЦВЕТ — ПОСЛЕДНЯЯ СТУПЕНЬ ПРАВИЛА. Он виден редко: и команда, и
-// метка получают цвет автоматом при создании, — но «ничего» на его месте
-// означало бы блок без цвета, поэтому «Не красить» здесь запрещено.
-// Умолчание — Сапфировый из палитры, а не кобальт продукта: кобальта в
-// справочнике нет, строка настройки не смогла бы назвать его словом.
-const FALLBACK_KEY = "babun-booking-fallback-color";
-const fallbackKey = (tenantId: string | null) =>
-  tenantId ? `${FALLBACK_KEY}:${tenantId}` : FALLBACK_KEY;
-const FALLBACK_DEFAULT = "#005BD3";
-
-function readFallback(tenantId: string | null): string {
-  try {
-    const v = getStorage().get<string>(fallbackKey(tenantId));
-    return typeof v === "string" && v.trim() ? v : FALLBACK_DEFAULT;
-  } catch {
-    return FALLBACK_DEFAULT;
-  }
+export function useSituationPalette(): SituationPalette {
+  return paletteWithDefaults(
+    useCalendarSettings().data?.recordColorPalette,
+  );
 }
 
 export function useFallbackColor(): string {
-  const tenantId = useTenantId();
-  const { data } = useQuery({
-    queryKey: ["booking-fallback-color", tenantId],
-    queryFn: () => readFallback(tenantId),
-    initialData: () => readFallback(tenantId),
-    staleTime: Infinity,
-  });
-  return data;
+  return useCalendarSettings().data?.recordColorFallback ?? FALLBACK_DEFAULT;
+}
+
+export function useSetAutoColorRule() {
+  const save = useSaveCalendarSettings();
+  return {
+    ...save,
+    mutate: (rule: AutoColorRule) => save.mutate({ recordColorRule: rule }),
+  };
 }
 
 export function useSetFallbackColor() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<string, Error, string>({
-    networkMode: "always",
-    mutationFn: async (color) => {
-      try {
-        getStorage().set(fallbackKey(tenantId), color);
-      } catch {
-        // Запись best-effort.
-      }
-      return color;
-    },
-    onSuccess: (color) =>
-      qc.setQueryData(["booking-fallback-color", tenantId], color),
-  });
+  const save = useSaveCalendarSettings();
+  return {
+    ...save,
+    mutate: (color: string) =>
+      save.mutate({ recordColorFallback: color || undefined }),
+  };
 }
 
 export function useSetSituationColor() {
-  const qc = useQueryClient();
-  const tenantId = useTenantId();
-  return useMutation<
-    SituationPalette,
-    Error,
-    { situation: ColorSituation; color: string | null }
-  >({
-    networkMode: "always",
-    mutationFn: async ({ situation, color }) => {
-      const next = { ...readPalette(tenantId), [situation]: color };
-      try {
-        getStorage().set(paletteKey(tenantId), next);
-      } catch {
-        // Запись best-effort.
-      }
-      return next;
+  const settings = useCalendarSettings();
+  const save = useSaveCalendarSettings();
+  return {
+    ...save,
+    // Патч цвета ОДНОЙ ситуации переписывает палитру целиком: колонка одна,
+    // и частичного слияния jsonb здесь нет. Основа — то, что сейчас на
+    // экране (с заводскими), иначе первая же правка стёрла бы соседние.
+    mutate: (input: { situation: ColorSituation; color: string | null }) => {
+      const base = paletteWithDefaults(settings.data?.recordColorPalette);
+      save.mutate({
+        recordColorPalette: { ...base, [input.situation]: input.color },
+      });
     },
-    onSuccess: (next) => qc.setQueryData(["booking-palette", tenantId], next),
-  });
+  };
 }
