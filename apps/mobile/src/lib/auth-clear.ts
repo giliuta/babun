@@ -10,6 +10,7 @@ import {
   restoreActiveTenantId,
   setActiveTenantId,
 } from "@/lib/active-tenant";
+import { isTenantScopedKey } from "@/lib/tenant-prefs";
 import {
   clearAllBabunNotifications,
   suspendAllBabunNotifications,
@@ -73,11 +74,25 @@ let intentionalSignOutBarrier: Promise<void> | null = null;
 // прежней компании сброс так же не оставляет, но подписчики остаются живыми и
 // узнают, что данных больше нет. На выходе из аккаунта остаётся `clear()` —
 // там сброс означал бы залп запросов без сессии.
-function wipeFastStores(keepSubscribers: boolean): void {
+function wipeFastStores(
+  keepSubscribers: boolean,
+  keepTenantNamedKeys = false,
+): void {
   const storage = getStorage();
   for (const key of storage.list()) {
     if (KEEP_KEYS.has(key)) continue;
     if (KEEP_PREFIXES.some((p) => key.startsWith(p))) continue;
+    // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ КЛЮЧИ, КОТОРЫЕ КОМПАНИЮ НАЗЫВАЮТ.
+    //
+    // Такой ключ безопасен по построению: под другой компанией его просто не
+    // прочитают — имя не совпадёт. А снос превращал «настройку компании» в
+    // «настройку до первого переключения»: способы связи, блоки записи, карты,
+    // шаблоны SMS и вид календаря возвращались к умолчаниям на каждом переходе,
+    // хотя все они уже давно носят компанию в имени. Список — в `tenant-prefs`.
+    //
+    // На выходе из аккаунта они уходят вместе со всем остальным: компанию они
+    // называют, а ЧЕЛОВЕКА нет, и на общем телефоне их оставлять нельзя.
+    if (keepTenantNamedKeys && isTenantScopedKey(key)) continue;
     if (TENANT_PREFIXES.some((p) => key.startsWith(p))) storage.remove(key);
   }
   if (keepSubscribers) void queryClient.resetQueries();
@@ -112,7 +127,7 @@ export async function wipeTenantScopedData(
   if (opts.keepLocalCache) await suspendAllBabunNotifications();
   else await clearAllBabunNotifications();
 
-  wipeFastStores(opts.keepSubscribers ?? false);
+  wipeFastStores(opts.keepSubscribers ?? false, opts.keepLocalCache ?? false);
 
   // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ НЕ СНОСИТ SQLite, И ЭТО НЕ ПОСЛАБЛЕНИЕ.
   //
@@ -243,6 +258,10 @@ export async function handleAuthEvent(
     for (const key of storage.list(ACTIVE_TENANT_KEY_PREFIX)) {
       if (key !== `${ACTIVE_TENANT_KEY_PREFIX}${next}`) storage.remove(key);
     }
+    // Настройки, помнящиеся по компании, здесь уходят вместе со всем
+    // остальным: `wipeTenantScopedData` без `keepLocalCache` подметает по
+    // префиксу и их тоже. Отдельного вызова не нужно — компанию они называют,
+    // а человека нет, и на общем телефоне оставлять их нельзя.
     await wipeTenantScopedData();
   }
   if (prev !== next) storage.setRaw(LAST_USER_KEY, next);
