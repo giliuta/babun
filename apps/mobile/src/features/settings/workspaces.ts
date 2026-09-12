@@ -124,9 +124,15 @@ export function useCalendarChips(opts: {
   const items: CalendarChip[] = foreign.length
     ? [
         ...opts.own.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
+        // ЧУЖОЙ ЧИП НАЗЫВАЕТ КОМПАНИЮ. В ряду два одинаковых с виду чипа
+        // делают РАЗНОЕ: свой переключает разрез внутри компании, чужой
+        // уводит в другую — другие счета, долги, прибыль. На календаре это
+        // безобидно, на деньгах человек тапнет «соседний», чтобы сравнить
+        // бригады, и увидит чужую кассу. Компания в подписи — самая дешёвая
+        // разница, которая не спорит с «в ряд добавляется и я выбираю».
         ...foreign.map((c) => ({
           id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
-          name: c.teamName,
+          name: `${c.tenantName} · ${c.teamName}`,
           color: c.teamColor,
         })),
       ]
