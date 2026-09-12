@@ -3,6 +3,19 @@ import { queryClient } from "@/lib/query-client";
 import { wipeTenantScopedData } from "@/lib/auth-clear";
 import { pauseSyncBridgeForTenantSwitch } from "@/lib/sync-bridge";
 import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
+import { markTenantOnboarded } from "@/lib/tenant";
+import { cacheClearAll } from "@babun/shared/db/cache/sql";
+
+/** `activate_tenant` отдаёт jsonb: роль, карточку мастера и факт онбординга.
+ *  Узкий разбор вместо `any` — сгенерированные типы знают только `Json`. */
+function isOnboardedResult(value: unknown): boolean {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as { onboarded?: unknown }).onboarded === true
+  );
+}
 
 // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ — ОДНА ТРАНЗАКЦИЯ НА ВЕСЬ ПРОДУКТ.
 //
@@ -39,9 +52,10 @@ export async function switchTenant(tenantId: string): Promise<void> {
   try {
     await wipeTenantScopedData();
 
-    const { error: activateError } = await supabase.rpc("activate_tenant", {
-      p_tenant_id: tenantId,
-    });
+    const { data: activated, error: activateError } = await supabase.rpc(
+      "activate_tenant",
+      { p_tenant_id: tenantId },
+    );
     if (activateError) {
       throw new Error(
         /not a member|membership/i.test(activateError.message)
@@ -65,8 +79,43 @@ export async function switchTenant(tenantId: string): Promise<void> {
       throw new Error("Сессия не переключилась на выбранную компанию.");
     }
 
-    await wipeTenantScopedData();
-    await queryClient.invalidateQueries();
+    // ВТОРАЯ ЧИСТКА — БЕЗ `queryClient.clear()`, И ЭТО РЕШАЮЩЕЕ ОТЛИЧИЕ.
+    //
+    // Полная очистка кэша запросов сносит сами запросы, а подписанные на них
+    // экраны остаются с замороженным снимком «идёт загрузка» — и никогда не
+    // узнают, что загрузка кончилась: будить некого, объекта больше нет.
+    // Измерено: гейт «Открываем компанию» так и висел ШЕСТЬДЕСЯТ СЕКУНД при
+    // пяти секундах самой транзакции, отрисовавшись ровно один раз.
+    //
+    // Данные старой компании при этом всё равно не остаются: их уносит первая
+    // чистка ДО смены токена, а здесь мы добиваем офлайн-базу и СБРАСЫВАЕМ
+    // запросы — сброс оставляет подписчиков живыми и сам говорит им, что
+    // данных больше нет.
+    await cacheClearAll().catch(() => {
+      // SQLite может быть ещё не внедрён (web/до загрузки) — остальное уже
+      // вычищено первой чисткой.
+    });
+
+    // ШТАМП СТАВИТСЯ ПОСЛЕ ЧИСТКИ, И ЭТО НЕ ПРИДИРКА К ПОРЯДКУ: чистка сносит
+    // ключи с префиксом `babun:`, а штамп — один из них. Поставленный раньше,
+    // он был бы стёрт той же секундой, и гейт снова пошёл бы спрашивать сервер.
+    //
+    // Что именно он экономит: гейт держал экран «Открываем компанию» тридцать
+    // секунд при пяти секундах самой транзакции — всё это время он выяснял
+    // запросом то, что `activate_tenant` уже вернул. Ставим только по ФАКТУ с
+    // сервера, а не по догадке.
+    if (isOnboardedResult(activated)) markTenantOnboarded(tenantId);
+
+    // ОТМЕНА ПЕРЕД ИНВАЛИДАЦИЕЙ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ. Запрос
+    // гейта улетает ещё со старым токеном и повисает; `invalidateQueries` его
+    // не будит — уже идущий запрос она не перезапускает, — а экран ждёт, пока
+    // тот сам не отвалится. Замер: между двумя отрисовками гейта прошло
+    // ШЕСТЬДЕСЯТ СЕКУНД, хотя ответ (штамп выше) лежал готовым с пятой.
+    //
+    // Отмена гасит зависший запрос, отрисовка происходит сразу, гейт читает
+    // штамп и пускает дальше; инвалидация после неё оставляет всё протухшим,
+    // и данные новой компании подтягиваются уже за открытым экраном.
+    await queryClient.resetQueries();
     switched = true;
   } finally {
     if (!switched) {

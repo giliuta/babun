@@ -63,6 +63,22 @@ function stampOnboarded(tenantId: string): void {
   writeCache(onboardedStampKey(tenantId), "1");
 }
 
+/** Тот же штамп, но снаружи — для перехода в другую компанию.
+ *
+ *  Гейт умеет отвечать без сети, когда компания уже помечена пройденной, и
+ *  ровно этого знания ему не хватало после перехода: он заново спрашивал
+ *  сервер «а онбординг пройден?» — с таймаутом и повтором, сразу после смены
+ *  токена, — и держал экран «Открываем компанию» ТРИДЦАТЬ СЕКУНД при пяти
+ *  секундах самой транзакции (замер 2026-09-12).
+ *
+ *  Ставить его имеет право только тот, кто получил ФАКТ от сервера:
+ *  `activate_tenant` возвращает `onboarded` из `tenants.onboarded_at`. Догадка
+ *  («раз есть календари — значит прошла») однажды провела бы человека мимо
+ *  мастера настройки его собственной компании. */
+export function markTenantOnboarded(tenantId: string): void {
+  stampOnboarded(tenantId);
+}
+
 // ---------------------------------------------------------------------------
 // Bounded gate queries: supabase-js has no fetch timeout on RN, and the root
 // navigator holds the splash screen while the gate is "loading" — a hung
