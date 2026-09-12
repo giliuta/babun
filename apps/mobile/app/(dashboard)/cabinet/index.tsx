@@ -54,7 +54,11 @@ import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
-import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import {
+  useCurrentRole,
+  usePlanAllows,
+  useTenant,
+} from "@/features/settings/tenant";
 import { ROLE_LABELS, type UserRole } from "@/features/settings/role-policy";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useAppointments } from "@/features/calendar/queries";
@@ -246,6 +250,8 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
 export default function CabinetHome() {
   const t = useThemeColors();
   const { data: role } = useCurrentRole();
+  // Прайс — работа с клиентами, а она в платном тарифе (канон, правило 10).
+  const canUseServices = usePlanAllows("services");
   // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
   // которая молчит о своём состоянии, заставляет открывать её, чтобы
   // вспомнить, что в ней стоит.
@@ -468,14 +474,18 @@ export default function CabinetHome() {
             desc={bookingDesc}
             href="/cabinet/booking"
           />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Briefcase}
-            tone={TILE.blue}
-            title="Услуги"
-            desc="Каталог работ и цены"
-            href="/cabinet/services"
-          />
+          {canUseServices ? (
+            <>
+              <Divider inset={58} />
+              <MenuRow
+                icon={Briefcase}
+                tone={TILE.blue}
+                title="Услуги"
+                desc="Каталог работ и цены"
+                href="/cabinet/services"
+              />
+            </>
+          ) : null}
           <Divider inset={58} />
           <MenuRow
             icon={Boxes}

@@ -49,7 +49,9 @@ import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
-import { useCurrentRole, useUpdateTenant } from "@/features/settings/tenant";
+import { useCurrentRole, useUpdateTenant ,
+  usePlanAllows,
+} from "@/features/settings/tenant";
 import { useCurrency } from "@/features/settings/currency";
 import { moneyName, moneySymbol } from "@babun/shared/common/utils/money";
 import { CurrencySheet } from "@/features/settings/CurrencySheet";
@@ -187,6 +189,12 @@ export default function CalendarSettingsScreen() {
   // семь дней надо видеть целиком, пока правишь один. См. шапку
   // `TeamScheduleSheet` — там же, почему это исключение из закона «настройка —
   // всегда страница».
+  // БЕЗ ПОДПИСКИ ЭТИХ ДВЕРЕЙ НЕТ. Личный календарь ведёт события и деньги;
+  // прайс и сотрудники — работа с клиентами, и она в платном тарифе. Строка,
+  // которая ведёт в закрытое, хуже отсутствия строки: человек идёт и упирается
+  // (канон, правило 10).
+  const canUseServices = usePlanAllows("services");
+  const canUseMasters = usePlanAllows("masters");
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -479,6 +487,7 @@ export default function CalendarSettingsScreen() {
               (настройки «Длительность» на календаре больше нет). Тот же
               экран, что в Кабинете, второй дверью внутри стека /calendar:
               наружу этот стек не ведёт (закон навигации). */}
+          {canUseServices ? (
           <SettingsRow
             tile={SETTINGS_TILE.blue}
             icon={Briefcase}
@@ -497,6 +506,7 @@ export default function CalendarSettingsScreen() {
               )
             }
           />
+          ) : null}
         </SectionCard>
         <SectionCard>
           <SettingsRow
@@ -541,15 +551,17 @@ export default function CalendarSettingsScreen() {
             ПЛИТКА ПОКА НЕЙТРАЛЬНАЯ, как у «Часового пояса» и «Валюты»:
             заводить новый пигмент словаря ради одной строки — тот самый
             дрейф, от которого словарь и написан. */}
-        <SectionCard>
-          <SettingsRow
-            tile="neutral"
-            icon={Users}
-            title="Мастера"
-            sub="Сотрудники и их доступ"
-            onPress={() => router.push("/calendar/masters" as Href)}
-          />
-        </SectionCard>
+        {canUseMasters ? (
+          <SectionCard>
+            <SettingsRow
+              tile="neutral"
+              icon={Users}
+              title="Мастера"
+              sub="Сотрудники и их доступ"
+              onPress={() => router.push("/calendar/masters" as Href)}
+            />
+          </SectionCard>
+        ) : null}
 
         {/* ЧТО ПОКАЗЫВАТЬ — ДВА ТУМБЛЕРА ЗДЕСЬ, А НЕ НА СВОЕЙ СТРАНИЦЕ
             (владелец 2026-08-27: «саму страницу „что показывать" можем
