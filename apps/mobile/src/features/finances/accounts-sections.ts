@@ -19,8 +19,9 @@
 // команды не имеют права исчезнуть с экрана. Их держит не секция, а ЧИП —
 // см. `accountsTeamChips`.
 //
-// Группировка осталась ровно одна и только для страницы «Порядок счетов»: там
-// она не витрина, а пространство нумерации `position` (тенант + команда).
+// Группировки не осталось вовсе: последняя жила для страницы «Порядок счетов»,
+// а порядок с 2026-09-12 переставляют ручкой прямо в списке — как теги,
+// категории, услуги и типы.
 
 import type {
   AccountKind,
@@ -51,14 +52,6 @@ export interface SectionTeam {
   is_active: boolean;
 }
 
-/** Виды идут в одном порядке всегда: счета одного вида стоят подряд. */
-const KIND_ORDER: Record<AccountKind, number> = {
-  cash: 0,
-  card: 1,
-  bank: 2,
-  other: 3,
-};
-
 // Локаль ru с `sensitivity: 'base'`: регистр и «ё» не должны рвать порядок
 // одноимённых счетов между рефетчами.
 const byName = new Intl.Collator("ru", { sensitivity: "base" });
@@ -68,16 +61,28 @@ const byName = new Intl.Collator("ru", { sensitivity: "base" });
  *  на 0,0000001. */
 const toCents = (value: number): number => Math.round(value * 100);
 
-/** Детерминированный порядок счетов: вид → position → имя. Один на продукт —
- *  список экрана и список в пикере перевода не имеют права разойтись. */
+/**
+ * Детерминированный порядок счетов: position → имя. Один на продукт — список
+ * экрана, панель «Финансов» и пикер перевода не имеют права разойтись.
+ *
+ * ПОРЯДОК ЗАДАЁТ РУКА, А НЕ ВИД СЧЁТА (владелец 2026-09-12: «шесть точек
+ * справа для передвижения… везде одно и то же»). До этого дня первым ключом
+ * стоял вид (наличные → карта → банк → другое), и ручка перетаскивания
+ * работала только внутри своего вида: у команды с одной кассой и одной картой
+ * — а это ровно то, что заводится новой команде, — тянуть было нечего вовсе,
+ * и ручек на экране не появлялось ни одной. Вид и так виден плиткой в строке;
+ * группировать по нему ЕЩЁ И порядком значило отнимать у человека жест ради
+ * структуры, которой на экране не нарисовано.
+ *
+ * `position` нумеруется внутри (тенант, команда), поэтому имя — не украшение,
+ * а честная добивка: в списке, собранном из нескольких команд (пикер
+ * перевода), позиции соседних групп совпадают.
+ */
 export function sortAccountRows<T extends SectionAccount>(
   rows: readonly T[],
 ): T[] {
   return [...rows].sort(
-    (a, b) =>
-      KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
-      || a.position - b.position
-      || byName.compare(a.name, b.name),
+    (a, b) => a.position - b.position || byName.compare(a.name, b.name),
   );
 }
 
@@ -202,72 +207,6 @@ export function isSelfNamedTeam(name: string): boolean {
  *  там, где на него смотрят, и там, куда по нему проваливаются. */
 export function brigadeTitle(name: string): string {
   return isSelfNamedTeam(name) ? name : `Команда ${name}`;
-}
-
-/** Группа страницы «Порядок счетов». */
-export interface AccountGroup<T extends SectionAccount = SectionAccount> {
-  key: string;
-  /** Обычным регистром: капс рисует `RowGroup`, а VoiceOver читает слова. */
-  title: string;
-  /** Риска слева от заголовка цветом команды. */
-  color: string | null;
-  data: T[];
-}
-
-/**
- * Группы страницы «Порядок счетов»: одна группа — одно пространство нумерации
- * `position` (тенант + команда), поэтому тянуть строку можно только внутри
- * своей группы. Счёт БЕЗ команды остался от снесённой схемы общего счёта: у
- * него своё, пустое пространство нумерации, и он идёт последней группой.
- *
- * Счета архивных и вовсе неразрешимых команд сюда не попадают: делать с ними
- * надо не порядок, а сдать остаток и закрыть.
- */
-export function accountOrderGroups<T extends SectionAccount>({
-  accounts,
-  teams,
-}: {
-  accounts: readonly T[];
-  teams: readonly SectionTeam[];
-}): AccountGroup<T>[] {
-  // Ключ — ровно тот, по которому нумеруется `position`. Читаем ТОЛЬКО
-  // `brigade_id`: `scope` — мёртвая колонка, и счёт с непустой командой, но
-  // чужим охватом вырывался здесь из группы своей команды, хотя на «Счетах», в
-  // переводе и в архиве стоял под её чипом.
-  const byOwner = new Map<string, T[]>();
-  for (const account of accounts) {
-    const owner = account.brigade_id ?? "";
-    const list = byOwner.get(owner);
-    if (list) list.push(account);
-    else byOwner.set(owner, [account]);
-  }
-
-  const groups: AccountGroup<T>[] = [];
-  for (const team of teams) {
-    if (!team.is_active) continue;
-    const rows = byOwner.get(team.id);
-    if (!rows || rows.length === 0) continue;
-    groups.push({
-      key: `team:${team.id}`,
-      title: brigadeTitle(team.name),
-      color: team.color,
-      data: sortAccountRows(rows),
-    });
-  }
-
-  const ownerless = byOwner.get("");
-  if (ownerless && ownerless.length > 0) {
-    groups.push({
-      // Ключ — про пространство нумерации, а не про текст: он и остаётся.
-      key: "shared",
-      // Одно имя на весь продукт: чип на «Счетах», группа перевода и архив
-      // называют этот счёт так же.
-      title: "Без команды",
-      color: null,
-      data: sortAccountRows(ownerless),
-    });
-  }
-  return groups;
 }
 
 /** Дни между двумя `YYYY-MM-DD`. `null` — дата нечитаема. */

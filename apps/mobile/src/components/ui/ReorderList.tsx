@@ -90,6 +90,12 @@ function Row({
   // меняет: палец тянет, а строка возвращается на место без объяснений.
   const draggable = max > min;
 
+  // ШАГ — ЭТО ВЫСОТА ПЛЮС ЗАЗОР. В режиме `spaced` строки стоят через
+  // `SPACED_GAP`, и мерить перелёт одной высотой значит промахиваться на
+  // восемь точек на каждом соседе: к четвёртой строке палец уже на строку
+  // выше, чем показывает список.
+  const pitch = rowHeight + (spaced ? SPACED_GAP : 0);
+
   const pan = Gesture.Pan()
     .activateAfterLongPress(120)
     .onStart(() => {
@@ -100,7 +106,7 @@ function Row({
     })
     .onChange((e) => {
       dy.value = e.translationY;
-      const to = Math.round(e.translationY / rowHeight) + index;
+      const to = Math.round(e.translationY / pitch) + index;
       target.value = Math.min(Math.max(to, min), max);
     })
     .onEnd(() => {
@@ -127,7 +133,7 @@ function Row({
       transform: [
         {
           translateY: withTiming(
-            shiftFor(index, active.value, target.value) * rowHeight,
+            shiftFor(index, active.value, target.value) * pitch,
             { duration: 140 },
           ),
         },
@@ -180,6 +186,10 @@ function Row({
                 borderCurve: "continuous" as const,
                 overflow: "hidden" as const,
                 backgroundColor: t.surface,
+                // Та же тень, что у `RowGroupBody`: отдельно стоящая строка —
+                // это карточка, и она не имеет права выглядеть плоским
+                // прямоугольником рядом с карточками остальных экранов.
+                boxShadow: t.cardShadow,
               }
             : {
                 borderTopWidth: index > 0 ? 1 : 0,

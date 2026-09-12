@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
-  FlatList,
+  ScrollView,
   Pressable,
   RefreshControl,
   Text,
@@ -22,6 +22,7 @@ import { useIsOnline } from "@babun/shared/sync";
 import type { AccountWithBalance } from "@/features/finances/accounts";
 import {
   useAccountsWithBalances,
+  useReorderAccounts,
   useUnassignedMoney,
 } from "@/features/finances/accounts";
 import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
@@ -51,8 +52,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { AddRow } from "@/components/ui/AddRow";
 import { SettingsRow } from "@/components/ui/SettingsRow";
+import { appearanceRowFill } from "@/components/ui/AppearanceSheet";
+import { ReorderList } from "@/components/ui/ReorderList";
+import { notify } from "@/lib/notify";
 import { SwipeRow } from "@/components/ui/SwipeRow";
-import { RowCaption, RowGroup, RowGroupBody } from "@/components/ui/card-rows";
+import { RowCaption, RowGroup } from "@/components/ui/card-rows";
 import { GUTTER, ICON } from "@/components/ui/tokens";
 import { chooseOption } from "@/lib/choose";
 import { confirmThen } from "@/lib/confirm";
@@ -115,6 +119,12 @@ export default function AccountsScreen() {
   const online = useIsOnline();
   const accountsQuery = useAccountsWithBalances({ includeInactive: true });
   const unassigned = useUnassignedMoney();
+  const reorder = useReorderAccounts();
+  const [dragging, setDragging] = useState(false);
+  // Оптимистичные позиции: после отпускания пальца строка обязана остаться
+  // там, куда её положили, а не прыгнуть обратно на те 300 мс, пока сервер
+  // подтверждает запись. Ключ — id счёта, значение — новая позиция.
+  const [moved, setMoved] = useState<Record<string, number>>({});
   // ВСЕ команды, включая архивные: счёт живёт дольше своей команды, и её имя
   // нужно и листу перевода, и подписи пересчёта.
   const teamsQuery = useTeams({ includeInactive: true });
@@ -141,7 +151,12 @@ export default function AccountsScreen() {
     [allTeams],
   );
 
-  const all = useMemo(() => view.data?.accounts ?? [], [view.data]);
+  const all = useMemo(() => {
+    const rows = view.data?.accounts ?? [];
+    return rows.map((a) =>
+      a.id in moved ? { ...a, position: moved[a.id] } : a,
+    );
+  }, [view.data, moved]);
   const accounts = useMemo(() => all.filter((a) => a.is_active), [all]);
 
   // ЛЕНТА: активные команды плюс те, чьи счета иначе не видно нигде. Правило
@@ -196,6 +211,35 @@ export default function AccountsScreen() {
   const openCreate = () => {
     setCreateTeamId(teamId);
     setCreateOpen(true);
+  };
+
+  // Высота строки фиксирована — ею меряется шаг перетаскивания. На крупном
+  // системном шрифте строка встаёт стопкой (имя сверху, остаток снизу), и в
+  // 60pt не помещается, поэтому высота считается тем же порогом.
+  const rowH = fontScale > STACK_ABOVE_FONT_SCALE ? 104 : 60;
+
+  /** Новый порядок строк: пишем позиции 0, 1, 2… по списку id. */
+  const applyOrder = (ids: string[]) => {
+    const next: Record<string, number> = {};
+    ids.forEach((id, index) => {
+      next[id] = index;
+    });
+    // Снимать оптимистичный порядок после успеха не нужно: он совпадает с
+    // тем, что вернёт рефетч, и снятие дало бы лишний кадр старого порядка.
+    setMoved((current) => ({ ...current, ...next }));
+    reorder.mutate(ids, {
+      onError: (e: Error) => {
+        // Сервер не принял — снимаем оптимистичный порядок целиком: показывать
+        // порядок, которого нет в базе, значит соврать при следующем входе.
+        setMoved({});
+        notify(
+          "Не удалось сохранить порядок",
+          online
+            ? e.message
+            : "Без сети порядок не сохранится — он живёт на сервере.",
+        );
+      },
+    });
   };
 
   // ДЕНЬГИ ДВИГАЮТСЯ ОТ СТРОКИ СЧЁТА. Единственная точка открытия листа:
@@ -322,7 +366,7 @@ export default function AccountsScreen() {
   /** Строка списка: свайп влево = «Перевести» на ЛЮБОМ виде счёта. Одна
    *  кромка — одно слово, и действие обратимо (оно только открывает лист),
    *  поэтому размашистый свайп срабатывает сразу. */
-  const renderRow = (a: AccountWithBalance) => {
+  const renderRow = (a: AccountWithBalance, handle: ReactNode) => {
     const negative = moneySign(a.balance) < 0;
     // Пустой счёт печатается тише живого: «€0» у кассы и «€5» на карте были
     // набраны одинаково громко, и глаз не находил, где лежат деньги. «Ноль» —
@@ -340,32 +384,56 @@ export default function AccountsScreen() {
           openTransfer(a);
         }}
       >
-        <SettingsRow
-          // ВИД СЧЁТА — ТОТ ЖЕ БЛОК, ЧТО У ВСЕХ (владелец 2026-09-10:
-          // «исправлять виды полностью всё»). Квадратная плитка и заливка
-          // строки цветом счёта; значка нет или он из старого набора (в базе
-          // лежат эмодзи) — рисуется глиф вида счёта.
-          appearance={{ color: a.color, icon: a.icon, fallback: accountIcon(a) }}
-          title={a.name}
-          value={money(a.balance)}
-          valueColor={negative ? t.danger : undefined}
-          valueQuiet={empty}
-          stacked={fontScale > STACK_ABOVE_FONT_SCALE}
-          // Озвучка собирается из смысла: минус на счёте — это долг, а не
-          // «минус четыреста десять».
-          a11yLabel={[
-            a.name,
-            negative
-              ? `долг ${money(Math.abs(a.balance))}`
-              : `остаток ${money(a.balance)}`,
-          ]
-            .filter(Boolean)
-            .join(", ")}
-          a11yActions={rowActions(a)}
-          onA11yAction={(name) => runRowAction(a, name)}
-          onPress={() => router.push(`/accounts/${a.id}`)}
-          onLongPress={() => openRowMenu(a)}
-        />
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={{ flex: 1 }}>
+            <SettingsRow
+              // ВИД СЧЁТА — ТОТ ЖЕ БЛОК, ЧТО У ВСЕХ (владелец 2026-09-10:
+              // «исправлять виды полностью всё»). Квадратная плитка и заливка
+              // строки цветом счёта; значка нет или он из старого набора (в
+              // базе лежат эмодзи) — рисуется глиф вида счёта.
+              appearance={{
+                color: a.color,
+                icon: a.icon,
+                fallback: accountIcon(a),
+              }}
+              title={a.name}
+              value={money(a.balance)}
+              valueColor={negative ? t.danger : undefined}
+              valueQuiet={empty}
+              stacked={fontScale > STACK_ABOVE_FONT_SCALE}
+              // Озвучка собирается из смысла: минус на счёте — это долг, а не
+              // «минус четыреста десять».
+              a11yLabel={[
+                a.name,
+                negative
+                  ? `долг ${money(Math.abs(a.balance))}`
+                  : `остаток ${money(a.balance)}`,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              a11yActions={rowActions(a)}
+              onA11yAction={(name) => runRowAction(a, name)}
+              onPress={() => router.push(`/accounts/${a.id}`)}
+              onLongPress={() => openRowMenu(a)}
+            />
+          </View>
+          {/* Ручка — ЗА пределами нажимаемой строки, но ВНУТРИ её заливки:
+              вложенная в `Pressable`, она отдала бы короткий тап карточке
+              счёта, а оставленная без цвета — светлой полосой выдавала бы
+              себя за отдельную колонку. Заливка та же, что у строки в покое. */}
+          <View
+            style={{
+              alignSelf: "stretch",
+              justifyContent: "center",
+              backgroundColor: appearanceRowFill(a.color, false, {
+                rest: "transparent",
+                pressed: t.pressed,
+              }),
+            }}
+          >
+            {handle}
+          </View>
+        </View>
       </SwipeRow>
     );
   };
@@ -560,26 +628,47 @@ export default function AccountsScreen() {
           action={{ label: "Добавить счёт", onPress: openCreate }}
         />
       ) : (
-        <FlatList
-          data={rows}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={hero}
-          // КАЖДЫЙ СЧЁТ — ОТДЕЛЬНАЯ КАРТОЧКА, А НЕ СТРОКА В ОБЩЕЙ (владелец
-          // 2026-08-11: «сделай разделитель между счетами»). Раньше строки
-          // склеивались в одну карточку с волосяной линией от 56pt, и список
-          // читался как один объект с подпунктами. Но счёт — это отдельная
-          // ёмкость с деньгами: касса лежит в машине у одной команды, карта —
-          // в кармане у другой, и потерять их можно по отдельности. Зазор
-          // между карточками говорит это без единого слова.
-          renderItem={({ item }) => (
-            <View style={{ marginBottom: 8 }}>
-              <RowGroupBody first last>
-                {renderRow(item)}
-              </RowGroupBody>
-            </View>
-          )}
-          ListFooterComponent={
-            <View>
+        <ScrollView
+          contentContainerStyle={{
+            paddingBottom: Math.max(insets.bottom, 16) + 8,
+          }}
+          scrollEnabled={!dragging}
+          refreshControl={
+            <RefreshControl
+              refreshing={pull.refreshing}
+              onRefresh={pull.onRefresh}
+              tintColor={t.accent}
+            />
+          }
+        >
+          {hero}
+          {/* ПОРЯДОК — РУЧКОЙ ПРЯМО В СПИСКЕ (владелец 2026-09-12: «шесть точек
+              справа для передвижения… везде одно и то же»). Отдельной страницы
+              «Порядок счетов» больше нет: тот же жест, что у тегов, категорий,
+              услуг, меток и типов, живёт там же, где на строки и смотрят.
+              КАЖДЫЙ СЧЁТ — ОТДЕЛЬНАЯ КАРТОЧКА, А НЕ СТРОКА В ОБЩЕЙ (владелец
+              2026-08-11: «сделай разделитель между счетами»): счёт — отдельная
+              ёмкость с деньгами, и зазор между карточками говорит это без
+              единого слова. Поверхность рисует сам `ReorderList` в режиме
+              `spaced` — вторая карточка поверх неё дала бы двойную рамку.
+              ПОРЯДОК НЕ ПЕРЕАДРЕСУЕТ ДЕНЬГИ: маршрут держит «Основной счёт
+              команды» в настройках счёта. */}
+          <View style={{ paddingHorizontal: GUTTER }}>
+            <ReorderList
+              items={rows}
+              rowHeight={rowH}
+              spaced
+              labelFor={(a) => a.name}
+              // Ручка ВНУТРИ строки: строка ещё и смахивается влево, а колонка
+              // ручки снаружи не уезжает — «Перевести» упиралось бы в неё.
+              handleInside
+              onReorder={applyOrder}
+              onDraggingChange={setDragging}
+            >
+              {(item, _index, handle) => renderRow(item, handle)}
+            </ReorderList>
+          </View>
+          <View>
               {/* Подсказка живёт до первого удавшегося свайпа — «она должна
                   как-то один раз показаться» (владелец 2026-08-11). */}
               {swipeLearned ? null : (
@@ -608,19 +697,8 @@ export default function AccountsScreen() {
                   <AddRow label="Добавить счёт" onPress={openCreate} />
                 </RowGroup>
               )}
-            </View>
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={pull.refreshing}
-              onRefresh={pull.onRefresh}
-              tintColor={t.accent}
-            />
-          }
-          contentContainerStyle={{
-            paddingBottom: Math.max(insets.bottom, 16) + 8,
-          }}
-        />
+          </View>
+        </ScrollView>
       )}
 
       <AccountCreateSheet

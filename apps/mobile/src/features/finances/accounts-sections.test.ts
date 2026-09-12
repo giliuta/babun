@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   accountDaysOnHand,
-  accountOrderGroups,
   accountsTeamChips,
   daysBetweenYmd,
   NO_TEAM,
@@ -41,13 +40,14 @@ const TEAMS: SectionTeam[] = [
 // уметь показать такие деньги, а не потерять их.
 const FIXTURE: Row[] = [
   account({ id: "yura-cash", name: "Наличные", balance: 640 }),
-  account({ id: "yura-card", name: "Карта", kind: "card", balance: 410 }),
+  account({ id: "yura-card", name: "Карта", kind: "card", position: 1, balance: 410 }),
   account({ id: "anya-cash", name: "Наличные", brigade_id: "t-anya", balance: 390 }),
   account({ id: "dima-cash", name: "Наличные", brigade_id: "t-dima", balance: 800 }),
   account({
     id: "dima-card",
     name: "Карта",
     kind: "card",
+    position: 1,
     brigade_id: "t-dima",
     balance: 120,
   }),
@@ -95,17 +95,30 @@ describe("счета выбранной команды", () => {
     assert.equal(sumAccountBalances(rows), 0);
   });
 
-  test("порядок строк детерминирован: вид, position, имя", () => {
+  test("порядок строк детерминирован: position, затем имя", () => {
     const rows = [
-      account({ id: "4", name: "Прочее", kind: "other", position: 0, balance: 0 }),
-      account({ id: "3", name: "Банк", kind: "bank", position: 0, balance: 0 }),
-      account({ id: "2b", name: "Ямаха", kind: "card", position: 5, balance: 0 }),
-      account({ id: "2a", name: "Альфа", kind: "card", position: 5, balance: 0 }),
-      account({ id: "1", name: "Наличные", kind: "cash", position: 9, balance: 0 }),
+      account({ id: "4", name: "Прочее", kind: "other", position: 3, balance: 0 }),
+      account({ id: "3", name: "Банк", kind: "bank", position: 2, balance: 0 }),
+      account({ id: "2b", name: "Ямаха", kind: "card", position: 1, balance: 0 }),
+      account({ id: "2a", name: "Альфа", kind: "card", position: 1, balance: 0 }),
+      account({ id: "1", name: "Наличные", kind: "cash", position: 0, balance: 0 }),
     ];
     assert.deepEqual(
       teamAccounts(rows, "t-yura").map((a) => a.id),
       ["1", "2a", "2b", "3", "4"],
+    );
+  });
+
+  test("РУКА СИЛЬНЕЕ ВИДА: карта, поднятая выше кассы, остаётся выше", () => {
+    // До 2026-09-12 первым ключом стоял вид счёта, и перетаскивание внутри
+    // списка ничего не меняло: строка возвращалась на место.
+    const rows = [
+      account({ id: "card", name: "Карта", kind: "card", position: 0, balance: 0 }),
+      account({ id: "cash", name: "Наличные", kind: "cash", position: 1, balance: 0 }),
+    ];
+    assert.deepEqual(
+      teamAccounts(rows, "t-yura").map((a) => a.id),
+      ["card", "cash"],
     );
   });
 
@@ -176,7 +189,14 @@ describe("лента команд", () => {
   test("тенант, у которого ВСЕ счета осиротели, видит их, а не пустой экран", () => {
     const accounts = [
       account({ id: "a", name: "Касса", brigade_id: "team-gone-1", balance: 900 }),
-      account({ id: "b", name: "Карта", kind: "card", brigade_id: "team-gone-2", balance: 40 }),
+      account({
+        id: "b",
+        name: "Карта",
+        kind: "card",
+        position: 1,
+        brigade_id: "team-gone-2",
+        balance: 40,
+      }),
     ];
     const chips = accountsTeamChips({ accounts, teams: [] });
     assert.deepEqual(
@@ -210,60 +230,6 @@ describe("лента команд", () => {
       ["revolut"],
     );
     assert.equal(sumAccountBalances(teamAccounts(rows, NO_TEAM)), 5120);
-  });
-});
-
-describe("группы страницы «Порядок счетов»", () => {
-  test("по командам, счёт без владельца — последней группой", () => {
-    const groups = accountOrderGroups({ accounts: FIXTURE, teams: TEAMS });
-    assert.deepEqual(
-      groups.map((g) => [g.title, g.data.map((a) => a.id)]),
-      [
-        ["Команда Юра", ["yura-cash", "yura-card"]],
-        ["Команда Аня", ["anya-cash"]],
-        ["Команда Дима", ["dima-cash", "dima-card"]],
-        ["Без команды", ["revolut"]],
-      ],
-    );
-    // Каждый счёт ровно в одной группе: `position` нумеруется внутри неё.
-    const drawn = groups.flatMap((g) => g.data.map((a) => a.id));
-    assert.equal(drawn.length, FIXTURE.length);
-    assert.equal(drawn.length, new Set(drawn).size);
-  });
-
-  test("имя команды не удваивает слово: «Команда 2», а не «Команда Команда 2»", () => {
-    const groups = accountOrderGroups({
-      accounts: [
-        account({ id: "a", brigade_id: "t1", balance: 1 }),
-        account({ id: "b", brigade_id: "t2", balance: 2 }),
-      ],
-      teams: [
-        { id: "t1", name: "Команда 2", color: null, is_active: true },
-        { id: "t2", name: "Команда Юга", color: null, is_active: true },
-      ],
-    });
-    assert.deepEqual(
-      groups.map((g) => g.title),
-      ["Команда 2", "Команда Юга"],
-    );
-  });
-
-  test("архивные и неразрешимые команды переставлять нечем", () => {
-    const groups = accountOrderGroups({
-      accounts: [
-        ...FIXTURE,
-        account({ id: "old", brigade_id: "t-old", balance: 250 }),
-        // Живая фактура прода: `brigade_id` без строки в справочнике команд.
-        account({ id: "ghost", brigade_id: "team-mpvbwqze-a8qj0", balance: 300 }),
-      ],
-      teams: [
-        ...TEAMS,
-        { id: "t-old", name: "Дима", color: null, is_active: false },
-      ],
-    });
-    const drawn = groups.flatMap((g) => g.data.map((a) => a.id));
-    assert.equal(drawn.includes("old"), false);
-    assert.equal(drawn.includes("ghost"), false);
   });
 });
 
