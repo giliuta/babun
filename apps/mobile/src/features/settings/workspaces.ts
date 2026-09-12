@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { switchTenant } from "./switch-tenant";
+import { useTenant } from "./tenant";
 import { USER_ROLES, type UserRole } from "./role-policy";
 
 // КАЛЕНДАРИ ЧЕЛОВЕКА ВО ВСЕХ ЕГО КОМПАНИЯХ.
@@ -136,6 +137,10 @@ export interface CalendarChip {
   id: string;
   name: string;
   color?: string | null;
+  /** Чип чужой компании — рисуется обводкой, а не заливкой. Поле объявлено
+   *  здесь, а не дописывается к объекту молча: лента его читает, и тип обязан
+   *  об этом знать. */
+  outline?: boolean;
 }
 
 export function useCalendarChips(opts: {
@@ -154,30 +159,60 @@ export function useCalendarChips(opts: {
   pendingId: string | null;
 } {
   const { data: myCalendars = [] } = useMyCalendars();
+  const tenant = useTenant();
   const switching = useSwitchWorkspace();
+  // Имя активной компании нужно, чтобы поставить СВОИ чипы на их место в общем
+  // порядке. Лента знает его сама; запасной путь — сама компания, на случай
+  // когда в активной компании нет ни одного неархивного календаря и в ленте
+  // её строки нет вовсе.
+  const activeTenantName =
+    myCalendars.find((c) => c.isActive)?.tenantName ?? tenant.data?.name ?? "";
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const foreign = myCalendars.filter((c) => !c.isActive);
+  const ownChips: CalendarChip[] = opts.own.map((tm) => ({
+    id: tm.id,
+    name: tm.name,
+    color: tm.color,
+  }));
+
+  // ПОРЯДОК РЯДА НЕ ЗАВИСИТ ОТ ТОГО, ГДЕ ЧЕЛОВЕК СЕЙЧАС.
+  //
+  // Владелец 2026-09-12: «как установлено — Y&D первая, вторая Команда 1 —
+  // оно не должно прыгать вправо-влево». Раньше ряд начинался с календарей
+  // АКТИВНОЙ компании, и переход переставлял чипы местами ровно в ту секунду,
+  // когда человек на них смотрит: бывший чужой становился своим и уезжал в
+  // начало. Место в ряду читается как «так установлено», а не как «я сейчас
+  // здесь»; где он сейчас, говорит ЗАЛИВКА чипа.
+  //
+  // Компании идут по имени, внутри компании порядок прежний. Свои чипы
+  // остаются из СВОЕГО источника: экран отдаёт ещё и архивные календари, за
+  // которыми осталась работа, а серверный список архивные не возвращает вовсе
+  // — пересортировать одну серверную выдачу значило бы молча потерять их.
+  //
+  // ЧУЖОЙ ЧИП — ДРУГОЙ ПРИРОДЫ, И ЭТО ВИДНО БЕЗ СЛОВ. В ряду два одинаковых с
+  // виду чипа делают РАЗНОЕ: свой переключает разрез внутри компании, чужой
+  // уводит в другую — другие счета, долги, прибыль. На календаре безобидно, на
+  // деньгах человек тапнет «соседний», чтобы сравнить бригады, и увидит чужую
+  // кассу. Подписи компании при этом НЕ БУДЕТ: «Giliuta · Команда 1» владелец
+  // отверг сразу — «нельзя делать такую длинную, просто Команда 1».
+  const byTenant = new Map<string, CalendarChip[]>();
+  byTenant.set(activeTenantName, ownChips);
+  for (const c of foreign) {
+    const chips = byTenant.get(c.tenantName) ?? [];
+    chips.push({
+      id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
+      name: c.teamName,
+      color: c.teamColor,
+      outline: true,
+    });
+    byTenant.set(c.tenantName, chips);
+  }
   const items: CalendarChip[] = foreign.length
-    ? [
-        ...opts.own.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color })),
-        // ЧУЖОЙ ЧИП — ДРУГОЙ ПРИРОДЫ, И ЭТО ВИДНО БЕЗ СЛОВ. В ряду два
-        // одинаковых с виду чипа делают РАЗНОЕ: свой переключает разрез внутри
-        // компании, чужой уводит в другую — другие счета, долги, прибыль. На
-        // календаре безобидно, на деньгах человек тапнет «соседний», чтобы
-        // сравнить бригады, и увидит чужую кассу.
-        //
-        // Подписи компании здесь НЕ БУДЕТ: «Giliuta · Команда 1» владелец
-        // отверг сразу — «нельзя делать такую длинную, просто Команда 1».
-        // Отличие несёт форма чипа (обводка вместо заливки), а не текст.
-        ...foreign.map((c) => ({
-          id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
-          name: c.teamName,
-          color: c.teamColor,
-          outline: true,
-        })),
-      ]
-    : opts.own.map((tm) => ({ id: tm.id, name: tm.name, color: tm.color }));
+    ? [...byTenant.entries()]
+        .sort(([a], [b]) => a.localeCompare(b, "ru"))
+        .flatMap(([, chips]) => chips)
+    : ownChips;
 
   const pick = (chipId: string) => {
     if (!chipId.startsWith(FOREIGN_PREFIX)) {
