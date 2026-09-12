@@ -9,7 +9,7 @@ import type { Team } from "@/features/reference/queries";
 import type { AccountWithBalance } from "./accounts";
 import { accountIcon } from "./account-ui";
 import { sortAccountRows } from "./accounts-sections";
-import { PanelHeader } from "./PanelHeader";
+import { PanelHeader, panelCount } from "./PanelHeader";
 
 // СЧЕТА РАСКРЫВАЮТСЯ ЗДЕСЬ, А НЕ УВОДЯТ (владелец 2026-08-11: «перекинем
 // вниз, в операции»). Ответ «где лежат деньги» — такой же срез команды, как
@@ -51,7 +51,7 @@ export function AccountsPanel({
           деньги», а управление живёт своей страницей — тот же закон, по
           которому шестерёнка списка ведёт на страницу его настроек. */}
       <PanelHeader
-        title={`Счета · ${rows.length}`}
+        title={panelCount("Счета", rows.length)}
         onSettings={() => onOpen("/accounts/settings")}
         settingsLabel="Настройки счетов"
       />

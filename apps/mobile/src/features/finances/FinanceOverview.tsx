@@ -74,14 +74,23 @@ export function SummaryToggle({
   label,
   color,
   value,
+  quiet,
   a11yValue,
   active,
   onPress,
 }: {
   label: string;
-  /** Цвет смысла строки: им красятся точка и значение. */
+  /** Цвет смысла строки: им красится точка, а значение — когда оно не ноль. */
   color: string;
   value: string;
+  /** НОЛЬ ТИШЕ ЖИВЫХ ДЕНЕГ — тот же закон, что у строки счёта в списке
+   *  (`SettingsRow.valueQuiet`). Пять нулей, набранных в полную силу своими
+   *  цветами, превращали сводку в ровный шаблон: глаз обегал зелёное,
+   *  красное, янтарное и синее и не находил единственное живое число.
+   *  Красный «€0» у расхода вдобавок врал прямо цветом — красное в этом
+   *  продукте значит «деньги ушли». Точка при этом остаётся цветной: она
+   *  называет строку, а не сумму. */
+  quiet?: boolean;
   /** Что значит число, если само по себе оно немое: «3» на плитке документов
    *  это «три документа ждут оплаты», и вслух строка обязана сказать это. */
   a11yValue?: string;
@@ -118,8 +127,11 @@ export function SummaryToggle({
         {label}
       </Text>
       <Text
-        className="ml-auto text-[15px] font-bold"
-        style={{ color, fontVariant: ["tabular-nums"] }}
+        className={`ml-auto text-[15px] ${quiet ? "font-semibold" : "font-bold"}`}
+        style={{
+          color: quiet ? t.caption : color,
+          fontVariant: ["tabular-nums"],
+        }}
       >
         {value}
       </Text>
@@ -252,6 +264,7 @@ export function FinanceOverview({
             label={accountsTitle}
             color={t.ink}
             value={formatEUR(accounts.total)}
+            quiet={moneySign(accounts.total) === 0}
             active={view === "accounts"}
             onPress={() => onTap("accounts")}
           />
@@ -269,7 +282,11 @@ export function FinanceOverview({
           <SummaryToggle
             label="Документы"
             color={t.ink}
-            value={String(invoices.openCount)}
+            // НОЛЬ ДОКУМЕНТОВ — СЛОВОМ. Голый «0» стоит вплотную к «€450» в
+            // том же ряду и читается как сумма; так же его печатает строка
+            // «Закрытые счета» в настройках счетов.
+            value={invoices.openCount > 0 ? String(invoices.openCount) : "нет"}
+            quiet={invoices.openCount === 0}
             active={view === "documents"}
             // Глагол склоняется вместе с числительным: «1 документ ждёт»,
             // а не «1 документ ждут».
@@ -302,6 +319,7 @@ export function FinanceOverview({
             label="Доход"
             color={moneySign(totals.income) < 0 ? t.danger : t.success}
             value={formatEUR(totals.income)}
+            quiet={moneySign(totals.income) === 0}
             active={view === "income"}
             onPress={() => onTap("income")}
           />
@@ -312,6 +330,7 @@ export function FinanceOverview({
             label="Расход"
             color={t.danger}
             value={formatEUR(totals.expense)}
+            quiet={moneySign(totals.expense) === 0}
             active={view === "expense"}
             onPress={() => onTap("expense")}
           />
@@ -322,6 +341,7 @@ export function FinanceOverview({
             label="Долги"
             color={t.warning}
             value={formatEUR(totals.debt)}
+            quiet={moneySign(totals.debt) === 0}
             active={view === "debt"}
             onPress={() => onTap("debt")}
           />
@@ -331,6 +351,7 @@ export function FinanceOverview({
             label="Прибыль"
             color={t.brandAccent}
             value={formatEUR(totals.profit)}
+            quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
             onPress={() => onTap("profit")}
           />

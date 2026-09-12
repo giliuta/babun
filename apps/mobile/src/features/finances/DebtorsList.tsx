@@ -6,6 +6,7 @@ import type { Client } from "@babun/shared/local/clients";
 import type { Debt, DebtDirection } from "@babun/shared/local/finance/debt";
 import { DEBT_DIRECTION_LABEL } from "@babun/shared/local/finance/debt";
 import { useThemeColors } from "@/theme/colors";
+import { panelCount } from "./PanelHeader";
 import { RecordRowsPanel } from "./RecordRowsPanel";
 import { debtRows, manualDebtRows, mergeDebtRows } from "./debt-rows";
 import type { RecordRow } from "./record-rows";
@@ -227,7 +228,7 @@ export function DebtorsList({
       // сверху отвечало на вопрос, которого к списку не задают, — а «когда это
       // повисло» пряталось в подписи строки.
       rows={sorted}
-      title={`Долги · ${sorted.length}`}
+      title={panelCount("Долги", sorted.length)}
       tone="debt"
       headerRight={sideChips}
       // Итог дня складывает долги: список однороден, и без этого над каждым

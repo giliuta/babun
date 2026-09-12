@@ -45,6 +45,7 @@ import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
 import { DebtorsList } from "@/features/finances/DebtorsList";
+import { panelCount } from "@/features/finances/PanelHeader";
 import { RecordRowsPanel } from "@/features/finances/RecordRowsPanel";
 import {
   mergeByRecord,
@@ -947,12 +948,10 @@ function FinancesContent() {
   // Счётчик считает ПОКАЗАННОЕ. Лента считает записями, а не проводками:
   // «Операции · 19» над одним визитом читалось как девятнадцать дел
   // (2026-09-09).
-  const feedTitle =
-    view === "income"
-      ? `Доход · ${blockRows.length}`
-      : view === "expense"
-        ? `Расход · ${blockRows.length}`
-        : `Записи · ${blockRows.length}`;
+  const feedTitle = panelCount(
+    view === "income" ? "Доход" : view === "expense" ? "Расход" : "Записи",
+    blockRows.length,
+  );
 
   if (loading) {
     return (
