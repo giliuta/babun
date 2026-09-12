@@ -18,6 +18,33 @@ export { TIMEZONE_OPTIONS } from "./timezones";
 
 import { getStorage } from "../storage/provider";
 
+/** Ситуации, которыми красится запись, когда своего цвета у неё нет. Список
+ *  ЕДИНСТВЕННЫЙ: подписи к этим же идентификаторам живут в приложении
+ *  (`features/appointments/record-color.ts`) и берут ids отсюда — двух списков
+ *  одного и того же не бывает. */
+export const RECORD_COLOR_SITUATIONS = [
+  "noClient",
+  "noObject",
+  "noServices",
+] as const;
+
+export type RecordColorSituation = (typeof RECORD_COLOR_SITUATIONS)[number];
+
+/** Чем красить запись, у которой нет своего цвета. */
+export type RecordColorRule = "team" | "label" | "service";
+
+export const RECORD_COLOR_RULES: readonly RecordColorRule[] = [
+  "team",
+  "label",
+  "service",
+];
+
+/** Цвет на ситуацию. `null` у ситуации — «эта ситуация не красит»; отсутствие
+ *  всей палитры — «владелец не трогал, действуют заводские цвета». */
+export type RecordColorPalette = Partial<
+  Record<RecordColorSituation, string | null>
+>;
+
 export interface CalendarSettings {
   /** Visible-grid start hour. Determines what the user actually sees
    *  on the calendar — 0-23, default 9. Renamed conceptually in v438:
@@ -69,6 +96,15 @@ export interface CalendarSettings {
    *  that has no per-date override. Empty / undefined → grey «+ метка»
    *  chip on every untagged day. */
   personalDefaultLabel?: string;
+  /** Настройки цвета записи. ЖИЛИ НА ТЕЛЕФОНЕ и переехали сюда 2026-09-12:
+   *  правило, палитра ситуаций и запасной цвет лежали только в MMKV, и два
+   *  устройства ОДНОГО владельца показывали разные цвета одних и тех же
+   *  записей. Настройка компании не имеет права жить на устройстве.
+   *  `undefined` значит «владелец не выбирал»: заводские значения знает
+   *  экран, а не хранилище. */
+  recordColorRule?: RecordColorRule;
+  recordColorPalette?: RecordColorPalette;
+  recordColorFallback?: string;
 }
 
 /**
@@ -78,10 +114,19 @@ export interface CalendarSettings {
  */
 export type OperationalCalendarSettings = Omit<
   CalendarSettings,
-  //   // вправе (`useSaveCalendarSettings` бросает «только владелец»), а знать,
-  // следит ли зона за телефоном, ему незачем — за неё отвечает владелец.
-  // Контрактный тест мастерского среза ловит любую попытку это протащить.
-  "personalLabels" | "personalDefaultLabel"
+  // Контрактный тест мастерского среза ловит любую попытку протащить сюда
+  // личное поле.
+  | "personalLabels"
+  | "personalDefaultLabel"
+  // Цвета записи сюда НЕ входят, и это не забывчивость: их не отдаёт
+  // `read_operational_calendar_settings_safe()` — единственный путь мастера к
+  // настройкам. Пока функция их не знает, у мастера цвета заводские, и тип
+  // обязан говорить это вслух, а не обещать поле, которого не будет.
+  // Чинится вместе с переписыванием безопасных функций — очередь прав на
+  // календарь (docs/PLAN-CALENDARS-2026-09-10.md).
+  | "recordColorRule"
+  | "recordColorPalette"
+  | "recordColorFallback"
 >;
 
 const STORAGE_KEY = "babun2:settings:calendar";
@@ -142,8 +187,67 @@ export function loadCalendarSettings(): CalendarSettings {
 // range, EXPAND the visible range to include it. Previously work/
 // scroll were silently snapped back into [startHour..endHour], which
 // produced the "settings save+revert" surprise on the form.
+/** Шестизначный hex и ничего кроме. Цвет уезжает прямо в стили и в
+ *  измеритель контраста: строка вроде «rgba(...)» или «blue» ломает и то, и
+ *  другое молча — блок просто становится прозрачным. */
+function hexOrNull(value: unknown): string | null {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value.trim())
+    ? value.trim()
+    : null;
+}
+
+/** Палитра ситуаций из чего угодно: чужие ключи выбрасываются, значения —
+ *  либо честный hex, либо явный `null` («ситуация не красит»). Пустая палитра
+ *  возвращается как `undefined` — «владелец не выбирал» и «владелец выбрал
+ *  ничего» это разные вещи, и хранилище обязано их различать. */
+function sanitizeRecordPalette(
+  value: unknown,
+): RecordColorPalette | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const raw = value as Record<string, unknown>;
+  const out: RecordColorPalette = {};
+  let touched = false;
+  for (const id of RECORD_COLOR_SITUATIONS) {
+    if (!(id in raw)) continue;
+    out[id] = hexOrNull(raw[id]);
+    touched = true;
+  }
+  return touched ? out : undefined;
+}
+
+/** ЕДИНСТВЕННЫЙ разбор цветов записи из чего угодно: им пользуются и разбор
+ *  локального кэша, и маппер строки базы. Две проверки одного и того же
+ *  разъезжаются в первый же месяц — этой уже случалось с полями часов. */
+export function sanitizeRecordColorSettings(input: {
+  rule?: unknown;
+  palette?: unknown;
+  fallback?: unknown;
+}): Pick<
+  CalendarSettings,
+  "recordColorRule" | "recordColorPalette" | "recordColorFallback"
+> {
+  return {
+    recordColorRule: RECORD_COLOR_RULES.includes(input.rule as RecordColorRule)
+      ? (input.rule as RecordColorRule)
+      : undefined,
+    recordColorPalette: sanitizeRecordPalette(input.palette),
+    recordColorFallback: hexOrNull(input.fallback) ?? undefined,
+  };
+}
+
 function sanitizeCalendarSettings(s: CalendarSettings): CalendarSettings {
   const next = { ...s };
+
+  Object.assign(
+    next,
+    sanitizeRecordColorSettings({
+      rule: next.recordColorRule,
+      palette: next.recordColorPalette,
+      fallback: next.recordColorFallback,
+    }),
+  );
 
   // Hard bounds: visible range stays inside [0..24] and ≥ 1 h wide.
   next.startHour = Math.max(0, Math.min(23, next.startHour));

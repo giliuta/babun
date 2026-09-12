@@ -18,11 +18,23 @@ import type {
 } from "../../local/calendar-settings";
 import {
   DEFAULT_CALENDAR_SETTINGS,
+  sanitizeRecordColorSettings,
   toOperationalCalendarSettings,
 } from "../../local/calendar-settings";
 
 type DbSupabase = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["calendar_settings"]["Row"];
+
+/** Колонки цвета записи. Сгенерированный `database.types.ts` отстал от базы
+ *  (в нём нет ни `start_minute`, ни `show_day_finance`, ни этих трёх), и
+ *  соседние поля здесь читаются через `as any`. Для новых — узкий тип: канон
+ *  запрещает `any`, а делать вид, что колонок нет, нельзя. Уйдёт сам, когда
+ *  типы перегенерируют. */
+type RecordColorColumns = {
+  record_color_rule: string | null;
+  record_color_palette: unknown;
+  record_color_fallback: string | null;
+};
 type OperationalRow =
   Database["public"]["Functions"]["read_operational_calendar_settings_safe"]["Returns"][number];
 
@@ -96,6 +108,11 @@ function rowToSettings(r: Row): CalendarSettings {
     workEndHour: (r as any).work_end_hour ?? undefined,
     personalLabels,
     personalDefaultLabel,
+    ...sanitizeRecordColorSettings({
+      rule: (r as Row & Partial<RecordColorColumns>).record_color_rule,
+      palette: (r as Row & Partial<RecordColorColumns>).record_color_palette,
+      fallback: (r as Row & Partial<RecordColorColumns>).record_color_fallback,
+    }),
   };
 }
 
@@ -206,6 +223,24 @@ export async function updateCalendarSettings(
         ? patch.personalDefaultLabel
         : null;
   }
+  // ЦВЕТА ЗАПИСИ. `undefined` в патче значит «не трогаем», а `null` в колонке —
+  // «владелец не выбирал, действуют заводские». Поэтому пустая палитра и
+  // пустой запасной цвет пишутся именно NULL: иначе «сбросить к заводскому»
+  // было бы невозможно выразить.
+  const colorInsert = insert as typeof insert & Partial<RecordColorColumns>;
+  if (patch.recordColorRule !== undefined) {
+    colorInsert.record_color_rule = patch.recordColorRule ?? "team";
+  }
+  if (patch.recordColorPalette !== undefined) {
+    colorInsert.record_color_palette =
+      patch.recordColorPalette && Object.keys(patch.recordColorPalette).length > 0
+        ? patch.recordColorPalette
+        : null;
+  }
+  if (patch.recordColorFallback !== undefined) {
+    colorInsert.record_color_fallback = patch.recordColorFallback || null;
+  }
+
   const { data, error } = await supabase
     .from("calendar_settings")
     .upsert(insert, { onConflict: "tenant_id" })

@@ -90,24 +90,34 @@ export async function listAccounts(
     .select("*")
     .eq("tenant_id", tenantId);
   if (!options.includeInactive) q = q.eq("is_active", true);
-  const [{ data, error }, memberships] = await Promise.all([
-    q.order("position", { ascending: true }),
-    supabase
+  const { data, error } = await q.order("position", { ascending: true });
+  if (error) throw new Error(`listAccounts: ${error.message}`);
+  const rows = (data ?? []) as Row[];
+
+  // ПРИВЯЗКИ ЧИТАЕМ, ТОЛЬКО ЕСЛИ ЕСТЬ КОМУ. `account_teams` — историческая
+  // таблица общего счёта: схема «счёт принадлежит ОДНОЙ команде» снесла его
+  // 2026-08-15, и с тех пор живой продукт её не пишет
+  // (`20260815150000_accounts_belong_to_one_team.sql`). Второй сетевой запрос
+  // всё равно уходил на КАЖДОЕ открытие счетов и возвращал пусто: в базе ноль
+  // строк и ноль счетов со `scope = 'company'` (проверено 2026-09-12).
+  // Легаси-строки при этом не теряются: у счёта такого охвата запрос по-прежнему
+  // выполняется.
+  const teamsByAccount = new Map<string, string[]>();
+  if (rows.some((r) => r.scope === "company")) {
+    const memberships = await supabase
       .from("account_teams")
       .select("account_id, team_id")
-      .eq("tenant_id", tenantId),
-  ]);
-  if (error) throw new Error(`listAccounts: ${error.message}`);
-  if (memberships.error) {
-    throw new Error(`listAccounts: ${memberships.error.message}`);
+      .eq("tenant_id", tenantId);
+    if (memberships.error) {
+      throw new Error(`listAccounts: ${memberships.error.message}`);
+    }
+    for (const m of memberships.data ?? []) {
+      const list = teamsByAccount.get(m.account_id);
+      if (list) list.push(m.team_id);
+      else teamsByAccount.set(m.account_id, [m.team_id]);
+    }
   }
-  const teamsByAccount = new Map<string, string[]>();
-  for (const m of memberships.data ?? []) {
-    const list = teamsByAccount.get(m.account_id);
-    if (list) list.push(m.team_id);
-    else teamsByAccount.set(m.account_id, [m.team_id]);
-  }
-  return ((data ?? []) as Row[])
+  return rows
     .map((r) => rowToAccount(r, teamsByAccount.get(r.id) ?? []))
     .sort(compareAccounts);
 }
