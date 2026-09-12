@@ -191,6 +191,29 @@ function readTenantId(opts: ReplayerOptions): string | null {
   return opts.currentTenantId?.() ?? opts.tenantId ?? null;
 }
 
+/** ПОЛЕ, КОТОРЫМ КЛИЕНТ ОБЪЯВЛЯЕТ СЕБЯ ПРИВЯЗАННЫМ К ОДНОЙ КОМПАНИИ.
+ *
+ *  Прогрев чужих компаний ходит клиентом, которому заголовок компании прибит
+ *  намертво. Такой клиент не имеет права попасть в выгрузку: операция АКТИВНОЙ
+ *  компании, отправленная под чужим заголовком, у вставки будет отбита
+ *  сервером, а вот УДАЛЕНИЕ вернёт ноль строк — и это честно прочитается как
+ *  «удалять нечего», после чего операция уйдёт из очереди. Тихая потеря
+ *  работы.
+ *
+ *  Договор простой: привязанный клиент ОБЪЯВЛЯЕТ свою компанию этим полем, а
+ *  выгрузка отказывается через него работать. Заслон стоит с обеих сторон —
+ *  тот, кто создаёт такой клиент, следит, чтобы он не доехал сюда; выгрузка
+ *  не верит этому на слово. Одной стороны мало: обёртки кэша зовут выгрузку
+ *  напрямую, и достаточно одного нового места. */
+export const BOUND_TENANT_FIELD = "__babunBoundTenantId";
+
+function boundTenantOf(supabase: DbSupabase): string | null {
+  const value = (supabase as unknown as Record<string, unknown>)[
+    BOUND_TENANT_FIELD
+  ];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
 async function drain(opts: ReplayerOptions): Promise<void> {
   const ops = await dequeueAll(); // sorted by created_at ASC via index
   if (ops.length === 0) return;
@@ -199,6 +222,13 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // операцией: переход посреди слива обязан его прервать, а не дописать
   // остаток уже в другую компанию.
   const gateTenantId = readTenantId(opts);
+
+  // ПРИВЯЗАННЫМ КЛИЕНТОМ НЕ СЛИВАЕМ ВОВСЕ. Не «пропускаем чужие операции», а
+  // выходим целиком: такой клиент отправит ЛЮБУЮ операцию под своим
+  // заголовком, в том числе операцию активной компании, которая гейт проходит
+  // честно. Fail-closed: клиент объявил себя привязанным — значит он не для
+  // выгрузки, даже если привязан к той же компании.
+  if (boundTenantOf(opts.supabase)) return;
 
   for (const op of ops) {
     if (op.attempts >= MAX_ATTEMPTS) {

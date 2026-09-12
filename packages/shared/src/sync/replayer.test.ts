@@ -29,6 +29,7 @@ import {
 } from "../db/cache/sql";
 import {
   __resetReplayerForTests,
+  BOUND_TENANT_FIELD,
   kickReplayer,
   setReplayerDefaults,
   type QuotaGate,
@@ -750,6 +751,32 @@ describe("replayer — гейт перепроверяется перед отп
     };
 
     await kickReplayer({ supabase: asSupabase(client), currentTenantId });
+
+    expect(calls).toHaveLength(0);
+    expect(await queueDepth()).toBe(1);
+  });
+});
+
+// ─── Привязанным клиентом очередь не сливается ─────────────────────────
+// Прогрев чужих компаний ходит клиентом с прибитым заголовком. Операция
+// АКТИВНОЙ компании, ушедшая под чужим заголовком, у вставки будет отбита
+// сервером — а удаление вернёт ноль строк, что честно читается как «удалять
+// нечего», и работа тихо пропадёт.
+
+describe("replayer — привязанный к компании клиент", () => {
+  test("через него не сливается ничего, очередь цела", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    const { client, calls } = makeFakeSupabase(() => ({ data: null, error: null }));
+    // Клиент объявляет себя привязанным — пусть даже к ТОЙ ЖЕ компании.
+    (client as Record<string, unknown>)[BOUND_TENANT_FIELD] = TENANT;
+
+    await kickReplayer({ supabase: asSupabase(client), tenantId: TENANT });
 
     expect(calls).toHaveLength(0);
     expect(await queueDepth()).toBe(1);
