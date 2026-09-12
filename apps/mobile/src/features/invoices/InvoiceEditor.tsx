@@ -477,18 +477,50 @@ export function InvoiceEditor({
     if (draft.notes && !notes.trim()) setNotes(draft.notes);
   };
 
+  // ПРИЧИНА ПЕЧАТАЕТСЯ ДО ТАПА, А НЕ ПОСЛЕ (закон продукта: погашенная кнопка
+  // обязана называть себя — так делают лист перевода и лист операции).
+  // Здесь было наоборот: кнопка «Выставить инвойс» всегда живая, а на пустом
+  // бланке отвечала «Итог инвойса должен быть больше нуля» — то есть человек
+  // тратил тап, чтобы получить выговор. Все три проверки выводимы заранее.
+  //
+  // Пустой бланк — не ошибка ввода, а незаполненное поле, поэтому первая
+  // строка нейтральна и говорит, ЧТО заполнить, а не что не так.
+  //
+  // Свежий бланк уже несёт строку «Услуги» без цены (её ставит генератор),
+  // поэтому «пусто» здесь — это ОТСУТСТВИЕ ЦЕНЫ, а не отсутствие названия:
+  // проверять только название значило бы ругать человека красным за то, что
+  // он ещё ничего не трогал.
+  const noPrice = parsedLines.every((line) => line.unit_price < 0);
+  const noTitle = parsedLines.every((line) => !line.title);
+  const reason: { text: string; error: boolean } | null =
+    noPrice && noTitle && totals.total <= 0
+      ? { text: "Заполните позицию: что и за сколько", error: false }
+      : noPrice && totals.total <= 0
+        ? { text: "Укажите цену позиции", error: false }
+      : parsedLines.some(
+            (line) => !line.title || line.qty <= 0 || line.unit_price < 0,
+          )
+        ? {
+            text: "Проверьте название, количество и цену каждой позиции",
+            error: true,
+          }
+        : rateMissing
+          ? { text: "Укажите ставку НДС — иначе инвойс не выставить", error: true }
+          : rate < 0 || rate > 100
+            ? {
+                text: "Ставка НДС должна быть от 0 до 100% и не больше двух знаков",
+                error: true,
+              }
+            : totals.total <= 0
+              ? { text: "Итог инвойса должен быть больше нуля", error: true }
+              : null;
+
   const submit = async () => {
     setError(null);
-    if (parsedLines.some((line) => !line.title || line.qty <= 0 || line.unit_price < 0)) {
-      setError("Проверьте название, количество и цену каждой позиции.");
-      return;
-    }
-    if (totals.total <= 0) {
-      setError("Итог инвойса должен быть больше нуля.");
-      return;
-    }
-    if (rate < 0 || rate > 100) {
-      setError("Ставка НДС должна быть от 0 до 100% и не больше двух знаков.");
+    // Кнопка погашена ровно по этой причине; guard остаётся на случай вызова
+    // не с кнопки (ротор VoiceOver, будущий «повторить»).
+    if (reason) {
+      setError(reason.text);
       return;
     }
     try {
@@ -781,20 +813,23 @@ export function InvoiceEditor({
           borderTopColor: t.separator,
         }}
       >
-        {error ? (
+        {error ?? reason ? (
           <Text
-            accessibilityRole="alert"
+            accessibilityRole={error ? "alert" : undefined}
+            accessibilityLiveRegion="polite"
             className="mb-2 text-center text-sm"
-            style={{ color: t.danger }}
+            style={{
+              color: error || reason?.error ? t.danger : t.sub,
+            }}
           >
-            {error}
+            {error ?? reason?.text}
           </Text>
         ) : null}
         <Button
           label={actionLabel}
           onPress={submit}
           loading={submitting}
-          disabled={submitting}
+          disabled={submitting || reason !== null}
         />
       </View>
 
