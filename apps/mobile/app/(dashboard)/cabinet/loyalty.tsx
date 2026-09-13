@@ -266,6 +266,24 @@ export default function LoyaltyScreen() {
         avoidKeyboard
         footer={
           <View style={{ paddingHorizontal: GUTTER }}>
+            {/* ПОГАШЕННАЯ КНОПКА НАЗЫВАЕТ ПРИЧИНУ — и здесь это важнее, чем
+                где-либо: у обоих обязательных полей серые плейсхолдеры «10» и
+                «10», и нетронутый лист выглядит ЗАПОЛНЕННЫМ. Человек видел две
+                десятки и серую «Добавить уровень» без единого слова. */}
+            {!threshold.trim() || !percent.trim() ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={{
+                  marginBottom: 8,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  textAlign: "center",
+                  color: th.sub,
+                }}
+              >
+                Укажите, со скольких визитов и какая скидка
+              </Text>
+            ) : null}
             <Button
               label={editingId ? "Сохранить" : "Добавить уровень"}
               onPress={saveTier}
