@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Redirect } from "expo-router";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
@@ -26,7 +26,18 @@ export function DashboardGate({ children }: { children: ReactNode }) {
   const gate = useOnboardingGate();
   const retry = useRetryOnboardingGate();
 
+  // ОТКРЫТЫЙ КАБИНЕТ НЕ ЗАМЕНЯЕТСЯ ГЕЙТОМ. Гейт нужен на СТАРТЕ: без сессии —
+  // на логин, без настроенной компании — в мастер. Но он же срабатывал ПОСРЕДИ
+  // работы: переход в компанию, у которой на устройстве ещё нет штампа
+  // «онбординг пройден», ронял всё дерево вкладок в «Открываем компанию» — и
+  // календарь, клиенты, финансы размонтировались вместе со своим состоянием.
+  // По спецификации владельца переход не меняет экран вовсе. Поэтому: если
+  // кабинет уже нарисован, «загрузка» гейта — это фон, а не занавес. Ответ
+  // «нужен онбординг» / «нет компании» по-прежнему уводит редиректом.
+  const dashboardShown = useRef(false);
+
   if (!session) return <Redirect href="/login" />;
+  if (gate.status === "loading" && dashboardShown.current) return <>{children}</>;
   if (gate.status === "loading") {
     return (
       <Screen edges={["top", "bottom"]}>
@@ -50,5 +61,6 @@ export function DashboardGate({ children }: { children: ReactNode }) {
   if (gate.status === "needs-onboarding" || gate.status === "no-tenant") {
     return <Redirect href="/onboarding" />;
   }
+  dashboardShown.current = true;
   return <>{children}</>;
 }
