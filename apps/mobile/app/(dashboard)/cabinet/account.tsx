@@ -94,6 +94,7 @@ export default function AccountScreen() {
 
 // ─── Смена пароля (web SecuritySection / PasswordBlock) ──────────────
 function PasswordSection({ email }: { email: string | null }) {
+  const t = useThemeColors();
   const toast = useToast();
   const [currentPwd, setCurrentPwd] = useState("");
   const [pwd, setPwd] = useState("");
@@ -109,6 +110,19 @@ function PasswordSection({ email }: { email: string | null }) {
     confirm === pwd &&
     !samePwd &&
     !saving;
+  // ПОГАШЕННАЯ КНОПКА НАЗЫВАЕТ ПРИЧИНУ (закон продукта). Короткий пароль,
+  // совпадение с текущим и расхождение подтверждения уже подписаны у своих
+  // полей; молчали только ПУСТЫЕ поля — и прежде всего «текущий пароль»:
+  // человек набирал новый дважды, а кнопка оставалась серой без единого слова.
+  const hint = saving
+    ? null
+    : !currentPwd
+      ? "Введите текущий пароль"
+      : !pwd
+        ? "Придумайте новый пароль"
+        : !confirm
+          ? "Повторите новый пароль"
+          : null;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -181,6 +195,14 @@ function PasswordSection({ email }: { email: string | null }) {
         textContentType="newPassword"
         error={mismatch ? "Пароли не совпадают" : null}
       />
+      {hint ? (
+        <Text
+          accessibilityLiveRegion="polite"
+          style={{ marginBottom: 8, fontSize: 13, lineHeight: 18, color: t.sub }}
+        >
+          {hint}
+        </Text>
+      ) : null}
       <Button
         label="Сменить пароль"
         onPress={() => void submit()}

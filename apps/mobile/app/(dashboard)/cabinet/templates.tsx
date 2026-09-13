@@ -426,6 +426,17 @@ export default function TemplatesScreen() {
             <Text className="mb-3 text-sm" style={{ color: t.sub }}>
               Для рабочего шаблона нужны команда и счёт.
             </Text>
+          ) : !name.trim() ? (
+            // ИМЯ И СУММА ТОЖЕ НАЗЫВАЮТ СЕБЯ. `canSave` требует их, а цепочка
+            // причин знала только про команду и счёт: выбрал оба — кнопка
+            // «Создать» серая, и ни слова почему.
+            <Text className="mb-3 text-sm" style={{ color: t.sub }}>
+              Назовите шаблон.
+            </Text>
+          ) : amountCents == null ? (
+            <Text className="mb-3 text-sm" style={{ color: t.sub }}>
+              Укажите сумму шаблона.
+            </Text>
           ) : null}
           <Button
             label={editing ? "Сохранить" : "Создать"}
