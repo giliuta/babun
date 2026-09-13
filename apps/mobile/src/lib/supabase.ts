@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@babun/shared/db/database.types";
 import { LargeSecureStore } from "@/lib/secure-store";
 import { getActiveTenantId } from "@/lib/active-tenant";
+import { applyTenantHeader } from "@/lib/tenant-header";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -44,9 +45,13 @@ function fetchWithActiveTenant(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
-  const tenantId = getActiveTenantId();
-  const headers = new Headers(init?.headers ?? {});
-  if (tenantId) headers.set("x-babun-tenant", tenantId);
+  // Явный заголовок вызывающего побеждает фоновый — так прогрев чужой
+  // компании называет её сам (`bind-tenant.ts`). Правило и его тест — в
+  // `tenant-header.ts`.
+  const headers = applyTenantHeader(
+    new Headers(init?.headers ?? {}),
+    getActiveTenantId(),
+  );
 
   // Свой сигнал НЕ отменяет чужой: если вызывающий уже дал `signal`
   // (react-query умеет отменять запросы), оставляем его хозяином — два
