@@ -46,6 +46,7 @@ import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { preflightQuotaForCreate } from "@/lib/quota";
 import { useTenantId } from "@/lib/tenant";
+import { clientsQueryKey, clientTagsQueryKey } from "@/lib/company-query-keys";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import { masterClientJsonToClient } from "@/features/settings/master-reference";
 import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
@@ -94,13 +95,9 @@ function syncClientReminderWithFeedback(client: Client): void {
   void syncClientReminder(client).then(surfaceClientReminderResult);
 }
 
-/** Экспортирован для label-auto-assign: чтение списка из кэша без хука. */
-export function clientsQueryKey(
-  tenantId: string | null,
-  role: UserRole | null | undefined,
-) {
-  return ["clients", tenantId, role ?? "role-pending"] as const;
-}
+/** Ключи живут в `lib/company-query-keys.ts`; реэкспорт для тех, кто уже
+ *  импортирует их отсюда (`label-auto-assign`). */
+export { clientsQueryKey, clientTagsQueryKey };
 
 function clientQueryKey(
   id: string,
@@ -110,15 +107,13 @@ function clientQueryKey(
   return ["client", id, tenantId, role ?? "role-pending"] as const;
 }
 
-function clientTagsQueryKey(
-  tenantId: string | null,
-  role: UserRole | null | undefined,
-) {
-  return ["client-tags", tenantId, role ?? "role-pending"] as const;
-}
-
-async function listMasterClientsSafe(clientId?: string): Promise<Client[]> {
-  const { data, error } = await supabase.rpc("list_master_clients_safe", {
+/** Клиент — параметром: прогрев чужой компании зовёт ту же функцию клиентом,
+ *  привязанным к ней (`bind-tenant.ts`). */
+export async function listMasterClientsSafe(
+  client: typeof supabase,
+  clientId?: string,
+): Promise<Client[]> {
+  const { data, error } = await client.rpc("list_master_clients_safe", {
     ...(clientId ? { p_client_id: clientId } : {}),
   });
   if (error) throw new Error(`listMasterClientsSafe: ${error.message}`);
@@ -137,7 +132,7 @@ export function useClients() {
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: () =>
       role === "master"
-        ? listMasterClientsSafe()
+        ? listMasterClientsSafe(supabase)
         : listClientsCached(supabase, tenantId as string),
   });
 }
@@ -156,7 +151,7 @@ export function useClient(id: string) {
     },
     queryFn: async () => {
       if (role === "master") {
-        return (await listMasterClientsSafe(id))[0] ?? null;
+        return (await listMasterClientsSafe(supabase, id))[0] ?? null;
       }
       try {
         return await getClient(supabase, id, tenantId as string);

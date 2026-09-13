@@ -17,6 +17,10 @@ import { type ScheduleMap, type TeamSchedule } from "@babun/shared/local/schedul
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
+import {
+  allTeamSchedulesQueryKey,
+  teamScheduleQueryKey,
+} from "@/lib/company-query-keys";
 
 /** The schedule for one team, or null when the team has no row yet. NOT
  *  coalesced to DEFAULT_SCHEDULE here: that hard-coded 08–22 band made the
@@ -27,12 +31,7 @@ export function useTeamSchedule(teamId: string | undefined) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   return useQuery<TeamSchedule | null>({
-    queryKey: [
-      "team-schedules",
-      tenantId,
-      roleQuery.data ?? "role-pending",
-      teamId,
-    ],
+    queryKey: teamScheduleQueryKey(tenantId, roleQuery.data, teamId),
     enabled:
       !!tenantId && !!teamId && roleQuery.isSuccess && roleQuery.data != null,
     queryFn: async () => {
@@ -49,12 +48,7 @@ export function useAllTeamSchedules() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   return useQuery<ScheduleMap>({
-    queryKey: [
-      "team-schedules",
-      tenantId,
-      roleQuery.data ?? "role-pending",
-      "all",
-    ],
+    queryKey: allTeamSchedulesQueryKey(tenantId, roleQuery.data),
     enabled:
       !!tenantId && roleQuery.isSuccess && roleQuery.data === "owner",
     queryFn: () => listScheduleEntries(supabase, tenantId as string),

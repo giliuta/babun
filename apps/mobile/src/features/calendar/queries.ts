@@ -18,6 +18,10 @@ import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
+import {
+  appointmentsQueryKey,
+  dayExtrasQueryKey,
+} from "@/lib/company-query-keys";
 
 // PostgREST silently caps every response at 1000 rows (Supabase default
 // max-rows), so an unordered, unlimited listAppointments truncates a busy
@@ -47,7 +51,9 @@ type AnyResult = { data: any[] | null; error: unknown };
 // A client that resolves `from(t).select(cols).eq(col,val)` to ALL pages.
 // The returned object is thenable so both `await client.from()...eq()` and
 // `client.from()...eq().then()` (whatever the caller does) get the full set.
-function pagingClient(): typeof supabase {
+/** Шим постраничного чтения поверх ЛЮБОГО клиента: обычного или привязанного
+ *  к чужой компании (`bind-tenant.ts`) — прогрев читает записи им же. */
+export function pagingClient(base: typeof supabase = supabase): typeof supabase {
   const runAllPages = async (
     table: string,
     columns: string,
@@ -56,7 +62,7 @@ function pagingClient(): typeof supabase {
   ): Promise<AnyResult> => {
     const all: unknown[] = [];
     for (let offset = 0; ; offset += APPT_PAGE_SIZE) {
-      const { data, error } = await ((supabase.from as any)(table)
+      const { data, error } = await ((base.from as any)(table)
         .select(columns)
         .eq(column, value)
         // date alone is not unique — without the id tiebreaker PostgREST
@@ -120,12 +126,9 @@ export async function listAppointmentsPaged(
   return listAppointmentsCached(pagingClient(), tenantId);
 }
 
-export function appointmentsQueryKey(
-  tenantId: string | null,
-  role: UserRole | null | undefined,
-) {
-  return ["appointments", tenantId, role ?? "role-pending"] as const;
-}
+/** Ключ живёт в `lib/company-query-keys.ts`; реэкспорт для тех, кто уже
+ *  импортирует его отсюда (`useClientAppointments`, `label-auto-assign`). */
+export { appointmentsQueryKey };
 
 // All tenant appointments (RLS-scoped) — shared cache key with the per-client
 // hook (which adds a `select` filter on top of the same data).
@@ -139,7 +142,7 @@ export function useAppointments() {
     // is confirmed. Masters always bypass the SQLite/SWR wrapper.
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: () => {
-      if (role === "master") return listMasterAppointmentsSafePaged();
+      if (role === "master") return listMasterAppointmentsSafePaged(supabase);
       if (role === "owner" || role === "dispatcher") {
         return listAppointmentsPaged(tenantId as string);
       }
@@ -155,7 +158,7 @@ export function useDayExtras() {
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["day-extras", tenantId, role ?? "role-pending"],
+    queryKey: dayExtrasQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role === "owner",
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });

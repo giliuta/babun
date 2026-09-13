@@ -15,7 +15,8 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { citiesQueryKey, teamsQueryKey } from "@/lib/company-query-keys";
+import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import {
   operationalMasterJsonToMaster,
   operationalTeamJsonToTeam,
@@ -54,35 +55,38 @@ export function teamCities(t: Team): string[] {
 // (accounts.brigade_id может указывать на soft-deleted команду; список
 // счетов обязан показать её имя, а не прочерк). Пикеры/фильтры зовут
 // без опции и видят только активные.
+/** Чтение команд ЧИСТОЙ функцией: клиент — параметром, чтобы прогрев чужой
+ *  компании читал их клиентом, привязанным к ней. Хук ниже зовёт её обычным. */
+export async function fetchTeams(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  includeInactive: boolean,
+): Promise<Team[]> {
+  if (role === "dispatcher" || role === "master") {
+    const { data, error } = await client.rpc("list_operational_teams_safe");
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(operationalTeamJsonToTeam);
+    return includeInactive ? rows : rows.filter((row) => row.is_active);
+  }
+  if (role !== "owner") throw new Error("Нет доступа к календарям");
+  let q = client.from("teams").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function useTeams(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: includeInactive
-      ? ["teams", tenantId, role ?? "role-pending", "all"]
-      : ["teams", tenantId, role ?? "role-pending"],
+    queryKey: teamsQueryKey(tenantId, role, includeInactive),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "dispatcher" || role === "master") {
-        const { data, error } = await supabase.rpc(
-          "list_operational_teams_safe",
-        );
-        if (error) throw new Error(error.message);
-        const rows = (data ?? []).map(operationalTeamJsonToTeam);
-        return includeInactive ? rows : rows.filter((row) => row.is_active);
-      }
-      if (role !== "owner") throw new Error("Нет доступа к календарям");
-      let q = supabase
-        .from("teams")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchTeams(supabase, tenantId as string, role as UserRole, includeInactive),
   });
 }
 
@@ -264,23 +268,29 @@ export function useCities(opts?: {
   const includeInactive = !!opts?.includeInactive;
   const teamId = opts?.teamId ?? null;
   return useQuery({
-    queryKey: ["cities", tenantId, includeInactive ? "all" : "live", teamId],
+    queryKey: citiesQueryKey(tenantId, includeInactive, teamId),
     enabled: !!tenantId,
-    queryFn: async () => {
-      let q = supabase
-        .from("cities")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      // Метка принадлежит команде: без её id вернётся весь справочник
-      // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
-      // дня, а не предложить её к выбору.
-      if (teamId) q = q.eq("team_id", teamId);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchCities(supabase, tenantId as string, includeInactive, teamId),
   });
+}
+
+/** Чтение городов ЧИСТОЙ функцией (см. `fetchTeams`). */
+export async function fetchCities(
+  client: typeof supabase,
+  tenantId: string,
+  includeInactive: boolean,
+  teamId: string | null,
+): Promise<City[]> {
+  let q = client.from("cities").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  // Метка принадлежит команде: без её id вернётся весь справочник
+  // тенанта — так читают экраны, которым нужно НАЗВАТЬ метку прошлого
+  // дня, а не предложить её к выбору.
+  if (teamId) q = q.eq("team_id", teamId);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export function useCreateCity() {

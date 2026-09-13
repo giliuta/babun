@@ -7,7 +7,8 @@ import type { Database, Json } from "@babun/shared/db/database.types";
 import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { allServicesQueryKey, servicesQueryKey } from "@/lib/company-query-keys";
+import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import {
   dispatcherServiceJsonToService,
   masterServiceJsonToService,
@@ -33,14 +34,17 @@ function isMissingProjectionRpc(error: {
   return error.code === "PGRST202" || /could not find the function/i.test(error.message ?? "");
 }
 
-async function listMasterServices(tenantId: string): Promise<Service[]> {
-  const { data, error } = await supabase.rpc("list_master_services_safe");
+export async function listMasterServices(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<Service[]> {
+  const { data, error } = await client.rpc("list_master_services_safe");
   if (!error) return (data ?? []).map(masterServiceJsonToService);
   if (!isMissingProjectionRpc(error)) throw new Error(error.message);
 
   // Rolling-deploy fallback against the older member-wide RLS policy. The
   // explicit projection prevents service economics from crossing the wire.
-  const fallback = await supabase
+  const fallback = await client
     .from("services")
     .select("id, tenant_id, name, color")
     .eq("tenant_id", tenantId)
@@ -52,14 +56,15 @@ async function listMasterServices(tenantId: string): Promise<Service[]> {
   );
 }
 
-async function listDispatcherServices(tenantId: string): Promise<Service[]> {
-  const { data, error } = await supabase.rpc(
-    "list_dispatcher_services_safe",
-  );
+export async function listDispatcherServices(
+  client: typeof supabase,
+  tenantId: string,
+): Promise<Service[]> {
+  const { data, error } = await client.rpc("list_dispatcher_services_safe");
   if (!error) return (data ?? []).map(dispatcherServiceJsonToService);
   if (!isMissingProjectionRpc(error)) throw new Error(error.message);
 
-  const fallback = await supabase
+  const fallback = await client
     .from("services")
     .select(
       "id, tenant_id, team_id, name, color, description, price, duration_minutes, cost_per_unit, cost_tiers, price_tiers, duration_tiers, bulk_threshold, bulk_price, is_active, position, created_at, updated_at",
@@ -73,29 +78,36 @@ async function listDispatcherServices(tenantId: string): Promise<Service[]> {
   );
 }
 
+/** Чтение услуг ЧИСТОЙ функцией: клиент — параметром, чтобы прогрев чужой
+ *  компании читал их клиентом, привязанным к ней. `archived` — с убранными
+ *  (для чтения прошлого) или только живые (для выбора). Роль важна: мастеру и
+ *  диспетчеру отдаются проекции, прячущие экономику. */
+export async function fetchServices(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  opts: { archived: boolean },
+): Promise<Service[]> {
+  if (role === "master") return listMasterServices(client, tenantId);
+  if (role === "dispatcher") return listDispatcherServices(client, tenantId);
+  let q = client.from("services").select("*").eq("tenant_id", tenantId);
+  if (!opts.archived) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function useServices() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["services", tenantId, role ?? "role-pending"],
+    queryKey: servicesQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "master") {
-        return listMasterServices(tenantId as string);
-      }
-      if (role === "dispatcher") {
-        return listDispatcherServices(tenantId as string);
-      }
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .eq("is_active", true)
-        .order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchServices(supabase, tenantId as string, role as UserRole, {
+        archived: false,
+      }),
   });
 }
 
@@ -119,20 +131,13 @@ export function useAllServices() {
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["services", "with-archived", tenantId, role ?? "role-pending"],
+    queryKey: allServicesQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     staleTime: 5 * 60_000,
-    queryFn: async () => {
-      if (role === "master") return listMasterServices(tenantId as string);
-      if (role === "dispatcher") return listDispatcherServices(tenantId as string);
-      const { data, error } = await supabase
-        .from("services")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchServices(supabase, tenantId as string, role as UserRole, {
+        archived: true,
+      }),
   });
 }
 

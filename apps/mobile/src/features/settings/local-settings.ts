@@ -13,11 +13,7 @@ import {
   DEFAULT_CALENDAR_SETTINGS,
   type CalendarSettings,
 } from "@babun/shared/local/calendar-settings";
-import {
-  getCalendarSettings,
-  getOperationalCalendarSettings,
-  updateCalendarSettings,
-} from "@babun/shared/db/repositories/calendar-settings";
+import { updateCalendarSettings } from "@babun/shared/db/repositories/calendar-settings";
 import {
   loadLoyalty,
   saveLoyalty,
@@ -41,6 +37,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
+import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
   locationLabelRemoveIds,
   positionedLocationLabelUpserts,
@@ -142,25 +140,30 @@ export function useCalendarSettings() {
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   return useQuery({
-    queryKey: ["calendar-settings", tenantId, role ?? "role-pending"],
+    queryKey: calendarSettingsQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     networkMode: "always",
     queryFn: async (): Promise<CalendarSettings> => {
       const activeTenantId = tenantId as string;
       try {
+        if (role !== "master" && role !== "owner" && role !== "dispatcher") {
+          throw new Error("Роль сотрудника ещё не подтверждена.");
+        }
+        const settings = await fetchCalendarSettings(
+          supabase,
+          activeTenantId,
+          role,
+        );
+        // ЗАПИСЬ В MMKV — ЗДЕСЬ, А НЕ В ЧТЕНИИ: хук работает только для активной
+        // компании, а прогрев чужой читает те же настройки через
+        // `fetchCalendarSettings` и кэш устройства не трогает — иначе настройки
+        // компании B легли бы под общий ключ и всплыли у A.
         if (role === "master") {
-          const settings = await getOperationalCalendarSettings(supabase);
-          safeSaveOperationalCalendarSettings(activeTenantId, {
-            ...settings,
-          });
-          return { ...settings };
+          safeSaveOperationalCalendarSettings(activeTenantId, { ...settings });
+        } else {
+          safeSaveCalendarSettings(settings);
         }
-        if (role === "owner" || role === "dispatcher") {
-          const s = await getCalendarSettings(supabase, activeTenantId);
-          safeSaveCalendarSettings(s);
-          return s;
-        }
-        throw new Error("Роль сотрудника ещё не подтверждена.");
+        return settings;
       } catch (error) {
         if (!calendarReadMayUseCache(error)) throw error;
         return role === "master"
