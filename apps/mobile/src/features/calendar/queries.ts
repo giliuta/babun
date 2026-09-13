@@ -16,7 +16,7 @@ import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
 import {
   appointmentsQueryKey,
