@@ -26,7 +26,13 @@ import {
   isColdOfflineCacheMissError,
   randomUuid,
 } from "@babun/shared/sync";
-import { readTenantPref, writeTenantPref } from "@/lib/tenant-prefs";
+import {
+  devicePrefKey,
+  readTenantPref,
+  tenantPrefKey,
+  writeTenantPref,
+} from "@/lib/tenant-prefs";
+import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
 import { freeSlotsForDay } from "@/features/calendar/free-slots";
 import { expandRepeat } from "@babun/shared/common/utils/expand-repeat";
@@ -177,10 +183,33 @@ import { useSession } from "@/providers/SessionProvider";
 // Agenda horizon — web AgendaView parity («what's next», not «this month»).
 const AGENDA_HORIZON_DAYS = 60;
 // Персист выбранного вида и команды (mode/teamId) между запусками — ПО
-// КОМПАНИИ. Ключи ниже — те, под которыми настройка лежала ДО переезда:
-// `readTenantPref` забирает их ровно один раз и сносит, иначе в день этой
-// правки у всех сбросился бы вид календаря — то самое, что мы и чиним.
+// КОМПАНИИ — НО НЕ ВСЁ.
+//
+// Владелец 2026-09-13, на прямой вопрос «один вид на все компании или свой в
+// каждой»: «Один на все компании». Его же словами раньше: «переход на команду
+// — это смена БАЗЫ, а не переход куда-то; всё должно оставаться идентично».
+//
+// Отсюда разделение по природе настройки, а не по удобству:
+//   • РЕЖИМ (День/Неделя/Месяц/Список) — свойство УСТРОЙСТВА. Человек смотрит
+//     одинаково, что бы за база сейчас ни была открыта.
+//   • ВЫБРАННЫЙ КАЛЕНДАРЬ — свойство КОМПАНИИ: это выбор ВНУТРИ базы, и в
+//     другой компании такой команды просто нет.
+//   • Карточка первого запуска — тоже компании: она про то, пуста ли ЭТА база.
+//
+// СТАРЫХ МЕСТ У РЕЖИМА ДВА, И ИМЕННО ПОЭТОМУ ИМЯ `calendar.view` НЕ МЕНЯЕТСЯ.
+//   1. голый `calendar.view` — на устройствах, где ещё не было правки 12.09;
+//   2. `calendar.view` ПОД КОМПАНИЕЙ — правка 12.09 уже перенесла туда
+//      настройку у владельца и у всех, кто её запускал, а голый ключ снесла.
+// Переименуй выбор календаря в новое имя — и на всех устройствах второго
+// поколения не нашлось бы ни нового ключа, ни старого: выбранный календарь
+// пропал бы у самого владельца. Косметика имени ценой данных.
+//
+// Поэтому выбор календаря остаётся ровно там, где лежит (`calendar.view` под
+// компанией), а режим оттуда только ЧИТАЕТСЯ — ни одно из старых мест он не
+// сносит, их хозяин по-прежнему выбор календаря.
 const CAL_VIEW_LEGACY_KEY = "calendar.view";
+/** Режим календаря живёт на устройстве и компанию в имени не носит. */
+const CAL_MODE_DEVICE_KEY = devicePrefKey("calendar.mode");
 // Онбординг-карточка: «✕» переживает перезапуск (web parity: localStorage).
 const ONBOARDING_DISMISSED_LEGACY_KEY = "calendar.onboardingDismissed";
 
@@ -476,13 +505,24 @@ export default function CalendarTab() {
   // владельца 2026-07-13; дальше вид запоминается за пользователем).
   const tenantId = useTenantId();
   const [mode, setMode] = useState<CalMode>(() => {
-    const saved = tenantId
-      ? readTenantPref<{ mode?: CalMode }>(
-          "calendar.view",
-          tenantId,
-          CAL_VIEW_LEGACY_KEY,
-        )?.mode
-      : undefined;
+    let saved: CalMode | undefined;
+    try {
+      const storage = getStorage();
+      saved =
+        storage.get<{ mode?: CalMode }>(CAL_MODE_DEVICE_KEY)?.mode ??
+        // Второе поколение: вчерашняя настройка под компанией.
+        (tenantId
+          ? storage.get<{ mode?: CalMode }>(
+              tenantPrefKey("calendar.view", tenantId),
+            )?.mode
+          : undefined) ??
+        // Первое поколение: голый ключ до правки 12.09.
+        storage.get<{ mode?: CalMode }>(CAL_VIEW_LEGACY_KEY)?.mode;
+    } catch {
+      // MMKV умеет бросить, пока Keychain заперт на прогреве iOS. Вид —
+      // удобство, а не данные: молча отдаём умолчание.
+      saved = undefined;
+    }
     return saved === "day" || saved === "month" || saved === "agenda"
       ? saved
       : "week";
@@ -527,7 +567,20 @@ export default function CalendarTab() {
   const prefRef = useRef({ mode, teamId: teamChoice });
   const rememberView = (next: { mode?: CalMode; teamId?: string | null }) => {
     prefRef.current = { ...prefRef.current, ...next };
-    if (tenantId) writeTenantPref("calendar.view", tenantId, prefRef.current);
+    if (next.mode !== undefined) {
+      try {
+        getStorage().set(CAL_MODE_DEVICE_KEY, { mode: prefRef.current.mode });
+      } catch {
+        // см. чтение режима выше
+      }
+    }
+    if (next.teamId !== undefined && tenantId) {
+      // Пишется только команда: режим уехал на устройство, и держать его
+      // копию здесь значило бы завести второй источник правды.
+      writeTenantPref("calendar.view", tenantId, {
+        teamId: prefRef.current.teamId,
+      });
+    }
   };
   // Стабильная ссылка для колбэков с пустыми зависимостями.
   const rememberViewRef = useRef(rememberView);
@@ -560,32 +613,28 @@ export default function CalendarTab() {
     setOnboardingDismissed(true);
   };
 
-  // ПЕРЕСЕВ ПРИ СМЕНЕ КОМПАНИИ. Прочитать настройку при монтировании мало:
-  // переход в другую компанию этот экран НЕ размонтирует, и без пересева
-  // человек увидел бы в новой компании вид ПРЕЖНЕЙ — а первое же его действие
-  // записало бы этот чужой вид сюда как «свой». Та же протечка, только на шаг
-  // позже и труднее в поиске.
+  // ПЕРЕСЕВ ПРИ СМЕНЕ КОМПАНИИ — ТОЛЬКО ТОГО, ЧТО ПРИНАДЛЕЖИТ КОМПАНИИ.
+  // Переход в другую компанию этот экран НЕ размонтирует, поэтому выбор
+  // календаря и карточку первого запуска надо перечитать: без этого человек
+  // увидел бы в новой базе команду прежней, а первое же действие записало бы
+  // её туда как «свою».
   //
-  // Старый ключ здесь намеренно НЕ передаётся: он принадлежал прежней
-  // компании и был забран при монтировании. Отдать его второй компании
-  // значило бы приписать ей чужую привычку.
+  // РЕЖИМ ЗДЕСЬ НЕ ТРОГАЕТСЯ НАМЕРЕННО. Владелец 2026-09-13: «один на все
+  // компании» — переключил базу, а День/Неделя/Месяц остались теми же. Вчера
+  // этот пересев перечитывал и режим; ровно это и было ошибкой.
+  //
+  // Старый ключ здесь не передаётся: он принадлежал прежней компании и был
+  // забран при монтировании. Отдать его второй — приписать ей чужую привычку.
   const seededTenantRef = useRef(tenantId);
   useEffect(() => {
     if (seededTenantRef.current === tenantId) return;
     seededTenantRef.current = tenantId;
-    const saved = tenantId
-      ? readTenantPref<{ mode?: CalMode; teamId?: string | null }>(
-          "calendar.view",
-          tenantId,
-        )
-      : null;
-    const nextMode: CalMode =
-      saved?.mode === "day" || saved?.mode === "month" || saved?.mode === "agenda"
-        ? saved.mode
-        : "week";
-    const nextTeam = saved?.teamId ?? null;
-    prefRef.current = { mode: nextMode, teamId: nextTeam };
-    setMode(nextMode);
+    const nextTeam =
+      (tenantId
+        ? readTenantPref<{ teamId?: string | null }>("calendar.view", tenantId)
+            ?.teamId
+        : null) ?? null;
+    prefRef.current = { ...prefRef.current, teamId: nextTeam };
     setTeamChoice(nextTeam);
     setOnboardingDismissed(
       (tenantId
