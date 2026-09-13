@@ -31,7 +31,13 @@ export function keyNamesKnownTenant(
  *  нечем. Это нашёл аудит 2026-09-13, и это была моя же ошибка: предикат по
  *  «называет компанию» честно не находил компании в ключе `["my-calendars",
  *  userId]` и сносил его. */
-const PERSON_SCOPED_QUERY_HEADS: readonly string[] = ["my-calendars"];
+export const PERSON_SCOPED_QUERY_HEADS: readonly string[] = [
+  "my-calendars",
+  // Привычки устройства, продублированные в react-query: без них экран
+  // читал бы умолчание, пока MMKV не перечитан.
+  "clients-sort",
+  "client-card-fields",
+];
 
 /** Переживает ли запрос переход в другую компанию. */
 export function querySurvivesSwitch(

@@ -12,7 +12,10 @@ import {
   setActiveTenantId,
 } from "@/lib/active-tenant";
 import { isTenantScopedKey } from "@/lib/tenant-prefs";
-import { querySurvivesSwitch } from "@/lib/tenant-query-keys";
+import {
+  PERSON_SCOPED_QUERY_HEADS,
+  querySurvivesSwitch,
+} from "@/lib/tenant-query-keys";
 import { settleClaimDebt } from "@/lib/claim-catch-up";
 import { notificationsForWipe } from "@/lib/wipe-plan";
 import {
@@ -151,6 +154,26 @@ function wipeFastStores(
     // компанией, а у её запросов ДРУГИЕ ключи — они сходят в сеть сами, при
     // монтировании. Запросы прежней компании становятся неактивными и молчат.
     void queryClient.invalidateQueries({ refetchType: "none" });
+
+    // ЗАПРОСЫ ЧЕЛОВЕКА ПЕРЕЗАПРАШИВАЮТСЯ СРАЗУ, И ЭТО ИСКЛЮЧЕНИЕ ИЗ ПРАВИЛА ВЫШЕ.
+    //
+    // Лента календарей одна на все компании, но сервер помечает в ней
+    // активную (`is_active = t.tenant_id = current_tenant_id()`), и после
+    // перехода эта пометка стоит на ПРЕЖНЕЙ компании, пока список не
+    // перезапрошен. Пока я сносил этот запрос, он перезапрашивался сам; когда
+    // стал беречь (офлайн без него не вернуться), наружу вылезло: в ленте свои
+    // календари новой компании дважды — заливкой и, из старого списка,
+    // обводкой как чужие, — а календари покидаемой пропали.
+    //
+    // Компания в заголовке уже новая, ответ приедет за одну поездку. Ключ
+    // компанию не называет, поэтому «протухнуть и ждать наблюдателя» ему не
+    // подходит: наблюдатель у него один и тот же по обе стороны перехода.
+    for (const head of PERSON_SCOPED_QUERY_HEADS) {
+      void queryClient.invalidateQueries({
+        queryKey: [head],
+        refetchType: "active",
+      });
+    }
     return;
   }
 
