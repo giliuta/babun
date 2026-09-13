@@ -2,8 +2,16 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
+import { useTenantId } from "@/lib/tenant";
 import { switchTenant } from "./switch-tenant";
 import { USER_ROLES, type UserRole } from "./role-policy";
+import {
+  composeCalendarChips,
+  FOREIGN_PREFIX,
+  type CalendarChip,
+} from "./calendar-chips";
+
+export type { CalendarChip } from "./calendar-chips";
 
 // КАЛЕНДАРИ ЧЕЛОВЕКА ВО ВСЕХ ЕГО КОМПАНИЯХ.
 //
@@ -127,20 +135,7 @@ export function useSwitchWorkspace() {
 // склеен идентификатор, что делать по тапу) значит получить два разных
 // поведения на одной неделе.
 
-/** Чужой чип носит компанию в идентификаторе: пара (компания, календарь) —
- *  настоящий ключ, в базе у команд именно такой первичный ключ. Без компании
- *  два календаря с одинаковым id из разных компаний слиплись бы в один. */
-const FOREIGN_PREFIX = "@";
 
-export interface CalendarChip {
-  id: string;
-  name: string;
-  color?: string | null;
-  /** Чип чужой компании — рисуется обводкой, а не заливкой. Поле объявлено
-   *  здесь, а не дописывается к объекту молча: лента его читает, и тип обязан
-   *  об этом знать. */
-  outline?: boolean;
-}
 
 export function useCalendarChips(opts: {
   /** Календари АКТИВНОЙ компании — как их знает экран. */
@@ -165,67 +160,35 @@ export function useCalendarChips(opts: {
   const { data: myCalendars = [], isPending: calendarsPending } =
     useMyCalendars();
   const switching = useSwitchWorkspace();
-  // Имя активной компании нужно, чтобы поставить СВОИ чипы на их место в общем
-  // порядке. Берём его из ленты, которая и так загружена.
+  // СВОЁ И ЧУЖОЕ СЧИТАЕТСЯ ОТ КОМПАНИИ УСТРОЙСТВА, А НЕ ОТ ФЛАГА СЕРВЕРА.
   //
-  // ЗАПАСНОГО ПУТИ ЧЕРЕЗ `useTenant()` ЗДЕСЬ НАМЕРЕННО НЕТ. Он выглядел
-  // безобидно, а стоил поездки на сервер (`current_tenant_profile_safe`) на
-  // ДВУХ экранах сразу — календаре и финансах, — причём именно на пути смены
-  // компании, где каждый лишний запрос человек чувствует. Платить сетью на
-  // горячем пути ради имени, которое нужно лишь когда в активной компании нет
-  // ни одного неархивного календаря, — плохая цена.
+  // `isActive` из `list_my_calendars` — это `t.tenant_id = current_tenant_id()`
+  // на момент ОТВЕТА. Сразу после тапа список ещё прежний: в нём «активна»
+  // компания, откуда человек ушёл, а новая числится чужой. Итог в одном кадре
+  // — свои календари новой компании приходят из экрана заливкой, они же из
+  // старого списка обводкой как чужие, а календари покидаемой компании
+  // исчезают вовсе. На экране: «Y&D» дважды, «Команды 1» нет.
   //
-  // Имени нет — свои чипы встают в начало ряда (пустая строка сортируется
-  // первой). Это ровно то поведение, что было до правки порядка, и наступает
-  // оно только в компании, где все календари архивные.
-  const activeTenantName =
-    myCalendars.find((c) => c.isActive)?.tenantName ?? "";
+  // Компания устройства меняется в ТОМ ЖЕ кадре, что и тап, и сети не
+  // требует; список компаний и их календарей от перехода не меняется вовсе —
+  // устаревает только флаг. Поэтому состав ряда берётся от устройства, а флаг
+  // сервера остаётся запасным путём на единственный случай, когда компания
+  // устройства ещё не известна: пометить тогда чужими ВСЕ календари значило бы
+  // задвоить свои.
+  const activeTenantId = useTenantId();
+  const isActiveCompany = (c: MyCalendar): boolean =>
+    activeTenantId ? c.tenantId === activeTenantId : c.isActive;
   const [pendingId, setPendingId] = useState<string | null>(null);
 
-  const foreign = myCalendars.filter((c) => !c.isActive);
-  const ownChips: CalendarChip[] = opts.own.map((tm) => ({
-    id: tm.id,
-    name: tm.name,
-    color: tm.color,
-  }));
-
-  // ПОРЯДОК РЯДА НЕ ЗАВИСИТ ОТ ТОГО, ГДЕ ЧЕЛОВЕК СЕЙЧАС.
-  //
-  // Владелец 2026-09-12: «как установлено — Y&D первая, вторая Команда 1 —
-  // оно не должно прыгать вправо-влево». Раньше ряд начинался с календарей
-  // АКТИВНОЙ компании, и переход переставлял чипы местами ровно в ту секунду,
-  // когда человек на них смотрит: бывший чужой становился своим и уезжал в
-  // начало. Место в ряду читается как «так установлено», а не как «я сейчас
-  // здесь»; где он сейчас, говорит ЗАЛИВКА чипа.
-  //
-  // Компании идут по имени, внутри компании порядок прежний. Свои чипы
-  // остаются из СВОЕГО источника: экран отдаёт ещё и архивные календари, за
-  // которыми осталась работа, а серверный список архивные не возвращает вовсе
-  // — пересортировать одну серверную выдачу значило бы молча потерять их.
-  //
-  // ЧУЖОЙ ЧИП — ДРУГОЙ ПРИРОДЫ, И ЭТО ВИДНО БЕЗ СЛОВ. В ряду два одинаковых с
-  // виду чипа делают РАЗНОЕ: свой переключает разрез внутри компании, чужой
-  // уводит в другую — другие счета, долги, прибыль. На календаре безобидно, на
-  // деньгах человек тапнет «соседний», чтобы сравнить бригады, и увидит чужую
-  // кассу. Подписи компании при этом НЕ БУДЕТ: «Giliuta · Команда 1» владелец
-  // отверг сразу — «нельзя делать такую длинную, просто Команда 1».
-  const byTenant = new Map<string, CalendarChip[]>();
-  byTenant.set(activeTenantName, ownChips);
-  for (const c of foreign) {
-    const chips = byTenant.get(c.tenantName) ?? [];
-    chips.push({
-      id: `${FOREIGN_PREFIX}${c.tenantId}:${c.teamId}`,
-      name: c.teamName,
-      color: c.teamColor,
-      outline: true,
-    });
-    byTenant.set(c.tenantName, chips);
-  }
-  const items: CalendarChip[] = foreign.length
-    ? [...byTenant.entries()]
-        .sort(([a], [b]) => a.localeCompare(b, "ru"))
-        .flatMap(([, chips]) => chips)
-    : ownChips;
+  const foreign = myCalendars.filter((c) => !isActiveCompany(c));
+  // Состав и порядок ряда — чистая функция в листе `calendar-chips.ts`: там
+  // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
+  // тестов её не поднимет.
+  const items = composeCalendarChips({
+    own: opts.own,
+    myCalendars,
+    activeTenantId,
+  });
 
   const pick = (chipId: string) => {
     if (!chipId.startsWith(FOREIGN_PREFIX)) {
