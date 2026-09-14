@@ -58,8 +58,8 @@ export function MemberRow({
   );
 }
 
-/** Приглашение, на которое ещё не ответили. Тап — отправить ссылку ещё раз
- *  (писем пока нет, ссылка могла потеряться) или отозвать. */
+/** Приглашение, на которое ещё не ответили. Приглашённый видит его у себя в
+ *  Кабинете; тап здесь — поделиться ссылкой (если аккаунта ещё нет) или отозвать. */
 export function PendingInvitationRow({ invitation }: { invitation: Invitation }) {
   const t = useThemeColors();
   const tenantQuery = useTenant();
@@ -67,7 +67,7 @@ export function PendingInvitationRow({ invitation }: { invitation: Invitation })
 
   const openActions = async () => {
     const picked = await presentChoiceSheet(invitation.email, [
-      { label: "Отправить ссылку ещё раз" },
+      { label: "Поделиться ссылкой" },
       { label: "Отозвать приглашение", destructive: true },
     ]);
     if (picked === 0) {

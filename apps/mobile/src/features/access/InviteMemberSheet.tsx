@@ -16,7 +16,6 @@ import {
 } from "@/features/settings/invitation-flow";
 import { ROLE_LABELS } from "@/features/settings/role-policy";
 import { useCreateInvitation } from "@/features/settings/team-access";
-import { useTenant } from "@/features/settings/tenant";
 
 // «ДОБАВИТЬ МАСТЕРА» — ЭТО ПРИГЛАШЕНИЕ ПО ПОЧТЕ (STORY-081; владелец 14.09 на
 // старой модалке «Имя · Телефон»: «мы договорились по почте»). Карточки по
@@ -24,9 +23,10 @@ import { useTenant } from "@/features/settings/tenant";
 // календарь. Роль — мастер: из двух ролей приглашения она ближе всего к
 // «по умолчанию всё выключено»; права настраиваются на его экране после приёма.
 //
-// ПИСЕМ BABUN ПОКА НЕ ШЛЁТ (почтовый сервис не подключён), поэтому ссылка
-// уходит системным «Поделиться» — тем же текстом, что в «Доступ в CRM».
-// Приглашение выписано на почту: принять его может только этот аккаунт.
+// ПРИГЛАШЕНИЕ ПРИХОДИТ В ПРИЛОЖЕНИЕ — в Кабинет приглашённого (разворот
+// владельца 14.09), писем нет. Ссылку, если нужна, отправляют из «Ждут ответа»
+// системным «Поделиться». Приглашение выписано на почту: принять его может
+// только этот аккаунт.
 
 /** Отказ сервера словами. Мастера без карточки сервер пускает только после
  *  правки 006 (`create_invitation`, `accept_invitation`, `handle_new_user`);
@@ -71,7 +71,6 @@ export function InviteMemberSheet({
   teamName: string | undefined;
   onClose: () => void;
 }) {
-  const tenantQuery = useTenant();
   const createInvitation = useCreateInvitation();
   const [email, setEmail] = useState("");
   const valid = isInvitationEmail(email);
@@ -91,16 +90,14 @@ export function InviteMemberSheet({
         teamId,
       });
       close();
+      // ПРИГЛАШЕНИЕ ПРИХОДИТ В ПРИЛОЖЕНИЕ (разворот владельца 14.09): карточка
+      // над календарём у приглашённого. Ответ одинаковый при любом аккаунте —
+      // есть ли он, экран не раскрывает (006: без оракула).
       await waitSheetExit();
-      try {
-        await shareInvitation({
-          email: invitation.email,
-          token: invitation.token,
-          tenantName: tenantQuery.data?.name,
-        });
-      } catch {
-        notify("Приглашение создано", "Ссылку можно отправить позже: нажмите на почту в «Ждут ответа».");
-      }
+      notify(
+        "Приглашение отправлено",
+        `${invitation.email} увидит его в Кабинете. Если человек ещё не зарегистрирован в Babun — пусть зарегистрируется, потом отправьте приглашение ещё раз.`,
+      );
     } catch (error) {
       notify("Не удалось пригласить", inviteErrorText((error as Error).message));
     }
