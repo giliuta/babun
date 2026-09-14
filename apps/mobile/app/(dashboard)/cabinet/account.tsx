@@ -20,7 +20,6 @@ import { useSession } from "@/providers/SessionProvider";
 import { useThemeColors } from "@/theme/colors";
 import { useToast } from "@/components/ui/Toast";
 import {
-  signOutAndWipe,
   signOutScopeAndWipe,
   wipeTenantScopedData,
 } from "@/lib/auth-clear";
@@ -74,18 +73,6 @@ export default function AccountScreen() {
           <PasswordSection email={u?.email ?? null} />
           <DevicesSection />
           <DangerZoneSection email={u?.email ?? ""} />
-
-          <View className="mx-3 mt-6">
-            <Button
-              label="Выйти"
-              variant="secondary"
-              tone="danger"
-              // Same intentional-logout path as the cabinet hub: a bare
-              // signOut() would keep all tenant data in MMKV on a shared
-              // device (bare SIGNED_OUT events deliberately never wipe).
-              onPress={() => void signOutAndWipe()}
-            />
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

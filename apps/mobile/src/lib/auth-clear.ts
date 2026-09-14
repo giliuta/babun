@@ -293,10 +293,16 @@ export function wipeLocalData(): void {
  *  local session — wiping before it would destroy device-only data
  *  (chats, closed-day records) while leaving the user logged in with
  *  empty screens. The wipe still runs before any next sign-in, so a
- *  shared device never leaks this account's cached data. */
+ *  shared device never leaks this account's cached data.
+ *
+ *  THIS DEVICE ONLY (`scope: "local"`, owner 2026-09-15). It used to be
+ *  `"global"`: «Выйти» on one phone revoked the account's sessions on every
+ *  other device and did exactly what «Выйти со всех устройств» does. The
+ *  global sign-out stays one explicit row in «Вход и безопасность»
+ *  (`cabinet/account.tsx`); `sign-out-contract.test.ts` holds both. */
 export async function signOutAndWipe(): Promise<void> {
   try {
-    await signOutScopeAndWipe("global");
+    await signOutScopeAndWipe("local");
   } catch {
     notify(
       "Не удалось выйти",
