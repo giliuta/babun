@@ -391,12 +391,7 @@ async function dispatch(
     //   • строка ВИДНА — сервер отказал именно в удалении. Это про права, а
     //     не про гонку: `view` без `edit_all` выглядит ровно так, и с
     //     правами по календарям этот случай стал обычным.
-    const { data: stillThere } = await supabase
-      .from(tableName)
-      .select("id")
-      .eq("id", op.row_id)
-      .maybeSingle();
-    if (stillThere) {
+    if (await rowStillVisible(supabase, tableName, op.row_id)) {
       throw new Error("Сервер не дал удалить эту запись: нет прав на неё.");
     }
     return false;
@@ -617,11 +612,22 @@ async function dispatch(
         toCachedRow(op.table, forced, prevCached),
       );
     }
-    // forced === null → 0 rows: the update is unappliable (row gone /
-    // not writable for this user). DROP the op (return true) instead of
-    // looping forever — a permanently-stuck op blocks the whole queue.
-    // The local cache self-heals on the next full refetch (foreground
-    // revalidate / realtime onResync re-pulls the canonical rows).
+    // forced === null → 0 rows, и это НЕ конфликт: правку не применили вовсе.
+    // Раньше операция уходила с `true`, то есть с тостом «Применены ваши
+    // изменения», — человеку сообщали об успехе, а правка пропадала. Разводим
+    // тем же чтением видимости, что у удаления:
+    //   • строки не видно — её удалили на другом устройстве. Применять некуда:
+    //     операцию снимаем МОЛЧА (зависшая держала бы очередь), кэш догонит
+    //     следующая полная перечитка (foreground revalidate / onResync);
+    //   • строка ВИДНА — сервер отказал в правке, это права (`view` без
+    //     `edit_all`). Операция остаётся с причиной и по исчерпании попыток
+    //     уходит в `onPermanentFailure`, а не в ложное «применено».
+    if (!forced) {
+      if (await rowStillVisible(supabase, tableName, op.row_id)) {
+        throw new Error("Сервер не дал изменить эту запись: нет прав на неё.");
+      }
+      return false;
+    }
     return true;
   }
 
@@ -634,6 +640,25 @@ async function dispatch(
     .eq("id", op.row_id);
   if (plainErr) throw new Error(`replay update (plain): ${plainErr.message}`);
   return false;
+}
+
+/** НОЛЬ СТРОК ДВУСМЫСЛЕН, и разрешает его только чтение видимости: строки не
+ *  видно — её удалили с другого устройства (или не было), строка ВИДНА —
+ *  сервер отказал именно в этой операции. Ошибка самого чтения — не «не
+ *  видно»: гадать нельзя, операция остаётся до следующей попытки, иначе обрыв
+ *  сети молча выбросил бы правку или удаление. */
+async function rowStillVisible(
+  supabase: DbSupabase,
+  tableName: ReturnType<typeof tableForOp>,
+  rowId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("id")
+    .eq("id", rowId)
+    .maybeSingle();
+  if (error) throw new Error(`replay visibility check: ${error.message}`);
+  return data != null;
 }
 
 function tableForOp(t: QueuedOp["table"]): "clients" | "appointments" | "client_tags" {

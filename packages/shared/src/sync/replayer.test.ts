@@ -724,6 +724,113 @@ describe("replayer — удаление отчитывается строкам�
     expect(left[0].attempts).toBe(1);
     expect(left[0].last_error ?? "").toContain("нет прав");
   });
+
+  test("ноль строк, а проверка видимости упала — операцию не снимаем", async () => {
+    await enqueueOp({
+      table: "clients",
+      op: "delete",
+      row_id: UUID_A,
+      payload: { id: UUID_A, tenant_id: TENANT },
+      expected_updated_at: null,
+    });
+    // Обрыв сети на чтении — не «строки не видно»: гадать нельзя.
+    const { client } = makeFakeSupabase((rec) =>
+      rec.op === "delete"
+        ? { data: [], error: null }
+        : { data: null, error: { message: "network down" } },
+    );
+
+    await kickReplayer({ supabase: asSupabase(client) });
+
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].last_error ?? "").toContain("network down");
+  });
+});
+
+// ─── Правка, которую сервер не дал применить ──────────────────────────
+// Ноль строк у ПРИНУДИТЕЛЬНОЙ правки так же двусмыслен, как у удаления:
+// строку удалили на другом устройстве — или она видна, но сервер отказал в
+// праве её менять (`view` без `edit_all`). Раньше оба случая уходили из
+// очереди с тостом «Применены ваши изменения»: человеку сообщали об успехе,
+// а его правка молча пропадала.
+
+describe("replayer — правка, которую сервер не дал применить", () => {
+  const enqueueStaleUpdate = () =>
+    enqueueOp({
+      table: "clients",
+      op: "update",
+      row_id: UUID_A,
+      payload: { full_name: "Mine" },
+      expected_updated_at: "2026-01-01T00:00:00.000Z",
+    });
+  // Первая правка (с `updated_at`) — ноль строк; принудительная
+  // (`maybeSingle`) — пусто; чтение видимости — по сценарию теста.
+  const refusedUpdate = (visibility: Result) =>
+    makeFakeSupabase((rec) => {
+      if (rec.op === "update") {
+        return rec.usedMaybeSingle
+          ? { data: null, error: null }
+          : { data: [], error: null };
+      }
+      return visibility;
+    });
+
+  test("строки не видно — операция снята, «применено» не пишется", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({ data: null, error: null });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    expect(await queueDepth()).toBe(0);
+  });
+
+  test("строка ВИДНА — сервер отказал, операция остаётся с причиной", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({ data: { id: UUID_A }, error: null });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].attempts).toBe(1);
+    expect(left[0].last_error ?? "").toContain("нет прав");
+  });
+
+  test("проверка видимости сама упала — операцию не снимаем", async () => {
+    await enqueueStaleUpdate();
+    const { client } = refusedUpdate({
+      data: null,
+      error: { message: "network down" },
+    });
+
+    let toast = "";
+    await kickReplayer({
+      supabase: asSupabase(client),
+      onConflict: (m) => {
+        toast = m;
+      },
+    });
+
+    expect(toast).toBe("");
+    const left = await dequeueAll();
+    expect(left).toHaveLength(1);
+    expect(left[0].last_error ?? "").toContain("network down");
+  });
 });
 
 // ─── Гейт держит и уже начатую операцию ────────────────────────────────
