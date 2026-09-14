@@ -125,7 +125,7 @@ async function readTenantProfileFallback(
   const { data, error } = await client
     .from("tenants")
     .select(
-      "id, name, vertical, city, country, address, logo_url, contact_phone, contact_email, contact_whatsapp, contact_telegram, contact_instagram, onboarded_at, personal_calendar_enabled, created_at",
+      "id, name, vertical, city, country, address, logo_url, contact_phone, contact_email, contact_whatsapp, contact_telegram, contact_instagram, onboarded_at, personal_calendar_enabled, currency, created_at",
     )
     .eq("id", tenantId)
     .maybeSingle();
