@@ -60,6 +60,18 @@ describe("role policy", () => {
     assert.equal(can("master", "manage-calendar-settings"), false);
   });
 
+  // ЛИЧНОЕ — ДЛЯ ВСЕХ РОЛЕЙ (15.09): приглашения и профиль принадлежат человеку.
+  // Без этого мастер, которого позвали в календарь, упёрся бы в «Недостаточно
+  // прав» ровно на странице, где принимают приглашение.
+  test("личные страницы Кабинета открыты любой роли", () => {
+    for (const path of ["/cabinet/invitations", "/cabinet/profile"]) {
+      assert.equal(canAccessCabinetPath("owner", path), true, path);
+      assert.equal(canAccessCabinetPath("dispatcher", path), true, path);
+      assert.equal(canAccessCabinetPath("master", path), true, path);
+      assert.equal(canAccessCabinetPath(null, path), false, path);
+    }
+  });
+
   test("every cabinet link rendered for dispatcher and master is reachable", () => {
     const dispatcherLinks = [
       "/cabinet",
@@ -69,12 +81,16 @@ describe("role policy", () => {
       "/cabinet/recurring",
       "/cabinet/sms-templates",
       "/cabinet/unclosed",
+      "/cabinet/invitations",
+      "/cabinet/profile",
     ];
     const masterLinks = [
       "/cabinet",
       "/cabinet/account",
       "/cabinet/business",
       "/cabinet/inventory",
+      "/cabinet/invitations",
+      "/cabinet/profile",
     ];
     const ownerOnlyLinks = [
       "/cabinet/accounts",

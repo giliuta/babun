@@ -83,6 +83,11 @@ export function can(
   return role ? ROLE_CAPABILITIES[role].has(capability) : false;
 }
 
+// ЛИЧНЫЕ СТРАНИЦЫ КАБИНЕТА ОТКРЫТЫ ЛЮБОЙ РОЛИ (15.09, «Кабинет — личное»):
+// приглашения приходят человеку, а не компании, и профиль — его имя и
+// телефон. Данных компании там нет, поэтому и закрывать их нечем.
+const PERSONAL_CABINET_ROUTES = ["/cabinet/invitations", "/cabinet/profile"] as const;
+
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",
   "/cabinet/account",
@@ -92,6 +97,7 @@ const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet/sms-templates",
   "/cabinet/sync",
   "/cabinet/unclosed",
+  ...PERSONAL_CABINET_ROUTES,
 ]);
 
 const MASTER_CABINET_ROUTES = new Set([
@@ -99,6 +105,7 @@ const MASTER_CABINET_ROUTES = new Set([
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
+  ...PERSONAL_CABINET_ROUTES,
 ]);
 
 function normalizePath(pathname: string): string {
