@@ -74,3 +74,25 @@ export function invitationShareText(args: {
     : " в Babun CRM";
   return `Вас пригласили${company} с ролью «${args.roleLabel}». Откройте ссылку на iPhone:\n${args.url}`;
 }
+
+/** Роль, с которой открыть компанию сразу после приёма приглашения.
+ *
+ *  Без роли первый кадр новой компании — полноэкранная граница прав и
+ *  крутилка, пока `current_user_role` летит на сервер (этап 0(ж) плана
+ *  доступа). Поэтому роль спрашивается ДО перехода, под заголовком новой
+ *  компании, и засевается переходом.
+ *
+ *  Порядок доверия: ответ сервера → роль из самого приглашения (то же значение,
+ *  которое `accept_invitation` записал в членство) → ничего. Ответ сервера
+ *  `null` значит «не состоит в компании» — такую роль не засеваем вовсе:
+ *  пусть экран спросит сам. `undefined` — сервер не ответил (сеть, таймаут). */
+export function seededInvitationRole(
+  serverRole: unknown,
+  previewRole: unknown,
+): UserRole | undefined {
+  if (serverRole === "owner" || serverRole === "dispatcher" || serverRole === "master") {
+    return serverRole;
+  }
+  if (serverRole === null) return undefined;
+  return isInvitableRole(previewRole) ? previewRole : undefined;
+}

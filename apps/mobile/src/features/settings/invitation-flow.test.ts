@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
   invitationErrorMessage,
@@ -8,6 +10,7 @@ import {
   isInvitationEmail,
   isInvitationToken,
   normalizeInvitationEmail,
+  seededInvitationRole,
 } from "./invitation-flow";
 
 describe("mobile invitation flow", () => {
@@ -47,5 +50,30 @@ describe("mobile invitation flow", () => {
       invitationErrorMessage("finish company setup before inviting employees"),
       /завершите настройку компании/,
     );
+  });
+});
+
+// ЭТАП 0(ж) ПЛАНА ДОСТУПА: роль едет вместе с переходом при приёме приглашения.
+describe("роль при приёме приглашения", () => {
+  test("ответ сервера важнее роли из приглашения", () => {
+    assert.equal(seededInvitationRole("dispatcher", "master"), "dispatcher");
+    assert.equal(seededInvitationRole("owner", "master"), "owner");
+  });
+  test("сервер не ответил — роль из приглашения", () => {
+    assert.equal(seededInvitationRole(undefined, "master"), "master");
+    assert.equal(seededInvitationRole(undefined, "dispatcher"), "dispatcher");
+  });
+  test("сервер сказал «не состоит» — роль не засевается", () => {
+    assert.equal(seededInvitationRole(null, "master"), undefined);
+  });
+  test("незнакомые значения не проходят", () => {
+    assert.equal(seededInvitationRole("admin", "boss"), undefined);
+    assert.equal(seededInvitationRole(undefined, "owner"), undefined);
+    assert.equal(seededInvitationRole(undefined, undefined), undefined);
+  });
+  test("приём приглашения спрашивает роль у новой компании и передаёт её в переход", () => {
+    const source = readFileSync(join(__dirname, "invitations.ts"), "utf8");
+    assert.match(source, /tenantBoundClient\(tenantId\)\.rpc\("current_user_role"\)/);
+    assert.match(source, /switchTenant\(tenantId, \{ onboarded: true, role \}\)/);
   });
 });

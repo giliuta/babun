@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Json } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { switchTenant } from "./switch-tenant";
 import {
   clearPendingInvitationToken,
@@ -11,6 +12,7 @@ import {
   invitationErrorMessage,
   isInvitableRole,
   isInvitationToken,
+  seededInvitationRole,
   type InvitationState,
   type InvitableRole,
 } from "./invitation-flow";
@@ -86,10 +88,34 @@ export function useInvitationPreview(token: string | null) {
   });
 }
 
+/** Роль в только что принятой компании — у сервера, под заголовком ИМЕННО этой
+ *  компании (привязанный клиент), а не того, куда смотрит устройство сейчас.
+ *  `undefined` — сервер не ответил, `null` — человек в компании не состоит.
+ *  Ждём недолго: приглашение уже принято, а крутилка на экране идёт. */
+const ROLE_READ_TIMEOUT_MS = 4_000;
+
+async function readRoleInCompany(tenantId: string): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const { data, error } = await Promise.race([
+      tenantBoundClient(tenantId).rpc("current_user_role"),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), ROLE_READ_TIMEOUT_MS);
+      }),
+    ]);
+    return error ? undefined : data;
+  } catch {
+    return undefined;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Accept membership, switch the JWT-bound active tenant, and erase every
  * previous-tenant cache before navigation can expose the new workspace. */
 export async function acceptAndActivateInvitation(
   token: string,
+  previewRole?: InvitableRole,
 ): Promise<string> {
   if (!isInvitationToken(token)) throw new Error("Некорректная ссылка");
 
@@ -119,7 +145,13 @@ export async function acceptAndActivateInvitation(
   // тот ушёл в фон ради мгновенного перехода — то есть к первому кадру ответа
   // ещё нет. Ленте контуров факт приходит заранее из `list_my_calendars`; у
   // приглашения такой ленты ещё нет вовсе, оно первое.
-  await switchTenant(tenantId, { onboarded: true });
+  //
+  // РОЛЬ ЕДЕТ ВМЕСТЕ С ПЕРЕХОДОМ (этап 0(ж) плана доступа). Без неё первый
+  // кадр новой компании — граница прав с крутилкой на весь экран, пока роль
+  // летит на сервер. Лента контуров роль знает заранее; у приглашения её
+  // спрашиваем здесь, пока крутилка приёма ещё на экране.
+  const role = seededInvitationRole(await readRoleInCompany(tenantId), previewRole);
+  await switchTenant(tenantId, { onboarded: true, role });
   await clearPendingInvitationToken(token);
   return tenantId;
 }
