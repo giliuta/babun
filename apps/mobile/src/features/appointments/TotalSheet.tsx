@@ -42,11 +42,8 @@ export function TotalSheet({
   nameFor,
   onQtyChange,
   onPriceChange,
-  servicesTotal,
   discountKind,
   discountValue,
-  discountAmount,
-  discountReason,
   onDiscountKindChange,
   onDiscountValueChange,
   total,
@@ -61,13 +58,9 @@ export function TotalSheet({
   onQtyChange: (serviceId: string, qty: number) => void;
   /** Цена ОДНОЙ услуги в этой записи. Прайс не трогается: это снимок строки. */
   onPriceChange: (serviceId: string, price: number) => void;
-  servicesTotal: number;
   discountKind: DiscountKind;
   /** Сырой текст поля скидки — разбор живёт у формы. */
   discountValue: string;
-  discountAmount: number;
-  /** «Постоянный», «VIP» — причина от программы лояльности. */
-  discountReason: string | null;
   onDiscountKindChange: (kind: DiscountKind) => void;
   onDiscountValueChange: (value: string) => void;
   total: number;
@@ -136,24 +129,12 @@ export function TotalSheet({
             нет вовсе: она стоит слева в блоке итога, а слово «Итого» съехало
             вплотную к сумме — деньги записи читаются одной строкой, слева
             вычет, справа результат. */}
-        {/* ИЗ ЧЕГО СЛОЖИЛАСЬ СУММА — строки, читаются сверху вниз.
-            «УСЛУГИ» СТОЯТ ТОЛЬКО ПРИ СКИДКЕ (владелец 2026-09-08: «вот это мы
-            и так знаем, в „Итого“ всё написано — зачем повторять, услуги это
-            не надо»). Без скидки строка печатала то же число, что и «Итого»
-            двумя строками ниже: «Услуги €180 / Итого €180». Со скидкой она
-            перестаёт быть повтором и становится тем, ИЗ ЧЕГО вычли, — без неё
-            «−€20 / Итого €180» не с чем сверить. */}
+        {/* НАД ИТОГОМ НИЧЕГО НЕ РАСКРЫВАЕТСЯ (владелец 2026-09-14: «когда я
+            пишу скидку, оно ничего не должно менять — не надо сверху тогда
+            открывать „Услуги“ и „Скидка“»). Строки «Услуги €180 / Скидка ·
+            Бронза −€10,80» появлялись с первой цифрой скидки и сдвигали лист
+            под пальцем. Вычет и так виден в поле слева, результат — справа. */}
         <View style={{ gap: 8 }}>
-          {discountAmount > 0 ? (
-            <>
-              <SumRow label="Услуги" value={formatEURExact(servicesTotal)} />
-              <SumRow
-                label={`Скидка${discountReason ? ` · ${discountReason}` : ""}`}
-                value={`−${formatEURExact(discountAmount)}`}
-                color={t.success}
-              />
-            </>
-          ) : null}
           <View
             style={{
               flexDirection: "row",
@@ -288,42 +269,6 @@ function UnitToggle({
         {percent ? "%" : symbol}
       </Text>
     </Pressable>
-  );
-}
-
-function SumRow({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-}) {
-  const t = useThemeColors();
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        paddingHorizontal: 14,
-      }}
-    >
-      <Text numberOfLines={1} style={{ flex: 1, fontSize: 14, color: t.sub }}>
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontSize: 15,
-          fontWeight: "600",
-          color: color ?? t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      >
-        {value}
-      </Text>
-    </View>
   );
 }
 

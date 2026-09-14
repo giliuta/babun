@@ -3389,13 +3389,10 @@ export default function BookScreen() {
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
         onPriceChange={setLinePrice}
-        servicesTotal={computedTotal}
         // «Без скидки» больше не выбирают: ноль в поле и есть её отсутствие,
         // а переключатель говорит только, ЧЕМ считать вписанное.
         discountKind={discountType ?? "fixed"}
         discountValue={discountValue}
-        discountAmount={discountAmount}
-        discountReason={discountReason}
         onDiscountKindChange={setDiscountType}
         onDiscountValueChange={setDiscountValue}
         total={effectiveTotal}
