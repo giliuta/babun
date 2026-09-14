@@ -8,15 +8,9 @@ import {
   normalizeInvitationEmail,
   type InvitableRole,
 } from "./invitation-flow";
-import { isUserRole, type UserRole } from "./role-policy";
+import { type UserRole } from "./role-policy";
 
-type MemberRow = Database["public"]["Tables"]["tenant_members"]["Row"];
 type InvitationRow = Database["public"]["Tables"]["invitations"]["Row"];
-
-export type TenantMember = Omit<MemberRow, "role"> & {
-  role: UserRole;
-  master_id: string | null;
-};
 
 export interface CreatedInvitation {
   id: string;
@@ -49,38 +43,12 @@ function parseCreatedInvitation(value: Json | null): CreatedInvitation {
   return row as unknown as CreatedInvitation;
 }
 
-function requireRole(value: unknown): UserRole {
-  if (!isUserRole(value)) throw new Error("Неизвестная роль сотрудника");
-  return value;
-}
-
 async function requireOwner(): Promise<void> {
   const { data, error } = await supabase.rpc("current_user_role");
   if (error) throw new Error(error.message);
   if (data !== "owner") {
     throw new Error("Управлять доступом может только владелец.");
   }
-}
-
-export function useTenantMembers() {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["tenant-members", tenantId],
-    enabled: !!tenantId,
-    queryFn: async (): Promise<TenantMember[]> => {
-      const { data, error } = await supabase
-        .from("tenant_members")
-        .select("*")
-        .eq("tenant_id", tenantId as string)
-        .order("joined_at");
-      if (error) throw new Error(error.message);
-      return data.map((row) => ({
-        ...row,
-        role: requireRole(row.role),
-        master_id: typeof row.master_id === "string" ? row.master_id : null,
-      }));
-    },
-  });
 }
 
 export function usePendingInvitations() {

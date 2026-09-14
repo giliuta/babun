@@ -2,14 +2,12 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   Text,
   View,
   type KeyboardTypeOptions,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronRight, ShieldCheck } from "lucide-react-native";
+import { useLocalSearchParams } from "expo-router";
 import { ROLE_LABELS, type MasterRole } from "@babun/shared/local/masters";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -18,7 +16,6 @@ import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { SwitchRow } from "@/components/ui/SwitchRow";
-import { ICON } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useMaster, useUpdateMaster } from "@/features/reference/queries";
 import { notify } from "@/lib/notify";
@@ -39,7 +36,6 @@ import {
 
 export default function MasterInfoScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const t = useThemeColors();
   const masterQuery = useMaster(id);
   const { data: master, isLoading } = masterQuery;
@@ -259,27 +255,6 @@ export default function MasterInfoScreen() {
             </View>
           </Section>
 
-          <View className="mx-3 mt-4">
-            <Card>
-              <Pressable
-                onPress={() => router.push("/cabinet/team-access")}
-                accessibilityRole="button"
-                accessibilityLabel="Управлять доступом сотрудника к CRM"
-                className="flex-row items-center gap-3 px-4 py-4 active:opacity-60"
-              >
-                <ShieldCheck color={t.accent} size={ICON.sm} />
-                <View className="flex-1">
-                  <Text style={{ fontSize: 15, color: t.ink }}>
-                    Доступ к CRM
-                  </Text>
-                  <Text style={{ fontSize: 12, color: t.faint, marginTop: 2 }}>
-                    Приглашение, роль и отзыв доступа
-                  </Text>
-                </View>
-                <ChevronRight color={t.chevron} size={18} strokeWidth={2.2} />
-              </Pressable>
-            </Card>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>

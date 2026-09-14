@@ -15,14 +15,11 @@ import {
   Info,
   MoreVertical,
   Phone,
-  ShieldCheck,
 } from "lucide-react-native";
 import {
   ACCOUNT_STATUS_LABELS,
-  PERMISSION_GROUPS,
   getInitials,
   type AccountStatus,
-  type MasterPermissions,
 } from "@babun/shared/local/masters";
 import { getRecognizedRevenue } from "@babun/shared/local/appointments";
 import { telUrl, whatsappUrl } from "@babun/shared/common/utils/messenger-links";
@@ -45,7 +42,6 @@ import {
 } from "@/features/reference/queries";
 import {
   getMasterContacts,
-  getMasterPermissions,
   getMasterProfile,
 } from "@/features/reference/master-profile";
 import { useAppointments } from "@/features/calendar/queries";
@@ -55,7 +51,7 @@ import { chooseOption } from "@/lib/choose";
 
 // Хаб мастера (nav-хаб, порт web masters/[id]/page.tsx). Собирает вокруг
 // одного мастера: шапку с аватаром/kebab, профиль-карточку, плашки команд,
-// nav на подэкраны (Информация/Доступы/Визиты/Статистика), тумблер active и
+// nav на подэкраны (Информация/Визиты/Статистика), тумблер active и
 // мини-статы «За этот месяц» (считаются на лету из appointments).
 
 // helper_ids приходит из Supabase как Json — узкое приведение к string[].
@@ -116,22 +112,6 @@ export default function MasterHubScreen() {
 
   const primaryTeam = assignedTeams[0] ?? null;
   const tint = primaryTeam?.color ?? t.faint;
-
-  // Превью «Доступы»: N из M включено (та же формула, что на вебе — по всем
-  // PERMISSION_GROUPS поверх resolved-прав c mergePermissions).
-  const accessPreview = useMemo(() => {
-    if (!master) return "";
-    const perms: MasterPermissions = getMasterPermissions(master);
-    let on = 0;
-    let total = 0;
-    for (const g of PERMISSION_GROUPS) {
-      for (const p of g.permissions) {
-        total += 1;
-        if (perms[p as keyof MasterPermissions]) on += 1;
-      }
-    }
-    return `${on} из ${total} включено`;
-  }, [master]);
 
   // Мини-статы за текущий месяц по всем командам мастера (на лету, кэш не
   // нужен): всего / закрыто / выручка по completed без полных возвратов.
@@ -417,14 +397,6 @@ export default function MasterHubScreen() {
               title="Информация"
               value={infoPreview(contacts, profile.whatsapp, profile.telegram, contacts.email, status)}
               onPress={() => router.push(`/calendar/masters/${master.id}/info`)}
-            />
-            <Divider inset={60} />
-            <NavRow
-              icon={<ShieldCheck color={t.onAccent} size={ICON.sm} />}
-              tone="#c9372c"
-              title="Доступы"
-              value={accessPreview}
-              onPress={() => router.push(`/calendar/masters/${master.id}/access`)}
             />
             <Divider inset={60} />
             <NavRow

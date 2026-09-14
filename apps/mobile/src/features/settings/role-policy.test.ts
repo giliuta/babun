@@ -101,7 +101,6 @@ describe("role policy", () => {
       "/cabinet/labels",
       "/cabinet/loyalty",
       "/cabinet/services",
-      "/cabinet/team-access",
       "/cabinet/templates",
     ];
 
