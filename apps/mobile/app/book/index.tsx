@@ -3352,6 +3352,8 @@ export default function BookScreen() {
         // Каталог знает день записи: услуга, которую по вторникам не делают,
         // уезжает вниз списка под свою подпись.
         date={date}
+        // И команду записи: дверь «Добавить услугу» открывает её прайс.
+        teamId={teamId}
         onToggle={toggleService}
         quantities={Object.fromEntries(
           serviceIds.map((id) => [id, overrides[id]?.qty ?? 1]),

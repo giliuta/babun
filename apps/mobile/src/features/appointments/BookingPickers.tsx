@@ -11,6 +11,7 @@ import { Briefcase } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -68,6 +69,7 @@ export function ServicePicker({
   services,
   selectedIds,
   date,
+  teamId,
   quantities,
   onToggle,
   onQtyChange,
@@ -78,6 +80,9 @@ export function ServicePicker({
   selectedIds: string[];
   /** Дата записи «YYYY-MM-DD» — по ней виден день недели. */
   date?: string;
+  /** Команда записи. Дверь в прайс открывает именно её: услуга принадлежит
+   *  одной команде, а без адреса страница брала команду из ленты календаря. */
+  teamId?: string | null;
   onToggle: (id: string) => void;
   /** Сколько каждой услуги уже в записи. Нет ключа — ни одной. */
   quantities: Record<string, number>;
@@ -86,6 +91,7 @@ export function ServicePicker({
 }) {
   const router = useRouter();
   const servicesHref = useReferenceHref().services;
+  const doorway = useSheetDoorway();
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -133,6 +139,21 @@ export function ServicePicker({
     setQ("");
     onClose();
   };
+  // ДВЕРЬ В ПРАЙС ПАРКУЕТ ЛИСТ, А НЕ ЗАКРЫВАЕТ (AGENTS 5.4). Закрытый лист
+  // по «назад» не возвращался: человек заводил услугу и попадал на форму, где
+  // выбор надо было открывать заново. Припаркованный встаёт на место сам — уже
+  // с новой услугой и «Применить». Команда едет адресом: без неё страница
+  // брала команду из ленты календаря, услуга уезжала чужой команде, и запись
+  // её так и не видела.
+  const openServices = () =>
+    doorway.open(() =>
+      router.push(
+        teamId
+          ? { pathname: servicesHref, params: { team: teamId } }
+          : servicesHref,
+      ),
+    );
+  const catalogEmpty = services.length === 0;
   // ТАП ПО СТРОКЕ — ВЗЯТЬ ИЛИ СНЯТЬ, КОЛИЧЕСТВО — СТЕППЕРОМ (владелец
   // 2026-09-08: «количество набирать несколькими тапами не очень прикольно, а
   // чтобы снять — надо прям на это нажимать, не все люди это поймут»).
@@ -149,7 +170,7 @@ export function ServicePicker({
 
   return (
     <BottomSheet
-      visible={visible}
+      visible={visible && !doorway.parked}
       onClose={close}
       title="Услуги"
       padded={false}
@@ -163,22 +184,31 @@ export function ServicePicker({
       // Закрыть шторку без единой услуги законно: запись сохраняется и так.
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
-          <GradientButton
-            // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ (владелец 2026-09-04: «сведи к
-            // одному слову»). Метка, команда, цвет и время говорят
-            // «Применить» — услуги говорят то же.
-            label={
-              selectedIds.length > 0
-                ? `Применить · ${totalQty} · ${formatEURExact(subtotal)}`
-                : "Применить"
-            }
-            onPress={close}
-            accessibilityHint={
-              selectedIds.length > 0
-                ? `Работ: ${totalQty} на ${formatEURExact(subtotal)}`
-                : undefined
-            }
-          />
+          {catalogEmpty ? (
+            // ПУСТОЙ ПРАЙС — ОДНА КНОПКА, И ОНА ВНИЗУ (владелец 2026-09-14:
+            // «если услуги нет, кнопка „Применить“ меняется на „Добавить
+            // услугу“»). Применять нечего, поэтому место главного действия
+            // занимает единственное осмысленное — завести услугу. Второй
+            // кнопки посередине листа нет: пустое состояние — это слова.
+            <GradientButton label="Добавить услугу" onPress={openServices} />
+          ) : (
+            <GradientButton
+              // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ (владелец 2026-09-04: «сведи к
+              // одному слову»). Метка, команда, цвет и время говорят
+              // «Применить» — услуги говорят то же.
+              label={
+                selectedIds.length > 0
+                  ? `Применить · ${totalQty} · ${formatEURExact(subtotal)}`
+                  : "Применить"
+              }
+              onPress={close}
+              accessibilityHint={
+                selectedIds.length > 0
+                  ? `Работ: ${totalQty} на ${formatEURExact(subtotal)}`
+                  : undefined
+              }
+            />
+          )}
         </View>
       }
     >
@@ -231,27 +261,14 @@ export function ServicePicker({
             );
           })
         ) : (
-          // ПУСТОЙ ПРАЙС — НЕ ТУПИК (2026-09-10). У новой компании и у
-          // команды, которой при разделении ничего не досталось, лист был
-          // белым листом: выбрать нечего, а завести услугу можно было только
-          // уйдя в Кабинет — то есть потеряв набранную запись. Дверь ведёт в
-          // сиблинг записи (`/book/services`), поэтому «назад» из него
-          // возвращает ровно в запись. Второй формы услуги не появляется:
-          // сущность-владелец правится своей страницей.
+          // ПУСТОЙ ПРАЙС — НЕ ТУПИК (2026-09-10), но и не вторая кнопка
+          // (2026-09-14). У новой компании и у команды, которой при разделении
+          // ничего не досталось, завести услугу можно, не теряя набранную
+          // запись: дверь — кнопка футера «Добавить услугу», здесь только
+          // слова. Второй формы услуги не появляется: сущность-владелец
+          // правится своей страницей.
           <EmptyState
             title={q.trim() ? "Услуги не найдены" : "У команды пока нет услуг"}
-            action={
-              q.trim()
-                ? undefined
-                : {
-                    label: "Добавить услугу",
-                    onPress: () => {
-                      // Страница не может жить под нижним листом.
-                      close();
-                      router.push(servicesHref);
-                    },
-                  }
-            }
           />
         )}
       </SelectList>
