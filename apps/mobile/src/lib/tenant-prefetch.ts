@@ -323,6 +323,12 @@ function dropRevokedCompanies(current: Set<string>): void {
   rememberedTenants = current;
 }
 
+/** Уволенную компанию прогрев забывает сразу. Данные стирает
+ *  `lib/evict-company.ts`; здесь — только память о том, что компанию грели. */
+export function forgetWarmCompany(tenantId: string): void {
+  rememberedTenants?.delete(tenantId);
+}
+
 async function runOnce(): Promise<void> {
   const userId = getActiveUserId();
   const activeTenantId = getActiveTenantId();
