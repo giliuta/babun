@@ -10,18 +10,13 @@ import { IncomingInvitationCard } from "./IncomingInvitationCard";
 import { useAcceptInvitation, useDeclineInvitation, useMyInvitations } from "./inbox-queries";
 import { invitationCardView, type IncomingInvitation } from "./invitation-inbox";
 
-/** Блок входящих приглашений СВЕРХУ КАБИНЕТА (владелец 14.09: «всё переводим
- *  на приглашение в кабинет… отдельный блок приглашения»). Пока приглашений нет
- *  или сервер не ответил — блока на экране нет. */
-export function IncomingInvitations() {
-  const query = useMyInvitations();
+/** Карточки приглашений с «Принять / Отклонить». ОДНО ТЕЛО на страницу
+ *  «Приглашения» и на блок в Кабинете — пока 007 не поставит строку-дверь. */
+export function InvitationCards({ invitations }: { invitations: readonly IncomingInvitation[] }) {
   const accept = useAcceptInvitation();
   const decline = useDeclineInvitation();
   const toast = useToast();
   const [busy, setBusy] = useState<{ id: string; action: "accept" | "decline" } | null>(null);
-
-  const invitations = query.data ?? [];
-  if (invitations.length === 0) return null;
 
   const onAccept = (invitation: IncomingInvitation) => {
     setBusy({ id: invitation.id, action: "accept" });
@@ -51,7 +46,6 @@ export function IncomingInvitations() {
 
   return (
     <View>
-      <SectionEyebrow>Приглашения</SectionEyebrow>
       {invitations.map((invitation) => (
         <IncomingInvitationCard
           key={invitation.id}
@@ -61,6 +55,21 @@ export function IncomingInvitations() {
           onDecline={() => onDecline(invitation)}
         />
       ))}
+    </View>
+  );
+}
+
+/** Блок входящих приглашений в Кабинете (владелец 14.09: «всё переводим на
+ *  приглашение в кабинет»). Виден только при приглашениях; уходит, когда 007
+ *  поставит на его место строку-дверь `InvitationsRow`. */
+export function IncomingInvitations() {
+  const query = useMyInvitations();
+  const invitations = query.data ?? [];
+  if (invitations.length === 0) return null;
+  return (
+    <View>
+      <SectionEyebrow>Приглашения</SectionEyebrow>
+      <InvitationCards invitations={invitations} />
     </View>
   );
 }
