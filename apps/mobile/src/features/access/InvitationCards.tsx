@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { View } from "react-native";
 
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { useToast } from "@/components/ui/Toast";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 
 import { IncomingInvitationCard } from "./IncomingInvitationCard";
-import { useAcceptInvitation, useDeclineInvitation, useMyInvitations } from "./inbox-queries";
+import { useAcceptInvitation, useDeclineInvitation } from "./inbox-queries";
 import { invitationCardView, type IncomingInvitation } from "./invitation-inbox";
 
-/** Карточки приглашений с «Принять / Отклонить». ОДНО ТЕЛО на страницу
- *  «Приглашения» и на блок в Кабинете — пока 007 не поставит строку-дверь. */
+/** Карточки приглашений с «Принять / Отклонить» на странице «Приглашения».
+ *  Блок в Кабинете, который жил рядом, снят: в Кабинете теперь строка-дверь
+ *  `InvitationsRow` на постоянном месте (владелец не находил блок). */
 export function InvitationCards({ invitations }: { invitations: readonly IncomingInvitation[] }) {
   const accept = useAcceptInvitation();
   const decline = useDeclineInvitation();
@@ -55,21 +55,6 @@ export function InvitationCards({ invitations }: { invitations: readonly Incomin
           onDecline={() => onDecline(invitation)}
         />
       ))}
-    </View>
-  );
-}
-
-/** Блок входящих приглашений в Кабинете (владелец 14.09: «всё переводим на
- *  приглашение в кабинет»). Виден только при приглашениях; уходит, когда 007
- *  поставит на его место строку-дверь `InvitationsRow`. */
-export function IncomingInvitations() {
-  const query = useMyInvitations();
-  const invitations = query.data ?? [];
-  if (invitations.length === 0) return null;
-  return (
-    <View>
-      <SectionEyebrow>Приглашения</SectionEyebrow>
-      <InvitationCards invitations={invitations} />
     </View>
   );
 }

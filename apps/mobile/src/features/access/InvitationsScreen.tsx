@@ -4,7 +4,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 
-import { InvitationCards } from "./IncomingInvitations";
+import { InvitationCards } from "./InvitationCards";
 import { useMyInvitations } from "./inbox-queries";
 
 // СТРАНИЦА «ПРИГЛАШЕНИЯ» В КАБИНЕТЕ (STORY-081). Дверь к ней — строка
