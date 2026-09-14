@@ -3753,6 +3753,14 @@ export type Database = {
       }
       _mcp_probe: { Args: never; Returns: number }
       accept_invitation: { Args: { p_token: string }; Returns: string }
+      accept_invitation_by_id: {
+        Args: { p_invitation_id: string }
+        Returns: string
+      }
+      decline_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
       access_map_for: {
         Args: { p_include_off: boolean; p_tenant_id: string; p_user_id: string }
         Returns: Json
@@ -4221,6 +4229,7 @@ export type Database = {
         }[]
       }
       my_access_map: { Args: never; Returns: Json }
+      my_invitations: { Args: never; Returns: Json }
       next_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: {

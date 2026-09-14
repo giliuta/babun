@@ -150,8 +150,18 @@ export async function acceptAndActivateInvitation(
   // кадр новой компании — граница прав с крутилкой на весь экран, пока роль
   // летит на сервер. Лента контуров роль знает заранее; у приглашения её
   // спрашиваем здесь, пока крутилка приёма ещё на экране.
-  const role = seededInvitationRole(await readRoleInCompany(tenantId), previewRole);
-  await switchTenant(tenantId, { onboarded: true, role });
+  await activateAcceptedInvitation(tenantId, previewRole);
   await clearPendingInvitationToken(token);
   return tenantId;
+}
+
+/** Принятое приглашение → роль в новой компании → переход. ОДНО ТЕЛО на приём
+ *  по ссылке и по id из карточки над календарём (STORY-081): второй способ
+ *  менять компанию разошёлся бы с первым на первой же правке. */
+export async function activateAcceptedInvitation(
+  tenantId: string,
+  previewRole?: InvitableRole,
+): Promise<void> {
+  const role = seededInvitationRole(await readRoleInCompany(tenantId), previewRole);
+  await switchTenant(tenantId, { onboarded: true, role });
 }

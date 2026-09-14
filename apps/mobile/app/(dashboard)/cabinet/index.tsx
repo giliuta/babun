@@ -49,6 +49,7 @@ import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
+import { IncomingInvitations } from "@/features/access/IncomingInvitations";
 import { Divider } from "@/components/ui/Divider";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
@@ -286,6 +287,11 @@ export default function CabinetHome() {
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <AccountHero role={role} />
+
+        {/* ВХОДЯЩИЕ ПРИГЛАШЕНИЯ — СВЕРХУ КАБИНЕТА (владелец 14.09: «всё переводим
+            на приглашение в кабинет… отдельный блок приглашения»). Пока
+            приглашений нет, блока нет. */}
+        <IncomingInvitations />
 
         {owner || dispatcher || master ? (
           <>

@@ -17,6 +17,7 @@ import {
   warmOtherCompanies,
 } from "@/lib/tenant-prefetch";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
@@ -97,6 +98,12 @@ function AccessSignalsMount() {
       const tenantId = (message.payload as { tenant_id?: unknown } | undefined)
         ?.tenant_id;
       if (typeof tenantId === "string") void evictCompanyFromDevice(tenantId);
+    });
+    // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА (006, 14.09): сигнал уходит и
+    // приглашённому, и пригласившему — оба перечитывают свои списки.
+    channel.on("broadcast", { event: "invitations_changed" }, () => {
+      void queryClient.invalidateQueries({ queryKey: myInvitationsKeyRoot });
+      void queryClient.invalidateQueries({ queryKey: ["tenant-invitations"] });
     });
     void supabase.realtime.setAuth().then(() => {
       if (!cancelled) channel.subscribe();

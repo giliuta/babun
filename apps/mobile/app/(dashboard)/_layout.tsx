@@ -10,6 +10,7 @@ import {
 import { getTotalUnread } from "@babun/shared/local/chats";
 import { useThemeColors } from "@/theme/colors";
 import { useChats } from "@/features/chats/store";
+import { useMyInvitations } from "@/features/access/inbox-queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { MESSAGING_ENABLED, can } from "@/features/settings/role-policy";
 import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
@@ -45,6 +46,11 @@ export default function DashboardLayout() {
   // hidden tab is a navigation affordance; this query gate is the data guard.
   const { data: chats = [] } = useChats(canMessages);
   const unread = getTotalUnread(chats);
+  // ПРИГЛАШЕНИЯ ЖДУТ ОТВЕТА — КРАСНЫЙ СЧЁТЧИК НА «КАБИНЕТЕ» (владелец 14.09:
+  // «метка над кабинетом, красный значок справа, как в играх»). Вид тот же, что у
+  // счётчика «Чатов», — второй анатомии значка в продукте не заводим.
+  const { data: invitations = [] } = useMyInvitations();
+  const invitationCount = invitations.length;
 
   // Гварды сессии/тенанта живут в DashboardGate — тем же компонентом их
   // переиспользует стек /calendar, который лежит НАД табами.
@@ -139,6 +145,13 @@ export default function DashboardLayout() {
           name="cabinet"
           options={{
             title: "Кабинет",
+            tabBarBadge: invitationCount > 0 ? invitationCount : undefined,
+            tabBarBadgeStyle: {
+              backgroundColor: t.danger,
+              color: t.onAccent,
+              fontSize: 11,
+              fontWeight: "600",
+            },
             tabBarIcon: ({ color, size, focused }) => (
               <LayoutGrid color={color} size={size} strokeWidth={focused ? 2.4 : 2} />
             ),
