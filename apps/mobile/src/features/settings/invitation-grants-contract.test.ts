@@ -85,4 +85,13 @@ describe("invitation calendar grants have one body", () => {
       /on conflict \(tenant_id, team_id, user_id\) do nothing/,
     );
   });
+
+  // ПРАВА ПО БЛОКАМ, ЭТАП 1 (14.09): приглашённый прикрепляется к календарю из
+  // приглашения, иначе владелец не видит его в людях календаря и на экране прав.
+  // Уровни приглашение не выдаёт — новый сотрудник «всё выключено».
+  test("the helper attaches the invited person to the calendar without granting levels", () => {
+    assert.ok(helper, "no migration defines public.grant_invitation_calendar");
+    assert.match(helper.body, /insert\s+into\s+public\.member_calendars/i, helper.file);
+    assert.doesNotMatch(helper.body, /insert\s+into\s+public\.member_access/i, helper.file);
+  });
 });
