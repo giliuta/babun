@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 import {
   invitationErrorMessage,
+  invitationSignupErrorMessage,
   invitationPath,
   invitationShareText,
   isInvitableRole,
@@ -75,5 +76,38 @@ describe("роль при приёме приглашения", () => {
     const source = readFileSync(join(__dirname, "invitations.ts"), "utf8");
     assert.match(source, /tenantBoundClient\(tenantId\)\.rpc\("current_user_role"\)/);
     assert.match(source, /switchTenant\(tenantId, \{ onboarded: true, role \}\)/);
+  });
+});
+
+// ОТКАЗЫ ПРИГЛАШЕНИЯ ПРО КАЛЕНДАРЬ говорят правду (14.09): архив при приёме,
+// архив при создании, мастер без календаря. Общие ветки «истёк» и «не найдено»
+// их больше не глотают, а регистрация по ссылке называет причину.
+describe("отказы приглашения про календарь", () => {
+  test("архивный календарь при приёме — просьба о новом приглашении", () => {
+    assert.equal(
+      invitationErrorMessage("invitation calendar is archived"),
+      "Календарь приглашения в архиве — попросите новое приглашение.",
+    );
+  });
+  test("архивный календарь при создании — не «приглашение не найдено»", () => {
+    const text = invitationErrorMessage("calendar not found or archived");
+    assert.equal(text, "Этот календарь в архиве — пригласить в него нельзя.");
+    assert.doesNotMatch(text, /не найдено/);
+  });
+  test("мастер без календаря и карточки — просьба выбрать календарь", () => {
+    assert.equal(
+      invitationErrorMessage(
+        "master invitation requires a calendar or an employee card",
+      ),
+      "Выберите календарь, в который зовёте мастера.",
+    );
+  });
+  test("регистрация по ссылке: общий отказ базы — приглашение больше не действует", () => {
+    assert.equal(
+      invitationSignupErrorMessage("Database error saving new user"),
+      "Приглашение больше не действует — попросите владельца отправить новое.",
+    );
+    assert.equal(invitationSignupErrorMessage("User already registered"), null);
+    assert.equal(invitationSignupErrorMessage(undefined), null);
   });
 });

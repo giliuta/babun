@@ -31,6 +31,18 @@ export function invitationPath(token: string): `/invite/${string}` {
 }
 
 export function invitationErrorMessage(message: string): string {
+  // Отказы про календарь — раньше общих «истёк» и «не найдено»: строка
+  // `calendar not found or archived` иначе читалась как «приглашение не
+  // найдено», а на экране создания это неправда.
+  if (/invitation calendar is archived/i.test(message)) {
+    return "Календарь приглашения в архиве — попросите новое приглашение.";
+  }
+  if (/calendar not found or archived/i.test(message)) {
+    return "Этот календарь в архиве — пригласить в него нельзя.";
+  }
+  if (/master invitation requires a calendar/i.test(message)) {
+    return "Выберите календарь, в который зовёте мастера.";
+  }
   if (/finish company setup|company setup is incomplete/i.test(message)) {
     return "Сначала завершите настройку компании, затем пригласите сотрудника.";
   }
@@ -62,6 +74,19 @@ export function invitationErrorMessage(message: string): string {
     return "Доступ к этой компании не найден.";
   }
   return message || "Не удалось обработать приглашение.";
+}
+
+/** Отказ приглашения при регистрации по ссылке — словами, а не «не удалось
+ *  создать аккаунт». Приглашение проводит триггер базы, а GoTrue любую ошибку
+ *  триггера отдаёт одной строкой «Database error saving new user». С токеном
+ *  приглашения в регистрации это отказ приглашения: истекло, уже принято,
+ *  другой email, календарь в архиве. `null` — ошибка не из этой беды. */
+export function invitationSignupErrorMessage(
+  message: string | undefined,
+): string | null {
+  return /database error saving new user/i.test(message ?? "")
+    ? "Приглашение больше не действует — попросите владельца отправить новое."
+    : null;
 }
 
 export function invitationShareText(args: {
