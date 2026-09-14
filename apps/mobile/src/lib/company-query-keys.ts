@@ -118,3 +118,14 @@ export const paymentAccountsQueryKey = (
   tenantId: string | null,
   teamId: string | null | undefined,
 ) => ["payment-accounts", tenantId, teamId ?? "no-team"] as const;
+
+// ПРАВА СОТРУДНИКОВ (STORY-081, «Контракт v1.1» сессии 006). Реестр блоков
+// общий для всех компаний, поэтому без компании в ключе; карта прав человека и
+// люди календаря принадлежат компании.
+export const accessBlocksQueryKey = () => ["access-blocks"] as const;
+
+export const memberAccessQueryKey = (tenantId: string | null, userId: string | null) =>
+  ["member-access", tenantId, userId] as const;
+
+export const calendarMembersQueryKey = (tenantId: string | null, teamId: string | null) =>
+  ["calendar-members", tenantId, teamId] as const;

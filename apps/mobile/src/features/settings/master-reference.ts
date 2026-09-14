@@ -240,6 +240,7 @@ export function operationalTeamJsonToTeam(value: Json): Team {
     name: requiredString(row, "name"),
     region: nullableString(row, "region"),
     color: nullableString(row, "color"),
+    icon: nullableString(row, "icon"),
     is_active: requiredBoolean(row, "is_active"),
     position: requiredNumber(row, "position"),
     timezone: nullableString(row, "timezone"),
