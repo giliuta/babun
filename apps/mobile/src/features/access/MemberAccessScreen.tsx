@@ -29,6 +29,7 @@ import {
   useSetMemberAccess,
   type CalendarMember,
 } from "./queries";
+import { MemberRemoveGroup, MemberRoleGroup } from "./MemberActions";
 import { roleAccessNotice } from "./role-access-notice";
 
 // ПРАВА СОТРУДНИКА В КАЛЕНДАРЕ (STORY-081). Вид выбран владельцем 14.09 после
@@ -199,6 +200,7 @@ export function MemberAccessScreen({
       {header}
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
         {member ? <PersonCard member={member} /> : null}
+        {member ? <MemberRoleGroup member={member} /> : null}
         {anyLive ? null : (
           <Text style={{ ...TYPE.subhead, color: t.sub, paddingHorizontal: 16, paddingTop: 12 }}>
             {notice}
@@ -225,6 +227,7 @@ export function MemberAccessScreen({
             ))}
           </SectionCard>
         ))}
+        {member ? <MemberRemoveGroup member={member} onRemoved={onBack} /> : null}
       </ScrollView>
     </Screen>
   );
