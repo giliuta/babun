@@ -80,6 +80,9 @@ export function PendingInvitationRow({ invitation }: { invitation: Invitation })
       return;
     }
     if (picked === 1) {
+      // Вопрос — только после того, как выбор уехал: второе окно поверх
+      // уезжающего не появляется вовсе.
+      await waitSheetExit();
       confirmThen(
         "Отозвать приглашение?",
         {
