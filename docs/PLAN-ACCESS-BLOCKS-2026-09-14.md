@@ -34,7 +34,9 @@
 0 · 2,5–3,5 — А · 2–2,5 (после SMTP и SMS от владельца) — 1 · 1,5–2 — 2 · 5–6 — 3 · 3–5 — Б · 3–4 — П · 1–1,5 — 5 · 2–3 — 7 · 1–1,5 — 8 · 1 — 9 · 1,5–2. **Итого ≈24–32.**
 Экраны (поиск, приглашение, входящие, права, регистрация с телефоном) — сессия 008. Этап 4 (перекраска Календаря, Финансов, `/book`, ≈7–9 дней) — по доменам; 006 берёт из него слой данных (`useAccess`, карта, стирание, прогрев по уровням, ≈2–3 дня).
 
-## Контракт v1 — права по блокам (сервер 006 → экраны 008)
+## Контракт v1.1 — права по блокам (сервер 006 → экраны 008)
+
+> v1.1 (14.09, этап 1 накатан на боевую): прикрепление к календарю отдельно от уровней (`member_calendars`, `set_member_calendars`), `list_members`, `attached_calendars` в карте для владельца, коды `access:not_attached` / `access:not_member` / `access:bad_changes`; приглашения этапа Б — по уточнениям 008.
 
 Окончательные решения владельца 14.09: у блока **три положения** — `off` (скрыт, данные на телефон не приходят) · `read` (данные приходят, запись отбивается) · `write`. Серых данных нет. Раздел, где у человека все блоки `off`, — на весь экран «Нет доступа». Новый сотрудник — всё `off`. Наборов нет. Календари — только явно выданные. Изменения — мгновенно.
 
@@ -43,9 +45,12 @@
 ### Таблицы
 - `public.access_blocks` — реестр, общий для всех компаний, пишут только миграции, читают все вошедшие.
   `key text primary key`, `area text` (`calendar | finance | clients | company | owner`), `scope text` (`calendar | company`), `levels text[]` (допустимые значения, первый — умолчание), `title_ru text`, `owner_only boolean`, `live boolean`, `enforced_by text[]`.
+- `public.member_calendars` — человек ПРИКРЕПЛЁН к календарю, без прав.
+  `tenant_id uuid`, `user_id uuid`, `team_id text`, `attached_by uuid`, `attached_at timestamptz`; ключ `(tenant_id, user_id, team_id)`; `(tenant_id, user_id) → tenant_members on delete cascade`, `(tenant_id, team_id) → teams on delete cascade`.
+  Прикреплённый со всеми уровнями `off` виден владельцу в людях календаря, но сам ничего не получает.
 - `public.member_access` — уровни людей.
   `tenant_id uuid`, `user_id uuid`, `block text → access_blocks(key)`, `team_id text null`, `level text`, `set_by uuid`, `set_at timestamptz`.
-  Уникально `(tenant_id, user_id, block, team_id) nulls not distinct`. `(tenant_id, user_id) → tenant_members on delete cascade` (увольнение стирает уровни). `(tenant_id, team_id) → teams(tenant_id, id) on delete cascade`.
+  Уникально `(tenant_id, user_id, block, team_id) nulls not distinct`. `(tenant_id, user_id) → tenant_members on delete cascade` (увольнение стирает уровни). `(tenant_id, user_id, team_id) → member_calendars on delete cascade` — уровень календарного блока возможен только у прикреплённого календаря; открепили — уровни этого календаря стёрты.
   Триггер: у `scope = calendar` `team_id` обязателен; у `scope = company` — пустой; `level ∈ access_blocks.levels`; `owner_only` блоки не пишутся.
   **Нет строки = первое значение из `levels`** (для обычных блоков `off`).
 
@@ -62,10 +67,12 @@
 - `my_access_map() → jsonb` — права вошедшего в АКТИВНОЙ компании:
   `{ "tenant_id", "is_owner": bool, "version": bigint, "company": { "<block>": "<level>" }, "calendars": { "<team_id>": { "<block>": "<level>" } } }`.
   Только `live` блоки. Владелец: `is_owner = true`, словари могут быть пустыми — экран считает всё `write`. Календарь, в котором у человека `calendar.records = off`, в `calendars` не попадает.
-- `list_member_access(p_user_id uuid) → jsonb` — та же форма для сотрудника; только владелец.
+- `list_member_access(p_user_id uuid) → jsonb` — для владельца: та же форма плюс `"attached_calendars": [team_id]`, а в `calendars` — ВСЕ прикреплённые, в том числе с `calendar.records = off`.
+- `set_member_calendars(p_user_id uuid, p_team_ids text[]) → jsonb` — заменяет набор прикреплённых календарей целиком; только владелец; живость блоков не нужна (прикрепление — не право); возвращает карту как `list_member_access`.
+- `list_members(p_team_id text default null) → jsonb` — люди компании (или прикреплённые к календарю): `[{ user_id, role, name, email, phone, phone_verified, calendars: [team_id], joined_at }]`; `name` — из регистрации, иначе начало почты; `phone` до этапа SMS — из `user_metadata`, `phone_verified = false`; только владелец.
 - `set_member_access(p_user_id uuid, p_changes jsonb) → jsonb` — `p_changes = [{ "block", "team_id" | null, "level" }]`, одной транзакцией; возвращает новую карту этого человека.
   Только владелец активной компании; нельзя менять себя и другого владельца; блок должен быть `live`; уровень допустим; календарь из активной компании; `owner_only` отвергается.
-  Отказы: `42501` `hint = 'access:not_owner' | 'access:target_owner' | 'access:not_live' | 'access:owner_only'`; `22023` `hint = 'access:bad_level' | 'access:bad_team' | 'access:bad_block'`.
+  Отказы: `42501` `hint = 'access:not_owner' | 'access:target_owner' | 'access:not_live' | 'access:owner_only'`; `22023` `hint = 'access:bad_level' | 'access:bad_team' | 'access:bad_block' | 'access:not_attached' | 'access:not_member' | 'access:bad_changes'`. `my_access_map()` без членства — `42501 access:not_member`.
 - Отказ записи по правам в любом другом месте: `42501` с `hint = 'block:<key>'` — экран показывает причину из реестра и перечитывает карту.
 
 ### Мгновенное применение
@@ -74,8 +81,9 @@
 - Шлёт триггер на `member_access` и на удаление из `tenant_members` (событие `membership_removed`, `{ "tenant_id" }` → стереть данные этой компании с устройства).
 
 ### Приглашения (этап Б, черновик — форма может уточниться)
-- `create_invitation(p_email text, p_changes jsonb)` — та же форма изменений, что у `set_member_access`; письмо уходит всегда, ответа «есть ли аккаунт» нет.
-- `my_invitations() → jsonb[]` — по подтверждённой почте вошедшего: `{ id, tenant_name, invited_by_name, calendars: [names], expires_at }`.
+- `create_invitation(p_email text, p_team_ids text[], p_changes jsonb)` — календари прикрепления и та же форма изменений, что у `set_member_access`; письмо уходит всегда, ответа «есть ли аккаунт» нет.
+- `list_invitations(p_team_id text null) → jsonb[]` — `{ id, email, calendars, invited_by_name, created_at, expires_at, status: pending | accepted | expired | declined | revoked }`; только владелец. `revoke_invitation(p_id)`, `resend_invitation(p_id)`.
+- `my_invitations() → jsonb[]` — по подтверждённой почте вошедшего: `{ id, tenant_name, invited_by_name, invited_by_email, calendars: [{ name, color }], expires_at }`. `decline_invitation(p_id)`.
 - `accept_invitation_by_id(p_id uuid) → { tenant_id, role, onboarded, access }` — `access` в форме `my_access_map()`; экран кладёт роль и карту в память ДО перехода.
 - Канал `invitations:<user_id>`, событие `invitation_received`.
 
