@@ -36,6 +36,7 @@ export function Field({
   style,
   accessibilityLabel,
   trailing,
+  leading,
   ...inputProps
 }: {
   label: string;
@@ -45,6 +46,10 @@ export function Field({
    *  осталось. Так на листе не заводится четвёртая рукописная рамка ради
    *  одного слова (анатомия та же, что у `MoneyField`). */
   trailing?: ReactNode;
+  /** ГОЛОВА ВНУТРИ РАМКИ — плитка слева, как у названия с цветом
+   *  (`NameColorField`): одна строка одним блоком, а не подпись над голым
+   *  вводом. Первый носитель — почта в «Пригласить мастера». */
+  leading?: ReactNode;
 } & TextInputProps) {
   const t = useThemeColors();
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ. Без этого правка «60» на «40» даёт
@@ -53,6 +58,7 @@ export function Field({
   const numeric =
     inputProps.keyboardType === "decimal-pad" ||
     inputProps.keyboardType === "number-pad";
+  const framed = Boolean(trailing || leading);
   const input = (
     <TextInput
       accessibilityLabel={accessibilityLabel ?? label}
@@ -63,13 +69,13 @@ export function Field({
       style={[
         {
           minHeight: 48,
-          paddingHorizontal: trailing ? 0 : 16,
+          paddingHorizontal: framed ? 0 : 16,
           paddingVertical: 12,
           fontSize: 15,
           color: t.ink,
-          ...(trailing ? { flex: 1 } : null),
+          ...(framed ? { flex: 1 } : null),
         },
-        trailing
+        framed
           ? null
           : {
               borderRadius: t.radius.input,
@@ -85,7 +91,7 @@ export function Field({
   return (
     <View style={{ marginBottom: 16 }}>
       <FieldLabel text={label} />
-      {trailing ? (
+      {framed ? (
         <View
           style={{
             flexDirection: "row",
@@ -97,6 +103,7 @@ export function Field({
             paddingHorizontal: 16,
           }}
         >
+          {leading ? <View style={{ marginRight: 12 }}>{leading}</View> : null}
           {input}
           {trailing}
         </View>
