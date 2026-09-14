@@ -1,70 +1,44 @@
-// Кабинет — корневое меню приложения в языке веб-«Настроек»
+// Кабинет — корневое меню аккаунта в языке веб-«Настроек»
 // (apps/web/src/app/dashboard/settings/page.tsx, v316 iOS-26 redesign):
 // герой-карта аккаунта с градиентом и инициалами → группы строк с
-// цветными icon-тайлами (палитра --tile-* из web globals.css), у каждой
-// строки название + серое описание → красная карта «Выйти из аккаунта»
-// → футер «Babun · vX.Y.Z».
+// цветными icon-тайлами, у каждой строки название + серое описание →
+// красная карта «Выйти из аккаунта» → футер «Babun · vX.Y.Z».
 //
-// Отличие от веба по содержимому (осознанное): мобильный Кабинет —
-// единственный хаб приложения, поэтому сверху остаётся мобильная группа
-// «Смена» (Сводка / Закрыть день / Незакрытые / Склад), которой в веб-
-// настройках нет (в вебе это раздел «Аналитика» сайдбара). Веб-пункты
-// без мобильного экрана (Тариф и оплата, Автоматические SMS, Онлайн
-// запись, Интеграции) не рисуем — мёртвых строк в меню быть не должно.
+// НАСТРОЕК РАЗДЕЛОВ ЗДЕСЬ НЕТ (владелец 2026-09-14: «с кабинета чистим, это
+// не надо уже: половина не нужна, половина уже есть в настройках календаря,
+// в настройках клиентов и в настройках финансов; дублировать в кабинете не
+// надо — все настройки там, где открывают шестерёнку»).
+//
+// Кабинет был хабом всего приложения, и почти каждая настройка жила в двух
+// местах: строкой здесь и строкой за шестерёнкой раздела. Теперь у неё одна
+// дверь — в разделе, которым пользуются: календарь (часы, метки, запись,
+// услуги, мастера и их доступ), клиенты (карточка, типы объектов, импорт),
+// финансы (счета, категории, шаблоны операций, реквизиты); Сводка — кнопка в
+// шапке Финансов. Тем же решением сняты строки, у которых второй двери не
+// было: Закрыть день, Незакрытые дни, Склад, Шаблоны SMS, Программа
+// лояльности, Повторяющиеся ТО — экраны остались в коде, входа в них нет.
+//
+// Здесь остаётся только то, что принадлежит аккаунту, а не разделу:
+// приглашения, вход и безопасность, синхронизация, выход. Новую настройку
+// раздела сюда не добавлять — её место за шестерёнкой этого раздела.
 
-import { useMemo, type ComponentType } from "react";
+import type { ComponentType } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
-import {
-  BarChart3,
-  BookUser,
-  CalendarCheck,
-  Boxes,
-  CalendarCheck2,
-  CalendarClock,
-  CalendarX2,
-  ChevronRight,
-  IdCard,
-  Landmark,
-  LogOut,
-  MessageSquareText,
-  Package,
-  Receipt,
-  RefreshCw,
-  RotateCw,
-  Briefcase,
-  Shield,
-  Star,
-  Tag,
-  UserCog,
-  Wallet,
-} from "lucide-react-native";
+import { ChevronRight, LogOut, RefreshCw, Shield } from "lucide-react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { DISPLAY_VERSION } from "@babun/shared/common/utils/version";
-import {
-  getCurrentCyprusTime,
-  getCurrentTimeInZone,
-} from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { TYPE } from "@/components/ui/tokens";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { IncomingInvitations } from "@/features/access/IncomingInvitations";
-import { Divider } from "@/components/ui/Divider";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { useThemeColors } from "@/theme/colors";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useSession } from "@/providers/SessionProvider";
-import {
-  useCurrentRole,
-  usePlanAllows,
-  useTenant,
-} from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
 import { ROLE_LABELS, type UserRole } from "@/features/settings/role-policy";
-import { formatYMD } from "@/features/appointments/helpers";
-import { useAppointments } from "@/features/calendar/queries";
-import { unclosedAppointments } from "@babun/shared/local/selectors/unclosed";
-import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useQueueDepth } from "@babun/shared/sync";
 
 type IconType = ComponentType<{
@@ -73,34 +47,13 @@ type IconType = ComponentType<{
   strokeWidth?: number;
 }>;
 
-// Личные события включены в единую страницу /book; их типы и метки должны
-// оставаться настраиваемыми из кабинета, а не жить скрытым deep link.
-const PERSONAL_CALENDAR_ENABLED = true;
-
-// ПАЛИТРА ПЛИТОК — ОБЩАЯ (владелец 2026-09-10: «свести к фирменному»).
-//
-// Здесь лежала своя палитра из восьми хексов, скопированная из веб-токенов, и
-// ни один не совпадал с общей: `#2F6FD6` рядом с кобальтом бренда `#2c5be0`
-// давал ДВА близких синих на одной странице, а с фиолетовым градиентом
-// герой-карты — три источника цвета на одном экране.
-//
-// Соответствие по смыслу и по семье оттенка: mint → green (`#087A52` против
-// `#1F7A44` — один тон), cyan → teal, yellow остался собой и переехал в общую
-// палитру. Различимость пунктов сохранена, палитра в продукте одна.
-const TILE = {
-  blue: SETTINGS_TILE.blue,
-  green: SETTINGS_TILE.green,
-  yellow: SETTINGS_TILE.yellow,
-  orange: SETTINGS_TILE.orange,
-  purple: SETTINGS_TILE.purple,
-  mint: SETTINGS_TILE.green,
-  cyan: SETTINGS_TILE.teal,
-  indigo: SETTINGS_TILE.indigo,
-} as const;
+// Плитки — из общей палитры `SETTINGS_TILE` (владелец 2026-09-10: «свести к
+// фирменному»): своя палитра Кабинета давала два близких синих на одной
+// странице рядом с кобальтом бренда.
 
 // Строка меню — анатомия веб-ряда: тайл 30, заголовок 15 medium,
 // описание 12 secondary, chevron. Бейдж-счётчик — мобильное дополнение
-// (веб-настройки счётчиков не носят, но «Незакрытые дни» без него слепнут).
+// (веб-настройки счётчиков не носят, но «Синхронизация» без него слепнет).
 function MenuRow({
   icon: Icon,
   tone,
@@ -251,33 +204,7 @@ function AccountHero({ role }: { role: UserRole | null | undefined }) {
 export default function CabinetHome() {
   const t = useThemeColors();
   const { data: role } = useCurrentRole();
-  // Прайс — работа с клиентами, а она в платном тарифе (канон, правило 10).
-  const canUseServices = usePlanAllows("services");
-  // Строка «Запись» называет ЖИВОЕ значение, как «Клиенты» рядом: настройка,
-  // которая молчит о своём состоянии, заставляет открывать её, чтобы
-  // вспомнить, что в ней стоит.
-  // ЗА ДВЕРЬЮ ТЕПЕРЬ РАЗВИЛКА, А НЕ НАСТРОЙКИ (2026-09-08): подпись называет
-  // обе страницы, а состояние каждой печатает уже сама развилка. Прежняя
-  // строка перечисляла правило цвета и блоки — то есть половину того, что за
-  // дверью, и молчала про вторую половину.
-  const bookingDesc = "Страница записи · страница события";
-  const owner = role === "owner";
-  const dispatcher = role === "dispatcher";
-  const master = role === "master";
   const syncDepth = useQueueDepth();
-  const { data: calendarSettings } = useCalendarSettings();
-  const todayKey = formatYMD(
-    calendarSettings?.timezone
-      ? getCurrentTimeInZone(calendarSettings.timezone)
-      : getCurrentCyprusTime(),
-  );
-  // Бейдж «Незакрытые дни» — тот же фильтр, что и в unclosed.tsx, но хабу
-  // нужен только count; useAppointments — локальный кэш, тяжёлого нет.
-  const { data: appts = [] } = useAppointments();
-  const unclosedCount = useMemo(
-    () => unclosedAppointments(appts, todayKey).length,
-    [appts, todayKey],
-  );
 
   return (
     <Screen>
@@ -293,258 +220,24 @@ export default function CabinetHome() {
             приглашений нет, блока нет. */}
         <IncomingInvitations />
 
-        {owner || dispatcher || master ? (
-          <>
-            <SectionEyebrow>Смена</SectionEyebrow>
-            <SectionCard>
-              {owner ? (
-                <>
-                  {/* Веб: АНАЛИТИКА → Сводка (KPI + топы за период). */}
-                  <MenuRow
-                    icon={BarChart3}
-                    tone={TILE.indigo}
-                    title="Сводка"
-                    desc="KPI и топы за период"
-                    href={"/cabinet/insights" as Href}
-                  />
-                  <Divider inset={58} />
-                  <MenuRow
-                    icon={CalendarCheck2}
-                    tone={TILE.green}
-                    title="Закрыть день"
-                    desc="Сверка записей и оплат за день"
-                    href="/cabinet/close-day"
-                  />
-                  <Divider inset={58} />
-                </>
-              ) : null}
-              {owner || dispatcher ? (
-                <MenuRow
-                  icon={CalendarX2}
-                  tone={TILE.orange}
-                  title="Незакрытые дни"
-                  desc="Прошедшие записи без итога"
-                  href={"/cabinet/unclosed" as Href}
-                  badge={unclosedCount}
-                />
-              ) : null}
-              {owner || dispatcher ? <Divider inset={58} /> : null}
-              <MenuRow
-                icon={Package}
-                tone={TILE.yellow}
-                title="Склад"
-                desc={owner ? "Материалы и остатки" : "Материалы · только просмотр"}
-                href="/cabinet/inventory"
-              />
-            </SectionCard>
-          </>
-        ) : null}
-
-        {/* Веб-группа «Личный кабинет» — те же строки, что в веб-меню;
-            «Счёт компании» на мобиле живёт внутри «Личной информации»
-            (business.tsx, секция «Реквизиты для счетов»). */}
         <SectionEyebrow>Личный кабинет</SectionEyebrow>
         <SectionCard>
           <MenuRow
-            icon={IdCard}
-            tone={TILE.blue}
-            title="Личная информация"
-            desc={owner ? "Бизнес, контакты, реквизиты" : "Профиль компании · только чтение"}
-            href="/cabinet/business"
-          />
-          {owner ? (
-            <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={Receipt}
-                tone={TILE.yellow}
-                title="Шаблоны транзакций"
-                desc="Аренда, ЗП, чаевые — в один тап"
-                href="/cabinet/templates"
-              />
-            </>
-          ) : null}
-          <Divider inset={58} />
-          <MenuRow
             icon={Shield}
-            tone={TILE.orange}
+            tone={SETTINGS_TILE.orange}
             title="Вход и безопасность"
             desc="Пароль, аккаунт, удаление"
             href="/cabinet/account"
           />
         </SectionCard>
 
-        <SectionEyebrow>Записи</SectionEyebrow>
-        <SectionCard>
-          <MenuRow
-            icon={CalendarClock}
-            tone={TILE.orange}
-            title={owner ? "Настройки календаря" : "Рабочий календарь"}
-            desc={owner ? "Часы, шаг сетки, буфер, часовой пояс" : "График и назначенные заявки"}
-            href={owner ? "/calendar" : "/"}
-          />
-          {dispatcher ? (
-            <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={BookUser}
-                tone={TILE.indigo}
-                title="Клиенты"
-                desc="Поиск, карточки и новые обращения"
-                href={"/clients" as Href}
-              />
-              <Divider inset={58} />
-              <MenuRow
-                icon={MessageSquareText}
-                tone={TILE.green}
-                title="Шаблоны SMS"
-                desc="Рабочие тексты для клиентов"
-                href={"/cabinet/sms-templates" as Href}
-              />
-              <Divider inset={58} />
-              <MenuRow
-                icon={RotateCw}
-                tone={TILE.mint}
-                title="Повторяющиеся ТО"
-                desc="Серии регулярных записей"
-                href="/cabinet/recurring"
-              />
-            </>
-          ) : null}
-          {owner ? (
-            <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={MessageSquareText}
-                tone={TILE.green}
-                title="Шаблоны SMS"
-                desc="Тексты напоминаний и подтверждений"
-                href={"/cabinet/sms-templates" as Href}
-              />
-              <Divider inset={58} />
-              <MenuRow
-                icon={Star}
-                tone={TILE.yellow}
-                title="Программа лояльности"
-                desc="Скидки постоянным клиентам"
-                href="/cabinet/loyalty"
-              />
-              <Divider inset={58} />
-              <MenuRow
-                icon={RotateCw}
-                tone={TILE.mint}
-                title="Повторяющиеся ТО"
-                desc="Серии регулярных записей"
-                href="/cabinet/recurring"
-              />
-            </>
-          ) : null}
-          {/* Метки используются в календаре. ТИПЫ СОБЫТИЙ ОТСЮДА УЕХАЛИ
-              (владелец 2026-09-08: «настройку типов событий переносим в
-              „Запись“»): они настраивают форму события, а не живут сами по
-              себе, и теперь стоят за «Запись» → «Страница события». */}
-          {owner && PERSONAL_CALENDAR_ENABLED ? (
-            <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={Tag}
-                tone={TILE.cyan}
-                title="Метки"
-                desc="Что стоит под датой в календаре"
-                href={"/cabinet/labels" as Href}
-              />
-            </>
-          ) : null}
-        </SectionCard>
-
-        {owner ? (
-          <>
-            <SectionEyebrow>Справочники</SectionEyebrow>
-            <SectionCard>
-          {/* Настройки списка клиентов — тот же экран, что за шестерёнкой
-              на вкладке Клиенты (правило: меню настроек живёт в Кабинете). */}
-          <MenuRow
-            icon={BookUser}
-            tone={TILE.indigo}
-            title="Клиенты"
-            desc="Что показывать, сортировка, импорт"
-            href={"/clients/settings" as Href}
-          />
-          <Divider inset={58} />
-          {/* Настройка САМИХ форм календаря: за дверью развилка — страница
-              записи (цвет, блоки) и страница события (типы, блоки). */}
-          <MenuRow
-            icon={CalendarCheck}
-            tone={TILE.blue}
-            title="Запись"
-            desc={bookingDesc}
-            href="/cabinet/booking"
-          />
-          {canUseServices ? (
-            <>
-              <Divider inset={58} />
-              <MenuRow
-                icon={Briefcase}
-                tone={TILE.blue}
-                title="Услуги"
-                desc="Каталог работ и цены"
-                href="/cabinet/services"
-              />
-            </>
-          ) : null}
-          <Divider inset={58} />
-          <MenuRow
-            icon={Boxes}
-            tone={TILE.purple}
-            title="Типы объектов"
-            desc="Метки адресов: офис, дом, склад, кафе"
-            href="/cabinet/object-types"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Wallet}
-            tone={TILE.green}
-            title="Категории"
-            desc="Доходы, расходы и долги"
-            href="/cabinet/categories"
-          />
-          <Divider inset={58} />
-          <MenuRow
-            icon={Landmark}
-            tone={TILE.mint}
-            title="Счета"
-            desc="Кассы и счета команд"
-            href="/accounts"
-          />
-            </SectionCard>
-
-            <SectionEyebrow>Компания</SectionEyebrow>
-            <SectionCard>
-              <MenuRow
-                icon={UserCog}
-                tone={TILE.green}
-                title="Доступ в CRM"
-                desc="Владелец, диспетчер, бригадир / мастер"
-                href={"/cabinet/team-access" as Href}
-              />
-              {/* «Мастера» УЕХАЛИ В НАСТРОЙКИ КАЛЕНДАРЯ (владелец 2026-09-10:
-                  «мастера — окей, перенеси её туда, и это будет основное»).
-                  Состав команды — свойство календаря, а не кабинета; сам
-                  кабинет владелец собирается разбирать, и настройки уходят
-                  туда, где ими пользуются. Право не изменилось: стек
-                  /calendar закрыт `manage-calendar-settings`, оно только у
-                  владельца — как и весь /cabinet. */}
-            </SectionCard>
-          </>
-        ) : null}
-
-        {owner || dispatcher ? (
+        {role === "owner" || role === "dispatcher" ? (
           <>
             <SectionEyebrow>Приложение</SectionEyebrow>
             <SectionCard>
               <MenuRow
                 icon={RefreshCw}
-                tone={TILE.blue}
+                tone={SETTINGS_TILE.blue}
                 title="Синхронизация"
                 desc={
                   syncDepth > 0
