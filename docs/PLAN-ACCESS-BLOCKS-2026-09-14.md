@@ -34,6 +34,58 @@
 0 · 2,5–3,5 — А · 2–2,5 (после SMTP и SMS от владельца) — 1 · 1,5–2 — 2 · 5–6 — 3 · 3–5 — Б · 3–4 — П · 1–1,5 — 5 · 2–3 — 7 · 1–1,5 — 8 · 1 — 9 · 1,5–2. **Итого ≈24–32.**
 Экраны (поиск, приглашение, входящие, права, регистрация с телефоном) — сессия 008. Этап 4 (перекраска Календаря, Финансов, `/book`, ≈7–9 дней) — по доменам; 006 берёт из него слой данных (`useAccess`, карта, стирание, прогрев по уровням, ≈2–3 дня).
 
+## Контракт v1 — права по блокам (сервер 006 → экраны 008)
+
+Окончательные решения владельца 14.09: у блока **три положения** — `off` (скрыт, данные на телефон не приходят) · `read` (данные приходят, запись отбивается) · `write`. Серых данных нет. Раздел, где у человека все блоки `off`, — на весь экран «Нет доступа». Новый сотрудник — всё `off`. Наборов нет. Календари — только явно выданные. Изменения — мгновенно.
+
+Этот раздел — ЕДИНСТВЕННЫЙ источник формы данных для экранов. Меняется только новой версией (v2) с записью в журнале доски.
+
+### Таблицы
+- `public.access_blocks` — реестр, общий для всех компаний, пишут только миграции, читают все вошедшие.
+  `key text primary key`, `area text` (`calendar | finance | clients | company | owner`), `scope text` (`calendar | company`), `levels text[]` (допустимые значения, первый — умолчание), `title_ru text`, `owner_only boolean`, `live boolean`, `enforced_by text[]`.
+- `public.member_access` — уровни людей.
+  `tenant_id uuid`, `user_id uuid`, `block text → access_blocks(key)`, `team_id text null`, `level text`, `set_by uuid`, `set_at timestamptz`.
+  Уникально `(tenant_id, user_id, block, team_id) nulls not distinct`. `(tenant_id, user_id) → tenant_members on delete cascade` (увольнение стирает уровни). `(tenant_id, team_id) → teams(tenant_id, id) on delete cascade`.
+  Триггер: у `scope = calendar` `team_id` обязателен; у `scope = company` — пустой; `level ∈ access_blocks.levels`; `owner_only` блоки не пишутся.
+  **Нет строки = первое значение из `levels`** (для обычных блоков `off`).
+
+### Значения уровней
+- обычные блоки: `off | read | write`;
+- `clients.scope`: `own | all` (умолчание `own` — «из его календарей»);
+- `company.currency`: `read | write` (без валюты суммы не показать; скрыть нельзя);
+- `owner.access`, `owner.billing`: `owner_only`, у сотрудника всегда недоступны.
+
+### Ключи блоков v1
+`calendar.records`, `calendar.create`, `record.status`, `record.amount`, `record.payment`, `calendar.day_labels` (все `scope = calendar`); `calendar.settings`; `finance.operations`, `finance.accounts`, `finance.debts`, `finance.documents`, `finance.close_day` (`calendar`); `finance.settings`; `clients`, `clients.scope`, `clients.contacts`; `services`; `masters`; `company.currency`; `company.profile`; `owner.access`; `owner.billing`. Экран берёт ключи и подписи ТОЛЬКО из `access_blocks`, строками в коде их не пишет.
+
+### Функции (все `security definer`, ошибки — `42501` с `hint`)
+- `my_access_map() → jsonb` — права вошедшего в АКТИВНОЙ компании:
+  `{ "tenant_id", "is_owner": bool, "version": bigint, "company": { "<block>": "<level>" }, "calendars": { "<team_id>": { "<block>": "<level>" } } }`.
+  Только `live` блоки. Владелец: `is_owner = true`, словари могут быть пустыми — экран считает всё `write`. Календарь, в котором у человека `calendar.records = off`, в `calendars` не попадает.
+- `list_member_access(p_user_id uuid) → jsonb` — та же форма для сотрудника; только владелец.
+- `set_member_access(p_user_id uuid, p_changes jsonb) → jsonb` — `p_changes = [{ "block", "team_id" | null, "level" }]`, одной транзакцией; возвращает новую карту этого человека.
+  Только владелец активной компании; нельзя менять себя и другого владельца; блок должен быть `live`; уровень допустим; календарь из активной компании; `owner_only` отвергается.
+  Отказы: `42501` `hint = 'access:not_owner' | 'access:target_owner' | 'access:not_live' | 'access:owner_only'`; `22023` `hint = 'access:bad_level' | 'access:bad_team' | 'access:bad_block'`.
+- Отказ записи по правам в любом другом месте: `42501` с `hint = 'block:<key>'` — экран показывает причину из реестра и перечитывает карту.
+
+### Мгновенное применение
+- Приватный канал Realtime `access:<user_id>` (broadcast, авторизация по `realtime.messages`: слушать может только сам человек).
+- Событие `access_changed`, полезная нагрузка `{ "tenant_id", "version" }` — без уровней. Получил → перечитать `my_access_map()`; если `version` не выросла — ничего.
+- Шлёт триггер на `member_access` и на удаление из `tenant_members` (событие `membership_removed`, `{ "tenant_id" }` → стереть данные этой компании с устройства).
+
+### Приглашения (этап Б, черновик — форма может уточниться)
+- `create_invitation(p_email text, p_changes jsonb)` — та же форма изменений, что у `set_member_access`; письмо уходит всегда, ответа «есть ли аккаунт» нет.
+- `my_invitations() → jsonb[]` — по подтверждённой почте вошедшего: `{ id, tenant_name, invited_by_name, calendars: [names], expires_at }`.
+- `accept_invitation_by_id(p_id uuid) → { tenant_id, role, onboarded, access }` — `access` в форме `my_access_map()`; экран кладёт роль и карту в память ДО перехода.
+- Канал `invitations:<user_id>`, событие `invitation_received`.
+
+### Телефон до этапа SMS
+`auth.users.user_metadata.phone` (E.164, пишет экран регистрации) + `phone_verified: false`. Сервер нормализует сам и не считает его подтверждённым. Переезд в `auth.users.phone` — только через SMS-подтверждение.
+
+### Что `live` и когда
+- Этап 1: реестр заведён, все блоки `live = false`, `set_member_access` отвечает `access:not_live` — экран можно строить на тестовых данных.
+- Этап 2: `calendar.*`, `record.*`, `finance.*` → `live`. Этап 5: `clients*`. Этап 7: `masters`, `services`. Этап 8: `company.*`.
+
 # Доступ сотрудников по блокам: итоговый план (14.09, после проверки)
 
 ## 0. Коротко
