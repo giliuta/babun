@@ -74,7 +74,7 @@ export default function InvitationScreen() {
     setActionError(null);
     setWorking(true);
     try {
-      await acceptAndActivateInvitation(token);
+      await acceptAndActivateInvitation(token, preview.data?.role);
       router.replace("/");
     } catch (error) {
       setActionError(invitationErrorMessage((error as Error).message));
