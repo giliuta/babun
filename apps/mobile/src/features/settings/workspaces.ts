@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { BOUND_TENANT_FIELD } from "@babun/shared/sync/replayer";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenantId } from "@/lib/tenant";
@@ -87,6 +88,33 @@ function asUserRole(role: string): UserRole | undefined {
 
 export const myCalendarsQueryKey = ["my-calendars"] as const;
 
+/** Лента календарей человека ЧИСТОЙ функцией — её же берёт прогрев других
+ *  компаний, чтобы узнать, какие они и кем там человек.
+ *
+ *  ТОЛЬКО ОБЫЧНЫМ КЛИЕНТОМ, И ЭТО ПРОВЕРЯЕТСЯ, А НЕ ОБЕЩАЕТСЯ. Почти вся
+ *  лента от компании не зависит: роль, права, имена, `onboarded` берутся по
+ *  членству человека. Кроме одного поля — `is_active` считается как
+ *  `tenant_id = current_tenant_id()`, то есть от ЗАГОЛОВКА запроса. Возьми
+ *  ленту клиентом, привязанным к компании B, и положи под общий ключ
+ *  `["my-calendars", userId]` (у него нет компании — это кэш экрана) — и в
+ *  кадре, когда компания устройства ещё не известна, ряд отметит «активной»
+ *  B при человеке в A: тот самый дубль чипа, от которого ушли в B3. Нашла
+ *  сессия 005, 2026-09-13. */
+export async function fetchMyCalendars(
+  client: typeof supabase,
+): Promise<MyCalendar[]> {
+  if (BOUND_TENANT_FIELD in (client as object)) {
+    throw new Error(
+      "fetchMyCalendars: лента календарей читается только обычным клиентом — " +
+        "флаг «активная» в ней считается от заголовка компании.",
+    );
+  }
+  const rpc = client as unknown as RpcWithMyCalendars;
+  const { data, error } = await rpc.rpc("list_my_calendars");
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(toCalendar);
+}
+
 export function useMyCalendars() {
   const { session } = useSession();
   const userId = session?.user.id ?? null;
@@ -97,12 +125,7 @@ export function useMyCalendars() {
     queryKey: [...myCalendarsQueryKey, userId],
     enabled: !!userId,
     staleTime: 60_000,
-    queryFn: async (): Promise<MyCalendar[]> => {
-      const client = supabase as unknown as RpcWithMyCalendars;
-      const { data, error } = await client.rpc("list_my_calendars");
-      if (error) throw new Error(error.message);
-      return (data ?? []).map(toCalendar);
-    },
+    queryFn: () => fetchMyCalendars(supabase),
   });
 }
 

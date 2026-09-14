@@ -15,7 +15,11 @@ import {
 } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { citiesQueryKey, teamsQueryKey } from "@/lib/company-query-keys";
+import {
+  citiesQueryKey,
+  mastersQueryKey,
+  teamsQueryKey,
+} from "@/lib/company-query-keys";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import {
   operationalMasterJsonToMaster,
@@ -156,35 +160,38 @@ export function useCreateTeam() {
 // ─── Masters ─────────────────────────────────────────────────────────
 // `includeInactive` — список мастеров показывает архив (иначе «Вернуть из
 // архива» в хабе недостижим); пикеры зовут без опции (паттерн useTeams).
+/** Чтение мастеров ЧИСТОЙ функцией (см. `fetchTeams`): прогрев чужой компании
+ *  зовёт её клиентом, привязанным к той компании (`bind-tenant.ts`). */
+export async function fetchMasters(
+  client: typeof supabase,
+  tenantId: string,
+  role: UserRole,
+  includeInactive: boolean,
+): Promise<Master[]> {
+  if (role === "dispatcher" || role === "master") {
+    const { data, error } = await client.rpc("list_operational_masters_safe");
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []).map(operationalMasterJsonToMaster);
+    return includeInactive ? rows : rows.filter((row) => row.is_active);
+  }
+  if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
+  let q = client.from("masters").select("*").eq("tenant_id", tenantId);
+  if (!includeInactive) q = q.eq("is_active", true);
+  const { data, error } = await q.order("position");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export function useMasters(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: includeInactive
-      ? ["masters", tenantId, role ?? "role-pending", "all"]
-      : ["masters", tenantId, role ?? "role-pending"],
+    queryKey: mastersQueryKey(tenantId, role, includeInactive),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
-    queryFn: async () => {
-      if (role === "dispatcher" || role === "master") {
-        const { data, error } = await supabase.rpc(
-          "list_operational_masters_safe",
-        );
-        if (error) throw new Error(error.message);
-        const rows = (data ?? []).map(operationalMasterJsonToMaster);
-        return includeInactive ? rows : rows.filter((row) => row.is_active);
-      }
-      if (role !== "owner") throw new Error("Нет доступа к сотрудникам");
-      let q = supabase
-        .from("masters")
-        .select("*")
-        .eq("tenant_id", tenantId as string);
-      if (!includeInactive) q = q.eq("is_active", true);
-      const { data, error } = await q.order("position");
-      if (error) throw new Error(error.message);
-      return data;
-    },
+    queryFn: () =>
+      fetchMasters(supabase, tenantId as string, role as UserRole, includeInactive),
   });
 }
 

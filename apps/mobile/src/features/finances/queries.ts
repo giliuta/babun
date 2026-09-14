@@ -25,6 +25,11 @@ import {
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import {
+  financeCategoriesQueryKey,
+  ledgerRangeQueryKey as ledgerRangeKey,
+  refundTotalsQueryKey,
+} from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "./accounts";
 
 /**
@@ -50,18 +55,9 @@ export function useAppointmentLedger(appointmentId: string | null | undefined) {
   });
 }
 
-/** Ключ среза журнала. Собирается ОДНОЙ функцией, потому что тот же срез
- *  берут и хук, и разовая дозагрузка выписки — разъехавшиеся ключи молча
- *  завели бы две копии одного месяца в кэше. */
-function ledgerRangeKey(
-  tenantId: string | null | undefined,
-  from: string,
-  to: string,
-  teamScope: string[] | null,
-  accountScope: string[] | null,
-) {
-  return ["transactions", tenantId, from, to, teamScope, accountScope];
-}
+// Ключ среза журнала (`ledgerRangeKey`) живёт в `lib/company-query-keys.ts`:
+// тот же срез берут хук, разовая дозагрузка выписки И прогрев другой компании
+// — разъехавшиеся ключи молча завели бы две копии одного месяца в кэше.
 
 /**
  * Журнал за период (границы включительно по `occurred_on`), сужаемый до нужных
@@ -132,7 +128,7 @@ export function useFetchLedgerRange() {
 export function useRefundTotals() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["transactions", tenantId, "refund-totals"],
+    queryKey: refundTotalsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listRefundTotals(supabase, tenantId as string),
   });
@@ -141,7 +137,7 @@ export function useRefundTotals() {
 export function useFinanceCategories() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["finance-categories", tenantId],
+    queryKey: financeCategoriesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listFinanceCategories(supabase, tenantId as string),
   });

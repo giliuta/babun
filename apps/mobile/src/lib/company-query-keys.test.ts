@@ -49,3 +49,60 @@ describe("ключи запросов компании не изменили ф�
     same(keys.allTeamSchedulesQueryKey(T, "owner"), ["team-schedules", T, "owner", "all"]);
   });
 });
+
+// ВТОРАЯ ВОЛНА ПЕРЕЕЗДА (прогрев, 2026-09-13): ключи денег, инвойсов и
+// мастеров. Справа — буквально массивы из finances/queries.ts,
+// finances/accounts.ts, invoices/queries.ts, reference/queries.ts до переноса.
+describe("ключи денег и мастеров не изменили форму при переносе", () => {
+  test("мастера: без суффикса и с «all»", () => {
+    same(keys.mastersQueryKey(T, "owner", false), ["masters", T, "owner"]);
+    same(keys.mastersQueryKey(T, undefined, true), ["masters", T, "role-pending", "all"]);
+  });
+  test("категории, срез журнала, возвраты", () => {
+    same(keys.financeCategoriesQueryKey(T), ["finance-categories", T]);
+    same(
+      keys.ledgerRangeQueryKey(T, "2026-09-01", "2026-09-30", null, null),
+      ["transactions", T, "2026-09-01", "2026-09-30", null, null],
+    );
+    same(
+      keys.ledgerRangeQueryKey(T, "2026-09-01", "2026-09-30", ["team-1"], ["acc-1"]),
+      ["transactions", T, "2026-09-01", "2026-09-30", ["team-1"], ["acc-1"]],
+    );
+    same(keys.refundTotalsQueryKey(T), ["transactions", T, "refund-totals"]);
+  });
+  test("инвойсы и платежи по ним", () => {
+    same(keys.invoicesQueryKey(T), ["invoices", T]);
+    same(keys.invoicePaymentsQueryKey(T), ["invoices", T, "payments"]);
+  });
+  test("счета: строки active/all и остатки", () => {
+    same(keys.accountRowsQueryKey(T, false), ["accounts", T, "rows", "active"]);
+    same(keys.accountRowsQueryKey(T, true), ["accounts", T, "rows", "all"]);
+    same(keys.accountBalancesQueryKey(T), ["accounts", T, "balances"]);
+  });
+});
+
+// УСЛОВИЕ СЕССИИ 004 (2026-09-13): по деньгам сбросы идут ПРЕФИКСОМ —
+// `["transactions"]`, `["accounts"]`, `["invoices"]`, `["payment-accounts"]`,
+// `["finance-categories"]`, `["masters"]` (payment-mutations.ts, cash-counts.ts,
+// invoices/queries.ts, finances/queries.ts, finances/accounts.ts,
+// settings/tenant.ts). Смени фабрика первый сегмент — оплата пройдёт, а
+// остаток и лента останутся старыми до ручного обновления, без единой ошибки.
+describe("первые сегменты ключей денег — те, по которым идут сбросы", () => {
+  test("журнал и возвраты — «transactions»", () => {
+    assert.equal(keys.ledgerRangeQueryKey(T, "a", "b", null, null)[0], "transactions");
+    assert.equal(keys.refundTotalsQueryKey(T)[0], "transactions");
+  });
+  test("счета и остатки — «accounts», кассы оплаты — «payment-accounts»", () => {
+    assert.equal(keys.accountRowsQueryKey(T, false)[0], "accounts");
+    assert.equal(keys.accountBalancesQueryKey(T)[0], "accounts");
+    assert.equal(keys.paymentAccountsQueryKey(T, "team-1")[0], "payment-accounts");
+    same(keys.paymentAccountsQueryKey(T, null), ["payment-accounts", T, "no-team"]);
+    same(keys.paymentAccountsQueryKey(T, "team-1"), ["payment-accounts", T, "team-1"]);
+  });
+  test("инвойсы, категории, мастера", () => {
+    assert.equal(keys.invoicesQueryKey(T)[0], "invoices");
+    assert.equal(keys.invoicePaymentsQueryKey(T)[0], "invoices");
+    assert.equal(keys.financeCategoriesQueryKey(T)[0], "finance-categories");
+    assert.equal(keys.mastersQueryKey(T, "owner", false)[0], "masters");
+  });
+});

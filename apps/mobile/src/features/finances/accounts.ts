@@ -30,6 +30,10 @@ import type {
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import {
+  accountBalancesQueryKey,
+  accountRowsQueryKey,
+} from "@/lib/company-query-keys";
+import {
   TEAM_ACCOUNT_SEEDS,
   planAccountSeeds,
   type AccountSeed,
@@ -97,7 +101,7 @@ export interface AccountsWithBalances {
 export function useUnassignedMoney(): number {
   const tenantId = useTenantId();
   const balancesQuery = useQuery({
-    queryKey: ["accounts", tenantId, "balances"],
+    queryKey: accountBalancesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listAccountBalances(supabase, tenantId as string),
   });
@@ -125,14 +129,14 @@ export function useAccountsWithBalances(
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
   const rowsQuery = useQuery({
-    queryKey: ["accounts", tenantId, "rows", includeInactive ? "all" : "active"],
+    queryKey: accountRowsQueryKey(tenantId, includeInactive),
     enabled: !!tenantId,
     staleTime: ACCOUNT_ROWS_STALE_MS,
     queryFn: () =>
       listAccounts(supabase, tenantId as string, { includeInactive }),
   });
   const balancesQuery = useQuery({
-    queryKey: ["accounts", tenantId, "balances"],
+    queryKey: accountBalancesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listAccountBalances(supabase, tenantId as string),
   });

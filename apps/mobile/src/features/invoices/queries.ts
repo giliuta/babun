@@ -19,6 +19,10 @@ import {
 import type { InvoiceStatus } from "@babun/shared/local/finance/invoice-ledger";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import {
+  invoicePaymentsQueryKey,
+  invoicesQueryKey,
+} from "@/lib/company-query-keys";
 
 /**
  * Счета тенанта — целиком либо СРЕЗОМ ПО КЛИЕНТУ.
@@ -38,7 +42,7 @@ export function useInvoices(filter?: { clientId?: string | null }) {
   return useQuery({
     queryKey: clientId
       ? ["invoices", tenantId, "by-client", clientId]
-      : ["invoices", tenantId],
+      : invoicesQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () =>
       listInvoices(supabase, tenantId as string, clientId ? { clientId } : {}),
@@ -122,7 +126,7 @@ export function useCreditNoteLinks() {
 export function useInvoicePayments() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["invoices", tenantId, "payments"],
+    queryKey: invoicePaymentsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listInvoicePayments(supabase, tenantId as string),
   });

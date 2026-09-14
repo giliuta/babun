@@ -68,3 +68,53 @@ export const allTeamSchedulesQueryKey = (tenantId: string | null, role: Role) =>
 
 export const tenantQueryKey = (tenantId: string | null, role: Role) =>
   ["tenant", tenantId, rolePart(role)] as const;
+
+export const mastersQueryKey = (
+  tenantId: string | null,
+  role: Role,
+  includeInactive: boolean,
+) =>
+  includeInactive
+    ? (["masters", tenantId, rolePart(role), "all"] as const)
+    : (["masters", tenantId, rolePart(role)] as const);
+
+// ДЕНЬГИ. Ключи финансов и инвойсов жили строками внутри хуков — прогрев
+// другой компании обязан греть ровно их, поэтому они переехали сюда. Форма
+// каждого сверяется тестом с тем, что стояло в хуке до переезда.
+
+export const financeCategoriesQueryKey = (tenantId: string | null) =>
+  ["finance-categories", tenantId] as const;
+
+/** Срез журнала: и хук, и разовая дозагрузка выписки, и прогрев берут его
+ *  одной функцией — разъехавшиеся ключи молча завели бы две копии месяца. */
+export const ledgerRangeQueryKey = (
+  tenantId: string | null | undefined,
+  from: string,
+  to: string,
+  teamScope: readonly string[] | null,
+  accountScope: readonly string[] | null,
+) => ["transactions", tenantId, from, to, teamScope, accountScope] as const;
+
+export const refundTotalsQueryKey = (tenantId: string | null) =>
+  ["transactions", tenantId, "refund-totals"] as const;
+
+export const invoicesQueryKey = (tenantId: string | null) =>
+  ["invoices", tenantId] as const;
+
+export const invoicePaymentsQueryKey = (tenantId: string | null) =>
+  ["invoices", tenantId, "payments"] as const;
+
+export const accountRowsQueryKey = (
+  tenantId: string | null,
+  includeInactive: boolean,
+) => ["accounts", tenantId, "rows", includeInactive ? "all" : "active"] as const;
+
+export const accountBalancesQueryKey = (tenantId: string | null) =>
+  ["accounts", tenantId, "balances"] as const;
+
+/** Кассы, куда можно принять деньги по заявке команды. Сбрасывается вместе со
+ *  счетами (`invalidateAccounts`), поэтому первый сегмент — свой, отдельный. */
+export const paymentAccountsQueryKey = (
+  tenantId: string | null,
+  teamId: string | null | undefined,
+) => ["payment-accounts", tenantId, teamId ?? "no-team"] as const;

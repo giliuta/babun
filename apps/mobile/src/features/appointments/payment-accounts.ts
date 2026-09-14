@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { AccountKind, AccountScope } from "@babun/shared/local/finance/account";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { paymentAccountsQueryKey } from "@/lib/company-query-keys";
 
 // СЧЕТА, ДОСТУПНЫЕ ДЛЯ ПРИЁМА ДЕНЕГ ПО ЭТОЙ ЗАЯВКЕ.
 //
@@ -35,7 +36,7 @@ export function paymentAccountsQuery(
   teamId: string | null | undefined,
 ) {
   return {
-    queryKey: ["payment-accounts", tenantId, teamId ?? "no-team"] as const,
+    queryKey: paymentAccountsQueryKey(tenantId, teamId),
     // Набор счетов меняется раз в месяцы, а спрашивают его на каждом
     // открытии записи — держим свежим 5 минут. Правки счетов эти пять минут
     // не ждут: каждая мутация счёта сбрасывает ключ (см. invalidateAccounts
