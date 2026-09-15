@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { AccessibilityInfo, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { Client } from "@babun/shared/local/clients";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { Button } from "@/components/ui/Button";
@@ -14,7 +13,7 @@ import {
 } from "@/features/clients/ObjectFields";
 import { hasAddressPlace, objectPlacePatch } from "@/features/clients/object-address";
 import { isLikelyUrl } from "@babun/shared/common/utils/map-links";
-import { defaultObjectType, snapObjectType } from "@/features/clients/object-types";
+import { snapObjectType } from "@/features/clients/object-types";
 import { useReferenceHref } from "@/features/clients/reference-href";
 import { haptics } from "@/lib/haptics";
 import { useKeyboardShown } from "@/lib/keyboard";
@@ -49,7 +48,6 @@ const EMPTY_DRAFT: ObjectFieldsValue = {
 
 export function ObjectSheet({
   visible,
-  client,
   writer,
   initialTarget,
   onAdded,
@@ -57,7 +55,6 @@ export function ObjectSheet({
   onClose,
 }: {
   visible: boolean;
-  client: Client;
   /** Писатель `locations` — общий с листом правки: свой завёл бы вторую
    *  очередь от своего снимка массива и стирал чужие правки. */
   writer: LocationWriter;
@@ -109,26 +106,13 @@ export function ObjectSheet({
   }, [visible, initialTarget]);
 
   const typeOptions = useObjectTypeOptions(draft.type);
-  // ТИП ПРЕДЗАПОЛНЕН, НО НЕ ОБЯЗАТЕЛЕН (владелец 2026-09-10: «выбор типа
-  // объекта необязательно — можно создать объект без типа, просто ссылку или
-  // адрес»). Раньше тип не хранился, а СЧИТАЛСЯ: `draft.type || default`, и
-  // снять его было нечем — пустое значение в ту же секунду снова становилось
-  // «Домом». Теперь подстановка сеется РОВНО ОДИН РАЗ на открытие, когда
-  // словарь приехал, и дальше значение принадлежит человеку: снял в шторке —
-  // объект запишется без типа. Пустой тип продукт уже умеет: списки печатают
-  // такой объект как «Объект» (`loc.label || "Объект"`).
-  const typeSeeded = useRef(false);
-  useEffect(() => {
-    if (!visible) {
-      typeSeeded.current = false;
-      return;
-    }
-    if (typeSeeded.current || typeOptions.length === 0) return;
-    typeSeeded.current = true;
-    setDraft((d) =>
-      d.type.trim() ? d : { ...d, type: defaultObjectType(client, typeOptions) },
-    );
-  }, [visible, typeOptions, client]);
+  // ТИП НЕ ПОДСТАВЛЯЕТСЯ (владелец 2026-09-15: «не сразу „Дом“, а „добавить“…
+  // в большинстве заказов мы не знаем, дом это, вилла или квартира»). Новый
+  // объект открывается с пустым типом — дверью «Выбрать тип объекта»; выбрать
+  // можно, но не обязательно, и объект без типа записывается одним адресом.
+  // До этого лист сам сеял тип основного объекта клиента или первый тип
+  // словаря, и почти каждый объект молча становился «Домом». Пустой тип
+  // продукт уже умеет: списки печатают такой объект как «Объект».
 
   // Объект существует, когда есть адрес, части с «где» ИЛИ отмеченная точка:
   // по пину команда доедет даже без единого слова адреса — на кипрских виллах

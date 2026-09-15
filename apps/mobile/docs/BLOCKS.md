@@ -342,12 +342,17 @@
 
 ## 7. Докет «Команда · Метка» и блок «Время»
 
-**Канон:** `src/features/appointments/BookingSummary.tsx:118` (`TeamLabelRow`),
-`:273` (`WhenRow`).
+**Канон:** `src/features/appointments/TeamLabelRow.tsx:46` (`TeamLabelRow`),
+`src/features/appointments/BookingSummary.tsx:96` (`WhenRow`).
+
+Выбранная команда и метка — квадратная плитка шторки (`AppearanceTile`, 28pt,
+как `TILE` у `SelectRow`), глиф тот же, что у строки шторки: `Users` у
+команды, `UserRound` у «Личного» события. Карточки остаются белыми (владелец
+2026-09-06); пустая «Метка» — кружок акцентом (владелец 2026-09-10).
 
 ```tsx
 <TeamLabelRow
-  teamName={teamName} teamColor={teamColor} masterName={masterName}
+  teamName={teamName} teamColor={teamColor} teamIcon={teamId == null ? UserRound : Users} masterName={masterName}
   label={effectiveLabel} labelColor={labelColor} labelFromDay={labelFromDay}
   showLabel labelIcon={Bookmark} labelPlaceholder="Метка"
   onEditTeam={() => setTeamSheetOpen(true)}

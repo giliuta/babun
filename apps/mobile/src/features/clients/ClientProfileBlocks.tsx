@@ -94,7 +94,6 @@ export function ClientProfileBlocks({
           блоком, а не в карточке: кроме открытия у карточки к нему дел нет. */}
       <ObjectSheet
         visible={objectsOpen}
-        client={client}
         writer={locationWriter}
         onRequestFromClient={
           canRequestAddress ? () => void requestActions.request(client.id) : undefined

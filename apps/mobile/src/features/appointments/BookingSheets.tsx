@@ -1,5 +1,5 @@
 import { Text as NativeText, View, type TextProps } from "react-native";
-import { Circle } from "lucide-react-native";
+import { Users } from "lucide-react-native";
 import {
   PRESET_COLOR_VALUES,
   colorName,
@@ -78,7 +78,7 @@ export function TeamMasterSheet({
       }
     >
       {/* СТРОКА КОМАНДЫ — ТОТ ЖЕ ДИАЛЕКТ, ЧТО У ВЫБОРА КЛИЕНТА И ОБЪЕКТА:
-          52pt на подложке, цвет команды точкой слева, галка у выбранной.
+          52pt на подложке, плитка команды слева, галка у выбранной.
           Пилюли-чипы здесь были единственным местом в продукте, где сущность
           выбирают лентой, — а выбирают её ровно так же, как клиента. */}
       <SelectList>
@@ -87,10 +87,17 @@ export function TeamMasterSheet({
             // СТРОКА — ОБЩАЯ (сведено 2026-09-10). Диалект был тот же, но
             // разметка своя: точка 10pt вместо кружка сущности и копия
             // строки. Последняя шторка выбора вне общего примитива.
+            //
+            // ЗНАЧОК И ЦВЕТ — ТЕ ЖЕ, ЧТО У ПЛИТКИ КОМАНДЫ В ФОРМЕ (владелец
+            // 2026-09-15: «выбранное должно показываться так же, как в
+            // шторке — блок с подсветкой и иконкой — во всех»). Здесь стоял
+            // пустой кружок `Circle`, а форма рисовала ту же команду значком
+            // людей: выбрал строку с кружком — получил плитку с людьми. Без
+            // своего цвета — акцент, как у плитки (`team?.color ?? t.accent`).
             <SelectRow
               key={team.id}
-              icon={Circle}
-              color={team.color ?? undefined}
+              icon={Users}
+              color={team.color ?? t.accent}
               title={team.name}
               selected={teamId === team.id}
               accessibilityRole="radio"

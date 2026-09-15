@@ -59,6 +59,7 @@ describe("библиотека блоков указывает на живой �
       "src/features/appointments/AppointmentFilesBlock.tsx",
       "src/features/appointments/InlineNoteField.tsx",
       "src/features/appointments/BookingSummary.tsx",
+      "src/features/appointments/TeamLabelRow.tsx",
       "src/features/clients/blocks/ObjectsBlock.tsx",
       "src/components/ui/select-rows.tsx",
     ]
@@ -131,14 +132,19 @@ describe("библиотека блоков указывает на живой �
     assert.match(choose, /fontSize: 17,/, "кегль двери блока больше не 17");
     assert.match(choose, /size=\{compact \? 30 : 34\}/, "плотный кружок двери поехал");
 
-    // ВЫБРАННОЕ В БЛОКЕ — те же числа, что у двери: кружок 34 (30 в плотном),
-    // 12pt до имени, кегль 17/600. Иначе при выборе блок «прыгает».
+    // ВЫБРАННОЕ В БЛОКЕ — СТРОКА ШТОРКИ (владелец 2026-09-15: «так же, как в
+    // шторке — с подсветкой и иконкой»). Своих чисел у выбранного больше нет:
+    // оно рисуется `SelectRow`, а снизу держит 8pt — как между строками
+    // шторки, иначе подсветка ложится на край карточки.
     const ref = readFileSync(resolve(APP, "src/components/ui/ReferenceBlock.tsx"), "utf8");
-    assert.match(ref, /const size = dense \? 30 : 34;/, "кружок выбранного разошёлся с дверью");
-    assert.match(ref, /paddingHorizontal: 16,/, "боковой отступ строки блока поехал");
-    assert.match(ref, /gap: 12,/, "отступ имени от кружка поехал");
-    assert.match(ref, /minHeight: dense \? 60 : 62,/, "высота строки выбранного поехала");
-    assert.match(ref, /fontSize: 17, fontWeight: "600"/, "кегль имени в блоке поехал");
+    assert.match(ref, /<SelectRow\b/, "выбранное в блоке больше не строка шторки");
+    assert.match(ref, /paddingBottom: 8 \}/, "подсветка выбранного легла на край карточки");
+    // Подсказка VoiceOver у выбранного — та же, что у пустой двери: тап по
+    // выбранной категории открывает тот же список. Потерялась однажды вместе
+    // с дверью, когда выбранное стало строкой шторки.
+    assert.match(ref, /accessibilityHint=\{emptyHint\}/, "выбранное в блоке молчит, что откроет список");
+    const rowSource = readFileSync(resolve(APP, "src/components/ui/select-rows.tsx"), "utf8");
+    assert.match(rowSource, /accessibilityHint=\{accessibilityHint\}/, "строка шторки глотает подсказку VoiceOver");
     assert.match(
       ref,
       /\/\^#\[0-9a-f\]\{6\}\$\/i\.test\(tint\)/,

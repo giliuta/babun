@@ -152,11 +152,8 @@ import {
 } from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import {
-  TeamLabelRow,
-  TotalRow,
-  WhenRow,
-} from "@/features/appointments/BookingSummary";
+import { TotalRow, WhenRow } from "@/features/appointments/BookingSummary";
+import { TeamLabelRow } from "@/features/appointments/TeamLabelRow";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
@@ -2858,6 +2855,7 @@ export default function BookScreen() {
               <TeamLabelRow
                 teamName={teamId == null ? "Личное" : team?.name ?? "Команда"}
                 teamColor={teamId == null ? t.accent : team?.color ?? t.accent}
+                teamIcon={teamId == null ? UserRound : Users}
                 label={effectiveLabel}
                 labelColor={
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
@@ -3257,7 +3255,6 @@ export default function BookScreen() {
       {client ? (
         <ObjectSheet
           visible={objectSheet}
-          client={client}
           writer={locationWriter}
           initialTarget={locationId ? "" : address}
           onRequestFromClient={
@@ -3418,6 +3415,8 @@ export default function BookScreen() {
       <PickerSheet
         visible={eventTeamSheetOpen}
         title="Команда"
+        // Отмечена текущая, «Личное» тоже — как в листе команды записи.
+        selectedId={teamId ?? "personal"}
         items={[
           {
             id: "personal",

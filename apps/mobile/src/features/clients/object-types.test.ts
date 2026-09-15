@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   appendOnly,
-  defaultObjectType,
   objectTypeKey,
   objectTypeVocabulary,
   snapObjectType,
@@ -113,31 +112,6 @@ describe("защита пальца: словарь только дописыв�
   test("нечего дописывать — возвращается ТОТ ЖЕ массив", () => {
     const shown = ["Дом", "Офис"];
     assert.equal(appendOnly(shown, ["Дом"]), shown);
-  });
-});
-
-describe("подстановка типа новому объекту", () => {
-  test("берётся тип основного объекта этого же клиента", () => {
-    const c = {
-      locations: [
-        { label: "Офис", isPrimary: false },
-        { label: "Вилла", isPrimary: true },
-      ],
-    };
-    assert.equal(defaultObjectType(c as never, ["Дом"]), "Вилла");
-  });
-
-  test("заглушка «Объект» за тип не считается", () => {
-    const c = { locations: [{ label: "Объект", isPrimary: true }] };
-    assert.equal(defaultObjectType(c as never, ["Квартира"]), "Квартира");
-  });
-
-  test("у нового клиента — первый тип словаря", () => {
-    assert.equal(defaultObjectType(null, ["Квартира", "Дом"]), "Квартира");
-  });
-
-  test("совсем ничего — «Дом»", () => {
-    assert.equal(defaultObjectType(null, []), "Дом");
   });
 });
 

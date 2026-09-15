@@ -1,8 +1,8 @@
-import { Pressable, Text, View } from "react-native";
+import { View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 import { ChooseRow } from "@/components/ui/ChooseRow";
 import { SectionCard } from "@/components/ui/SectionCard";
-import { ICON } from "@/components/ui/tokens";
+import { SelectRow } from "@/components/ui/select-rows";
 import { useThemeColors } from "@/theme/colors";
 
 // БЛОК ВЫБОРА ИЗ СПРАВОЧНИКА — ОДНО ТЕЛО НА ВСЕ СПРАВОЧНИКИ (владелец
@@ -19,21 +19,21 @@ import { useThemeColors } from "@/theme/colors";
 // которая звучит дважды («КАТЕГОРИЯ» сверху и «Категория» в строке, значение
 // мелким серым у правого края) — это два заголовка и спрятанное значение.
 //
+// ВЫБРАННОЕ — ТА ЖЕ СТРОКА, ЧТО В ШТОРКЕ (владелец 2026-09-15: «в категориях
+// должно показываться так же, как в шторке — красивый блок с подсветкой и
+// иконкой, и так во всех»). Здесь стоял бледный кружок со значком, окрашенным
+// цветом записи, а шторка рисует ту же запись строкой, подсвеченной её цветом,
+// с квадратной плиткой, залитой им в полную силу. Одна категория выглядела
+// двумя вещами: выбрал «Товары» подсвеченной строкой — получил кружок. Теперь
+// блок рисует `SelectRow` шторки как есть, и расходиться нечему.
+//
 // ЗНАЧОК И ЦВЕТ — ИЗ САМОЙ ЗАПИСИ СПРАВОЧНИКА, И ЗНАЧОК ТОЛЬКО ИЗ СЛОВАРЯ
-// (владелец 2026-09-10: «переделай категории так же, как события; эмодзи
-// убираем, это не надо»). Различает записи ЦВЕТ; эмодзи из базы рисовались
-// вперемешку со значками словаря, и строка категории была единственной в
-// продукте, которая выглядела иначе, чем строка команды, метки и типа
-// события. Кружок и его размер — те же, что у строки-двери, поэтому при
-// выборе ничего не прыгает.
+// (владелец 2026-09-10: «эмодзи убираем, это не надо»). Своего значка у записи
+// может не быть — тогда общий значок сущности, тот же, что на закрытой двери.
 //
 // ЛЕНТЫ ПЛИТОК ЗДЕСЬ НЕТ. Тип события до 2026-09-10 стоял горизонтальной
-// лентой кружков с подписями: свой жест (листать вбок), своя геометрия (40pt
-// кружок, подпись 11pt в две строки), своя дверь в справочник (ползунки в
-// шапке блока) и свой способ снять выбор (повторный тап). Всё это — второй
-// диалект выбора в продукте, где выбор уже описан: блок + шторка. Владелец
-// свёл их: «мне кажется, тип события будет гораздо лучше выглядеть под
-// категорию».
+// лентой кружков с подписями — второй диалект выбора в продукте, где выбор уже
+// описан: блок + шторка.
 
 export interface ReferenceValue {
   /** Имя записи справочника — то, что человек и выбирал. */
@@ -84,52 +84,28 @@ export function ReferenceBlock({
   }
 
   const tint = value.color ?? t.accent;
-  // Подложка кружка — цвет записи в 12%. Токены темы записаны в `rgba()`, и
-  // приписать к ним альфу строкой нельзя: `rgba(...)1f` — не цвет, RN рисует
-  // им ЧЁРНЫЙ кружок (поймано на симуляторе 2026-09-08 на плитках типов).
-  const fill = /^#[0-9a-f]{6}$/i.test(tint) ? `${tint}1f` : t.rowFill;
-  const size = dense ? 30 : 34;
-  // Своего значка у записи может не быть — тогда стоит общий значок сущности,
-  // тот же, что на закрытой двери: пустого кружка в блоке не бывает.
-  const Glyph = value.Icon ?? emptyIcon;
+  // Строка шторки приписывает цвету альфу строкой (`${color}14`). Токены темы
+  // записаны в `rgba()`, и `rgba(...)14` — не цвет: RN рисует им ЧЁРНУЮ
+  // подложку (поймано на симуляторе 2026-09-08). Не hex — строка без краски.
+  const color = /^#[0-9a-f]{6}$/i.test(tint) ? tint : undefined;
 
   return (
     <SectionCard title={title} dense={dense}>
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`${title}: ${value.name}`}
-        accessibilityHint={emptyHint}
-        style={({ pressed }) => ({
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 16,
-          paddingVertical: dense ? 10 : 12,
-          minHeight: dense ? 60 : 62,
-          backgroundColor: pressed ? t.pressed : "transparent",
-        })}
-      >
-        <View
-          style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: fill,
-          }}
-        >
-          <Glyph color={tint} size={dense ? ICON.sm : ICON.md} strokeWidth={2.2} />
-        </View>
-        <Text
-          maxFontSizeMultiplier={1.2}
-          numberOfLines={1}
-          style={{ flex: 1, fontSize: 17, fontWeight: "600", color: t.ink }}
-        >
-          {value.name}
-        </Text>
-      </Pressable>
+      {/* Снизу 8pt — как между строками шторки: без них подсвеченная строка
+          ложилась на нижний край карточки (поймано на листе операции). Сверху
+          в плотном листе ноль — шапка там уже держит отступ. */}
+      <View style={{ paddingHorizontal: 8, paddingTop: dense ? 0 : 4, paddingBottom: 8 }}>
+        <SelectRow
+          icon={value.Icon ?? emptyIcon}
+          color={color}
+          title={value.name}
+          accessibilityLabel={`${title}: ${value.name}`}
+          // Та же подсказка, что у пустой двери: тап по выбранному открывает
+          // тот же список, и VoiceOver обязан сказать это в обоих состояниях.
+          accessibilityHint={emptyHint}
+          onPress={onPress}
+        />
+      </View>
     </SectionCard>
   );
 }

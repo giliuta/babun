@@ -98,20 +98,6 @@ export function snapObjectType(
   return vocabulary.find((v) => objectTypeKey(v) === key) ?? name;
 }
 
-/** Тип, который подставляется НОВОМУ объекту, чтобы обычный объект
- *  заводился, не касаясь этой строки: тип основного объекта того же клиента →
- *  первый тип словаря → «Дом». Значение-заглушка «Объект» за тип не считаем. */
-export function defaultObjectType(
-  client: { locations?: { label?: string; isPrimary?: boolean }[] } | null
-    | undefined,
-  vocabulary: readonly string[],
-): string {
-  const locs = client?.locations ?? [];
-  const own = (locs.find((l) => l.isPrimary) ?? locs[0])?.label?.trim();
-  if (own && objectTypeKey(own) !== "объект") return own;
-  return vocabulary[0] ?? STANDARD_OBJECT_TYPES[0];
-}
-
 /** Слияние БЕЗ ПЕРЕСТАНОВОК: уже показанный порядок сохраняется как есть, а
  *  всё новое дописывается в хвост. Это и есть защита пальца — вынесена в
  *  чистую функцию, чтобы её можно было проверить тестом, а не «на глаз». */
