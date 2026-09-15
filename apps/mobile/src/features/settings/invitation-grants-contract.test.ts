@@ -123,3 +123,24 @@ describe("invitation calendar grants have one body", () => {
     assert.match(archive.body, /m\.user_id = old\.user_id or m\.id = old\.master_id/, archive.file);
   });
 });
+
+// МАСТЕР МЕНЯЕТ СТАТУС СВОЕЙ ЗАПИСИ (15.09). Любая правка записи мастером
+// падала `record "new" has no field "is_demo"`: колонку сняли, а сторож
+// `appointments_master_column_guard` продолжал её сравнивать. Владельца и
+// диспетчера сторож пропускает первой строкой, поэтому поломку видит только
+// мастер. Тест ловит возврат старой копии тела.
+describe("the master column guard reads only live columns", () => {
+  const guard = latestDefinition("appointments_master_column_guard");
+
+  test("the latest guard body does not compare the dropped is_demo column", () => {
+    assert.ok(guard, "no migration defines public.appointments_master_column_guard");
+    assert.doesNotMatch(guard.body, /is_demo/, guard.file);
+  });
+
+  test("the guard still leaves a master only status and comment", () => {
+    assert.ok(guard, "no migration defines public.appointments_master_column_guard");
+    assert.match(guard.body, /master role can only update status and comment on work appointments/, guard.file);
+    assert.doesNotMatch(guard.body, /new\.status is distinct from old\.status/, guard.file);
+    assert.doesNotMatch(guard.body, /new\.comment is distinct from old\.comment/, guard.file);
+  });
+});
