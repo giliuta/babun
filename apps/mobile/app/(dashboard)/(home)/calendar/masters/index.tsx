@@ -7,7 +7,6 @@ import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Divider } from "@/components/ui/Divider";
-import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
@@ -17,7 +16,11 @@ import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
 import { InviteMemberSheet } from "@/features/access/InviteMemberSheet";
 import { MemberRow, PendingInvitationRow } from "@/features/access/PeopleRows";
-import { AccessRequestError, useCalendarMembers } from "@/features/access/queries";
+import {
+  AccessRequestError,
+  useCalendarMembers,
+  type CalendarMember,
+} from "@/features/access/queries";
 
 // Мастера календаря — корневой экран nav-хаба (masters/index.tsx). Сверху люди
 // с доступом к календарю и приглашения, на которые ещё не ответили; ниже
@@ -27,6 +30,13 @@ import { AccessRequestError, useCalendarMembers } from "@/features/access/querie
 // «Новый мастер · Имя · Телефон»: «мы договорились по почте»). Модалка,
 // заводившая карточку без аккаунта, снесена: без аккаунта мастера не заводим
 // (STORY-081). Шторка приглашения — `features/access/InviteMemberSheet`.
+type PendingInvitation = NonNullable<ReturnType<typeof usePendingInvitations>["data"]>[number];
+
+type MastersRow =
+  | { kind: "member"; key: string; member: CalendarMember }
+  | { kind: "invite"; key: string; invitation: PendingInvitation }
+  | { kind: "card"; key: string; master: Master };
+
 export default function MastersScreen() {
   const t = useThemeColors();
   const router = useRouter();
@@ -121,7 +131,29 @@ export default function MastersScreen() {
   }, [calendarInvitations, search]);
 
   const hasAnyone = allMasters.length > 0 || staff.length > 0 || calendarInvitations.length > 0;
-  const hasPeople = members.length > 0 || pending.length > 0;
+
+  // ОДИН СПИСОК МАСТЕРОВ КАЛЕНДАРЯ, БЕЗ ПЛАШЕК (владелец 15.09: «не нравится
+  // „С доступом к календарю", вот эта плашка»). Экран делился тремя подписями —
+  // «С доступом к календарю», «Ждут ответа», «Карточки мастеров», — и человек
+  // читал устройство базы, а не свою команду. Теперь это один ряд: кто
+  // работает, кого позвали (строка сама говорит «ждёт ответа»), старые
+  // карточки — в том же ряду и тем же видом.
+  const rows = useMemo<MastersRow[]>(
+    () => [
+      ...members.map((member): MastersRow => ({
+        kind: "member",
+        key: `member:${member.userId}`,
+        member,
+      })),
+      ...pending.map((invitation): MastersRow => ({
+        kind: "invite",
+        key: `invite:${invitation.id}`,
+        invitation,
+      })),
+      ...cards.map((master): MastersRow => ({ kind: "card", key: `card:${master.id}`, master })),
+    ],
+    [members, pending, cards],
+  );
 
   // Тинт аватара по основной команде мастера (цвет команды), как на вебе.
   const teamColorById = useMemo(() => {
@@ -156,8 +188,8 @@ export default function MastersScreen() {
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={cards}
-          keyExtractor={(m) => m.id}
+          data={rows}
+          keyExtractor={(row) => row.key}
           contentContainerStyle={{ flexGrow: 1 }}
           ListHeaderComponent={
             <>
@@ -182,36 +214,6 @@ export default function MastersScreen() {
                   />
                 </View>
               ) : null}
-              {members.length > 0 ? (
-                <View>
-                  <SectionEyebrow>С доступом к календарю</SectionEyebrow>
-                  {members.map((member, i) => (
-                    <View key={member.userId}>
-                      {i > 0 ? <Divider inset={64} /> : null}
-                      <MemberRow
-                        member={member}
-                        tint={(teamId && teamColorById.get(teamId)) || t.faint}
-                        onPress={() =>
-                          router.push(
-                            `/calendar/masters/access/${member.userId}?team=${encodeURIComponent(teamId ?? "")}` as Href,
-                          )
-                        }
-                      />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-              {pending.length > 0 ? (
-                <View>
-                  <SectionEyebrow>Ждут ответа</SectionEyebrow>
-                  {pending.map((invitation, i) => (
-                    <View key={invitation.id}>
-                      {i > 0 ? <Divider inset={64} /> : null}
-                      <PendingInvitationRow invitation={invitation} />
-                    </View>
-                  ))}
-                </View>
-              ) : null}
               {membersFailed ? (
                 <EmptyState
                   state="error"
@@ -219,23 +221,40 @@ export default function MastersScreen() {
                   action={{ label: "Повторить", onPress: () => void membersQuery.refetch() }}
                 />
               ) : null}
-              {hasPeople && cards.length > 0 ? (
-                <SectionEyebrow>Карточки мастеров</SectionEyebrow>
-              ) : null}
             </>
           }
-          renderItem={({ item }) => (
-            <MasterRow
-              master={item}
-              tint={
-                item.team_id ? teamColorById.get(item.team_id) ?? t.faint : t.faint
-              }
-              onPress={() => router.push(`/calendar/masters/${item.id}`)}
-            />
-          )}
+          renderItem={({ item }) => {
+            if (item.kind === "member") {
+              return (
+                <MemberRow
+                  member={item.member}
+                  tint={(teamId && teamColorById.get(teamId)) || t.faint}
+                  onPress={() =>
+                    router.push(
+                      `/calendar/masters/access/${item.member.userId}?team=${encodeURIComponent(teamId ?? "")}` as Href,
+                    )
+                  }
+                />
+              );
+            }
+            if (item.kind === "invite") {
+              return <PendingInvitationRow invitation={item.invitation} />;
+            }
+            return (
+              <MasterRow
+                master={item.master}
+                tint={
+                  item.master.team_id
+                    ? teamColorById.get(item.master.team_id) ?? t.faint
+                    : t.faint
+                }
+                onPress={() => router.push(`/calendar/masters/${item.master.id}`)}
+              />
+            );
+          }}
           ItemSeparatorComponent={() => <Divider inset={64} />}
           ListEmptyComponent={
-            hasPeople || membersFailed ? null : (
+            membersFailed ? null : (
               <EmptyState
                 fill
                 title={search.trim() ? "Ничего не найдено" : "Нет мастеров"}
