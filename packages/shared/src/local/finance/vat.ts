@@ -110,13 +110,19 @@ export interface VatOverride {
 export function effectiveVatSettings(
   tenant: VatSettings | undefined,
   teamOverride: VatOverride | null | undefined,
-  accountMode: VatMode | null | undefined,
+  accountMode: VatMode | "on" | null | undefined,
 ): VatSettings {
   if (!tenant || tenant.mode === "off") return VAT_OFF;
-  return {
-    mode: accountMode ?? teamOverride?.mode ?? tenant.mode,
-    rate: teamOverride?.rate ?? tenant.rate,
-  };
+  // «С НДС» у счёта (`on`, 2026-09-15) включает налог, но не выбирает, как
+  // его считать: режим — у команды, а выключенный у команды — у компании.
+  // Сервер делает то же в `fill_transaction_vat` (миграция account_vat_switch).
+  const mode =
+    accountMode === "on"
+      ? teamOverride?.mode && teamOverride.mode !== "off"
+        ? teamOverride.mode
+        : tenant.mode
+      : (accountMode ?? teamOverride?.mode ?? tenant.mode);
+  return { mode, rate: teamOverride?.rate ?? tenant.rate };
 }
 
 // ─── ДЕНЬГИ СЧИТАЮТСЯ В ЦЕЛЫХ ЦЕНТАХ ────────────────────────────────────

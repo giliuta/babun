@@ -143,7 +143,7 @@ export interface AccountDraft {
    *  форма создания об этом не спрашивает, выключают потом в настройках. */
   show_in_payments?: boolean;
   /** Режим НДС этого счёта. null — как у команды/компании. */
-  vat_mode?: "off" | "inclusive" | "exclusive" | null;
+  vat_mode?: "off" | "inclusive" | "exclusive" | "on" | null;
 }
 
 function assertOpeningBalance(amount: number | undefined): void {
