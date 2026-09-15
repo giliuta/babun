@@ -7,6 +7,7 @@ import {
   Mail,
 } from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
+import { GradientButton } from "@/components/ui/GradientButton";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -25,9 +26,25 @@ import {
   rememberPendingInvitationToken,
 } from "@/features/settings/pending-invitation";
 import {
+  InvitationGoneError,
   invitationErrorMessage,
   isInvitationToken,
 } from "@/features/settings/invitation-flow";
+
+// ПРИГЛАШЕНИЕ ПО ССЫЛКЕ.
+//
+// ОДНА КНОПКА — ВНИЗУ, В КАРТОЧКАХ ТОЛЬКО СЛОВА (владелец 15.09 на «Повторить»
+// внутри карточки: «почему кнопка не внизу — почему она не соблюдает нашу
+// архитектуру»). Действие экрана одно и живёт в футере, как у всех экранов;
+// вторая кнопка появляется под первой только там, где у человека правда два
+// пути (войти или создать аккаунт).
+//
+// ПРИГЛАШЕНИЯ БОЛЬШЕ НЕТ — ССЫЛКА ЗАБЫВАЕТСЯ (владелец 15.09: «вечная хуета
+// открывается»). Токен запоминается, чтобы после входа вернуть человека сюда
+// (`(auth)/_layout.tsx`), и раньше стирался только при истёкшем сроке:
+// отозванное или удалённое приглашение возвращало этот экран при каждом входе.
+// Теперь ссылка забывается, как только сервер ответил «такого нет», и когда
+// человек сам уходит с экрана. Обрыв связи ссылку не трогает — это не ответ.
 
 export default function InvitationScreen() {
   const t = useThemeColors();
@@ -40,15 +57,16 @@ export default function InvitationScreen() {
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const gone = preview.error instanceof InvitationGoneError;
+  const expired = preview.data?.state === "expired";
+
   useEffect(() => {
     if (token) void rememberPendingInvitationToken(token);
   }, [token]);
 
   useEffect(() => {
-    if (token && preview.data?.state === "expired") {
-      void clearPendingInvitationToken(token);
-    }
-  }, [preview.data?.state, token]);
+    if (token && (gone || expired)) void clearPendingInvitationToken(token);
+  }, [gone, expired, token]);
 
   const expiry = useMemo(() => {
     if (!preview.data?.expiresAt) return "";
@@ -80,208 +98,202 @@ export default function InvitationScreen() {
     }
   };
 
+  // Ушёл с экрана сам — ссылка больше не возвращает его сюда при каждом входе.
   const goBack = () => {
+    if (token) void clearPendingInvitationToken(token);
     if (session) router.replace("/");
     else router.replace("/login");
   };
 
-  return (
-    <Screen edges={["top"]}>
-      <ScreenHeader title="Приглашение в CRM" onBack={goBack} />
-      <ScrollView
-        contentContainerStyle={{ paddingTop: 20, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        {!token ? (
-          <MessageCard
-            title="Ссылка повреждена"
-            text="Попросите владельца компании отправить новое приглашение."
-          />
-        ) : preview.isLoading ? (
-          <View className="items-center px-6 py-20">
-            <Spinner size={28} label="Проверяем приглашение" />
-            <Text style={{ marginTop: 12, fontSize: 14, color: t.sub }}>
-              Проверяем приглашение…
-            </Text>
+  const ready = !!token && !!preview.data && !expired;
+
+  let content: ReactNode;
+  let footer: ReactNode = null;
+  if (!token) {
+    content = (
+      <MessageCard
+        title="Ссылка повреждена"
+        text="Попросите владельца компании отправить новое приглашение."
+      />
+    );
+    footer = <GradientButton label="Готово" onPress={goBack} />;
+  } else if (preview.isLoading) {
+    content = (
+      <View className="items-center px-6 py-20">
+        <Spinner size={28} label="Проверяем приглашение" />
+        <Text style={{ marginTop: 12, fontSize: 14, color: t.sub }}>
+          Проверяем приглашение…
+        </Text>
+      </View>
+    );
+  } else if (gone) {
+    content = (
+      <MessageCard
+        title="Приглашения больше нет"
+        text="Попросите владельца отправить новое приглашение."
+      />
+    );
+    footer = <GradientButton label="Готово" onPress={goBack} />;
+  } else if (preview.isError || !preview.data) {
+    content = (
+      <MessageCard title="Нет связи" text="Проверьте интернет и повторите." />
+    );
+    footer = (
+      <GradientButton label="Повторить" onPress={() => void preview.refetch()} />
+    );
+  } else {
+    content = (
+      <>
+        <View className="items-center px-6 pb-5">
+          <View
+            className="h-16 w-16 items-center justify-center rounded-[10px]"
+            style={{ backgroundColor: t.fill }}
+          >
+            <Building2 color={t.accent} size={30} />
           </View>
-        ) : preview.isError || !preview.data ? (
-          <MessageCard
-            title="Не удалось открыть приглашение"
-            text={
-              preview.error instanceof Error
-                ? preview.error.message
-                : "Проверьте интернет и повторите."
-            }
-            action={{
-              label: "Повторить",
-              onPress: () => void preview.refetch(),
+          <Text
+            style={{
+              marginTop: 14,
+              textAlign: "center",
+              fontSize: 24,
+              fontWeight: "700",
+              color: t.ink,
             }}
+          >
+            {preview.data.tenantName}
+          </Text>
+          <Text
+            style={{
+              marginTop: 5,
+              textAlign: "center",
+              fontSize: 14,
+              lineHeight: 20,
+              color: t.sub,
+            }}
+          >
+            Владелец приглашает вас работать в этой компании.
+          </Text>
+        </View>
+
+        <SectionCard>
+          {/* Роль не показываем (владелец 15.09: «роль уберём, она в
+              целом нам не нужна»): человек видит, куда его зовут. */}
+          {preview.data.teamName ? (
+            <>
+              <InfoRow
+                icon={<CalendarRange color={t.accent} size={ICON.sm} />}
+                label="Календарь"
+                value={preview.data.teamName}
+              />
+              <Divider inset={52} />
+            </>
+          ) : null}
+          <InfoRow
+            icon={<Mail color={t.accent} size={ICON.sm} />}
+            label="Аккаунт"
+            value={preview.data.emailHint}
+          />
+        </SectionCard>
+
+        {expired ? (
+          <MessageCard
+            title="Срок приглашения истёк"
+            text="Попросите владельца отправить новое приглашение."
           />
         ) : (
-          <>
-            <View className="items-center px-6 pb-5">
-              <View
-                className="h-16 w-16 items-center justify-center rounded-[10px]"
-                style={{ backgroundColor: t.fill }}
-              >
-                <Building2 color={t.accent} size={30} />
-              </View>
+          <View className="px-4 pt-6">
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 13,
+                lineHeight: 18,
+                color: t.sub,
+              }}
+            >
+              {session
+                ? `Вы вошли как ${session.user.email ?? "пользователь Babun"}`
+                : "Войдите под указанным email. После входа Babun вернёт вас на эту страницу."}
+            </Text>
+            {actionError ? (
               <Text
+                accessibilityRole="alert"
                 style={{
-                  marginTop: 14,
+                  marginTop: 12,
                   textAlign: "center",
-                  fontSize: 24,
-                  fontWeight: "700",
-                  color: t.ink,
+                  fontSize: 13,
+                  lineHeight: 18,
+                  color: t.danger,
                 }}
               >
-                {preview.data.tenantName}
+                {actionError}
               </Text>
+            ) : null}
+            {expiry ? (
               <Text
                 style={{
-                  marginTop: 5,
+                  marginTop: 12,
                   textAlign: "center",
-                  fontSize: 14,
-                  lineHeight: 20,
-                  color: t.sub,
+                  fontSize: 12,
+                  color: t.faint,
                 }}
               >
-                Владелец приглашает вас работать в этой компании.
+                Ссылка действует до {expiry}
               </Text>
-            </View>
-
-            <SectionCard>
-              {/* Роль не показываем (владелец 15.09: «роль уберём, она в
-                  целом нам не нужна»): человек видит, куда его зовут. */}
-              {preview.data.teamName ? (
-                <>
-                  <InfoRow
-                    icon={<CalendarRange color={t.accent} size={ICON.sm} />}
-                    label="Календарь"
-                    value={preview.data.teamName}
-                  />
-                  <Divider inset={52} />
-                </>
-              ) : null}
-              <InfoRow
-                icon={<Mail color={t.accent} size={ICON.sm} />}
-                label="Аккаунт"
-                value={preview.data.emailHint}
-              />
-            </SectionCard>
-
-            {preview.data.state === "expired" ? (
-              <MessageCard
-                title="Срок приглашения истёк"
-                text="Попросите владельца создать и отправить новую ссылку."
-              />
-            ) : (
-              <View className="px-4 pt-6">
-                {session ? (
-                  <Text
-                    style={{
-                      marginBottom: 12,
-                      textAlign: "center",
-                      fontSize: 13,
-                      color: t.sub,
-                    }}
-                  >
-                    Вы вошли как {session.user.email ?? "пользователь Babun"}
-                  </Text>
-                ) : (
-                  <Text
-                    style={{
-                      marginBottom: 12,
-                      textAlign: "center",
-                      fontSize: 13,
-                      lineHeight: 18,
-                      color: t.sub,
-                    }}
-                  >
-                    Войдите под указанным email. После входа Babun вернёт вас
-                    на эту страницу.
-                  </Text>
-                )}
-
-                {actionError ? (
-                  <View
-                    className="mb-3 rounded-[10px] px-4 py-3"
-                    style={{
-                      backgroundColor: t.surface,
-                      borderWidth: 1,
-                      borderColor: t.danger,
-                    }}
-                    accessibilityRole="alert"
-                  >
-                    <Text
-                      style={{
-                        textAlign: "center",
-                        fontSize: 13,
-                        lineHeight: 18,
-                        color: t.danger,
-                      }}
-                    >
-                      {actionError}
-                    </Text>
-                  </View>
-                ) : null}
-
-                {session ? (
-                  <>
-                    <Button
-                      label={
-                        working
-                          ? "Подключаем компанию…"
-                          : "Принять приглашение"
-                      }
-                      onPress={() => void accept()}
-                      loading={working}
-                      disabled={working}
-                    />
-                    {actionError?.includes("другой email") ? (
-                      <View className="mt-3">
-                        <Button
-                          label="Войти под другим аккаунтом"
-                          variant="secondary"
-                          onPress={() => void signOutAndWipe()}
-                          disabled={working}
-                        />
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      label="Войти и принять"
-                      onPress={() => void goToAuth("/login")}
-                    />
-                    <View className="mt-3">
-                      <Button
-                        label="Создать аккаунт"
-                        variant="secondary"
-                        onPress={() => void goToAuth("/register")}
-                      />
-                    </View>
-                  </>
-                )}
-
-                {expiry ? (
-                  <Text
-                    style={{
-                      marginTop: 12,
-                      textAlign: "center",
-                      fontSize: 12,
-                      color: t.faint,
-                    }}
-                  >
-                    Ссылка действует до {expiry}
-                  </Text>
-                ) : null}
-              </View>
-            )}
-          </>
+            ) : null}
+          </View>
         )}
+      </>
+    );
+    if (expired) {
+      footer = <GradientButton label="Готово" onPress={goBack} />;
+    } else if (ready && session) {
+      footer = (
+        <>
+          <GradientButton
+            label={working ? "Подключаем компанию…" : "Принять приглашение"}
+            onPress={() => void accept()}
+            loading={working}
+            disabled={working}
+          />
+          {actionError?.includes("другой email") ? (
+            <Button
+              label="Войти под другим аккаунтом"
+              variant="secondary"
+              onPress={() => void signOutAndWipe()}
+              disabled={working}
+            />
+          ) : null}
+        </>
+      );
+    } else if (ready) {
+      footer = (
+        <>
+          <GradientButton label="Войти и принять" onPress={() => void goToAuth("/login")} />
+          <Button
+            label="Создать аккаунт"
+            variant="secondary"
+            onPress={() => void goToAuth("/register")}
+          />
+        </>
+      );
+    }
+  }
+
+  return (
+    <Screen edges={["top", "bottom"]}>
+      <ScreenHeader title="Приглашение в CRM" onBack={goBack} />
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingTop: 20, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {content}
       </ScrollView>
+      {footer ? (
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 8 }}>
+          {footer}
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -310,15 +322,8 @@ function InfoRow({
   );
 }
 
-function MessageCard({
-  title,
-  text,
-  action,
-}: {
-  title: string;
-  text: string;
-  action?: { label: string; onPress: () => void };
-}) {
+/** Сообщение экрана — только слова. Действие у экрана одно и живёт в футере. */
+function MessageCard({ title, text }: { title: string; text: string }) {
   const t = useThemeColors();
   return (
     <SectionCard padded className="mt-4">
@@ -330,11 +335,6 @@ function MessageCard({
       >
         {text}
       </Text>
-      {action ? (
-        <View className="mt-4">
-          <Button label={action.label} onPress={action.onPress} />
-        </View>
-      ) : null}
     </SectionCard>
   );
 }

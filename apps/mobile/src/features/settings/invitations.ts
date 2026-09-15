@@ -9,7 +9,9 @@ import {
   pendingInvitationQueryKey,
 } from "./pending-invitation";
 import {
+  InvitationGoneError,
   invitationErrorMessage,
+  isGoneInvitationMessage,
   isInvitableRole,
   isInvitationToken,
   seededInvitationRole,
@@ -79,9 +81,14 @@ export function useInvitationPreview(token: string | null) {
       const { data, error } = await supabase.rpc("invitation_preview", {
         p_token: token,
       });
-      if (error) throw new Error(invitationErrorMessage(error.message));
+      // «Такого приглашения нет» — ответ сервера, а не обрыв: экран забудет
+      // запомненную ссылку и перестанет открываться при каждом входе.
+      if (error) {
+        const text = invitationErrorMessage(error.message);
+        throw isGoneInvitationMessage(error.message) ? new InvitationGoneError(text) : new Error(text);
+      }
       if (data == null) {
-        throw new Error("Приглашение не найдено или ссылка повреждена.");
+        throw new InvitationGoneError("Приглашение не найдено или ссылка повреждена.");
       }
       return parsePreview(data);
     },
