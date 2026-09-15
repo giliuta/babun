@@ -79,6 +79,7 @@ export function SummaryToggle({
   quiet,
   a11yValue,
   active,
+  locked = false,
   onPress,
 }: {
   label: string;
@@ -97,15 +98,23 @@ export function SummaryToggle({
    *  это «три документа ждут оплаты», и вслух строка обязана сказать это. */
   a11yValue?: string;
   active: boolean;
+  /** ДЕНЕГ ЗА СТРОКОЙ ЭТОМУ ЧЕЛОВЕКУ НЕ ПОКАЗЫВАЮТ (владелец 15.09: «доход
+   *  серым, расход серым, долги серым, прибыль серым»). Точка, ярлык и
+   *  значение — одним серым, строка не нажимается. Цвет смысла здесь соврал
+   *  бы: зелёная точка у «Дохода» обещает деньги, которых экран не считал. */
+  locked?: boolean;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
+      disabled={locked}
       accessibilityRole="button"
-      accessibilityState={{ expanded: active }}
-      accessibilityLabel={`${label}: ${a11yValue ?? value}`}
+      accessibilityState={{ expanded: active, disabled: locked }}
+      // Закрытая строка не называет сумму вслух: «Доход: €0» прозвучал бы
+      // фактом о деньгах, а их здесь просто не показывают.
+      accessibilityLabel={`${label}: ${locked ? "нет доступа" : (a11yValue ?? value)}`}
       // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
       // за счёт зазора, вид не меняется (тот же приём, что у Chip).
       hitSlop={{ top: 3, bottom: 3 }}
@@ -117,21 +126,24 @@ export function SummaryToggle({
         // Тинта ХВАТАЕТ: цветная рамка была третьей грамматикой выбора на
         // продукт (у Chip — заливка, у оттиск-рядов — углубление материала), и
         // 1.5px контур нигде больше не встречался.
-        backgroundColor: active ? color + "1a" : t.surface,
+        backgroundColor: active && !locked ? color + "1a" : t.surface,
         borderCurve: "continuous",
       }}
     >
       <View
         className="h-1.5 w-1.5 rounded-full"
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: locked ? t.muted : color }}
       />
-      <Text className="ml-2 text-sm font-semibold" style={{ color: t.sub }}>
+      <Text
+        className="ml-2 text-sm font-semibold"
+        style={{ color: locked ? t.muted : t.sub }}
+      >
         {label}
       </Text>
       <Text
-        className={`ml-auto text-[15px] ${quiet ? "font-semibold" : "font-bold"}`}
+        className={`ml-auto text-[15px] ${quiet || locked ? "font-semibold" : "font-bold"}`}
         style={{
-          color: quiet ? t.caption : color,
+          color: locked ? t.muted : quiet ? t.caption : color,
           fontVariant: ["tabular-nums"],
         }}
       >
@@ -159,6 +171,7 @@ export function FinanceOverview({
   showDocuments = true,
   view,
   onTap,
+  locked = false,
 }: {
   teams: Team[];
   scopeTeamId: string | null;
@@ -175,6 +188,11 @@ export function FinanceOverview({
   showDocuments?: boolean;
   view: HomeView;
   onTap: (v: HomeView) => void;
+  /** ФИНАНСЫ ЭТОЙ КОМПАНИИ ЧЕЛОВЕКУ ЗАКРЫТЫ (`LockedFinances`, владелец 15.09:
+   *  «всё серое, всё по нулям, но переключаться можно»). Период и плитки
+   *  серые и не нажимаются; лента команд остаётся живой — по ней уходят в
+   *  компанию, где деньги этого человека есть. */
+  locked?: boolean;
 }) {
   const t = useThemeColors();
 
@@ -217,7 +235,9 @@ export function FinanceOverview({
         onSelect={calendarChips.pick}
       />
 
-      {/* period row — NAME opens the preset list, DATES open the wheels */}
+      {/* period row — NAME opens the preset list, DATES open the wheels.
+          У закрытых финансов ряд серый и глухой: месяц назван, а выбирать
+          период не для чего — денег за ним не покажут. */}
       <View
         className="flex-row items-center justify-between px-4"
         style={{
@@ -231,26 +251,40 @@ export function FinanceOverview({
       >
         <Pressable
           onPress={onOpenPresets}
+          disabled={locked}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={`Период: ${periodTitle(period)}`}
+          accessibilityState={{ disabled: locked }}
           className="flex-row items-center gap-1 py-2 active:opacity-60"
         >
-          <Text className="text-[15px] font-semibold" style={{ color: t.ink }}>
+          <Text
+            className="text-[15px] font-semibold"
+            style={{ color: locked ? t.muted : t.ink }}
+          >
             {periodTitle(period)}
           </Text>
-          <ChevronDown color={t.faint} size={14} strokeWidth={2.6} />
+          <ChevronDown
+            color={locked ? t.muted : t.faint}
+            size={14}
+            strokeWidth={2.6}
+          />
         </Pressable>
         <Pressable
           onPress={onOpenCustom}
+          disabled={locked}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Выбрать диапазон дат"
+          accessibilityState={{ disabled: locked }}
           className="py-2 active:opacity-60"
         >
           <Text
             className="text-[15px] font-bold"
-            style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
+            style={{
+              color: locked ? t.muted : t.ink,
+              fontVariant: ["tabular-nums"],
+            }}
           >
             {periodDates(period)}
           </Text>
@@ -278,6 +312,7 @@ export function FinanceOverview({
             value={formatEUR(accounts.total)}
             quiet={moneySign(accounts.total) === 0}
             active={view === "accounts"}
+            locked={locked}
             onPress={() => onTap("accounts")}
           />
           {/* ДОКУМЕНТ — НЕ ДЕНЬГИ (владелец 2026-08-11: «какой смысл в
@@ -306,6 +341,7 @@ export function FinanceOverview({
               invoices.openCount,
               ["ждёт", "ждут", "ждут"],
             )} оплаты`}
+            locked={locked}
             onPress={() => onTap("documents")}
           />
           ) : null}
@@ -333,6 +369,7 @@ export function FinanceOverview({
             value={formatEUR(totals.income)}
             quiet={moneySign(totals.income) === 0}
             active={view === "income"}
+            locked={locked}
             onPress={() => onTap("income")}
           />
           {/* МИНУСА ЗДЕСЬ НЕТ (владелец 2026-08-15: «расход и так даёт минус»).
@@ -344,6 +381,7 @@ export function FinanceOverview({
             value={formatEUR(totals.expense)}
             quiet={moneySign(totals.expense) === 0}
             active={view === "expense"}
+            locked={locked}
             onPress={() => onTap("expense")}
           />
         </View>
@@ -355,6 +393,7 @@ export function FinanceOverview({
             value={formatEUR(totals.debt)}
             quiet={moneySign(totals.debt) === 0}
             active={view === "debt"}
+            locked={locked}
             onPress={() => onTap("debt")}
           />
           {/* Минус печатает сам форматтер — по округлённым центам, а не по
@@ -365,6 +404,7 @@ export function FinanceOverview({
             value={formatEUR(totals.profit)}
             quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
+            locked={locked}
             onPress={() => onTap("profit")}
           />
         </View>
