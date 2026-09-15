@@ -63,6 +63,12 @@ import {
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import { NO_TEAM, sortAccountRows } from "@/features/finances/accounts-sections";
+import {
+  hasTeamlessMoney,
+  inTeamScope,
+  teamlessLedgerRows,
+  withTeamlessRows,
+} from "@/features/finances/team-scope";
 import { buildRefundDraft } from "@/features/finances/refund";
 import {
   FinanceOverview,
@@ -254,7 +260,14 @@ function FinancesContent() {
   // Открыта панель документов: у шапки другой предмет поиска, и она обязана
   // сказать об этом словами подсказки.
   const documentsView = view === "documents";
-  const debtsQuery = useDebts(period.from, period.to, { teamId: scope });
+  // «Без команды» — не команда: долги под этим чипом отбираются на экране
+  // (`team_id` пуст), а у хука берётся вся компания тем же ключом.
+  const debtsQuery = useDebts(period.from, period.to, {
+    teamId: scope === NO_TEAM ? null : scope,
+  });
+  // Вся компания без отбора — тот же ключ, лишнего запроса нет: по ней видно,
+  // есть ли долги без команды, которым нужен чип «Без команды».
+  const companyDebtsQuery = useDebts(period.from, period.to);
   const debtPaidQuery = useDebtPaidTotals();
   const categories = useMemo(
     () => categoriesQuery.data ?? [],
@@ -302,9 +315,37 @@ function FinancesContent() {
     [accounts],
   );
   const hasOrphanAccounts = orphanAccounts.length > 0;
+  // Команда каждого счёта, включая закрытые: строка журнала без команды встаёт
+  // под команду своего счёта (`team-scope.ts`).
+  const accountTeam = useMemo(
+    () =>
+      new Map(
+        allAccounts.map((account) => [account.id, account.brigade_id ?? null] as const),
+      ),
+    [allAccounts],
+  );
+  // Журнал периода всей компании — тот же ключ, что у командного отбора ниже,
+  // лишнего запроса нет: из него добираются строки без команды.
+  const companyLedgerQuery = useTransactions(period.from, period.to);
+  const teamlessKnown =
+    companyLedgerQuery.data !== undefined && companyDebtsQuery.data !== undefined;
+  const hasTeamless = useMemo(
+    () =>
+      hasTeamlessMoney({
+        appointments: appts,
+        debts: companyDebtsQuery.data ?? [],
+        companyRows: companyLedgerQuery.data ?? [],
+        accountTeam,
+      }),
+    [appts, companyDebtsQuery.data, companyLedgerQuery.data, accountTeam],
+  );
+  // ЧИП «БЕЗ КОМАНДЫ» ЖИВЁТ, ПОКА У ДЕНЕГ НЕТ КОМАНДЫ: счета-сироты ИЛИ записи,
+  // долги и строки журнала без команды не на счёте команды. Раньше его держали
+  // только сироты, и такие деньги не показывались нигде (находки 2026-09-15).
+  const needsNoTeamChip = hasOrphanAccounts || hasTeamless;
   const scopeChipTeams = useMemo(
-    () => (hasOrphanAccounts ? [...teams, NO_TEAM_CHIP] : teams),
-    [hasOrphanAccounts, teams],
+    () => (needsNoTeamChip ? [...teams, NO_TEAM_CHIP] : teams),
+    [needsNoTeamChip, teams],
   );
   // ДЕНЬГИ ВСЕГДА ЧЬИ-ТО. Владелец 2026-08-10: «компания в целом не нужна,
   // только разбивка по командам — итог по компании смотрят в сводках».
@@ -323,11 +364,13 @@ function FinancesContent() {
     setScope(
       fallbackScopeUpdate({
         teamIds: teams.map((team) => team.id),
-        accountsLoaded,
-        hasOrphans: hasOrphanAccounts,
+        // Уводить с «Без команды» можно, только когда известно, что денег без
+        // команды нет: пока журнал и долги едут, чип нельзя объявить пустым.
+        accountsLoaded: accountsLoaded && teamlessKnown,
+        hasOrphans: needsNoTeamChip,
       }),
     );
-  }, [accountsLoaded, hasOrphanAccounts, scope, setScope, teams, teamsQuery.isSuccess]);
+  }, [accountsLoaded, teamlessKnown, needsNoTeamChip, scope, setScope, teams, teamsQuery.isSuccess]);
   const delTransfer = useDeleteTransfer();
   const delTx = useDeleteTransaction();
   const insertTx = useInsertTransaction();
@@ -369,13 +412,18 @@ function FinancesContent() {
     [transactionsQuery.data],
   );
 
-  const scopedTransactions = useMemo(
-    () =>
-      requestedClientId
-        ? txs.filter((transaction) => transaction.client_id === requestedClientId)
-        : txs,
-    [requestedClientId, txs],
+  // Строки без команды добираются из той же выборки компании: командный отбор
+  // их не видит, а деньги их лежат на счетах (`team-scope.ts`).
+  const teamlessRows = useMemo(
+    () => teamlessLedgerRows(companyLedgerQuery.data ?? [], scope, accountTeam),
+    [companyLedgerQuery.data, scope, accountTeam],
   );
+  const scopedTransactions = useMemo(() => {
+    const rows = withTeamlessRows(txs, teamlessRows);
+    return requestedClientId
+      ? rows.filter((transaction) => transaction.client_id === requestedClientId)
+      : rows;
+  }, [requestedClientId, txs, teamlessRows]);
 
   // Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
   // своей команды, «общих счетов» больше нет; чип «Без команды» показывает
@@ -401,7 +449,7 @@ function FinancesContent() {
     for (const appointment of scopedAppointments) {
       if (appointment.status !== "completed" && appointment.status !== "in_progress") continue;
       if (appointment.date < period.from || appointment.date > period.to) continue;
-      if (scope && appointment.team_id !== scope) continue;
+      if (!inTeamScope(appointment.team_id, scope)) continue;
       const cost = appointmentMaterialCost(appointment, services);
       if (cost <= 0) continue;
       amount += cost;
@@ -439,7 +487,12 @@ function FinancesContent() {
 
   // Пустышки через useMemo, а не `?? []` в выражении: новый литерал на каждый
   // рендер ломает мемоизацию списка долгов, ради которой он и написан.
-  const debts = useMemo(() => debtsQuery.data ?? [], [debtsQuery.data]);
+  const debts = useMemo(() => {
+    const rows = debtsQuery.data ?? [];
+    // Ручной долг, заведённый под «Без команды», пишется без команды — и здесь
+    // же обязан найтись (раньше не показывался ни под одним чипом).
+    return scope === NO_TEAM ? rows.filter((debt) => debt.team_id == null) : rows;
+  }, [debtsQuery.data, scope]);
   const debtPaid = useMemo(
     () => debtPaidQuery.data ?? new Map<string, number>(),
     [debtPaidQuery.data],
@@ -482,7 +535,9 @@ function FinancesContent() {
       if (a.status !== "completed" && !past) continue;
       if (a.status === "cancelled") continue;
       if (a.date < period.from || a.date > period.to) continue;
-      if (scope && a.team_id !== scope) continue;
+      // Тем же правилом, что лента долгов (`debtRows`): на «Без команды»
+      // плитка не брала ни одной записи, а лента — все записи компании.
+      if (!inTeamScope(a.team_id, scope)) continue;
       if (invoicedAppointments.has(a.id)) continue;
       debt += getDebtAmount(a);
     }
@@ -728,7 +783,7 @@ function FinancesContent() {
               from: period.from,
               to: period.to,
               today: businessToday,
-              teamId: scope === NO_TEAM ? null : scope,
+              teamId: scope,
               invoicedAppointmentIds: invoicedAppointments,
             }),
             ...manualDebtRows(

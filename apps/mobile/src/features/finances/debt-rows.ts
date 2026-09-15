@@ -13,6 +13,7 @@ import {
   debtAge,
   type RecordRow,
 } from "./record-rows";
+import { inTeamScope } from "./team-scope";
 
 // ДОЛГ — ТАКАЯ ЖЕ СТРОКА-ЗАПИСЬ, КАК ДОХОД И РАСХОД (владелец 2026-09-09:
 // «общая — это когда по времени там сразу долг, доход и расход, всё это туда
@@ -70,7 +71,9 @@ export function debtRows(
         (a.status === "completed" || a.date < window.today) &&
         a.date >= window.from &&
         a.date <= window.to &&
-        (!window.teamId || a.team_id === window.teamId) &&
+        // Под «Без команды» — записи без команды, а не вся компания: плитка
+        // «Долги» режет тем же `inTeamScope` (находка 2026-09-15).
+        inTeamScope(a.team_id, window.teamId) &&
         !window.invoicedAppointmentIds.has(a.id),
     )
     .map((a): DebtRow => {
