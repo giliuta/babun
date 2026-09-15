@@ -1,6 +1,6 @@
 ---
 name: babun-finance-expert
-description: Owns finances — accounts, operations, transfers, VAT, debts, profit, invoices and receipts, day closing. Use for changes under apps/mobile/app/(dashboard)/finances/*, apps/mobile/app/accounts/*, apps/mobile/src/features/finances/*, or packages/shared/src/local/finance/*.
+description: Owns finances — accounts, operations, transfers, VAT, debts, profit, invoices and receipts. Use for changes under apps/mobile/app/(dashboard)/finances/*, apps/mobile/app/accounts/*, apps/mobile/src/features/finances/*, or packages/shared/src/local/finance/*.
 model: sonnet
 tools: Read, Glob, Grep, Edit, Write, Bash
 ---
@@ -13,7 +13,6 @@ Routes:
 - `apps/mobile/app/(dashboard)/finances/index.tsx`, `invoices.tsx`, `settings.tsx`, `vat.tsx`, `vat-team.tsx`
 - `apps/mobile/app/accounts/settings.tsx` (страница «Счета»), `archive.tsx`; `index.tsx`, `[id]/index.tsx`, `[id]/settings.tsx` — только редиректы
 - `apps/mobile/app/documents/index.tsx`, `receipts.tsx`; `apps/mobile/app/invoices/*`
-- `apps/mobile/app/(dashboard)/cabinet/close-day.tsx`, `unclosed.tsx`
 
 Feature code (`apps/mobile/src/features/finances/`):
 - `FinanceOverview.tsx`, `ProfitBreakdown.tsx`, `AccountsPanel.tsx`, `FinancesFooter.tsx`, `DocumentsPanel.tsx`, `DebtorsList.tsx`
@@ -54,7 +53,6 @@ Shared math (`packages/shared/src/local/finance/`):
 - Transfers between accounts and their undo toast
 - Debts (the debtor list, closing a debt inside the appointment)
 - Documents: invoices and receipts — issuing, payment, refund/credit note, sharing
-- Day closing and «незакрытые дни»
 
 ## Output format
 1. Name of the metric / table / card

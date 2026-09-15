@@ -45,7 +45,6 @@ describe("role policy", () => {
   test("uses an explicit cabinet route allow-list for non-owners", () => {
     assert.equal(canAccessCabinetPath("owner", "/cabinet/accounts"), true);
     assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/recurring"), true);
-    assert.equal(canAccessCabinetPath("dispatcher", "/cabinet/unclosed"), true);
     assert.equal(canAccessCabinetPath("master", "/cabinet/business/"), true);
     assert.equal(canAccessCabinetPath(null, "/cabinet"), false);
   });
@@ -80,7 +79,6 @@ describe("role policy", () => {
       "/cabinet/inventory",
       "/cabinet/recurring",
       "/cabinet/sms-templates",
-      "/cabinet/unclosed",
       "/cabinet/invitations",
       "/cabinet/profile",
     ];
@@ -95,7 +93,6 @@ describe("role policy", () => {
     const ownerOnlyLinks = [
       "/cabinet/accounts",
       "/cabinet/categories",
-      "/cabinet/close-day",
       "/cabinet/event-types",
       "/cabinet/insights",
       "/cabinet/labels",

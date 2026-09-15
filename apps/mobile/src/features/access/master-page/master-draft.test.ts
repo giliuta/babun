@@ -40,7 +40,6 @@ const REGISTRY: AccessBlock[] = (
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
     ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
-    ["finance.close_day", "finance", "calendar", ["off", "write"], 150],
     ["finance.settings", "finance", "company", OFF_READ_WRITE, 160],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],

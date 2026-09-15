@@ -39,7 +39,7 @@ Status legend: ✅ done · 🔜 ready (primitives in place) · ⏳ needs visual 
 
 ## Cabinet (settings hub) — `(dashboard)/cabinet/*` (🔜 low-risk first)
 - `cabinet/index.tsx`: canvas bg; grouped menu sections in `Card` with `SectionHeader` eyebrows; rows 56h, icon tile, chevron faint; «Выйти» = danger ghost.
-- Sub-screens (services, teams, masters, cities, accounts, categories, templates, loyalty, calendar, event-types, object-types, inventory, recurring, close-day): list rows in `Card`, headers Display, add = GradientButton or accent «+», delete = danger. Bottom-sheets get grouped `Card` inputs.
+- Sub-screens (services, teams, masters, cities, accounts, categories, templates, loyalty, calendar, event-types, object-types, inventory, recurring): list rows in `Card`, headers Display, add = GradientButton or accent «+», delete = danger. Bottom-sheets get grouped `Card` inputs.
 
 ## Shared chrome (⏳)
 - `ScreenHeader` / `Screen`: optional canvas variant + `Halo` slot; large Display titles.

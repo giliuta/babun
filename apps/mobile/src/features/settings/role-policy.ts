@@ -16,7 +16,6 @@ export type AppCapability =
   | "manage-client-settings"
   | "manage-messaging"
   | "view-finances"
-  | "close-day"
   | "view-insights"
   | "manage-personal-account";
 
@@ -49,7 +48,6 @@ const ROLE_CAPABILITIES: Record<UserRole, ReadonlySet<AppCapability>> = {
     "manage-client-settings",
     "manage-messaging",
     "view-finances",
-    "close-day",
     "view-insights",
     "manage-personal-account",
   ]),
@@ -96,7 +94,6 @@ const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet/recurring",
   "/cabinet/sms-templates",
   "/cabinet/sync",
-  "/cabinet/unclosed",
   ...PERSONAL_CABINET_ROUTES,
 ]);
 

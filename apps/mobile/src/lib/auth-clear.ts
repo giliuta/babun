@@ -26,7 +26,7 @@ import {
 // implementation and the canon — there is nothing left to keep in sync with.
 //
 // The shared local stores persist under GLOBAL (non-tenant-scoped) MMKV keys
-// («babun-chats», «babun-appointments», «babun:closed-day:*», …), so without
+// («babun-chats», «babun-appointments», …), so without
 // a wipe Tenant B logging in on the same phone inherits Tenant A's chats,
 // finances and reference books — the cross-tenant leak first tracked on web.
 //
@@ -291,7 +291,7 @@ export function wipeLocalData(): void {
  *  really gone. auth-js signOut() does NOT throw: on a network failure
  *  (offline is a normal mobile state) it returns { error } and KEEPS the
  *  local session — wiping before it would destroy device-only data
- *  (chats, closed-day records) while leaving the user logged in with
+ *  (chats and other on-device records) while leaving the user logged in with
  *  empty screens. The wipe still runs before any next sign-in, so a
  *  shared device never leaks this account's cached data.
  *

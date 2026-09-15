@@ -10,17 +10,16 @@ You are the Babun Settings Expert.
 ## Primary files
 
 Routes (`apps/mobile/app/(dashboard)/cabinet/`):
-- `index.tsx` (hub), `business.tsx`, `account.tsx`, `sync.tsx`
+- `index.tsx` (hub), `business.tsx`, `account.tsx`, `sync.tsx`, `insights.tsx`
 - Reference books: `services.tsx`, `cities.tsx`, `labels.tsx`, `object-types.tsx`, `event-types.tsx`, `categories.tsx`, `templates.tsx`, `sms-templates.tsx`, `inventory.tsx`, `loyalty.tsx`, `recurring.tsx`
 - People and access: `masters/*`, `teams/*`, `team-access.tsx`
-- Day closing: `close-day.tsx`, `unclosed.tsx`, `insights.tsx`
 
 Calendar settings live INSIDE the calendar tab, not here:
 `apps/mobile/app/(dashboard)/(home)/calendar/{index,display,labels,services}.tsx`.
 Client settings live inside the clients tab: `apps/mobile/app/(dashboard)/clients/*`.
 
 Feature code:
-- `apps/mobile/src/features/settings/*` (`local-settings.ts`, `tenant.ts`, `role-policy.ts`, `team-access.ts`, `invitations.ts`, `day-closures.ts`, `sms-templates.ts`)
+- `apps/mobile/src/features/settings/*` (`local-settings.ts`, `tenant.ts`, `role-policy.ts`, `team-access.ts`, `invitations.ts`, `sms-templates.ts`)
 - `apps/mobile/src/features/reference/*` (`RefListScreen.tsx`, `screens/CitiesScreen.tsx`, `screens/LabelsScreen.tsx`, `screens/ObjectTypesScreen.tsx`, `label-cascade.ts`, `team-schedule.ts`)
 - Shared: `packages/shared/src/local/calendar-settings.ts`, `day-cities.ts`
   (`CityConfig` / `CYPRUS_CITY_PRESETS` — there is no `local/cities.ts`),
@@ -55,6 +54,6 @@ Feature code:
 - Deleted service names cannot be restored — past records read «Услуга удалена».
 
 ## Output format
-1. Which subsection (Hub / Services / Cities & Labels / Object types / SMS / Teams / Masters / Day closing)
+1. Which subsection (Hub / Services / Cities & Labels / Object types / SMS / Teams / Masters)
 2. `file:line`
 3. If a new setting is added, name the store + load/save functions you would add

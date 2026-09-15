@@ -1100,65 +1100,6 @@ export type Database = {
           },
         ]
       }
-      day_closures: {
-        Row: {
-          actual_cash_cents: number
-          business_date: string
-          closed_at: string
-          closed_by: string | null
-          created_at: string
-          currency: string
-          delta_cash_cents: number
-          expected_cash_cents: number
-          is_closed: boolean
-          reopened_at: string | null
-          reopened_by: string | null
-          revision: number
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          actual_cash_cents: number
-          business_date: string
-          closed_at?: string
-          closed_by?: string | null
-          created_at?: string
-          currency?: string
-          delta_cash_cents: number
-          expected_cash_cents: number
-          is_closed?: boolean
-          reopened_at?: string | null
-          reopened_by?: string | null
-          revision?: number
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          actual_cash_cents?: number
-          business_date?: string
-          closed_at?: string
-          closed_by?: string | null
-          created_at?: string
-          currency?: string
-          delta_cash_cents?: number
-          expected_cash_cents?: number
-          is_closed?: boolean
-          reopened_at?: string | null
-          reopened_by?: string | null
-          revision?: number
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "day_closures_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       day_extras: {
         Row: {
           amount: number
@@ -4019,57 +3960,6 @@ export type Database = {
           user_id: string
         }[]
       }
-      close_business_day:
-        | {
-            Args: { p_business_date: string }
-            Returns: {
-              actual_cash_cents: number
-              business_date: string
-              closed_at: string
-              closed_by: string | null
-              created_at: string
-              currency: string
-              delta_cash_cents: number
-              expected_cash_cents: number
-              is_closed: boolean
-              reopened_at: string | null
-              reopened_by: string | null
-              revision: number
-              tenant_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "day_closures"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
-        | {
-            Args: { p_actual_cash_cents: number; p_business_date: string }
-            Returns: {
-              actual_cash_cents: number
-              business_date: string
-              closed_at: string
-              closed_by: string | null
-              created_at: string
-              currency: string
-              delta_cash_cents: number
-              expected_cash_cents: number
-              is_closed: boolean
-              reopened_at: string | null
-              reopened_by: string | null
-              revision: number
-              tenant_id: string
-              updated_at: string
-            }[]
-            SetofOptions: {
-              from: "*"
-              to: "day_closures"
-              isOneToOne: false
-              isSetofReturn: true
-            }
-          }
       create_client_with_tags: {
         Args: {
           p_client: Json
@@ -4315,25 +4205,6 @@ export type Database = {
         Returns: Json
       }
       purge_expired_clients: { Args: never; Returns: number }
-      read_day_closure: {
-        Args: { p_business_date: string }
-        Returns: {
-          actual_cash_cents: number
-          business_date: string
-          closed_at: string
-          closed_by: string
-          created_at: string
-          currency: string
-          delta_cash_cents: number
-          expected_cash_cents: number
-          is_closed: boolean
-          reopened_at: string
-          reopened_by: string
-          revision: number
-          tenant_id: string
-          updated_at: string
-        }[]
-      }
       read_operational_calendar_settings_safe: {
         Args: never
         Returns: {
@@ -4631,31 +4502,6 @@ export type Database = {
         Args: { p_charge: string; p_tenant_id: string }
         Returns: undefined
       }
-      reopen_business_day: {
-        Args: { p_business_date: string }
-        Returns: {
-          actual_cash_cents: number
-          business_date: string
-          closed_at: string
-          closed_by: string | null
-          created_at: string
-          currency: string
-          delta_cash_cents: number
-          expected_cash_cents: number
-          is_closed: boolean
-          reopened_at: string | null
-          reopened_by: string | null
-          revision: number
-          tenant_id: string
-          updated_at: string
-        }[]
-        SetofOptions: {
-          from: "*"
-          to: "day_closures"
-          isOneToOne: false
-          isSetofReturn: true
-        }
-      }
       replace_day_extras: {
         Args: { p_date: string; p_extras: Json; p_team_id: string }
         Returns: {
@@ -4850,10 +4696,6 @@ export type Database = {
       }
       sync_tenant_claims: { Args: { p_user_id: string }; Returns: undefined }
       tenant_business_date: { Args: { p_tenant_id: string }; Returns: string }
-      tenant_cash_ledger_cents: {
-        Args: { p_as_of_date: string; p_tenant_id: string }
-        Returns: number
-      }
       tenant_currency: { Args: { p_tenant_id: string }; Returns: string }
       tenant_data_export: { Args: never; Returns: Json }
       tenant_effective_plan: { Args: { t_id: string }; Returns: string }

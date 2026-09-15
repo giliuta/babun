@@ -24,7 +24,6 @@ const REGISTRY: AccessBlock[] = (
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
     ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
-    ["finance.close_day", "finance", "calendar", ["off", "write"], 150],
     ["finance.settings", "finance", "company", OFF_READ_WRITE, 160],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
@@ -67,11 +66,7 @@ describe("страница прав — какие строки видны", () 
       b.key === "finance.settings" ? { ...b, position: 100 } : b,
     ).sort((a, b) => a.position - b.position);
     const sections = rightsSections(shuffled, () => "write", "team-1");
-    assert.deepEqual(keysOf(sections, "finance"), [
-      "finance.operations",
-      "finance.close_day",
-      "finance.settings",
-    ]);
+    assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.settings"]);
   });
 
   test("«Календарь и записи» скрыт — пять строк свёрнуты только в этом календаре", () => {
