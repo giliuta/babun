@@ -1971,6 +1971,7 @@ export type Database = {
           language: string
           notes: string | null
           number: string
+          payment_id: string | null
           pdf_url: string | null
           seller_snapshot: Json
           seq: number
@@ -1980,6 +1981,7 @@ export type Database = {
           total: number
           updated_at: string
           vat_amount: number
+          vat_mode: string | null
           vat_percent: number
           year: number
         }
@@ -1999,6 +2001,7 @@ export type Database = {
           language?: string
           notes?: string | null
           number: string
+          payment_id?: string | null
           pdf_url?: string | null
           seller_snapshot: Json
           seq: number
@@ -2008,6 +2011,7 @@ export type Database = {
           total: number
           updated_at?: string
           vat_amount: number
+          vat_mode?: string | null
           vat_percent?: number
           year: number
         }
@@ -2027,6 +2031,7 @@ export type Database = {
           language?: string
           notes?: string | null
           number?: string
+          payment_id?: string | null
           pdf_url?: string | null
           seller_snapshot?: Json
           seq?: number
@@ -2036,6 +2041,7 @@ export type Database = {
           total?: number
           updated_at?: string
           vat_amount?: number
+          vat_mode?: string | null
           vat_percent?: number
           year?: number
         }
@@ -3775,6 +3781,10 @@ export type Database = {
         Args: { p_data: Json; p_event_type: string; p_recipients: string[] }
         Returns: undefined
       }
+      _issue_credit_note: {
+        Args: { p_invoice_id: string; p_reason?: string }
+        Returns: string
+      }
       _mcp_probe: { Args: never; Returns: number }
       accept_invitation: { Args: { p_token: string }; Returns: string }
       accept_invitation_by_id: {
@@ -3978,6 +3988,7 @@ export type Database = {
           language: string
           notes: string | null
           number: string
+          payment_id: string | null
           pdf_url: string | null
           seller_snapshot: Json
           seq: number
@@ -3987,6 +3998,7 @@ export type Database = {
           total: number
           updated_at: string
           vat_amount: number
+          vat_mode: string | null
           vat_percent: number
           year: number
         }
@@ -4210,6 +4222,7 @@ export type Database = {
           language: string
           notes: string | null
           number: string
+          payment_id: string | null
           pdf_url: string | null
           seller_snapshot: Json
           seq: number
@@ -4219,6 +4232,7 @@ export type Database = {
           total: number
           updated_at: string
           vat_amount: number
+          vat_mode: string | null
           vat_percent: number
           year: number
         }
@@ -4966,6 +4980,7 @@ export type Database = {
           language: string
           notes: string | null
           number: string
+          payment_id: string | null
           pdf_url: string | null
           seller_snapshot: Json
           seq: number
@@ -4975,6 +4990,7 @@ export type Database = {
           total: number
           updated_at: string
           vat_amount: number
+          vat_mode: string | null
           vat_percent: number
           year: number
         }
@@ -5007,6 +5023,7 @@ export type Database = {
           language: string
           notes: string | null
           number: string
+          payment_id: string | null
           pdf_url: string | null
           seller_snapshot: Json
           seq: number
@@ -5016,6 +5033,7 @@ export type Database = {
           total: number
           updated_at: string
           vat_amount: number
+          vat_mode: string | null
           vat_percent: number
           year: number
         }
