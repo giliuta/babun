@@ -501,6 +501,9 @@ function makeServerRow(
     // БЕЗ ЭТОЙ СТРОКИ офлайн-реплей молча терял бы выбранный счёт, и деньги
     // ложились бы на угаданный — ровно то, от чего мы уходим.
     payment_account_id: input.payment_account_id ?? null,
+    // НДС записи пишет только дверь `set_appointment_vat_mode`; новая запись
+    // уходит без выбора — «как у счёта».
+    vat_mode: input.vat_mode ?? null,
     paid_amount: input.paid_amount ?? 0,
     // STORY-055 — created_by is filled server-side by the BEFORE
     // INSERT trigger; the optimistic cache row carries null and gets

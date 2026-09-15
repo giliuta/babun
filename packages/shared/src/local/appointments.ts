@@ -197,6 +197,11 @@ export interface Appointment {
    *  импорт). Именно это угадывание и роняло приём денег у команд, у которых
    *  счёта нужного вида не оказалось. */
   payment_account_id?: string | null;
+  /** НДС ЗАПИСИ (2026-09-15, миграция `appointment_vat_choice`): «с НДС» или
+   *  «без НДС» для денег этой записи — сильнее счёта. null — как у счёта,
+   *  команды и компании. Меняется только до первой оплаты и только дверью
+   *  `set_appointment_vat_mode`: в патч записи поле не пишется. */
+  vat_mode?: "on" | "off" | null;
   /** Mirror — total actually received so far. The trigger uses
    *  total_amount for the income row; this field lets the UI show
    *  «частично оплачено» (paid_amount < total_amount). */

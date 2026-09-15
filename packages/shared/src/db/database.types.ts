@@ -422,6 +422,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }
         Insert: {
           address?: string
@@ -476,6 +477,7 @@ export type Database = {
           total_amount?: number
           total_duration?: number
           updated_at?: string
+          vat_mode?: string | null
         }
         Update: {
           address?: string
@@ -530,6 +532,7 @@ export type Database = {
           total_amount?: number
           total_duration?: number
           updated_at?: string
+          vat_mode?: string | null
         }
         Relationships: [
           {
@@ -1826,48 +1829,60 @@ export type Database = {
         Row: {
           accepted_at: string | null
           accepted_by_user_id: string | null
+          access_changes: Json
           created_at: string
           email: string
           expires_at: string
           full_name: string | null
           id: string
           invited_by_user_id: string | null
+          master_color: string | null
           master_id: string | null
+          master_title: string | null
           phone: string | null
           role: string
           team_id: string | null
+          team_ids: string[] | null
           tenant_id: string
           token: string
         }
         Insert: {
           accepted_at?: string | null
           accepted_by_user_id?: string | null
+          access_changes?: Json
           created_at?: string
           email: string
           expires_at?: string
           full_name?: string | null
           id?: string
           invited_by_user_id?: string | null
+          master_color?: string | null
           master_id?: string | null
+          master_title?: string | null
           phone?: string | null
           role: string
           team_id?: string | null
+          team_ids?: string[] | null
           tenant_id: string
           token: string
         }
         Update: {
           accepted_at?: string | null
           accepted_by_user_id?: string | null
+          access_changes?: Json
           created_at?: string
           email?: string
           expires_at?: string
           full_name?: string | null
           id?: string
           invited_by_user_id?: string | null
+          master_color?: string | null
           master_id?: string | null
+          master_title?: string | null
           phone?: string | null
           role?: string
           team_id?: string | null
+          team_ids?: string[] | null
           tenant_id?: string
           token?: string
         }
@@ -3766,13 +3781,22 @@ export type Database = {
         Args: { p_invitation_id: string }
         Returns: string
       }
-      decline_invitation: {
-        Args: { p_invitation_id: string }
+      access_apply_changes: {
+        Args: {
+          p_changes: Json
+          p_set_by: string
+          p_tenant: string
+          p_user: string
+        }
         Returns: undefined
       }
       access_map_for: {
         Args: { p_include_off: boolean; p_tenant_id: string; p_user_id: string }
         Returns: Json
+      }
+      access_validate_changes: {
+        Args: { p_changes: Json; p_team_ids: string[]; p_tenant: string }
+        Returns: undefined
       }
       access_writer_target: { Args: { p_user_id: string }; Returns: string }
       account_balances: {
@@ -3849,6 +3873,13 @@ export type Database = {
         }
       }
       appointment_payment_mirror: { Args: { p_payments: Json }; Returns: Json }
+      attach_invited_master_card: {
+        Args: {
+          p_invitation: Database["public"]["Tables"]["invitations"]["Row"]
+          p_user_id: string
+        }
+        Returns: string
+      }
       build_invoice_client_snapshot: {
         Args: { p_client_id: string; p_tenant_id: string }
         Returns: Json
@@ -3920,6 +3951,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4037,12 +4069,16 @@ export type Database = {
       }
       create_invitation: {
         Args: {
+          p_access?: Json
           p_email: string
           p_full_name?: string
+          p_master_color?: string
           p_master_id?: string
+          p_master_title?: string
           p_phone?: string
           p_role: string
           p_team_id?: string
+          p_team_ids?: string[]
         }
         Returns: Json
       }
@@ -4092,6 +4128,10 @@ export type Database = {
       current_user_master_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
       current_user_team_ids: { Args: never; Returns: string[] }
+      decline_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: undefined
+      }
       delete_account_transfer: {
         Args: { p_transfer_group_id: string }
         Returns: boolean
@@ -4133,6 +4173,10 @@ export type Database = {
           p_schedules?: Json
         }
         Returns: undefined
+      }
+      inbox_invitation_token: {
+        Args: { p_invitation_id: string }
+        Returns: string
       }
       invitation_preview: { Args: { p_token: string }; Returns: Json }
       is_platform_admin: { Args: never; Returns: boolean }
@@ -4436,6 +4480,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4676,6 +4721,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4760,6 +4806,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }
         SetofOptions: {
           from: "*"
@@ -4767,6 +4814,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_appointment_vat_mode: {
+        Args: { p_appointment_id: string; p_vat_mode: string | null }
+        Returns: Database["public"]["Tables"]["appointments"]["Row"]
       }
       set_member_access: {
         Args: { p_changes: Json; p_user_id: string }
@@ -4783,6 +4834,7 @@ export type Database = {
           ok: boolean
         }[]
       }
+      sync_tenant_claims: { Args: { p_user_id: string }; Returns: undefined }
       tenant_business_date: { Args: { p_tenant_id: string }; Returns: string }
       tenant_cash_ledger_cents: {
         Args: { p_as_of_date: string; p_tenant_id: string }
@@ -4856,6 +4908,7 @@ export type Database = {
           total_amount: number
           total_duration: number
           updated_at: string
+          vat_mode: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -4870,6 +4923,18 @@ export type Database = {
           p_patch: Json
           p_tag_ids?: string[]
           p_tenant_id: string
+        }
+        Returns: Json
+      }
+      update_invitation: {
+        Args: {
+          p_access: Json
+          p_full_name: string
+          p_invitation_id: string
+          p_master_color: string
+          p_master_title: string
+          p_phone: string
+          p_team_ids: string[]
         }
         Returns: Json
       }

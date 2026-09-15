@@ -88,11 +88,14 @@ describe("invitation calendar grants have one body", () => {
 
   // ПРАВА ПО БЛОКАМ, ЭТАП 1 (14.09): приглашённый прикрепляется к календарю из
   // приглашения, иначе владелец не видит его в людях календаря и на экране прав.
-  // Уровни приглашение не выдаёт — новый сотрудник «всё выключено».
-  test("the helper attaches the invited person to the calendar without granting levels", () => {
+  // С 15.09 приглашение несёт и уровни, которые владелец выставил в карточке до
+  // «Пригласить», — но пишет их только общий писатель `access_apply_changes`,
+  // а не помощник своими руками: одно тело на экран прав и на приём.
+  test("the helper attaches the invited person and writes levels only through the shared writer", () => {
     assert.ok(helper, "no migration defines public.grant_invitation_calendar");
     assert.match(helper.body, /insert\s+into\s+public\.member_calendars/i, helper.file);
     assert.doesNotMatch(helper.body, /insert\s+into\s+public\.member_access/i, helper.file);
+    assert.match(helper.body, /perform\s+public\.access_apply_changes\(/, helper.file);
   });
 
   // КАРТОЧКА МАСТЕРУ ПРИ ПРИЁМЕ (15.09): без неё приглашённого мастера не
@@ -105,7 +108,9 @@ describe("invitation calendar grants have one body", () => {
       /if p_invitation\.role = 'master' and p_invitation\.master_id is null then\s+v_master_id := public\.attach_invited_master_card\(p_invitation, p_user_id\);/,
       helper.file,
     );
-    assert.match(helper.body, /values \(\s*p_invitation\.tenant_id,\s*p_invitation\.team_id,\s*p_user_id,\s*v_master_id,/, helper.file);
+    // С 15.09 календарей в приглашении несколько: права пишутся на каждый, и
+    // каждая строка несёт номер карточки.
+    assert.match(helper.body, /select p_invitation\.tenant_id,\s*x\.team_id,\s*p_user_id,\s*v_master_id,/, helper.file);
   });
 
   test("the card belongs to the account: found again by user and linked to the membership", () => {
@@ -146,6 +151,58 @@ describe("invitation calendar grants have one body", () => {
       /left join public\.masters m on m\.tenant_id = tm\.tenant_id and m\.id = tm\.master_id/,
       members.file,
     );
+  });
+});
+
+// УРОВЕНЬ СНИМАЕТСЯ И В АРХИВНОМ КАЛЕНДАРЕ (15.09). Архив календаря никого от
+// него не открепляет, и экран прав владельца его показывает. Общая проверка
+// `access_validate_changes`, требуй она живой календарь, отказала бы даже в
+// «Скрыт»: сохранённое «Меняет» пережило бы архив и заработало, когда календарь
+// вернут и блок оживёт. Архивные календари приглашению отказывают сами
+// create_invitation и update_invitation — до общей проверки.
+const CARD_RIGHTS_MIGRATION = "20260915110000_invitation_carries_card_calendars_and_rights.sql";
+
+function withoutSqlComments(sql: string): string {
+  return sql.replace(/--.*$/gm, "");
+}
+
+describe("a level can be reset on an archived calendar the person is still attached to", () => {
+  const migration = readFileSync(join(MIGRATIONS_DIR, CARD_RIGHTS_MIGRATION), "utf8");
+
+  test("the shared validator's calendar branch does not require an active calendar", () => {
+    const validator = latestDefinition("access_validate_changes");
+    assert.ok(validator, "no migration defines public.access_validate_changes");
+    const start = validator.body.indexOf("if b.scope = 'calendar' then");
+    const end = validator.body.indexOf("elsif change_team is not null then", start);
+    assert.ok(start >= 0 && end > start, `${validator.file}: the calendar branch is missing`);
+    assert.doesNotMatch(withoutSqlComments(validator.body.slice(start, end)), /is_active/, validator.file);
+    assert.doesNotMatch(withoutSqlComments(validator.body), /is_active/, validator.file);
+  });
+
+  test("set_member_access validates against every attached calendar, archived ones included", () => {
+    const setter = latestDefinition("set_member_access");
+    assert.ok(setter, "no migration defines public.set_member_access");
+    assert.match(
+      setter.body,
+      /from public\.member_calendars mc\s+where mc\.tenant_id = active_tenant and mc\.user_id = p_user_id;/,
+      setter.file,
+    );
+    assert.doesNotMatch(withoutSqlComments(setter.body), /is_active/, setter.file);
+  });
+
+  test("both invitation writers still refuse archived calendars before the shared validator", () => {
+    for (const fn of ["create_invitation", "update_invitation"]) {
+      const writer = latestDefinition(fn);
+      assert.ok(writer, `no migration defines public.${fn}`);
+      const archived = writer.body.search(/and t\.is_active[\s\S]*?raise exception 'calendar not found or archived'/);
+      const validate = writer.body.indexOf("perform public.access_validate_changes(");
+      assert.ok(archived >= 0, `${writer.file}: ${fn} no longer refuses archived calendars`);
+      assert.ok(validate > archived, `${writer.file}: ${fn} validates rights before refusing archived calendars`);
+    }
+  });
+
+  test("a renamed block follows into open invitations", () => {
+    assert.match(migration, /after update of key on public\.access_blocks/);
   });
 });
 

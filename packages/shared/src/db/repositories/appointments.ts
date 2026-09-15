@@ -99,6 +99,8 @@ export function rowToAppointment(r: Row): Appointment {
     // Счёт, выбранный при приёме денег. Без него сервер угадывает счёт по
     // способу оплаты — и промахивается, когда счёта такого вида у команды нет.
     payment_account_id: r.payment_account_id ?? null,
+    // НДС записи — только чтение: пишет его дверь `set_appointment_vat_mode`.
+    vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined
