@@ -54,11 +54,9 @@ export function formatCountRu(count: number, forms: PluralFormsRu): string {
 
 // ─── Preset form sets for the nouns audit found in production ───────
 
-export const FORMS_ZAPIS: PluralFormsRu = ["запись", "записи", "записей"];
 export const FORMS_USLUGA: PluralFormsRu = ["услуга", "услуги", "услуг"];
 export const FORMS_DEN: PluralFormsRu = ["день", "дня", "дней"];
 export const FORMS_RAZ: PluralFormsRu = ["раз", "раза", "раз"];
 export const FORMS_SCHET: PluralFormsRu = ["счёт", "счёта", "счетов"];
-export const FORMS_KASSA: PluralFormsRu = ["касса", "кассы", "касс"];
 export const FORMS_DOCUMENT: PluralFormsRu = ["документ", "документа", "документов"];
 export const FORMS_PLATEZH: PluralFormsRu = ["платёж", "платежа", "платежей"];

@@ -291,7 +291,7 @@ export function getPaidAmount(apt: Appointment): number {
   if (apt.payment_status === "refunded") return 0;
 
   // Получено СВЕРХ аванса считается по двум источникам и берётся максимум:
-  // леджер payments[] (мобильные пути: buildDebtPaidPatch, close-day) и
+  // леджер payments[] (мобильные пути: buildDebtPaidPatch) и
   // веб-зеркала — payment-объект (нал+карта) либо колонка paid_amount
   // (actualPaid, web appointment-builders) — оба БЕЗ аванса. Именно max,
   // а не «леджер вытесняет зеркала»: у смешанных строк первый мобильный

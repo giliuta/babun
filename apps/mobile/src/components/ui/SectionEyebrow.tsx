@@ -10,7 +10,7 @@ import { useThemeColors } from "@/theme/colors";
 // запрещено.
 //
 // Единственный дом рецепта: до этого он жил пятью копиями по экранам
-// (настройки календаря, cabinet/close-day, teams/[id], + два GroupLabel с
+// (настройки календаря, teams/[id], + два GroupLabel с
 // другими отступами) и уже начал расходиться.
 export function SectionEyebrow({ children }: { children: string }) {
   const t = useThemeColors();
