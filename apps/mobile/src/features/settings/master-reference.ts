@@ -266,8 +266,8 @@ export function operationalTeamJsonToTeam(value: Json): Team {
   };
 }
 
-/** Booking picker identity for an employee. HR/profile jsonb and creator id
- * are never allowed into a dispatcher/master query cache. */
+/** Booking picker identity for an employee. HR/profile jsonb, creator id and
+ * the card's account id are never allowed into a dispatcher/master query cache. */
 export function operationalMasterJsonToMaster(value: Json): Master {
   const row = record(value);
   return {
@@ -286,6 +286,7 @@ export function operationalMasterJsonToMaster(value: Json): Master {
     created_at: requiredString(row, "created_at"),
     updated_at: requiredString(row, "updated_at"),
     created_by: null,
+    user_id: null,
     profile: {},
   };
 }

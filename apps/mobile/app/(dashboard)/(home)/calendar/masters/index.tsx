@@ -88,6 +88,15 @@ export default function MastersScreen() {
       normalizeSearch(`${member.name} ${member.email} ${member.phone ?? ""}`).includes(needle),
     );
   }, [staff, search]);
+  // КАРТОЧКА ПРИГЛАШЁННОГО — НЕ ВТОРАЯ СТРОКА ТОГО ЖЕ ЧЕЛОВЕКА (15.09). Мастеру,
+  // принявшему приглашение, сервер заводит карточку (`invited_master_gets_card`),
+  // а сам он уже стоит строкой «С доступом к календарю»: карточка ниже
+  // повторила бы его вторым рядом.
+  const staffIds = useMemo(() => new Set(staff.map((member) => member.userId)), [staff]);
+  const cards = useMemo(
+    () => masters.filter((master) => !(master.user_id && staffIds.has(master.user_id))),
+    [masters, staffIds],
+  );
   // Отказ «людей видит владелец» — не беда: раздела просто нет. Любая другая
   // ошибка называется вслух, иначе пустой список соврёт «Нет мастеров».
   const membersFailed =
@@ -143,7 +152,7 @@ export default function MastersScreen() {
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={masters}
+          data={cards}
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ flexGrow: 1 }}
           ListHeaderComponent={
@@ -206,7 +215,7 @@ export default function MastersScreen() {
                   action={{ label: "Повторить", onPress: () => void membersQuery.refetch() }}
                 />
               ) : null}
-              {hasPeople && masters.length > 0 ? (
+              {hasPeople && cards.length > 0 ? (
                 <SectionEyebrow>Карточки мастеров</SectionEyebrow>
               ) : null}
             </>
