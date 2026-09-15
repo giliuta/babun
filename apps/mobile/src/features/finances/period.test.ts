@@ -3,15 +3,13 @@ import { describe, test } from "node:test";
 import {
   defaultPeriod,
   makePeriod,
-  monthPeriodOf,
   periodDates,
-  periodPhrase,
   presetHint,
   presetRange,
 } from "./period";
 
-// period.ts — граница ВСЕХ денежных запросов: from/to отсюда уходят в итоги
-// счетов, ленты операций, панель НДС и экспорт. Ошибка на стыке года — это
+// period.ts — граница ВСЕХ денежных запросов: from/to отсюда уходят в ленты
+// операций, итоги «Финансов» и панель НДС. Ошибка на стыке года — это
 // деньги, посчитанные не за тот период, поэтому все стыки закреплены здесь
 // с фиксированной base (никакого «сегодня» внутри тестов).
 
@@ -91,7 +89,7 @@ describe("presetRange — границы пресетов", () => {
   });
 });
 
-describe("makePeriod / monthPeriodOf", () => {
+describe("makePeriod", () => {
   test("makePeriod сохраняет имя пресета рядом с границами", () => {
     assert.deepEqual(makePeriod("lastmonth", JAN15), {
       preset: "lastmonth",
@@ -99,62 +97,6 @@ describe("makePeriod / monthPeriodOf", () => {
       to: "2025-12-31",
     });
     assert.equal(defaultPeriod(JAN15).preset, "month");
-  });
-
-  test("monthPeriodOf — месяц даты, пресет намеренно custom", () => {
-    assert.deepEqual(monthPeriodOf("2026-07-15"), {
-      preset: "custom",
-      from: "2026-07-01",
-      to: "2026-07-31",
-    });
-  });
-});
-
-describe("periodPhrase — период словами", () => {
-  const custom = (from: string, to: string) =>
-    ({ preset: "custom", from, to }) as const;
-
-  test("целый год и целый месяц называются именем", () => {
-    assert.equal(periodPhrase(custom("2026-01-01", "2026-12-31"), JAN15), "2026 год");
-    assert.equal(
-      periodPhrase(custom("2026-01-01", "2026-01-31"), JAN15),
-      "январь",
-    );
-  });
-
-  test("целый месяц ЧУЖОГО года обязан назвать год", () => {
-    assert.equal(
-      periodPhrase(custom("2025-08-01", "2025-08-31"), JAN15),
-      "август 2025",
-    );
-  });
-
-  test("день и диапазон внутри месяца — родительный падеж", () => {
-    assert.equal(periodPhrase(custom("2026-08-10", "2026-08-10"), JAN15), "10 августа");
-    assert.equal(
-      periodPhrase(custom("2026-08-01", "2026-08-15"), JAN15),
-      "1–15 августа",
-    );
-  });
-
-  test("диапазон через месяцы одного года — без года", () => {
-    assert.equal(
-      periodPhrase(custom("2026-06-15", "2026-07-10"), JAN15),
-      "15 июня – 10 июля",
-    );
-  });
-
-  test("диапазон через границу года несёт год у ОБЕИХ границ", () => {
-    // Двухлетний и двухмесячный периоды обязаны читаться по-разному —
-    // именно их «15 декабря – 10 января 2026» не различала.
-    assert.equal(
-      periodPhrase(custom("2024-12-15", "2026-01-10"), JAN15),
-      "15 декабря 2024 – 10 января 2026",
-    );
-    assert.equal(
-      periodPhrase(custom("2025-12-15", "2026-01-10"), JAN15),
-      "15 декабря 2025 – 10 января 2026",
-    );
   });
 });
 

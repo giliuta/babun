@@ -19,6 +19,8 @@ import {
   useVatSettings,
   vatSummaryLine,
 } from "@/features/finances/vat-queries";
+import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useTenant, type Tenant } from "@/features/settings/tenant";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
@@ -63,6 +65,12 @@ export default function FinanceSettingsScreen() {
   const vat = useVatSettings();
   const tenant = useTenant();
   const nextNumber = useNextInvoiceNumber(new Date().getFullYear());
+  // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
+  // общий со страницей «Счета», так что дверь и страница не назовут разные
+  // числа.
+  const accounts = useAccountsWithBalances({ includeInactive: true });
+  const openCount = accounts.data?.filter((a) => a.is_active).length;
+  const closedCount = accounts.data?.filter((a) => !a.is_active).length;
 
   return (
     <Screen>
@@ -70,18 +78,18 @@ export default function FinanceSettingsScreen() {
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionEyebrow>Деньги</SectionEyebrow>
         <SectionCard>
-          {/* Дверь ведёт в НАСТРОЙКИ счетов, а не в список: список — это
-              рабочий экран с деньгами, ему место во вкладке «Финансы», а
-              страница настроек здесь и называется настройкой. */}
+          {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ (владелец
+              2026-09-15: «эту настройку поставь в шестерёнку, и там счета,
+              чтоб была одна и та же страница»). Остатки, порядок, скрытие,
+              «Добавить счёт» и закрытые счета — всё там; двух разных страниц
+              счетов у продукта нет.
+              Соседство с «Счетами клиентам» ниже различают подписи: здесь
+              числа счетов, там номер следующего инвойса. */}
           <SettingsRow
             tile={SETTINGS_TILE.blue}
             icon={Wallet}
-            title="Настройки счетов"
-            // «Порядок строк» здесь больше нет: порядок переставляют ручкой
-            // в самом списке счетов, отдельной страницы не осталось
-            // (владелец 2026-09-12). Подпись перечисляет то, что за дверью
-            // ДЕЙСТВИТЕЛЬНО есть.
-            sub="Добавить счёт, закрытые счета"
+            title="Счета"
+            sub={accountsDoorLine(openCount, closedCount)}
             onPress={() => router.push("/accounts/settings")}
           />
           <Divider inset={56} />
@@ -139,9 +147,9 @@ export default function FinanceSettingsScreen() {
 
         {/* «Отчёта бухгалтеру» в продукте нет (владелец 2026-08-11). Сводный
             CSV за период не имел ни остатка на начало, ни на конец, поэтому не
-            сводился ни с банком, ни с кассой. Формат, который бухгалтер
-            действительно проверяет, — выписка по КОНКРЕТНОМУ счёту; она живёт
-            на карточке счёта, где у неё есть эти границы. */}
+            сводился ни с банком, ни с кассой. Выписку по счёту владелец
+            2026-09-15 тоже снял со страницы счёта («никаких кнопок внутри»),
+            так что сюда её не возвращаем без его слова. */}
       </ScrollView>
     </Screen>
   );

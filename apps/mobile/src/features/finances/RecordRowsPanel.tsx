@@ -35,7 +35,10 @@ export function RecordRowsPanel({
   onOpenRecord,
 }: {
   rows: RecordRow[];
-  title: string;
+  /** Эйбрау над списком. Без него список идёт голым: заголовок рисует хозяин
+   *  НАД списком, чтобы тот не уезжал с прокруткой (лента счёта под плитками
+   *  стоит на месте вместе со своим заголовком). */
+  title?: string;
   /** Направление списка. У смешанной ленты его нет — там каждая строка
    *  приносит своё (`row.tone`). */
   tone?: RecordRowTone;
@@ -130,7 +133,9 @@ export function RecordRowsPanel({
       refreshControl={refreshControl}
       keyExtractor={(row) => row.key}
       ListHeaderComponent={
-        <PanelHeader title={title} right={headerRight} onReset={onReset} />
+        title !== undefined ? (
+          <PanelHeader title={title} right={headerRight} onReset={onReset} />
+        ) : null
       }
       ListEmptyComponent={
         <EmptyState

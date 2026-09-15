@@ -309,8 +309,8 @@ export default function BookScreen() {
     /** Правка существующей записи. Та же страница, тот же порядок полей —
      *  других форм записи в продукте нет (STORY-064). */
     appointmentId?: string;
-    /** Откуда пришли открывать запись: «finances», «invoice:<id>»,
-     *  «account:<id>». Словарь дорог — `resolveReturnTo`. */
+    /** Откуда пришли открывать запись: «finances», «finances:<разрез>»,
+     *  «invoice:<id>». Словарь дорог — `resolveReturnTo`. */
     from?: string;
   }>();
 

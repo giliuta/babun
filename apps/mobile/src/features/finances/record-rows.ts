@@ -1,4 +1,5 @@
 import type { Appointment } from "@babun/shared/local/appointments";
+import { money } from "@babun/shared/common/utils/money";
 import {
   signedAmount,
   type FinanceTransaction,
@@ -40,6 +41,13 @@ export interface RecordRow {
    *  бензин»), которой у них вместо услуг ничего нет. Без неё перевод
    *  печатался прочерком — «Перевод / —». */
   subtitle?: string;
+  /** ЧЕРЕЗ КАКИЕ СЧЕТА ПРОШЛИ ДЕНЬГИ СТРОКИ (владелец 2026-09-15: «в каждой
+   *  заявке — приход, расход, доход — писалось, откуда взялись деньги или
+   *  куда ушли: наличные, карта и так далее»). Данными, а не готовой строкой:
+   *  склейка записи (`mergeByRecord`) собирает счета нескольких строк, и имена
+   *  обязаны встать в том же порядке, что плитки счетов, — его несёт `rank`.
+   *  У перевода пары нет: «Наличные → Карта» уже стоит в `subtitle`. */
+  accounts?: readonly RowAccount[];
   /** СКОЛЬКО. Нетто разреза: все проводки визита сложены со своим знаком. */
   amount: number;
   /** КОГДА. Дата визита (у ручной — дата операции), YYYY-MM-DD. */
@@ -75,13 +83,21 @@ export interface RowExtra {
   amount: number;
 }
 
+/** Счёт строки: имя и место в списке счетов (`RecordRowRefs.accounts`). */
+export interface RowAccount {
+  name: string;
+  rank: number;
+}
+
 export interface RecordRowRefs {
   appointments: readonly Appointment[];
   clients: readonly { id: string; full_name: string }[];
   services: readonly { id: string; name: string }[];
   categories: readonly { id: string; name: string }[];
-  /** Счета — чтобы перевод сказал, ОТКУДА он: заметки и времени у него обычно
-   *  нет, и вторая строка печаталась прочерком. */
+  /** Счета — чтобы строка сказала, ОТКУДА деньги или КУДА ушли. Порядок
+   *  списка — порядок имён в строке («Наличные · Карта»), поэтому сюда
+   *  отдают счета в порядке плиток. Закрытые тоже: операция периода могла
+   *  пройти через счёт, который с тех пор закрыли, и имя у неё осталось. */
   accounts?: readonly { id: string; name: string }[];
 }
 
@@ -109,8 +125,24 @@ export function recordRows(
   const catalog = new Map(refs.services.map((s) => [s.id, s.name]));
   const category = new Map(refs.categories.map((c) => [c.id, c.name]));
   const account = new Map((refs.accounts ?? []).map((a) => [a.id, a.name]));
+  const accountRank = new Map((refs.accounts ?? []).map((a, i) => [a.id, i]));
+  /** Счета строки по id проводок. Неизвестный счёт молчит: печатать «счёт»
+   *  рядом с услугами — сказать меньше, чем ничего. */
+  const accountTags = (
+    ids: Iterable<string | null>,
+  ): RowAccount[] | undefined => {
+    const tags: RowAccount[] = [];
+    for (const id of ids) {
+      const name = id ? account.get(id) : undefined;
+      const rank = id ? accountRank.get(id) : undefined;
+      if (name !== undefined && rank !== undefined) tags.push({ name, rank });
+    }
+    return tags.length > 0 ? tags : undefined;
+  };
 
   const byRecord = new Map<string, RecordRow>();
+  /** Счета визита копятся по мере сложения его проводок. */
+  const recordAccounts = new Map<string, Set<string | null>>();
   const rows: RecordRow[] = [];
 
   // ПЕРЕВОД — ОДНА ОПЕРАЦИЯ, А НЕ ДВЕ (владелец 2026-09-10: «это как будто
@@ -179,11 +211,10 @@ export function recordRows(
         title,
         services: [],
         // Заметку печатаем, только если она не повторяет заголовок: у
-        // операции без категории заголовком стала сама заметка. Перевод
-        // заметки обычно не несёт — тогда он называет свой счёт.
-        subtitle:
-          (note && note !== title ? note : undefined) ??
-          (tx.account_id ? account.get(tx.account_id) : undefined),
+        // операции без категории заголовком стала сама заметка. Счёт идёт
+        // своим полем и встаёт после заметки, а не вместо неё.
+        subtitle: note && note !== title ? note : undefined,
+        accounts: accountTags([tx.account_id]),
         tone: tx.type === "transfer" ? "transfer" : undefined,
         amount: signedAmount(tx),
         date: tx.occurred_on,
@@ -196,8 +227,10 @@ export function recordRows(
     if (existing) {
       existing.amount += signedAmount(tx);
       existing.count += 1;
+      recordAccounts.get(apt.id)?.add(tx.account_id);
       continue;
     }
+    recordAccounts.set(apt.id, new Set([tx.account_id]));
     const row: RecordRow = {
       key: apt.id,
       appointmentId: apt.id,
@@ -213,6 +246,11 @@ export function recordRows(
     };
     byRecord.set(apt.id, row);
     rows.push(row);
+  }
+
+  for (const [aptId, ids] of recordAccounts) {
+    const row = byRecord.get(aptId);
+    if (row) row.accounts = accountTags(ids);
   }
 
   // Копейки после сложения нескольких платежей: 44.4 + 34.4 даёт 78.80000001.
@@ -239,15 +277,71 @@ export function servicesLine(services: readonly string[]): string {
   return rest > 0 ? `${shown} +${rest}` : shown;
 }
 
-/** ЧТО и КОГДА — одной строкой под именем клиента. Время здесь обязательно
- *  (владелец 2026-09-09: «насчёт время надо на этом обязательно»): по нему
- *  узнают работу. Дата не печатается — она заголовок дня. */
+/** КОГДА, ЧЕРЕЗ КАКОЙ СЧЁТ и ЧТО — одной строкой под именем клиента. Время
+ *  здесь обязательно (владелец 2026-09-09: «насчёт время надо на этом
+ *  обязательно»): по нему узнают работу. Дата не печатается — она заголовок
+ *  дня.
+ *
+ *  СЧЁТ ИДЁТ ДО УСЛУГ (разбор 2026-09-15). Строка в одну линию и режется
+ *  многоточием с конца; счёт в хвосте первым и срезался — «11:30 · Chimney
+ *  sweeping, Duct cleaning +2 · Нал…», и слово владельца «в каждой заявке
+ *  писалось, откуда взялись деньги» на обычном визите не выполнялось.
+ *  Перечень услуг длинный и узнаётся по первому слову, счёт — одно-два
+ *  коротких имени. */
 export function whatLine(
-  row: Pick<RecordRow, "time" | "services" | "subtitle">,
+  row: Pick<RecordRow, "time" | "services" | "subtitle" | "accounts">,
 ): string {
-  return [row.time, row.subtitle || servicesLine(row.services)]
+  return [
+    row.time,
+    accountsLine(row.accounts),
+    row.subtitle || servicesLine(row.services),
+  ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/** Лента ОДНОГО выбранного счёта имени счёта в строках не повторяет: оно уже
+ *  стоит заголовком ленты («НАЛИЧНЫЕ · 5»), а повтор одного и того же
+ *  владелец не любит. Перевод своё «Наличные → Карта» держит — это не имя
+ *  выбранного счёта, а куда ушли деньги. */
+export function dropAccountNames(rows: readonly RecordRow[]): RecordRow[] {
+  return rows.map((row) => (row.accounts ? { ...row, accounts: undefined } : row));
+}
+
+/** Имена счетов строки: каждое один раз, в порядке плиток счетов. Порядок не
+ *  зависит от того, какой платёж пришёл первым, — иначе один и тот же визит
+ *  читался бы то «Наличные · Карта», то «Карта · Наличные». Два счёта с одним
+ *  именем в разных командах печатаются одним словом: строка называет, где
+ *  деньги, а чья команда — говорит чип над экраном. */
+export function accountsLine(
+  accounts: readonly RowAccount[] | undefined,
+): string {
+  if (!accounts?.length) return "";
+  const names: string[] = [];
+  for (const tag of [...accounts].sort((a, b) => a.rank - b.rank)) {
+    if (!names.includes(tag.name)) names.push(tag.name);
+  }
+  return names.join(" · ");
+}
+
+/** Сумма «как напечатано» и сумма «как хранится» — один канон для сравнения:
+ *  без пробелов (лента ставит неразрывный U+00A0), без €, запятая → точка. */
+const canonMoney = (s: string) => s.replace(/[\s€]/g, "").replace(/,/g, ".");
+
+/** ПОИСК ИЩЕТ ТО, ЧТО ВИДНО В СТРОКЕ: клиент, услуги, сумма и счёт. Поле
+ *  поиска обещает «Сумма, счёт, заметка», а счёт до 2026-09-15 в строке не
+ *  печатался — и искать по нему было нельзя. Пустой запрос пропускает всё. */
+export function rowMatchesQuery(row: RecordRow, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const includes = (text: string) => text.toLowerCase().includes(needle);
+  return (
+    includes(row.title) ||
+    row.services.some(includes) ||
+    (row.subtitle ? includes(row.subtitle) : false) ||
+    (row.accounts ?? []).some((tag) => includes(tag.name)) ||
+    canonMoney(money(Math.abs(row.amount))).includes(canonMoney(needle))
+  );
 }
 
 /** Правая подпись, когда состояние одно: число платежей, если их несколько. */
@@ -332,8 +426,12 @@ export function mergeByRecord(rows: readonly RecordRow[]): RecordRow[] {
       tone,
       amount: Math.abs(sums.get(tone) ?? 0),
     }));
+    // Счета склеенной строки — все, через которые шли деньги этой работы:
+    // доход пришёл на карту, материалы ушли наличными — «Наличные · Карта».
+    const accounts = group.flatMap((row) => row.accounts ?? []);
     return {
       ...head,
+      accounts: accounts.length > 0 ? accounts : undefined,
       key: `rec:${head.appointmentId}`,
       amount: Math.round((sums.get(headTone) ?? 0) * 100) / 100,
       tone: headTone,

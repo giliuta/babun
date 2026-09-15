@@ -56,8 +56,8 @@ export function useAppointmentLedger(appointmentId: string | null | undefined) {
 }
 
 // Ключ среза журнала (`ledgerRangeKey`) живёт в `lib/company-query-keys.ts`:
-// тот же срез берут хук, разовая дозагрузка выписки И прогрев другой компании
-// — разъехавшиеся ключи молча завели бы две копии одного месяца в кэше.
+// тот же срез берут хук и прогрев другой компании — разъехавшиеся ключи молча
+// завели бы две копии одного месяца в кэше.
 
 /**
  * Журнал за период (границы включительно по `occurred_on`), сужаемый до нужных
@@ -97,25 +97,6 @@ export function useTransactions(
         ...(accountScope ? { accountIds: accountScope } : {}),
       }),
   });
-}
-
-/**
- * Разовая дозагрузка ПОЛНОГО среза периода — по нажатию, а не подпиской.
- *
- * Нужна ровно одному месту: выписке по счёту. Её колонке «Корреспондент» нужна
- * ВТОРАЯ нога перевода, а она лежит на чужом счёте и в суженный срез карточки
- * не попадает. Держать ради этой колонки постоянную подписку на журнал всего
- * тенанта — плохой размен: выписку просят раз в месяц, а карточку открывают
- * двадцать раз в день.
- */
-export function useFetchLedgerRange() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return (from: string, to: string) =>
-    qc.fetchQuery({
-      queryKey: ledgerRangeKey(tenantId, from, to, null, null),
-      queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
-    });
 }
 
 // Σ возвратов по каждому исходному доходу (refund_of_id → сумма) — кап для

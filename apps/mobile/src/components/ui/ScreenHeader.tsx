@@ -1,6 +1,6 @@
 import { type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { ChevronLeft } from "lucide-react-native";
 import { ICON, TYPE } from "./tokens";
 import { useThemeColors } from "@/theme/colors";
@@ -16,10 +16,14 @@ export function ScreenHeader({
   right,
   large,
   seam = true,
+  fallbackHref,
 }: {
   title: string;
   subtitle?: string;
   onBack?: () => void;
+  /** Куда ведёт «назад», когда истории переходов нет. По умолчанию — корень
+   *  приложения (календарь); страницам счёта это «Финансы → Счета». */
+  fallbackHref?: Href;
   /** Действие СЛЕВА от заголовка — место шестерёнки на корневых экранах
    *  вкладок. Владелец 2026-08-09: «настройки должны быть с левой стороны и
    *  везде, полностью всё одинаковое, чтоб не путаться». */
@@ -61,10 +65,13 @@ export function ScreenHeader({
       <Pressable
         // Cold deep link (push / state restore) can land here with an empty
         // history — GO_BACK would be a dead button (red screen in dev), so
-        // fall back to the app root.
+        // fall back to the screen's home (the app root unless told otherwise).
         onPress={
           onBack ??
-          (() => (router.canGoBack() ? router.back() : router.replace("/")))
+          (() =>
+            router.canGoBack()
+              ? router.back()
+              : router.replace(fallbackHref ?? "/"))
         }
         hitSlop={8}
         accessibilityRole="button"

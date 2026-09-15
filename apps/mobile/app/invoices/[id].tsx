@@ -13,6 +13,7 @@ import {
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { paymentMethodLabel } from "@babun/shared/local/finance/transaction";
 import { Badge } from "@/components/ui/Badge";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Divider } from "@/components/ui/Divider";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,6 +29,7 @@ import { useAppointments } from "@/features/calendar/queries";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
+import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import {
   formatInvoiceDate,
   formatInvoiceMoney,
@@ -66,17 +68,11 @@ export default function InvoiceDetailScreen() {
   const clientsQuery = useClients();
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
   const appointmentsQuery = useAppointments();
-  const appointments = useMemo(
-    () => appointmentsQuery.data ?? [],
-    [appointmentsQuery.data],
-  );
+  const appointments = useMemo(() => appointmentsQuery.data ?? [], [appointmentsQuery.data]);
   const teamsQuery = useTeams({ includeInactive: true });
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const accountsQuery = useAccountsWithBalances();
-  const accounts = useMemo(
-    () => accountsQuery.data ?? [],
-    [accountsQuery.data],
-  );
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const tenantQuery = useTenant();
   const tenant = tenantQuery.data;
   const calendarSettingsQuery = useCalendarSettings();
@@ -96,6 +92,7 @@ export default function InvoiceDetailScreen() {
   const refund = useRefundInvoicePayment(id);
   const cancel = useCancelInvoice(id);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [accountCreateOpen, setAccountCreateOpen] = useState(false);
   const [refundTarget, setRefundTarget] = useState<InvoicePaymentLedger | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const businessToday = todayYmd(calendarSettings?.timezone ?? "Europe/Nicosia");
@@ -106,10 +103,7 @@ export default function InvoiceDetailScreen() {
   );
   const appointment = appointments.find((item) => item.id === invoice.data?.appointment_id);
   const team = teams.find((item) => item.id === invoice.data?.brigade_id);
-  const payments = useMemo(
-    () => paymentRows.data?.[id] ?? [],
-    [id, paymentRows.data],
-  );
+  const payments = useMemo(() => paymentRows.data?.[id] ?? [], [id, paymentRows.data]);
   const settlement = useMemo(
     () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
     [invoice.data, payments],
@@ -133,10 +127,7 @@ export default function InvoiceDetailScreen() {
     () => accountsForTeam(accounts, invoice.data?.brigade_id ?? null),
     [accounts, invoice.data?.brigade_id],
   );
-  const accountById = useMemo(
-    () => new Map(accounts.map((account) => [account.id, account.name])),
-    [accounts],
-  );
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
 
   const shareInvoice = async () => {
     if (!invoice.data) return;
@@ -363,16 +354,21 @@ export default function InvoiceDetailScreen() {
       setPaymentOpen(true);
       return;
     }
-    confirmThen(
-      "Нет активного финансового счёта",
-      {
-        message: row.brigade_id
-          ? "Заведите счёт этой команде или подключите её к уже существующему счёту, затем отметьте инвойс оплаченным."
-          : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
-        confirmLabel: "Открыть счета",
-      },
-      () => router.push("/accounts"),
-    );
+    // Счёт одной команды (владелец 2026-08-15) заводится ПРЯМО ЗДЕСЬ, листом
+    // (владелец 2026-09-15: «добавлять счёт, не переходя на отдельную
+    // страницу»). Уход на «Финансы» из корневого стека клал поверх инвойса
+    // вторую копию всех вкладок (`navigate` в expo-router 6 — это push), а
+    // человек терял инвойс, который собирался отметить оплаченным.
+    confirmThen("Нет активного финансового счёта", {
+      message: row.brigade_id
+        ? "Заведите счёт этой команде, затем отметьте инвойс оплаченным."
+        : "Создайте или активируйте финансовый счёт, затем отметьте инвойс оплаченным.",
+      confirmLabel: "Добавить счёт",
+      // Шторка счёта — после отъезда вопроса: открытая в миг ответа, она не
+      // появлялась, а флаг «открыта» оставался (ревью 2026-09-15).
+    }, () => {
+      setTimeout(() => setAccountCreateOpen(true), SHEET_EXIT_MS + 350);
+    });
   };
 
   const openLinkedAppointment = () => {
@@ -698,6 +694,12 @@ export default function InvoiceDetailScreen() {
           await refund.mutateAsync(value);
         }}
         onClose={() => setRefundTarget(null)}
+      />
+      <AccountEditorSheet
+        visible={accountCreateOpen}
+        accountId={null}
+        onClose={() => setAccountCreateOpen(false)}
+        presetTeamId={row.brigade_id}
       />
       <ClientPickerSheet
         visible={pickClientOpen}

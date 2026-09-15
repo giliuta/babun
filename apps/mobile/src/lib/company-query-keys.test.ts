@@ -83,7 +83,7 @@ describe("ключи денег и мастеров не изменили фор
 
 // УСЛОВИЕ СЕССИИ 004 (2026-09-13): по деньгам сбросы идут ПРЕФИКСОМ —
 // `["transactions"]`, `["accounts"]`, `["invoices"]`, `["payment-accounts"]`,
-// `["finance-categories"]`, `["masters"]` (payment-mutations.ts, cash-counts.ts,
+// `["finance-categories"]`, `["masters"]` (payment-mutations.ts,
 // invoices/queries.ts, finances/queries.ts, finances/accounts.ts,
 // settings/tenant.ts). Смени фабрика первый сегмент — оплата пройдёт, а
 // остаток и лента останутся старыми до ручного обновления, без единой ошибки.

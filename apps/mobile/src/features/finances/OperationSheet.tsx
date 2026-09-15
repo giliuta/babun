@@ -5,9 +5,10 @@ import type {
   FinanceTransaction,
   PaymentMethod,
 } from "@babun/shared/local/finance/transaction";
-import { BottomSheet } from "@/components/ui/BottomSheet";
+import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { useReferenceHref } from "@/features/clients/reference-href";
+import { accountEditHref } from "./account-editor/editor-logic";
 import { Button } from "@/components/ui/Button";
 import { ActionRow } from "@/components/ui/card-rows";
 import { Chip } from "@/components/ui/Chip";
@@ -877,6 +878,9 @@ export function OperationSheet({
                   color={a.color ?? th.ink}
                   tint={a.color}
                   width={tileWidth}
+                  // Одной плашкой: значок слева от имени, 44pt (владелец
+                  // 2026-09-15: «компактнее, чтоб иконка была слева»).
+                  compact
                   // Плитка держит СВОЙ цвет и в покое, и выбранной — им счёт
                   // и узнают. Radio-семантика: счёт обязателен, повторный тап
                   // выбор не снимает.
@@ -959,14 +963,15 @@ export function OperationSheet({
               />
             ) : null}
             {txAccountClosed && txAccountId ? (
-              // Выход из тупика закрытого счёта: открыть счёт можно только
-              // на его странице, отсюда туда и ведём.
+              // Выход из тупика закрытого счёта: «Открыть снова» — в его листе.
               <ActionRow
                 separated={showClientRow || showInvoiceRow || showRefundRow}
-                label="Открыть страницу счёта"
+                label="Открыть настройки счёта"
                 onPress={() => {
                   onClose();
-                  router.push(`/accounts/${txAccountId}`);
+                  // Переход — когда лист уехал: страница поднимает шторку счёта,
+                  // и поверх уезжающего листа она не появлялась.
+                  setTimeout(() => router.push(accountEditHref(txAccountId)), SHEET_EXIT_MS);
                 }}
               />
             ) : (

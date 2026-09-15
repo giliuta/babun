@@ -16,11 +16,10 @@ import {
   type AccountDraft,
 } from "@babun/shared/db/repositories/accounts";
 import {
-  accountHasLedgerHistory,
   createTransfer,
   deleteTransfer,
   listAccountBalances,
-  listAccountPeriodTotals,
+  type AccountBalanceRow,
   type TransferDraft,
 } from "@babun/shared/db/repositories/finance-transactions";
 import type {
@@ -67,8 +66,8 @@ function invalidateAccounts(qc: QueryClient): void {
 // и сохраняет набранное, а повтор попадает в серверный дедуп по `request_id`.
 //
 // Стоит на КАЖДОЙ денежной записи продукта, а не только на переводе: закрытие
-// счёта, перестановка строк, сохранение операции и сверка кассы без сети
-// зависали ровно так же.
+// счёта, перестановка строк и сохранение операции без сети зависали ровно так
+// же.
 export const NEVER_PAUSE = { networkMode: "always" } as const;
 
 // Карточки счетов живут дольше денег: имя, вид и порядок меняют раз в
@@ -143,23 +142,10 @@ export function useAccountsWithBalances(
 
   const rows = rowsQuery.data;
   const balances = balancesQuery.data;
-  const data = useMemo(() => {
-    if (!rows || !balances) return undefined;
-    const byAccount = new Map(
-      balances.filter((b) => b.account_id).map((b) => [b.account_id, b]),
-    );
-    return rows.map((a): AccountWithBalance => {
-      const b = byAccount.get(a.id);
-      return {
-        ...a,
-        balance: a.opening_balance + (b?.delta ?? 0),
-        has_history: b?.has_history ?? false,
-        last_outflow_on: b?.last_outflow_on ?? null,
-        last_tx_on: b?.last_tx_on ?? null,
-        first_tx_on: b?.first_tx_on ?? null,
-      };
-    });
-  }, [rows, balances]);
+  const data = useMemo(
+    () => (rows && balances ? mergeAccountBalances(rows, balances) : undefined),
+    [rows, balances],
+  );
 
   return {
     data,
@@ -170,21 +156,25 @@ export function useAccountsWithBalances(
   };
 }
 
-/**
- * Итоги счетов за период (герой экрана, суммы строк). Колонки приходят с
- * сервера УЖЕ СО ЗНАКОМ и только складываются — см. account-period.ts.
- *
- * Ключ намеренно НЕ под ["accounts"]: правка имени счёта не должна ронять
- * периодную сводку, а любая запись в журнал — должна, поэтому префикс общий
- * с остальными деньгами (["transactions"] инвалидируется на каждой записи).
- */
-export function useAccountPeriodTotals(from: string, to: string) {
-  const tenantId = useTenantId();
-  return useQuery({
-    queryKey: ["transactions", tenantId, "account-period-totals", from, to],
-    enabled: !!tenantId && !!from && !!to,
-    queryFn: () =>
-      listAccountPeriodTotals(supabase, tenantId as string, from, to),
+/** Строки счетов + серверные остатки → счета с живым остатком. Одна склейка на
+ *  хук и на чтение из кэша после перевода (закрытие счёта). */
+export function mergeAccountBalances(
+  rows: readonly Account[],
+  balances: readonly AccountBalanceRow[],
+): AccountWithBalance[] {
+  const byAccount = new Map(
+    balances.filter((b) => b.account_id).map((b) => [b.account_id, b]),
+  );
+  return rows.map((a): AccountWithBalance => {
+    const b = byAccount.get(a.id);
+    return {
+      ...a,
+      balance: a.opening_balance + (b?.delta ?? 0),
+      has_history: b?.has_history ?? false,
+      last_outflow_on: b?.last_outflow_on ?? null,
+      last_tx_on: b?.last_tx_on ?? null,
+      first_tx_on: b?.first_tx_on ?? null,
+    };
   });
 }
 
@@ -207,16 +197,6 @@ export function useDeleteAccount() {
     mutationFn: (id: string) => deleteAccount(supabase, id),
     onSuccess: () => invalidateAccounts(qc),
     meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
-// Зеркало серверного guard_account_financial_history: настройки счёта
-// глушат правку вида/старта/команды заранее, а не ошибкой после сохранения.
-export function useAccountHasHistory(accountId: string | null) {
-  return useQuery({
-    queryKey: ["accounts", "has-history", accountId],
-    enabled: !!accountId,
-    queryFn: () => accountHasLedgerHistory(supabase, accountId as string),
   });
 }
 

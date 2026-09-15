@@ -163,6 +163,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices, useServices } from "@/features/services/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
+import { financeAccountsHref } from "@/features/finances/accounts-sections";
 import { useCalendarChips } from "@/features/settings/workspaces";
 import {
   useCities,
@@ -1483,14 +1484,13 @@ export default function CalendarTab() {
           // выбор» (CalendarCreateSheet). Автосозданный календарь про это
           // забывал: календарь из шторки рождался со «Наличные» и «Карта», а
           // самый первый — вообще без счетов, и первая же оплата упиралась в
-          // пустой выбор. Успех молчит (человек ничего не просил), а вот
-          // провал говорит вслух и даёт дверь — иначе деньги некуда принять,
-          // и никто об этом не знает.
+          // пустой выбор. Успех молчит (человек ничего не просил), а провал
+          // говорит вслух и даёт дверь в счета команды на «Финансах».
           seedFirstCalendarAccounts.mutate(team.id, {
             onError: () =>
               toast("Календарю нужны счета — добавьте их", "error", {
                 label: "Счета",
-                onPress: () => router.push(`/accounts?team=${team.id}`),
+                onPress: () => router.navigate(financeAccountsHref(team.id) as Href),
               }),
           });
         },

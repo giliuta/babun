@@ -55,7 +55,7 @@
 
 Панель, выезжающая снизу поверх экрана. `BottomSheet`, 40 применений.
 
-**Анатомия:** заголовок пропом `title` → тело в прокрутке (`scroll`) → кнопка в `footer` вне прокрутки. Эталон: `src/features/finances/AccountCreateSheet.tsx:249`.
+**Анатомия:** заголовок пропом `title` → тело в прокрутке (`scroll`) → кнопка в `footer` вне прокрутки. Эталон: `src/features/finances/account-editor/CreateAccountSheet.tsx:248`.
 
 **Закон жанра — создание листом, информация страницей.** Короткая форма на 2–4 поля, которую заполняют по несколько штук подряд, — лист. Сущность, которая владеет вещами и к которой возвращаются, — своя страница. Настройка и набор («Способы связи», справочники) листом быть не могут вовсе: у листа нет ни заголовка в стеке, ни «назад», ни места под пояснение (LOCKED 2026-08-02). Шестерёнка внутри листа уводит НА страницу.
 
@@ -107,50 +107,49 @@
 
 | Нужно сделать | Берётся деталь | Эталон смотреть здесь |
 |---|---|---|
-| Начать любой экран | `Screen edges={["top"]}` | `app/accounts/index.tsx:472` |
+| Начать любой экран | `Screen edges={["top"]}` | `app/accounts/settings.tsx:165` |
 | Экран над табами (таб-бара нет) | `Screen edges={["top","bottom"]}` + `DashboardGate` в `_layout` | `app/accounts/_layout.tsx:12` |
-| Шапка внутренней страницы | `ScreenHeader` | `app/accounts/index.tsx:476` |
+| Шапка внутренней страницы | `ScreenHeader` | `app/accounts/settings.tsx:166` |
 | Крупный заголовок корня вкладки | `ScreenHeader large` | `app/(dashboard)/chats/index.tsx:331` |
 | Полоса управления на корне вкладки | копия анатомии CalendarHeader (примитива нет) | `src/features/calendar/CalendarHeader.tsx:34` |
-| Переключить команду, чьи данные видно | `ScopeChips` | `app/accounts/index.tsx:528` |
+| Переключить команду, чьи данные видно | `ScopeChips` | `src/features/finances/FinanceOverview.tsx:229` |
 | Назвать группу карточек | `SectionEyebrow` | `app/(dashboard)/cabinet/index.tsx:269` |
 | Обычная карточка-блок | `SectionCard` | `app/(dashboard)/(home)/calendar/display.tsx:53` |
-| Карточка с подытогом или цветом команды | `RowGroup` | `app/accounts/[id]/settings.tsx:357` |
+| Карточка с подытогом или цветом команды | `RowGroup` | `src/features/finances/account-editor/AccountMoneyGroup.tsx:91` |
 | Карточка, приезжающая по частям (SectionList) | `RowGroupBody` + `RowGroupHeader` | `src/features/finances/AccountsPanel.tsx:74` |
 | Строка, которую правят прямо на месте | `FieldRow stacked live` | `src/features/clients/ClientHeader.tsx:301` |
-| Строка, которая уводит на страницу или в лист | `NavRow` | `app/accounts/[id]/settings.tsx:374` |
-| Строка настройки со значком в плитке | `SettingsRow` | `app/accounts/index.tsx:339` |
+| Строка, которая уводит на страницу или в лист | `NavRow` | `app/accounts/settings.tsx:235` |
+| Строка настройки со значком в плитке | `SettingsRow` | `src/features/access/InvitationsRow.tsx:23` |
 | Строка «включено / выключено» | `SwitchRow` | `app/(dashboard)/(home)/calendar/display.tsx:54` |
 | Строка со значением, которое может быть «как везде» | `ValueRow` | `src/features/calendar/TeamScheduleSheet.tsx:478` |
 | Строка-действие над сущностью, в т.ч. «Удалить» | `ActionRow` (`tone="danger"`) | `src/features/finances/OperationSheet.tsx:839` |
-| Добавить сущность в список | `AddRow` | `app/accounts/index.tsx:592` |
-| Тихий факт под группой строк | `RowCaption` | `app/accounts/[id]/index.tsx:895` |
+| Добавить сущность в список | `AddRow` | `src/features/calendar/BreaksSection.tsx:131` |
+| Тихий факт под группой строк | `RowCaption` | `app/accounts/settings.tsx:247` |
 | Действие над значением конкретной строки (позвонить, маршрут) | `RowActionButton` | `src/features/clients/PhoneChannelButton.tsx:67` |
 | Редкое действие по свайпу строки | `SwipeRow` | `src/features/reference/screens/LabelsScreen.tsx:289` |
 | Дать переставить строки местами | `ReorderList` | `src/features/reference/screens/LabelsScreen.tsx:274` |
 | Целая страница-набор с галками | `ToggleListScreen` | `app/(dashboard)/clients/channels.tsx:78` |
 | Поле ввода в форме | `Field` | `app/(dashboard)/cabinet/account.tsx:158` |
-| Подписать не-поле в той же форме | `FieldLabel` | `src/features/finances/AccountCreateSheet.tsx:353` |
-| Спросить сумму как главный вопрос экрана | `MoneyField` | `src/features/finances/AccountCreateSheet.tsx:284` |
+| Подписать не-поле в той же форме | `FieldLabel` | `src/features/finances/account-editor/CreateAccountSheet.tsx:333` |
+| Спросить сумму как главный вопрос экрана | `MoneyField` | `src/features/finances/account-editor/CreateAccountSheet.tsx:279` |
 | Спросить дату | `DateTimeInput` (компактный) | `src/features/invoices/InvoiceDateRow.tsx:46` |
 | Спросить НЕобязательную дату («Указать») | `DateWheelSheet` | `src/features/clients/blocks/PersonalBlock.tsx:231` |
 | Спросить время | `TimeWheelPair` (шаг 5 минут) | `src/features/services/ServiceBlocks.tsx:439` |
 | Спросить отрезок «Начало — Конец» | `TimeRangePicker` | `src/features/calendar/HourRangeSheet.tsx:135` |
-| Спросить цвет | `ColorField` | `src/features/finances/AccountCreateSheet.tsx:341` |
-| Спросить значок | `IconField` | `src/features/finances/AccountCreateSheet.tsx:335` |
+| Спросить вид (значок или цвет) у сущности без имени | `AppearanceField` | `app/(dashboard)/cabinet/inventory.tsx:391` |
 | Спросить имя и цвет одним вопросом | `NameColorField` | `app/(dashboard)/cabinet/teams/[id]/index.tsx:280` |
 | Выбор из 3–8 коротких значений одним тапом | `Chip` (+ `radio`/`checkbox`) | `src/features/finances/OperationSheet.tsx:779` |
 | Две-четыре стороны одной оси («Доход / Расход») | `SegmentedControl` | `src/features/finances/OperationSheet.tsx:618` |
 | Расширяемый словарь бизнеса (тип объекта) | `ChoiceRow` | `src/features/clients/ObjectSheet.tsx:301` |
 | Одно значение из длинного списка со своей страницей | `ValuePickerSheet` | `src/features/finances/OperationSheet.tsx:887` |
 | Выбор ВТОРЫМ ШАГОМ внутри уже открытого листа | `ValueOptionList` | `src/features/finances/TransferSheet.tsx:457` |
-| Закрытое перечисление (страна, способ оплаты) | `chooseValue` | `app/accounts/[id]/settings.tsx:205` |
+| Закрытое перечисление (страна, способ оплаты) | `chooseValue` | `app/(dashboard)/cabinet/business.tsx:73` |
 | Меню «что сделать» (5–6 крупных строк) | `PickerSheet` | `src/features/clients/RouteSheet.tsx:37` |
 | Спросить «точно удалить?» | `confirmThen` / `chooseOption` | `src/features/reference/screens/LabelsScreen.tsx:209` |
 | Выбрать период | `PeriodPresetModal` + `PeriodWheelsModal` | `app/(dashboard)/finances/index.tsx:1135` |
 | Главное действие экрана или листа | `Button` (`primary`) | `app/(dashboard)/cabinet/account.tsx:79` |
 | То же, но в цвете сущности | `GradientButton tint` | `app/book/index.tsx:2420` |
-| Показать «пусто / грузим / сломалось» | `EmptyState` | `app/accounts/index.tsx:395` |
+| Показать «пусто / грузим / сломалось» | `EmptyState` | `app/accounts/settings.tsx:175` |
 | Точечное ожидание (в кнопке, у строки) | `Spinner` | `src/components/ui/GradientButton.tsx:158` |
 | Показать фоновое дообновление поверх готовых данных | `LoadingBar` | `app/(dashboard)/clients/index.tsx:589` |
 | Дать «потянуть список вниз» | `usePullRefresh` | `app/(dashboard)/finances/index.tsx:525` |

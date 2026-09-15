@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { RotateCcw } from "lucide-react-native";
@@ -11,6 +11,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { RowGroup } from "@/components/ui/card-rows";
 import { useToast } from "@/components/ui/Toast";
+import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { accountIcon } from "@/features/finances/account-ui";
 import {
   useAccountsWithBalances,
@@ -26,8 +27,13 @@ import { useThemeColors } from "@/theme/colors";
 //
 // Раньше архив жил параметром `/accounts?archived=1`: тот же экран рисовал сам
 // себя поверх себя, второй раз тянул все запросы счетов и держал в голове
-// ветку «а это архив» в каждом состоянии. Теперь это отдельная страница за
-// «Настройки счетов».
+// ветку «а это архив» в каждом состоянии. Теперь это отдельная страница, и
+// дверь в неё одна: строка «Закрытые счета» на странице «Счета» (за ползунками
+// панели и шестерёнкой «Финансов», владелец 2026-09-15).
+//
+// ТАП — ТА ЖЕ ШТОРКА ПРАВКИ, ЧТО У ОТКРЫТОГО СЧЁТА (владелец 2026-09-15: «я
+// могу также тапнуть на тот же созданный и то же самое редактировать»).
+// «Открыть снова» живёт в ней словом и здесь — левой кромкой.
 //
 // ЦИФРЫ ЗДЕСЬ НЕТ — ЕСТЬ СОСТОЯНИЕ. У закрытого счёта печатается «Закрыт», а
 // не «€0»: ноль в денежной колонке читается как правда о деньгах («на счету
@@ -59,6 +65,11 @@ export default function AccountsArchiveScreen() {
 
   const reopen = useReopenAccount();
   const close = useSoftCloseAccount();
+  // `id` отдельно от `open`: уезжающая шторка не меняет содержимое на полпути.
+  const [editor, setEditor] = useState<{ open: boolean; id: string | null }>({
+    open: false,
+    id: null,
+  });
 
   // ОТКРЫТИЕ ОБРАТИМО — значит тостом с «Отменить», а не вопросом до
   // действия (тот же приём, что у перевода и архива клиентов). Вопрос перед
@@ -67,8 +78,8 @@ export default function AccountsArchiveScreen() {
     reopen.mutate(account.id, {
       // ОТМЕНА ПРЕДЛАГАЕТСЯ ТОЛЬКО ТАМ, ГДЕ ОНА СРАБОТАЕТ. Счёт с остатком
       // закрыть нельзя (`guard_account_financial_history`) — у янтарной строки
-      // кнопка «Отменить» отбивалась бы ВСЕГДА. Такой счёт закрывают из его
-      // настроек: там есть единственная рабочая дорога — сдать остаток.
+      // кнопка «Отменить» отбивалась бы ВСЕГДА. Такой счёт закрывают со
+      // страницы «Счета»: там есть единственная рабочая дорога — сдать остаток.
       onSuccess: () =>
         toast(
           `Счёт «${account.name}» открыт`,
@@ -120,7 +131,16 @@ export default function AccountsArchiveScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Закрытые счета" />
+      <ScreenHeader
+        title="Закрытые счета"
+        // Холодная ссылка прямо сюда: «назад» ведёт к единственной двери этой
+        // страницы, а не на календарь, куда примитив уводит пустую историю.
+        onBack={() =>
+          router.canGoBack()
+            ? router.back()
+            : router.replace("/accounts/settings")
+        }
+      />
       {!hasData && !loadError ? (
         online ? (
           <EmptyState state="loading" fill title="Загружаем счета" />
@@ -192,7 +212,7 @@ export default function AccountsArchiveScreen() {
                       onA11yAction={(name) => {
                         if (name === "reopen") openAgain(account, left);
                       }}
-                      onPress={() => router.push(`/accounts/${account.id}`)}
+                      onPress={() => setEditor({ open: true, id: account.id })}
                     />
                   </SwipeRow>
                 </View>
@@ -201,6 +221,11 @@ export default function AccountsArchiveScreen() {
           </RowGroup>
         </ScrollView>
       )}
+      <AccountEditorSheet
+        visible={editor.open}
+        accountId={editor.id}
+        onClose={() => setEditor((current) => ({ ...current, open: false }))}
+      />
     </Screen>
   );
 }

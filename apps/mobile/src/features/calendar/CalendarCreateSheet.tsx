@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -15,6 +15,7 @@ import {
   type Team,
 } from "@/features/reference/queries";
 import { useCreateTeamAccounts } from "@/features/finances/accounts";
+import { financeAccountsHref } from "@/features/finances/accounts-sections";
 
 // СОЗДАНИЕ КАЛЕНДАРЯ — ЕДИНСТВЕННАЯ ДВЕРЬ НА ВЕСЬ ПРОДУКТ.
 //
@@ -120,15 +121,20 @@ export function CalendarCreateSheet({
         toast(
           `Календарю «${team.name}» созданы счета: ${created.map((a) => a.name).join(", ")}`,
           "success",
-          // «Изменить» ведёт на счета ИМЕННО ЭТОГО календаря: без параметра
-          // экран открывался на первом чипе, и человек смотрел на чужие
-          // счета сразу после слов «созданы счета».
-          { label: "Изменить", onPress: () => router.push(`/accounts?team=${team.id}`) },
+          // «Изменить» ведёт на счета ИМЕННО ЭТОГО календаря на «Финансах»
+          // (списка счетов с 2026-09-15 нет): без параметра панель открылась
+          // бы на первом чипе, и человек смотрел бы на чужие счета сразу
+          // после слов «созданы счета». `navigate`, а не `push`: вкладку
+          // «Финансы» не кладём второй копией поверх календаря.
+          {
+            label: "Изменить",
+            onPress: () => router.navigate(financeAccountsHref(team.id) as Href),
+          },
         );
       }
     } catch (e) {
       // Календарь создан — молчать нельзя, но и держать человека незачем:
-      // счета дозаводятся из настроек счетов.
+      // счета дозаводятся на «Финансах», панелью «Счета».
       toast(
         `Календарь создан, но счета не завелись: ${
           e instanceof Error ? e.message : "попробуйте ещё раз"

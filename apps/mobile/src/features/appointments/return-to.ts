@@ -1,8 +1,8 @@
 // ДОРОГА НАЗАД ИЗ ЗАПИСИ — ОДИН СЛОВАРЬ НА ВЕСЬ ПРОДУКТ.
 //
-// Запись открывают с четырёх поверхностей: календарь (своя, дороги не нужно),
-// вкладка денег, страница инвойса, карточка счёта. Три последние передают
-// `from`, и «назад» обязано вернуть человека туда, откуда он пришёл.
+// Запись открывают с трёх поверхностей: календарь (своя, дороги не нужно),
+// вкладка денег и страница инвойса. Две последние передают `from`, и «назад»
+// обязано вернуть человека туда, откуда он пришёл.
 //
 // Почему словарь переехал сюда (2026-09-08): он жил внутри календаря, а
 // страница записи `/book` про `from` не знала вовсе — её `leaveBook()` звал
@@ -11,13 +11,23 @@
 // календаре, да ещё и переключённом на «День». Возврат работал только у
 // бригадира: ему открывается лист поверх календаря, а не страница.
 //
-// Формат `from`: «finances» — вкладка денег; «invoice:<id>» и «account:<id>» —
-// страница-донор, с чьей проводки запись открыли.
+// Формат `from`: «finances» — вкладка денег; «finances:<разрез>» — она же с
+// разрезом; «finances:accounts:<id>» — «Счета» с лентой выбранного счёта;
+// «invoice:<id>» — страница инвойса, с чьей проводки запись открыли.
 
 /** Разрезы вкладки денег, которые дорога назад умеет восстановить. Список
  *  закрытый: `from` приходит из адреса, и собирать по нему произвольный путь
  *  или произвольный параметр нельзя. */
-const FINANCE_VIEWS = new Set(["income", "expense", "debt", "documents"]);
+const FINANCE_VIEWS = new Set([
+  "income",
+  "expense",
+  "debt",
+  "documents",
+  "accounts",
+]);
+
+/** Счёт из адреса — только uuid: тот же закрытый словарь, что у разрезов. */
+const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function resolveReturnTo(from: string | undefined): string | null {
   if (!from) return null;
@@ -26,17 +36,23 @@ export function resolveReturnTo(from: string | undefined): string | null {
     // ДОРОГА НАЗАД НЕСЁТ РАЗРЕЗ. Вкладка денег пересоздаётся при возврате, и
     // выбранная плитка сбрасывалась на «Все»: человек открывал запись из
     // «Дохода», закрывал её и попадал в общую ленту (2026-09-09).
-    const view = from.slice("finances:".length).trim();
-    return FINANCE_VIEWS.has(view) ? `/finances?view=${view}` : "/finances";
+    const [view = "", accountId = ""] = from
+      .slice("finances:".length)
+      .trim()
+      .split(":");
+    if (!FINANCE_VIEWS.has(view)) return "/finances";
+    // И ВЫБРАННЫЙ СЧЁТ (2026-09-15): запись открыли из ленты «Наличных» под
+    // «Счетами» — закрыв её, человек возвращается к «Наличным», а не ко всем
+    // счетам.
+    return view === "accounts" && ACCOUNT_ID.test(accountId)
+      ? `/finances?view=accounts&account=${accountId}`
+      : `/finances?view=${view}`;
   }
-  const donor = (prefix: string, base: string) => {
-    if (!from.startsWith(prefix)) return null;
-    const id = from.slice(prefix.length).trim();
-    // Пустой id дал бы `/invoices/` — маршрут, которого нет. Лучше остаться на
-    // календаре, чем увести человека на «страница не найдена».
-    return id ? `${base}/${id}` : null;
-  };
-  return donor("invoice:", "/invoices") ?? donor("account:", "/accounts");
+  if (!from.startsWith("invoice:")) return null;
+  const id = from.slice("invoice:".length).trim();
+  // Пустой id дал бы `/invoices/` — маршрут, которого нет. Лучше остаться на
+  // календаре, чем увести человека на «страница не найдена».
+  return id ? `/invoices/${id}` : null;
 }
 
 /** Метка для ссылки: `from=` собирается только там, где дорога есть. */

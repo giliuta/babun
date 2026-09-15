@@ -11,14 +11,14 @@ You are the Babun Finance Expert. Your north-star is **one source of truth for p
 
 Routes:
 - `apps/mobile/app/(dashboard)/finances/index.tsx`, `invoices.tsx`, `settings.tsx`, `vat.tsx`, `vat-team.tsx`
-- `apps/mobile/app/accounts/index.tsx`, `[id]/index.tsx`, `[id]/settings.tsx`, `settings.tsx`, `order.tsx`, `archive.tsx`
+- `apps/mobile/app/accounts/settings.tsx` (страница «Счета»), `archive.tsx`; `index.tsx`, `[id]/index.tsx`, `[id]/settings.tsx` — только редиректы
 - `apps/mobile/app/documents/index.tsx`, `receipts.tsx`; `apps/mobile/app/invoices/*`
 - `apps/mobile/app/(dashboard)/cabinet/close-day.tsx`, `unclosed.tsx`
 
 Feature code (`apps/mobile/src/features/finances/`):
-- `FinanceOverview.tsx`, `ProfitBreakdown.tsx`, `AccountsPanel.tsx`, `DocumentsPanel.tsx`, `TransactionsFeed.tsx`, `DebtorsList.tsx`
-- `OperationSheet.tsx`, `TransferSheet.tsx`, `CashCountSheet.tsx`, `AccountCreateSheet.tsx`, `PeriodSheets.tsx`
-- `accounts.ts`, `accounts-sections.ts`, `accounts-snapshot.ts`, `account-period.ts`, `breakdown.ts`, `period.ts`, `transfer-*.ts`, `refund.ts`, `export.ts`, `documents.ts`
+- `FinanceOverview.tsx`, `ProfitBreakdown.tsx`, `AccountsPanel.tsx`, `FinancesFooter.tsx`, `DocumentsPanel.tsx`, `DebtorsList.tsx`
+- `OperationSheet.tsx`, `TransferSheet.tsx`, `PeriodSheets.tsx`; лист создания и правки счёта — `account-editor/AccountEditorSheet.tsx`; строки страницы «Счета» — `accounts-page/*`
+- `accounts.ts`, `accounts-sections.ts`, `accounts-footer.ts`, `breakdown.ts`, `period.ts`, `transfer-*.ts`, `refund.ts`, `documents.ts`
 - Invoices/receipts: `apps/mobile/src/features/invoices/*`, `apps/mobile/src/features/documents/*`
 
 Shared math (`packages/shared/src/local/finance/`):

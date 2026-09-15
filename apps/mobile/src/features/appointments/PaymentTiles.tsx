@@ -9,10 +9,14 @@ import { useThemeColors } from "@/theme/colors";
 // ПЛИТКИ БЛОКА «ОПЛАТА» — только вид (STORY-065, выбор владельца 2026-09-06:
 // «плитки Б2, компактнее; предоплата и инвойс — маленькие иконки справа;
 // сумму в шапке не дублировать»). Логика денег живёт в PaymentBlock.
+// Та же плитка — счёт в форме операции и в панели «Счета» на «Финансах»
+// (владелец 2026-09-15: «как в счёт оплаты»): счёт узнают по плитке всюду.
 
 export const TILE_GAP = 8;
 const TILE_HEIGHT = 48;
 const TILE_HEIGHT_PAID = 56;
+/** Значок в строку с именем: плитка счёта с остатком, но на ряд ниже. */
+const TILE_HEIGHT_COMPACT = 44;
 
 /** Ширина плитки: три в ряд внутри карточки с полями 16. */
 export function useTileWidth(perRow = 3): number {
@@ -32,6 +36,8 @@ export function PaymentTile({
   state,
   selected,
   amount,
+  amountColor,
+  compact,
   disabled,
   onPress,
   accessibilityLabel,
@@ -50,8 +56,16 @@ export function PaymentTile({
    *  метка выбора обязана оставить плитке её собственный цвет: перекрашенная
    *  в акцент, она теряла то, чем счёт узнают (владелец 2026-09-10). */
   selected?: boolean;
-  /** Полученная на этот счёт сумма (только для `paid`). */
+  /** Сумма под именем: полученная на счёт (`paid`) либо остаток счёта в
+   *  панели «Счета» на «Финансах». */
   amount?: string;
+  /** Цвет суммы вне `paid`: минус — `danger`, ноль — тише живых денег. */
+  amountColor?: string;
+  /** Значок в строку с именем, сумма под ними — 44pt вместо 56. Владелец
+   *  2026-09-15: панель «Счета» — «ещё немножечко компактней», затем форма
+   *  операции и оплата записи — «чтоб иконка была слева… одной плашкой».
+   *  У оплаченной плитки на месте значка галка. */
+  compact?: boolean;
   disabled?: boolean;
   onPress: () => void;
   accessibilityLabel: string;
@@ -71,7 +85,11 @@ export function PaymentTile({
       }}
       style={({ pressed }) => ({
         width,
-        height: paid ? TILE_HEIGHT_PAID : TILE_HEIGHT,
+        height: compact
+          ? TILE_HEIGHT_COMPACT
+          : paid || amount
+            ? TILE_HEIGHT_PAID
+            : TILE_HEIGHT,
         borderRadius: t.radius.card,
         backgroundColor: paid
           ? `${t.success}1f`
@@ -88,30 +106,63 @@ export function PaymentTile({
         opacity: pressed ? 0.7 : state === "dim" ? 0.35 : 1,
       })}
     >
-      {paid ? (
-        <Check size={16} strokeWidth={2.4} color={t.success} />
+      {compact ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            maxWidth: "100%",
+            paddingHorizontal: 6,
+          }}
+        >
+          {paid ? (
+            <Check size={14} strokeWidth={2.4} color={t.success} />
+          ) : (
+            <Icon size={14} strokeWidth={2} color={pending ? t.accent : color} />
+          )}
+          <Text
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+            style={{
+              flexShrink: 1,
+              fontSize: 12,
+              fontWeight: "600",
+              color: paid ? t.successInk : t.ink,
+            }}
+          >
+            {label}
+          </Text>
+        </View>
       ) : (
-        <Icon size={16} strokeWidth={2} color={pending ? t.accent : color} />
-      )}
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{
-          fontSize: 12,
-          fontWeight: "600",
-          color: paid ? t.successInk : t.ink,
-          paddingHorizontal: 6,
-        }}
-      >
-        {label}
-      </Text>
-      {paid && amount ? (
+        <>
+        {paid ? (
+          <Check size={16} strokeWidth={2.4} color={t.success} />
+        ) : (
+          <Icon size={16} strokeWidth={2} color={pending ? t.accent : color} />
+        )}
         <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+          style={{
+            fontSize: 12,
+            fontWeight: "600",
+            color: paid ? t.successInk : t.ink,
+            paddingHorizontal: 6,
+          }}
+        >
+          {label}
+        </Text>
+        </>
+      )}
+      {amount ? (
+        <Text
+          numberOfLines={1}
           maxFontSizeMultiplier={1.3}
           style={{
             fontSize: 12,
             fontWeight: "700",
-            color: t.successInk,
+            color: paid ? t.successInk : (amountColor ?? t.ink),
             fontVariant: ["tabular-nums"],
           }}
         >

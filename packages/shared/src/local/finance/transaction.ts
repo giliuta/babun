@@ -46,13 +46,6 @@ export function paymentMethodLabel(method: string | null | undefined): string {
 
 export type ReversalKind = "not_received" | "client_refund";
 
-/** Слово для строки минуса. «Возврат» на снятой оплате — неправда: денег не
- *  возвращали, их не получили. */
-export const REVERSAL_LABEL: Record<ReversalKind, string> = {
-  not_received: "Оплата снята",
-  client_refund: "Возврат",
-};
-
 export interface FinanceTransaction {
   id: string;
   tenant_id: string;

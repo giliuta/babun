@@ -1,6 +1,6 @@
-// Shared visual vocabulary of accounts: one icon and one label per kind,
-// plus the masked-balance placeholder («глазик»). Every accounts surface
-// (list, panel, sheets) imports from here — no local copies.
+// Shared visual vocabulary of accounts: the fallback glyph per kind and the
+// picker label. The kind itself is never shown or asked any more — it follows
+// the icon (`account-kind.ts`). Every accounts surface imports from here.
 
 import {
   Banknote,
@@ -11,7 +11,6 @@ import {
 } from "lucide-react-native";
 import { iconPreset } from "@/components/ui/icon-set";
 import type { Account, AccountKind } from "@babun/shared/local/finance/account";
-import { brigadeTitle } from "./accounts-sections";
 import type { AccountWithBalance } from "./accounts";
 
 // Глиф по ВИДУ счёта — фолбэк для тех, у кого значок не выбран.
@@ -34,38 +33,6 @@ export function accountIcon(
   account: Pick<Account, "icon" | "kind">,
 ): LucideIcon {
   return iconPreset(account.icon) ?? KIND_ICON[account.kind];
-}
-
-export const KINDS: { value: AccountKind; label: string }[] = [
-  { value: "cash", label: "Наличные" },
-  { value: "card", label: "Карта" },
-  { value: "bank", label: "Банк" },
-  { value: "other", label: "Другое" },
-];
-
-/**
- * Подпись счёта одной строкой: «Наличные · Команда Юра». Ею подписан герой
- * карточки и лист пересчёта — счёт обязан называться одинаково там, где на
- * него смотрят, и там, где его пересчитывают.
- *
- * `teamName` отдаёт голое имя команды по её id либо `null`, если такой строки
- * в справочнике нет вовсе; «Команду» приписывает сама подпись — одним общим
- * `brigadeTitle`.
- */
-export function accountSubtitle(
-  account: Pick<AccountWithBalance, "kind" | "brigade_id">,
-  teamName: (teamId: string) => string | null,
-): string {
-  const kind = KINDS.find((k) => k.value === account.kind)?.label ?? "";
-  const own = account.brigade_id ? teamName(account.brigade_id) : null;
-  // Команды нет вовсе — счёт остался от старой схемы «общего счёта». Молчать
-  // об этом нельзя: деньги на нём настоящие, а хозяина у них нет.
-  const owner = account.brigade_id
-    ? own
-      ? brigadeTitle(own)
-      : "Команда удалена"
-    : "Без команды";
-  return `${kind} · ${owner}`;
 }
 
 /**

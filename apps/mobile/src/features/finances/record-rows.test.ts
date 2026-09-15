@@ -3,12 +3,15 @@ import { describe, test } from "node:test";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import {
+  accountsLine,
   debtAge,
   mergeByRecord,
   recordRows,
+  rowMatchesQuery,
   servicesLine,
   paymentsLine,
   whatLine,
+  type RecordRow,
   type RecordRowRefs,
 } from "./record-rows";
 
@@ -45,6 +48,139 @@ const refs: RecordRowRefs = {
   services: [{ id: "s1", name: "A/C Cleaning" }],
   categories: [{ id: "cat1", name: "Топливо" }],
 };
+
+/** Порядок счетов — порядок плиток: наличные первыми, карта второй. */
+const withAccounts: RecordRowRefs = {
+  ...refs,
+  accounts: [
+    { id: "acc-cash", name: "Наличные" },
+    { id: "acc-card", name: "Карта" },
+  ],
+};
+
+describe("счёт в строке операции (владелец 2026-09-15)", () => {
+  test("визит, оплаченный двумя счетами, называет оба — в порядке счетов, а не платежей", () => {
+    const [row] = recordRows(
+      [
+        tx({ id: "tx1", amount: 35, account_id: "acc-card" }),
+        tx({ id: "tx2", amount: 100, account_id: "acc-cash" }),
+        tx({ id: "tx3", amount: 10, account_id: "acc-card" }),
+      ],
+      withAccounts,
+    );
+    assert.equal(whatLine(row), "11:30 · Наличные · Карта · A/C Cleaning");
+  });
+
+  test("счёт стоит до услуг: длинный перечень режется с конца, а не счёт", () => {
+    const line = whatLine({
+      time: "11:30",
+      services: ["Chimney sweeping", "Duct cleaning", "Filter", "Gas refill"],
+      accounts: [{ name: "Наличные", rank: 0 }],
+    });
+    assert.ok(line.startsWith("11:30 · Наличные · "), line);
+    assert.equal(line, "11:30 · Наличные · Chimney sweeping · Duct cleaning +2");
+  });
+
+  test("визит одним счётом называет его один раз", () => {
+    const [row] = recordRows(
+      [
+        tx({ id: "tx1", amount: 50, account_id: "acc-cash" }),
+        tx({ id: "tx2", amount: 85, account_id: "acc-cash" }),
+      ],
+      withAccounts,
+    );
+    assert.equal(whatLine(row), "11:30 · Наличные · A/C Cleaning");
+  });
+
+  test("ручная операция называет и счёт, и заметку — счёт первым", () => {
+    const [row] = recordRows(
+      [
+        tx({
+          id: "m1",
+          appointment_id: null,
+          type: "expense",
+          amount: 20,
+          category_id: "cat1",
+          notes: "бензин",
+          account_id: "acc-cash",
+        }),
+      ],
+      withAccounts,
+    );
+    assert.equal(whatLine(row), "17:45 · Наличные · бензин");
+  });
+
+  test("перевод — «откуда → куда», счёт второй раз не дописывается", () => {
+    const [row] = recordRows(
+      [
+        tx({ id: "out", appointment_id: null, type: "transfer", amount: -55, transfer_group_id: "g1", account_id: "acc-cash" }),
+        tx({ id: "in", appointment_id: null, type: "transfer", amount: 55, transfer_group_id: "g1", account_id: "acc-card" }),
+      ],
+      withAccounts,
+    );
+    assert.equal(whatLine(row), "17:45 · Наличные → Карта");
+  });
+
+  test("операция без счёта не говорит ничего лишнего", () => {
+    const [bare] = recordRows(
+      [tx({ id: "m1", appointment_id: null, account_id: null })],
+      withAccounts,
+    );
+    assert.equal(whatLine(bare), "17:45");
+    const [unknown] = recordRows(
+      [tx({ id: "m2", appointment_id: null, account_id: "acc-ghost" })],
+      withAccounts,
+    );
+    assert.equal(whatLine(unknown), "17:45");
+  });
+
+  test("склеенная запись собирает счета всех своих строк в порядке счетов", () => {
+    const base = {
+      appointmentId: "a1",
+      title: "Константин",
+      services: ["A/C Cleaning"],
+      date: "2026-09-06",
+      time: "11:30",
+      count: 1,
+    };
+    const [merged] = mergeByRecord([
+      { ...base, key: "in:a1", tone: "income", amount: 128, accounts: [{ name: "Карта", rank: 1 }] },
+      { ...base, key: "ex:a1", tone: "expense", amount: -10, accounts: [{ name: "Наличные", rank: 0 }] },
+    ] satisfies RecordRow[]);
+    assert.equal(accountsLine(merged.accounts), "Наличные · Карта");
+  });
+
+  test("одно имя в двух командах печатается одним словом", () => {
+    assert.equal(
+      accountsLine([
+        { name: "Наличка", rank: 2 },
+        { name: "Наличка", rank: 0 },
+      ]),
+      "Наличка",
+    );
+    assert.equal(accountsLine(undefined), "");
+  });
+});
+
+describe("rowMatchesQuery", () => {
+  const [row] = recordRows([tx({ account_id: "acc-card" })], withAccounts);
+
+  test("находит по счёту — строка теперь его называет", () => {
+    assert.ok(rowMatchesQuery(row, "карт"));
+    assert.ok(!rowMatchesQuery(row, "наличные"));
+  });
+
+  test("по клиенту, услуге и сумме — как раньше", () => {
+    assert.ok(rowMatchesQuery(row, "КОНСТ"));
+    assert.ok(rowMatchesQuery(row, "clean"));
+    assert.ok(rowMatchesQuery(row, "50"));
+    assert.ok(!rowMatchesQuery(row, "бензин"));
+  });
+
+  test("пустой запрос пропускает всё", () => {
+    assert.ok(rowMatchesQuery(row, "  "));
+  });
+});
 
 describe("recordRows", () => {
   test("предоплата и доплата одного визита — одна строка с общей суммой", () => {
@@ -174,7 +310,9 @@ describe("recordRows", () => {
     );
     assert.equal(rows.length, 1);
     assert.equal(rows[0].amount, -55);
-    assert.equal(rows[0].subtitle, "Наличные");
+    // Счёт идёт своим полем, а не подменяет заметку.
+    assert.equal(rows[0].subtitle, undefined);
+    assert.equal(whatLine(rows[0]), "17:45 · Наличные");
   });
 
   test("перевод называет себя переводом, а не заметкой", () => {

@@ -210,65 +210,6 @@ export async function listAccountBalances(
   }));
 }
 
-/**
- * Итоги счёта за период из серверного `account_period_totals`.
- *
- * ВСЕ ДЕНЕЖНЫЕ КОЛОНКИ ПРИХОДЯТ УЖЕ СО ЗНАКОМ: income ≥ 0, expense ≤ 0,
- * refund ≤ 0, transfer_in ≥ 0, transfer_out ≤ 0. Клиент их только
- * СКЛАДЫВАЕТ. Написать «− expense» или «− refund» значит вычесть дважды;
- * контракт закреплён тестом apps/mobile/src/features/finances/account-period.
- */
-export interface AccountPeriodTotals {
-  /** NULL — та же строка «операции без счёта», что и в account_balances. */
-  account_id: string | null;
-  /** Полный остаток на начало периода (opening_balance + всё до p_from). */
-  opening_before: number;
-  income: number;
-  expense: number;
-  refund: number;
-  transfer_in: number;
-  transfer_out: number;
-  /** Подписанная сумма всего, КРОМЕ переводов, — единственная цифра героя. */
-  net: number;
-}
-
-/**
- * Период включает обе границы; даты — строки YYYY-MM-DD по `occurred_on`.
- * Owner-only, как и account_balances: ошибка роли обязана дойти до экрана.
- */
-export async function listAccountPeriodTotals(
-  supabase: DbSupabase,
-  tenantId: string,
-  fromDate: string,
-  toDate: string,
-): Promise<AccountPeriodTotals[]> {
-  const { data, error } = await supabase.rpc("account_period_totals", {
-    p_tenant: tenantId,
-    p_from: fromDate,
-    p_to: toDate,
-  });
-  if (error) throw new Error(error.message || "Не удалось посчитать период");
-  // Тот же пробел генератора, что и в account_balances: все колонки, кроме
-  // account_id, — числа, и пустыми они приходить не должны, но защита от
-  // NULL здесь дешевле, чем NaN в остатке.
-  const rows: Array<
-    { account_id: string | null } & Record<
-      Exclude<keyof AccountPeriodTotals, "account_id">,
-      number | null
-    >
-  > = data ?? [];
-  return rows.map((r) => ({
-    account_id: r.account_id,
-    opening_before: Number(r.opening_before ?? 0),
-    income: Number(r.income ?? 0),
-    expense: Number(r.expense ?? 0),
-    refund: Number(r.refund ?? 0),
-    transfer_in: Number(r.transfer_in ?? 0),
-    transfer_out: Number(r.transfer_out ?? 0),
-    net: Number(r.net ?? 0),
-  }));
-}
-
 /** Does the account carry ANY ledger rows? Mirrors the server-side
  * `guard_account_financial_history` freeze checks: the settings screen uses
  * this to disable kind/opening/brigade edits instead of surfacing a server

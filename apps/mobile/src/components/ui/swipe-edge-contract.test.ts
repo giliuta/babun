@@ -22,9 +22,10 @@ import { fileURLToPath } from "node:url";
 //   нечего удалять     — правой кромки нет вовсе (`label`/`onAction` опущены);
 //   тап по строке      — правка, а не смена состояния.
 //
-// Исключение ровно одно и названо здесь по имени: `/accounts` — на этом экране
-// разрушительного действия нет НИ У ОДНОЙ строки (счёт закрывают в карточке), и
-// правая кромка отдана главному действию списка — «Перевести».
+// ИСКЛЮЧЕНИЙ НЕТ. Единственное жило у списка `/accounts` («Перевести» на правой
+// кромке); список снесён 2026-09-15 (владелец: счета — на «Финансах», перевод
+// — кнопкой в футере), и вместе с ним снята лазейка, через которую на правую
+// кромку могло вернуться не-разрушительное слово.
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** `apps/mobile` */
@@ -99,8 +100,6 @@ function labels(edge: string): string[] {
 
 const DESTRUCTIVE = ["Удалить", "Убрать"];
 const STATE = ["Скрыть", "Показать", "Вернуть", "Открыть"];
-/** Экраны, где разрушительного нет ни у одной строки (см. шапку). */
-const PRIMARY_ACTION_SCREENS = new Map([["app/accounts/index.tsx", "Перевести"]]);
 
 const files = [...walk(join(app, "app")), ...walk(join(app, "src"))].filter(
   (f) => !f.endsWith("swipe-edge-contract.test.ts"),
@@ -113,7 +112,6 @@ describe("кромки свайпа", () => {
       const raw = readFileSync(file, "utf8");
       if (!raw.includes("<SwipeRow")) continue;
       const rel = relative(app, file);
-      const allowed = PRIMARY_ACTION_SCREENS.get(rel);
       for (const tag of openingTags(withoutLineComments(raw))) {
         seen += 1;
         const { trailing, leading } = edges(tag);
@@ -138,8 +136,8 @@ describe("кромки свайпа", () => {
             `${rel}: «${word}» на ПРАВОЙ кромке. Состояние строки живёт на левой (leading) — правая закреплена за «Удалить»/«Убрать». Нечего удалять — правой кромки нет вовсе (label/onAction необязательны).`,
           );
           assert.ok(
-            DESTRUCTIVE.includes(word) || allowed === word,
-            `${rel}: «${word}» на ПРАВОЙ кромке. Там живёт только «Удалить»/«Убрать»; главное действие списка допустимо лишь на экране без разрушительных действий вовсе (см. PRIMARY_ACTION_SCREENS).`,
+            DESTRUCTIVE.includes(word),
+            `${rel}: «${word}» на ПРАВОЙ кромке. Там живёт только «Удалить»/«Убрать»; главное действие списка — кнопкой в футере, а не кромкой.`,
           );
         }
         for (const word of labels(leading)) {

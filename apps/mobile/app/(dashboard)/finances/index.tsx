@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Search, Settings, X } from "lucide-react-native";
 import { signedAmount, type FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { accountServesTeam } from "@babun/shared/local/finance/integrity";
-import { money } from "@babun/shared/common/utils/money";
 import { accountsTotal } from "@/features/finances/account-ui";
 import { getDebtAmount } from "@babun/shared/local/appointments";
 import {
@@ -19,7 +18,6 @@ import {
 } from "@babun/shared/common/utils/date-utils";
 import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { GradientButton } from "@/components/ui/GradientButton";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
@@ -37,10 +35,11 @@ import {
 } from "@/features/finances/queries";
 import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
-import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
+import { FinancesFooter } from "@/features/finances/FinancesFooter";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
-import { TransferSheet } from "@/features/finances/TransferSheet";
+import { useFinanceRoute } from "@/features/finances/use-finance-route";
+import { fallbackScopeUpdate } from "@/features/finances/finance-route";
 import { DocumentsPanel } from "@/features/finances/DocumentsPanel";
 import type { DocumentFilter } from "@/features/finances/documents";
 import { ProfitBreakdown } from "@/features/finances/ProfitBreakdown";
@@ -50,6 +49,7 @@ import { RecordRowsPanel } from "@/features/finances/RecordRowsPanel";
 import {
   mergeByRecord,
   recordRows,
+  rowMatchesQuery,
   type RecordRow,
 } from "@/features/finances/record-rows";
 import { debtRows, manualDebtRows } from "@/features/finances/debt-rows";
@@ -62,7 +62,7 @@ import {
 } from "@babun/shared/local/finance/debt";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
 import { canEditTransaction } from "@babun/shared/local/finance/transaction";
-import { NO_TEAM } from "@/features/finances/accounts-sections";
+import { NO_TEAM, sortAccountRows } from "@/features/finances/accounts-sections";
 import { buildRefundDraft } from "@/features/finances/refund";
 import {
   FinanceOverview,
@@ -86,18 +86,6 @@ import { useInvoicePayments, useInvoices } from "@/features/invoices/queries";
 import { useInvoiceNavigation } from "@/features/invoices/navigation";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 
-/** Разрезы, которые вкладка умеет восстановить из адреса. Список шире, чем в
- *  `resolveReturnTo`: оттуда приходят только те, из которых открывают запись
- *  (доход, расход, долги, документы), а сюда можно прийти и диплинком. */
-const VIEWS = new Set<HomeView>([
-  "accounts",
-  "documents",
-  "income",
-  "expense",
-  "debt",
-  "profit",
-]);
-
 /** Разрезы, в которых поиск из шапки фильтрует ПОКАЗАННОЕ. У «Счетов»,
  *  «Долгов» и «Прибыли» строк поиска нет вовсе, поэтому первая же буква
  *  возвращает ленту операций — иначе поиск молча фильтровал бы невидимое. */
@@ -116,14 +104,10 @@ const SEARCHABLE_VIEWS = new Set<HomeView>([
  *  станет SHEET_EXIT_MS. */
 const OPERATION_SHEET_EXIT_MS = 450;
 
-/** Сумма «как напечатано» и сумма «как хранится» — один канон для сравнения:
- *  без пробелов (лента ставит неразрывный U+00A0), без €, запятая → точка. */
-const canonMoney = (s: string) => s.replace(/[\s€]/g, "").replace(/,/g, ".");
-
 /** Псевдо-команда ленты скоупа для счетов, оставшихся без команды от старой
  *  схемы общего счёта. Лента FinanceOverview читает у команды только
- *  id/name/color — ими псевдо-строка и ограничена (см. одноимённый чип
- *  страницы счетов в accounts-sections.ts). */
+ *  id/name/color — ими псевдо-строка и ограничена (`NO_TEAM` в
+ *  accounts-sections.ts). */
 const NO_TEAM_CHIP = {
   id: NO_TEAM,
   name: "Без команды",
@@ -136,8 +120,12 @@ function FinancesContent() {
   const params = useLocalSearchParams<{
     clientId?: string | string[];
     /** Разрез, с которого ушли открывать запись: возврат ставит его обратно
-     *  (см. resolveReturnTo). Читается один раз, при создании состояния. */
+     *  (см. resolveReturnTo). Применяется и на смонтированной вкладке. */
     view?: string;
+    /** Счёт, чья лента была открыта под «Счетами», — тем же возвратом. */
+    account?: string;
+    /** Команда «Счетов» — ссылки «заведите счёт этой команде». */
+    team?: string;
   }>();
   const requestedClientId = Array.isArray(params.clientId)
     ? params.clientId[0]
@@ -203,28 +191,12 @@ function FinancesContent() {
   }, [businessToday, businessTimezone, calendarSettings?.timezone]);
   const [presetOpen, setPresetOpen] = useState(false);
   const [wheelsOpen, setWheelsOpen] = useState(false);
-  const [scope, setScope] = useState<string | null>(null);
-  // Разрез переживает поездку в запись: вкладка пересоздаётся при возврате, и
-  // без этого «Доход» сбрасывался на «Все» (2026-09-09). Ленивый инициализатор,
-  // а не эффект: разрез должен стоять уже в первом кадре, иначе человек видит
-  // вспышку общей ленты. Незнакомое значение из адреса игнорируем.
-  const [viewState, setView] = useState<HomeView>(() =>
-    params.view && VIEWS.has(params.view as HomeView)
-      ? (params.view as HomeView)
-      : "all",
-  );
   // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ — ни плитки, ни разреза, ни
   // кнопки «Выставить инвойс» (канон: без права блок не показывается либо
   // только читается; «видно, но при нажатии ошибка» в продукте не бывает).
   // Настоящий запрет стоит триггером `enforce_plan_limits` в базе, здесь —
-  // вид на него. Гасим РАЗРЕЗ, а не только плитку: в «Документы» приходят и
-  // адресом `?view=documents`, и возвратом из записи.
+  // вид на него.
   const canUseDocuments = usePlanAllows("documents");
-  const view: HomeView =
-    !canUseDocuments && viewState === "documents" ? "all" : viewState;
-  // Открыта панель документов: у шапки другой предмет поиска, и она обязана
-  // сказать об этом словами подсказки.
-  const documentsView = view === "documents";
   // Вид документа живёт ЗДЕСЬ, а не внутри панели: от него зависит главная
   // кнопка внизу экрана, а она снаружи. Инвойсы первыми — это единственный
   // документ, который выписывают руками.
@@ -232,8 +204,6 @@ function FinancesContent() {
   const [opOpen, setOpOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<FinanceTransaction | null>(null);
   const [popupTx, setPopupTx] = useState<FinanceTransaction | null>(null);
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [createAccountOpen, setCreateAccountOpen] = useState(false);
   // Какую сторону долгов смотрим и какой долг правим. Живут ЗДЕСЬ, а не в
   // панели: от стороны зависит подпись главной кнопки внизу экрана, а она
   // снаружи панели (тот же довод, что у `docFilter`).
@@ -264,6 +234,26 @@ function FinancesContent() {
   const invoicesQuery = useInvoices();
   const invoicePaymentsQuery = useInvoicePayments();
   const accountsQuery = useAccountsWithBalances();
+  // С закрытыми — только ради имён в строках ленты: операция периода могла
+  // пройти через счёт, который с тех пор закрыли.
+  const allAccountsQuery = useAccountsWithBalances({ includeInactive: true });
+  // Разрез, команда и выбранный счёт — из адреса и из тапов.
+  const {
+    view: routeView,
+    setView,
+    scope,
+    setScope,
+    accountId,
+    setAccountId,
+    changeScope,
+  } = useFinanceRoute(params, accountsQuery.data);
+  // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
+  // адресом `?view=documents`, и возвратом из записи.
+  const view: HomeView =
+    !canUseDocuments && routeView === "documents" ? "all" : routeView;
+  // Открыта панель документов: у шапки другой предмет поиска, и она обязана
+  // сказать об этом словами подсказки.
+  const documentsView = view === "documents";
   const debtsQuery = useDebts(period.from, period.to, { teamId: scope });
   const debtPaidQuery = useDebtPaidTotals();
   const categories = useMemo(
@@ -299,11 +289,14 @@ function FinancesContent() {
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
   );
-  // Счета без команды — сироты старой схемы общего счёта (на проде такой
-  // есть: Revolut Business, ждущий переноса). Ни с одним чипом команды они
-  // не совпадают, а чипа «Все» на экране нет — без своего чипа их деньги
-  // были бы невидимы на вкладке ЦЕЛИКОМ. Тот же закон, что у сиротского
-  // чипа страницы счетов: «ДЕНЬГИ БЕЗ ХОЗЯИНА ВСЁ РАВНО ВИДНЫ».
+  const allAccounts = useMemo(
+    () => allAccountsQuery.data ?? accounts,
+    [allAccountsQuery.data, accounts],
+  );
+  // Счета без команды — сироты старой схемы общего счёта. Ни с одним чипом
+  // команды они не совпадают, а чипа «Все» на экране нет — без своего чипа их
+  // деньги были бы невидимы на вкладке ЦЕЛИКОМ: «ДЕНЬГИ БЕЗ ХОЗЯИНА ВСЁ РАВНО
+  // ВИДНЫ».
   const orphanAccounts = useMemo(
     () => accounts.filter((account) => !account.brigade_id),
     [accounts],
@@ -323,19 +316,18 @@ function FinancesContent() {
   const accountsLoaded = accountsQuery.data !== undefined;
   useEffect(() => {
     if (!teamsQuery.isSuccess) return;
-    if (scope === NO_TEAM) {
-      // Сироты розданы — чипа больше нет; у тенанта без команд скоуп
-      // возвращается в null, иначе экран ждал бы отключённый запрос вечно.
-      if (accountsLoaded && !hasOrphanAccounts) {
-        setScope(teams.length > 0 ? teams[0].id : null);
-      }
-      return;
-    }
-    if (teams.length === 0) return;
-    if (!scope || teams.every((team) => team.id !== scope)) {
-      setScope(teams[0].id);
-    }
-  }, [accountsLoaded, hasOrphanAccounts, scope, teams, teamsQuery.isSuccess]);
+    // Функцией от очереди (`fallbackScopeUpdate`): команда счёта из адреса,
+    // поставленная в этом же кадре, не затирается первой командой. Сироты
+    // розданы — у тенанта без команд скоуп уходит в null, иначе экран ждал бы
+    // отключённый запрос вечно.
+    setScope(
+      fallbackScopeUpdate({
+        teamIds: teams.map((team) => team.id),
+        accountsLoaded,
+        hasOrphans: hasOrphanAccounts,
+      }),
+    );
+  }, [accountsLoaded, hasOrphanAccounts, scope, setScope, teams, teamsQuery.isSuccess]);
   const delTransfer = useDeleteTransfer();
   const delTx = useDeleteTransaction();
   const insertTx = useInsertTransaction();
@@ -388,17 +380,16 @@ function FinancesContent() {
   // Счёт = одна команда (2026-08-15): командный скоуп видит РОВНО счета
   // своей команды, «общих счетов» больше нет; чип «Без команды» показывает
   // сирот старой схемы. Скрытые балансы ВХОДЯТ в Σ (решение владельца:
-  // маркер-глазик у плитки снят; скрытие остатка живёт в списках и на
-  // странице счёта).
+  // маркер-глазик у плитки снят).
   const scopedAccounts = useMemo(() => {
     if (scope === NO_TEAM) return orphanAccounts;
     return scope ? accounts.filter((a) => accountServesTeam(a, scope)) : accounts;
   }, [accounts, orphanAccounts, scope]);
-  // Одна цифра «сколько у нас денег» на весь продукт: и плитка «Счета», и
-  // страница счетов считают ПОЛНУЮ сумму. Скрытых балансов в продукте нет.
+  // Одна цифра «сколько у нас денег» на весь продукт: плитка «Счета» считает
+  // ПОЛНУЮ сумму. Скрытых балансов в продукте нет.
   // Разбивки по видам счетов здесь НЕТ (владелец 2026-08-11): плитка отвечает
   // «сколько у команды», а не «сколько из этого наличными» — второй вопрос
-  // задают на самой странице счетов, глядя на конкретный счёт.
+  // задают плитками счетов под ней, глядя на конкретный счёт.
   const accountsSummary = useMemo(
     () => ({ total: accountsTotal(scopedAccounts) }),
     [scopedAccounts],
@@ -685,15 +676,19 @@ function FinancesContent() {
   //
   // Поимённая история платежей никуда не делась: она переезжает в саму
   // запись, кнопкой в блоке оплаты.
+  //
+  // Каждая строка называет свой счёт (владелец 2026-09-15): имена берутся со
+  // всех счетов, включая закрытые, в порядке плиток — строка «Наличные ·
+  // Карта» читается в том же порядке, что счета над ней.
   const recordRefs = useMemo(
     () => ({
       appointments: scopedAppointments,
       clients,
       services,
       categories,
-      accounts,
+      accounts: sortAccountRows(allAccounts),
     }),
-    [scopedAppointments, clients, services, categories, accounts],
+    [scopedAppointments, clients, services, categories, allAccounts],
   );
 
   const blockRows = useMemo(() => {
@@ -754,23 +749,14 @@ function FinancesContent() {
           ).map((row) => ({ ...row, key: `tr:${row.key}` }))
         : [];
 
-    const needle = query.trim().toLowerCase();
-    const moneyNeedle = canonMoney(needle);
-    // Ищем по тому, что человек ВИДИТ в блоке: клиент, услуги и сумма. Раньше
-    // поиск шёл по проводкам (счёт, категория, заметка) — их в блоке нет, и
-    // строка поиска молча искала невидимое.
-    const match = (row: RecordRow) =>
-      !needle ||
-      row.title.toLowerCase().includes(needle) ||
-      row.services.some((name) => name.toLowerCase().includes(needle)) ||
-      canonMoney(money(Math.abs(row.amount))).includes(moneyNeedle);
-
+    // Ищем по тому, что человек ВИДИТ в строке (`rowMatchesQuery`). Раньше
+    // поиск шёл по проводкам — по невидимому.
     const all = [...income, ...expense, ...debtBlocks, ...transfers];
     // ОДНА ЗАПИСЬ — ОДНА СТРОКА (владелец 2026-09-09). В общей ленте состояния
     // одной работы склеиваются: доход главным числом, остальное подписью.
     // В разрезах склейки нет — там человек просил именно этот вид денег.
     return (view === "all" ? mergeByRecord(all) : all)
-      .filter(match)
+      .filter((row) => rowMatchesQuery(row, query))
       .sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? 1 : -1;
       const at = a.time ?? "";
@@ -801,7 +787,7 @@ function FinancesContent() {
     setView((prev) => (prev === v ? "all" : v));
 
   // Real refund (web handleRefund): драфт собирает общий buildRefundDraft —
-  // тот же, что на карточке счёта, — с наследованием НДС-снимка исходника.
+  // с наследованием НДС-снимка исходника.
   // Хаптик успеха НЕ здесь: возврат проводится только через TransactionPopup,
   // и сигналит он — второй вызов на экране давал двойную вибрацию.
   const handleRefund = async (tx: FinanceTransaction, amount: number) => {
@@ -811,11 +797,10 @@ function FinancesContent() {
     await insertTx.mutateAsync(buildRefundDraft(tx, amount, businessToday));
   };
 
-  // ОБЩЕЙ ВЫГРУЗКИ ПО ВСЕМ ОПЕРАЦИЯМ НЕТ. Владелец 2026-08-11: «Отчёт
-  // бухгалтеру» убран из продукта. Файл, который бухгалтер реально сводит с
-  // банком, — это выписка по КОНКРЕТНОМУ счёту (остаток на начало, движения,
-  // остаток на конец); она живёт на карточке счёта, где у неё есть эти
-  // границы. Сводный CSV за период таких границ не имел и ни с чем не сходился.
+  // ВЫГРУЗОК ОПЕРАЦИЙ НЕТ. Владелец 2026-08-11: «Отчёт бухгалтеру» убран из
+  // продукта — сводный CSV за период не имел границ счёта и ни с чем не
+  // сходился. Выписку по счёту владелец убрал следом (2026-09-15: «убери
+  // кнопку выгрузить выписку»).
 
   /**
    * Открыть заявку в календаре. Возвращает false, если её нет в загруженном
@@ -827,13 +812,21 @@ function FinancesContent() {
   const openAppointment = (appointmentId: string): boolean => {
     const target = appts.find((a) => a.id === appointmentId);
     if (!target) return false;
+    // Под «Счетами» дорога несёт и счёт — если его лента правда на экране:
+    // иначе возврат выбрал бы счёт, которого человек не видел.
+    const shownAccount =
+      view === "accounts" && scopedAccounts.some((a) => a.id === accountId)
+        ? `:${accountId}`
+        : "";
     pushOnce(
       `/(dashboard)?appointmentId=${target.id}&date=${target.date}` +
         (target.team_id ? `&teamId=${target.team_id}` : "") +
         // Дорога назад: закрыв запись, человек возвращается в ленту денег, а не
         // остаётся в календаре (владелец 2026-08-15) — и в ТОТ ЖЕ разрез, из
         // которого ушёл: вкладка пересоздаётся, и «Доход» сбрасывался на «Все».
-        (view === "all" ? "&from=finances" : `&from=finances:${view}`),
+        (view === "all"
+          ? "&from=finances"
+          : `&from=finances:${view}${shownAccount}`),
     );
     return true;
   };
@@ -953,6 +946,34 @@ function FinancesContent() {
     blockRows.length,
   );
 
+  // СТРОКА ЛЮБОЙ ПАНЕЛИ ВЕДЁТ В ОДНО МЕСТО — и в разрезах «Доход / Расход /
+  // Долги», и в ленте счёта под «Счетами»: одна дверь на одну строку.
+  const openRecordRow = (row: RecordRow) => {
+    // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
+    if (row.appointmentId && openAppointment(row.appointmentId)) return;
+    // Ручной долг записи не имеет — открывается он сам.
+    if (row.debtId) {
+      const found = debts.find((d) => d.id === row.debtId);
+      if (!found) return;
+      setEditingDebt(found);
+      setDebtOpen(true);
+      return;
+    }
+    // Одиночная операция — бензин, обед, перевод — открывается на
+    // правку: другой двери к ней на экране нет. Витрина остаётся
+    // тому, что править нельзя (перевод, проводка инвойса).
+    const tx = row.txId
+      ? scopedTransactions.find((x) => x.id === row.txId)
+      : null;
+    if (!tx) return;
+    if (canEditTransaction(tx)) {
+      setEditingTx(tx);
+      setOpOpen(true);
+      return;
+    }
+    setPopupTx(tx);
+  };
+
   if (loading) {
     return (
       <Screen edges={["top"]}>
@@ -989,7 +1010,7 @@ function FinancesContent() {
         <FinanceOverview
           teams={scopeChipTeams}
           scopeTeamId={scope}
-          onScopeChange={setScope}
+          onScopeChange={changeScope}
           period={period}
           onOpenPresets={() => setPresetOpen(true)}
           onOpenCustom={() => setWheelsOpen(true)}
@@ -1034,8 +1055,12 @@ function FinancesContent() {
         {view === "accounts" ? (
           <AccountsPanel
             accounts={scopedAccounts}
-            teams={teams}
+            transactions={scopedTransactions}
+            refs={recordRefs}
+            selectedId={accountId}
+            onSelect={setAccountId}
             onOpen={pushOnce}
+            onOpenRecord={openRecordRow}
             refreshControl={refreshControl}
           />
         ) : view === "documents" ? (
@@ -1110,123 +1135,32 @@ function FinancesContent() {
             }
             onReset={view !== "all" ? () => setView("all") : undefined}
             refreshControl={refreshControl}
-            onOpenRecord={(row) => {
-              // ДЕНЬГИ ПО ЗАПИСИ ОТКРЫВАЮТ САМУ ЗАПИСЬ (владелец 2026-08-15).
-              if (row.appointmentId && openAppointment(row.appointmentId)) return;
-              // Ручной долг записи не имеет — открывается он сам.
-              if (row.debtId) {
-                const found = debts.find((d) => d.id === row.debtId);
-                if (!found) return;
-                setEditingDebt(found);
-                setDebtOpen(true);
-                return;
-              }
-              // Одиночная операция — бензин, обед, перевод — открывается на
-              // правку: другой двери к ней на экране нет. Витрина остаётся
-              // тому, что править нельзя (перевод, проводка инвойса).
-              const tx = row.txId
-                ? scopedTransactions.find((x) => x.id === row.txId)
-                : null;
-              if (!tx) return;
-              if (canEditTransaction(tx)) {
-                setEditingTx(tx);
-                setOpOpen(true);
-                return;
-              }
-              setPopupTx(tx);
-            }}
+            onOpenRecord={openRecordRow}
           />
         )}
       </View>
 
-      {/* ГЛАВНОЕ ДЕЙСТВИЕ СЛЕДУЕТ ЗА ОТКРЫТОЙ ПАНЕЛЬЮ (владелец 2026-08-12).
-          Кнопка стоит на одном месте — том же, что «Создать клиента» на
-          вкладке «Клиенты», — но делает то, чего человек хочет ЗДЕСЬ:
-            • счета     → перевод. Счёт заводят раз в квартал, а перекладывают
-                          деньги каждый день; создание живёт на странице счетов;
-            • документы → новый инвойс. Это единственный документ, который
-                          выписывают руками: чек продукт выдаёт сам при приёме
-                          денег, договоры ещё не сделаны;
-            • остальное → операция, то есть доход или расход.
-          Экран берёт только верхний отступ (edges=["top"]), иначе нижняя
-          безопасная зона поднимала кнопку выше клиентской, и при переходе
-          между вкладками она прыгала. */}
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-        {view === "accounts" ? (
-          // КНОПКА ДЕЛАЕТ ТО, ЧТО ВОЗМОЖНО (владелец 2026-09-07: «нет ни одного
-          // счёта — кнопка „Добавить счёт“; после создания она сама меняется
-          // на переводы»). Перевод — движение между ДВУМЯ счетами, поэтому до
-          // второго счёта кнопка заводит счёт, а не стоит серой с оправданием.
-          // Считаем ВСЕ счета тенанта, а не срез команды: деньги ходят между
-          // командами.
-          accounts.length < 2 ? (
-            <GradientButton
-              label="Добавить счёт"
-              onPress={() => setCreateAccountOpen(true)}
-            />
-          ) : (
-            <GradientButton
-              label="Сделать перевод"
-              onPress={() => setTransferOpen(true)}
-            />
-          )
-        ) : view === "documents" && docFilter === "receipt" ? (
-          // ЧЕК НЕЛЬЗЯ ВЫПИСАТЬ КНОПКОЙ. Его выдаёт сервер в тот же миг, когда
-          // принимает деньги (триггер issue_receipt_for_income): чек — это
-          // доказательство, что оплата получена, и бумага без денег была бы
-          // подделкой. Рождается он ТОЛЬКО у дохода С КЛИЕНТОМ (триггер
-          // выходит при client_id null), а форма операции клиента не знает —
-          // доход записывался, чек не появлялся никогда. Клиент уже есть у
-          // ЗАПИСИ, поэтому кнопка ведёт в «Долги» — список работ, ждущих
-          // денег: оплату принимают в самой записи (канон владельца), и чек
-          // рождается сам. Выслать уже выданный чек можно из него самого.
-          <GradientButton
-            label="Принять оплату"
-            onPress={() => setView("debt")}
-          />
-        ) : view === "documents" ? (
-          <GradientButton
-            label="Выставить инвойс"
-            onPress={() => pushOnce("/invoices/new")}
-          />
-        ) : view === "debt" ? (
-          // ДОЛГ — СВОЯ СУЩНОСТЬ, И ЗАВОДИТСЯ ОН СВОЕЙ ШТОРКОЙ (владелец
-          // 2026-09-10: «почему, когда я нажимаю „Добавить долг“, открывается
-          // форма записи? Там должна открываться такая менюшка, только,
-          // наверно, другие категории»).
-          //
-          // Раньше кнопка уводила в создание ЗАПИСИ: долг умел рождаться
-          // только из визита, и «Вася должен мне €100» без визита, как и «я
-          // должен Gree €900» за товар, записать было негде. Теперь у долга
-          // есть строка с направлением, и форма спрашивает ровно его вопросы —
-          // без счёта и способа оплаты: долг не деньги, деньги будут платежом.
-          <GradientButton
-            label={debtSide === "incoming" ? "Добавить долг" : "Добавить свой долг"}
-            onPress={() => {
-              setEditingDebt(null);
-              setDebtOpen(true);
-            }}
-          />
-        ) : (
-          // КНОПКА СЛЕДУЕТ ЗА РАЗРЕЗОМ (владелец 2026-09-08: «нажимаю на доход
-          // — внизу меняется кнопка на добавить доход… и вытягивается только
-          // по доходу»). Направление уже выбрано плиткой; спрашивать его
-          // второй раз в форме незачем.
-          <GradientButton
-            label={
-              view === "income"
-                ? "Добавить доход"
-                : view === "expense"
-                  ? "Добавить расход"
-                  : "Добавить операцию"
-            }
-            onPress={() => {
-              setEditingTx(null);
-              setOpOpen(true);
-            }}
-          />
-        )}
-      </View>
+      {/* Главное действие экрана и листы счетов — `FinancesFooter`. */}
+      <FinancesFooter
+        view={view}
+        docFilter={docFilter}
+        debtSide={debtSide}
+        teamById={teamByIdAll}
+        teamId={scope === NO_TEAM ? null : scope}
+        accounts={accounts}
+        shownAccounts={scopedAccounts}
+        selectedAccountId={view === "accounts" ? accountId : null}
+        onAcceptPayment={() => setView("debt")}
+        onIssueInvoice={() => pushOnce("/invoices/new")}
+        onAddDebt={() => {
+          setEditingDebt(null);
+          setDebtOpen(true);
+        }}
+        onAddOperation={() => {
+          setEditingTx(null);
+          setOpOpen(true);
+        }}
+      />
 
       <TransactionPopup
         visible={!!popupTx}
@@ -1345,26 +1279,6 @@ function FinancesContent() {
           scope && scope !== NO_TEAM ? teamByIdAll.get(scope)?.name : undefined
         }
         onClose={() => setDebtOpen(false)}
-      />
-
-      {/* Перевод — тот же лист, что на странице счетов: одна форма движения
-          денег на продукт. Счета отдаём ВСЕ, не срез команды: деньги ходят
-          между всеми счетами тенанта, и фильтр экрана на них не распространяется
-          (иначе «сдать выручку на счёт другой команды» стало бы невозможно). */}
-      <TransferSheet
-        visible={transferOpen}
-        onClose={() => setTransferOpen(false)}
-        accounts={accounts}
-        teamById={teamByIdAll}
-      />
-      {/* Первый счёт заводится прямо отсюда — тем же листом, что на странице
-          счетов; команда — та, что выбрана чипом. */}
-      <AccountCreateSheet
-        visible={createAccountOpen}
-        onClose={() => setCreateAccountOpen(false)}
-        teams={teams}
-        accounts={accounts}
-        presetTeamId={scope === NO_TEAM ? null : scope}
       />
 
       <PeriodPresetModal

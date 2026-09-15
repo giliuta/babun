@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   accountDaysOnHand,
-  accountsTeamChips,
+  accountOrderGroups,
+  accountsDoorLine,
+  closedCountValue,
   daysBetweenYmd,
+  financeAccountsHref,
   NO_TEAM,
-  sumAccountBalances,
   teamAccounts,
   type SectionAccount,
   type SectionTeam,
@@ -60,39 +62,22 @@ const FIXTURE: Row[] = [
   }),
 ];
 
-describe("счета выбранной команды", () => {
-  test("только свои; чужие не видны, а сумма равна сумме строк", () => {
-    const rows = teamAccounts(FIXTURE, "t-yura");
-    assert.deepEqual(
-      rows.map((a) => a.id),
-      ["yura-cash", "yura-card"],
-    );
-    // Цифру героя можно проверить пальцем: она складывается ровно из того,
-    // что нарисовано ниже.
-    assert.equal(sumAccountBalances(rows), 1050);
-    assert.equal(rows.some((a) => a.brigade_id === "t-anya"), false);
-  });
+const ids = (rows: readonly SectionAccount[]) => rows.map((a) => a.id);
 
-  test("СЧЁТ ПРИНАДЛЕЖИТ ОДНОЙ БРИГАДЕ: чужой в списке не появляется", () => {
-    const anya = teamAccounts(FIXTURE, "t-anya");
-    assert.deepEqual(
-      anya.map((a) => a.id),
-      ["anya-cash"],
-    );
-    assert.equal(sumAccountBalances(anya), 390);
+describe("счета выбранной команды", () => {
+  test("только свои; чужие не видны", () => {
+    assert.deepEqual(ids(teamAccounts(FIXTURE, "t-yura")), ["yura-cash", "yura-card"]);
+    assert.deepEqual(ids(teamAccounts(FIXTURE, "t-anya")), ["anya-cash"]);
   });
 
   test("счёт без владельца не приписывается никому", () => {
-    const ids = teamAccounts(FIXTURE, "t-dima").map((a) => a.id);
-    assert.deepEqual(ids, ["dima-cash", "dima-card"]);
-    assert.ok(!ids.includes("revolut"));
-    assert.equal(ids.length, new Set(ids).size);
+    const rows = ids(teamAccounts(FIXTURE, "t-dima"));
+    assert.deepEqual(rows, ["dima-cash", "dima-card"]);
+    assert.ok(!rows.includes("revolut"));
   });
 
-  test("команда, которой счёт не открыт: пустой список и честный ноль", () => {
-    const rows = teamAccounts(FIXTURE, "t-kolya");
-    assert.deepEqual(rows, []);
-    assert.equal(sumAccountBalances(rows), 0);
+  test("команда, которой счёт не открыт: пустой список", () => {
+    assert.deepEqual(teamAccounts(FIXTURE, "t-kolya"), []);
   });
 
   test("порядок строк детерминирован: position, затем имя", () => {
@@ -103,10 +88,7 @@ describe("счета выбранной команды", () => {
       account({ id: "2a", name: "Альфа", kind: "card", position: 1, balance: 0 }),
       account({ id: "1", name: "Наличные", kind: "cash", position: 0, balance: 0 }),
     ];
-    assert.deepEqual(
-      teamAccounts(rows, "t-yura").map((a) => a.id),
-      ["1", "2a", "2b", "3", "4"],
-    );
+    assert.deepEqual(ids(teamAccounts(rows, "t-yura")), ["1", "2a", "2b", "3", "4"]);
   });
 
   test("РУКА СИЛЬНЕЕ ВИДА: карта, поднятая выше кассы, остаётся выше", () => {
@@ -116,120 +98,139 @@ describe("счета выбранной команды", () => {
       account({ id: "card", name: "Карта", kind: "card", position: 0, balance: 0 }),
       account({ id: "cash", name: "Наличные", kind: "cash", position: 1, balance: 0 }),
     ];
-    assert.deepEqual(
-      teamAccounts(rows, "t-yura").map((a) => a.id),
-      ["card", "cash"],
-    );
+    assert.deepEqual(ids(teamAccounts(rows, "t-yura")), ["card", "cash"]);
   });
 
-  test("копейки складываются центами: сумма не тащит хвост float", () => {
-    const rows = [
-      account({ id: "a", balance: 0.1 }),
-      account({ id: "b", balance: 0.2, kind: "card" }),
-      account({ id: "c", balance: 0.3, kind: "bank" }),
-    ];
-    assert.equal(sumAccountBalances(teamAccounts(rows, "t-yura")), 0.6);
+  test("счёт без команды встаёт под свою группу", () => {
+    assert.deepEqual(ids(teamAccounts(FIXTURE, NO_TEAM)), ["revolut"]);
   });
 });
 
-describe("лента команд", () => {
-  test("активные команды идут в порядке справочника", () => {
-    // В FIXTURE есть «Revolut» без команды — за ним встаёт чип «Без команды»:
-    // деньги без хозяина обязаны быть видны.
-    assert.deepEqual(accountsTeamChips({ accounts: FIXTURE, teams: TEAMS }), [
-      ...TEAMS.map((team) => ({
-        id: team.id,
-        name: team.name,
-        color: team.color,
-        orphan: false,
-      })),
-      { id: NO_TEAM, name: "Без команды", color: null, orphan: true },
-    ]);
+describe("группы страницы «Счета»", () => {
+  test("живые команды в порядке справочника, «Без команды» последней", () => {
+    const groups = accountOrderGroups({ accounts: FIXTURE, teams: TEAMS });
+    assert.deepEqual(
+      groups.map((g) => [g.key, g.title, ids(g.accounts)]),
+      [
+        ["t-yura", "Юра", ["yura-cash", "yura-card"]],
+        ["t-anya", "Аня", ["anya-cash"]],
+        ["t-dima", "Дима", ["dima-cash", "dima-card"]],
+        [NO_TEAM, "Без команды", ["revolut"]],
+      ],
+    );
   });
 
-  test("счёт удалённой команды не пропадает: у неё остаётся чип", () => {
+  test("ДЕНЬГИ АРХИВНОЙ И УДАЛЁННОЙ КОМАНДЫ ВИДНЫ: у каждой своя названная группа", () => {
+    // Живая фактура прода: у Giliuta архивная команда держит открытые «Карту»
+    // и «Наличку» с деньгами; у другого тенанта счёт ссылается на команду,
+    // строки которой уже нет. «Финансы» таких команд не показывают вовсе.
+    const archivedCard = account({
+      id: "old-card",
+      name: "Карта",
+      kind: "card",
+      brigade_id: "t-old",
+      balance: 490,
+    });
+    const archivedCash = account({
+      id: "old-cash",
+      name: "Наличка",
+      brigade_id: "t-old",
+      position: 1,
+      balance: 95,
+    });
     const ghost = account({
       id: "ghost-cash",
       name: "Сейф",
-      // Живая фактура прода: `brigade_id` без строки в справочнике команд.
       brigade_id: "team-mpvbwqze-a8qj0",
+      position: 2,
       balance: 300,
     });
-    const archived = account({
-      id: "old-cash",
-      name: "Касса",
-      brigade_id: "t-old",
-      balance: 250,
+    const groups = accountOrderGroups({
+      accounts: [ghost, ...FIXTURE, archivedCash, archivedCard],
+      teams: [...TEAMS, { id: "t-old", name: "Команда 2", color: null, is_active: false }],
     });
-    const chips = accountsTeamChips({
-      accounts: [...FIXTURE, ghost, archived],
+    assert.deepEqual(
+      groups.slice(TEAMS.length).map((g) => [g.key, g.title, ids(g.accounts)]),
+      [
+        // Осиротевшие — после всех живых, в порядке своих счетов.
+        ["t-old", "Команда 2 · в архиве", ["old-card", "old-cash"]],
+        ["team-mpvbwqze-a8qj0", "Команда удалена", ["ghost-cash"]],
+        [NO_TEAM, "Без команды", ["revolut"]],
+      ],
+    );
+  });
+
+  test("архивная команда без открытых счетов группы не рождает", () => {
+    const groups = accountOrderGroups({
+      accounts: [account({ id: "yura-cash", name: "Наличные", balance: 1000 })],
       teams: [...TEAMS, { id: "t-old", name: "Дима", color: null, is_active: false }],
     });
-    // Осиротевшие — последними, после всех активных, и в том же порядке, в
-    // каком идут их счета («Касса» перед «Сейфом»).
-    assert.deepEqual(chips.slice(TEAMS.length), [
-      { id: "t-old", name: "Дима", color: null, orphan: true },
-      {
-        id: "team-mpvbwqze-a8qj0",
-        name: "Команда удалена",
-        color: null,
-        orphan: true,
-      },
-      { id: NO_TEAM, name: "Без команды", color: null, orphan: true },
-    ]);
-    // И деньги под этими чипами — настоящие.
-    assert.deepEqual(
-      teamAccounts([...FIXTURE, ghost, archived], "team-mpvbwqze-a8qj0").map(
-        (a) => a.id,
-      ),
-      ["ghost-cash"],
-    );
+    // И живые команды без счетов — тоже: двигать там нечего.
+    assert.deepEqual(groups.map((g) => g.key), ["t-yura"]);
   });
 
-  test("тенант, у которого ВСЕ счета осиротели, видит их, а не пустой экран", () => {
-    const accounts = [
-      account({ id: "a", name: "Касса", brigade_id: "team-gone-1", balance: 900 }),
-      account({
-        id: "b",
-        name: "Карта",
-        kind: "card",
-        position: 1,
-        brigade_id: "team-gone-2",
-        balance: 40,
-      }),
-    ];
-    const chips = accountsTeamChips({ accounts, teams: [] });
-    assert.deepEqual(
-      chips.map((c) => [c.id, c.name, c.orphan]),
-      [
-        ["team-gone-1", "Команда удалена", true],
-        ["team-gone-2", "Команда удалена", true],
-      ],
-    );
-    assert.equal(sumAccountBalances(teamAccounts(accounts, chips[0].id)), 900);
-  });
-
-  test("счёт живой команды лишнего чипа не рождает", () => {
-    const chips = accountsTeamChips({
-      accounts: [account({ id: "yura-cash", name: "Наличные", balance: 1000 })],
-      teams: [
-        ...TEAMS,
-        { id: "t-old", name: "Дима", color: null, is_active: false },
-      ],
+  test("одна команда у компании — без заголовка; архивная своё имя держит", () => {
+    const only = accountOrderGroups({
+      accounts: [account({ id: "yura-cash", name: "Наличные", balance: 1 })],
+      // Архивная команда без открытых счетов не делает команд «больше одной».
+      teams: [TEAMS[0], { id: "t-old", name: "Дима", color: null, is_active: false }],
     });
-    assert.equal(
-      chips.every((c) => !c.orphan),
-      true,
+    assert.equal(only.length, 1);
+    assert.equal(only[0].title, null);
+
+    const orphanOnly = accountOrderGroups({
+      accounts: [account({ id: "a", name: "Касса", brigade_id: "team-gone", balance: 900 })],
+      teams: [],
+    });
+    assert.deepEqual(
+      orphanOnly.map((g) => [g.key, g.title]),
+      [["team-gone", "Команда удалена"]],
     );
   });
 
-  test("счёт без команды встаёт под свой чип, и деньги под ним настоящие", () => {
-    const rows = [...FIXTURE];
-    assert.deepEqual(
-      teamAccounts(rows, NO_TEAM).map((a) => a.id),
-      ["revolut"],
+  test("команд больше одной — имя стоит и над единственной группой", () => {
+    // У второй команды счетов нет, но без имени не видно, чьи это счета.
+    const groups = accountOrderGroups({
+      accounts: [account({ id: "yura-cash", name: "Наличные", balance: 1 })],
+      teams: TEAMS,
+    });
+    assert.deepEqual(groups.map((g) => [g.key, g.title]), [["t-yura", "Юра"]]);
+  });
+
+  test("нет открытых счетов — нет групп", () => {
+    assert.deepEqual(accountOrderGroups({ accounts: [], teams: TEAMS }), []);
+  });
+});
+
+describe("адрес счетов на «Финансах»", () => {
+  test("команда уходит параметром, без неё — просто разрез «Счета»", () => {
+    assert.equal(financeAccountsHref("t-yura"), "/finances?view=accounts&team=t-yura");
+    assert.equal(financeAccountsHref(null), "/finances?view=accounts");
+    assert.equal(financeAccountsHref(undefined), "/finances?view=accounts");
+    assert.equal(financeAccountsHref(""), "/finances?view=accounts");
+  });
+
+  test("id команды экранируется: «&» в id не рвёт адрес", () => {
+    assert.equal(
+      financeAccountsHref("a&view=documents"),
+      "/finances?view=accounts&team=a%26view%3Ddocuments",
     );
-    assert.equal(sumAccountBalances(teamAccounts(rows, NO_TEAM)), 5120);
+  });
+});
+
+describe("подпись двери «Счета»", () => {
+  test("числа открытых и закрытых, ноль — словом, неизвестное не выдумываем", () => {
+    assert.equal(accountsDoorLine(2, 0), "2 счёта · закрытых нет");
+    assert.equal(accountsDoorLine(5, 3), "5 счетов · закрытых 3");
+    assert.equal(accountsDoorLine(0, 1), "Открытых нет · закрытых 1");
+    assert.equal(accountsDoorLine(undefined, 0), "Остатки, порядок, закрытые");
+    assert.equal(accountsDoorLine(2, undefined), "Остатки, порядок, закрытые");
+  });
+
+  test("строка «Закрытые счета» за дверью пишет то же число тем же словом", () => {
+    assert.equal(closedCountValue(2), "2");
+    assert.equal(closedCountValue(0), "нет");
+    assert.ok(accountsDoorLine(4, 2).endsWith(closedCountValue(2)));
   });
 });
 

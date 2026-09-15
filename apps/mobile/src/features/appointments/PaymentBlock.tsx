@@ -2,26 +2,21 @@ import { useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { FileText, History, Split } from "lucide-react-native";
-import { useQuery } from "@tanstack/react-query";
 import type {
   Appointment,
   AppointmentStatus,
 } from "@babun/shared/local/appointments";
-import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import { randomUuid } from "@babun/shared/sync";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
 import { haptics } from "@/lib/haptics";
-import { supabase } from "@/lib/supabase";
-import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
-import { AccountCreateSheet } from "@/features/finances/AccountCreateSheet";
+import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { useInvoices } from "@/features/invoices/queries";
-import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { useBusinessNow } from "./business-now";
 import {
@@ -100,7 +95,6 @@ export function PaymentBlock({
   const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
-  const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const currency = useTenant().data?.currency;
   const businessNow = useBusinessNow();
@@ -112,16 +106,8 @@ export function PaymentBlock({
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const canCreateAccount = role === "owner" || role === "dispatcher";
+  const canCreateAccount = role === "owner"; // RLS accounts_owner_all: счёт заводит только владелец
   const canUseDocuments = usePlanAllows("documents");
-  const { data: teams = [] } = useTeams();
-  // Все счета тенанта — листу создания для проверки дубля имени (общий ключ).
-  const accountRows = useQuery({
-    queryKey: ["accounts", tenantId, "rows", "all"],
-    enabled: canCreateAccount && !!tenantId && createOpen,
-    queryFn: () =>
-      listAccounts(supabase, tenantId as string, { includeInactive: true }),
-  });
 
   const invoice = useMemo(() => {
     if (!appointment) return null;
@@ -417,7 +403,7 @@ export function PaymentBlock({
                 label={account.name}
                 color={account.color ?? t.ink}
                 tint={account.color}
-                width={tileWidth}
+                width={tileWidth} compact
                 state={state}
                 amount={isPaid ? formatEURExact(paid) : undefined}
                 disabled={busy}
@@ -436,11 +422,10 @@ export function PaymentBlock({
           })}
         </View>
       )}
-      <AccountCreateSheet
+      <AccountEditorSheet
         visible={createOpen}
+        accountId={null}
         onClose={() => setCreateOpen(false)}
-        teams={teams}
-        accounts={accountRows.data ?? []}
         presetTeamId={teamId}
       />
       <PaymentHistorySheet
