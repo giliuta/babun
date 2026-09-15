@@ -44,6 +44,13 @@ export interface DebtRangeOptions {
 /**
  * Долги за период по дню возникновения. Окно — то же, что у долгов записей:
  * список под цифрой обязан набираться тем же правилом, что сама цифра.
+ *
+ * ПОСТРАНИЧНО, КАК ЖУРНАЛ (15.09). «Финансы» читают долги всей компании за
+ * период и отбирают команду на устройстве (`pickTeamDebts`) — так смена
+ * команды не ходит в сеть. Одна выборка с `limit` срезала бы строки ДО
+ * отбора, и у команды молча пропали бы старые долги. Порядок с добивкой
+ * `created_at` и `id` — чтобы страницы не теряли и не повторяли строки с
+ * одним днём.
  */
 export async function listDebts(
   supabase: DbSupabase,
@@ -52,18 +59,26 @@ export async function listDebts(
   to: string,
   options: DebtRangeOptions = {},
 ): Promise<Debt[]> {
-  let q = supabase
-    .from("debts")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .gte("occurred_on", from)
-    .lte("occurred_on", to);
-  if (options.teamId) q = q.eq("team_id", options.teamId);
-  const { data, error } = await q
-    .order("occurred_on", { ascending: false })
-    .limit(DEBTS_PAGE_SIZE);
-  if (error) throw new Error(`listDebts: ${error.message}`);
-  return ((data ?? []) as Row[]).map(rowToDebt);
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += DEBTS_PAGE_SIZE) {
+    let q = supabase
+      .from("debts")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .gte("occurred_on", from)
+      .lte("occurred_on", to);
+    if (options.teamId) q = q.eq("team_id", options.teamId);
+    const { data, error } = await q
+      .order("occurred_on", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(offset, offset + DEBTS_PAGE_SIZE - 1);
+    if (error) throw new Error(`listDebts: ${error.message}`);
+    const page = (data ?? []) as Row[];
+    rows.push(...page);
+    if (page.length < DEBTS_PAGE_SIZE) break;
+  }
+  return rows.map(rowToDebt);
 }
 
 /**
