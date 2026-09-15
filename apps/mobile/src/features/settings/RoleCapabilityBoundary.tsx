@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { evictCompanyFromDevice } from "@/lib/evict-company";
 import { useTenantId } from "@/lib/tenant";
-import { can, ROLE_LABELS, type AppCapability } from "./role-policy";
+import { can, type AppCapability } from "./role-policy";
 import { useCurrentRole } from "./tenant";
 
 /**
@@ -108,8 +108,8 @@ export function RoleCapabilityBoundary({
         <ScreenHeader title="Недостаточно прав" />
         <EmptyState
           fill
-          title="Этот раздел недоступен для вашей роли"
-          subtitle={`Ваша роль — ${ROLE_LABELS[role].toLowerCase()}. Доступные рабочие разделы остались без изменений.`}
+          title="Этот раздел вам недоступен"
+          subtitle="Доступ к нему открывает владелец компании."
           action={{ label: "Вернуться", onPress: () => router.replace(fallbackHref) }}
         />
       </Screen>

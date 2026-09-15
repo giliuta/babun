@@ -5,7 +5,7 @@ import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useCurrentRole } from "./tenant";
-import { canAccessCabinetPath, ROLE_LABELS } from "./role-policy";
+import { canAccessCabinetPath } from "./role-policy";
 
 export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -58,7 +58,7 @@ export function CabinetRoleBoundary({ children }: { children: ReactNode }) {
         <EmptyState
           fill
           title="Раздел доступен только владельцу"
-          subtitle={`Ваша роль — ${ROLE_LABELS[role].toLowerCase()}. Рабочие разделы остаются доступны.`}
+          subtitle="Рабочие разделы остаются доступны."
           action={{ label: "В кабинет", onPress: () => router.replace("/cabinet") }}
         />
       </Screen>

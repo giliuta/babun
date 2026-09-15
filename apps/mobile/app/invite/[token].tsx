@@ -5,7 +5,6 @@ import {
   Building2,
   CalendarRange,
   Mail,
-  ShieldCheck,
 } from "lucide-react-native";
 import { Button } from "@/components/ui/Button";
 import { Screen } from "@/components/ui/Screen";
@@ -29,7 +28,6 @@ import {
   invitationErrorMessage,
   isInvitationToken,
 } from "@/features/settings/invitation-flow";
-import { ROLE_LABELS } from "@/features/settings/role-policy";
 
 export default function InvitationScreen() {
   const t = useThemeColors();
@@ -153,22 +151,18 @@ export default function InvitationScreen() {
             </View>
 
             <SectionCard>
-              <InfoRow
-                icon={<ShieldCheck color={t.accent} size={ICON.sm} />}
-                label="Роль"
-                value={ROLE_LABELS[preview.data.role]}
-              />
+              {/* Роль не показываем (владелец 15.09: «роль уберём, она в
+                  целом нам не нужна»): человек видит, куда его зовут. */}
               {preview.data.teamName ? (
                 <>
-                  <Divider inset={52} />
                   <InfoRow
                     icon={<CalendarRange color={t.accent} size={ICON.sm} />}
                     label="Календарь"
                     value={preview.data.teamName}
                   />
+                  <Divider inset={52} />
                 </>
               ) : null}
-              <Divider inset={52} />
               <InfoRow
                 icon={<Mail color={t.accent} size={ICON.sm} />}
                 label="Аккаунт"

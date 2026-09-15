@@ -14,7 +14,6 @@ import {
   invitationShareText,
   isInvitationEmail,
 } from "@/features/settings/invitation-flow";
-import { ROLE_LABELS } from "@/features/settings/role-policy";
 import { useCreateInvitation } from "@/features/settings/team-access";
 
 // «ДОБАВИТЬ МАСТЕРА» — ЭТО ПРИГЛАШЕНИЕ ПО ПОЧТЕ (STORY-081; владелец 14.09 на
@@ -40,11 +39,7 @@ export async function shareInvitation(args: {
   const url = Linking.createURL(invitationPath(args.token));
   await Share.share({
     title: `Приглашение для ${args.email}`,
-    message: invitationShareText({
-      tenantName: args.tenantName,
-      roleLabel: ROLE_LABELS.master,
-      url,
-    }),
+    message: invitationShareText({ tenantName: args.tenantName, url }),
     url,
   });
 }

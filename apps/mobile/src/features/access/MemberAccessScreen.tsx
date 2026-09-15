@@ -8,7 +8,6 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useToast } from "@/components/ui/Toast";
 import { TYPE } from "@/components/ui/tokens";
 import { useTeams } from "@/features/reference/queries";
-import { ROLE_LABELS, isUserRole } from "@/features/settings/role-policy";
 import { useThemeColors } from "@/theme/colors";
 
 import {
@@ -29,7 +28,7 @@ import {
   useSetMemberAccess,
   type CalendarMember,
 } from "./queries";
-import { MemberRemoveGroup, MemberRoleGroup } from "./MemberActions";
+import { MemberRemoveGroup } from "./MemberActions";
 import { roleAccessNotice } from "./role-access-notice";
 
 // ПРАВА СОТРУДНИКА В КАЛЕНДАРЕ (STORY-081). Вид выбран владельцем 14.09 после
@@ -41,9 +40,12 @@ import { roleAccessNotice } from "./role-access-notice";
 // Блок, который сервер ещё не проверяет (`live = false`), показан, но заперт:
 // галочка без замка на сервере — пустое обещание.
 //
-// Пока заперты ВСЕ блоки, над разделами стоит строка о том, что действует на
-// самом деле: доступ задаёт роль (`role-access-notice.ts`). Иначе экран
-// говорил бы «Скрыт», пока диспетчер видит записи и телефоны.
+// Пока заперты ВСЕ блоки, над разделами стоит строка о том, что человек видит
+// и может на самом деле (`role-access-notice.ts`). Иначе экран говорил бы
+// «Скрыт», пока диспетчер видит записи и телефоны.
+//
+// СТРОКИ «РОЛЬ» НЕТ (владелец 15.09: «роль уберём, она в целом нам не
+// нужна»): что человеку можно, владелец настраивает блоками ниже.
 
 const REFUSAL_TEXT: Record<AccessRefusal, string> = {
   not_live: "Этот раздел прав ещё не включён",
@@ -183,7 +185,6 @@ export function MemberAccessScreen({
     : null;
   const notice = roleAccessNotice(
     member?.role ?? null,
-    member && isUserRole(member.role) ? ROLE_LABELS[member.role] : null,
     attachedNames && attachedNames.every((name): name is string => typeof name === "string")
       ? attachedNames
       : null,
@@ -200,7 +201,6 @@ export function MemberAccessScreen({
       {header}
       <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
         {member ? <PersonCard member={member} /> : null}
-        {member ? <MemberRoleGroup member={member} /> : null}
         {anyLive ? null : (
           <Text style={{ ...TYPE.subhead, color: t.sub, paddingHorizontal: 16, paddingTop: 12 }}>
             {notice}

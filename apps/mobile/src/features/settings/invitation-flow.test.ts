@@ -36,11 +36,10 @@ describe("mobile invitation flow", () => {
   test("renders a signed mobile share message and friendly failures", () => {
     const text = invitationShareText({
       tenantName: "AirFix",
-      roleLabel: "Бригадир / мастер",
       url: "babun://invite/token",
     });
     assert.match(text, /AirFix/);
-    assert.match(text, /Бригадир \/ мастер/);
+    assert.doesNotMatch(text, /рол/i);
     assert.match(text, /babun:\/\/invite\/token/);
     assert.match(
       invitationErrorMessage("invitation email does not match"),

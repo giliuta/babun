@@ -8,7 +8,6 @@ import {
   normalizeInvitationEmail,
   type InvitableRole,
 } from "./invitation-flow";
-import { type UserRole } from "./role-policy";
 
 type InvitationRow = Database["public"]["Tables"]["invitations"]["Row"];
 
@@ -103,39 +102,6 @@ export function useCreateInvitation() {
     },
     onSuccess: () =>
       void qc.invalidateQueries({ queryKey: ["tenant-invitations"] }),
-    meta: { errorHandled: true },
-  });
-}
-
-export function useUpdateTenantMember() {
-  const tenantId = useTenantId();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      userId,
-      role,
-      masterId,
-    }: {
-      userId: string;
-      role: UserRole;
-      masterId: string | null;
-    }) => {
-      if (!tenantId) throw new Error("Нет активной компании");
-      await requireOwner();
-      const { data, error } = await supabase
-        .from("tenant_members")
-        .update({ role, master_id: masterId })
-        .eq("tenant_id", tenantId)
-        .eq("user_id", userId)
-        .select("user_id")
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (!data) throw new Error("Сотрудник не найден или доступ запрещён");
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["tenant-members"] });
-      void qc.invalidateQueries({ queryKey: ["current-role"] });
-    },
     meta: { errorHandled: true },
   });
 }

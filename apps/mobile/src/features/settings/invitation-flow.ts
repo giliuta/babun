@@ -91,13 +91,13 @@ export function invitationSignupErrorMessage(
 
 export function invitationShareText(args: {
   tenantName?: string | null;
-  roleLabel: string;
   url: string;
 }): string {
   const company = args.tenantName?.trim()
     ? ` в «${args.tenantName.trim()}»`
     : " в Babun CRM";
-  return `Вас пригласили${company} с ролью «${args.roleLabel}». Откройте ссылку на iPhone:\n${args.url}`;
+  // Роль не называем (владелец 15.09: «роль уберём, она в целом нам не нужна»).
+  return `Вас пригласили${company}. Откройте ссылку на iPhone:\n${args.url}`;
 }
 
 /** Роль, с которой открыть компанию сразу после приёма приглашения.
