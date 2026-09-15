@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
 import { humanDay } from "@/features/appointments/helpers";
@@ -92,6 +93,9 @@ export function CrewAppointmentSheet({
   // Наряд только ЧИТАЕТ услуги — значит читает все, включая убранные:
   // команда не должна видеть в сегодняшнем наряде безымянную «Услуга».
   const { data: services = [] } = useAllServices();
+  // Файлы записи удаляют владелец и диспетчер — так пускает сервер;
+  // мастеру корзинку не рисуем (15.09).
+  const role = useCurrentRole().data;
   const [comment, setComment] = useState("");
   const [savedComment, setSavedComment] = useState("");
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
@@ -327,6 +331,7 @@ export function CrewAppointmentSheet({
                 clientId={null}
                 locationId={appointment.location_id}
                 canUpload={status !== "cancelled"}
+                canDelete={role !== "master"}
                 pending={[]}
                 onPendingChange={() => {}}
               />

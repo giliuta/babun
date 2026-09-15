@@ -12,6 +12,9 @@ import type { PendingFile } from "./appointment-files";
 // пока нет), документ — значок и имя. Корзинка в углу — единственный
 // видимый путь к удалению (владелец: «сейчас я не знаю, как удалить
 // фотографию»), удержание плитки делает то же.
+//
+// БЕЗ `onDelete` НЕТ НИ КОРЗИНКИ, НИ УДЕРЖАНИЯ (15.09): мастеру сервер удалять
+// файлы записи не даёт, и корзинка обещала бы то, что кончится ошибкой.
 
 function useTile(size: number) {
   const t = useThemeColors();
@@ -63,7 +66,8 @@ export function PhotoTile({
   size: number;
   deleting: boolean;
   onOpen: () => void;
-  onDelete: () => void;
+  /** Нет — удалять нельзя: ни корзинки, ни удержания. */
+  onDelete?: () => void;
 }) {
   const t = useThemeColors();
   const tile = useTile(size);
@@ -75,7 +79,7 @@ export function PhotoTile({
       disabled={deleting}
       accessibilityRole="imagebutton"
       accessibilityLabel={video ? "Видео записи" : "Фото записи"}
-      accessibilityHint="Удерживайте, чтобы удалить"
+      accessibilityHint={onDelete ? "Удерживайте, чтобы удалить" : undefined}
       style={({ pressed }) => [tile, { opacity: pressed || deleting ? 0.6 : 1 }]}
     >
       {video ? (
@@ -96,7 +100,9 @@ export function PhotoTile({
       ) : (
         <Image source={{ uri: photo.url }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
       )}
-      <TrashBadge label={video ? "Удалить видео" : "Удалить фото"} onPress={onDelete} disabled={deleting} />
+      {onDelete ? (
+        <TrashBadge label={video ? "Удалить видео" : "Удалить фото"} onPress={onDelete} disabled={deleting} />
+      ) : null}
       {deleting ? (
         <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
           <Spinner size={20} label="Удаляем" />
@@ -117,7 +123,8 @@ export function DocTile({
   size: number;
   deleting: boolean;
   onOpen: () => void;
-  onDelete: () => void;
+  /** Нет — удалять нельзя: ни корзинки, ни удержания. */
+  onDelete?: () => void;
 }) {
   const t = useThemeColors();
   const tile = useTile(size);
@@ -127,11 +134,13 @@ export function DocTile({
       onLongPress={onDelete}
       accessibilityRole="button"
       accessibilityLabel={`Документ ${doc.filename}`}
-      accessibilityHint="Удерживайте, чтобы удалить"
+      accessibilityHint={onDelete ? "Удерживайте, чтобы удалить" : undefined}
       style={({ pressed }) => [tile, { opacity: pressed ? 0.6 : 1, padding: 10, justifyContent: "space-between" }]}
     >
       <FileText color={t.accent} size={22} strokeWidth={2} />
-      <TrashBadge label={`Удалить документ ${doc.filename}`} onPress={onDelete} disabled={deleting} />
+      {onDelete ? (
+        <TrashBadge label={`Удалить документ ${doc.filename}`} onPress={onDelete} disabled={deleting} />
+      ) : null}
       <View>
         <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
           {docTitle(doc.filename)}

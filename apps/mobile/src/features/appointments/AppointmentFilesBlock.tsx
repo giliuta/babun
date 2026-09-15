@@ -69,6 +69,10 @@ export interface AppointmentFilesBlockProps {
   clientId: string | null;
   locationId: string | null;
   canUpload: boolean;
+  /** Удалять фото и документы записи. Сервер пускает только владельца и
+   *  диспетчера (`storage_appointment_photos_delete`), поэтому мастеру
+   *  корзинку не рисуем вовсе (15.09): иначе нажатие кончалось ошибкой. */
+  canDelete?: boolean;
   pending: PendingFile[];
   onPendingChange: (next: PendingFile[]) => void;
 }
@@ -78,6 +82,7 @@ export function AppointmentFilesBlock({
   clientId,
   locationId,
   canUpload,
+  canDelete = true,
   pending,
   onPendingChange,
 }: AppointmentFilesBlockProps) {
@@ -237,7 +242,7 @@ export function AppointmentFilesBlock({
                 size={tileWidth}
                 deleting={remove.isPending && remove.variables?.id === photo.id}
                 onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
-                onDelete={() => void holdPhoto(photo)}
+                onDelete={canDelete ? () => void holdPhoto(photo) : undefined}
               />
             ))}
             {docs.map((doc) => (
@@ -247,7 +252,7 @@ export function AppointmentFilesBlock({
                 size={tileWidth}
                 deleting={removeDoc.isPending}
                 onOpen={() => void openDoc(doc)}
-                onDelete={() => void holdDoc(doc)}
+                onDelete={canDelete ? () => void holdDoc(doc) : undefined}
               />
             ))}
             {invoices.map((inv) => (
