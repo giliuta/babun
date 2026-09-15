@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import {
   ChevronRight,
@@ -262,6 +262,9 @@ export function FieldRow({
   addLabel,
   onEditEnd,
   onType,
+  inputRef,
+  inputColor,
+  readOnly,
   onSave,
 }: {
   label: string;
@@ -313,6 +316,16 @@ export function FieldRow({
    *  у которых хвост зависит от набранного: значок «открыть Telegram» обязан
    *  появиться, пока логин печатают, а не после ухода со строки. */
   onType?: (v: string) => void;
+  /** Поле ввода наружу: серая главная кнопка ведёт курсор к первому
+   *  незаполненному полю (карточка нового мастера, 15.09). Поле смонтировано
+   *  всегда только у `live` — у обычной строки ссылка пуста до правки. */
+  inputRef?: Ref<TextInput>;
+  /** Цвет набираемого текста: почта, не прошедшая проверку, краснеет прямо в
+   *  поле. `valueColor` красит только показанное значение, не ввод. */
+  inputColor?: string;
+  /** Значение только показывается: почта приглашения — адрес, на который оно
+   *  выписано, и сменить её значит позвать другого человека. */
+  readOnly?: boolean;
   onSave: (v: string) => void;
 }) {
   // ЧИСЛО ВЫДЕЛЯЕТСЯ ЦЕЛИКОМ ПРИ ФОКУСЕ — иначе правка «135» на «140» даёт
@@ -341,7 +354,7 @@ export function FieldRow({
     if (!editing) setText(value);
   }, [value, editing]);
 
-  const editingNow = editing || !!live;
+  const editingNow = !readOnly && (editing || !!live);
   const valueSize = big ? 17 : 15;
   // Буквы в номер не попадают НИ ОДНИМ путём — ни вставкой, ни диктовкой,
   // ни внешней клавиатурой. Чистка живёт в примитиве, а не в каждом вызове:
@@ -392,17 +405,17 @@ export function FieldRow({
             (кнопка связи, ✕) остаётся СНАРУЖИ: вложенный в нажимаемую
             область он склеивается со строкой для VoiceOver. */}
         <Pressable
-          onPress={editingNow ? undefined : () => setEditing(true)}
-          disabled={editingNow}
+          onPress={editingNow || readOnly ? undefined : () => setEditing(true)}
+          disabled={editingNow || !!readOnly}
           // В РЕЖИМЕ ПРАВКИ контейнер перестаёт быть элементом доступности:
           // иначе он склеивает TextInput внутрь себя, и VoiceOver не может
           // войти в поле — клиента становится нельзя создать вслепую.
           accessible={!editingNow}
-          accessibilityRole={editingNow ? "none" : "button"}
+          accessibilityRole={editingNow ? "none" : readOnly ? "text" : "button"}
           // Запятая, а не двоеточие: VoiceOver даёт паузу, и строка читается
           // «Мобильный, +357 …», а не как «поле: значение».
           accessibilityLabel={value ? `${label}, ${value}` : label}
-          accessibilityHint={editingNow ? undefined : "Нажмите, чтобы изменить"}
+          accessibilityHint={editingNow || readOnly ? undefined : "Нажмите, чтобы изменить"}
           // Смена подписи вложена в строку и потому недоступна VoiceOver:
           // отдаём её действием ротора, не разбивая строку на две остановки.
           accessibilityActions={
@@ -470,6 +483,7 @@ export function FieldRow({
           })()}
           {editingNow ? (
             <TextInput
+              ref={inputRef}
               autoFocus={autoFocus ?? editing}
               value={text}
               onChangeText={(raw) => {
@@ -507,7 +521,7 @@ export function FieldRow({
                 padding: 0,
                 fontSize: valueSize,
                 fontWeight: "600",
-                color: t.ink,
+                color: inputColor ?? t.ink,
                 fontVariant: tabular ? ["tabular-nums"] : undefined,
               }}
             />
@@ -578,6 +592,7 @@ export function FieldRow({
       <View style={{ flex: 1, alignItems: "flex-end" }}>
         {editingNow ? (
           <TextInput
+            ref={inputRef}
             autoFocus={autoFocus ?? editing}
             value={text}
             onChangeText={(raw) => {
@@ -611,14 +626,15 @@ export function FieldRow({
               textAlign: "right",
               fontSize: 15,
               fontWeight: "500",
-              color: t.ink,
+              color: inputColor ?? t.ink,
               paddingVertical: 4,
               fontVariant: tabular ? ["tabular-nums"] : undefined,
             }}
           />
         ) : (
           <Pressable
-            onPress={() => setEditing(true)}
+            onPress={readOnly ? undefined : () => setEditing(true)}
+            disabled={!!readOnly}
             accessibilityRole="button"
             accessibilityLabel={value ? `${label}: ${value}` : label}
             accessibilityHint="Нажмите, чтобы изменить"

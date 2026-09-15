@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   BarChart3,
   CalendarDays,
@@ -48,6 +48,40 @@ import { useAppointments } from "@/features/calendar/queries";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { chooseOption } from "@/lib/choose";
+import { MasterCard } from "@/features/access/master-page/MasterCard";
+import { invitationIdFromSegment } from "@/features/access/master-page/master-draft";
+
+// «/calendar/masters/new» — СТРАНИЦА НОВОГО МАСТЕРА (владелец 15.09: «„Добавить"
+// сразу перебрасывает, как клиент, на создание страницы»). Как у клиента, `new`
+// приходит сюда вместо id, отдельного файла маршрута нет: новый файл маршрута
+// перезагрузил бы бандл у всех девайсов общего Metro. `invite-<uuid>` —
+// приглашение без ответа, та же карточка мастера (дефис, а не двоеточие:
+// двоеточие в сегменте ломает разбор диплинка). Любой другой id — хаб старой
+// карточки мастера.
+export default function MasterRoute() {
+  const params = useLocalSearchParams<{
+    id: string;
+    team?: string | string[];
+  }>();
+  const router = useRouter();
+  const invitationId = invitationIdFromSegment(params.id);
+  if (params.id !== "new" && !invitationId) return <MasterHubScreen />;
+  const team = Array.isArray(params.team) ? params.team[0] : params.team;
+  const back = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace(
+      (team ? `/calendar/masters?team=${encodeURIComponent(team)}` : "/calendar/masters") as Href,
+    );
+  };
+  return invitationId ? (
+    <MasterCard mode="invite" invitationId={invitationId} onBack={back} />
+  ) : (
+    <MasterCard mode="draft" teamId={team || null} onBack={back} />
+  );
+}
 
 // Хаб мастера (nav-хаб, порт web masters/[id]/page.tsx). Собирает вокруг
 // одного мастера: шапку с аватаром/kebab, профиль-карточку, плашки команд,
@@ -68,7 +102,7 @@ function teamLeadIds(t: Team): string[] {
   return t.lead_id ? [t.lead_id] : [];
 }
 
-export default function MasterHubScreen() {
+function MasterHubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const t = useThemeColors();
   const router = useRouter();

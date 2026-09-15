@@ -3,15 +3,9 @@ import { Mail } from "lucide-react-native";
 import { getInitials } from "@babun/shared/local/masters";
 import type { Database } from "@babun/shared/db/database.types";
 
-import { presentChoiceSheet } from "@/components/ui/ChoiceSheet";
-import { confirmThen } from "@/lib/confirm";
-import { notify } from "@/lib/notify";
-import { useRevokeInvitation } from "@/features/settings/team-access";
-import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 
-import { shareInvitation, waitSheetExit } from "./InviteMemberSheet";
 import type { CalendarMember } from "./queries";
 
 // СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах» (STORY-081): кто уже с доступом и кто
@@ -20,7 +14,7 @@ import type { CalendarMember } from "./queries";
 
 type Invitation = Database["public"]["Tables"]["invitations"]["Row"];
 
-/** Человек с доступом к календарю. Тап открывает его права. */
+/** Человек с доступом к календарю. Тап открывает его карточку. */
 export function MemberRow({
   member,
   tint,
@@ -58,52 +52,20 @@ export function MemberRow({
   );
 }
 
-/** Приглашение, на которое ещё не ответили. Приглашённый видит его у себя в
- *  Кабинете; тап здесь — поделиться ссылкой (если аккаунта ещё нет) или отозвать. */
-export function PendingInvitationRow({ invitation }: { invitation: Invitation }) {
+/** Приглашение, на которое ещё не ответили. Тап открывает его карточку
+ *  (владелец 15.09: приглашение — та же полная карточка мастера); «Поделиться
+ *  ссылкой» и «Отозвать» живут в ⋯ этой карточки, а не в меню строки. */
+export function PendingInvitationRow({
+  invitation,
+  onPress,
+}: {
+  invitation: Invitation;
+  onPress: () => void;
+}) {
   const t = useThemeColors();
-  const tenantQuery = useTenant();
-  const revoke = useRevokeInvitation();
-
-  const openActions = async () => {
-    const picked = await presentChoiceSheet(invitation.email, [
-      { label: "Поделиться ссылкой" },
-      { label: "Отозвать приглашение", destructive: true },
-    ]);
-    if (picked === 0) {
-      await waitSheetExit();
-      await shareInvitation({
-        email: invitation.email,
-        token: invitation.token,
-        tenantName: tenantQuery.data?.name,
-      }).catch(() => notify("Не удалось открыть «Поделиться»", "Попробуйте ещё раз."));
-      return;
-    }
-    if (picked === 1) {
-      // Вопрос — только после того, как выбор уехал: второе окно поверх
-      // уезжающего не появляется вовсе.
-      await waitSheetExit();
-      confirmThen(
-        "Отозвать приглашение?",
-        {
-          message: `Ссылка для ${invitation.email} перестанет работать.`,
-          confirmLabel: "Отозвать",
-          destructive: true,
-        },
-        async () => {
-          try {
-            await revoke.mutateAsync(invitation.id);
-          } catch (error) {
-            notify("Не удалось отозвать", (error as Error).message);
-          }
-        },
-      );
-    }
-  };
-
   return (
     <Pressable
-      onPress={() => void openActions()}
+      onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${invitation.full_name || invitation.email}, ждёт ответа`}
       className="flex-row items-center px-4 py-3 active:opacity-60"

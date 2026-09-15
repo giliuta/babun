@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import { Pressable, StyleSheet, TextInput, View } from "react-native";
-import { ChevronRight } from "lucide-react-native";
+import { ChevronRight, type LucideIcon } from "lucide-react-native";
 import { useThemeColors } from "@/theme/colors";
 import { AppearanceSheet, AppearanceTile } from "./AppearanceSheet";
 import { FieldLabel } from "./Field";
@@ -211,6 +211,13 @@ export function NameColorField({
   icon,
   onIconChange,
   icons,
+  fallback,
+  placeholder,
+  autoCapitalize,
+  inputRef,
+  trailing,
+  minHeight,
+  colorReadOnly,
 }: {
   name: string;
   onNameChange: (value: string) => void;
@@ -239,6 +246,26 @@ export function NameColorField({
   icon?: string | null;
   onIconChange?: (slug: string | null) => void;
   icons?: readonly IconPreset[];
+  /** Глиф плитки, когда своего значка нет или слаг незнаком словарю. У счёта
+   *  это глиф его типа: эмодзи старого веб-мастера словарь не знает, а
+   *  плитка обязана оставаться узнаваемой. */
+  fallback?: LucideIcon;
+  /** Подсказка называет поле («Имя») — у строки без ярлыка это единственное
+   *  его имя, и VoiceOver читает её же. */
+  placeholder?: string;
+  autoCapitalize?: "none" | "sentences" | "words";
+  /** Поле ввода наружу — чтобы экран мог вернуть в него курсор. */
+  inputRef?: Ref<TextInput>;
+  /** Хвост строки справа от ввода: ✓ заполненного имени. */
+  trailing?: ReactNode;
+  /** Высота строки без рамки. Карточка, где имя стоит над строками
+   *  `FieldRow stacked` (60pt, карточка мастера), выравнивает его по ним —
+   *  иначе первая строка карточки ниже остальных на 8pt; без пропа 52. */
+  minHeight?: number;
+  /** Плитка только показывает вид и шторку не открывает: вид хранится не
+   *  здесь (приглашение по существующей карточке — её правят в самой
+   *  карточке). Имя при этом правится как обычно. */
+  colorReadOnly?: boolean;
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
@@ -268,7 +295,7 @@ export function NameColorField({
       <View
         style={{
           ...(bare
-            ? { minHeight: 52 }
+            ? { minHeight: minHeight ?? 52 }
             : {
                 borderRadius: t.radius.input,
                 borderCurve: "continuous",
@@ -285,9 +312,11 @@ export function NameColorField({
             — люди и так замотанные»). Плитка показывает ответ целиком: цвет
             заливкой, значок внутри неё. */}
         <Pressable
-          onPress={() => setOpen(true)}
+          onPress={colorReadOnly ? undefined : () => setOpen(true)}
+          disabled={colorReadOnly}
+          accessible={!colorReadOnly}
           hitSlop={10}
-          accessibilityRole="button"
+          accessibilityRole={colorReadOnly ? undefined : "button"}
           accessibilityLabel={onIconChange ? "Цвет и значок" : "Цвет"}
           style={({ pressed }) => ({
             paddingVertical: 12,
@@ -295,15 +324,24 @@ export function NameColorField({
             opacity: pressed ? 0.5 : 1,
           })}
         >
-          <AppearanceTile color={color} icon={icon} icons={icons} size={28} />
+          <AppearanceTile
+            color={color}
+            icon={icon}
+            icons={icons}
+            fallback={fallback}
+            size={28}
+          />
         </Pressable>
         <TextInput
+          ref={inputRef}
           value={name}
           onChangeText={onNameChange}
-          accessibilityLabel={label ?? "Название"}
+          accessibilityLabel={label ?? placeholder ?? "Название"}
+          placeholder={placeholder}
           placeholderTextColor={t.placeholder}
           selectionColor={t.accent}
           keyboardAppearance="light"
+          autoCapitalize={autoCapitalize}
           autoFocus={autoFocus}
           maxLength={maxLength}
           onBlur={onBlur}
@@ -312,24 +350,27 @@ export function NameColorField({
           style={{
             flex: 1,
             minHeight: 48,
-            paddingRight: 16,
+            paddingRight: trailing ? 12 : 16,
             paddingVertical: 12,
             fontSize: bare ? 17 : 16,
             fontWeight: bare ? "600" : "400",
             color: t.ink,
           }}
         />
+        {trailing ? <View style={{ paddingRight: 16 }}>{trailing}</View> : null}
       </View>
 
-      <AppearanceSheet
-        visible={open}
-        onClose={() => setOpen(false)}
-        color={color}
-        onColorChange={onColorChange}
-        icon={icon}
-        onIconChange={onIconChange}
-        icons={icons}
-      />
+      {colorReadOnly ? null : (
+        <AppearanceSheet
+          visible={open}
+          onClose={() => setOpen(false)}
+          color={color}
+          onColorChange={onColorChange}
+          icon={icon}
+          onIconChange={onIconChange}
+          icons={icons}
+        />
+      )}
     </View>
   );
 }

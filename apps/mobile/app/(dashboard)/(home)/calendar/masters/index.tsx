@@ -14,7 +14,11 @@ import { useMasters, useTeams, type Master } from "@/features/reference/queries"
 import { usePendingInvitations } from "@/features/settings/team-access";
 import { refusalOf } from "@/features/access/access-map";
 import { calendarCards } from "@/features/access/masters-list";
-import { InviteMemberSheet } from "@/features/access/InviteMemberSheet";
+import { openMasterDraft } from "@/features/access/master-page/draft-store";
+import {
+  draftFromInvitation,
+  invitationSegment,
+} from "@/features/access/master-page/master-draft";
 import { MemberRow, PendingInvitationRow } from "@/features/access/PeopleRows";
 import {
   AccessRequestError,
@@ -26,10 +30,10 @@ import {
 // с доступом к календарю и приглашения, на которые ещё не ответили; ниже
 // старые карточки мастеров (строка пушит на хаб ./[id]).
 //
-// «ДОБАВИТЬ МАСТЕРА» — ПРИГЛАШЕНИЕ ПО ПОЧТЕ (владелец 2026-09-14 на модалке
-// «Новый мастер · Имя · Телефон»: «мы договорились по почте»). Модалка,
-// заводившая карточку без аккаунта, снесена: без аккаунта мастера не заводим
-// (STORY-081). Шторка приглашения — `features/access/InviteMemberSheet`.
+// «ДОБАВИТЬ МАСТЕРА» — СРАЗУ ПОЛНАЯ КАРТОЧКА НОВОГО МАСТЕРА (владелец 15.09:
+// «как добавление клиента»), приглашение по почте уходит из неё кнопкой
+// «Пригласить». Шторки приглашения на этом экране больше нет: одна дверь к
+// одному действию. Тап по приглашению без ответа открывает ту же карточку.
 type PendingInvitation = NonNullable<ReturnType<typeof usePendingInvitations>["data"]>[number];
 
 type MastersRow =
@@ -62,7 +66,6 @@ export default function MastersScreen() {
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
 
   const [search, setSearch] = useState("");
-  const [inviteOpen, setInviteOpen] = useState(false);
 
   const masters = useMemo(() => {
     const needle = normalizeSearch(search);
@@ -120,8 +123,15 @@ export default function MastersScreen() {
   // ПРИГЛАШЕНИЯ В ЭТОТ КАЛЕНДАРЬ БЕЗ ОТВЕТА. Без них «Пригласить» уходило бы в
   // пустоту: ни следа на экране, ни способа отправить ссылку ещё раз.
   const invitationsQuery = usePendingInvitations();
+  // Приглашение зовёт в несколько календарей (15.09) и стоит в каждом из них,
+  // а не только в домашнем.
   const calendarInvitations = useMemo(
-    () => (teamId ? (invitationsQuery.data ?? []).filter((inv) => inv.team_id === teamId) : []),
+    () =>
+      teamId
+        ? (invitationsQuery.data ?? []).filter((inv) =>
+            draftFromInvitation(inv).teamIds.includes(teamId),
+          )
+        : [],
     [invitationsQuery.data, teamId],
   );
   const pending = useMemo(() => {
@@ -238,7 +248,16 @@ export default function MastersScreen() {
               );
             }
             if (item.kind === "invite") {
-              return <PendingInvitationRow invitation={item.invitation} />;
+              return (
+                <PendingInvitationRow
+                  invitation={item.invitation}
+                  onPress={() =>
+                    router.push(
+                      `/calendar/masters/${invitationSegment(item.invitation.id)}` as Href,
+                    )
+                  }
+                />
+              );
             }
             return (
               <MasterRow
@@ -278,17 +297,14 @@ export default function MastersScreen() {
           Без календаря в адресе звать некуда: приглашение всегда в календарь. */}
       {teamId ? (
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
-          <GradientButton label="Добавить мастера" onPress={() => setInviteOpen(true)} />
+          <GradientButton
+            label="Добавить мастера"
+            onPress={() => {
+              openMasterDraft(teamId);
+              router.push(`/calendar/masters/new?team=${encodeURIComponent(teamId)}` as Href);
+            }}
+          />
         </View>
-      ) : null}
-
-      {teamId ? (
-        <InviteMemberSheet
-          visible={inviteOpen}
-          teamId={teamId}
-          teamName={teamName}
-          onClose={() => setInviteOpen(false)}
-        />
       ) : null}
     </Screen>
   );

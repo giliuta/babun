@@ -138,6 +138,7 @@ export function SelectRow({
   disabled,
   trailing,
   accessibilityLabel,
+  accessibilityHint,
   accessibilityRole = "button",
   onPress,
 }: {
@@ -168,6 +169,11 @@ export function SelectRow({
   /** Свой орган справа ВМЕСТО галки — степпер количества у услуги. */
   trailing?: ReactNode;
   accessibilityLabel?: string;
+  /** Что случится по тапу, для VoiceOver. Нужна там, где строка стоит не в
+   *  шторке, а в блоке формы: выбранная категория открывает список заново, и
+   *  без подсказки это не слышно (подсказка двери пропала вместе с дверью,
+   *  когда выбранное стало строкой шторки 2026-09-15). */
+  accessibilityHint?: string;
   accessibilityRole?: "button" | "radio" | "checkbox";
   onPress: () => void;
 }) {
@@ -197,6 +203,7 @@ export function SelectRow({
           : { selected: !!selected, disabled: !!disabled }
       }
       accessibilityLabel={accessibilityLabel ?? title}
+      accessibilityHint={accessibilityHint}
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
