@@ -14,6 +14,7 @@ import { readableForeground } from "@/theme/readable-color";
 import { useMasters, useTeams, type Master } from "@/features/reference/queries";
 import { usePendingInvitations } from "@/features/settings/team-access";
 import { refusalOf } from "@/features/access/access-map";
+import { calendarCards } from "@/features/access/masters-list";
 import { InviteMemberSheet } from "@/features/access/InviteMemberSheet";
 import { MemberRow, PendingInvitationRow } from "@/features/access/PeopleRows";
 import { AccessRequestError, useCalendarMembers } from "@/features/access/queries";
@@ -93,9 +94,12 @@ export default function MastersScreen() {
   // а сам он уже стоит строкой «С доступом к календарю»: карточка ниже
   // повторила бы его вторым рядом.
   const staffIds = useMemo(() => new Set(staff.map((member) => member.userId)), [staff]);
+  // И ТОЛЬКО КАРТОЧКИ ЭТОГО КАЛЕНДАРЯ (владелец 15.09: мастер, принятый в
+  // «Команду 1», стоял карточкой в мастерах «Команды 2»). Правило — в
+  // `features/access/masters-list.ts`.
   const cards = useMemo(
-    () => masters.filter((master) => !(master.user_id && staffIds.has(master.user_id))),
-    [masters, staffIds],
+    () => calendarCards(masters, { teamId, teams, staffUserIds: staffIds }),
+    [masters, teamId, teams, staffIds],
   );
   // Отказ «людей видит владелец» — не беда: раздела просто нет. Любая другая
   // ошибка называется вслух, иначе пустой список соврёт «Нет мастеров».
