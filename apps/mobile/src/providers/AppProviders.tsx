@@ -101,9 +101,18 @@ function AccessSignalsMount() {
     });
     // ПРИГЛАШЕНИЯ МЕНЯЮТСЯ БЕЗ ПЕРЕЗАПУСКА (006, 14.09): сигнал уходит и
     // приглашённому, и пригласившему — оба перечитывают свои списки.
-    channel.on("broadcast", { event: "invitations_changed" }, () => {
+    // Принятое приглашение у пригласившего — это ещё и новый человек
+    // календаря с карточкой мастера (15.09): без них «Мастера» показывали
+    // «Нет мастеров», пока экран не открыть заново.
+    channel.on("broadcast", { event: "invitations_changed" }, (message) => {
       void queryClient.invalidateQueries({ queryKey: myInvitationsKeyRoot });
       void queryClient.invalidateQueries({ queryKey: ["tenant-invitations"] });
+      const tenantId = (message.payload as { tenant_id?: unknown } | undefined)
+        ?.tenant_id;
+      if (typeof tenantId === "string") {
+        void queryClient.invalidateQueries({ queryKey: ["calendar-members", tenantId] });
+        void queryClient.invalidateQueries({ queryKey: ["masters", tenantId] });
+      }
     });
     void supabase.realtime.setAuth().then(() => {
       if (!cancelled) channel.subscribe();
