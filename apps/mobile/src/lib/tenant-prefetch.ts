@@ -19,6 +19,7 @@ import { listFinanceCategories } from "@babun/shared/db/repositories/finance-cat
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import { listInvoices } from "@babun/shared/db/repositories/invoices";
 import { listInvoicePayments } from "@babun/shared/db/repositories/invoice-payments";
+import { listDebtPaidTotals, listDebts } from "@babun/shared/db/repositories/debts";
 import type { CalendarSettings } from "@babun/shared/local/calendar-settings";
 import {
   getCurrentCyprusTime,
@@ -181,6 +182,13 @@ function readTarget(ctx: CompanyContext, target: WarmTarget): Promise<unknown> {
       );
     case "refund-totals":
       return listRefundTotals(client, tenantId);
+    // Долги — всей компанией, без `teamId`: хук читает тот же срез и отбирает
+    // команду на устройстве (`pickTeamDebts`), так что один прогретый ответ
+    // годится для любого чипа.
+    case "debts":
+      return listDebts(client, tenantId, target.from as string, target.to as string);
+    case "debt-paid-totals":
+      return listDebtPaidTotals(client, tenantId);
     case "invoices":
       return listInvoices(client, tenantId, {});
     case "invoice-payments":

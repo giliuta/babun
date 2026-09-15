@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteDebt,
@@ -8,28 +9,48 @@ import {
   type DebtPatch,
   type NewDebt,
 } from "@babun/shared/db/repositories/debts";
+import type { Debt } from "@babun/shared/local/finance/debt";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import {
+  debtPaidTotalsQueryKey,
+  debtsRangeQueryKey,
+} from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "./accounts";
+import { pickTeamDebts, placeholderWithinTenant } from "./ledger-select";
 
 // Долги живут своими ключами, а не под ["transactions"]: журнал их не
 // содержит, и сбрасывать месячный срез из-за заведённого долга незачем.
 // Обратное неверно — ПЛАТЁЖ по долгу это операция журнала, поэтому он роняет
 // и остатки долгов (см. invalidateDebts у мутаций операций ниже).
 
+/** Долги за период. КЛЮЧ — ВСЯ КОМПАНИЯ, команду отбирает `select`
+ *  (`pickTeamDebts`, строго `team_id === teamId`, как `.eq` на сервере): тап
+ *  по чипу команды не ходит в сеть и не роняет плитку «Долги» в ноль до
+ *  ответа. Смена периода держит прошлые долги гашёными — но только своей
+ *  компании (`placeholderWithinTenant`). */
 export function useDebts(
   from: string,
   to: string,
   options: { teamId?: string | null; enabled?: boolean } = {},
 ) {
   const tenantId = useTenantId();
+  const teamId = options.teamId ?? null;
+  // Та же пара, что у журнала, и по той же причине: заглушка новой ссылкой на
+  // смену команды, иначе react-query отдаст прошлый отбор без `select`.
+  const { select, placeholderData } = useMemo(
+    () => ({
+      select: (rows: Debt[]) => pickTeamDebts(rows, teamId),
+      placeholderData: placeholderWithinTenant<Debt[]>(tenantId),
+    }),
+    [tenantId, teamId],
+  );
   return useQuery({
-    queryKey: ["debts", tenantId, from, to, options.teamId ?? null],
+    queryKey: debtsRangeQueryKey(tenantId, from, to, null),
     enabled: !!tenantId && (options.enabled ?? true),
-    queryFn: () =>
-      listDebts(supabase, tenantId as string, from, to, {
-        teamId: options.teamId ?? null,
-      }),
+    placeholderData,
+    select,
+    queryFn: () => listDebts(supabase, tenantId as string, from, to),
   });
 }
 
@@ -38,7 +59,7 @@ export function useDebts(
 export function useDebtPaidTotals() {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ["debts", tenantId, "paid-totals"],
+    queryKey: debtPaidTotalsQueryKey(tenantId),
     enabled: !!tenantId,
     queryFn: () => listDebtPaidTotals(supabase, tenantId as string),
   });

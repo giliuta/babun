@@ -398,13 +398,18 @@ function FinancesContent() {
     period.from,
     period.to,
     scope === NO_TEAM
-      ? {
-          // Журнал бесхозных счетов режется по СЧЕТАМ, а не по team_id:
-          // их проводки могут нести team_id живых команд (сдача выручки
-          // старой схемы), и командный срез потерял бы эти деньги.
-          accountIds: orphanAccounts.map((account) => account.id),
-          enabled: orphanAccounts.length > 0,
-        }
+      ? orphanAccounts.length > 0
+        ? {
+            // Журнал бесхозных счетов режется по СЧЕТАМ, а не по team_id:
+            // их проводки могут нести team_id живых команд (сдача выручки
+            // старой схемы), и командный срез потерял бы эти деньги.
+            accountIds: orphanAccounts.map((account) => account.id),
+          }
+        : // Сирот нет — ноль строк, как `.in("team_id", ["__no_team__"])` на
+          // сервере. Пустой `accountIds` значил бы «фильтра нет», а ключ
+          // компании теперь почти всегда в кэше: `enabled: false` больше
+          // ничего не прятал бы, и чип показал бы журнал всей компании.
+          { brigadeIds: [NO_TEAM] }
       : { brigadeIds: scope ? [scope] : undefined },
   );
   const txs = useMemo(
@@ -577,11 +582,15 @@ function FinancesContent() {
   // incomplete ledger without any visible warning.
   // isPending, не isLoading: офлайн-paused запрос (isFetching=false) иначе
   // проваливался под гейт и рисовал нулевой P&L как настоящие данные.
-  // transactions — вне полного гейта: смена периода/скоупа не должна прятать
-  // весь экран (хук держит прошлые данные до прихода новых); первый заход
-  // ловится общим transactionsQuery.isPending без данных.
+  // Журнал и долги — вне полного гейта: смена периода не должна прятать весь
+  // экран (хуки держат прошлые данные своей компании до прихода новых); первый
+  // заход и холодная компания ловятся `isPending` без данных. Суммы платежей
+  // по долгам окна не имеют и заглушки не держат — ждём их целиком: без них
+  // закрытый долг на миг выглядел бы открытым.
   const loading =
     (transactionsQuery.isPending && transactionsQuery.data === undefined) ||
+    (debtsQuery.isPending && debtsQuery.data === undefined) ||
+    debtPaidQuery.isPending ||
     categoriesQuery.isPending ||
     teamsQuery.isPending ||
     servicesQuery.isPending ||
@@ -592,12 +601,16 @@ function FinancesContent() {
     accountsQuery.isPending ||
     refundTotalsQuery.isPending ||
     calendarSettingsQuery.isPending;
-  // Смена периода или команды: прошлый срез ещё на экране, подпись уже новая.
-  // Такие цифры гасятся (§8) — подменять деньги молча нельзя, по ним
-  // принимают решения.
-  const stale = transactionsQuery.isPlaceholderData;
+  // Смена периода: прошлый срез ещё на экране, подпись уже новая. Такие цифры
+  // гасятся (§8) — подменять деньги молча нельзя, по ним принимают решения.
+  // Смена КОМАНДЫ сюда больше не попадает: журнал и долги читаются ключом
+  // компании, команду отбирает `select` в том же кадре. Долги гасятся вместе с
+  // журналом: плитка «Долги» складывает обоих.
+  const stale = transactionsQuery.isPlaceholderData || debtsQuery.isPlaceholderData;
   const loadError =
     (transactionsQuery.data === undefined ? transactionsQuery.error : null) ||
+    (debtsQuery.data === undefined ? debtsQuery.error : null) ||
+    (debtPaidQuery.data === undefined ? debtPaidQuery.error : null) ||
     (categoriesQuery.data === undefined ? categoriesQuery.error : null) ||
     (teamsQuery.data === undefined ? teamsQuery.error : null) ||
     (servicesQuery.data === undefined ? servicesQuery.error : null) ||
@@ -611,6 +624,8 @@ function FinancesContent() {
   const refreshAll = () =>
     void Promise.all([
       transactionsQuery.refetch(),
+      debtsQuery.refetch(),
+      debtPaidQuery.refetch(),
       categoriesQuery.refetch(),
       teamsQuery.refetch(),
       servicesQuery.refetch(),
@@ -627,17 +642,23 @@ function FinancesContent() {
   // таблицы не покрывает, а экран таба живёт смонтированным весь сеанс —
   // без этого владелец, вернувшийся из календаря через час, читал утренние
   // остатки. invalidate (тот же набор, что у invalidateLedger), а не полный
-  // refetch: обновляются только активные подписки, keepPreviousData держит
-  // цифры без миганий. Первый фокус пропускаем — маунт и так всё грузит.
+  // refetch: обновляются только активные подписки, данные стоят на своём
+  // ключе и не мигают. Первый фокус пропускаем — маунт и так всё грузит.
   //
   // ОДИН НАБОР КЛЮЧЕЙ НА ОБЕ ДВЕРИ ОБНОВЛЕНИЯ: возврат по фокусу и жест
   // pull-to-refresh (U86) обязаны довозить одно и то же — две копии списка
   // разъехались бы на первой правке.
+  //
+  // ["debts"] — с 2026-09-15 обязательно. Раньше тап по команде менял ключ
+  // долгов, и устаревший ключ перечитывался сам; теперь ключ один на компанию,
+  // тап сети не трогает, и эти две двери — единственный путь, которым долги,
+  // заведённые с другого устройства, доезжают до экрана.
   const qc = useQueryClient();
   const invalidateLedger = useCallback(
     () =>
       Promise.all([
         qc.invalidateQueries({ queryKey: ["transactions"] }),
+        qc.invalidateQueries({ queryKey: ["debts"] }),
         qc.invalidateQueries({ queryKey: ["accounts"] }),
         qc.invalidateQueries({ queryKey: ["invoices"] }),
       ]),
@@ -1056,9 +1077,13 @@ function FinancesContent() {
     <Screen edges={["top"]}>
       {header}
       {/* Пока едет новый срез, цифры прошлого периода ГАСНУТ, а не выдаются за
-          новые. `keepPreviousData` держит их, чтобы экран не мигал пустотой, —
-          но под новой подписью периода это чужие деньги, и решение по ним
-          принимать нельзя. Полоска под шапкой говорит, что работа идёт. */}
+          новые. Журнал и долги держат прошлый период, чтобы экран не мигал
+          пустотой, — но только своей компании (`placeholderWithinTenant`):
+          деньги другой компании сюда не попадают никогда, холодная компания
+          идёт в скелет (`loading`), а не под вуаль. Под новой подписью периода
+          это всё равно чужие цифры, и решение по ним принимать нельзя —
+          поэтому гаснут и журнал, и плитка «Долги». Полоска под шапкой
+          говорит, что работа идёт. */}
       <LoadingBar visible={stale} />
 
       <View style={{ flex: 1, opacity: stale ? 0.4 : 1 }}>

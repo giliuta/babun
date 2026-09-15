@@ -79,6 +79,20 @@ describe("ключи денег и мастеров не изменили фор
     same(keys.accountRowsQueryKey(T, true), ["accounts", T, "rows", "all"]);
     same(keys.accountBalancesQueryKey(T), ["accounts", T, "balances"]);
   });
+  // ТРЕТЬЯ ВОЛНА (2026-09-15): долги. Справа — буквально массивы из
+  // finances/debts-queries.ts до переноса: `["debts", tenantId, from, to,
+  // teamId ?? null]` и `["debts", tenantId, "paid-totals"]`.
+  test("долги: срез периода и суммы платежей", () => {
+    same(
+      keys.debtsRangeQueryKey(T, "2026-09-01", "2026-09-30", null),
+      ["debts", T, "2026-09-01", "2026-09-30", null],
+    );
+    same(
+      keys.debtsRangeQueryKey(T, "2026-09-01", "2026-09-30", "team-1"),
+      ["debts", T, "2026-09-01", "2026-09-30", "team-1"],
+    );
+    same(keys.debtPaidTotalsQueryKey(T), ["debts", T, "paid-totals"]);
+  });
 });
 
 // УСЛОВИЕ СЕССИИ 004 (2026-09-13): по деньгам сбросы идут ПРЕФИКСОМ —
@@ -104,5 +118,17 @@ describe("первые сегменты ключей денег — те, по �
     assert.equal(keys.invoicePaymentsQueryKey(T)[0], "invoices");
     assert.equal(keys.financeCategoriesQueryKey(T)[0], "finance-categories");
     assert.equal(keys.mastersQueryKey(T, "owner", false)[0], "masters");
+  });
+  // Долги сбрасываются префиксом `["debts"]` (debts-queries.ts,
+  // finances/queries.ts, экран «Финансы»). И компания — ВТОРЫМ элементом у
+  // журнала и долгов: по нему заглушка загрузки решает, своя ли компания
+  // (`placeholderWithinTenant`). Сдвинь её — и деньги прошлой компании снова
+  // встанут под шапкой новой.
+  test("долги — «debts»; компания вторым элементом у журнала и долгов", () => {
+    assert.equal(keys.debtsRangeQueryKey(T, "a", "b", null)[0], "debts");
+    assert.equal(keys.debtPaidTotalsQueryKey(T)[0], "debts");
+    assert.equal(keys.debtsRangeQueryKey(T, "a", "b", null)[1], T);
+    assert.equal(keys.debtPaidTotalsQueryKey(T)[1], T);
+    assert.equal(keys.ledgerRangeQueryKey(T, "a", "b", null, null)[1], T);
   });
 });

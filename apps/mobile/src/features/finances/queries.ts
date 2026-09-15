@@ -1,9 +1,5 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   deleteTransaction,
   insertTransaction,
@@ -31,6 +27,12 @@ import {
   refundTotalsQueryKey,
 } from "@/lib/company-query-keys";
 import { NEVER_PAUSE } from "./accounts";
+import {
+  idsFromKey,
+  idsKey,
+  pickLedgerRows,
+  placeholderWithinTenant,
+} from "./ledger-select";
 
 /**
  * Журнал ОДНОЙ записи — для истории платежей в блоке оплаты. Отдельный запрос,
@@ -60,13 +62,19 @@ export function useAppointmentLedger(appointmentId: string | null | undefined) {
 // завели бы две копии одного месяца в кэше.
 
 /**
- * Журнал за период (границы включительно по `occurred_on`), сужаемый до нужных
+ * Журнал за период (границы включительно по `occurred_on`), суженный до нужных
  * команд и/или счетов. Тенант ограничивает RLS.
  *
- * `accountIds` — не оптимизация ради оптимизации: карточка обычной кассы
- * показывает операции ОДНОГО счёта, а тянула месячный срез всего тенанта.
- * Полный срез остаётся там, где он действительно нужен, — у счёта компании,
- * где инкассацию атрибуцирует вторая нога перевода, лежащая на чужом счёте.
+ * КЛЮЧ — ВСЯ КОМПАНИЯ ЗА ПЕРИОД, команды и счета отбирает `select`
+ * (`ledger-select.ts`, тем же правилом, что прежние `.in` на сервере). Тап по
+ * чипу команды раньше заводил новый ключ: экран шёл в сеть и гас, хотя строки
+ * месяца уже лежали в кэше. Теперь тап — это пересчёт на устройстве в том же
+ * кадре. Месяц компании — десятки строк, широкое чтение ничего не стоит.
+ *
+ * Смена ПЕРИОДА по-прежнему держит прошлый срез до прихода нового — экран не
+ * мигает спиннером и не показывает нулевые итоги. Показывать его под новой
+ * подписью нельзя: пока `isPlaceholderData`, экран обязан гасить цифры. И эта
+ * заглушка никогда не берётся из ДРУГОЙ компании (`placeholderWithinTenant`).
  */
 export function useTransactions(
   from: string,
@@ -74,28 +82,33 @@ export function useTransactions(
   options: {
     brigadeIds?: string[];
     accountIds?: string[];
-    /** `false`, пока экран не знает, какой срез ему нужен: запрос не должен
-     *  уехать за полным журналом только потому, что строка счёта ещё не
-     *  приехала. */
+    /** `false`, пока у зовущего нет периода (пустая неделя, лист дня ещё не
+     *  открыт): запрос за пустыми границами никому не нужен. */
     enabled?: boolean;
   } = {},
 ) {
   const tenantId = useTenantId();
-  const teamScope = options.brigadeIds?.length ? options.brigadeIds : null;
-  const accountScope = options.accountIds?.length ? options.accountIds : null;
+  const teamKey = idsKey(options.brigadeIds);
+  const accountKey = idsKey(options.accountIds);
+  // Оба зависят от компании и среза. `select` новой ссылкой — пересчёт отбора
+  // на тап. Заглушка новой ссылкой — потому что react-query 5, увидев ту же
+  // функцию заглушки поверх заглушки, отдаёт прошлый УЖЕ ОТОБРАННЫЙ результат
+  // без `select`: тап по команде во время загрузки периода оставил бы строки
+  // прошлой команды, а полоса под календарём гашения не знает.
+  const { select, placeholderData } = useMemo(
+    () => ({
+      select: (rows: FinanceTransaction[]) =>
+        pickLedgerRows(rows, idsFromKey(teamKey), idsFromKey(accountKey)),
+      placeholderData: placeholderWithinTenant<FinanceTransaction[]>(tenantId),
+    }),
+    [tenantId, teamKey, accountKey],
+  );
   return useQuery({
-    queryKey: ledgerRangeKey(tenantId, from, to, teamScope, accountScope),
+    queryKey: ledgerRangeKey(tenantId, from, to, null, null),
     enabled: !!tenantId && (options.enabled ?? true),
-    // Смена периода/скоупа держит прошлый срез до прихода нового — экран не
-    // мигает полноэкранным спиннером и не показывает нулевые итоги. Показывать
-    // его под НОВОЙ подписью нельзя: пока `isPlaceholderData`, экран обязан
-    // гасить цифры, а не выдавать чужой месяц за свой.
-    placeholderData: keepPreviousData,
-    queryFn: () =>
-      listTransactionsForRange(supabase, tenantId as string, from, to, {
-        ...(teamScope ? { brigadeIds: teamScope } : {}),
-        ...(accountScope ? { accountIds: accountScope } : {}),
-      }),
+    placeholderData,
+    select,
+    queryFn: () => listTransactionsForRange(supabase, tenantId as string, from, to),
   });
 }
 

@@ -70,6 +70,8 @@ describe("план прогрева компании", () => {
         ["invoices", T, "payments"],
         ["accounts", T, "rows", "active"],
         ["accounts", T, "balances"],
+        ["debts", T, "2026-09-01", "2026-09-30", null],
+        ["debts", T, "paid-totals"],
       ].map((k) => JSON.stringify(k)),
     );
   });
@@ -108,12 +110,14 @@ describe("план прогрева компании", () => {
     }
   });
 
-  test("срез журнала несёт свои границы, чтобы исполнитель читал тот же месяц", () => {
-    const [tx] = planCompanyFinances({ tenantId: T, period: PERIOD }).filter(
-      (t) => t.kind === "transactions",
-    );
-    assert.equal(tx?.from, PERIOD.from);
-    assert.equal(tx?.to, PERIOD.to);
+  test("срезы журнала и долгов несут свои границы, чтобы исполнитель читал тот же месяц", () => {
+    const plan = planCompanyFinances({ tenantId: T, period: PERIOD });
+    for (const kind of ["transactions", "debts"] as const) {
+      const ranged = plan.filter((t) => t.kind === kind);
+      assert.equal(ranged.length, 1, kind);
+      assert.equal(ranged[0]?.from, PERIOD.from, kind);
+      assert.equal(ranged[0]?.to, PERIOD.to, kind);
+    }
   });
 });
 
@@ -172,7 +176,7 @@ describe("какие компании и в каком порядке", () => {
     assert.equal(tenants.indexOf(OTHER), tenants.lastIndexOf(T) + 1);
     assert.deepEqual(
       finances.map((job) => job.tenantId),
-      [...Array(7).fill(T), ...Array(7).fill(OTHER)],
+      [...Array(9).fill(T), ...Array(9).fill(OTHER)],
     );
   });
 
@@ -232,6 +236,7 @@ const CLIENTS = "../features/clients/queries.ts";
 const FINANCES = "../features/finances/queries.ts";
 const ACCOUNTS = "../features/finances/accounts.ts";
 const INVOICES = "../features/invoices/queries.ts";
+const DEBTS = "../features/finances/debts-queries.ts";
 
 const HOOKS: Record<WarmKind, HookContract> = {
   tenant: { file: "../features/settings/tenant.ts", hooks: ["useTenant"], builder: "tenantQueryKey" },
@@ -270,6 +275,8 @@ const HOOKS: Record<WarmKind, HookContract> = {
   "finance-categories": { file: FINANCES, hooks: ["useFinanceCategories"], builder: "financeCategoriesQueryKey" },
   transactions: { file: FINANCES, hooks: ["useTransactions"], builder: "ledgerRangeQueryKey" },
   "refund-totals": { file: FINANCES, hooks: ["useRefundTotals"], builder: "refundTotalsQueryKey" },
+  debts: { file: DEBTS, hooks: ["useDebts"], builder: "debtsRangeQueryKey" },
+  "debt-paid-totals": { file: DEBTS, hooks: ["useDebtPaidTotals"], builder: "debtPaidTotalsQueryKey" },
   invoices: { file: INVOICES, hooks: ["useInvoices"], builder: "invoicesQueryKey" },
   "invoice-payments": { file: INVOICES, hooks: ["useInvoicePayments"], builder: "invoicePaymentsQueryKey" },
   "account-rows": { file: ACCOUNTS, hooks: ["useAccountsWithBalances"], builder: "accountRowsQueryKey" },
@@ -287,6 +294,13 @@ const LOCAL_BUILDERS: Record<string, string> = {
 };
 
 const ANY = Symbol("любое значение");
+
+/** Команда или счёт на месте аргумента ключа. Совпадает только сам с собой —
+ *  не с `null` и не с `ANY`. Журнал и долги прогрев греет ключом ВСЕЙ
+ *  компании (`null`): хук, вернувший команду в ключ, завёл бы по ключу на чип,
+ *  прогретый срез не спросил бы никто, а тап по команде снова ходил бы в сеть.
+ *  Раньше эти имена стояли в `ANY`, и такой возврат проходил зелёным. */
+const TEAM_OR_ACCOUNT = Symbol("команда или счёт");
 
 /** Значения, которые хук может передать фабрике на месте аргумента. */
 function argValues(token: string, role: string): unknown[] {
@@ -306,9 +320,11 @@ function argValues(token: string, role: string): unknown[] {
       return [true, false];
     case "from":
     case "to":
+      return [ANY];
     case "teamScope":
     case "accountScope":
-      return [ANY];
+    case "teamId":
+      return [TEAM_OR_ACCOUNT];
     default:
       return assert.fail(`неизвестный аргумент ключа «${token}» — дополни таблицу теста`);
   }
@@ -413,6 +429,23 @@ describe("контракт: каждый ключ прогрева — тот, �
     assert.match(body, /queryKey:\s*teamsQueryKey\(\s*tenantId\s*,\s*role\s*,\s*true\s*\)/);
     assert.match(body, /fetchTeams\([^)]*,\s*true\s*\)/);
     assert.match(body, /select:\s*includeInactive\s*\?\s*undefined\s*:\s*pickLiveTeams\b/);
+  });
+
+  test("журнал и долги: хук строит ключ всей компании, команда и счёт — только select", () => {
+    // Общая сверка выше говорит «ключ хука совпал с ключом прогрева». Здесь —
+    // прямо, какой он: места команды и счёта в ключе хука — литеральный
+    // `null`, одним вариантом. Имя переменной на этом месте (`teamScope`,
+    // `teamId`, любое новое) даёт не `null`, и тест падает.
+    for (const role of ROLES) {
+      const ledger = keysHookBuilds(HOOKS.transactions, "useTransactions", role);
+      assert.deepEqual(ledger.map((key) => key.slice(4)), [[null, null]]);
+      const debts = keysHookBuilds(HOOKS.debts, "useDebts", role);
+      assert.deepEqual(debts.map((key) => key.slice(4)), [[null]]);
+      const plan = planCompanyFinances({ tenantId: T, period: PERIOD });
+      const warmed = (kind: WarmKind) => plan.find((t) => t.kind === kind)?.queryKey.slice(4);
+      assert.deepEqual(warmed("transactions"), [null, null]);
+      assert.deepEqual(warmed("debts"), [null]);
+    }
   });
 
   test("активной компании не греем ключ, чей хук делает больше, чем читает", () => {

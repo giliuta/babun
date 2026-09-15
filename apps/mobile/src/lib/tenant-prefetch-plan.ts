@@ -11,6 +11,8 @@ import {
   clientsQueryKey,
   dayCitiesQueryKey,
   dayExtrasQueryKey,
+  debtPaidTotalsQueryKey,
+  debtsRangeQueryKey,
   financeCategoriesQueryKey,
   invoicePaymentsQueryKey,
   invoicesQueryKey,
@@ -60,6 +62,8 @@ export type WarmKind =
   | "finance-categories"
   | "transactions"
   | "refund-totals"
+  | "debts"
+  | "debt-paid-totals"
   | "invoices"
   | "invoice-payments"
   | "account-rows"
@@ -68,7 +72,7 @@ export type WarmKind =
 export interface WarmTarget {
   kind: WarmKind;
   queryKey: readonly unknown[];
-  /** Границы среза журнала, YYYY-MM-DD включительно. */
+  /** Границы среза журнала или долгов, YYYY-MM-DD включительно. */
   from?: string;
   to?: string;
 }
@@ -130,10 +134,14 @@ export function planCompanyCalendar({
 }
 
 /** Деньги. Ключи без роли: право видеть их решает `canViewFinances` снаружи
- *  и RLS на сервере. Долги, НДС, архивные счета и журнал недели сюда пока не
- *  входят: их хуки живут в файлах финансов, которые сейчас переделываются
- *  (шаг «финансы без пригасания»), — греть ключи, которые вот-вот сменят
- *  форму, значит греть мимо. */
+ *  и RLS на сервере.
+ *
+ *  ЖУРНАЛ МЕСЯЦА И ДОЛГИ — КЛЮЧИ ВСЕЙ КОМПАНИИ (2026-09-15). Команду и счёт
+ *  отбирает `select` на устройстве (`finances/ledger-select.ts`), поэтому на
+ *  месте команды в ключе всегда `null`, и один прогретый срез отвечает любому
+ *  чипу команды. Долги стоят в гейте загрузки финансов наравне с журналом:
+ *  холодные долги — это тот же скелет после перехода. НДС, архивные счета и
+ *  журнал недели в подвале календаря сюда пока не входят: гейт их не ждёт. */
 export function planCompanyFinances({
   tenantId,
   period,
@@ -154,6 +162,13 @@ export function planCompanyFinances({
     { kind: "invoice-payments", queryKey: invoicePaymentsQueryKey(tenantId) },
     { kind: "account-rows", queryKey: accountRowsQueryKey(tenantId, false) },
     { kind: "account-balances", queryKey: accountBalancesQueryKey(tenantId) },
+    {
+      kind: "debts",
+      queryKey: debtsRangeQueryKey(tenantId, period.from, period.to, null),
+      from: period.from,
+      to: period.to,
+    },
+    { kind: "debt-paid-totals", queryKey: debtPaidTotalsQueryKey(tenantId) },
   ];
 }
 

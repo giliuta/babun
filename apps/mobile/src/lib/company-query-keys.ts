@@ -91,8 +91,11 @@ export const mastersQueryKey = (
 export const financeCategoriesQueryKey = (tenantId: string | null) =>
   ["finance-categories", tenantId] as const;
 
-/** Срез журнала: и хук, и разовая дозагрузка выписки, и прогрев берут его
- *  одной функцией — разъехавшиеся ключи молча завели бы две копии месяца. */
+/** Срез журнала: и хук, и прогрев берут его одной функцией — разъехавшиеся
+ *  ключи молча завели бы две копии месяца. С 2026-09-15 хук зовёт его с
+ *  `null, null`: команду и счёт отбирает `select` (`finances/ledger-select.ts`),
+ *  а тап по чипу команды не заводит нового ключа и не ходит в сеть. Места под
+ *  срезы в ключе остались, чтобы не менять форму. */
 export const ledgerRangeQueryKey = (
   tenantId: string | null | undefined,
   from: string,
@@ -103,6 +106,22 @@ export const ledgerRangeQueryKey = (
 
 export const refundTotalsQueryKey = (tenantId: string | null) =>
   ["transactions", tenantId, "refund-totals"] as const;
+
+// ДОЛГИ. Жили строкой внутри `useDebts` — переехали сюда тем же правилом, что
+// журнал. Компания — ВТОРЫМ элементом, как у каждого ключа денег: заглушка
+// загрузки (`placeholderWithinTenant`) узнаёт по нему, своя ли это компания.
+// Команда в ключе — всегда `null` у хука (её отбирает `select`); первый
+// сегмент `"debts"` — префикс, по которому сбрасывают долги мутации и экран.
+
+export const debtsRangeQueryKey = (
+  tenantId: string | null | undefined,
+  from: string,
+  to: string,
+  teamId: string | null,
+) => ["debts", tenantId, from, to, teamId] as const;
+
+export const debtPaidTotalsQueryKey = (tenantId: string | null | undefined) =>
+  ["debts", tenantId, "paid-totals"] as const;
 
 export const invoicesQueryKey = (tenantId: string | null) =>
   ["invoices", tenantId] as const;
