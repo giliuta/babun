@@ -19,6 +19,28 @@ import {
   currentRoleQueryKey,
   tenantQueryKey,
 } from "@/lib/company-query-keys";
+import { queryClient } from "@/lib/query-client";
+import {
+  rolePollInterval,
+  subscribeSwitchRevalidation,
+} from "@/lib/switch-revalidate-plan";
+import { rearmRolePollers } from "@/lib/role-poll-rearm";
+
+const ROLE_POLL_MS = 60 * 1000;
+
+// ОПРОС РОЛИ ЗАМИРАЕТ, ПОКА ОЧЕРЕДЬ ДООБНОВЛЕНИЯ ЧИТАЕТ СЕТЬ.
+//
+// Раз в минуту `current_user_role` — это 60–120 вызовов в час на сессию, и
+// попадая в очередь после перехода, он вставал в неё третьим к двум её
+// запросам. Интервал считается функцией (`rolePollInterval`), но react-query
+// пересчитывает её только когда меняются опции или запрос. Поэтому на КАЖДОЙ
+// смене фазы — и на старте очереди, и на её конце — наблюдателям роли
+// отдаются их же опции: старт гасит таймер, конец взводит заново. Прежний
+// ранний выход «очередь идёт — не трогаем» пропускал именно старт, и опрос
+// тикал сквозь очередь. Разбор и тест с настоящим таймером — `role-poll-rearm.ts`.
+subscribeSwitchRevalidation(() =>
+  rearmRolePollers(queryClient, currentRoleQueryKey(null)[0]),
+);
 
 type TenantUpdate = Database["public"]["Tables"]["tenants"]["Update"];
 
@@ -70,7 +92,8 @@ export function useCurrentRole() {
     // продолжают им пользоваться (fail-open, см. RoleCapabilityBoundary) —
     // иначе пропавшая сеть выкидывала бы владельца с экрана денег.
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // Пауза на время тихой очереди после перехода — разбор над подпиской выше.
+    refetchInterval: () => rolePollInterval(ROLE_POLL_MS),
     refetchIntervalInBackground: false,
     queryFn: async (): Promise<UserRole | null> => {
       const { data, error } = await withRoleLookupTimeout(

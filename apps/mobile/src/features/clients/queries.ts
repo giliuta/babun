@@ -42,6 +42,7 @@ import {
 } from "@babun/shared/local/clients";
 import { isOnline, randomUuid } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { preflightQuotaForCreate } from "@/lib/quota";
@@ -123,6 +124,22 @@ export async function listMasterClientsSafe(
 // Clients list — SWR wrapper read (full domain shape incl. tag_ids, served
 // from the SQLite cache when warm, then revalidated). RLS scopes rows to the
 // tenant; we pass tenantId for the query key and the RLS/cache filter.
+//
+// ЧТЕНИЯ ЧЕРЕЗ SQLite-ОБЁРТКИ — КЛИЕНТОМ, ПРИВЯЗАННЫМ К КОМПАНИИ КЛЮЧА. Обёртка
+// отдаёт снимок и отпускает фоновое перечитывание: страницы клиентов, потом
+// отдельный запрос `updated_at`. Глобальный клиент берёт заголовок на каждый
+// запрос, и переход посреди этой цепочки отправлял бы её хвост под другой
+// компанией: ноль строк, `cacheReplaceTenant` стирает клиентов этой компании,
+// а уцелевшие ложатся без штампа LWW. Мастерские RPC идут прежним клиентом:
+// SQLite они не пишут.
+//
+// ЦЕНА, ПРИНЯТАЯ НАМЕРЕННО. Привязанный клиент объявляет себя полем
+// `BOUND_TENANT_FIELD`, и выгрузка очереди через него не работает вовсе. Когда
+// перечитывание пропущено из-за ждущих операций, его `kickReplayer` теперь
+// ничего не делает; очередь всё равно разгребают старт синхронизации, возврат
+// сети и мутации — они зовут выгрузку глобальным клиентом. Снимать поле
+// нельзя: непомеченный привязанный клиент выгрузил бы удаление активной
+// компании под заголовком другой.
 export function useClients() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
@@ -133,7 +150,7 @@ export function useClients() {
     queryFn: () =>
       role === "master"
         ? listMasterClientsSafe(supabase)
-        : listClientsCached(supabase, tenantId as string),
+        : listClientsCached(tenantBoundClient(tenantId as string), tenantId as string),
   });
 }
 
@@ -164,7 +181,11 @@ export function useClient(id: string) {
         // The list is offline-aware and may already have the complete domain
         // client in SQLite. A connection loss after opening the list should
         // therefore keep the card usable instead of becoming «not found».
-        const cached = await listClientsCached(supabase, tenantId as string);
+        // Привязанным клиентом — разбор над `useClients`.
+        const cached = await listClientsCached(
+          tenantBoundClient(tenantId as string),
+          tenantId as string,
+        );
         const client = cached.find((item) => item.id === id);
         if (client) return client;
         throw error;
@@ -363,7 +384,8 @@ function useHiddenClients(
       !!tenantId &&
       roleQuery.isSuccess &&
       (role === "owner" || role === "dispatcher"),
-    queryFn: () => read(supabase, tenantId as string),
+    // Привязанным клиентом — разбор над `useClients`.
+    queryFn: () => read(tenantBoundClient(tenantId as string), tenantId as string),
   });
 }
 
@@ -449,10 +471,11 @@ export function useClientTags() {
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     // SWR wrapper read (same as useClients): warm cache serves instantly, the
     // background revalidate prunes + emits, the realtime bridge re-reads.
+    // Привязанным клиентом — разбор над `useClients`.
     queryFn: () =>
       role === "master"
         ? Promise.resolve([])
-        : listClientTagsCached(supabase, tenantId as string),
+        : listClientTagsCached(tenantBoundClient(tenantId as string), tenantId as string),
   });
 }
 

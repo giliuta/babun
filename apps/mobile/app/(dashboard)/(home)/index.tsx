@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useOptimistic,
   useRef,
   useState,
 } from "react";
@@ -48,6 +49,7 @@ import { Screen } from "@/components/ui/Screen";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingBar } from "@/components/ui/LoadingBar";
 import { usePullRefresh } from "@/lib/pull-refresh";
+import { useSilentRevalidating } from "@/lib/switch-revalidate";
 import { useThemeColors } from "@/theme/colors";
 import {
   addMinutesHM,
@@ -108,6 +110,7 @@ import {
   useBookingBlocks,
   useFallbackColor,
   useSituationPalette,
+  type SituationPalette,
 } from "@/features/appointments/booking-prefs";
 import {
   COLOR_SITUATIONS,
@@ -123,6 +126,7 @@ import { AgendaView } from "@/features/calendar/AgendaView";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { CalendarSkeleton } from "@/features/calendar/CalendarSkeleton";
 import { startOfWeek } from "@/features/calendar/week";
+import { useLatestHandler } from "@/features/calendar/use-latest-handler";
 import {
   deriveScrollHour,
   deriveWindow,
@@ -323,6 +327,10 @@ export default function CalendarTab() {
   // Контрол ленты отражает ЖЕСТ: раньше он питался от isRefetching, то есть
   // выезжал сам при каждом возврате на календарь.
   const pull = usePullRefresh(onRefresh);
+  // Тихая очередь — подпиской, а не чтением модуля: конец очереди обязан
+  // перерисовать экран, иначе начатое в ней настоящее перечитывание
+  // осталось бы без полосы.
+  const silentRevalidating = useSilentRevalidating();
 
   /** Часовой пояс записи: её команды, иначе бизнеса. Дата и время записи —
    *  «настенные» поля бизнеса, а не устройства диспетчера. */
@@ -677,7 +685,15 @@ export default function CalendarTab() {
     own: calendarTeams,
     onPickOwn: (teamId) => {
       setMoving(null);
-      setTeamChoice(teamId);
+      // ЧИП ЗАГОРАЕТСЯ В ТОМ ЖЕ КАДРЕ, СЕТКА ДОГОНЯЕТ ПЕРЕХОДОМ. Отрисовка
+      // недели другого календаря — самая тяжёлая работа экрана, и пока она
+      // шла срочно, тап выглядел несработавшим. Подсветка берёт оптимистичное
+      // значение (`chipTeamId`), которое React показывает, пока переход не
+      // закоммичен, и само возвращается к `activeTeamId` после.
+      startTransition(() => {
+        showChipTeam(teamId);
+        setTeamChoice(teamId);
+      });
       rememberView({ teamId });
     },
     onSwitchError: (message) => toast(message, "error"),
@@ -704,6 +720,9 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? calendarTeams[0]?.id ?? null;
   const activeTeam = calendarTeams.find((tm) => tm.id === activeTeamId);
+  // Подсветка чипа своего календаря — см. `onPickOwn`: пока переход смены
+  // календаря не закоммичен, лента показывает тапнутый чип, а не прежний.
+  const [chipTeamId, showChipTeam] = useOptimistic(activeTeamId);
 
   // ПОДБОР ВРЕМЕНИ ПЕРЕКЛЮЧАЕТ КАЛЕНДАРЬ НА БРИГАДУ КЛИЕНТА. Иначе свободное
   // время считалось по команде, открытой в чипе: постоянного клиента команды
@@ -920,8 +939,14 @@ export default function CalendarTab() {
   // СОБЫТИЕ НАЗЫВАЕТСЯ СВОИМ ТИПОМ и с клиентом тоже (форма события 2026-09-06:
   // клиент у события необязателен): имя человека идёт второй строкой блока
   // (см. serviceLabel), а не вместо «Обед».
-  const clientName = (a: Appointment) =>
-    a.client_id && !isCalendarEvent(a) ? nameById.get(a.client_id) ?? "" : "";
+  // useCallback, а не обёртка «свежей функции»: колонка зовёт имя ВО ВРЕМЯ
+  // отрисовки, и смена ссылки — единственный сигнал memo сетки, что имена
+  // стали другими.
+  const clientName = useCallback(
+    (a: Appointment) =>
+      a.client_id && !isCalendarEvent(a) ? nameById.get(a.client_id) ?? "" : "",
+    [nameById],
+  );
   // КУДА ЕХАТЬ — ЧЕТВЁРТАЯ СТРОКА БЛОКА. То же правило, по которому «Маршрут»
   // в контекстном меню собирает ссылку на карты: снимок адреса записи, иначе
   // адрес клиента. Разовый выезд по звонку объекта в справочнике не имеет, и
@@ -1014,7 +1039,20 @@ export default function CalendarTab() {
   // принадлежит команде, и у каждой своя копия: без фильтра пикер дня
   // показывал «Лимассол» столько раз, сколько в компании команд.
   const autoColorRule = useAutoColorRule();
-  const situationPalette = useSituationPalette();
+  // ПАЛИТРА СТАБИЛЬНОЙ ССЫЛКОЙ. Хук собирает новый объект на каждый рендер,
+  // а палитра — зависимость резолверов цвета сетки (`teamColorFor`,
+  // `situationFor`, `holeByDay`): новая ссылка роняла memo Недели, Дня и всех
+  // колонок на каждом флаге запроса, тосте и тике минуты. Ключ memo — сами
+  // три цвета: строки сравниваются значением.
+  const paletteRaw = useSituationPalette();
+  const situationPalette = useMemo<SituationPalette>(
+    () => ({
+      noClient: paletteRaw.noClient,
+      noObject: paletteRaw.noObject,
+      noServices: paletteRaw.noServices,
+    }),
+    [paletteRaw.noClient, paletteRaw.noObject, paletteRaw.noServices],
+  );
   const fallbackColor = useFallbackColor();
   // Ситуация про блок, выключенный в настройке, не считается дырой: у бьюти-
   // мастера объекта нет вовсе.
@@ -1297,8 +1335,10 @@ export default function CalendarTab() {
   );
   // Стрелка прямо в пропе делала `memo` месяца мёртвым: свежая функция на
   // каждый рендер родителя перерисовывала все три страницы пейджера, и
-  // стабильность `holeFor` ничего не защищала.
-  const onPickLabelDayMonth = useMemo(
+  // стабильность `holeFor` ничего не защищала. Неделя берёт тот же
+  // обработчик: тап по дате у неё значит то же самое, и её memo так же мёртв
+  // от стрелки.
+  const onPickLabelDay = useMemo(
     () =>
       canManageDayLabels && activeTeamId
         ? (dateYmd: string) => {
@@ -2255,37 +2295,100 @@ export default function CalendarTab() {
     open();
   };
 
-  const gridProps = {
-    clientName,
-    serviceLabel,
-    addressFor,
-    teamColorFor,
-    onEdit: openEdit,
-    onReschedule: canManageBookings ? reschedule : undefined,
-    canReschedule: canMutateAppointment,
-    startHour: visStartHour,
-    endHour: visEndHour,
-    // Привязка драга и тапа по пустому слоту — 15 мин, константа. «Шаг сетки»
-    // как настройка убран: ни одной линии он не рисовал (сетку рисует зум —
-    // граница часа безусловна, получас появляется при hourH ≥ 52), зато тайно
-    // задавал длительность новой записи. Длительность теперь честная настройка
-    // календаря (teams.default_slot_minutes).
-    stepMinutes: 15,
-    workStartHour: calSettings?.workStartHour,
-    workEndHour: calSettings?.workEndHour,
-    workBandFor,
-    freeSlotsFor,
-    labelTintFor,
-    bufferMinutes,
-    nowMinutes,
-    scrollToHour,
-    hourH,
-    hourHSv,
-    // Коммит зума — низким приоритетом: полный ре-рендер сетки на отпускании
-    // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
-    // и так на UI-потоке; здесь догоняют только «холодные» слои (текст-фит).
-    onZoom: (v: number) => startTransition(() => setHourH(v)),
-  };
+  // ОБРАБОТЧИКИ СЕТКИ — СТАБИЛЬНЫЕ ПО ССЫЛКЕ, НО ЗОВУТ СВЕЖЕЕ ЗАМЫКАНИЕ.
+  // Колонки и блоки мемоизированы; функция, пересоздаваемая каждым рендером,
+  // перерисовывала бы все двадцать одну колонку недели на любой флаг запроса.
+  // `useCallback` здесь не годится: зависимостей у этих функций десятки, и
+  // ссылка менялась бы почти всегда. Обёртка же отдаёт жесту (перенос
+  // пальцем, долгое нажатие, тап по слоту) функцию последнего ПОКАЗАННОГО
+  // рендера — с сегодняшними записями, режимом переноса и правами, а не с
+  // теми, что были при последней отрисовке блока. См. `use-latest-handler`.
+  const onEditGrid = useLatestHandler(openEdit);
+  const onMenuGrid = useLatestHandler(openActionMenu);
+  const createAtGrid = useLatestHandler(createAt);
+  const rescheduleGrid = useLatestHandler(reschedule);
+  // Коммит зума — низким приоритетом: полный ре-рендер сетки на отпускании
+  // щипка давал видимый «прыжок» кадра (жалоба владельца). Живая геометрия
+  // и так на UI-потоке; здесь догоняют только «холодные» слои (текст-фит).
+  // Сеттер стабилен, поэтому пустые зависимости честны.
+  const onZoom = useCallback(
+    (v: number) => startTransition(() => setHourH(v)),
+    [],
+  );
+  const onCommitWeekPage = useCallback(
+    (dir: 1 | -1) => setDay((d) => addDays(d, dir * 7)),
+    [],
+  );
+  const onCommitDayPage = useCallback(
+    (dir: 1 | -1) => setDay((d) => addDays(d, dir)),
+    [],
+  );
+  // Тап по шапке Дня — метка ИМЕННО открытой даты, поэтому dayYmd в
+  // зависимостях: иначе после свайпа метка ставилась бы на прежний день.
+  const onDayLabelTap = useMemo(
+    () =>
+      canManageDayLabels && activeTeamId
+        ? () => {
+            haptics.tap();
+            setCityPickerYmd(dayYmd);
+          }
+        : undefined,
+    [canManageDayLabels, activeTeamId, dayYmd],
+  );
+
+  const gridProps = useMemo(
+    () => ({
+      clientName,
+      serviceLabel,
+      addressFor,
+      teamColorFor,
+      onEdit: onEditGrid,
+      onReschedule: canManageBookings ? rescheduleGrid : undefined,
+      canReschedule: canMutateAppointment,
+      startHour: visStartHour,
+      endHour: visEndHour,
+      // Привязка драга и тапа по пустому слоту — 15 мин, константа. «Шаг сетки»
+      // как настройка убран: ни одной линии он не рисовал (сетку рисует зум —
+      // граница часа безусловна, получас появляется при hourH ≥ 52), зато тайно
+      // задавал длительность новой записи. Длительность теперь честная настройка
+      // календаря (teams.default_slot_minutes).
+      stepMinutes: 15,
+      workStartHour: calSettings?.workStartHour,
+      workEndHour: calSettings?.workEndHour,
+      workBandFor,
+      freeSlotsFor,
+      labelTintFor,
+      bufferMinutes,
+      nowMinutes,
+      scrollToHour,
+      hourH,
+      hourHSv,
+      onZoom,
+    }),
+    [
+      clientName,
+      serviceLabel,
+      addressFor,
+      teamColorFor,
+      onEditGrid,
+      canManageBookings,
+      rescheduleGrid,
+      canMutateAppointment,
+      visStartHour,
+      visEndHour,
+      calSettings?.workStartHour,
+      calSettings?.workEndHour,
+      workBandFor,
+      freeSlotsFor,
+      labelTintFor,
+      bufferMinutes,
+      nowMinutes,
+      scrollToHour,
+      hourH,
+      hourHSv,
+      onZoom,
+    ],
+  );
 
   const calendarLoading =
     isLoading ||
@@ -2306,12 +2409,14 @@ export default function CalendarTab() {
     teamScheduleQuery.error;
 
   // Долгий тап по дате в Неделе — провалиться в День (см. WeekHeaderRow).
-  const pickDay = (d: Date) => {
+  // Стабильная ссылка (как `openWeekFromMonth`): иначе memo Недели мёртв.
+  // Настройка пишется через ref — там всегда свежий `rememberView`.
+  const pickDay = useCallback((d: Date) => {
     haptics.tap();
     setDay(startOfDay(d));
     setMode("day");
-    rememberView({ mode: "day" });
-  };
+    rememberViewRef.current({ mode: "day" });
+  }, []);
 
   // First-run gate (web parity: dashboard/page.tsx). No team calendar yet →
   // show the «Создать календарь» screen instead of an empty grid. Hold on a
@@ -2450,14 +2555,17 @@ export default function CalendarTab() {
       <ScopeChips
         items={chipItems}
         // Пока идёт переход, подсвечен ТОТ чип, в который тапнули: экран
-        // отвечает на касание сразу, а данные догоняют под скелетом.
-        activeId={pendingChipId ?? activeTeamId}
+        // отвечает на касание сразу, а данные догоняют под скелетом. Для
+        // своего календаря то же даёт оптимистичный `chipTeamId` (onPickOwn).
+        activeId={pendingChipId ?? chipTeamId}
         onSelect={pickCalendar}
       />
 
       {/* Фоновое дообновление календаря: полоса под шапкой вместо контрола,
           который сам выезжал и сдвигал ленту. */}
-      <LoadingBar visible={isRefetching && !pull.refreshing} />
+      <LoadingBar
+        visible={isRefetching && !pull.refreshing && !silentRevalidating}
+      />
 
       {calendarLoading ? (
         // mode известен синхронно (MMKV) — скелет обязан обещать ту же
@@ -2517,18 +2625,11 @@ export default function CalendarTab() {
               today={now}
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
-              onCreateAt={canManageBookings ? createAt : undefined}
-              onMenu={openActionMenu}
+              onCreateAt={canManageBookings ? createAtGrid : undefined}
+              onMenu={onMenuGrid}
               onPickDay={pickDay}
-              onPickLabelDay={
-                canManageDayLabels && activeTeamId
-                  ? (ymd) => {
-                      haptics.tap();
-                      setCityPickerYmd(ymd);
-                    }
-                  : undefined
-              }
-              onCommitPage={(dir) => setDay((d) => addDays(d, dir * 7))}
+              onPickLabelDay={onPickLabelDay}
+              onCommitPage={onCommitWeekPage}
               {...gridProps}
             />
           </View>
@@ -2555,17 +2656,10 @@ export default function CalendarTab() {
               todayYmd={todayYmd}
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
-              onDayLabelTap={
-                canManageDayLabels && activeTeamId
-                  ? () => {
-                      haptics.tap();
-                      setCityPickerYmd(dayYmd);
-                    }
-                  : undefined
-              }
-              onMenu={openActionMenu}
-              onCreateAt={canManageBookings ? createAt : undefined}
-              onCommitPage={(dir) => setDay((d) => addDays(d, dir))}
+              onDayLabelTap={onDayLabelTap}
+              onMenu={onMenuGrid}
+              onCreateAt={canManageBookings ? createAtGrid : undefined}
+              onCommitPage={onCommitDayPage}
               {...gridProps}
             />
           </View>
@@ -2595,7 +2689,7 @@ export default function CalendarTab() {
                   labelFor={labelFor}
                   holeFor={holeFor}
                   onPickDay={openWeekFromMonth}
-                  onPickLabelDay={onPickLabelDayMonth}
+                  onPickLabelDay={onPickLabelDay}
                 />
               )}
             />
@@ -2677,8 +2771,10 @@ export default function CalendarTab() {
             ? teamSchedule?.date_overrides?.[cityPickerYmd]?.is_working === false
             : false
         }
+        // Пока карта графиков не пришла, выходной не предлагаем: блоб собрался
+        // бы из общих часов и заменил на сервере настоящий график команды.
         onToggleDayOff={
-          activeTeamId && cityPickerYmd
+          activeTeamId && cityPickerYmd && !teamScheduleQuery.isPending
             ? (next) => {
                 const base: TeamSchedule = teamSchedule ?? {
                   start: hourLabel(globalWork.start),

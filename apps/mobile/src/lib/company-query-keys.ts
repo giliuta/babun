@@ -27,6 +27,8 @@ export const clientsQueryKey = (tenantId: string | null, role: Role) =>
 export const clientTagsQueryKey = (tenantId: string | null, role: Role) =>
   ["client-tags", tenantId, rolePart(role)] as const;
 
+// С 2026-09-15 `useTeams` читает только вариант с «all» (активные отбираются
+// `select`); ключ без суффикса остался лишь у плана прогрева — до его правки.
 export const teamsQueryKey = (
   tenantId: string | null,
   role: Role,
@@ -36,6 +38,8 @@ export const teamsQueryKey = (
     ? (["teams", tenantId, rolePart(role), "all"] as const)
     : (["teams", tenantId, rolePart(role)] as const);
 
+// С 2026-09-15 `useCities` читает ключ с `teamId = null` (команда — `select`);
+// ключи с командой остались лишь у плана прогрева — до его правки.
 export const citiesQueryKey = (
   tenantId: string | null,
   includeInactive: boolean,
@@ -57,6 +61,8 @@ export const dayCitiesQueryKey = (tenantId: string | null, role: Role) =>
 export const dayExtrasQueryKey = (tenantId: string | null, role: Role) =>
   ["day-extras", tenantId, rolePart(role)] as const;
 
+// С 2026-09-15 экраны читают только карту компании (`allTeamSchedulesQueryKey`,
+// команда — `select`); ключ одной команды остался лишь у плана прогрева.
 export const teamScheduleQueryKey = (
   tenantId: string | null,
   role: Role,

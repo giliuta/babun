@@ -14,6 +14,7 @@ import {
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Service } from "@babun/shared/local/services";
 import { supabase } from "@/lib/supabase";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
@@ -120,10 +121,20 @@ export function pagingClient(base: typeof supabase = supabase): typeof supabase 
 // and paged around the 1000-row cap by threading the shim above in as the
 // wrapper's supabase client. Retained name/signature: useClientAppointments
 // imports this.
+//
+// КЛИЕНТ ПРИВЯЗАН К КОМПАНИИ КЛЮЧА, А НЕ К КОМПАНИИ УСТРОЙСТВА. Обёртка
+// отдаёт снимок SQLite и отпускает фоновое перечитывание, а шим читает
+// страницы одну за другой — по 2–6 с каждую в очереди бесплатного плана.
+// Глобальный клиент берёт заголовок на КАЖДЫЙ запрос: переход посреди чтения
+// отправлял бы вторую страницу под другой компанией, сервер отвечал нулём
+// строк, и `cacheReplaceTenant` стирал остаток записей этой компании с
+// меткой «сервер сказал: пусто». Привязанный клиент несёт заголовок `tenantId`
+// на всех страницах, в том числе у отпущенного перечитывания. У шима нет поля
+// привязки, так что подталкивание очереди выгрузки работает как раньше.
 export async function listAppointmentsPaged(
   tenantId: string,
 ): Promise<Appointment[]> {
-  return listAppointmentsCached(pagingClient(), tenantId);
+  return listAppointmentsCached(pagingClient(tenantBoundClient(tenantId)), tenantId);
 }
 
 /** Ключ живёт в `lib/company-query-keys.ts`; реэкспорт для тех, кто уже

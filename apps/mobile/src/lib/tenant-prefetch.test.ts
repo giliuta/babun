@@ -68,6 +68,26 @@ describe("прогрев чужой компании не имеет побоч�
     assert.ok(prefetch.includes("fetchMyCalendars(supabase)"));
   });
 
+  // Поведение очереди проверено на чистой функции (`tenant-prefetch-plan.test.ts`);
+  // здесь — что исполнитель на неё и опирается, а не на фиксированную паузу.
+  test("круг стартует после взаимодействий и уступает экрану", () => {
+    assert.ok(prefetch.includes("InteractionManager.runAfterInteractions("));
+    assert.ok(prefetch.includes("runWarmQueue(calendarWave"));
+    assert.ok(prefetch.includes("runWarmQueue(financeWave"));
+    assert.ok(prefetch.includes("isBusy: screensBusy"));
+  });
+
+  // Правило «экран занят» проверено на листе (`screensBusyFrom`); здесь — что
+  // исполнитель отдаёт ему ВСЁ: свои чтения, чтобы их не считать, и записи.
+  test("занятость экрана: чтения в полёте, свои хеши прогрева и записи", () => {
+    assert.ok(prefetch.includes("screensBusyFrom("));
+    assert.match(prefetch, /findAll\(\{ fetchStatus: "fetching" \}\)/);
+    assert.match(
+      prefetch,
+      /screensBusyFrom\(\{[\s\S]*?\bwarmingHashes,[\s\S]*?mutating: queryClient\.isMutating\(\),?\s*\}\)/,
+    );
+  });
+
   test("обратная сторона: у активной компании побочные действия на месте", () => {
     const tenantHook = read("../features/settings/tenant.ts");
     const settingsHook = read("../features/settings/local-settings.ts");

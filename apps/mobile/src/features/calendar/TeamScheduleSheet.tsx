@@ -100,7 +100,7 @@ export function TeamScheduleSheet({
 }) {
   const t = useThemeColors();
   const { data: settings } = useCalendarSettings();
-  const { data: schedule } = useTeamSchedule(teamId);
+  const { data: schedule, isPending: schedulePending } = useTeamSchedule(teamId);
   const upsert = useUpsertTeamSchedule();
   const [active, setActive] = useState<WeekdayKey>("mon");
   const [bufferOpen, setBufferOpen] = useState(false);
@@ -166,6 +166,10 @@ export function TeamScheduleSheet({
 
   const commit = (next: TeamSchedule) => {
     if (!teamId) return;
+    // Карта графиков ещё не пришла — `base` собран из общих часов, а не из
+    // строки команды. Апсерт ЗАМЕНЯЕТ блоб целиком, и такая правка стёрла бы
+    // на сервере настоящий график: перерывы, особые дни, отпуска.
+    if (schedulePending) return;
     upsert.mutate(
       { teamId, schedule: next },
       { onError: (e) => notify("Ошибка", (e as Error).message) },

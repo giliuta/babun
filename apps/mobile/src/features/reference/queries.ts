@@ -25,6 +25,7 @@ import {
   operationalMasterJsonToMaster,
   operationalTeamJsonToTeam,
 } from "@/features/settings/master-reference";
+import { pickLiveTeams, pickTeamLabels } from "./reference-select";
 
 type Tables = Database["public"]["Tables"];
 export type Team = Tables["teams"]["Row"];
@@ -87,10 +88,15 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
   const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
-    queryKey: teamsQueryKey(tenantId, role, includeInactive),
+    // ОДИН ЗАПРОС НА ОБА ВАРИАНТА (2026-09-15). Календарь зовёт хук и так, и
+    // с архивом — это были два запроса за одной таблицей в каждой волне после
+    // перехода. Читаем полный список, активные отбираются на устройстве тем же
+    // условием, что стояло в запросе (`reference-select.ts`, с тестом).
+    queryKey: teamsQueryKey(tenantId, role, true),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
     queryFn: () =>
-      fetchTeams(supabase, tenantId as string, role as UserRole, includeInactive),
+      fetchTeams(supabase, tenantId as string, role as UserRole, true),
+    select: includeInactive ? undefined : pickLiveTeams,
   });
 }
 
@@ -274,11 +280,20 @@ export function useCities(opts?: {
   const tenantId = useTenantId();
   const includeInactive = !!opts?.includeInactive;
   const teamId = opts?.teamId ?? null;
+  // КЛЮЧ — ВЕСЬ СПРАВОЧНИК КОМПАНИИ, КОМАНДА — `select` (2026-09-15). Ключ по
+  // команде означал запрос на каждый первый тап по календарю, и сетка ждала
+  // его скелетом. Отбор повторяет `.eq("team_id")` из `fetchCities` точь-в-точь
+  // (`reference-select.ts`, с тестом); RLS меток и так отдаёт всю компанию.
+  const select = useCallback(
+    (rows: City[]) => pickTeamLabels(rows, teamId),
+    [teamId],
+  );
   return useQuery({
-    queryKey: citiesQueryKey(tenantId, includeInactive, teamId),
+    queryKey: citiesQueryKey(tenantId, includeInactive, null),
     enabled: !!tenantId,
     queryFn: () =>
-      fetchCities(supabase, tenantId as string, includeInactive, teamId),
+      fetchCities(supabase, tenantId as string, includeInactive, null),
+    select,
   });
 }
 

@@ -32,6 +32,11 @@ import {
 } from "@babun/shared/sync";
 import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
+import { getActiveTenantId } from "@/lib/active-tenant";
+import {
+  resyncAfterClaim,
+  subscribeClaimSettled,
+} from "@/lib/claim-resync-plan";
 
 // Cache-table vocab (clients / appointments / tags) → the react-query key the
 // mobile hooks register. Tags live under "client-tags" (features/clients/
@@ -93,9 +98,21 @@ export function startSyncBridge(
       onChange: (table) => invalidate(qc, table),
       onResync: (table) => invalidate(qc, table),
     });
+    // 3. Claim caught up — realtime of this tenant was blind until now and a
+    // token push does not rejoin channels, so no resync fires. Re-read ONLY
+    // this tenant's keys (never the bare `invalidate`: it would mark the other
+    // tenant's warm keys stale too). Rules and test: `claim-resync-plan.ts`.
+    const unsubClaim = subscribeClaimSettled((settled) => {
+      resyncAfterClaim(qc, {
+        settledTenantId: settled,
+        bridgeTenantId: tenantId,
+        activeTenantId: getActiveTenantId(),
+      });
+    });
     subscriptions = () => {
       unsubRevalidate();
       unsubRealtime();
+      unsubClaim();
     };
   };
 

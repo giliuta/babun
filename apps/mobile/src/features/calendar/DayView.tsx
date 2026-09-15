@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import {
   Pressable,
   Text,
@@ -49,6 +49,10 @@ import {
 import { ZoomableTimeGrid } from "@/features/calendar/zoom";
 import { PagedStrip, usePeriodPager } from "@/features/calendar/pager";
 import { DateCell } from "@/features/calendar/date-header";
+import {
+  blockPropsEqual,
+  dayColumnPropsEqual,
+} from "@/features/calendar/grid-memo";
 
 export const RAIL_W = 48;
 // Высота полосы шапки дат над сеткой (web DayColumn header h-[64px]) —
@@ -355,7 +359,12 @@ export function AllDayRow({
   );
 }
 
-function Block({
+// `memo` со сравнением размещения по содержимому (`blockPropsEqual`): перенос
+// одной записи пересоздаёт размещения всей колонки, а перерисовать надо только
+// сдвинутый блок. Замыкания жестов ниже читают лишь пропсы — при равных пропсах
+// прошлое замыкание держит те же значения, а обработчики экрана приходят
+// обёрткой, которая сама зовёт свежую функцию.
+const Block = memo(function Block({
   placed,
   hourH,
   laneW,
@@ -820,7 +829,7 @@ function Block({
       </Animated.View>
     </GestureDetector>
   );
-}
+}, blockPropsEqual);
 
 // The fixed hour-label rail on the left of the grid: one flex cell per hour
 // (equal split of the animated grid height), each label riding its cell top.
@@ -941,7 +950,12 @@ export function TimeRail({
 // percent-positioned overlays. The column has NO pixel geometry of its own —
 // it stretches to the animated row height (see zoom module note above), so
 // nothing here renders, measures or animates during a pinch.
-export function DayColumn({
+//
+// `memo` (`dayColumnPropsEqual`): у недели смонтирована двадцать одна колонка,
+// и перерисовка экрана без смены данных колонки не должна их трогать. Полоса
+// графика, записи дня и свободные слоты приходят новыми объектами с тем же
+// содержимым — их сравнение по содержимому объяснено в `grid-memo.ts`.
+export const DayColumn = memo(function DayColumn({
   dateYmd,
   appointments,
   clientName,
@@ -1412,7 +1426,7 @@ export function DayColumn({
 
     </View>
   );
-}
+}, dayColumnPropsEqual);
 
 // Sticky date header above the day grid — web parity (DayColumn header):
 // the user must always see WHICH day is open. Same visual grammar as the
@@ -1468,7 +1482,9 @@ function DayHeader({
 // Single-day grid: hour rail + a live-paged day column (prev/cur/next dates
 // ride the shared pager axis — swipe drags the neighbouring day in under the
 // finger, web/Bumpix-style). Header pages in lockstep with the column.
-export function DayView({
+//
+// `memo` — по той же причине, что у WeekView: пропсы экран держит стабильными.
+export const DayView = memo(function DayView({
   dateYmd,
   apptsFor,
   todayYmd,
@@ -1663,7 +1679,9 @@ export function DayView({
                 freeSlots={freeSlotsFor?.(d)}
                 tintColor={labelTintFor?.(d) ?? null}
                 bufferMinutes={bufferMinutes}
-                nowMinutes={nowMinutes}
+                // «Сейчас» — только странице сегодня: соседние страницы его не
+                // читают, а тик раз в минуту перерисовывал бы и их.
+                nowMinutes={d === todayYmd ? nowMinutes : null}
               />
             );
           }}
@@ -1671,4 +1689,4 @@ export function DayView({
       </ZoomableTimeGrid>
     </View>
   );
-}
+});

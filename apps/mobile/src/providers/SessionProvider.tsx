@@ -8,6 +8,7 @@ import {
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { handleAuthEvent } from "@/lib/auth-clear";
 import { supabase } from "@/lib/supabase";
+import { shouldPublishSession } from "./session-publish";
 
 type SessionState = { session: Session | null; loading: boolean };
 
@@ -32,7 +33,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         .then(async () => {
           await handleAuthEvent(event, next);
           if (!mounted) return;
-          setSession(next);
+          // Обновлённый токен того же человека дерево не перерисовывает:
+          // экраны читают из сессии человека, а не токен (`session-publish.ts`).
+          setSession((prev) =>
+            shouldPublishSession(event, prev, next) ? next : prev,
+          );
           setLoading(false);
         })
         .catch(() => {

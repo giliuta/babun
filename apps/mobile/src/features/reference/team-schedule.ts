@@ -8,6 +8,7 @@
 // onto DEFAULT_SCHEDULE (or the fetched value) in TS first, then passes the
 // full object.
 
+import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   listScheduleEntries,
@@ -17,40 +18,51 @@ import { type ScheduleMap, type TeamSchedule } from "@babun/shared/local/schedul
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { allTeamSchedulesQueryKey } from "@/lib/company-query-keys";
 import {
-  allTeamSchedulesQueryKey,
-  teamScheduleQueryKey,
-} from "@/lib/company-query-keys";
+  pickTeamSchedule,
+  rollbackTeamSchedule,
+  writeTeamScheduleOptimistic,
+} from "./team-schedule-map";
 
 /** The schedule for one team, or null when the team has no row yet. NOT
  *  coalesced to DEFAULT_SCHEDULE here: that hard-coded 08–22 band made the
  *  global «Рабочие часы по умолчанию» setting dead — DayView never reached
  *  its workStartHour/EndHour fallback. Callers pick their own fallback
- *  (grid → global work hours, hub editor → DEFAULT_SCHEDULE). */
+ *  (grid → global work hours, hub editor → DEFAULT_SCHEDULE).
+ *
+ *  КЛЮЧ — КАРТА КОМПАНИИ, А НЕ КОМАНДЫ (2026-09-15). Запрос и так приносит
+ *  графики всех команд; ключ по команде заставлял первый тап по соседнему
+ *  календарю снова идти за той же картой, и сетка ждала сеть скелетом.
+ *  Теперь карта одна на компанию и роль, команда выбирается `select`. */
 export function useTeamSchedule(teamId: string | undefined) {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
-  return useQuery<TeamSchedule | null>({
-    queryKey: teamScheduleQueryKey(tenantId, roleQuery.data, teamId),
+  const select = useCallback(
+    (map: ScheduleMap) => pickTeamSchedule(map, teamId),
+    [teamId],
+  );
+  return useQuery<ScheduleMap, Error, TeamSchedule | null>({
+    queryKey: allTeamSchedulesQueryKey(tenantId, roleQuery.data),
     enabled:
       !!tenantId && !!teamId && roleQuery.isSuccess && roleQuery.data != null,
-    queryFn: async () => {
-      const map = await listScheduleEntries(supabase, tenantId as string);
-      return map[teamId as string] ?? null;
-    },
+    queryFn: () => listScheduleEntries(supabase, tenantId as string),
+    select,
   });
 }
 
 /** Расписания ВСЕХ команд тенанта одной картой. Список календарей показывает
- *  график каждого — тем же одним запросом, что уже делает useTeamSchedule под
- *  капотом (listScheduleEntries отдаёт карту), а не N запросами по команде. */
+ *  график каждого — тем же одним запросом и тем же ключом, что читает
+ *  useTeamSchedule, а не N запросами по команде.
+ *
+ *  Прежнее «только владелец» снято: роль уже стоит в ключе, а для других
+ *  ролей ровно эту карту и так читал useTeamSchedule. */
 export function useAllTeamSchedules() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   return useQuery<ScheduleMap>({
     queryKey: allTeamSchedulesQueryKey(tenantId, roleQuery.data),
-    enabled:
-      !!tenantId && roleQuery.isSuccess && roleQuery.data === "owner",
+    enabled: !!tenantId && roleQuery.isSuccess && roleQuery.data != null,
     queryFn: () => listScheduleEntries(supabase, tenantId as string),
   });
 }
@@ -79,25 +91,29 @@ export function useUpsertTeamSchedule() {
     // весь блоб, а редактор дня строит следующий блоб от того, что лежит в
     // кэше. Без него правка «Начало», сделанная до приземления рефетча,
     // читалась бы из устаревшего кэша — и следующая правка «Конец» записала
-    // бы старое начало обратно, молча потеряв первую. Ключ узкий (…, teamId):
-    // именно его читает useTeamSchedule.
-    onMutate: async ({ teamId, schedule }) => {
-      const key = ["team-schedules", tenantId, role ?? "role-pending", teamId];
-      await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<TeamSchedule | null>([
-        "team-schedules",
-        tenantId,
-        role ?? "role-pending",
+    // бы старое начало обратно, молча потеряв первую. Ключ — карта компании:
+    // именно её читает useTeamSchedule. Пишем и откатываем ТОЛЬКО свою
+    // команду (`team-schedule-map.ts`): снимок всей карты в откате стёр бы
+    // правку соседней команды, легшую между onMutate и ошибкой.
+    //
+    // Карты ещё нет (холодный старт, переход в компанию без кэша) — сначала
+    // её дождаться, потом отменять и писать. Отмена летящей первой загрузки
+    // оставила бы карту из одной команды, и правка любой другой заменила бы её
+    // настоящий график общими часами. Разбор и тест — в листе.
+    onMutate: ({ teamId, schedule }) =>
+      writeTeamScheduleOptimistic(
+        qc,
+        allTeamSchedulesQueryKey(tenantId, role),
+        () => listScheduleEntries(supabase, tenantId as string),
         teamId,
-      ]);
-      qc.setQueryData(key, schedule);
-      return { prev, teamId };
-    },
+        schedule,
+      ),
     onError: (_e, _vars, ctx) => {
       if (ctx) {
-        qc.setQueryData(
-          ["team-schedules", tenantId, role ?? "role-pending", ctx.teamId],
-          ctx.prev,
+        qc.setQueryData<ScheduleMap>(
+          allTeamSchedulesQueryKey(tenantId, role),
+          (current) =>
+            rollbackTeamSchedule(current, ctx.teamId, ctx.written, ctx.prev),
         );
       }
     },

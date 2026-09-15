@@ -8,6 +8,11 @@ import {
   rememberPendingClaim,
   settlePendingClaim,
 } from "@/lib/active-tenant";
+import {
+  CLAIM_FIRST_ATTEMPT_DELAY_MS,
+  waitUntilSwitchSettled,
+} from "@/lib/switch-revalidate-plan";
+import { notifyClaimSettled } from "@/lib/claim-resync-plan";
 
 // ДОГОН CLAIM'А В ТОКЕНЕ — ДОЛГ, КОТОРЫЙ ГАСИТСЯ, А НЕ ПОПЫТКА, КОТОРАЯ ЗАБЫВАЕТСЯ.
 //
@@ -41,11 +46,27 @@ async function tryCatchUp(userId: string, tenantId: string): Promise<boolean> {
   if (error) return false;
   const { error: refreshError } = await supabase.auth.refreshSession();
   if (refreshError) return false;
+  // ДОГНАЛИ — СКАЗАТЬ МОСТУ. До этой строки realtime новой компании был слеп
+  // (claim в токене называл прежнюю), а переподключения каналов догон не
+  // вызывает: пропущенное в это окно никто бы не перечитал. Мост перечитает
+  // ключи этой компании сам (`claim-resync-plan.ts`). `refreshSession`
+  // возвращается уже после того, как новый токен ушёл в каналы.
   settlePendingClaim(userId, tenantId);
+  notifyClaimSettled(tenantId);
   return true;
 }
 
 let inFlight: Promise<void> | null = null;
+
+// ДОГОН НЕ ТОЛКАЕТСЯ С ПЕРВЫМИ СЕКУНДАМИ ПОСЛЕ ПЕРЕХОДА.
+//
+// `activate_tenant` + `refreshSession` — две поездки, и раньше они уходили в
+// ту же миллисекунду, что и тихая очередь дообновления новой компании: в
+// очереди бесплатного плана это ещё два места перед записями. Экрану догон
+// не нужен вовсе (он про realtime, фото и edge-функции), поэтому КАЖДАЯ
+// попытка ждёт, пока пройдут 3 с после перехода И стихнет очередь. На
+// холодном старте и при возврате сети ждать нечего: перехода не было.
+let firstAttemptNotBefore = 0;
 
 /** Гасит долг, если он есть. Одновременно идёт не больше одной попытки: два
  *  параллельных `refreshSession` ломают друг друга («Не удалось обновить
@@ -58,6 +79,10 @@ export function settleClaimDebt(): Promise<void> {
       const userId = getActiveUserId();
       if (!userId) return;
       for (const delay of RETRY_DELAYS_MS) {
+        if (delay) await new Promise((r) => setTimeout(r, delay));
+        await waitUntilSwitchSettled(() => firstAttemptNotBefore);
+        // Долг и цель читаются ПОСЛЕ ожидания: пока ждали, человек мог
+        // перейти ещё раз или долг успели погасить.
         const target = readPendingClaim(userId);
         if (!target) return;
         // Долг мог устареть: человек ушёл дальше, а долг стоит на прежнюю.
@@ -65,7 +90,6 @@ export function settleClaimDebt(): Promise<void> {
         // потому что settle сверяет цель.
         const live = getActiveTenantId() ?? target;
         if (live !== target) rememberPendingClaim(userId, live);
-        if (delay) await new Promise((r) => setTimeout(r, delay));
         if (await tryCatchUp(userId, live)) return;
       }
     } finally {
@@ -75,8 +99,10 @@ export function settleClaimDebt(): Promise<void> {
   return inFlight;
 }
 
-/** Зовёт переход: записать долг и начать гасить, НЕ дожидаясь. */
+/** Зовёт переход: записать долг и начать гасить, НЕ дожидаясь. Долг
+ *  записывается сразу — первая попытка ждёт тишины (разбор выше). */
 export function scheduleClaimCatchUp(userId: string, tenantId: string): void {
+  firstAttemptNotBefore = Date.now() + CLAIM_FIRST_ATTEMPT_DELAY_MS;
   rememberPendingClaim(userId, tenantId);
   void settleClaimDebt();
 }

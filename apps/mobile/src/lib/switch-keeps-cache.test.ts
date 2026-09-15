@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { QueryClient } from "@tanstack/react-query";
 
-import { querySurvivesSwitch } from "./tenant-query-keys";
+import {
+  knownTenantsForSwitch,
+  sweepQueryCacheOnSwitch,
+} from "./switch-cache-sweep";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const read = (path: string): string => readFileSync(resolve(here, path), "utf8");
 
 // ЧТО ИМЕННО ЗДЕСЬ ДОКАЗЫВАЕТСЯ, И ЧЕГО ЗДЕСЬ НЕ ДОКАЗЫВАЕТСЯ.
 //
@@ -22,13 +31,13 @@ import { querySurvivesSwitch } from "./tenant-query-keys";
 const AIRFIX = "2bc7907e-b149-44a9-92ff-a5e73403031c";
 const GILIUTA = "11365a87-bef9-4f6c-a030-b15083fe646b";
 
-/** Та же строка, что стоит в `wipeFastStores`. Повторена дословно: сама
- *  функция тянет supabase, уведомления и MMKV, которым в юнит-тесте делать
- *  нечего, а предикат импортируется настоящий. */
+/** НАСТОЯЩАЯ чистка перехода, а не её копия. Раньше здесь стояли строки,
+ *  повторённые из `wipeFastStores` «дословно», — и сторожили они копию: верни
+ *  в `auth-clear.ts` пометку «протухло» на весь кэш, копия бы не заметила.
+ *  Теперь `auth-clear.ts` зовёт лист `switch-cache-sweep.ts`, и тест зовёт
+ *  его же. */
 function sweepOnSwitch(qc: QueryClient, knownTenantIds: string[]): void {
-  qc.removeQueries({
-    predicate: (q) => !querySurvivesSwitch(q.queryKey, knownTenantIds),
-  });
+  sweepQueryCacheOnSwitch(qc, knownTenantIds);
 }
 
 function seedBothCompanies(): QueryClient {
@@ -121,6 +130,143 @@ describe("переход не выбрасывает скачанное", () => 
     assert.notDeepEqual(
       qc.getQueryData(["appointments", AIRFIX, "owner"]),
       qc.getQueryData(["appointments", GILIUTA, "master"]),
+    );
+  });
+});
+
+const queryState = (qc: QueryClient, queryKey: readonly unknown[]) =>
+  qc.getQueryCache().find({ queryKey, exact: true })?.state;
+
+describe("переход не снимает свежесть (владелец 2026-09-15: «загружается с задержкой»)", () => {
+  // Пометка «протухло» на весь кэш делала каждый смонтированный экран залпом в
+  // сеть: 17–20 запросов в очереди бесплатного плана по 3–5 с. Верни её в
+  // чистку — эти тесты упадут.
+  test("ключи компаний после чистки НЕ протухшие: первый кадр рисуется из памяти", () => {
+    const qc = seedBothCompanies();
+    sweepOnSwitch(qc, [AIRFIX, GILIUTA]);
+    for (const key of [
+      ["appointments", GILIUTA, "master"],
+      ["teams", GILIUTA, "master"],
+      ["appointments", AIRFIX, "owner"],
+    ]) {
+      const state = queryState(qc, key);
+      assert.equal(state?.isInvalidated, false, `${key.join("/")} помечен протухшим`);
+    }
+    const query = qc
+      .getQueryCache()
+      .find({ queryKey: ["appointments", GILIUTA, "master"], exact: true });
+    assert.equal(query?.isStaleByTime(60_000), false);
+  });
+
+  test("РОЛЬ, положенная ДО чистки, переживает её свежей — без крутилки прав", () => {
+    const qc = seedBothCompanies();
+    qc.setQueryData(["current-role", GILIUTA], "master");
+    sweepOnSwitch(qc, [AIRFIX, GILIUTA]);
+    assert.equal(qc.getQueryData(["current-role", GILIUTA]), "master");
+    assert.equal(queryState(qc, ["current-role", GILIUTA])?.isInvalidated, false);
+  });
+
+  test("ДВОЙНЫЕ ЧИПЫ: лента календарей перечитывается, а не донашивается", () => {
+    // Флаг «активная» в ленте считается от заголовка. Не перечитай её — и в
+    // ряду свои календари новой компании дважды, а покидаемой нет.
+    const qc = seedBothCompanies();
+    sweepOnSwitch(qc, [AIRFIX, GILIUTA]);
+    assert.equal(queryState(qc, ["my-calendars", "user-1"])?.isInvalidated, true);
+  });
+});
+
+describe("компании человека для чистки — из ленты в памяти", () => {
+  test("все компании ленты плюс обе стороны перехода, без повторов", () => {
+    assert.deepEqual(
+      knownTenantsForSwitch({
+        target: GILIUTA,
+        leaving: AIRFIX,
+        calendars: [{ tenantId: AIRFIX }, { tenantId: GILIUTA }, { tenantId: "t-3" }],
+      }).sort(),
+      [AIRFIX, GILIUTA, "t-3"].sort(),
+    );
+  });
+
+  test("ленты нет — хватает двух компаний перехода", () => {
+    assert.deepEqual(
+      knownTenantsForSwitch({ target: GILIUTA, leaving: AIRFIX, calendars: undefined }),
+      [GILIUTA, AIRFIX],
+    );
+    assert.deepEqual(
+      knownTenantsForSwitch({ target: GILIUTA, leaving: null, calendars: undefined }),
+      [GILIUTA],
+    );
+  });
+});
+
+describe("проводка перехода в коде", () => {
+  test("auth-clear зовёт настоящую чистку и не метит протухшим весь кэш", () => {
+    // Комментарии вырезаются: разбор над чисткой называет снятый вызов по
+    // имени, и сторож обязан смотреть на код, а не на его историю.
+    const authClear = read("auth-clear.ts").replace(/^\s*\/\/.*$/gm, "");
+    assert.match(authClear, /sweepQueryCacheOnSwitch\(queryClient, knownTenantIds\)/);
+    assert.doesNotMatch(
+      authClear,
+      /invalidateQueries\(\s*\{\s*refetchType/,
+      "пометка «протухло» на весь кэш вернула залп запросов после перехода",
+    );
+  });
+
+  test("ПОРЯДОК: выбор календаря, роль и фаза дообновления — до смены компании; getSession нет", () => {
+    const switching = read("../features/settings/switch-tenant.ts");
+    const setActive = switching.indexOf("setActiveTenantId(userId, tenantId)");
+    assert.notEqual(setActive, -1);
+    for (const before of [
+      "writeTenantPref(CALENDAR_VIEW_PREF, tenantId, { teamId: opts.viewTeamId })",
+      "queryClient.setQueryData(currentRoleQueryKey(tenantId), opts.role)",
+      "beginSwitchRevalidation(tenantId, knownTenantIds)",
+    ]) {
+      const at = switching.indexOf(before);
+      assert.notEqual(at, -1, `нет строки ${before}`);
+      assert.ok(at < setActive, `${before} стоит после смены компании`);
+    }
+    assert.doesNotMatch(
+      switching,
+      /\.getSession\(/,
+      "getSession на пути перехода — асинхронный шаг между тапом и сменой компании",
+    );
+  });
+
+  test("выбор календаря пишется в той же форме, что читает календарь", () => {
+    const switching = read("../features/settings/switch-tenant.ts");
+    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    assert.match(switching, /const CALENDAR_VIEW_PREF = "calendar\.view";/);
+    assert.match(
+      calendar,
+      /readTenantPref<\{ teamId\?: string \| null \}>\("calendar\.view", tenantId\)/,
+    );
+    assert.match(calendar, /writeTenantPref\("calendar\.view", tenantId, \{\s*teamId:/);
+  });
+
+  test("лента не зовёт onPickOwn замыканием тапа — оно знает покидаемую компанию", () => {
+    const workspaces = read("../features/settings/workspaces.ts");
+    assert.equal(
+      workspaces.split("opts.onPickOwn(").length - 1,
+      1,
+      "onPickOwn из замыкания тапа записал бы выбор под компанию, из которой уходим",
+    );
+    assert.match(workspaces, /optsRef\.current\.onPickOwn\(arrival\.teamId\)/);
+    assert.match(workspaces, /viewTeamId: teamId/);
+  });
+
+  test("полоса загрузки молчит, пока идёт тихое дообновление", () => {
+    const calendar = read("../../app/(dashboard)/(home)/index.tsx");
+    assert.match(
+      calendar,
+      /<LoadingBar\s+visible=\{isRefetching && !pull\.refreshing && !silentRevalidating\}/,
+    );
+    // Подпиской, а не чтением модуля в рендере: конец очереди экран не
+    // перерисовал бы, и настоящее перечитывание, начатое в ней, шло бы без полосы.
+    assert.match(calendar, /const silentRevalidating = useSilentRevalidating\(\);/);
+    const revalidate = read("./switch-revalidate.ts");
+    assert.match(
+      revalidate,
+      /useSyncExternalStore\(\s*subscribeSwitchRevalidation,\s*isSilentRevalidating/,
     );
   });
 });

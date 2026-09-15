@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BOUND_TENANT_FIELD } from "@babun/shared/sync/replayer";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenantId } from "@/lib/tenant";
 import { switchTenant } from "./switch-tenant";
+import { myCalendarsQueryKey } from "./my-calendars-key";
 import { USER_ROLES, type UserRole } from "./role-policy";
 import {
   composeCalendarChips,
@@ -86,7 +87,9 @@ function asUserRole(role: string): UserRole | undefined {
     : undefined;
 }
 
-export const myCalendarsQueryKey = ["my-calendars"] as const;
+// Ключ живёт листом (`my-calendars-key.ts`): его читает переход, а ключ
+// отсюда замкнул бы круг импортов `workspaces` ↔ `switch-tenant`.
+export { myCalendarsQueryKey };
 
 /** Лента календарей человека ЧИСТОЙ функцией — её же берёт прогрев других
  *  компаний, чтобы узнать, какие они и кем там человек.
@@ -140,10 +143,13 @@ export function useSwitchWorkspace() {
       tenantId: string;
       onboarded: boolean;
       role?: UserRole;
+      /** Календарь, в который тапнули, — ложится в выбор ЦЕЛЕВОЙ компании. */
+      viewTeamId?: string;
     }) =>
       switchTenant(input.tenantId, {
         onboarded: input.onboarded,
         role: input.role,
+        viewTeamId: input.viewTeamId,
       }),
   });
 }
@@ -203,6 +209,27 @@ export function useCalendarChips(opts: {
     activeTenantId ? c.tenantId === activeTenantId : c.isActive;
   const [pendingId, setPendingId] = useState<string | null>(null);
 
+  // ВЫБОР ЭКРАНА ПОСЛЕ ПЕРЕХОДА — СВЕЖИМ ЭКРАНОМ, А НЕ ЗАМЫКАНИЕМ ТАПА.
+  //
+  // Раньше `onPickOwn(teamId)` звался в `.then` перехода — с `opts` того
+  // рендера, в котором тапнули. Его замыкание знает компанию, из которой
+  // УХОДИМ: календарь записывал выбранный календарь новой компании в выбор
+  // покидаемой, и возврат туда открывал не свой календарь. Звать его до
+  // перехода — та же ошибка.
+  //
+  // Теперь сам выбор кладёт переход в настройку ЦЕЛЕВОЙ компании
+  // (`viewTeamId`), а экранное (снять режим переноса, разрез финансов) делает
+  // `onPickOwn` из ПЕРВОГО рендера уже в новой компании — эффектом ниже.
+  const optsRef = useRef(opts);
+  optsRef.current = opts;
+  const arrivalRef = useRef<{ tenantId: string; teamId: string } | null>(null);
+  useEffect(() => {
+    const arrival = arrivalRef.current;
+    if (!arrival || arrival.tenantId !== activeTenantId) return;
+    arrivalRef.current = null;
+    optsRef.current.onPickOwn(arrival.teamId);
+  }, [activeTenantId]);
+
   const foreign = myCalendars.filter((c) => !isActiveCompany(c));
   // Состав и порядок ряда — чистая функция в листе `calendar-chips.ts`: там
   // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
@@ -236,20 +263,24 @@ export function useCalendarChips(opts: {
     // доехавший `onSuccess` означает, что открылся НЕ ТОТ календарь, в который
     // тапнули, — компания сменилась, а разрез остался прежним. Промис
     // `mutateAsync` живёт сам по себе и доводит выбор до конца.
+    // Экранная часть выбора ждёт первого рендера в новой компании — разбор
+    // над `arrivalRef`.
+    arrivalRef.current = { tenantId, teamId };
     void switching
       .mutateAsync({
         tenantId,
         onboarded: target?.onboarded ?? false,
         role: target ? asUserRole(target.role) : undefined,
+        viewTeamId: teamId,
       })
       .then(() => {
-        opts.onPickOwn(teamId);
         setPendingId(null);
       })
       .catch((error: unknown) => {
         // Переход не состоялся — подсветка возвращается туда, где человек и
         // остался. Оставить её на чужом чипе значило бы соврать про то, где
         // он сейчас.
+        arrivalRef.current = null;
         setPendingId(null);
         opts.onSwitchError(
           error instanceof Error

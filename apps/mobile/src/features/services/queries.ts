@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   useMutation,
   useQuery,
@@ -7,7 +8,8 @@ import type { Database, Json } from "@babun/shared/db/database.types";
 import { generateId } from "@babun/shared/local/masters";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { allServicesQueryKey, servicesQueryKey } from "@/lib/company-query-keys";
+import { allServicesQueryKey } from "@/lib/company-query-keys";
+import { pickLiveServices } from "@/features/reference/reference-select";
 import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
 import {
   dispatcherServiceJsonToService,
@@ -97,17 +99,26 @@ export async function fetchServices(
   return data;
 }
 
+/** Каталог ВЫБОРА — живые услуги. Читает тот же ключ, что и полный справочник
+ *  (`useAllServices`), и отбирает живые у себя (владелец 15.09: «переключение
+ *  без задержки»): два ключа за одной таблицей давали два запроса в каждой
+ *  волне после смены компании. Отбор повторяет сервер ровно — `is_active`
+ *  фильтровал только путь владельца, проекции мастера и диспетчера одни и те же
+ *  (`pickLiveServices`). */
 export function useServices() {
   const tenantId = useTenantId();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
+  const selectLive = useCallback((rows: Service[]) => pickLiveServices(rows, role), [role]);
   return useQuery({
-    queryKey: servicesQueryKey(tenantId, role),
+    queryKey: allServicesQueryKey(tenantId, role),
     enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    staleTime: 5 * 60_000,
     queryFn: () =>
       fetchServices(supabase, tenantId as string, role as UserRole, {
-        archived: false,
+        archived: true,
       }),
+    select: selectLive,
   });
 }
 

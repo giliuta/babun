@@ -1,12 +1,23 @@
-import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { wipeTenantScopedData } from "@/lib/auth-clear";
 import { pauseSyncRuntimeForTenantSwitch } from "@/lib/sync-runtime";
 import { getActiveTenantId, getActiveUserId, setActiveTenantId } from "@/lib/active-tenant";
 import { scheduleClaimCatchUp } from "@/lib/claim-catch-up";
 import { markTenantOnboarded } from "@/lib/tenant";
+import { writeTenantPref } from "@/lib/tenant-prefs";
+import { knownTenantsForSwitch } from "@/lib/switch-cache-sweep";
+import {
+  abandonSwitchRevalidation,
+  beginSwitchRevalidation,
+} from "@/lib/switch-revalidate";
 import { currentRoleQueryKey } from "./tenant";
+import { myCalendarsQueryKey } from "./my-calendars-key";
 import type { UserRole } from "./role-policy";
+
+/** Выбор календаря компании — тот же ключ и та же форма, что пишет и читает
+ *  календарь (`rememberView` и пересев в `app/(dashboard)/(home)/index.tsx`).
+ *  Совпадение формы держит тест `switch-keeps-cache.test.ts`. */
+const CALENDAR_VIEW_PREF = "calendar.view";
 
 // ПЕРЕХОД В ДРУГУЮ КОМПАНИЮ — ОДНА ТРАНЗАКЦИЯ НА ВЕСЬ ПРОДУКТ.
 //
@@ -25,7 +36,9 @@ import type { UserRole } from "./role-policy";
 // Теперь компанию называет КЛИЕНТ заголовком запроса, а сервер подтверждает её
 // членством (`current_tenant_id()`, миграция
 // `active_tenant_from_verified_header`). Поэтому переход — это ДВЕ СТРОКИ без
-// сети: поставить компанию и протухнуть запросы. Ноль поездок, ноль ожидания.
+// сети: поставить компанию и подмести ничьи запросы. Ноль поездок, ноль
+// ожидания. Свежесть запросов компаний переход НЕ снимает — перечитывает их
+// тихая очередь по возрасту данных (`lib/switch-revalidate.ts`).
 //
 // `activate_tenant` НЕ СНЁСЕН, но уехал в фон: realtime, storage и
 // edge-функции ходят в базу мимо PostgREST и заголовка не видят — им нужен
@@ -48,6 +61,10 @@ export interface SwitchTenantOptions {
    *  `current_user_role` летает на сервер: роль приезжает ОТВЕТОМ, а экран
    *  уже смонтирован. */
   role?: UserRole;
+  /** Календарь новой компании, в который тапнули. Кладётся в ЕЁ выбор
+   *  календаря до смены компании — и календарь в первом же пересеве читает
+   *  нужный, а не тот, что был выбран там в прошлый раз. */
+  viewTeamId?: string;
 }
 
 /** Меняет активную компанию на ЭТОМ устройстве.
@@ -72,30 +89,44 @@ export async function switchTenant(
 
   // СПИСОК КОМПАНИЙ ЧЕЛОВЕКА — нужен чистке, чтобы отличить «запрос принадлежит
   // одной из моих компаний» от «запрос ничей»: первые остаются тёплыми, вторые
-  // сносятся. Берётся из токена (`available_tenants`, его ведут
-  // `activate_tenant` и приём приглашения), но токен — best-effort: без сети
-  // его может не быть, и тогда достаточно двух компаний, между которыми идёт
-  // сам переход. Лишнего список не сохранит: ключ без компании сносится.
-  const known = new Set<string>([tenantId]);
-  const leaving = getActiveTenantId();
-  if (leaving) known.add(leaving);
-  try {
-    const { data } = await supabase.auth.getSession();
-    const claimed = (
-      data.session?.user.app_metadata as { available_tenants?: unknown } | undefined
-    )?.available_tenants;
-    if (Array.isArray(claimed)) {
-      for (const id of claimed) if (typeof id === "string") known.add(id);
-    }
-  } catch {
-    // Сессия недоступна — переход всё равно состоится.
-  }
-  const knownTenantIds = [...known];
+  // сносятся. Берётся из ленты календарей, УЖЕ лежащей в памяти (по ней
+  // нарисован чип, в который тапнули), а не из `getSession()`: тот стоил
+  // асинхронного шага между тапом и сменой компании. Ленты нет — хватает двух
+  // компаний перехода; лишнего список не сохранит, ключ без компании сносится.
+  const knownTenantIds = knownTenantsForSwitch({
+    target: tenantId,
+    leaving: getActiveTenantId(),
+    calendars: queryClient.getQueryData<readonly { tenantId: string }[]>([
+      ...myCalendarsQueryKey,
+      userId,
+    ]),
+  });
+
+  // ВСЁ, ЧТО ПЕРВЫЙ КАДР НОВОЙ КОМПАНИИ ЧИТАЕТ, КЛАДЁТСЯ ДО СМЕНЫ КОМПАНИИ.
+  //
+  // Смена компании будит экран, и он рисуется тем, что найдёт в этот момент.
+  // Положенное после — это кадр с чужим календарём или с крутилкой прав.
 
   // ШТАМП ВПЕРЁД, ЕСЛИ ФАКТ УЖЕ ИЗВЕСТЕН. Ставится ДО чистки — она сносит
   // ключи с префиксом `babun:`, поэтому порядок здесь не придирка. Дальше
   // экран перерисовывается и читает готовый ответ: гейта человек не видит.
   if (opts.onboarded) markTenantOnboarded(tenantId);
+
+  // ВЫБОР КАЛЕНДАРЯ — В НАСТРОЙКУ ЦЕЛЕВОЙ КОМПАНИИ. Ключ её называет, поэтому
+  // чистка его не трогает, а пересев календаря прочитает его первым же
+  // эффектом. Писать через `onPickOwn` экрана нельзя: его замыкание знает
+  // компанию, из которой уходим, и выбор лёг бы под неё.
+  if (opts.viewTeamId) {
+    writeTenantPref(CALENDAR_VIEW_PREF, tenantId, { teamId: opts.viewTeamId });
+  }
+
+  // РОЛЬ — ТОЖЕ ДО СМЕНЫ. Раньше её клали после чистки, потому что та
+  // помечала протухшим всё подряд и роль ушла бы перезапрашиваться. Теперь
+  // ключ роли называет компанию, чистка его бережёт и свежести не снимает — и
+  // границы прав отвечают в первом кадре без `current_user_role` в сети.
+  if (opts.role) {
+    queryClient.setQueryData(currentRoleQueryKey(tenantId), opts.role);
+  }
 
   // ОЧЕРЕДЬ ЗАМИРАЕТ ДО СМЕНЫ ЗАГОЛОВКА, И ЭТО НЕ ОСТАТОК СТАРОЙ СХЕМЫ.
   //
@@ -112,28 +143,29 @@ export async function switchTenant(
   const resumeRuntime = pauseSyncRuntimeForTenantSwitch();
   let switched = false;
   try {
+    // ТИХОЕ ДООБНОВЛЕНИЕ ОБЪЯВЛЯЕТСЯ ДО СМЕНЫ: с этого мгновения ключи новой
+    // компании свежи по длинному порогу, и первый кадр рисуется из памяти, а
+    // не залпом в сеть. Лежащее старше минуты через пару секунд перечитает
+    // очередь — по два запроса, без полосы загрузки (`switch-revalidate.ts`).
+    beginSwitchRevalidation(tenantId, knownTenantIds);
+
     // САМ ПЕРЕХОД. Одна строка, ноль сети: следующий же запрос уходит с новым
     // заголовком, и сервер отвечает данными новой компании.
     setActiveTenantId(userId, tenantId);
 
-    // Чистка с сохранением подписчиков и местного кэша: запросы прежней
-    // компании протухают, смонтированные экраны об этом УЗНАЮТ (снос оставил
-    // бы их замороженными на «загрузке» навсегда), а скачанное прежде остаётся
-    // лежать и делает возврат назад мгновенным.
+    // Чистка с сохранением подписчиков и местного кэша: ничьи запросы
+    // сносятся, запросы компаний человека остаются со своей свежестью,
+    // смонтированные экраны живы (снос оставил бы их замороженными на
+    // «загрузке» навсегда), а скачанное прежде делает возврат назад мгновенным.
     //
-    // ВТОРОГО `resetQueries` ЗДЕСЬ НЕТ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ.
+    // `resetQueries` ЗДЕСЬ НЕТ, И ЭТО ГЛАВНАЯ СТРОКА ПО СКОРОСТИ.
     // `queryClient.resetQueries()` не просто помечает запросы протухшими — она
     // ВОЗВРАЩАЕТ `refetchQueries({type:"active"})`, то есть обещание, которое
     // исполнится, когда КАЖДЫЙ смонтированный экран сходит в сеть (проверено в
     // `query-core/build/modern/queryClient.js`). Поэтому `await` на ней держал
-    // переход открытым до полной перезагрузки всего, что на экране, и только
-    // потом отпускал `onSuccess` — то есть выбор календаря, в который тапнули.
-    //
-    // Волна и так уже запущена: `wipeFastStores` при `keepSubscribers` зовёт
-    // `void queryClient.resetQueries()` сам, не дожидаясь. Второй вызов не
-    // добавлял свежести — он ОТМЕНЯЛ только что начатые запросы, запускал их
-    // заново и вставал ждать. Здесь его больше нет: экран рисуется сразу, а
-    // данные догоняют под скелетом.
+    // переход открытым до полной перезагрузки всего, что на экране. Волны на
+    // переходе больше нет вовсе: экран рисуется из памяти, а старое тихо
+    // перечитывает очередь дообновления.
     await wipeTenantScopedData({
       keepSubscribers: true,
       keepLocalCache: true,
@@ -144,20 +176,14 @@ export async function switchTenant(
       knownTenantIds,
     });
 
-    // РОЛЬ КЛАДЁТСЯ ПОСЛЕ ЧИСТКИ, ИНАЧЕ ЕЁ ЖЕ И СМОЕТ. С ней границы прав
-    // отвечают в первом кадре; без неё `RoleCapabilityBoundary` честно покажет
-    // крутилку, пока роль летит с сервера, — то есть ровно то ожидание,
-    // которое мы отсюда и убираем.
-    if (opts.role) {
-      queryClient.setQueryData(currentRoleQueryKey(tenantId), opts.role);
-    }
-
     switched = true;
   } finally {
     // Не переключились — возвращаем выгрузку туда, где она была. Переключились
     // — НЕ возвращаем: старая очередь с новым заголовком дописала бы работу
     // прежней компании в новую.
     if (!switched) resumeRuntime();
+    // И длинный порог свежести снимается с компании, куда не перешли.
+    if (!switched) abandonSwitchRevalidation(tenantId);
   }
 
   // ДОГОНЯЮЩАЯ ПОЛОВИНА — В ФОНЕ, КАК ДОЛГ, А НЕ КАК ПОПЫТКА. Экран её не
