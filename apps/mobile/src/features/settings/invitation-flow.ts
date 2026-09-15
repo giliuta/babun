@@ -52,6 +52,12 @@ export function invitationErrorMessage(message: string): string {
   if (/invalid invitation email/i.test(message)) {
     return "Проверьте адрес электронной почты.";
   }
+  if (/invalid invitation phone/i.test(message)) {
+    return "Проверьте номер телефона — введите его с кодом страны.";
+  }
+  if (/invitation name is too long/i.test(message)) {
+    return "Имя слишком длинное — оставьте до 120 символов.";
+  }
   if (/does not match/i.test(message)) {
     return "Приглашение выписано на другой email. Войдите под нужным аккаунтом.";
   }

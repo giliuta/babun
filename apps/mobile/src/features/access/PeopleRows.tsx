@@ -105,7 +105,7 @@ export function PendingInvitationRow({ invitation }: { invitation: Invitation })
     <Pressable
       onPress={() => void openActions()}
       accessibilityRole="button"
-      accessibilityLabel={`${invitation.email}, ждёт ответа`}
+      accessibilityLabel={`${invitation.full_name || invitation.email}, ждёт ответа`}
       className="flex-row items-center px-4 py-3 active:opacity-60"
     >
       <View
@@ -115,11 +115,13 @@ export function PendingInvitationRow({ invitation }: { invitation: Invitation })
         <Mail color={t.faint} size={18} />
       </View>
       <View className="flex-1">
+        {/* Имя из приглашения (владелец 15.09: «мини-информация о человеке»);
+            без имени строку по-прежнему называет почта. */}
         <Text style={{ fontSize: 16, fontWeight: "600", color: t.ink }} numberOfLines={1}>
-          {invitation.email}
+          {invitation.full_name || invitation.email}
         </Text>
         <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
-          Ждёт ответа
+          {invitation.full_name ? `${invitation.email} · ждёт ответа` : "Ждёт ответа"}
         </Text>
       </View>
     </Pressable>

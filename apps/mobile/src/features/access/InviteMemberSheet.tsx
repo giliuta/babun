@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Share } from "react-native";
 import * as Linking from "expo-linking";
-import { Mail } from "lucide-react-native";
+import { Mail, Phone, UserRound } from "lucide-react-native";
 
 import { AppearanceTile } from "@/components/ui/AppearanceSheet";
 import { BottomSheet, SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { notify } from "@/lib/notify";
+import { formatPhoneAsYouType } from "@/features/clients/phone";
+import { phoneToSave } from "@/features/profile/profile";
 import {
   invitationErrorMessage,
   invitationPath,
@@ -20,9 +22,13 @@ import { useCreateInvitation } from "@/features/settings/team-access";
 // старой модалке «Имя · Телефон»: «мы договорились по почте»). Карточку по
 // имени и телефону владелец больше не заводит: мастер — аккаунт, принявший
 // приглашение в этот календарь, а карточку ему при приёме заводит сервер
-// (`20260915040000_invited_master_gets_card.sql`). Роль — мастер: из двух ролей
-// приглашения она ближе всего к «по умолчанию всё выключено»; права
-// настраиваются на его экране после приёма.
+// (`20260915040000_invited_master_gets_card.sql`).
+//
+// МИНИ-КАРТОЧКА ЧЕЛОВЕКА (владелец 15.09: «при отправке — имя, почта, номер
+// телефона: мини-информация об этом человеке»). Почта — адрес приглашения и
+// единственное обязательное поле; имя и телефон сервер кладёт в карточку
+// мастера при приёме, а до ответа строка «Ждут ответа» называет человека по
+// имени. Разбор номера — тот же, что у «Телефона» в «Профиле» (`phoneToSave`).
 //
 // ПРИГЛАШЕНИЕ ПРИХОДИТ В ПРИЛОЖЕНИЕ — в Кабинет приглашённого (разворот
 // владельца 14.09), писем нет. Ссылку, если нужна, отправляют из «Ждут ответа»
@@ -59,27 +65,38 @@ export function InviteMemberSheet({
   onClose: () => void;
 }) {
   const createInvitation = useCreateInvitation();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const valid = isInvitationEmail(email);
 
   const close = () => {
+    setName("");
     setEmail("");
+    setPhone("");
     onClose();
   };
 
   const invite = async () => {
     if (!valid || createInvitation.isPending) return;
+    const phoneE164 = phoneToSave(phone);
+    if (phoneE164 === undefined) {
+      notify("Проверьте номер", "Номер не похож на телефон. Введите его с кодом страны.");
+      return;
+    }
     try {
       const invitation = await createInvitation.mutateAsync({
         email,
         role: "master",
         masterId: null,
         teamId,
+        fullName: name,
+        phone: phoneE164,
       });
       close();
       // ПРИГЛАШЕНИЕ ПРИХОДИТ В ПРИЛОЖЕНИЕ (разворот владельца 14.09): карточка
-      // над календарём у приглашённого. Ответ одинаковый при любом аккаунте —
-      // есть ли он, экран не раскрывает (006: без оракула).
+      // в Кабинете у приглашённого. Ответ одинаковый при любом аккаунте — есть
+      // ли он, экран не раскрывает (006: без оракула).
       await waitSheetExit();
       notify(
         "Приглашение отправлено",
@@ -108,9 +125,21 @@ export function InviteMemberSheet({
         />
       }
     >
-      {/* ПОЧТА — ОДНИМ БЛОКОМ, КАК «НАЗВАНИЕ» У МЕТКИ (владелец 14.09: «строчка
+      {/* ПОЛЯ — ОДНИМ БЛОКОМ С ПЛИТКОЙ, КАК ПОЧТА (владелец 14.09: «строчка
           почты — в едином блоке»): плитка слева внутри рамки, ввод справа.
-          Подсказки нет: поле уже названо подписью. */}
+          Подсказок нет: поле уже названо подписью. */}
+      <Field
+        label="Имя"
+        leading={<AppearanceTile fallback={UserRound} size={28} />}
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        autoCorrect={false}
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+        autoFocus
+      />
       <Field
         label="Почта"
         leading={<AppearanceTile fallback={Mail} size={28} />}
@@ -121,8 +150,17 @@ export function InviteMemberSheet({
         autoCorrect={false}
         autoComplete="email"
         textContentType="emailAddress"
+        returnKeyType="next"
+      />
+      <Field
+        label="Телефон"
+        leading={<AppearanceTile fallback={Phone} size={28} />}
+        value={phone}
+        onChangeText={(value) => setPhone(formatPhoneAsYouType(value))}
+        keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
         returnKeyType="send"
-        autoFocus
         onSubmitEditing={() => void invite()}
       />
     </BottomSheet>

@@ -77,6 +77,8 @@ export function useCreateInvitation() {
       role,
       masterId,
       teamId,
+      fullName,
+      phone,
     }: {
       email: string;
       role: InvitableRole;
@@ -84,6 +86,10 @@ export function useCreateInvitation() {
       /** Календарь, в который зовут. `null` — приглашение без календаря:
        *  человек войдёт по роли, строк прав ему не запишется. */
       teamId?: string | null;
+      /** Мини-карточка человека (владелец 15.09): имя и телефон в E.164
+       *  необязательны; при приёме сервер кладёт их в карточку мастера. */
+      fullName?: string | null;
+      phone?: string | null;
     }): Promise<CreatedInvitation> => {
       await requireOwner();
       // В календарь мастера зовут по почте и без карточки («Мастера → Добавить
@@ -91,11 +97,14 @@ export function useCreateInvitation() {
       if (role === "master" && !masterId && !teamId) {
         throw new Error("Для мастера выберите карточку сотрудника.");
       }
+      const name = fullName?.trim();
       const { data, error } = await supabase.rpc("create_invitation", {
         p_email: normalizeInvitationEmail(email),
         p_role: role,
         ...(role === "master" && masterId ? { p_master_id: masterId } : {}),
         ...(teamId ? { p_team_id: teamId } : {}),
+        ...(name ? { p_full_name: name } : {}),
+        ...(phone ? { p_phone: phone } : {}),
       });
       if (error) throw new Error(error.message);
       return parseCreatedInvitation(data);

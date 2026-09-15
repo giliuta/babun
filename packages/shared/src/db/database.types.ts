@@ -1829,9 +1829,11 @@ export type Database = {
           created_at: string
           email: string
           expires_at: string
+          full_name: string | null
           id: string
           invited_by_user_id: string | null
           master_id: string | null
+          phone: string | null
           role: string
           team_id: string | null
           tenant_id: string
@@ -1843,9 +1845,11 @@ export type Database = {
           created_at?: string
           email: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by_user_id?: string | null
           master_id?: string | null
+          phone?: string | null
           role: string
           team_id?: string | null
           tenant_id: string
@@ -1857,9 +1861,11 @@ export type Database = {
           created_at?: string
           email?: string
           expires_at?: string
+          full_name?: string | null
           id?: string
           invited_by_user_id?: string | null
           master_id?: string | null
+          phone?: string | null
           role?: string
           team_id?: string | null
           tenant_id?: string
@@ -4032,7 +4038,9 @@ export type Database = {
       create_invitation: {
         Args: {
           p_email: string
+          p_full_name?: string
           p_master_id?: string
+          p_phone?: string
           p_role: string
           p_team_id?: string
         }

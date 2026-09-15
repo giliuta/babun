@@ -122,6 +122,31 @@ describe("invitation calendar grants have one body", () => {
     assert.match(archive.body, /set is_active = false/, archive.file);
     assert.match(archive.body, /m\.user_id = old\.user_id or m\.id = old\.master_id/, archive.file);
   });
+
+  // МИНИ-КАРТОЧКА В ПРИГЛАШЕНИИ (15.09): имя и телефон, которые написал
+  // владелец, сильнее того, что человек написал о себе при регистрации, а
+  // «Мастера» называют человека именем его карточки.
+  test("the card takes the name and phone the owner wrote in the invitation", () => {
+    const card = latestDefinition("attach_invited_master_card");
+    assert.ok(card, "no migration defines public.attach_invited_master_card");
+    assert.match(
+      card.body,
+      /coalesce\(\s*nullif\(btrim\(p_invitation\.full_name\), ''\),\s*nullif\(btrim\(u\.raw_user_meta_data ->> 'full_name'\), ''\)/,
+      card.file,
+    );
+    assert.match(card.body, /coalesce\(\s*nullif\(btrim\(p_invitation\.phone\), ''\),/, card.file);
+  });
+
+  test("people of a calendar are named by their employee card first", () => {
+    const members = latestDefinition("list_members");
+    assert.ok(members, "no migration defines public.list_members");
+    assert.match(members.body, /'name', coalesce\(\s*nullif\(btrim\(m\.full_name\), ''\),/, members.file);
+    assert.match(
+      members.body,
+      /left join public\.masters m on m\.tenant_id = tm\.tenant_id and m\.id = tm\.master_id/,
+      members.file,
+    );
+  });
 });
 
 // МАСТЕР МЕНЯЕТ СТАТУС СВОЕЙ ЗАПИСИ (15.09). Любая правка записи мастером
