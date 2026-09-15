@@ -94,4 +94,32 @@ describe("invitation calendar grants have one body", () => {
     assert.match(helper.body, /insert\s+into\s+public\.member_calendars/i, helper.file);
     assert.doesNotMatch(helper.body, /insert\s+into\s+public\.member_access/i, helper.file);
   });
+
+  // КАРТОЧКА МАСТЕРУ ПРИ ПРИЁМЕ (15.09): без неё приглашённого мастера не
+  // назначить в запись, а статус и фото сервер пускает по карточке. Карточку
+  // заводит тот же помощник — значит, оба входа получают её одинаково.
+  test("the helper gives an invited master without a card his own card", () => {
+    assert.ok(helper, "no migration defines public.grant_invitation_calendar");
+    assert.match(
+      helper.body,
+      /if p_invitation\.role = 'master' and p_invitation\.master_id is null then\s+v_master_id := public\.attach_invited_master_card\(p_invitation, p_user_id\);/,
+      helper.file,
+    );
+    assert.match(helper.body, /values \(\s*p_invitation\.tenant_id,\s*p_invitation\.team_id,\s*p_user_id,\s*v_master_id,/, helper.file);
+  });
+
+  test("the card belongs to the account: found again by user and linked to the membership", () => {
+    const card = latestDefinition("attach_invited_master_card");
+    assert.ok(card, "no migration defines public.attach_invited_master_card");
+    assert.match(card.body, /and m\.user_id = p_user_id/, card.file);
+    assert.match(card.body, /set team_id = p_invitation\.team_id/, card.file);
+    assert.match(card.body, /update public\.tenant_members tm\s+set master_id = v_master_id/, card.file);
+  });
+
+  test("leaving the company sends the card to the archive", () => {
+    const archive = latestDefinition("tenant_members_removed_archive_card");
+    assert.ok(archive, "no migration defines public.tenant_members_removed_archive_card");
+    assert.match(archive.body, /set is_active = false/, archive.file);
+    assert.match(archive.body, /m\.user_id = old\.user_id or m\.id = old\.master_id/, archive.file);
+  });
 });
