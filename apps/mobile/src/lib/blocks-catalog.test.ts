@@ -60,6 +60,8 @@ describe("библиотека блоков указывает на живой �
       "src/features/appointments/InlineNoteField.tsx",
       "src/features/appointments/BookingSummary.tsx",
       "src/features/appointments/TeamLabelRow.tsx",
+      "src/features/appointments/ServicesBlock.tsx",
+      "src/features/appointments/ClientBlock.tsx",
       "src/features/clients/blocks/ObjectsBlock.tsx",
       "src/components/ui/select-rows.tsx",
     ]
@@ -79,21 +81,50 @@ describe("библиотека блоков указывает на живой �
     // Блоки записи, которые каталог показывает разметкой (пока они не вынесены
     // в компоненты). Исчезла подпись — каталог посылает в пустоту.
     for (const marker of [
-      'SectionCard title="Клиент"',
       'SectionCard title="Объект"',
-      'SectionCard title="Услуги"',
       'SectionCard title="Заметка"',
       "<TeamLabelRow",
       "<WhenRow",
-      "<TotalRow",
       "<EventTypeBlock",
       "<AppointmentFilesBlock",
       "<ClientPickerSheet",
       "<ServicePicker",
+      // «Клиент», «Услуги» и «Итого» с 2026-09-20 — компоненты: запись
+      // ставит их тегом, а разметка живёт в одном месте на два документа.
+      "<ClientBlock",
+      "<ServicesBlock",
     ]) {
       assert.ok(
         book.includes(marker),
         `в app/book/index.tsx больше нет «${marker}» — поправь BLOCKS.md`,
+      );
+    }
+    const servicesBlock = readFileSync(
+      resolve(APP, "src/features/appointments/ServicesBlock.tsx"),
+      "utf8",
+    );
+    // Шапка блока стала пропом: у записи и чека «Услуги», у инвойса
+    // «Позиции» — один блок на три документа. Сторожим УМОЛЧАНИЕ, а не
+    // литерал в разметке.
+    for (const marker of ['title = "Услуги"', "<TotalRow", "<QtyBadge", "<ChooseRow"]) {
+      assert.ok(
+        servicesBlock.includes(marker),
+        `в ServicesBlock.tsx больше нет «${marker}» — поправь BLOCKS.md`,
+      );
+    }
+    const clientBlock = readFileSync(
+      resolve(APP, "src/features/appointments/ClientBlock.tsx"),
+      "utf8",
+    );
+    for (const marker of [
+      'SectionCard title="Клиент"',
+      "<ClientHistoryLine",
+      "<PhoneChannelButton",
+      "<ChooseRow",
+    ]) {
+      assert.ok(
+        clientBlock.includes(marker),
+        `в ClientBlock.tsx больше нет «${marker}» — поправь BLOCKS.md`,
       );
     }
   });
@@ -166,8 +197,11 @@ describe("библиотека блоков указывает на живой �
 
   test("иконка сущности та же, что обещает каталог", () => {
     const expected: [string, string, string][] = [
-      ["app/book/index.tsx", "UserRound", "клиент"],
-      ["app/book/index.tsx", "Briefcase", "услуга"],
+      // Значок клиента уехал вместе с блоком (2026-09-20).
+      ["src/features/appointments/ClientBlock.tsx", "UserRound", "клиент"],
+      // Значок услуги уехал вместе с блоком: с 2026-09-20 «Услуги» —
+      // компонент, и `Briefcase` живёт там же, где пустое состояние блока.
+      ["src/features/appointments/ServicesBlock.tsx", "Briefcase", "услуга"],
       ["src/features/clients/ObjectPickerSheet.tsx", "MapPin", "объект"],
       ["src/features/reference/LabelPickerSheet.tsx", "Bookmark", "метка"],
       ["src/features/clients/TagPickerSheet.tsx", "Tag", "тег"],

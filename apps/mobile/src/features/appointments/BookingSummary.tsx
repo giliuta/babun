@@ -36,20 +36,18 @@ export function TotalRow({
   total,
   custom,
   discountAmount,
-  discountReason,
   onPress,
 }: {
   total: number;
   /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
   custom: boolean;
   discountAmount: number;
-  discountReason: string | null;
   onPress: () => void;
 }) {
   const t = useThemeColors();
   const note =
     discountAmount > 0
-      ? `Скидка${discountReason ? ` · ${discountReason}` : ""} −${formatEURExact(discountAmount)}`
+      ? `Скидка −${formatEURExact(discountAmount)}`
       : custom
         ? "Сумма вписана рукой"
         : null;
@@ -103,7 +101,11 @@ export function WhenRow({
   onPress,
 }: {
   date: string;
-  timeStart: string;
+  /** Время. НЕТ — плашка печатает ОДИН ДЕНЬ: у чека деньги приняты в такой-то
+   *  день, а не в 18:43 (владелец 2026-09-20: «чётко по времени не надо, это
+   *  дата… как выборка обычная»). Плашка при этом та же самая — он просил
+   *  именно её. */
+  timeStart?: string;
   /** Конец и длительность есть у ЗАПИСИ — она занимает отрезок. У операции
    *  время одно: деньги случились в момент, а не длились полтора часа. Без
    *  них строка печатает «день · время» (владелец 2026-09-09: блок времени в
@@ -134,14 +136,20 @@ export function WhenRow({
             backgroundColor: pressed ? t.pressed : "transparent",
           })}
           accessibilityRole="button"
-          accessibilityLabel={`Дата и время: ${humanDay(date)}, ${
-            allDay
-              ? "весь день"
-              : timeEnd
-                ? `с ${timeStart} до ${timeEnd}, ${durationLabel(duration ?? 0)}`
-                : timeStart
-          }`}
-          accessibilityHint="Открывает выбор даты и времени"
+          accessibilityLabel={
+            timeStart
+              ? `Дата и время: ${humanDay(date)}, ${
+                  allDay
+                    ? "весь день"
+                    : timeEnd
+                      ? `с ${timeStart} до ${timeEnd}, ${durationLabel(duration ?? 0)}`
+                      : timeStart
+                }`
+              : `Дата: ${humanDay(date)}`
+          }
+          accessibilityHint={
+            timeStart ? "Открывает выбор даты и времени" : "Открывает выбор даты"
+          }
         >
           {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
               «первое — суббота 19 сентября, потом время, потом длительность;
@@ -158,8 +166,8 @@ export function WhenRow({
             >
               {humanDay(date)}
             </Text>
-            <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
-            {allDay ? (
+            {timeStart ? <Text style={{ fontSize: 15, color: t.separator }}>·</Text> : null}
+            {!timeStart ? null : allDay ? (
               <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
                 весь день
               </Text>

@@ -23,11 +23,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
   MapPin,
-  MoreHorizontal,
   UserRound,
   Users,
-  X,
-  Briefcase,
 } from "lucide-react-native";
 import type {
   Appointment,
@@ -61,8 +58,6 @@ import {
   findOverlap,
 } from "@babun/shared/common/utils/appointment-overlap";
 import { getDayScheduleForDate } from "@babun/shared/local/schedule";
-import { tierForVisits } from "@babun/shared/local/loyalty";
-import { formatEURExact } from "@babun/shared/common/utils/money";
 import { colorName } from "@babun/shared/common/utils/colors";
 import {
   getCurrentCyprusTime,
@@ -78,7 +73,6 @@ import { PageWash } from "@/features/appointments/PageWash";
 import { resolveReturnTo } from "@/features/appointments/return-to";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionCard } from "@/components/ui/SectionCard";
-import PhoneChannelButton from "@/features/clients/PhoneChannelButton";
 import { useToast } from "@/components/ui/Toast";
 import { resolveCalendarDayLabel } from "@/features/calendar/day-label";
 import { useDayCities } from "@/features/calendar/day-cities";
@@ -117,7 +111,6 @@ import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
 import {
   useCalendarSettings,
-  useLoyalty,
   usePersonalEventTypes,
 } from "@/features/settings/local-settings";
 import { PaymentBlock, type PendingPayment } from "@/features/appointments/PaymentBlock";
@@ -147,15 +140,15 @@ import {
 import { useLocationRequests } from "@/features/clients/location-requests";
 import { useCurrentRole } from "@/features/settings/tenant";
 import {
-  ClientHistoryLine,
   clientHistoryText,
 } from "@/features/clients/history-line";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import { TotalRow, WhenRow } from "@/features/appointments/BookingSummary";
+import { WhenRow } from "@/features/appointments/BookingSummary";
 import { TeamLabelRow } from "@/features/appointments/TeamLabelRow";
+import { ClientBlock } from "@/features/appointments/ClientBlock";
+import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
-import { QtyBadge } from "@/features/appointments/QtyBadge";
 import {
   ColorSheet,
   TeamMasterSheet,
@@ -319,7 +312,6 @@ export default function BookScreen() {
   // трёхкомнатная квартира — это не «три раза комната».
   const clientsQuery = useClients();
   const appointmentsQuery = useAppointments();
-  const loyaltyQuery = useLoyalty();
   const calendarSettingsQuery = useCalendarSettings();
   const eventTypesQuery = usePersonalEventTypes();
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
@@ -336,7 +328,6 @@ export default function BookScreen() {
     () => buildStatsMap(clientsQuery.data ?? [], allAppts),
     [clientsQuery.data, allAppts],
   );
-  const loyalty = loyaltyQuery.data;
   const calendarSettings = calendarSettingsQuery.data;
   // Создание заявки и весь его хвост (закрытие напоминания, синхронизация
   // push события, тосты, хаптика) живут в общем хуке — на нём же строится
@@ -446,6 +437,8 @@ export default function BookScreen() {
     null,
   );
   const [discountValue, setDiscountValue] = useState("");
+  // Причина скидки осталась только у старых записей — программу лояльности
+  // сняли 20.09 по слову владельца, и её больше никто не выставляет сам.
   const [discountReason, setDiscountReason] = useState<string | null>(null);
   const [status, setStatus] = useState<AppointmentStatus>("scheduled");
   const [comment, setComment] = useState("");
@@ -773,8 +766,8 @@ export default function BookScreen() {
   // ═══ ГИДРАЦИЯ ПРАВКИ ═══
   //
   // Один раз, когда запись доехала из кеша. Дальше страница живёт обычной
-  // жизнью: все умные дефолты ниже (команда, префилл клиента, лояльность,
-  // авто-конец) выключены в режиме правки — им нечего доопределять, а
+  // жизнью: все умные дефолты ниже (команда, префилл клиента, авто-конец)
+  // выключены в режиме правки — им нечего доопределять, а
   // затереть сохранённое они могут.
   //
   // ЗАМОК СТРОК ОБЯЗАТЕЛЕН. Сохранённая строка отдаёт числа того дня, когда
@@ -1012,36 +1005,6 @@ export default function BookScreen() {
     setTimeEnd(addMinutesHM(timeStart, grow));
   }, [timeStart, computedDuration, durationTouched, slotFallback, hydrated]);
 
-  // ── лояльность показана, не спрятана: авто-скидка по числу визитов ──
-  //
-  // ТОЛЬКО ПРИ СОЗДАНИИ. В сохранённой записи скидка — уже принятое решение,
-  // о котором договорились с клиентом. Пересчитать её при открытии значит
-  // молча уценить чужую запись и включить ложное «есть несохранённое».
-  const loyaltyAppliedRef = useRef(false);
-  useEffect(() => {
-    if (isEdit) return;
-    if (kind !== "work" || !client || !loyalty) return;
-    // ручная скидка всегда побеждает; авто-скидка заменяет только себя.
-    // Считаем по ВПИСАННОМУ: тип теперь лишь единица измерения.
-    if (parseMoneyInput(discountValue) > 0 && !loyaltyAppliedRef.current) return;
-    const visits = allAppts.filter(
-      (a) => a.client_id === client.id && a.status === "completed",
-    ).length;
-    const tier = tierForVisits(visits, loyalty);
-    if (tier) {
-      setDiscountType("percent");
-      setDiscountValue(String(tier.percent));
-      setDiscountReason(tier.label);
-      loyaltyAppliedRef.current = true;
-    } else if (loyaltyAppliedRef.current) {
-      setDiscountType(null);
-      setDiscountValue("");
-      setDiscountReason(null);
-      loyaltyAppliedRef.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientId, loyalty, kind]);
-
   // ── пересечение по команде на выбранный день (warn, not block) ──
   const dayTeamAppts = useMemo(
     () =>
@@ -1177,9 +1140,6 @@ export default function BookScreen() {
       haptics.tap();
       return;
     }
-    // НЕ сбрасываем loyaltyAppliedRef здесь: сброс заставлял эффект принять
-    // авто-скидку прошлого клиента за ручную (discountType && !ref → return) и
-    // перенести её на нового. Эффект сам пересчитает лояльность по clientId.
     const prefill = resolveBookingClientPrefill(c);
     // Continuity: команда по ПОСЛЕДНЕМУ визиту клиента, а не глобально-последняя.
     // Иначе любимый мастер клиента отсеивается как «не из той команды».
@@ -1619,17 +1579,16 @@ export default function BookScreen() {
           { label: "услуги", query: servicesQuery },
           { label: "клиентов", query: clientsQuery },
           { label: "календарь", query: appointmentsQuery },
-          { label: "программу лояльности", query: loyaltyQuery },
           { label: "настройки календаря", query: calendarSettingsQuery },
           ...(teamId
             ? [{ label: "график команды", query: teamScheduleQuery }]
             : []),
         ] as const);
   // Только БАЗОВЫЕ справочники гейтят экран: без них нельзя собрать валидную
-  // запись (команды; для работы ещё клиенты). Всё остальное (услуги/лояльность/
-  // график/настройки/типы/календарь) — необязательное: его сбой не блокирует
+  // запись (команды; для работы ещё клиенты). Всё остальное (услуги/график/
+  // настройки/типы/календарь) — необязательное: его сбой не блокирует
   // создание простой записи, а лишь даёт деградацию (пустой список/без
-  // лояльности/без предупреждения о наложении).
+  // предупреждения о наложении).
   const essentialQueries =
     kind === "event"
       ? ([
@@ -2372,85 +2331,24 @@ export default function BookScreen() {
                   выбор (клиент, объект, услуга), а всё, что ведёт вглубь,
                   живёт кружком в хвосте. Стрелки справа больше нет ни у
                   клиента, ни у объекта. */}
-              <SectionCard title="Клиент">
-                {client ? (
-                  <View className="flex-row items-center">
-                    <Pressable
-                      className="flex-1 flex-row items-center px-4 py-2.5"
-                      onPress={() => {
-                        setClientPickerOpen(true);
-                        haptics.tap();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
-                        clientHistory ?? client.phone ?? "ещё не обслуживали"
-                      }`}
-                      accessibilityHint="Открывает выбор клиента"
-                    >
-                      <View className="flex-1">
-                        <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                          {client.full_name || "Без имени"}
-                        </Text>
-                        {/* ПОРЯДОК КАК В СПИСКЕ КЛИЕНТОВ: имя, деньги, связь.
-                            Раньше история ВЫТЕСНЯЛА телефон — у постоянного
-                            клиента номер из записи пропадал вовсе. */}
-                        <ClientHistoryLine client={client} stats={clientStats} />
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: client.phone ? t.sub : t.placeholder,
-                            marginTop: 2,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {client.phone ?? "без телефона"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                    {client.phone ? (
-                      // Та же кнопка, что у номера в карточке и в списке: тап
-                      // звонит, удержание — способы связи; 32pt, как маршрут
-                      // и «…» (владелец 2026-09-06).
-                      <View className="mr-4 self-center">
-                        <PhoneChannelButton
-                          number={client.phone}
-                          telegramUsername={client.telegram_username}
-                          label={client.full_name || undefined}
-                        />
-                      </View>
-                    ) : null}
-                    {/* «…» — карточка клиента: телефоны, объекты, история,
-                        долг. Снаружи нажимаемой области строки, иначе
-                        VoiceOver склеит их в один элемент. */}
-                    <Pressable
-                      onPress={openClientCard}
-                      className="mr-4 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
-                    >
-                      <MoreHorizontal color={t.body} size={ICON.sm} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <ChooseRow
-                    icon={UserRound}
-                    label="Выбрать клиента"
-                    hint="Открывает поиск по имени или телефону"
-                    onPress={() => setClientPickerOpen(true)}
-                  />
-                )}
-                {/* ЗАМЕТКА КЛИЕНТА — мини-блок под клиентом, пишет в клиента
-                    (см. `writeClientNote`). */}
-                {client ? (
+              {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
+                  его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
+                  ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              <ClientBlock
+                client={client}
+                stats={clientStats}
+                summary={clientHistory}
+                onPick={() => setClientPickerOpen(true)}
+                onOpenCard={openClientCard}
+                note={
                   <InlineNoteField
                     note={clientNote}
                     placeholder="Заметка клиента"
                     accessibilityLabel="Заметка клиента"
                     maxLength={500}
                   />
-                ) : null}
-              </SectionCard>
+                }
+              />
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
                   чтоб был зафиксированный блок, и он никуда не девался и не
@@ -2601,142 +2499,27 @@ export default function BookScreen() {
                   стоит в блоке строкой «Итого»; называть её ещё и в шапке
                   значило объявлять два предмета там, где предмет один: набор
                   работ, у которого есть цена. */}
-              <SectionCard title="Услуги">
-                {serviceIds.length === 0 ? (
-                  <>
-                    {/* ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА И ОБЪЕКТА (аудит 2026-09-06):
-                        три пустых состояния формы отвечают на один вопрос и
-                        выглядят одинаково. */}
-                    <ChooseRow
-                      icon={Briefcase}
-                      label="Выбрать услугу"
-                      hint="Открывает список услуг"
-                      onPress={() => setServicePickerOpen(true)}
-                    />
-                    <TotalRow
-                      total={effectiveTotal}
-                      custom={customTotal}
-                      discountAmount={discountAmount}
-                      discountReason={discountReason}
-                      onPress={() => {
-                        setTotalSheetOpen(true);
-                        haptics.tap();
-                      }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    {selectedServices.map((line, index) => {
-                      // СТРОКА ЖИВЁТ БЕЗ КАТАЛОГА. Раньше здесь стоял
-                      // `catalog.get(id) ?? return null`, и у сохранённой
-                      // записи строки просто исчезали с экрана, когда услугу
-                      // убирали из прайса: сумма в «Итого» оставалась, а
-                      // работы, за которые её взяли, было не видно. Имя,
-                      // единицу и длительность держит снимок строки.
-                      const svc = catalog.get(line.serviceId);
-                      const lineName =
-                        line.serviceName ??
-                        nameById.get(line.serviceId) ??
-                        "Услуга удалена";
-                      return (
-                        <View
-                          key={line.serviceId}
-                          // Волосок — МЕЖДУ строками, не под шапкой «УСЛУГИ»:
-                          // у остальных карточек под надписью линии нет.
-                          style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
-                        >
-                        {/* ТАП ПО УСЛУГЕ ОТКРЫВАЕТ СПИСОК УСЛУГ ЗАНОВО (владелец
-                            2026-09-04: «„Добавить услугу“ убираем; тапаю по
-                            выбранной услуге — открывается список»). Та же
-                            грамматика, что у клиента и объекта: строка выбранного
-                            и есть дверь к выбору. Степпер и цена внутри строки
-                            ловят свои касания сами. */}
-                        <Pressable
-                          className="flex-row items-center px-4 py-2.5"
-                          onPress={() => {
-                            setServicePickerOpen(true);
-                            haptics.tap();
-                          }}
-                          style={({ pressed }) => ({
-                            backgroundColor: pressed ? t.pressed : "transparent",
-                          })}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${lineName}, ${durationLabel(line.duration)}, ${formatEURExact(line.totalPrice)}`}
-                          accessibilityHint="Открывает выбор услуг"
-                        >
-                          {/* ЦВЕТНОЙ ТОЧКИ БОЛЬШЕ НЕТ (владелец 2026-09-08:
-                              «убираем полностью цвет — я понял, что он вообще
-                              не нужен»). Она заводилась, чтобы услуги в записи
-                              не стояли безымянными строками, но имя у них есть
-                              и так, а цвет ничего не различал: услуг в записи
-                              две-три. Освободившиеся 20pt ушли имени. */}
-                          <View className="flex-1 pr-2">
-                            <Text style={{ fontSize: 15, color: t.ink }}>{lineName}</Text>
-                            <Text style={{ fontSize: 13, color: t.placeholder, marginTop: 1 }}>
-                              {durationLabel(line.duration)}
-                            </Text>
-                          </View>
-                          {/* СКОЛЬКО РАЗ ВЗЯЛИ — ОТТИСКОМ «×3» (владелец
-                              2026-09-04, выбрал из четырёх вариантов на
-                              экране сравнения). Стрелок вверх/вниз больше
-                              нет: количество набирают тапами в списке услуг,
-                              который открывает эта же строка. */}
-                          <QtyBadge
-                            qty={line.quantity}
-                            unit={line.unit ?? svc?.unit ?? null}
-                          />
-                          {/* ЦЕНА ЗА ОДНУ — МЕЛКО, МЕЖДУ КОЛИЧЕСТВОМ И СУММОЙ
-                              (владелец 2026-09-07: «посередине количество,
-                              потом цена за штуку маленькими цифрами, правее
-                              общая сумма за услугу»). Столбец стоит всегда,
-                              чтобы строки читались таблицей. */}
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: t.sub,
-                              minWidth: 44,
-                              marginLeft: 8,
-                              textAlign: "right",
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {formatEURExact(line.pricePerUnit)}
-                          </Text>
-                          <Text
-                            style={{
-                              fontSize: 15,
-                              fontWeight: "600",
-                              color: t.ink,
-                              minWidth: 56,
-                              marginLeft: 8,
-                              textAlign: "right",
-                              fontVariant: ["tabular-nums"],
-                            }}
-                          >
-                            {formatEURExact(line.totalPrice)}
-                          </Text>
-                        </Pressable>
-                        </View>
-                      );
-                    })}
-                    {/* ИТОГ — ДВЕРЬ, А НЕ ПОЛЕ (владелец 2026-09-04: «когда я
-                        открываю „Итого“, открывается шторка, где прописаны
-                        каждая услуга, количество их, и там же скидки»).
-                        Скидка называется прямо в строке: видно, почему сумма
-                        меньше суммы услуг. */}
-                    <TotalRow
-                      total={effectiveTotal}
-                      custom={customTotal}
-                      discountAmount={discountAmount}
-                      discountReason={discountReason}
-                      onPress={() => {
-                        setTotalSheetOpen(true);
-                        haptics.tap();
-                      }}
-                    />
-                  </>
-                )}
-              </SectionCard>
+              {/* БЛОК «УСЛУГИ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ServicesBlock.tsx`):
+                  его же ставит составитель чека — владелец 2026-09-20 попросил там
+                  «такой же блок, как в записи», а вторая копия разметки назавтра
+                  разошлась бы с первой. Вид не менялся ни на пиксель. */}
+              <ServicesBlock
+                lines={selectedServices.map((line) => ({
+                  id: line.serviceId,
+                  name: line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена",
+                  // Вторая строка у записи — длительность работы.
+                  subtitle: durationLabel(line.duration),
+                  qty: line.quantity,
+                  unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
+                  pricePerUnit: line.pricePerUnit,
+                  total: line.totalPrice,
+                }))}
+                total={effectiveTotal}
+                custom={customTotal}
+                discountAmount={discountAmount}
+                onPickServices={() => setServicePickerOpen(true)}
+                onOpenTotal={() => setTotalSheetOpen(true)}
+              />
 
               {/* Оплата — сразу после «Итого»: плитки счетов команды, тап
                   пишет деньги сразу (STORY-065). Выключается в Кабинет →
@@ -2829,11 +2612,10 @@ export default function BookScreen() {
                   было сказано неверно. Источник и SMS-переключатель живы во
                   ВТОРОЙ форме записи (`AppointmentSheet`), которой правят
                   существующую запись, — снос здесь сделал работу наполовину.
-                  Скидка же осталась и на этом экране: её начисляет программа
-                  лояльности, и она печатается в итогах. Но ТОЛЬКО при
-                  создании: при правке лояльность молчит (`if (isEdit) return`),
-                  а ручного поля больше нет — у сохранённой записи скидку из
-                  этой формы теперь не изменить и не снять. */}
+                  Скидка же осталась и на этом экране — её вписывают рукой в
+                  шторке «Итого», а не в этом блоке: он по-прежнему не
+                  показывает и не меняет скидку. Автоскидку по числу визитов
+                  сняли 20.09 по слову владельца. */}
             </>
           ) : (
             /* ── Событие ── */
@@ -2900,93 +2682,28 @@ export default function BookScreen() {
               {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
                   у выбранного есть «убрать» — лист выбора пустого варианта не
                   предлагает. */}
-              <SectionCard title="Клиент">
-                {client ? (
-                  <View className="flex-row items-center">
-                    <Pressable
-                      className="flex-1 flex-row items-center px-4 py-2.5"
-                      onPress={() => {
-                        setClientPickerOpen(true);
-                        haptics.tap();
-                      }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Клиент: ${client.full_name || "без имени"}`}
-                      accessibilityHint="Открывает выбор клиента"
-                    >
-                      <View className="flex-1">
-                        <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
-                          {client.full_name || "Без имени"}
-                        </Text>
-                        {/* ВВОДНАЯ О ЧЕЛОВЕКЕ — И У СОБЫТИЯ (сведено
-                            2026-09-10). Долг, визиты, деньги, последний визит
-                            стояли только в записи: тот же клиент в событии
-                            выглядел незнакомым, хотя данные под рукой. */}
-                        <ClientHistoryLine client={client} stats={clientStats} />
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            color: client.phone ? t.sub : t.placeholder,
-                            marginTop: 2,
-                          }}
-                          numberOfLines={1}
-                        >
-                          {client.phone ?? "без телефона"}
-                        </Text>
-                      </View>
-                    </Pressable>
-                    {client.phone ? (
-                      <View className="mr-2 self-center">
-                        <PhoneChannelButton
-                          number={client.phone}
-                          telegramUsername={client.telegram_username}
-                          label={client.full_name || undefined}
-                        />
-                      </View>
-                    ) : null}
-                    <Pressable
-                      onPress={openClientCard}
-                      className="mr-2 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
-                    >
-                      <MoreHorizontal color={t.body} size={ICON.sm} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setClientId(null);
-                        setLocationId(null);
-                        haptics.tap();
-                      }}
-                      className="mr-4 items-center justify-center self-center rounded-full"
-                      style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-                      accessibilityRole="button"
-                      accessibilityLabel="Убрать клиента"
-                    >
-                      <X color={t.body} size={ICON.sm} />
-                    </Pressable>
-                  </View>
-                ) : (
-                  <ChooseRow
-                    icon={UserRound}
-                    label="Выбрать клиента"
-                    hint="Открывает поиск по имени или телефону"
-                    onPress={() => setClientPickerOpen(true)}
-                  />
-                )}
-                {/* ЗАМЕТКА КЛИЕНТА — И У СОБЫТИЯ (сведено 2026-09-10): то же
-                    поле, что в записи и в карточке, пишет в того же клиента.
-                    Один и тот же блок «Клиент» не может знать заметку на
-                    одном экране и не знать на другом. */}
-                {client ? (
+              {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
+                  его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
+                  ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              <ClientBlock
+                client={client}
+                stats={clientStats}
+                summary={clientHistory}
+                onPick={() => setClientPickerOpen(true)}
+                onOpenCard={openClientCard}
+                onClear={() => {
+                  setClientId(null);
+                  setLocationId(null);
+                }}
+                note={
                   <InlineNoteField
                     note={clientNote}
                     placeholder="Заметка клиента"
                     accessibilityLabel="Заметка клиента"
                     maxLength={500}
                   />
-                ) : null}
-              </SectionCard>
+                }
+              />
 
               {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
                   2026-09-08: «объект надо сделать точно такой же вид объекта,

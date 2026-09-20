@@ -114,7 +114,23 @@
 
 ## 1. Блок «Клиент» + шторка выбора клиента
 
-**Канон:** `app/book/index.tsx:2356` (запись), `app/book/index.tsx:2884` (событие).
+**Канон:** `src/features/appointments/ClientBlock.tsx` — КОМПОНЕНТ, ставится
+одним тегом. До 2026-09-20 разметка стояла в `app/book/index.tsx` ДВАЖДЫ —
+своя у записи, своя у события, — и копии уже разошлись; вынесен, когда тот же
+блок попросили в составителе чека.
+
+```tsx
+<ClientBlock
+  client={client}
+  stats={clientStats}
+  summary={clientHistory}
+  onPick={() => setClientPickerOpen(true)}
+  onOpenCard={openClientCard}
+  onClear={() => setClientId(null)}
+  note={<InlineNoteField note={clientNote} placeholder="Заметка клиента" />}
+/>
+```
+
 
 Выбранный клиент: имя 17/700 → `ClientHistoryLine` (долг, визиты, деньги,
 последний визит) → телефон 13. Справа `PhoneChannelButton` 32pt (тап звонит,
@@ -246,28 +262,26 @@
 
 ## 3. Блок «Услуги» + «Итого» + шторки
 
-**Канон:** `app/book/index.tsx:2585`.
+**Канон:** `src/features/appointments/ServicesBlock.tsx` — КОМПОНЕНТ, ставится
+одним тегом. Вынесен из `app/book/index.tsx` 2026-09-20, когда владелец
+попросил «такой же блок» в составителе чека: вид не менялся, изменилось
+только то, что данные приходят пропами.
 
 ```tsx
-<SectionCard title="Услуги">
-  {serviceIds.length === 0 ? (
-    <ChooseRow icon={Briefcase} label="Выбрать услугу" hint="Открывает список услуг" onPress={() => setServicePickerOpen(true)} />
-  ) : (
-    selectedServices.map((line, index) => (
-      <View key={line.serviceId} style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}>
-        {/* тап по строке открывает список услуг заново */}
-      </View>
-    ))
-  )}
-  <TotalRow
-    total={effectiveTotal}
-    custom={customTotal}
-    discountAmount={discountAmount}
-    discountReason={discountReason}
-    onPress={() => setTotalSheetOpen(true)}
-  />
-</SectionCard>
+<ServicesBlock
+  lines={selectedServices}
+  nameFor={(line) => line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена"}
+  unitFor={(line) => line.unit ?? catalog.get(line.serviceId)?.unit ?? null}
+  total={effectiveTotal}
+  custom={customTotal}
+  discountAmount={discountAmount}
+  onPickServices={() => setServicePickerOpen(true)}
+  onOpenTotal={() => setTotalSheetOpen(true)}
+/>
 ```
+
+Строка «Итого» (`TotalRow`) живёт ВНУТРИ блока — своей карточки у неё нет:
+итог закрывает перечень работ, а не стоит рядом с ним.
 
 **Шторка выбора** — `ServicePicker` в
 `src/features/appointments/BookingPickers.tsx`: поиск, строки со значком
@@ -585,15 +599,17 @@
 
 ## 10. Что ещё НЕ компонент (и потому копируется глазами)
 
-Блоки «Клиент», «Объект» и «Услуги» живут разметкой внутри
-`app/book/index.tsx` (3400 строк). Пока это так, «взять готовый блок» значит
-«скопировать из указанной строки», а не «поставить один тег». Вынести их в
-`BookClientBlock`, `BookObjectBlock`, `BookServicesBlock` — ближайший шаг:
-тогда каждая карточка выше сократится до трёх строк, а этот файл перестанет
-дублировать разметку.
+Блок «Объект» живёт разметкой внутри `app/book/index.tsx`. Пока это так,
+«взять готовый блок» значит «скопировать из указанной строки», а не
+«поставить один тег». Вынести его — ближайший шаг.
+
+«Клиент» и «Услуги» этот путь уже прошли: 2026-09-20 они стали `ClientBlock` и
+`ServicesBlock` ровно потому, что понадобились во втором месте (составитель
+чека). Правило из этого простое: как только блок нужен дважды — он выносится,
+а не копируется.
 
 Уже компоненты и копируются одним тегом: `ObjectFields`, `ClientPickerSheet`,
 `ObjectPickerSheet`, `LabelPickerSheet`, `TagPickerSheet`, `ServicePicker`,
 `ReferenceBlock`, `CategoryBlock`, `EventTypeBlock`, `PaymentBlock`,
 `AppointmentFilesBlock`, `InlineNoteField`, `TeamLabelRow`, `WhenRow`,
-`TotalRow`, `SelectRow`.
+`TotalRow`, `SelectRow`, `ServicesBlock`, `ClientBlock`.
