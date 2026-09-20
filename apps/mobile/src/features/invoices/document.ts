@@ -387,7 +387,7 @@ function clean(value: string | null | undefined): string {
  *  Единица берётся из СТРОКИ СЧЁТА, а не из прайса: выставленный документ
  *  заморожен, и смена единицы у услуги через месяц не переписывает бумагу,
  *  которую клиент уже получил. */
-function formatQty(
+export function formatQty(
   value: number,
   unit?: string | null,
   locale = "ru-RU",

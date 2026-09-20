@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
+import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { parseMoneyInput } from "@/features/appointments/helpers";
-import { formatEURExact } from "@babun/shared/common/utils/money";
-import { useMoney } from "@/features/settings/currency";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import type { AppointmentService } from "@babun/shared/local/appointments";
@@ -49,6 +49,7 @@ export function TotalSheet({
   total,
   customTotal,
   onResetTotal,
+  vat: vatControl,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -67,8 +68,32 @@ export function TotalSheet({
   /** У записи, сохранённой со «своей» суммой: её можно вернуть к расчёту. */
   customTotal: boolean;
   onResetTotal: () => void;
+  /** НАЛОГ — РЕШЕНИЕ ВЫЗЫВАЮЩЕГО, А НЕ ЭТОЙ ШТОРКИ.
+   *
+   *  Владелец 2026-09-20, увидев чек: «НДС почему-то добавляется, или он
+   *  включён — так не должно быть». И правда: шторка держала режим налога
+   *  внутри себя и включала его сама по настройке компании, а документ потом
+   *  печатал то, чего человек не выбирал.
+   *
+   *  Теперь режим приходит СНАРУЖИ и туда же возвращается. `undefined` —
+   *  у документа налога нет вовсе (так зовёт запись): строка итога тогда
+   *  печатает одну сумму, без ставки и клавиши. */
+  vat?: {
+    mode: TxVatMode;
+    rate: number;
+    onModeChange: (next: TxVatMode) => void;
+  };
 }) {
   const t = useThemeColors();
+  // ДЕНЬГИ СЧИТАЕТ КАНОН, А НЕ ЭТОТ ЛИСТ (`applyTxVat`): ровно та же функция
+  // кладёт сумму в проводку, и серверная `fill_transaction_vat` достаёт налог
+  // из неё же. Своей формулы здесь нет — иначе бумага и журнал разошлись бы
+  // на цент.
+  const money = vatControl
+    ? applyTxVat(total, vatControl.mode, vatControl.rate)
+    : null;
+  const shownTotal = money ? money.gross : total;
+
   return (
     <BottomSheet
       visible={visible}
@@ -84,7 +109,7 @@ export function TotalSheet({
         </View>
       }
     >
-      <View style={{ paddingHorizontal: SIDE, paddingBottom: 12, gap: 16 }}>
+      <View style={{ paddingHorizontal: SIDE, paddingBottom: 10, gap: 8 }}>
         {lines.length > 0 ? (
           /* ОДНА КАРТОЧКА НА ВЕСЬ СПИСОК, СТРОКИ — ВОЛОСКОМ (владелец
              2026-09-08: «это не одна услуга будет, а там будет чистка, потом
@@ -111,78 +136,50 @@ export function TotalSheet({
                 onPriceChange={onPriceChange}
               />
             ))}
+            {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
+                «скидку закинуть туда, где надпись „Услуги“, и справа будет
+                точная цена»). Справа — цена работ после скидки. */}
+            <ServicesRow
+              discountValue={discountValue}
+              onDiscountValueChange={onDiscountValueChange}
+              percent={discountKind === "percent"}
+              onPercentChange={(next) =>
+                onDiscountKindChange(next ? "percent" : "fixed")
+              }
+              discountAmount={
+                lines.reduce((sum, line) => sum + line.totalPrice, 0) - total
+              }
+              afterDiscount={total}
+            />
           </View>
         ) : (
           <EmptyState title="Услуги ещё не выбраны" />
         )}
 
-        {/* СКИДКА — ОДНА СТРОКА, А НЕ ТРИ КЛАВИШИ (владелец 2026-09-04:
-            «не блоками „без скидки“ и проценты или евро — сделай маленький
-            блок, где это сразу всё выбирается, и там всегда будет ноль; а
-            если я напишу скидку, тогда уже выбираю валюту или процент»).
-            Клавиша «Без скидки» называла НОРМУ: обычный день работы объявлялся
-            выбором. Ноль в поле говорит то же самое молча, а переключатель
-            «€ | %» стоит рядом и нужен только тому, кто уже что-то вписал. */}
-        {/* КОМПАКТНО — И В ОДНОЙ СТРОКЕ С ИТОГОМ (владелец 2026-09-08:
-            «поставим скидку посередине блока „Итого“, или скидку слева в этом
-            блоке, а „Итого“ прямо возле суммы»). Своей полосы у скидки больше
-            нет вовсе: она стоит слева в блоке итога, а слово «Итого» съехало
-            вплотную к сумме — деньги записи читаются одной строкой, слева
-            вычет, справа результат. */}
-        {/* НАД ИТОГОМ НИЧЕГО НЕ РАСКРЫВАЕТСЯ (владелец 2026-09-14: «когда я
-            пишу скидку, оно ничего не должно менять — не надо сверху тогда
-            открывать „Услуги“ и „Скидка“»). Строки «Услуги €180 / Скидка ·
-            Бронза −€10,80» появлялись с первой цифрой скидки и сдвигали лист
-            под пальцем. Вычет и так виден в поле слева, результат — справа. */}
-        <View style={{ gap: 8 }}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              minHeight: 56,
-              paddingHorizontal: 14,
-              borderRadius: t.radius.input,
-              backgroundColor: t.rowFill,
-            }}
-          >
-            {/* СКИДКА — ЛЕВЫЙ КРАЙ БЛОКА ИТОГА. Без своей подложки: пилюля
-                внутри пилюли читалась бы вторым блоком, а это одна строка.
-
-                ПОДПИСЬ ТА ЖЕ, ЧТО У ИТОГА (владелец 2026-09-08: «сделай
-                „Скидка“ таким же словом, как „Итого“ — точно такого же цвета,
-                и двоеточие»). Она была тише — 13pt серым, — и строка читалась
-                как «мелочь слева, главное справа», хотя слева ввод, а справа
-                результат: два имени одного разговора о деньгах записи. */}
-            <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
-              Скидка:
-            </Text>
-            <TextInput
-              keyboardAppearance="light"
-              value={discountValue}
-              onChangeText={onDiscountValueChange}
-              selectTextOnFocus
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={t.placeholder}
-              accessibilityLabel="Скидка"
-              style={{
-                minWidth: 40,
-                height: 44,
-                paddingHorizontal: 2,
-                textAlign: "right",
-                fontSize: 16,
-                fontWeight: "700",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            />
-            <UnitToggle value={discountKind} onChange={onDiscountKindChange} />
-            {/* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
-                СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
-                можно, иначе такая запись навсегда осталась бы со своим
-                числом, не сходящимся со строками. */}
-            {customTotal ? (
+        {/* ИТОГ — ПОСЛЕДНЯЯ СТРОКА ЛИСТА. У документа в ней ещё ставка и
+            налог, у записи — только сумма и, у старых записей с ручным
+            числом, клавиша «По услугам». */}
+        <PayRow
+          total={shownTotal}
+          vat={
+            vatControl && money
+              ? {
+                  mode: vatControl.mode,
+                  rate: vatControl.rate,
+                  amount: money.vat,
+                  onModeChange: vatControl.onModeChange,
+                }
+              : undefined
+          }
+          action={
+            /* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
+               СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
+               можно, иначе такая запись навсегда осталась бы со своим
+               числом, не сходящимся со строками. Клавиша ЖИВАЯ: вместе с
+               прежней разметкой итога она на полдня уехала под
+               `display: "none"` — единственный выход из ручной суммы
+               пропал с экрана молча (аудит кода 2026-09-20). */
+            customTotal ? (
               <Pressable
                 onPress={() => {
                   haptics.tap();
@@ -190,85 +187,19 @@ export function TotalSheet({
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Вернуть сумму по услугам"
-                style={{
-                  minHeight: 44,
-                  justifyContent: "center",
-                  paddingHorizontal: 6,
-                }}
+                hitSlop={8}
+                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
               >
                 <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
                   По услугам
                 </Text>
               </Pressable>
-            ) : null}
-            <View style={{ flex: 1 }} />
-            {/* «ИТОГО» ВПЛОТНУЮ К СУММЕ: слово и число — один предмет, и
-                читаются вместе, а не через всю строку друг от друга. */}
-            <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
-              Итого:
-            </Text>
-            {/* СУММУ ЗДЕСЬ НЕ ПРАВЯТ (владелец 2026-09-08: «её менять нельзя,
-                если что»): это результат — услуги минус скидка. Ручную сумму
-                записи больше не вписывают нигде; у старых записей с ней
-                остаётся только «По услугам», чтобы вернуть посчитанную. */}
-            <Text
-              style={{
-                fontSize: 20,
-                fontWeight: "700",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {formatEURExact(total)}
-            </Text>
-          </View>
-        </View>
+            ) : null
+          }
+        />
+
       </View>
     </BottomSheet>
-  );
-}
-
-/** ОДНА КЛАВИША, А НЕ ДВЕ (владелец 2026-09-06: «евро и проценты — это не
- *  выбор: нажал на евро — стало проценты, нажал на проценты — стало обратно,
- *  причём не евро, а валюта из настроек»). Клавиша показывает текущую единицу
- *  и переворачивается тапом. */
-function UnitToggle({
-  value,
-  onChange,
-}: {
-  value: DiscountKind;
-  onChange: (next: DiscountKind) => void;
-}) {
-  const t = useThemeColors();
-  const { symbol } = useMoney();
-  const percent = value === "percent";
-  return (
-    <Pressable
-      onPress={() => {
-        haptics.tap();
-        onChange(percent ? "fixed" : "percent");
-      }}
-      accessibilityRole="button"
-      accessibilityLabel={percent ? "Скидка в процентах" : "Скидка в валюте"}
-      accessibilityHint={percent ? "Переключить на сумму" : "Переключить на проценты"}
-      // 32pt вместо 36 и без своих полей: пилюля сидит внутри маленькой
-      // строки, а до 44pt зону касания добирает hitSlop — не размер.
-      hitSlop={8}
-      style={({ pressed }) => ({
-        minWidth: 32,
-        height: 32,
-        alignItems: "center",
-        justifyContent: "center",
-        borderRadius: t.radius.input,
-        backgroundColor: t.surface,
-        boxShadow: t.cardShadow,
-        opacity: pressed ? 0.6 : 1,
-      })}
-    >
-      <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
-        {percent ? "%" : symbol}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -300,8 +231,8 @@ function ColumnHeader() {
         alignItems: "center",
         gap: COL_GAP,
         paddingHorizontal: 14,
-        paddingTop: 10,
-        paddingBottom: 6,
+        paddingTop: 8,
+        paddingBottom: 4,
       }}
     >
       <Text style={[cap, { flex: 1 }]}>Услуга</Text>
@@ -352,9 +283,9 @@ function ServiceLine({
         flexDirection: "row",
         alignItems: "center",
         gap: COL_GAP,
-        minHeight: 52,
+        minHeight: 46,
         paddingHorizontal: 14,
-        paddingVertical: 6,
+        paddingVertical: 4,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
       }}

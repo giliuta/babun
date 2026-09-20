@@ -94,7 +94,7 @@ export default function DocumentsScreen() {
               а не дверь, пока договоров нет. */}
           <NavRow label="Договоры" placeholder="Скоро" separated dimmed />
         </RowGroup>
-        <RowCaption text="Чек выписывается сам при каждом приёме денег — по записи и по инвойсу. Договоры привяжутся к клиентам и записям — следующий шаг." />
+        <RowCaption text="Чек выписывается кнопкой в «Финансах». Договоры привяжутся к клиентам и записям — следующий шаг." />
       </ScrollView>
     </Screen>
   );

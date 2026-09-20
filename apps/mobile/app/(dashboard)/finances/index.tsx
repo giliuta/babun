@@ -1230,7 +1230,15 @@ function FinancesContent() {
         accounts={accounts}
         shownAccounts={scopedAccounts}
         selectedAccountId={view === "accounts" ? accountId : null}
-        onAcceptPayment={() => setView("debt")}
+        onIssueReceipt={() =>
+          // Команда чипа едет с собой: чек выписывают в той команде,
+          // которую человек сейчас смотрит, и кассы в нём — её.
+          pushOnce(
+            scope && scope !== NO_TEAM
+              ? `/documents/receipt-new?teamId=${encodeURIComponent(scope)}`
+              : "/documents/receipt-new",
+          )
+        }
         onIssueInvoice={() => pushOnce("/invoices/new")}
         onAddDebt={() => {
           setEditingDebt(null);
