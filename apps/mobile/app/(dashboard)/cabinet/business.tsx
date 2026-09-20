@@ -10,6 +10,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { CompaniesCard } from "@/features/companies/CompaniesCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { LogoRow } from "@/features/settings/LogoRow";
@@ -279,6 +280,17 @@ export default function BusinessScreen() {
             </View>
           </SectionCard>
         ) : null}
+
+        {/* РЕКВИЗИТЫ СПИСКОМ — ЗДЕСЬ ЖЕ, А НЕ ОТДЕЛЬНОЙ ДВЕРЬЮ (владелец
+            2026-09-20: «реквизиты компании и компании — можешь совместить
+            вместе», и он же поправил слово: «компания — это компания, а именно
+            реквизиты компании»).
+            Карточка выше — реквизиты арендатора одной строкой, их и сегодня
+            печатает инвойс; список ниже — НАБОРЫ реквизитов, которыми
+            подписывают документы, и чек уже берёт продавца оттуда. Две
+            карточки в одном месте — это переход, а не замысел: когда инвойс
+            тоже научится брать продавца из списка, верхняя исчезнет. */}
+        {owner ? <CompaniesCard /> : null}
 
         <View className="mx-3 mt-5">
           {readOnly ? (
