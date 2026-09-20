@@ -76,6 +76,7 @@ function receipt(patch: Partial<Receipt> = {}): Receipt {
     payment_method: "cash",
     status: "issued",
     seller_snapshot: {},
+    lines: null,
     client_snapshot: { name: "Пётр Иванов" },
     created_at: "2026-08-07T10:00:00Z",
     ...patch,

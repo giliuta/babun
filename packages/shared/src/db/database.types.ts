@@ -936,6 +936,63 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          archived_at: string | null
+          bank_name: string | null
+          business_address: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          iban: string | null
+          id: string
+          is_default: boolean
+          legal_name: string | null
+          name: string
+          position: number
+          reg_number: string | null
+          tenant_id: string
+          updated_at: string
+          vat_number: string | null
+        }
+        Insert: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          iban?: string | null
+          id?: string
+          is_default?: boolean
+          legal_name?: string | null
+          name: string
+          position?: number
+          reg_number?: string | null
+          tenant_id: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Update: {
+          archived_at?: string | null
+          bank_name?: string | null
+          business_address?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          iban?: string | null
+          id?: string
+          is_default?: boolean
+          legal_name?: string | null
+          name?: string
+          position?: number
+          reg_number?: string | null
+          tenant_id?: string
+          updated_at?: string
+          vat_number?: string | null
+        }
+        Relationships: []
+      }
       clients: {
         Row: {
           acquisition_source: string
@@ -2564,6 +2621,7 @@ export type Database = {
           id: string
           invoice_id: string | null
           issued_on: string
+          lines: Json | null
           number: string
           payment_method: string | null
           seller_snapshot: Json
@@ -2586,6 +2644,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           issued_on: string
+          lines?: Json | null
           number: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -2608,6 +2667,7 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           issued_on?: string
+          lines?: Json | null
           number?: string
           payment_method?: string | null
           seller_snapshot?: Json
@@ -4082,6 +4142,35 @@ export type Database = {
       }
       invitation_preview: { Args: { p_token: string }; Returns: Json }
       is_platform_admin: { Args: never; Returns: boolean }
+      set_default_company: {
+        Args: { p_company_id: string }
+        Returns: undefined
+      }
+      issue_receipt: {
+        Args: { p_lines?: Json; p_transaction_id: string }
+        Returns: {
+          account_id: string | null
+          amount: number
+          appointment_id: string | null
+          client_id: string | null
+          client_snapshot: Json | null
+          created_at: string
+          currency: string
+          id: string
+          invoice_id: string | null
+          issued_on: string
+          number: string
+          payment_method: string | null
+          seller_snapshot: Json
+          seq: number
+          status: string
+          tenant_id: string
+          transaction_id: string | null
+          vat_amount: number | null
+          vat_rate: number | null
+          year: number
+        }
+      }
       issue_invoice: {
         Args: {
           p_appointment_id: string

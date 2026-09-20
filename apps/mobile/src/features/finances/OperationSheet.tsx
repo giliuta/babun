@@ -43,6 +43,7 @@ import { PickerSheet } from "@/components/ui/PickerSheet";
 import { iconPreset } from "@/components/ui/icon-set";
 import { GUTTER } from "@/components/ui/tokens";
 import { useToast } from "@/components/ui/Toast";
+import { useIssueReceipt } from "@/features/documents/receipts-queries";
 import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
@@ -164,6 +165,7 @@ export function OperationSheet({
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
   const toast = useToast();
+  const issueReceipt = useIssueReceipt();
   const isEdit = !!transaction;
   const router = useRouter();
 
@@ -611,6 +613,17 @@ export function OperationSheet({
     // Остаток к возврату — по округлённым центам (moneySign), а не через
     // самодельный эпсилон: сравниваем ровно то, что напечатано.
     moneySign(transaction.amount - refundedTotal) > 0;
+  // ЧЕК ПО УЖЕ ПРИНЯТЫМ ДЕНЬГАМ — ЗДЕСЬ, А НЕ В СОСТАВИТЕЛЕ. Аудит денег
+  // 2026-09-20 поймал ловушку: после снятия автовыписки единственная кнопка
+  // «Выписать чек» вела в составитель, а он ЗАВОДИТ НОВЫЙ ПРИХОД. Человек,
+  // принявший оплату в записи и пришедший за бумагой, записал бы деньги
+  // дважды. Настоящая дорога — отсюда: дверь `issue_receipt` берёт ЭТУ
+  // проводку и ничего нового не создаёт.
+  //
+  // Идемпотентность двери снимает вопрос двойного нажатия: второй раз она
+  // отдаёт тот же документ, второго номера не бывает.
+  const showReceiptRow =
+    transaction?.type === "income" && !!transaction.client_id && !transaction.refund_of_id;
 
   // Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
   // закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
@@ -955,9 +968,28 @@ export function OperationSheet({
                 onPress={() => onInvoice?.(transaction)}
               />
             ) : null}
-            {showRefundRow ? (
+            {showReceiptRow ? (
               <ActionRow
                 separated={showClientRow || showInvoiceRow}
+                label="Выписать чек"
+                onPress={() => {
+                  issueReceipt.mutate(
+                    { transactionId: transaction.id },
+                    {
+                      onSuccess: (receipt) => toast(`Чек ${receipt.number} выписан`),
+                      onError: (error) =>
+                        toast(
+                          error instanceof Error ? error.message : "Чек не выписан",
+                          "error",
+                        ),
+                    },
+                  );
+                }}
+              />
+            ) : null}
+            {showRefundRow ? (
+              <ActionRow
+                separated={showClientRow || showInvoiceRow || showReceiptRow}
                 label="Создать возврат"
                 onPress={() => onRefund?.(transaction)}
               />
@@ -965,7 +997,7 @@ export function OperationSheet({
             {txAccountClosed && txAccountId ? (
               // Выход из тупика закрытого счёта: «Открыть снова» — в его листе.
               <ActionRow
-                separated={showClientRow || showInvoiceRow || showRefundRow}
+                separated={showClientRow || showInvoiceRow || showReceiptRow || showRefundRow}
                 label="Открыть настройки счёта"
                 onPress={() => {
                   onClose();
@@ -976,7 +1008,7 @@ export function OperationSheet({
               />
             ) : (
               <ActionRow
-                separated={showClientRow || showInvoiceRow || showRefundRow}
+                separated={showClientRow || showInvoiceRow || showReceiptRow || showRefundRow}
                 tone="danger"
                 label="Удалить операцию"
                 dimmed={busy}
