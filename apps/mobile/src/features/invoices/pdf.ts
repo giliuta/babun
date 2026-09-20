@@ -46,7 +46,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
         </div>`).join("");
 
   return `<!doctype html>
-<html lang="ru">
+<html lang="${doc.dict.locale.slice(0, 2)}">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />

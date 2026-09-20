@@ -39,6 +39,7 @@ import {
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
+import { buildInvoiceDocument } from "@/features/invoices/document";
 import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import {
@@ -130,15 +131,25 @@ export default function InvoiceDetailScreen() {
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts]);
 
   const shareInvoice = async () => {
-    if (!invoice.data) return;
+    // Итоги — часть документа, а не украшение: без них сообщение не собрать,
+    // и лучше промолчать, чем отправить клиенту счёт без сумм.
+    if (!invoice.data || !settlement) return;
     try {
       await Share.share({
-        message: buildInvoiceShareText({
-          invoice: invoice.data,
-          companyName: tenant?.legal_name || tenant?.name,
-          clientName: client?.full_name,
-          settlement: settlement ?? undefined,
-        }),
+        // ТЕКСТ И PDF — ОДНА МОДЕЛЬ. Раньше сообщение считало состав само и
+        // расходилось с вложением словами за одну отправку.
+        message: buildInvoiceShareText(
+          buildInvoiceDocument({
+            invoice: invoice.data,
+            tenant: tenant ?? undefined,
+            client,
+            settlement,
+            payments,
+            accountNames: accountById,
+            businessToday,
+            language: invoice.data.language as "ru" | "en" | undefined,
+          }),
+        ),
       });
     } catch (error) {
       notify("Не удалось поделиться", (error as Error).message);
@@ -157,6 +168,10 @@ export default function InvoiceDetailScreen() {
     setPdfBusy(true);
     try {
       await shareInvoicePdf({
+        // ЯЗЫК ДОКУМЕНТА ЕДЕТ ВМЕСТЕ С НИМ. Он выбран при выставлении и лежит
+        // в строке инвойса; без него PDF уходил клиенту всегда по-русски,
+        // даже собранный на английском (аудит бумаги 2026-09-20).
+        language: invoice.data.language as "ru" | "en" | undefined,
         invoice: invoice.data,
         tenant: tenant ?? undefined,
         client,
@@ -200,23 +215,22 @@ export default function InvoiceDetailScreen() {
   //
   // Аннулирование предлагается ТОЛЬКО пока по инвойсу ничего не получено: это
   // путь для ошибочной бумаги, выставленной минуту назад, и оставлять след
-  // кредит-нотой там нечему. Оплаченный инвойс сервер и не отменит — попросит
-  // сначала оформить возврат, и его формулировка показывается как есть.
+  // кредит-нотой там нечему.
   const cancelInvoice = async () => {
     // Кнопка живёт только под загруженным документом; guard — на случай
     // вызова не с неё (ротор VoiceOver).
     if (!settlement) return;
     if (settlement.paid > 0) {
-      confirmThen(
-        "Отменить инвойс?",
-        {
-          message:
-            "Будет выпущена кредит-нота — встречный документ на ту же сумму."
-            + " Инвойс получит статус «Отменён».",
-          confirmLabel: "Отменить инвойс",
-          destructive: true,
-        },
-        runCreditNote,
+      // ДЕНЬГИ ВПЕРЁД БУМАГИ. Сервер отменяет инвойс только когда у нас по нему
+      // ничего не осталось (`cancel_invoice` считает доходы минус возвраты), и
+      // кредит-нота на инвойс с деньгами не выписывается вовсе. Раньше экран
+      // всё равно предлагал отмену и печатал отказ сервера ПОСЛЕ
+      // подтверждения — теперь он сразу называет единственный путь.
+      notify(
+        "Сначала верните оплату",
+        `По инвойсу получено ${formatInvoiceMoney(settlement.paid, invoice.data?.currency)}.`
+          + " Оформите возврат в списке платежей — после него инвойс отменяется"
+          + " кредит-нотой.",
       );
       return;
     }

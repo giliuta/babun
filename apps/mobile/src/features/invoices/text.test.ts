@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
+import { buildInvoiceDocument } from "./document";
 import { buildInvoiceShareText } from "./text";
 
 const invoice = {
@@ -70,62 +71,72 @@ const invoice = {
   }],
 } satisfies InvoiceLedgerWithLines;
 
-describe("invoice text sharing", () => {
-  it("uses issued snapshots instead of mutable live names", () => {
-    const text = buildInvoiceShareText({
+const settlement = {
+  income: 50,
+  refunded: 0,
+  paid: 50,
+  remaining: 69,
+  overpaid: 0,
+  isPartial: true,
+  isPaid: false,
+};
+
+/** Текст собирается ИЗ ДОКУМЕНТА — так же, как PDF и экран. Помощник держит
+ *  этот путь в одном месте, чтобы тест не изобретал свой. */
+function shareText(
+  over: Partial<Parameters<typeof buildInvoiceDocument>[0]> = {},
+): string {
+  return buildInvoiceShareText(
+    buildInvoiceDocument({
       invoice,
-      companyName: "Renamed Seller",
-      clientName: "Renamed Client",
-      settlement: {
-        income: 50,
-        refunded: 0,
-        paid: 50,
-        remaining: 69,
-        overpaid: 0,
-        isPartial: true,
-        isPaid: false,
-      },
-    });
+      settlement,
+      payments: [],
+      businessToday: "2026-07-21",
+      ...over,
+    } as Parameters<typeof buildInvoiceDocument>[0]),
+  );
+}
 
+describe("текст инвойса для клиента", () => {
+  it("берёт снимок выставления, а не сегодняшние имена", () => {
+    const text = shareText({
+      tenant: { legal_name: "Renamed Seller", name: "Renamed Seller" } as never,
+      client: { full_name: "Renamed Client" } as never,
+    });
     assert.match(text, /Historical Seller Ltd/);
-    assert.match(text, /Historical Client/);
-    assert.match(text, /Old client address/);
-    assert.match(text, /OLD-IBAN/);
     assert.doesNotMatch(text, /Renamed Seller/);
-    assert.doesNotMatch(text, /Renamed Client/);
   });
 
-  it("does not replace a blank snapshotted name from mutable live data", () => {
-    const text = buildInvoiceShareText({
-      invoice: {
-        ...invoice,
-        seller_snapshot: { ...invoice.seller_snapshot, legal_name: null, name: null, display_name: null },
-        client_snapshot: { ...invoice.client_snapshot, full_name: null },
-      },
-      companyName: "Later Seller",
-      clientName: "Later Client",
-    });
-
-    assert.match(text, /Продавец не указан/);
-    assert.match(text, /Клиент: не указан/);
-    assert.doesNotMatch(text, /Later Seller/);
-    assert.doesNotMatch(text, /Later Client/);
+  it("не подставляет бренд платформы вместо продавца", () => {
+    const text = shareText({ invoice: { ...invoice, seller_snapshot: null } });
+    assert.doesNotMatch(text, /Babun/);
   });
 
-  // U57: «Babun CRM» — бренд платформы, а не бизнеса. Без снимка продавцом
-  // становится имя тенанта; нет и его — строка честно опускается.
-  it("falls back to the tenant name, never the platform brand", () => {
-    const withTenant = buildInvoiceShareText({
-      invoice: { ...invoice, seller_snapshot: null },
-      companyName: "AirFix Ltd",
-    });
-    assert.match(withTenant, /^AirFix Ltd\n/);
-    assert.doesNotMatch(withTenant, /Babun/);
+  // РЕГРЕССИЯ АУДИТА БУМАГИ 2026-09-20: сообщение считало состав само и
+  // расходилось с вложением за одну отправку — говорило «Итого» там, где
+  // бумага говорит «К оплате», и печатало клиента, которого на бумаге нет.
+  it("говорит теми же словами и числами, что бумага", () => {
+    const doc = buildInvoiceDocument({
+      invoice,
+      settlement,
+      payments: [],
+      businessToday: "2026-07-21",
+    } as Parameters<typeof buildInvoiceDocument>[0]);
+    const text = buildInvoiceShareText(doc);
+    for (const row of doc.totals) {
+      assert.ok(
+        text.includes(`${row.label}: ${row.value}`),
+        `в сообщении нет строки итога «${row.label}»`,
+      );
+    }
+    assert.ok(text.includes(doc.number), "в сообщении нет номера документа");
+  });
 
-    const anonymous = buildInvoiceShareText({
-      invoice: { ...invoice, seller_snapshot: null },
+  it("английский счёт уходит английским сообщением", () => {
+    const text = shareText({
+      invoice: { ...invoice, language: "en" },
+      language: "en",
     });
-    assert.doesNotMatch(anonymous, /Babun/);
-    assert.match(anonymous, /^Инвойс INV-2026-007\n/);
+    assert.doesNotMatch(text, /Инвойс|К оплате|Выставлен/);
   });
 });

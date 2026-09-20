@@ -1,60 +1,36 @@
-import type {
-  InvoiceLedgerWithLines,
-  InvoiceSettlement,
-} from "@babun/shared/local/finance/invoice-ledger";
-import { formatInvoiceDate, formatInvoiceMoney } from "./format";
+import type { InvoiceDocument } from "./document";
 
-export function buildInvoiceShareText({
-  invoice,
-  companyName,
-  clientName,
-  settlement,
-}: {
-  invoice: InvoiceLedgerWithLines;
-  companyName?: string | null;
-  clientName?: string | null;
-  settlement?: InvoiceSettlement;
-}): string {
-  const seller = invoice.seller_snapshot;
-  const client = invoice.client_snapshot;
-  // A present snapshot is authoritative as a whole. A blank snapshotted field
-  // must not be filled later from a mutable company/client profile.
-  //
-  // Без снимка продавец — имя ТЕНАНТА (companyName), а не «Babun CRM»:
-  // Babun — бренд платформы, у клиента бизнеса ему делать нечего. Нет и
-  // имени тенанта — строка честно опускается, выдуманного продавца не будет.
-  const sellerName = seller
-    ? seller.legal_name || seller.name || seller.display_name || "Продавец не указан"
-    : companyName || null;
-  const recipientName = client
-    ? client.full_name || "не указан"
-    : clientName || "не указан";
-  const lines = invoice.lines.map(
-    (line) => `${line.title}: ${line.qty} × ${formatInvoiceMoney(line.unit_price, invoice.currency)} = ${formatInvoiceMoney(line.total, invoice.currency)}`,
+// ТЕКСТ ИНВОЙСА ДЛЯ КЛИЕНТА — то, что уходит в WhatsApp или почтой.
+//
+// СОБИРАЕТСЯ ИЗ ТОЙ ЖЕ МОДЕЛИ, ЧТО PDF И ЭКРАН (`buildInvoiceDocument`), тем
+// же приёмом, что у чека (`documents/receipt-text.ts`). Раньше он считал
+// состав САМ: печатал клиента и его адрес, говорил «Итого» там, где бумага
+// говорит «К оплате», форматировал дату своим форматтером и звал налог
+// по-своему. За одну отправку человек получал сообщение и вложение, которые
+// расходились словами (аудит бумаги 2026-09-20).
+//
+// ЯЗЫК ПРИХОДИТ ВМЕСТЕ С ДОКУМЕНТОМ. `doc.dict` выбран при сборке по языку
+// инвойса, поэтому английский счёт уходит английским сообщением, а не
+// русским с английским вложением.
+export function buildInvoiceShareText(doc: InvoiceDocument): string {
+  const lines = doc.lines.map(
+    (line) => `${line.title} · ${line.qty} × ${line.unitPrice} = ${line.total}`,
   );
   return [
-    sellerName,
-    seller?.vat_number ? `VAT: ${seller.vat_number}` : null,
-    `Инвойс ${invoice.number}`,
-    `Клиент: ${recipientName}`,
-    client?.primary_address ? `Адрес: ${client.primary_address}` : null,
-    `Дата: ${formatInvoiceDate(invoice.issued_on)}`,
-    invoice.due_on ? `Оплатить до: ${formatInvoiceDate(invoice.due_on)}` : null,
-    "",
+    // Без снимка продавца строка опускается: «Babun CRM» — бренд платформы, а
+    // не бизнеса, и в бумаге для клиента ему делать нечего.
+    doc.seller.name || null,
+    ...doc.seller.lines,
+    `${doc.dict.invoiceEyebrow} ${doc.number}`,
+    `${doc.dict.issuedOn}: ${doc.issuedOn}`,
+    doc.dueOn ? `${doc.dict.dueOn}: ${doc.dueOn}` : null,
+    lines.length > 0 ? "" : null,
     ...lines,
     "",
-    invoice.vat_amount > 0
-      ? `VAT ${invoice.vat_percent}%: ${formatInvoiceMoney(invoice.vat_amount, invoice.currency)}`
-      : null,
-    `Итого: ${formatInvoiceMoney(invoice.total, invoice.currency)}`,
-    settlement && settlement.paid > 0
-      ? `Оплачено: ${formatInvoiceMoney(settlement.paid, invoice.currency)}`
-      : null,
-    settlement && settlement.remaining > 0
-      ? `Остаток: ${formatInvoiceMoney(settlement.remaining, invoice.currency)}`
-      : null,
-    seller?.iban ? `IBAN: ${seller.iban}` : null,
-    invoice.notes || null,
+    // Итоги — РОВНО те строки и в том порядке, что печатает бумага: второго
+    // решения «что показать» в продукте нет.
+    ...doc.totals.map((row) => `${row.label}: ${row.value}`),
+    doc.notes ? `\n${doc.notes}` : null,
   ]
     .filter((line): line is string => line !== null)
     .join("\n");
