@@ -106,7 +106,9 @@ export default function NewInvoiceScreen() {
   // комментарий — это работа на минуту, и «‹» стирала её без вопроса.
   const [dirty, setDirty] = useState(false);
   const leave = () =>
-    router.canGoBack() ? router.back() : router.replace("/invoices" as Href);
+    router.canGoBack()
+      ? router.back()
+      : router.replace("/finances?view=documents" as Href);
   const back = () => {
     if (!dirty) {
       leave();

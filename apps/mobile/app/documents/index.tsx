@@ -67,7 +67,13 @@ export default function DocumentsScreen() {
                   : "Все оплачены"
             }
             onPress={() =>
-              router.push(clientId ? `/invoices?clientId=${clientId}` : "/invoices")
+              // Инвойсы живут в «Финансах» → «Документы» (владелец 22.09);
+              // отдельный список `/invoices` снесён как вторая дверь.
+              router.push(
+                clientId
+                  ? `/finances?view=documents&clientId=${clientId}`
+                  : "/finances?view=documents",
+              )
             }
           />
           {/* Чеки выписываются сами при каждом приёме денег (триггер
