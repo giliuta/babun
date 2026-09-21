@@ -4,7 +4,6 @@ import { Linking, View } from "react-native";
 import { useRouter, type Href } from "expo-router";
 import { Camera, FileText, Images, Receipt, ScanLine } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
-import { formatEURExact } from "@babun/shared/common/utils/money";
 import { listAccounts } from "@babun/shared/db/repositories/accounts";
 import type { Receipt as ReceiptDoc } from "@babun/shared/local/finance/receipt";
 import { randomUuid } from "@babun/shared/sync";
@@ -25,15 +24,18 @@ import {
   type ClientAttachment,
   type PickedFile,
 } from "@/features/clients/card-attachments";
-import { formatShortDateRu } from "@/features/clients/format";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useReceipts } from "@/features/documents/receipts-queries";
 import { useInvoices } from "@/features/invoices/queries";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
-import { isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
-import { useBusinessNow } from "./business-now";
-import { invoiceOverdue } from "./payment-draft";
-import { DocTile, GeneratedDocTile, PendingTile, PhotoTile, UploadingTile } from "./AppointmentFileTiles";
+import { docTitle, isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
+import {
+  DocumentPill,
+  PendingTile,
+  PhotoTile,
+  UploadingDocumentPill,
+  UploadingTile,
+} from "./AppointmentFileTiles";
 import {
   MAX_APPOINTMENT_PHOTOS,
   RetryableAppointmentPhotoUploadError,
@@ -44,18 +46,21 @@ import {
   type UploadAppointmentPhotosInput,
 } from "./appointment-photos";
 import { scannerAvailable } from "./document-scanner";
-import { TILE_GAP, useTileWidth } from "./PaymentTiles";
+import { TILE_GAP } from "./PaymentTiles";
 import { useFilePickers } from "./use-file-pickers";
 
-// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070). Плитки 3 в ряд — фото и видео записи,
-// документы (они лежат во вложениях КЛИЕНТА с меткой записи — владелец
-// 2026-08-03: «все чеки, все инвойсы — всё в одном месте»), инвойс и чеки,
-// которые выписал сам продукт (владелец: «оно автоматически закидывается в
-// файлы, и там чётко написано, что это и за что»). Под плитками строка
-// «Добавить», как «Добавить объект»; она открывает лист: снять фото или видео,
-// выбрать из галереи, выбрать файл, отсканировать документ (последнее — где
-// собран нативный сканер). Строки состояния и счётчиков нет: плитки говорят
-// сами. Удаление — корзинка в углу плитки и удержание.
+// БЛОК «ФАЙЛЫ» ЗАПИСИ (STORY-070; редизайн 20.09 — владелец: «фотографии
+// открываются квадратиком, обычный файл — плашкой с надписью, компактно»).
+// Фото и видео — квадраты помельче с переносом строк (вид — в
+// AppointmentFileTiles), документы (они лежат во вложениях КЛИЕНТА с меткой
+// записи — владелец 2026-08-03: «все чеки, все инвойсы — всё в одном месте»),
+// инвойс и чеки, которые выписал сам продукт (владелец: «оно автоматически
+// закидывается в файлы, и там чётко написано, что это и за что») — компактные
+// плашки со значком и названием. Под плитками строка «Добавить», как
+// «Добавить объект»; она открывает лист: снять фото или видео, выбрать из
+// галереи, выбрать файл, отсканировать документ (последнее — где собран
+// нативный сканер). Строки состояния и счётчиков нет: плитки говорят сами.
+// Удаление — крестик/корзинка на плитке и удержание.
 //
 // У НОВОЙ ЗАПИСИ БЛОК ТОЖЕ ЕСТЬ (владелец 2026-09-06: «тут нет блока файлы»):
 // выбранное ждёт «Создать запись» в очереди страницы и уезжает после неё, как
@@ -90,8 +95,6 @@ export function AppointmentFilesBlock({
   const toast = useToast();
   const router = useRouter();
   const tenantId = useTenantId();
-  const tileWidth = useTileWidth(3);
-  const businessNow = useBusinessNow();
   const saved = appointmentId != null;
   const photosQuery = useAppointmentPhotos(appointmentId ?? "");
   const upload = useUploadAppointmentPhotos(appointmentId ?? "");
@@ -132,9 +135,18 @@ export function AppointmentFilesBlock({
     () => (saved ? (receiptsQuery.data ?? []).filter((r) => r.status !== "void") : []),
     [receiptsQuery.data, saved],
   );
-  const remaining = Math.max(0, MAX_APPOINTMENT_PHOTOS - photos.length - pending.filter((f) => f.kind === "media").length);
-  const busy = upload.isPending || uploadDoc.isPending;
-  const hasTiles = photos.length + docs.length + invoices.length + receipts.length + pending.length > 0 || busy;
+  // Очередь новой записи делится на медиа (квадраты) и документы (плашки) —
+  // владелец 20.09: у них разный вид, поэтому и группы в раскладке разные.
+  const pendingMediaFiles = pending.filter((f) => f.kind === "media");
+  const pendingDocFiles = pending.filter((f) => f.kind === "document");
+  const remaining = Math.max(0, MAX_APPOINTMENT_PHOTOS - photos.length - pendingMediaFiles.length);
+  const photoBusy = upload.isPending;
+  const docBusy = uploadDoc.isPending;
+  const busy = photoBusy || docBusy;
+  const hasMediaTiles = photos.length > 0 || pendingMediaFiles.length > 0 || photoBusy;
+  const hasDocTiles =
+    docs.length > 0 || invoices.length > 0 || receipts.length > 0 || pendingDocFiles.length > 0 || docBusy;
+  const hasTiles = hasMediaTiles || hasDocTiles;
 
   const submit = (input: UploadAppointmentPhotosInput) => {
     upload.reset();
@@ -231,61 +243,70 @@ export function AppointmentFilesBlock({
     <>
       <SectionCard title="Файлы">
         {hasTiles ? (
-          <View
-            className="flex-row flex-wrap"
-            style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12, gap: TILE_GAP }}
-          >
-            {photos.map((photo) => (
-              <PhotoTile
-                key={photo.id}
-                photo={photo}
-                size={tileWidth}
-                deleting={remove.isPending && remove.variables?.id === photo.id}
-                onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
-                onDelete={canDelete ? () => void holdPhoto(photo) : undefined}
-              />
-            ))}
-            {docs.map((doc) => (
-              <DocTile
-                key={doc.id}
-                doc={doc}
-                size={tileWidth}
-                deleting={removeDoc.isPending}
-                onOpen={() => void openDoc(doc)}
-                onDelete={canDelete ? () => void holdDoc(doc) : undefined}
-              />
-            ))}
-            {invoices.map((inv) => (
-              <GeneratedDocTile
-                key={inv.id}
-                icon={FileText}
-                title={`Инвойс ${inv.number}`}
-                subtitle={`${formatEURExact(inv.total)} · ${
-                  inv.status === "paid" ? "оплачен" : invoiceOverdue(inv, businessNow().ymd) ? "просрочен" : "ждёт оплаты"
-                }`}
-                size={tileWidth}
-                onOpen={() => router.push(`/invoices/${inv.id}` as Href)}
-              />
-            ))}
-            {receipts.map((r) => (
-              <GeneratedDocTile
-                key={r.id}
-                icon={Receipt}
-                title={`Чек ${r.number}`}
-                subtitle={`${formatEURExact(r.amount)} · ${formatShortDateRu(r.issued_on)}`}
-                size={tileWidth}
-                onOpen={() => setOpenReceipt(r)}
-              />
-            ))}
-            {pending.map((file) => (
-              <PendingTile
-                key={file.id}
-                file={file}
-                size={tileWidth}
-                onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
-              />
-            ))}
-            {busy ? <UploadingTile size={tileWidth} /> : null}
+          <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 12 }}>
+            {/* Фото и видео — квадраты помельче, с переносом строк (владелец
+                20.09: «фотографии открываются квадратиком»). */}
+            {hasMediaTiles ? (
+              <View className="flex-row flex-wrap" style={{ gap: TILE_GAP }}>
+                {photos.map((photo) => (
+                  <PhotoTile
+                    key={photo.id}
+                    photo={photo}
+                    deleting={remove.isPending && remove.variables?.id === photo.id}
+                    onOpen={() => (isVideoPath(photo.storage_path) ? void openUrl(photo.url) : setViewer(photo))}
+                    onDelete={canDelete ? () => void holdPhoto(photo) : undefined}
+                  />
+                ))}
+                {pendingMediaFiles.map((file) => (
+                  <PendingTile
+                    key={file.id}
+                    file={file}
+                    onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
+                  />
+                ))}
+                {photoBusy ? <UploadingTile /> : null}
+              </View>
+            ) : null}
+            {/* Всё остальное — компактная плашка со значком и названием, не
+                квадрат (владелец 20.09: «обычный файл открывается плашкой»). */}
+            {hasDocTiles ? (
+              <View className="flex-row flex-wrap" style={{ gap: TILE_GAP, marginTop: hasMediaTiles ? TILE_GAP : 0 }}>
+                {docs.map((doc) => (
+                  <DocumentPill
+                    key={doc.id}
+                    icon={FileText}
+                    title={docTitle(doc.filename)}
+                    deleting={removeDoc.isPending}
+                    onOpen={() => void openDoc(doc)}
+                    onDelete={canDelete ? () => void holdDoc(doc) : undefined}
+                  />
+                ))}
+                {invoices.map((inv) => (
+                  <DocumentPill
+                    key={inv.id}
+                    icon={Receipt}
+                    title={`Инвойс ${inv.number}`}
+                    onOpen={() => router.push(`/invoices/${inv.id}` as Href)}
+                  />
+                ))}
+                {receipts.map((r) => (
+                  <DocumentPill
+                    key={r.id}
+                    icon={Receipt}
+                    title={`Чек ${r.number}`}
+                    onOpen={() => setOpenReceipt(r)}
+                  />
+                ))}
+                {pendingDocFiles.map((file) => (
+                  <PendingTile
+                    key={file.id}
+                    file={file}
+                    onDelete={() => onPendingChange(pending.filter((f) => f.id !== file.id))}
+                  />
+                ))}
+                {docBusy ? <UploadingDocumentPill /> : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
         {canUpload ? (

@@ -29,7 +29,6 @@ import {
   amountProblem,
   blockCaption,
   closesVisit,
-  invoiceSubtitle,
   paidAtLabel,
   paidTileIntent,
   paymentMath,
@@ -41,7 +40,6 @@ import {
 } from "./payment-draft";
 import { useCancelPayment, useRecordPayment } from "./payment-mutations";
 import {
-  InvoiceRow,
   ModeIconButton,
   NoAccountsNotice,
   PaymentStateRow,
@@ -395,13 +393,10 @@ export function PaymentBlock({
         }
       />
       ) : null}
-      {invoice ? (
-        <InvoiceRow
-          number={invoice.number}
-          subtitle={invoiceSubtitle(invoice)}
-          onPress={handleInvoice}
-        />
-      ) : null}
+      {/* СТРОКИ ИНВОЙСА ЗДЕСЬ БОЛЬШЕ НЕТ (владелец 20.09: «ты сгенерировал
+          инвойс — но он должен быть в файлах, в оплате нет его»). Выписанный
+          документ живёт плашкой в блоке «Файлы», а в оплате остаётся только
+          значок, которым его выписывают и открывают. */}
       {unattributed.map((row) => (
         <Text key={row.id} style={{ marginHorizontal: 16, marginTop: 4, fontSize: 13, color: t.sub }}>
           {row.kind === "prepayment" ? "Предоплата" : "Оплачено"} {formatEURExact(row.amount)} · счёт определён автоматически

@@ -2,22 +2,32 @@ import { Image, Pressable, Text, View } from "react-native";
 import { FileText, Play, Trash2, type LucideIcon } from "lucide-react-native";
 import type { AppointmentPhotoRecord } from "@babun/shared/db/repositories/appointment-photos";
 import { Spinner } from "@/components/ui/Spinner";
-import { formatBytes, type ClientAttachment } from "@/features/clients/card-attachments";
-import { useThemeColors } from "@/theme/colors";
+import { useThemeColors, type ThemeColors } from "@/theme/colors";
 import { docTitle, isVideoPath } from "./appointment-files";
 import type { PendingFile } from "./appointment-files";
 
-// ПЛИТКИ БЛОКА «ФАЙЛЫ» — только вид (STORY-070). Три в ряд, квадрат, сквиркл
-// карточки. Фото — картинка, видео — значок «play» на подложке (кадра-превью
-// пока нет), документ — значок и имя. Корзинка в углу — единственный
-// видимый путь к удалению (владелец: «сейчас я не знаю, как удалить
-// фотографию»), удержание плитки делает то же.
+// ПЛИТКИ БЛОКА «ФАЙЛЫ» — только вид (STORY-070; редизайн 20.09, владелец:
+// «фотографии открываются квадратиком, обычный файл — плашкой, не квадратный
+// значок, надпись, компактно»). Квадрат остаётся только у фото и видео — они
+// мельче прежнего, чтобы в ряд помещалось 4–5, а не 3, и блок стал ниже.
+// Документ, инвойс и чек — одна и та же горизонтальная плашка (значок +
+// название), а не квадрат: «просто блок маленький с надписью… которое
+// нажимаю, и оно открывается, вот и всё». Корзинка — единственный видимый
+// путь удаления помимо удержания (владелец: «сейчас я не знаю, как удалить
+// фотографию»).
 //
 // БЕЗ `onDelete` НЕТ НИ КОРЗИНКИ, НИ УДЕРЖАНИЯ (15.09): мастеру сервер удалять
 // файлы записи не даёт, и корзинка обещала бы то, что кончится ошибкой.
 
-function useTile(size: number) {
-  const t = useThemeColors();
+/** Квадрат фото/видео — фиксированный размер, а не доля ширины карточки
+ *  (владелец 20.09: «мельче», чтобы в ряд помещалось 4–5, а не 3). */
+const PHOTO_TILE_SIZE = 64;
+const TRASH_BADGE_SIZE = 20;
+const PLAY_BADGE_SIZE = 26;
+const PILL_HEIGHT = 34;
+const PILL_TITLE_MAX_WIDTH = 160;
+
+function squareTile(t: ThemeColors, size: number) {
   return {
     width: size,
     height: size,
@@ -39,38 +49,85 @@ function TrashBadge({ label, onPress, disabled }: { label: string; onPress: () =
       accessibilityLabel={label}
       style={({ pressed }) => ({
         position: "absolute",
-        top: 4,
-        right: 4,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        top: 3,
+        right: 3,
+        width: TRASH_BADGE_SIZE,
+        height: TRASH_BADGE_SIZE,
+        borderRadius: TRASH_BADGE_SIZE / 2,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: `${t.ink}8c`,
         opacity: pressed ? 0.6 : 1,
       })}
     >
-      <Trash2 color="#ffffff" size={12} strokeWidth={2.4} />
+      <Trash2 color="#ffffff" size={10} strokeWidth={2.4} />
     </Pressable>
+  );
+}
+
+/** Маленький крестик в конце плашки документа — тот же смысл, что у
+ *  `TrashBadge` над фото, но вписан в строку, а не висит поверх картинки
+ *  (владелец 20.09: «крестик… рисуй маленькой, у правого края»). */
+function PillDeleteButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  const t = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{ width: 20, height: 20, alignItems: "center", justifyContent: "center" }}
+    >
+      <Trash2 color={t.sub} size={12} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
+
+/** Кружок «play» на подложке видео — общий вид для сохранённого файла и
+ *  файла в очереди новой записи, чтобы обе плитки читались одинаково. */
+function VideoPlayBadge() {
+  const t = useThemeColors();
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <View
+        style={{
+          width: PLAY_BADGE_SIZE,
+          height: PLAY_BADGE_SIZE,
+          borderRadius: PLAY_BADGE_SIZE / 2,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: `${t.ink}b3`,
+        }}
+      >
+        <Play color="#ffffff" size={12} strokeWidth={2.4} fill="#ffffff" />
+      </View>
+    </View>
   );
 }
 
 export function PhotoTile({
   photo,
-  size,
   deleting,
   onOpen,
   onDelete,
 }: {
   photo: AppointmentPhotoRecord;
-  size: number;
   deleting: boolean;
   onOpen: () => void;
   /** Нет — удалять нельзя: ни корзинки, ни удержания. */
   onDelete?: () => void;
 }) {
   const t = useThemeColors();
-  const tile = useTile(size);
+  const tile = squareTile(t, PHOTO_TILE_SIZE);
   const video = isVideoPath(photo.storage_path);
   return (
     <Pressable
@@ -83,20 +140,7 @@ export function PhotoTile({
       style={({ pressed }) => [tile, { opacity: pressed || deleting ? 0.6 : 1 }]}
     >
       {video ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <View
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: `${t.ink}b3`,
-            }}
-          >
-            <Play color="#ffffff" size={18} strokeWidth={2.4} fill="#ffffff" />
-          </View>
-        </View>
+        <VideoPlayBadge />
       ) : (
         <Image source={{ uri: photo.url }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
       )}
@@ -105,125 +149,155 @@ export function PhotoTile({
       ) : null}
       {deleting ? (
         <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}>
-          <Spinner size={20} label="Удаляем" />
+          <Spinner size={18} label="Удаляем" />
         </View>
       ) : null}
     </Pressable>
   );
 }
 
-export function DocTile({
-  doc,
-  size,
+/** Компактная горизонтальная плашка документа — заменяет прежние квадраты
+ *  `DocTile` и `GeneratedDocTile` (владелец 20.09: «не квадратный значок,
+ *  а маленький блок с надписью — название, которое нажимаю, и оно
+ *  открывается, вот и всё»). Один вид на файл клиента, инвойс и чек:
+ *  различает их только иконка и название, которые задаёт вызывающий блок —
+ *  сама плашка ничего не знает про источник данных. */
+export function DocumentPill({
+  icon: Icon,
+  title,
   deleting,
   onOpen,
   onDelete,
 }: {
-  doc: ClientAttachment;
-  size: number;
-  deleting: boolean;
+  icon: LucideIcon;
+  title: string;
+  deleting?: boolean;
   onOpen: () => void;
-  /** Нет — удалять нельзя: ни корзинки, ни удержания. */
+  /** Нет — удалять нельзя: инвойс и чек не удаляются вовсе, их аннулируют
+   *  там, где выписали. */
   onDelete?: () => void;
 }) {
   const t = useThemeColors();
-  const tile = useTile(size);
   return (
     <Pressable
       onPress={onOpen}
       onLongPress={onDelete}
       accessibilityRole="button"
-      accessibilityLabel={`Документ ${doc.filename}`}
+      accessibilityLabel={title}
       accessibilityHint={onDelete ? "Удерживайте, чтобы удалить" : undefined}
-      style={({ pressed }) => [tile, { opacity: pressed ? 0.6 : 1, padding: 10, justifyContent: "space-between" }]}
+      // Крестик в плашке мелкий и у самого края — на случай промаха пальцем
+      // то же действие живёт ротором VoiceOver (владелец 20.09).
+      accessibilityActions={onDelete ? [{ name: "delete", label: "Удалить" }] : undefined}
+      onAccessibilityAction={
+        onDelete
+          ? (e) => {
+              if (e.nativeEvent.actionName === "delete") onDelete();
+            }
+          : undefined
+      }
+      style={({ pressed }) => ({
+        flexDirection: "row",
+        alignItems: "center",
+        height: PILL_HEIGHT,
+        borderRadius: t.radius.input,
+        borderCurve: "continuous",
+        backgroundColor: t.fill,
+        paddingLeft: 10,
+        paddingRight: onDelete ? 6 : 10,
+        gap: 6,
+        opacity: pressed ? 0.6 : 1,
+      })}
     >
-      <FileText color={t.accent} size={22} strokeWidth={2} />
-      {onDelete ? (
-        <TrashBadge label={`Удалить документ ${doc.filename}`} onPress={onDelete} disabled={deleting} />
-      ) : null}
-      <View>
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
-          {docTitle(doc.filename)}
-        </Text>
-        <Text numberOfLines={1} style={{ fontSize: 11, color: t.sub, marginTop: 2 }}>
-          {formatBytes(doc.size_bytes)}
-        </Text>
-      </View>
+      <Icon color={t.accent} size={15} strokeWidth={2} />
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.2}
+        style={{ maxWidth: PILL_TITLE_MAX_WIDTH, fontSize: 14, fontWeight: "600", color: t.ink }}
+      >
+        {title}
+      </Text>
+      {onDelete ? <PillDeleteButton label={`Удалить ${title}`} onPress={onDelete} disabled={!!deleting} /> : null}
     </Pressable>
   );
 }
 
-export function UploadingTile({ size }: { size: number }) {
-  const tile = useTile(size);
+export function UploadingTile() {
+  const t = useThemeColors();
+  const tile = squareTile(t, PHOTO_TILE_SIZE);
   return (
     <View style={[tile, { alignItems: "center", justifyContent: "center" }]}>
-      <Spinner size={22} label="Загрузка" />
+      <Spinner size={20} label="Загрузка" />
     </View>
   );
 }
 
-/** Документ, который выписал сам продукт — инвойс, чек: открывается своим
- *  экраном, корзинки нет (его не удаляют, его аннулируют там, где выписали).
- *  Владелец 2026-09-06: «то, что мы генерируем, автоматически закидывается в
- *  файлы, и там чётко написано, что это и за что». */
-export function GeneratedDocTile({
-  icon: Icon,
-  title,
-  subtitle,
-  size,
-  onOpen,
-}: {
-  icon: LucideIcon;
-  title: string;
-  subtitle: string;
-  size: number;
-  onOpen: () => void;
-}) {
+/** Плашка загрузки документа — тот же язык, что у `UploadingTile`, но в
+ *  форме пилюли: документ грузится плашкой, а не квадратом (владелец 20.09). */
+export function UploadingDocumentPill() {
   const t = useThemeColors();
-  const tile = useTile(size);
   return (
-    <Pressable
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${subtitle}`}
-      style={({ pressed }) => [tile, { opacity: pressed ? 0.6 : 1, padding: 10, justifyContent: "space-between" }]}
+    <View
+      style={{
+        width: 90,
+        height: PILL_HEIGHT,
+        borderRadius: t.radius.input,
+        borderCurve: "continuous",
+        backgroundColor: t.fill,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
-      <Icon color={t.accent} size={22} strokeWidth={2} />
-      <View>
-        <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
-          {title}
-        </Text>
-        <Text numberOfLines={1} style={{ fontSize: 11, color: t.sub, marginTop: 2 }}>
-          {subtitle}
-        </Text>
-      </View>
-    </Pressable>
+      <Spinner size={16} label="Загрузка" />
+    </View>
   );
 }
 
-/** Файл новой записи: ещё не уехал, ждёт «Создать запись». Выглядит как
- *  готовая плитка — человек не должен различать «уже» и «пока». */
-export function PendingTile({ file, size, onDelete }: { file: PendingFile; size: number; onDelete: () => void }) {
+/** Файл новой записи: ещё не уехал, ждёт «Создать запись». Медиа — квадрат,
+ *  как у сохранённого фото; документ — та же плашка, что у сохранённого
+ *  файла (владелец 20.09: разница только в источнике данных, не во виде). */
+export function PendingTile({ file, onDelete }: { file: PendingFile; onDelete: () => void }) {
   const t = useThemeColors();
-  const tile = useTile(size);
+  if (file.kind === "document") {
+    return (
+      <View
+        accessible
+        accessibilityLabel={`Документ ${file.name}, добавится при создании`}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: PILL_HEIGHT,
+          borderRadius: t.radius.input,
+          borderCurve: "continuous",
+          backgroundColor: t.fill,
+          paddingLeft: 10,
+          paddingRight: 6,
+          gap: 6,
+        }}
+      >
+        <FileText color={t.accent} size={15} strokeWidth={2} />
+        <Text
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.2}
+          style={{ maxWidth: PILL_TITLE_MAX_WIDTH, fontSize: 14, fontWeight: "600", color: t.ink }}
+        >
+          {docTitle(file.name)}
+        </Text>
+        <PillDeleteButton label={`Убрать ${file.name}`} onPress={onDelete} />
+      </View>
+    );
+  }
+  const tile = squareTile(t, PHOTO_TILE_SIZE);
   return (
-    <View style={tile} accessible accessibilityLabel={`${file.video ? "Видео" : file.kind === "document" ? "Документ" : "Фото"} ${file.name}, добавится при создании`}>
+    <View
+      style={tile}
+      accessible
+      accessibilityLabel={`${file.video ? "Видео" : "Фото"} ${file.name}, добавится при создании`}
+    >
       {file.previewUri ? (
         <Image source={{ uri: file.previewUri }} resizeMode="cover" style={{ width: "100%", height: "100%" }} />
       ) : file.video ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: `${t.ink}b3` }}>
-            <Play color="#ffffff" size={18} strokeWidth={2.4} fill="#ffffff" />
-          </View>
-        </View>
-      ) : (
-        <View style={{ flex: 1, padding: 10, justifyContent: "space-between" }}>
-          <FileText color={t.accent} size={22} strokeWidth={2} />
-          <Text numberOfLines={2} maxFontSizeMultiplier={1.2} style={{ fontSize: 12, fontWeight: "600", color: t.ink }}>
-            {docTitle(file.name)}
-          </Text>
-        </View>
-      )}
+        <VideoPlayBadge />
+      ) : null}
       <TrashBadge label={`Убрать ${file.name}`} onPress={onDelete} disabled={false} />
     </View>
   );
