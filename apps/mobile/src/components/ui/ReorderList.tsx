@@ -1,8 +1,9 @@
-import { useCallback, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 import { View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
+  runOnUI,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -50,7 +51,18 @@ export interface ReorderRow {
   id: string;
 }
 
+/** Общее состояние жеста на весь список. `laid` — порядок id, на который
+ *  посчитаны остальные значения (см. `useAnimatedStyle` строки). */
+interface DragState {
+  active: SharedValue<number>;
+  target: SharedValue<number>;
+  dy: SharedValue<number>;
+  laid: SharedValue<string[]>;
+  pending: SharedValue<boolean>;
+}
+
 function Row({
+  id,
   index,
   rowHeight,
   min,
@@ -59,11 +71,11 @@ function Row({
   handleInside,
   spaced,
   onDrop,
-  active,
-  target,
+  drag,
   onActiveChange,
   children,
 }: {
+  id: string;
   index: number;
   rowHeight: number;
   /** Первое и последнее место, куда этой строке разрешено встать. */
@@ -78,13 +90,12 @@ function Row({
   handleInside?: boolean;
   spaced?: boolean;
   onDrop: (from: number, to: number) => void;
-  active: SharedValue<number>;
-  target: SharedValue<number>;
+  drag: DragState;
   onActiveChange: (dragging: boolean) => void;
   children: (handle: ReactNode) => ReactNode;
 }) {
   const t = useThemeColors();
-  const dy = useSharedValue(0);
+  const { active, target, dy, laid, pending } = drag;
   // Двигать некуда — ручки нет. Строка, у которой единственное допустимое
   // место — её собственное, не должна предлагать жест, который ничего не
   // меняет: палец тянет, а строка возвращается на место без объяснений.
@@ -99,48 +110,79 @@ function Row({
   const pan = Gesture.Pan()
     .activateAfterLongPress(120)
     .onStart(() => {
+      // Прошлое отпускание ещё не приехало новым порядком — новый жест ждёт.
+      if (pending.value) return;
       active.value = index;
       target.value = index;
       runOnJS(onActiveChange)(true);
       runOnJS(bump)();
     })
     .onChange((e) => {
+      if (active.value !== index || pending.value) return;
       dy.value = e.translationY;
       const to = Math.round(e.translationY / pitch) + index;
       target.value = Math.min(Math.max(to, min), max);
     })
     .onEnd(() => {
+      if (active.value !== index || pending.value) return;
       const to = target.value;
-      if (to !== index) runOnJS(onDrop)(index, to);
+      if (to !== index) {
+        // КАРТИНКА ЗАМИРАЕТ ДО НОВОГО ПОРЯДКА. Раньше здесь всё сбрасывалось
+        // сразу: строка на потоке UI прыгала на старое место, а порядок из JS
+        // приезжал кадром-двумя позже и ставил её на новое — рывок, который
+        // владелец видел на каждом списке с ручкой (22.09). Теперь строка
+        // доезжает в свою ячейку и стоит, пока список не перерисуется.
+        pending.value = true;
+        dy.value = withTiming((to - index) * pitch, { duration: 120 });
+        runOnJS(onDrop)(index, to);
+      }
     })
     .onFinalize(() => {
-      dy.value = 0;
-      active.value = -1;
-      target.value = -1;
+      if (!pending.value && active.value === index) {
+        dy.value = 0;
+        active.value = -1;
+        target.value = -1;
+      }
       runOnJS(onActiveChange)(false);
     });
 
   const style = useAnimatedStyle(() => {
-    const dragging = active.value === index;
+    // МЕСТО, НА КОТОРОЕ СЧИТАНЫ ОБЩИЕ ЗНАЧЕНИЯ ЖЕСТА. Пока новый порядок не
+    // принят (`laid` ещё старый), строка, уже перерисованная на новом месте,
+    // сдвигается назад на разницу — и глаз видит ту же картинку, что до
+    // перерисовки. Сброс жеста и новый `laid` пишутся ОДНОЙ записью, поэтому
+    // в какой бы кадр ни пришли перерисовка и сброс, видимое не дёргается.
+    const at = laid.value.indexOf(id);
+    const from = at < 0 ? index : at;
+    const comp = (from - index) * pitch;
+    const dragging = active.value >= 0 && active.value === from;
     if (dragging) {
       return {
-        transform: [{ translateY: dy.value }, { scale: 1.02 }],
+        transform: [{ translateY: dy.value + comp }, { scale: 1.02 }],
         zIndex: 10,
         backgroundColor: t.surface,
       };
     }
+    const shift = shiftFor(from, active.value, target.value) * pitch;
     return {
       transform: [
         {
-          translateY: withTiming(
-            shiftFor(index, active.value, target.value) * pitch,
-            { duration: 140 },
-          ),
+          // Плавно — только пока тянут; замершая и сброшенная картинка
+          // ставится мгновенно, иначе догоняющая анимация и есть рывок.
+          translateY:
+            active.value >= 0 && !pending.value
+              ? withTiming(shift + comp, { duration: 140 })
+              : shift + comp,
         },
         { scale: 1 },
       ],
       zIndex: 0,
-      backgroundColor: "transparent",
+      // Строка-карточка (`spaced`) держит СВОЙ белый фон и здесь. Анимированный
+      // стиль reanimated пишется поверх статичного: «transparent» стирал фон
+      // карточки при первом же перетаскивании (на вебе — сразу), и строки
+      // становились серыми тенями на сером (найдено сборкой для Claude Design
+      // 21.09).
+      backgroundColor: spaced ? t.surface : "transparent",
     };
   });
 
@@ -243,18 +285,55 @@ export function ReorderList<T extends ReorderRow>({
   onDraggingChange?: (dragging: boolean) => void;
   children: (item: T, index: number, handle: ReactNode) => ReactNode;
 }) {
-  const active = useSharedValue(-1);
-  const target = useSharedValue(-1);
+  const ids = items.map((item) => item.id);
+  const orderKey = ids.join("|");
+  const drag: DragState = {
+    active: useSharedValue(-1),
+    target: useSharedValue(-1),
+    dy: useSharedValue(0),
+    laid: useSharedValue(ids),
+    pending: useSharedValue(false),
+  };
 
+  // Новый порядок перерисован — жест сбрасывается ОДНОЙ записью на потоке UI
+  // вместе с новым `laid` (почему это важно — у стиля строки).
+  const settle = useCallback(
+    (next: string[]) => {
+      const { active, target, dy, laid, pending } = drag;
+      runOnUI((order: string[]) => {
+        "worklet";
+        laid.value = order;
+        dy.value = 0;
+        active.value = -1;
+        target.value = -1;
+        pending.value = false;
+      })(next);
+    },
+    // Общие значения живут столько же, сколько список.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  useLayoutEffect(() => {
+    settle(orderKey ? orderKey.split("|") : []);
+  }, [orderKey, settle]);
+
+  // Экран может и не принять порядок (ошибка, запрет) — тогда перерисовки не
+  // будет, и замершая картинка вернётся к тому, что есть, сама.
+  const keyRef = useRef(orderKey);
+  keyRef.current = orderKey;
   const drop = useCallback(
     (from: number, to: number) => {
-      const ids = items.map((item) => item.id);
-      const [moved] = ids.splice(from, 1);
-      ids.splice(to, 0, moved);
+      const next = items.map((item) => item.id);
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
       haptics.success();
-      onReorder(ids);
+      const before = keyRef.current;
+      onReorder(next);
+      setTimeout(() => {
+        if (keyRef.current === before) settle(before ? before.split("|") : []);
+      }, 700);
     },
-    [items, onReorder],
+    [items, onReorder, settle],
   );
 
   const dragging = useCallback(
@@ -269,6 +348,7 @@ export function ReorderList<T extends ReorderRow>({
         return (
           <Row
             key={item.id}
+            id={item.id}
             index={index}
             rowHeight={rowHeight}
             min={min}
@@ -277,8 +357,7 @@ export function ReorderList<T extends ReorderRow>({
             handleInside={handleInside}
             spaced={spaced}
             onDrop={drop}
-            active={active}
-            target={target}
+            drag={drag}
             onActiveChange={dragging}
           >
             {(handle) => children(item, index, handle)}
