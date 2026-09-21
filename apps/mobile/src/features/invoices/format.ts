@@ -51,6 +51,25 @@ export function formatInvoiceDate(
   }).format(date);
 }
 
+/** Черновик позиции счёта. Числа держим строками, пока поле в фокусе:
+ *  переписывать значение на каждый ввод роняет каретку в конец строки —
+ *  число из строки достают на выходе из поля (`parseDecimal`/`parseMoneyAmount`).
+ *  Тип жил в `InvoiceLineEditor.tsx`; сам компонент нигде не рендерился и
+ *  снесён 2026-09-20 (канон «мёртвое сносится в том же заходе»), тип переехал
+ *  сюда — в общий модуль, который уже читают и форма, и бумага. */
+export interface EditableInvoiceLine {
+  id: string;
+  title: string;
+  /** Что входит в работу. Приезжает из описания услуги и дальше живёт своей
+   *  жизнью: правка в документе прайс не трогает. */
+  description?: string | null;
+  qty: string;
+  /** Единица количества: «4 м» на бумаге. Приезжает из услуги и с этого
+   *  момента принадлежит документу — как и описание. */
+  unit?: string | null;
+  unitPrice: string;
+}
+
 export function parseDecimal(value: string): number | null {
   const normalized = value.replace(/\s/g, "").replace(",", ".");
   if (!normalized || !/^\d+(?:\.\d{0,3})?$/.test(normalized)) return null;

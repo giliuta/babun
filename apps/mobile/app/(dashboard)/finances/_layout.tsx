@@ -46,6 +46,7 @@ const OWNER_ONLY_PATHS = [
   "/finances/vat",
   "/finances/vat-team",
   "/finances/invoices",
+  "/finances/requisites",
 ];
 
 export default function FinancesLayout() {

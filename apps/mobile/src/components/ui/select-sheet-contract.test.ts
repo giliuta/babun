@@ -24,7 +24,6 @@ const SHEETS = [
   "../../features/clients/ObjectPickerSheet.tsx",
   "../../features/clients/TagPickerSheet.tsx",
   "../../features/reference/LabelPickerSheet.tsx",
-  "../../features/invoices/EntityPickerSheet.tsx",
   "../../features/appointments/BookingPickers.tsx",
   "./PickerSheet.tsx",
   "./ValuePickerSheet.tsx",

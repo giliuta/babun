@@ -74,6 +74,11 @@ export interface InvoiceSellerSnapshot {
   display_name: string | null;
   legal_name: string | null;
   vat_number: string | null;
+  /** Регистрационный номер юрлица. Его печатает чек, и с 2026-09-21 обязан
+   *  печатать инвойс: два документа одной фирмы не имеют права представлять
+   *  её по-разному. `null` у документов, выписанных до справочника
+   *  реквизитов — тогда его просто не записывали. */
+  reg_number?: string | null;
   business_address: string | null;
   address: string | null;
   city: string | null;
@@ -115,6 +120,17 @@ export interface InvoiceLedger {
   client_id: string | null;
   appointment_id: string | null;
   brigade_id: string | null;
+  /** Реквизиты, которыми подписан документ (ссылка на `companies`, миграция
+   *  20260921000000). Печать всё равно берёт замороженный `seller_snapshot` —
+   *  это поле лишь метка «чем подписали»; у счетов до неё стоит `null`.
+   *  Необязательное — как `kind` и `vat_mode` выше — по той же причине:
+   *  написанные до миграции фикстуры и тесты его не знают. */
+  company_id?: string | null;
+  /** Счёт, куда клиенту предложено заплатить (ссылка на `accounts`) —
+   *  подсказка платежу, а не сам платёж: фактическую оплату несёт
+   *  `payment_id`, который проставляет `record_invoice_payment`.
+   *  Необязательное по той же причине, что и `company_id` выше. */
+  account_id?: string | null;
   subtotal_net: number;
   vat_percent: number;
   vat_amount: number;
@@ -396,6 +412,12 @@ export function parseInvoiceSellerSnapshot(
     display_name: stringValue(row.display_name),
     legal_name: stringValue(row.legal_name),
     vat_number: stringValue(row.vat_number),
+    // РАЗБОР — ЭТО ТОЖЕ ПЕЧАТЬ. Сервер клал `reg_number` и `logo_url` в
+    // снимок, а разбор их не читал: поля физически не доезжали до бумаги, и
+    // документ печатал СЕГОДНЯШНИЙ логотип арендатора вместо того, с которым
+    // его выслали.
+    reg_number: stringValue(row.reg_number),
+    logo_url: stringValue(row.logo_url),
     business_address: stringValue(row.business_address),
     address: stringValue(row.address),
     city: stringValue(row.city),

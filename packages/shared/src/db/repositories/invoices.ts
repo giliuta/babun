@@ -42,6 +42,13 @@ export interface IssueInvoiceDraft {
   lines: InvoiceLineDraft[];
   notes?: string | null;
   link_to_tx_id?: string | null;
+  /** Выбранные реквизиты (`companies.id`). Не задано — сервер сам подставит
+   *  основные реквизиты компании (`resolve_company_id`), поэтому контрольное
+   *  чтение сверяет это поле только когда черновик его явно задал. */
+  company_id?: string | null;
+  /** Счёт, куда клиенту предложено заплатить (`accounts.id`) — подсказка
+   *  платежу, а не сам платёж. Сервер его не подставляет по умолчанию. */
+  account_id?: string | null;
 }
 
 export interface EditInvoiceDraft {
@@ -53,6 +60,11 @@ export interface EditInvoiceDraft {
   vat_percent: number;
   lines: InvoiceLineDraft[];
   notes?: string | null;
+  /** Набор реквизитов и счёт — их принимает и правка (миграция
+   *  20260921010000). ПРАВКА ЗАМЕНЯЕТ ЧЕРНОВИК ЦЕЛИКОМ: не прислать поле
+   *  значит стереть выбранное, а не «оставить как было». */
+  company_id?: string | null;
+  account_id?: string | null;
 }
 
 function rowToInvoice(r: Row): InvoiceLedger {
@@ -68,6 +80,8 @@ function rowToInvoice(r: Row): InvoiceLedger {
     client_id: r.client_id,
     appointment_id: r.appointment_id,
     brigade_id: r.brigade_id,
+    company_id: r.company_id,
+    account_id: r.account_id,
     subtotal_net: Number(r.subtotal_net ?? 0),
     vat_percent: Number(r.vat_percent ?? 19),
     vat_amount: Number(r.vat_amount ?? 0),
@@ -165,6 +179,8 @@ export async function issueInvoice(
       })),
       p_notes: draft.notes?.trim() || null,
       p_link_to_tx_id: draft.link_to_tx_id ?? null,
+      p_company_id: draft.company_id ?? null,
+      p_account_id: draft.account_id ?? null,
     }),
   );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {
@@ -186,6 +202,8 @@ export async function issueInvoice(
     notes: draft.notes ?? null,
     vatMode: draft.vat_mode,
     vatPercent: draft.vat_percent,
+    companyId: draft.company_id ?? null,
+    accountId: draft.account_id ?? null,
     allowResolvedReferences: !!draft.link_to_tx_id,
   });
   return saved;
@@ -274,6 +292,8 @@ export async function updateInvoice(
       p_brigade_id: draft.brigade_id ?? null,
       p_vat_mode: draft.vat_mode,
       p_vat_percent: draft.vat_percent,
+      p_company_id: draft.company_id ?? null,
+      p_account_id: draft.account_id ?? null,
       p_lines: lines.map((line) => ({
         title: line.title,
         description: line.description ?? null,
@@ -303,6 +323,11 @@ export async function updateInvoice(
     vatMode: draft.vat_mode,
     vatPercent: draft.vat_percent,
     allowResolvedReferences: false,
+    // РЕКВИЗИТЫ И СЧЁТ СВЕРЯЮТСЯ И ПОСЛЕ ПРАВКИ. При выставлении это уже
+    // делалось; у правки поля просто забыли — а ошибка здесь означает НЕ ТОГО
+    // продавца (чужой номер НДС и чужой IBAN) на настоящем счёте.
+    companyId: draft.company_id ?? null,
+    accountId: draft.account_id ?? null,
   });
   return saved;
 }
@@ -320,6 +345,11 @@ function assertInvoiceControlRead(
     notes: string | null;
     vatMode: InvoiceVatMode;
     vatPercent: number;
+    // Необязательны, потому что `null` здесь значит «человек не выбирал»:
+    // сервер тогда подставляет ОСНОВНОЙ набор реквизитов (`resolve_company_id`),
+    // и сверять `null` с подставленным нельзя — сверка пропускается, см. ниже.
+    companyId?: string | null;
+    accountId?: string | null;
     allowResolvedReferences: boolean;
   },
 ): void {
@@ -341,6 +371,13 @@ function assertInvoiceControlRead(
     : saved.client_id === expected.clientId &&
       saved.appointment_id === expected.appointmentId &&
       saved.brigade_id === expected.brigadeId;
+  // РЕКВИЗИТЫ И СЧЁТ СВЕРЯЮТСЯ, ТОЛЬКО КОГДА ЧЕРНОВИК ИХ ВЫБРАЛ. `null`
+  // здесь не значит «пусто в базе»: сервер вправе подставить основной набор
+  // реквизитов сам (`resolve_company_id`), и сверка `null` с подставленным
+  // значением ложно уронила бы правильно выставленный счёт.
+  const requisitesMatch =
+    (expected.companyId == null || saved.company_id === expected.companyId) &&
+    (expected.accountId == null || saved.account_id === expected.accountId);
   const linesMatch =
     saved.lines.length === lines.length &&
     saved.lines.every((line, index) => {
@@ -366,7 +403,7 @@ function assertInvoiceControlRead(
         );
     });
 
-  if (!headerMatches || !referencesMatch || !linesMatch) {
+  if (!headerMatches || !referencesMatch || !requisitesMatch || !linesMatch) {
     throw new Error(
       "Контрольное чтение инвойса не совпало с отправленным документом",
     );

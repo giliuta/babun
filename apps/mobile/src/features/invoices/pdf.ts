@@ -22,7 +22,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
   const lineRows = doc.lines.map((line, index) => `
     <tr>
       <td class="line-number">${index + 1}</td>
-      <td class="line-title">${escapeHtml(line.title)}${
+      <td class="line-title">${escapeHtml(line.title || doc.dict.untitled)}${
         line.description
           ? `<div class="muted small">${escapeHtml(line.description)}</div>`
           : ""
@@ -49,6 +49,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
 <html lang="${doc.dict.locale.slice(0, 2)}">
 <head>
   <meta charset="utf-8" />
+  <title>${escapeHtml(doc.dict.invoiceEyebrow)} ${escapeHtml(doc.number)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     @page { size: A4; margin: 34px 38px 42px; }
@@ -118,12 +119,11 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       </div>
     </header>
 
+    <!-- КАРТОЧКИ «ПРОДАВЕЦ» ЗДЕСЬ НЕТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ: продавец уже
+         напечатан в шапке слева, вместе с логотипом. Две одинаковые колонки
+         имени, адреса, VAT и телефона подряд — это дубль, а не «подробнее»;
+         на экране InvoicePaper продавец тоже один. -->
     <section class="party-grid">
-      <div class="party">
-        <div class="party-title">${escapeHtml(doc.dict.seller)}</div>
-        <div class="party-name">${escapeHtml(doc.seller.name)}</div>
-        ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
-      </div>
       <div class="party">
         <div class="party-title">${escapeHtml(doc.dict.recipient)}</div>
         <div class="party-name">${escapeHtml(doc.client.name)}</div>
@@ -146,7 +146,9 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       <thead>
         <tr><th></th><th>${escapeHtml(doc.dict.lineTitle)}</th><th class="number">${escapeHtml(doc.dict.qty)}</th><th class="number">${escapeHtml(doc.dict.price)}</th><th class="number">${escapeHtml(doc.dict.amount)}</th></tr>
       </thead>
-      <tbody>${lineRows}</tbody>
+      <tbody>${lineRows || `
+        <tr><td colspan="5" class="muted">${escapeHtml(doc.dict.linesEmpty)}</td></tr>
+      `}</tbody>
     </table>
 
     <div class="totals-wrap">
@@ -157,7 +159,7 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       <section class="section">
         <h2>${escapeHtml(doc.dict.payTo)}</h2>
         ${doc.payTo.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
-        <div class="muted small">В назначении платежа укажите ${escapeHtml(doc.number)}.</div>
+        <div class="muted small">${escapeHtml(doc.dict.paymentPurpose(doc.number))}</div>
       </section>
     ` : ""}
 

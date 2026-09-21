@@ -948,6 +948,7 @@ export type Database = {
           id: string
           is_default: boolean
           legal_name: string | null
+          logo_url: string | null
           name: string
           position: number
           reg_number: string | null
@@ -966,6 +967,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           legal_name?: string | null
+          logo_url?: string | null
           name: string
           position?: number
           reg_number?: string | null
@@ -984,6 +986,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           legal_name?: string | null
+          logo_url?: string | null
           name?: string
           position?: number
           reg_number?: string | null
@@ -1954,10 +1957,12 @@ export type Database = {
       }
       invoices: {
         Row: {
+          account_id: string | null
           appointment_id: string | null
           brigade_id: string | null
           client_id: string | null
           client_snapshot: Json | null
+          company_id: string | null
           created_at: string
           created_by: string | null
           credit_note_of_id: string | null
@@ -1984,10 +1989,12 @@ export type Database = {
           year: number
         }
         Insert: {
+          account_id?: string | null
           appointment_id?: string | null
           brigade_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
@@ -2014,10 +2021,12 @@ export type Database = {
           year: number
         }
         Update: {
+          account_id?: string | null
           appointment_id?: string | null
           brigade_id?: string | null
           client_id?: string | null
           client_snapshot?: Json | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           credit_note_of_id?: string | null
@@ -4173,9 +4182,11 @@ export type Database = {
       }
       issue_invoice: {
         Args: {
+          p_account_id?: string
           p_appointment_id: string
           p_brigade_id: string
           p_client_id: string
+          p_company_id?: string
           p_due_on: string
           p_issued_on: string
           p_lines: Json
@@ -4885,9 +4896,11 @@ export type Database = {
       }
       update_invoice_draft: {
         Args: {
+          p_account_id?: string
           p_appointment_id: string
           p_brigade_id: string
           p_client_id: string
+          p_company_id?: string
           p_due_on: string
           p_invoice_id: string
           p_lines: Json

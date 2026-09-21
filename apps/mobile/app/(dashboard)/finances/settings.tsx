@@ -172,10 +172,11 @@ export default function FinanceSettingsScreen() {
                     <SettingsRow
                       tile="neutral"
                       icon={Building2}
-                      title="Реквизиты компании"
-                      sub="Печатаются в инвойсах и чеках"
-                      onPress={() => router.push("/cabinet/business")}
+                      title="Реквизиты"
+                      sub="Чем подписаны чеки и инвойсы"
+                      onPress={() => router.push("/finances/requisites")}
                     />
+
                   </>
                 ) : null}
               </SectionCard>

@@ -1,5 +1,16 @@
 import { Image, Text, View } from "react-native";
 import type { InvoiceDocument } from "./document";
+import { invoicePaperZones, type InvoicePaperHandlerFlags } from "./invoice-paper-zones";
+import {
+  Boxed,
+  Invite,
+  PAPER,
+  Party,
+  PressableZone,
+  Section,
+  cell,
+  headCell,
+} from "./InvoicePaperHotspots";
 
 // ЗЕРКАЛО ИНВОЙСА — ТА ЖЕ БУМАГА, ЧТО УЙДЁТ КЛИЕНТУ.
 //
@@ -14,22 +25,52 @@ import type { InvoiceDocument } from "./document";
 //
 // Лист рисуем в пропорции А4 по ширине экрана: шрифты мелкие намеренно, это
 // документ, а не интерфейс. Читать его будут на PDF, здесь — узнавать.
+//
+// ПЕРВЫЙ ЗАХОД ЗЕРКАЛА-СОСТАВИТЕЛЯ (владелец 2026-09-20): «добавляем инвойс —
+// открывается стандартный инвойс, кликаем на логотип — логотип добавился,
+// кликаем на адрес — адрес добавился, кликаем на клиента — добавился клиент».
+// Зоны бумаги зовут тапом готовые шторки составителя — коллбэками пропами,
+// сама бумага о шторках не знает. Пустое место печатает короткое приглашение
+// акцентным цветом вместо пустоты; какая зона нажимается и что приглашать —
+// решает чистая функция `invoicePaperZones` (тестируется отдельно, без
+// рендера дерева — в продукте нет RN-компонентных тестов). Без обработчика
+// зона остаётся обычным текстом: бумага обязана уметь быть просто бумагой —
+// она понадобится такой на экране уже выставленного документа.
 
-const PAPER = {
-  ink: "#111827",
-  body: "#475569",
-  muted: "#64748b",
-  faint: "#94a3b8",
-  line: "#e8edf3",
-  border: "#e2e8f0",
-  fill: "#f6f8fb",
-  accent: "#3157a4",
-  accentFill: "#eef3ff",
-  green: "#16794b",
-  red: "#b42318",
-};
+export interface InvoicePaperHandlers {
+  /** Тап по логотипу — реквизиты компании (`LogoRow` уже умеет загрузку). */
+  onPressLogo?: () => void;
+  /** Тап по продавцу (юр. имя/адрес/VAT/IBAN — одна зона) — тоже туда:
+   *  это данные компании на все будущие документы, не поле этого счёта. */
+  onPressSeller?: () => void;
+  onPressClient?: () => void;
+  /** `"issued"` приходит, только пока документ ещё черновик — у выставленного
+   *  дата выставления заморожена (см. `invoicePaperZones`). */
+  onPressDate?: (field: "issued" | "due") => void;
+  onPressLine?: (index: number) => void;
+  onPressTax?: () => void;
+  onPressNote?: () => void;
+}
 
-export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
+export function InvoicePaper({
+  doc,
+  onPressLogo,
+  onPressSeller,
+  onPressClient,
+  onPressDate,
+  onPressLine,
+  onPressTax,
+  onPressNote,
+}: { doc: InvoiceDocument } & InvoicePaperHandlers) {
+  const flags: InvoicePaperHandlerFlags = {
+    hasLogo: !!onPressLogo,
+    hasSeller: !!onPressSeller,
+    hasClient: !!onPressClient,
+    hasDate: !!onPressDate,
+    hasNote: !!onPressNote,
+  };
+  const zones = invoicePaperZones(doc, flags);
+
   return (
     <View
       style={{
@@ -46,22 +87,38 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
       {/* Шапка: кто выставил — слева, что за документ — справа. */}
       <View style={{ flexDirection: "row", gap: 16 }}>
         <View style={{ flex: 1 }}>
-          {doc.logoUrl ? (
-            <Image
-              source={{ uri: doc.logoUrl }}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-              style={{ width: 120, height: 40, marginBottom: 8 }}
-            />
-          ) : null}
-          <Text style={{ fontSize: 15, fontWeight: "800", color: PAPER.ink }}>
-            {doc.seller.name}
-          </Text>
-          {doc.seller.lines.map((line) => (
-            <Text key={line} style={{ fontSize: 10, color: PAPER.body, marginTop: 1 }}>
-              {line}
+          <PressableZone
+            onPress={zones.logo.interactive ? onPressLogo : undefined}
+            accessibilityLabel={doc.logoUrl ? "Заменить логотип" : "Добавить логотип"}
+          >
+            {doc.logoUrl ? (
+              <Image
+                source={{ uri: doc.logoUrl }}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+                style={{ width: 120, height: 40, marginBottom: 8 }}
+              />
+            ) : zones.logo.invite ? (
+              <Invite label={zones.logo.invite} style={{ marginBottom: 8 }} />
+            ) : null}
+          </PressableZone>
+          <PressableZone
+            onPress={zones.seller.interactive ? onPressSeller : undefined}
+            accessibilityLabel="Реквизиты компании"
+          >
+            <Text style={{ fontSize: 15, fontWeight: "800", color: PAPER.ink }}>
+              {doc.seller.name}
             </Text>
-          ))}
+            {zones.seller.invite ? (
+              <Invite label={zones.seller.invite} style={{ marginTop: 1 }} />
+            ) : (
+              doc.seller.lines.map((line) => (
+                <Text key={line} style={{ fontSize: 10, color: PAPER.body, marginTop: 1 }}>
+                  {line}
+                </Text>
+              ))
+            )}
+          </PressableZone>
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 1, color: PAPER.muted }}>
@@ -88,11 +145,26 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         </View>
       </View>
 
-      <Party title={doc.dict.recipient} party={doc.client} />
+      <Party
+        title={doc.dict.recipient}
+        party={doc.client}
+        invite={zones.client.invite}
+        onPress={zones.client.interactive ? onPressClient : undefined}
+      />
 
       <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-        <Boxed label={doc.dict.issuedOn} value={doc.issuedOn} />
-        <Boxed label={doc.dict.dueOn} value={doc.dueOn} />
+        <Boxed
+          label={doc.dict.issuedOn}
+          value={doc.issuedOn}
+          invite={zones.issuedOn.invite}
+          onPress={zones.issuedOn.interactive ? () => onPressDate?.("issued") : undefined}
+        />
+        <Boxed
+          label={doc.dict.dueOn}
+          value={doc.dueOn}
+          invite={zones.dueOn.invite}
+          onPress={zones.dueOn.interactive ? () => onPressDate?.("due") : undefined}
+        />
       </View>
 
       {/* Позиции */}
@@ -116,8 +188,10 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
           </Text>
         ) : (
           doc.lines.map((line, index) => (
-            <View
+            <PressableZone
               key={`${line.title}-${index}`}
+              onPress={onPressLine ? () => onPressLine(index) : undefined}
+              accessibilityLabel={`${line.title || doc.dict.untitled} — изменить`}
               style={{
                 flexDirection: "row",
                 alignItems: "flex-start",
@@ -159,14 +233,16 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               <Text style={[cell, { width: 74, fontWeight: "700", color: PAPER.ink }]}>
                 {line.total}
               </Text>
-            </View>
+            </PressableZone>
           ))
         )}
       </View>
 
-      {/* Итоги — прижаты вправо, как на бумаге. */}
+      {/* Итоги — прижаты вправо, как на бумаге. Налог правится тем же тапом. */}
       <View style={{ alignItems: "flex-end", marginTop: 14 }}>
-        <View
+        <PressableZone
+          onPress={onPressTax}
+          accessibilityLabel="Налог и итоги — изменить"
           style={{
             minWidth: 210,
             padding: 12,
@@ -209,7 +285,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               </Text>
             </View>
           ))}
-        </View>
+        </PressableZone>
       </View>
 
       {doc.payTo.length > 0 ? (
@@ -220,7 +296,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
             </Text>
           ))}
           <Text style={{ fontSize: 10, color: PAPER.muted, marginTop: 4 }}>
-            В назначении платежа укажите {doc.number}.
+            {doc.dict.paymentPurpose(doc.number)}
           </Text>
         </Section>
       ) : null}
@@ -269,7 +345,9 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
 
       {doc.notes ? (
         <Section title={doc.dict.notes}>
-          <View
+          <PressableZone
+            onPress={onPressNote}
+            accessibilityLabel="Комментарий — изменить"
             style={{
               paddingHorizontal: 12,
               paddingVertical: 10,
@@ -280,8 +358,19 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
             }}
           >
             <Text style={{ fontSize: 11, color: "#334155" }}>{doc.notes}</Text>
-          </View>
+          </PressableZone>
         </Section>
+      ) : zones.note.invite ? (
+        // Пустой комментарий не рисуем в отдельной секции с заголовком
+        // «Комментарий»: заголовок и приглашение сказали бы одно и то же
+        // слово дважды подряд. Приглашение — просто акцентная строка.
+        <PressableZone
+          onPress={onPressNote}
+          accessibilityLabel="Добавить комментарий"
+          style={{ marginTop: 18 }}
+        >
+          <Invite label={zones.note.invite} />
+        </PressableZone>
       ) : null}
 
       <Text
@@ -300,73 +389,3 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
   );
 }
 
-function Party({ title, party }: { title: string; party: InvoiceDocument["client"] }) {
-  return (
-    <View
-      style={{
-        marginTop: 16,
-        padding: 12,
-        borderWidth: 1,
-        borderColor: PAPER.border,
-        borderRadius: 10,
-      }}
-    >
-      <Text style={{ fontSize: 8, fontWeight: "700", letterSpacing: 0.8, color: PAPER.muted }}>
-        {title.toUpperCase()}
-      </Text>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginTop: 5 }}>
-        {party.name}
-      </Text>
-      {party.lines.map((line) => (
-        <Text key={line} style={{ fontSize: 11, color: PAPER.body, marginTop: 1 }}>
-          {line}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
-function Boxed({ label, value }: { label: string; value: string }) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        paddingHorizontal: 11,
-        paddingVertical: 9,
-        borderWidth: 1,
-        borderColor: PAPER.border,
-        borderRadius: 10,
-      }}
-    >
-      <Text style={{ fontSize: 9, color: PAPER.muted }}>{label}</Text>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginTop: 2 }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={{ marginTop: 18 }}>
-      <Text style={{ fontSize: 12, fontWeight: "700", color: PAPER.ink, marginBottom: 8 }}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-const headCell = {
-  fontSize: 8,
-  fontWeight: "700" as const,
-  letterSpacing: 0.4,
-  color: PAPER.muted,
-  textTransform: "uppercase" as const,
-};
-
-const cell = {
-  fontSize: 11,
-  color: PAPER.body,
-  textAlign: "right" as const,
-};

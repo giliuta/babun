@@ -38,6 +38,25 @@ export interface InvoiceDictionary {
   netAmount: string;
   vatOf: (percent: string) => string;
   grandTotal: string;
+  /** Регистрационный номер юрлица в строках продавца — как у чека. */
+  regNumber: string;
+  /** Номер черновику ещё не выдан: настоящий рождается на сервере в момент
+   *  выставления, и показать угаданный значит однажды показать не тот. */
+  numberPending: string;
+  /** Подпись под реквизитами для оплаты. Жила зашитой по-русски В ДВУХ
+   *  рендерах сразу, и английский счёт просил «указать в назначении
+   *  платежа» русскими словами. */
+  paymentPurpose: (number: string) => string;
+  /** Способ платежа в истории оплат: он приходит кодом, а печатается на
+   *  языке документа. До этого печатался словарём приложения — в английском
+   *  счёте стояло «Банк». */
+  method_cash: string;
+  method_card: string;
+  method_bank: string;
+  method_other: string;
+  /** Подвал выставленного документа. Был зашит по-русски и печатался
+   *  последней строкой английского счёта. */
+  footer: (number: string, currency: string) => string;
   payTo: string;
   bank: string;
   payment: string;
@@ -83,11 +102,24 @@ const RU: InvoiceDictionary = {
   amount: "Сумма",
   untitled: "Без названия",
   subtotal: "Сумма",
-  vatInclusive: "НДС включён в цены",
-  vatExclusive: "НДС начислен сверху",
-  netAmount: "Без НДС",
-  vatOf: (percent) => `НДС · ${percent}`,
+  // VAT, А НЕ «НДС» (владелец 2026-09-20: «пиши VAT»). Слово отменяет его же
+  // закон от 09.08 и меняется ВЕЗДЕ, где его читает человек: бумага, шторка
+  // «Итого», форма операции. Один документ, говорящий на двух языках про один
+  // налог, читается как два разных налога.
+  vatInclusive: "VAT включён в цены",
+  vatExclusive: "VAT начислен сверху",
+  netAmount: "Без VAT",
+  vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "К оплате",
+  regNumber: "Рег. №",
+  numberPending: "Номер присвоится при выставлении",
+  paymentPurpose: (number) => `В назначении платежа укажите номер ${number}.`,
+  method_cash: "Наличные",
+  method_card: "Карта",
+  method_bank: "Банк",
+  method_other: "Другое",
+  footer: (number, currency) =>
+    `Документ сформирован из данных инвойса ${number}. Валюта: ${currency}.`,
   payTo: "Реквизиты для оплаты",
   bank: "Банк",
   payment: "Оплата",
@@ -98,7 +130,9 @@ const RU: InvoiceDictionary = {
   refundRow: "Возврат",
   notes: "Комментарий",
   draftFooter: (number) =>
-    `Черновик. Номер ${number} закрепится за документом при выставлении.`,
+    number
+      ? `Черновик. Номер ${number} закрепится за документом при выставлении.`
+      : "Черновик. Номер закрепится за документом при выставлении.",
   invoiceEyebrow: "Инвойс",
   paymentsDate: "Дата",
   paymentsOperation: "Операция",
@@ -139,6 +173,15 @@ const EN: InvoiceDictionary = {
   netAmount: "Net amount",
   vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "Total due",
+  regNumber: "Reg. No",
+  numberPending: "Number will be assigned on issue",
+  paymentPurpose: (number) => `Please quote invoice ${number} as the payment reference.`,
+  method_cash: "Cash",
+  method_card: "Card",
+  method_bank: "Bank transfer",
+  method_other: "Other",
+  footer: (number, currency) =>
+    `Document generated from invoice ${number}. Currency: ${currency}.`,
   payTo: "Payment details",
   bank: "Bank",
   payment: "Payment",
@@ -149,7 +192,9 @@ const EN: InvoiceDictionary = {
   refundRow: "Refund",
   notes: "Notes",
   draftFooter: (number) =>
-    `Draft. Number ${number} will be assigned when the invoice is issued.`,
+    number
+      ? `Draft. Number ${number} will be assigned when the invoice is issued.`
+      : "Draft. The number will be assigned when the invoice is issued.",
   invoiceEyebrow: "Invoice",
   paymentsDate: "Date",
   paymentsOperation: "Operation",

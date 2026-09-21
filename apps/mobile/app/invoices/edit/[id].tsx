@@ -94,6 +94,11 @@ export default function EditInvoiceScreen() {
       vat_percent: value.vat_percent,
       lines: value.lines,
       notes: value.notes,
+      // Реквизиты и счёт правятся наравне с остальным: дверь их принимает
+      // с 20260921010000, а экран сюда вообще не пускает документ, который
+      // править нельзя (оплаченный или не `issued` — выше пустое состояние).
+      company_id: value.company_id,
+      account_id: value.account_id,
     });
     router.replace(`/invoices/${id}` as Href);
   };

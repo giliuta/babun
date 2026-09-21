@@ -145,7 +145,7 @@ export default function NewReceiptScreen() {
         onChange={change}
         // Компании живут на странице реквизитов: владелец 2026-09-20 попросил
         // совместить их в одном месте, и второй двери к ним нет.
-        onOpenCompany={() => router.push("/cabinet/business" as Href)}
+        onOpenCompany={() => router.push("/requisites" as Href)}
         footer={
           <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
             {/* Причина — словами над кнопкой, как в «Финансах»: серая кнопка

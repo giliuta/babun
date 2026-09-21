@@ -23,7 +23,7 @@ export function buildInvoiceShareText(doc: InvoiceDocument): string {
     ...doc.seller.lines,
     `${doc.dict.invoiceEyebrow} ${doc.number}`,
     `${doc.dict.issuedOn}: ${doc.issuedOn}`,
-    doc.dueOn ? `${doc.dict.dueOn}: ${doc.dueOn}` : null,
+    doc.dueOnKnown ? `${doc.dict.dueOn}: ${doc.dueOn}` : null,
     lines.length > 0 ? "" : null,
     ...lines,
     "",

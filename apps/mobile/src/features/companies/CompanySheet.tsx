@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { ControlRow, NavRow } from "@/components/ui/card-rows";
 import { Field } from "@/components/ui/Field";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { LogoRow } from "@/features/settings/LogoRow";
 import { useThemeColors } from "@/theme/colors";
 import type { Company, CompanyDraft } from "./queries";
 
@@ -19,6 +20,7 @@ import type { Company, CompanyDraft } from "./queries";
 
 const EMPTY: CompanyDraft = {
   name: "",
+  logo_url: null,
   legal_name: null,
   business_address: null,
   vat_number: null,
@@ -58,6 +60,7 @@ export function CompanySheet({
       company
         ? {
             name: company.name,
+            logo_url: company.logo_url,
             legal_name: company.legal_name,
             business_address: company.business_address,
             vat_number: company.vat_number,
@@ -117,6 +120,16 @@ export function CompanySheet({
             )}
           </SectionCard>
         ) : null}
+        {/* ЛОГОТИП ПРИНАДЛЕЖИТ НАБОРУ (владелец 2026-09-20: «логотип, я думаю,
+            мы будем добавлять это в реквизиты»). Ряд тот же, что в настройках
+            компании, — второй загрузки картинки в продукте нет. Пусто —
+            бумага печатает логотип компании целиком, как раньше. */}
+        <SectionCard title="Логотип">
+          <LogoRow
+            logoUrl={draft.logo_url ?? null}
+            onChange={(logo_url) => set({ logo_url })}
+          />
+        </SectionCard>
         <Field
           label="Название"
           value={draft.name}

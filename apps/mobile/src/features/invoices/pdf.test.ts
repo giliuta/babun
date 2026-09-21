@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import type { Client } from "@babun/shared/local/clients";
 import type { InvoiceLedgerWithLines } from "@babun/shared/local/finance/invoice-ledger";
 import type { Tenant } from "@/features/settings/tenant";
+import { PAPER_INVITE } from "./invoice-paper-zones";
 import { buildInvoicePdfHtml, escapeHtml } from "./pdf";
 
 const invoice: InvoiceLedgerWithLines = {
@@ -247,5 +248,50 @@ describe("invoice PDF HTML", () => {
 
   it("escapes every HTML control character", () => {
     assert.equal(escapeHtml(`<&>\"'`), "&lt;&amp;&gt;&quot;&#039;");
+  });
+
+  // ПЕРВЫЙ ЗАХОД ЗЕРКАЛА-СОСТАВИТЕЛЯ (2026-09-20): пустые зоны бумаги в
+  // составителе печатают короткое приглашение акцентным цветом («Логотип»,
+  // «Юр. адрес», «Выбрать клиента», «Срок оплаты», «Комментарий»). Эти слова
+  // живут ТОЛЬКО в `InvoicePaper.tsx` (через `invoicePaperZones`) — сам PDF
+  // рисуется отдельным шаблоном из той же модели `InvoiceDocument` и о
+  // приглашениях не знает вовсе. Документ ниже пуст ровно там, где бумага
+  // предлагает эти слова: без логотипа, без реквизитов продавца, без
+  // клиента, без срока оплаты и без комментария.
+  it("never prints the paper's empty-state invitations", () => {
+    const html = buildInvoicePdfHtml({
+      draft: {
+        number: "Номер присвоится при выставлении",
+        issuedOn: "2026-09-20",
+        dueOn: null,
+        clientId: null,
+        lines: [],
+        vatMode: "off",
+        vatPercent: 0,
+        subtotalNet: 0,
+        vatAmount: 0,
+        total: 0,
+        currency: "EUR",
+        notes: "",
+      },
+      tenant: {
+        ...tenant,
+        legal_name: null,
+        business_address: null,
+        vat_number: null,
+        iban: null,
+        bank_name: null,
+        contact_email: null,
+        contact_phone: null,
+        logo_url: null,
+      },
+    });
+
+    for (const invite of Object.values(PAPER_INVITE)) {
+      assert.ok(
+        !html.includes(invite),
+        `PDF содержит приглашение бумаги «${invite}» — оно должно жить только на экране`,
+      );
+    }
   });
 });

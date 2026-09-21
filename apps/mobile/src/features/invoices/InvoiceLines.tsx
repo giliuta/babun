@@ -12,8 +12,12 @@ import { useThemeColors } from "@/theme/colors";
 import { invoiceLineTotal } from "@babun/shared/local/finance/invoice-ledger";
 import { durationLabel } from "@/features/services/format";
 import type { Service } from "@/features/services/queries";
-import { formatInvoiceMoney, parseDecimal, parseMoneyAmount } from "./format";
-import type { EditableInvoiceLine } from "./InvoiceLineEditor";
+import {
+  type EditableInvoiceLine,
+  formatInvoiceMoney,
+  parseDecimal,
+  parseMoneyAmount,
+} from "./format";
 
 // ПОЗИЦИЯ — КАРТОЧКА, А НЕ АНКЕТА (владелец 2026-08-25, по прокликанному
 // мокапу). Раньше каждая строка счёта разворачивалась формой из четырёх полей:
@@ -239,8 +243,11 @@ function Stepper({
 }
 
 /** Лист позиции. Рисуется на открытие и во время ввода не пересобирается —
- *  значения лежат в строках родителя, поэтому каретка стоит на месте. */
-function LineSheet({
+ *  значения лежат в строках родителя, поэтому каретка стоит на месте.
+ *  Экспортирован: бумага инвойса (`InvoicePaperScreen`) открывает тот же лист
+ *  по тапу на строку — второй формы позиции заводить нельзя (канон
+ *  «Берём готовое»). */
+export function LineSheet({
   line,
   currency,
   first,
@@ -270,7 +277,7 @@ function LineSheet({
     <BottomSheet
       visible={!!line}
       onClose={onClose}
-      title={line?.title.trim() || "Позиция"}
+      title={line?.title.trim() || "Услуга"}
       avoidKeyboard
       scroll
     >
@@ -367,7 +374,8 @@ function LineSheet({
 }
 
 /** Каталог: позиция заводится ВЫБОРОМ из прайса. Своя строка тоже нужна —
- *  в счёт попадает не только то, что лежит в справочнике.
+ *  в счёт попадает не только то, что лежит в справочнике. */
+/** Каталог услуг одним листом с поиском и строкой «Своя строка».
  *
  *  ЭКСПОРТИРОВАН, потому что его зовёт не только счёт: составитель чека
  *  выбирает позиции ИЗ ТОГО ЖЕ каталога тем же жестом (владелец 2026-09-20:
@@ -434,8 +442,8 @@ export function CatalogSheet({
           title={query.trim() ? "Услуги не найдены" : "Прайс пуст"}
           subtitle={
             query.trim()
-              ? "Измените запрос или добавьте свою строку."
-              : "Добавьте свою строку — она уйдёт только в этот счёт."
+              ? "Измените запрос или добавьте свою услугу."
+              : "Своя услуга уйдёт только в этот счёт и в прайс не попадёт."
           }
         />
       ) : (
@@ -482,7 +490,7 @@ export function CatalogSheet({
       )}
 
       <Button
-        label="Своя строка"
+        label="Своя услуга"
         variant="secondary"
         onPress={() => onPick(null)}
       />
