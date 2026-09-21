@@ -53,6 +53,11 @@ export const SHEET_EXIT_MS = 260;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+/** Обычная JS-функция для `runOnJS`: жест не должен захватывать `Keyboard`. */
+function dismissKeyboard() {
+  Keyboard.dismiss();
+}
+
 export function BottomSheet({
   visible,
   onClose,
@@ -202,7 +207,10 @@ export function BottomSheet({
     // клавиатуру (отдельное окно выше приложения), палец идёт, а порог
     // закрытия не достигается: жест читается как сломанный.
     .onStart(() => {
-      runOnJS(Keyboard.dismiss)();
+      // СВОЯ ФУНКЦИЯ, А НЕ `Keyboard.dismiss` (2026-09-22): ссылка на метод
+      // тянула в worklet весь объект `Keyboard`, и вызов на потоке UI падал
+      // нативным abort — любой лист ронял приложение при свайпе за грабер.
+      runOnJS(dismissKeyboard)();
     })
     .onChange((e) => {
       ty.value = Math.max(0, ty.value + e.changeY);
