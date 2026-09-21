@@ -33,8 +33,10 @@ import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeamVatOverrides, useVatSettings } from "@/features/finances/vat-queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
+import { companyDetail } from "@/features/companies/company-rules";
 import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { iconPreset } from "@/components/ui/icon-set";
 
 // СОСТАВИТЕЛЬ ЧЕКА — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ.
 //
@@ -341,9 +343,13 @@ export function ReceiptComposer({
           ...liveCompanies.map((c) => ({
             id: c.id,
             label: c.name,
-            hint: c.is_default ? "Основные" : (c.business_address ?? undefined),
-            icon: Building2,
-            color: t.accent,
+            // Та же подпись, что на странице «Реквизиты»: один набор
+          // не выглядит в выборе иначе, чем в справочнике.
+          hint: companyDetail(c),
+            // Вид набора — его собственный: две фирмы в списке различает
+            // плитка, а не чтение имени. Нет вида — прежний «дом» акцентом.
+            icon: iconPreset(c.icon) ?? Building2,
+            color: c.color ?? t.accent,
             onPress: () => onChange({ companyId: c.id }),
           })),
         ]}

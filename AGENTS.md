@@ -403,6 +403,7 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Настройки страницы события | `app/(dashboard)/cabinet/booking-event.tsx` | `calendar/booking-event.tsx` |
 | Счёт (создание = правка) | страница «Счета» `app/accounts/settings.tsx` (строки `finances/accounts-page/AccountRow.tsx`, порядок, «Скрыть», «Добавить счёт») + `archive.tsx`; ОДИН лист создания и правки `finances/account-editor/AccountEditorSheet.tsx` | Ползунки панели «Счета» и шестерёнка «Финансов» ведут на одну страницу; `app/accounts/index.tsx` — указатель на панель «Счета», `[id]/index.tsx` и `[id]/settings.tsx` — редиректы на «Счета» с `?edit=<id>`; вид — общий блок; закрытие мягкое |
 | Способы связи | `app/(dashboard)/clients/channels.tsx` | `app/(shared)/channels.tsx` |
+| Реквизиты (справочник + лист создания = правки) | `src/features/companies/RequisitesScreen.tsx` + `CompanySheet.tsx`; правила подписи и чистки — `company-rules.ts` | `finances/requisites.tsx`, `app/(shared)/requisites.tsx`; выбор в инвойсе и чеке — `PickerSheet` с той же подписью (`companyDetail`) |
 | Карты для маршрута | `app/(dashboard)/clients/maps.tsx` | `app/(shared)/maps.tsx` |
 
 **Реестр выбора — какой блок открывает какую шторку и что написано на кнопке.**

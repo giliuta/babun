@@ -15,8 +15,12 @@ import { useTenantId } from "@/lib/tenant";
 // имени которых печатают бумаги. Слово одно, сущности разные, и путать их
 // нельзя: первое про доступ, второе про подпись под документом.
 //
-// УДАЛЕНИЯ НЕТ, ЕСТЬ АРХИВ. Выданный чек ссылается на компанию, от которой
-// выписан; стереть её значит оставить бумагу без продавца.
+// СКРЫТЬ И УДАЛИТЬ — ДВА РАЗНЫХ ДЕЙСТВИЯ (владелец 2026-09-22: «вправо
+// сдвинуть — удалить, влево — скрывать, чтоб оно больше не показывалось»).
+// Скрытый набор (`archived_at`) пропадает из выбора в чеке и инвойсе, но
+// живёт в справочнике серой строкой. Удалённый уходит совсем — бумаге это не
+// вредит: и чек, и инвойс печатают продавца из СВОЕГО снимка
+// (`seller_snapshot`), а не из живой строки.
 
 export type Company = Database["public"]["Tables"]["companies"]["Row"];
 export type CompanyDraft = Omit<
@@ -115,6 +119,71 @@ export function useArchiveCompany() {
       if (error) throw new Error(error.message);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    meta: { errorHandled: true },
+  });
+}
+
+/** Удаление набора. Бумага от него не страдает: чек и инвойс печатают свой
+ *  снимок, а их связь с набором при удалении обнуляется (`on delete set
+ *  null`, миграция 20260922020000). */
+export function useDeleteCompany() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("companies")
+        .delete()
+        .eq("id", id)
+        .eq("tenant_id", tenantId as string);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["companies"] }),
+    meta: { errorHandled: true },
+  });
+}
+
+/** Порядок — тот, что человек перетащил. Пишется только у строк, чьё место
+ *  поменялось: наборов единицы, отдельный RPC ради этого не нужен. */
+export function useReorderCompanies() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (moves: { id: string; position: number }[]) => {
+      for (const move of moves) {
+        const { error } = await supabase
+          .from("companies")
+          .update({ position: move.position })
+          .eq("id", move.id)
+          .eq("tenant_id", tenantId as string);
+        if (error) throw new Error(error.message);
+      }
+    },
+    // ПОРЯДОК ВИДЕН СРАЗУ: без этого отпущенная строка на секунду прыгала
+    // на старое место и возвращалась, когда сервер отвечал. Ошибка —
+    // откат к тому, что было.
+    // СИНХРОННО, без `await`: ожидание отмены запросов отодвигало новый порядок
+    // на кадры после отпускания, и строка успевала отпрыгнуть на старое место
+    // (владелец 22.09: «рывок был»). Отмена уходит фоном, данные — сразу.
+    onMutate: (moves) => {
+      const key = companiesQueryKey(tenantId);
+      void qc.cancelQueries({ queryKey: key });
+      const before = qc.getQueryData<Company[]>(key);
+      if (before) {
+        const at = new Map(moves.map((m) => [m.id, m.position]));
+        qc.setQueryData<Company[]>(
+          key,
+          before
+            .map((c) => ({ ...c, position: at.get(c.id) ?? c.position }))
+            .sort((a, b) => a.position - b.position),
+        );
+      }
+      return { before };
+    },
+    onError: (_error, _moves, context) => {
+      if (context?.before) qc.setQueryData(companiesQueryKey(tenantId), context.before);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["companies"] }),
     meta: { errorHandled: true },
   });
 }

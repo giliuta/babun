@@ -941,10 +941,12 @@ export type Database = {
           archived_at: string | null
           bank_name: string | null
           business_address: string | null
+          color: string | null
           contact_email: string | null
           contact_phone: string | null
           created_at: string
           iban: string | null
+          icon: string | null
           id: string
           is_default: boolean
           legal_name: string | null
@@ -960,10 +962,12 @@ export type Database = {
           archived_at?: string | null
           bank_name?: string | null
           business_address?: string | null
+          color?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
           iban?: string | null
+          icon?: string | null
           id?: string
           is_default?: boolean
           legal_name?: string | null
@@ -979,10 +983,12 @@ export type Database = {
           archived_at?: string | null
           bank_name?: string | null
           business_address?: string | null
+          color?: string | null
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
           iban?: string | null
+          icon?: string | null
           id?: string
           is_default?: boolean
           legal_name?: string | null

@@ -20,11 +20,13 @@ import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
+import { companyDetail } from "@/features/companies/company-rules";
 import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
+import { iconPreset } from "@/components/ui/icon-set";
 import { CatalogSheet, LineSheet } from "./InvoiceLines";
 import { InvoiceDateRow } from "./InvoiceDateRow";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
@@ -321,9 +323,13 @@ export function InvoiceBlocks({
         items={liveCompanies.map((c) => ({
           id: c.id,
           label: c.name,
-          hint: c.is_default ? "Основные" : (c.business_address ?? undefined),
-          icon: Building2,
-          color: t.accent,
+          // Та же подпись, что на странице «Реквизиты»: один набор
+          // не выглядит в выборе иначе, чем в справочнике.
+          hint: companyDetail(c),
+          // Вид набора — его собственный: две фирмы в списке различает
+          // плитка, а не чтение имени. Нет вида — прежний «дом» акцентом.
+          icon: iconPreset(c.icon) ?? Building2,
+          color: c.color ?? t.accent,
           onPress: () => onCompanyChange(c.id),
         }))}
         selectedId={company?.id ?? null}
