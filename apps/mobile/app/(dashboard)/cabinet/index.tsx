@@ -27,6 +27,7 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import { TYPE } from "@/components/ui/tokens";
 import { InvitationsRow } from "@/features/access/InvitationsRow";
+import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
@@ -55,6 +56,15 @@ export default function CabinetHome() {
         <SectionCard>
           <InvitationsRow />
         </SectionCard>
+
+        {/* АРХИВ — ТОЛЬКО ВЛАДЕЛЬЦУ: в архив календарь уводит он, и только
+            он может вернуть его или стереть навсегда (владелец 2026-09-21:
+            «архив засунь в Кабинет»). */}
+        {role === "owner" ? (
+          <SectionCard>
+            <ArchiveRow />
+          </SectionCard>
+        ) : null}
 
         <SectionCard>
           <SettingsRow

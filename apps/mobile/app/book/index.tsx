@@ -306,6 +306,9 @@ export default function BookScreen() {
 
   // ── справочные данные (кеш уже тёплый — календарь грузит те же ключи) ──
   const teamsQuery = useTeams();
+  // Весь справочник, с архивом — только чтобы назвать календарь записи,
+  // ушедшей в архив. Ключ общий с `teamsQuery`: сети это не добавляет.
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
   const mastersQuery = useMasters();
   const servicesQuery = useServices();
   // Услуга типа «варианты» продаётся выбором объёма работ, а не количеством:
@@ -680,7 +683,16 @@ export default function BookScreen() {
   //
   // МОЛЧИТ, КОГДА МЕТКИ СОВПАЛИ: сообщать «вы записываете клиента туда же,
   // куда и всегда» — это шум, который научит не читать плашки вовсе.
-  const team = teams.find((tm) => tm.id === teamId) ?? null;
+  // ЗАПИСЬ АРХИВНОГО КАЛЕНДАРЯ — ТОЛЬКО ДЛЯ ПРОСМОТРА (владелец 2026-09-21:
+  // «можно посмотреть запись… но оно всё в архиве, то есть уже удалено»). Её
+  // открывают из карточки клиента; календаря в живом списке нет, поэтому имя,
+  // цвет и часовой пояс берутся из архива. Ни сохранить, ни принять оплату в
+  // архив нельзя — деньги архивного календаря в живых финансах не существуют.
+  const archivedTeam = isEdit
+    ? allTeams.find((tm) => tm.id === teamId && !tm.is_active) ?? null
+    : null;
+  const archivedRecord = archivedTeam !== null;
+  const team = teams.find((tm) => tm.id === teamId) ?? archivedTeam;
   const clientLabel = (client?.city ?? "").trim();
   // МЕТКА ДНЯ — РОВНО ТА, ЧТО СТОИТ НА ДНЕ В КАЛЕНДАРЕ. Здесь звался
   // `resolveDayLabel` из shared: он знает только про ЯВНО поставленную метку
@@ -1706,7 +1718,9 @@ export default function BookScreen() {
         clientId == null
         ? "Выберите клиента"
       : !hasValidTeam
-        ? "Выберите команду"
+        ? archivedRecord
+          ? "Календарь в архиве — запись только для просмотра"
+          : "Выберите команду"
       : !workSelectionValid
         ? "Проверьте услуги и мастера для этой команды"
         : "Проверьте услуги и мастера для этой команды";
@@ -2293,7 +2307,13 @@ export default function BookScreen() {
                   этого выезда (владелец 2026-09-04: «можем совместить команду
                   и метку в одно, а время поставить блоком ниже»). */}
               <TeamLabelRow
-                teamName={team?.name ?? "Команда"}
+                teamName={
+                  team
+                    ? archivedRecord
+                      ? `${team.name} · в архиве`
+                      : team.name
+                    : "Команда"
+                }
                 teamColor={team?.color ?? t.accent}
                 masterName={
                   masterId
@@ -2307,6 +2327,8 @@ export default function BookScreen() {
                 labelFromDay={city == null}
                 showLabel={showLabelBlock}
                 onEditTeam={() => {
+                  // Из архива запись не переносят: она только для просмотра.
+                  if (archivedRecord) return;
                   setTeamSheetOpen(true);
                   haptics.tap();
                 }}
@@ -2534,7 +2556,9 @@ export default function BookScreen() {
               {/* Оплата — сразу после «Итого»: плитки счетов команды, тап
                   пишет деньги сразу (STORY-065). Выключается в Кабинет →
                   «Запись»: не всякий бизнес принимает деньги в записи. */}
-              {showPayment ? (
+              {/* В архив деньги не принимаются: у архивного календаря счетов в
+                  живых финансах нет, а блок пишет оплату сразу, мимо «Сохранить». */}
+              {showPayment && !archivedRecord ? (
                 <PaymentBlock
                   appointment={editing}
                   teamId={teamId}

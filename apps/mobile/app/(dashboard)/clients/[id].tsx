@@ -60,6 +60,8 @@ import {
   useUpdateClient,
 } from "@/features/clients/queries";
 import { useArchiveWithUndo } from "@/features/clients/archive-undo";
+import { archivedVisitTag } from "@/features/clients/archived-visit";
+import { useTeams } from "@/features/reference/queries";
 import { daysLeft, daysWordRu } from "@/features/clients/HiddenClientsScreen";
 import { TRASH_DAYS } from "@babun/shared/db/repositories/clients";
 import { useClientAppointments } from "@/features/clients/appointments";
@@ -635,6 +637,9 @@ function ArchivedClientView({
   const history = [...appointments].sort((a, b) =>
     `${b.date}T${b.time_start}`.localeCompare(`${a.date}T${a.time_start}`),
   );
+  // Заявка архивного календаря называет свою команду (`archived-visit.ts`).
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
+  const teamsById = new Map(allTeams.map((team) => [team.id, team]));
 
   return (
     <Screen edges={["top"]}>
@@ -701,7 +706,12 @@ function ArchivedClientView({
                       {humanDay(appointment.date)} · {appointment.time_start}–{appointment.time_end}
                     </Text>
                     <Text className="mt-1 text-xs" style={{ color: t.sub }} numberOfLines={2}>
-                      {names.join(" · ") || STATUS_LABELS[appointment.status] || "Заявка"}
+                      {[
+                        archivedVisitTag(appointment.team_id, teamsById),
+                        names.join(" · ") || STATUS_LABELS[appointment.status] || "Заявка",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </Text>
                   </View>
                 </View>

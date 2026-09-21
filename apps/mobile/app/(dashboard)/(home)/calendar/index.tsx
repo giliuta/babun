@@ -40,7 +40,6 @@ import {
 } from "@/features/settings/local-settings";
 import {
   useCities,
-  useDeleteTeam,
   useTeams,
   useUpdateTeam,
 } from "@/features/reference/queries";
@@ -48,6 +47,8 @@ import { useAllTeamSchedules } from "@/features/reference/team-schedule";
 import { SavedIndicator } from "@/features/calendar/SavedIndicator";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import { schedulePreview } from "@/features/calendar/schedule-days";
+import { ARCHIVE_CALENDAR_MESSAGE } from "@/features/calendar/calendar-delete";
+import { useCalendarDelete } from "@/features/calendar/useCalendarDelete";
 import { HourRangeSheet } from "@/features/calendar/HourRangeSheet";
 import { TimezoneSheet } from "@/features/calendar/TimezoneSheet";
 import { calendarSettingsRows } from "@/features/calendar/settings-rows";
@@ -157,7 +158,7 @@ export default function CalendarSettingsScreen() {
   const { data: schedules = {} } = useAllTeamSchedules();
   const update = useUpdateTeam();
   const saveSettings = useSaveCalendarSettings();
-  const removeTeam = useDeleteTeam();
+  const archiveTeam = useCalendarDelete().archive;
   const toast = useToast();
   const [savedTick, setSavedTick] = useState(0);
   // Отдельной двери к общим «Рабочим часам» больше нет (владелец 2026-08-17):
@@ -692,20 +693,23 @@ export default function CalendarSettingsScreen() {
                       );
                       return;
                     }
+                    // «УДАЛИТЬ» УВОДИТ В АРХИВ (владелец 2026-09-21: «удаляешь —
+                    // оно кидается в архив… потом можно удалить с архива»).
+                    // Шаг обратим, поэтому вопрос короткий и без цифр; стереть
+                    // навсегда можно только из Кабинета → «Архив».
                     confirmThen(
                       `Удалить календарь «${team.name}»?`,
                       {
-                        message:
-                          "Он пропадёт из ленты. Записи и деньги останутся в базе — их видно в отчётах.",
+                        message: ARCHIVE_CALENDAR_MESSAGE,
                         confirmLabel: "Удалить",
                         destructive: true,
                       },
                       () =>
-                        removeTeam.mutate(team.id, {
+                        archiveTeam.mutate(team.id, {
                           onSuccess: () => {
-                            // Экран смотрел на удалённый календарь: уводим на
+                            // Экран смотрел на ушедший календарь: уводим на
                             // соседний, иначе он показывает настройки того,
-                            // чего уже нет.
+                            // чего в ленте уже нет.
                             const next = teams.find((x) => x.id !== team.id);
                             router.setParams({ team: next?.id });
                           },
@@ -713,7 +717,7 @@ export default function CalendarSettingsScreen() {
                         }),
                     );
                   }}
-                  disabled={removeTeam.isPending}
+                  disabled={archiveTeam.isPending}
                   accessibilityRole="button"
                   accessibilityLabel={`Удалить календарь ${team.name}`}
                   className="min-h-[52px] flex-row items-center justify-center gap-2 px-4 py-3.5"

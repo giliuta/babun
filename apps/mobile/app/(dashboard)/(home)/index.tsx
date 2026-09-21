@@ -267,19 +267,16 @@ export default function CalendarTab() {
     error: teamsQueryError,
     refetch: refetchTeams,
   } = useTeams();
-  // АРХИВНАЯ КОМАНДА НЕ УНОСИТ СВОЮ РАБОТУ С СОБОЙ.
+  // УДАЛЁННЫХ КАЛЕНДАРЕЙ В ЛЕНТЕ НЕТ — НИ ЗДЕСЬ, НИ В «ФИНАНСАХ».
   //
-  // Календарь показывает записи только активной команды, а список команд
-  // отдаёт лишь `is_active = true`. Значит после архивации ВСЕ записи
-  // команды — включая будущие визиты и деньги дня — исчезали из Дня, Недели,
-  // Месяца и футера: чипа нет, вернуть в вид нечем. Диалог при этом обещает
-  // «история заявок и финансов сохранится». История и правда сохранялась —
-  // просто до неё не было дороги.
-  //
-  // Поэтому архивная команда остаётся ЧИПОМ, пока у неё есть записи, но
-  // только для показа: выбор по умолчанию и все пикеры продолжают жить на
-  // активных, иначе архивная команда стала бы календарём по умолчанию.
-  const { data: allTeamsForCalendar = [] } = useTeams({ includeInactive: true });
+  // Здесь год стоял второй список, `useTeams({ includeInactive: true })`:
+  // удалённая команда оставалась чипом, пока за ней числились записи, — чтобы
+  // её работа не пропадала с сетки. Чип при этом НИЧЕМ не отличался от живого,
+  // «Финансы» его не показывали вовсе, а создание записи из такого календаря
+  // молча уходило в первый живой. Владелец 2026-09-21 на собственной удалённой
+  // «Команде 2»: «я не пойму, что это такое, откуда она взялась… и почему оно
+  // не ушло». Беда, ради которой список заводили, закрыта в вопросе удаления —
+  // он называет цифрой работу, которая слетит с сетки (`calendar-delete.ts`).
   const calSettingsQuery = useCalendarSettings();
   const calSettings = calSettingsQuery.data;
   const roleQuery = useCurrentRole();
@@ -658,19 +655,6 @@ export default function CalendarTab() {
   // меню долгого нажатия, — денег она не пишет.
   const paymentBlockOn = useBookingBlocks().includes("payment");
 
-  // Чипы календаря: активные команды плюс архивные, за которыми осталась
-  // работа. Порядок сохраняем — архивные уходят в хвост.
-  const calendarTeams = useMemo(() => {
-    const active = new Set(teams.map((tm) => tm.id));
-    const withWork = new Set(
-      appts.map((a) => a.team_id).filter((id): id is string => !!id),
-    );
-    const retired = allTeamsForCalendar.filter(
-      (tm) => !active.has(tm.id) && withWork.has(tm.id),
-    );
-    return retired.length > 0 ? [...teams, ...retired] : teams;
-  }, [teams, allTeamsForCalendar, appts]);
-
   // Лента календарей: свои плюс чужие, одним рядом. Правила склейки и
   // переход в другую компанию живут в `useCalendarChips` — та же лента стоит
   // над финансами, и двух её копий быть не должно.
@@ -680,7 +664,7 @@ export default function CalendarTab() {
     pendingId: pendingChipId,
     loading: chipsLoading,
   } = useCalendarChips({
-    own: calendarTeams,
+    own: teams,
     onPickOwn: (teamId) => {
       setMoving(null);
       // ЧИП ЗАГОРАЕТСЯ В ТОМ ЖЕ КАДРЕ, СЕТКА ДОГОНЯЕТ ПЕРЕХОДОМ. Отрисовка
@@ -712,12 +696,14 @@ export default function CalendarTab() {
   // to the first team until the user picks one, and re-anchors if the chosen
   // team disappears. Null only while there are no teams (→ first-run gate).
   const activeTeamId =
-    // Выбрать можно и архивную (её чип виден), а вот ПО УМОЛЧАНИЮ открывается
-    // всегда активная: иначе архив стал бы стартовым экраном.
-    teamChoice && calendarTeams.some((tm) => tm.id === teamChoice)
+    // УДАЛЁННЫЙ КАЛЕНДАРЬ СЮДА НЕ ПОПАДАЕТ ДАЖЕ ИЗ ПАМЯТИ ВЫБОРА: его нет в
+    // `teams`, и выбор сам перескакивает на первый живой. Проверено на
+    // «Команде 2», которую владелец удалил 15.09, а лента показывала её ещё
+    // неделю (`calendar-delete.ts`).
+    teamChoice && teams.some((tm) => tm.id === teamChoice)
       ? teamChoice
-      : teams[0]?.id ?? calendarTeams[0]?.id ?? null;
-  const activeTeam = calendarTeams.find((tm) => tm.id === activeTeamId);
+      : teams[0]?.id ?? null;
+  const activeTeam = teams.find((tm) => tm.id === activeTeamId);
   // ДЕНЬГИ В КАЛЕНДАРЕ — ПО УРОВНЮ «ДОХОДЫ И РАСХОДЫ» В ЭТОМ КАЛЕНДАРЕ (этап 2
   // доступа, владелец 15.09: «чтоб всё сразу менялось в живом времени»).
   // Раньше — только владельцу, какие бы права ни выставили сотруднику. Смена

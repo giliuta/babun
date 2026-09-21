@@ -32,11 +32,16 @@ import {
   accountBalancesQueryKey,
   accountRowsQueryKey,
 } from "@/lib/company-query-keys";
+import { useTeams } from "@/features/reference/queries";
 import {
   TEAM_ACCOUNT_SEEDS,
   planAccountSeeds,
   type AccountSeed,
 } from "./account-seeds";
+import {
+  archivedCalendarIds,
+  withoutArchivedCalendars,
+} from "./archived-calendar-accounts";
 
 export type { Account } from "@babun/shared/local/finance/account";
 export type AccountWithBalance = Account & {
@@ -123,10 +128,17 @@ export function useUnassignedMoney(): number {
  * честную ошибку — «€0» вместо остатка было бы враньём про деньги.
  */
 export function useAccountsWithBalances(
-  options: { includeInactive?: boolean } = {},
+  options: {
+    includeInactive?: boolean;
+    /** Счета календарей В АРХИВЕ. По умолчанию их нет нигде: деньги ушедшего
+     *  в архив календаря в живых финансах не существуют (владелец
+     *  2026-09-21, `archived-calendar-accounts.ts`). Просит их только архив. */
+    includeArchivedCalendars?: boolean;
+  } = {},
 ): AccountsWithBalances {
   const tenantId = useTenantId();
   const includeInactive = options.includeInactive ?? false;
+  const includeArchived = options.includeArchivedCalendars ?? false;
   const rowsQuery = useQuery({
     queryKey: accountRowsQueryKey(tenantId, includeInactive),
     enabled: !!tenantId,
@@ -139,18 +151,32 @@ export function useAccountsWithBalances(
     enabled: !!tenantId,
     queryFn: () => listAccountBalances(supabase, tenantId as string),
   });
+  // Справочник целиком, вместе с архивом: иначе не узнать, чей календарь
+  // ушёл. Ключ общий с календарём и лентами — сети обычно нет вовсе.
+  const teamsQuery = useTeams({ includeInactive: true });
 
   const rows = rowsQuery.data;
   const balances = balancesQuery.data;
-  const data = useMemo(
-    () => (rows && balances ? mergeAccountBalances(rows, balances) : undefined),
-    [rows, balances],
-  );
+  const teams = teamsQuery.data;
+  // ПОКА СПРАВОЧНИК НЕ ПРИШЁЛ, СЧЕТОВ НЕТ ВОВСЕ — а не «все подряд». Иначе
+  // на первом кадре мелькали бы кассы архивного календаря, которых в живых
+  // финансах не существует. Упавший справочник экран денег НЕ запирает:
+  // лучше показать счета без фильтра архива, чем вечную загрузку.
+  const teamsReady = includeArchived || teams !== undefined || teamsQuery.isError;
+  const data = useMemo(() => {
+    if (!rows || !balances || !teamsReady) return undefined;
+    const merged = mergeAccountBalances(rows, balances);
+    return includeArchived
+      ? merged
+      : withoutArchivedCalendars(merged, archivedCalendarIds(teams ?? []));
+  }, [rows, balances, teams, teamsReady, includeArchived]);
 
   return {
     data,
-    isPending: rowsQuery.isPending || balancesQuery.isPending,
-    isLoading: rowsQuery.isLoading || balancesQuery.isLoading,
+    isPending:
+      rowsQuery.isPending || balancesQuery.isPending || (!teamsReady && teamsQuery.isPending),
+    isLoading:
+      rowsQuery.isLoading || balancesQuery.isLoading || (!teamsReady && teamsQuery.isLoading),
     error: rowsQuery.error ?? balancesQuery.error,
     refetch: () => Promise.all([rowsQuery.refetch(), balancesQuery.refetch()]),
   };

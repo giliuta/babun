@@ -13,6 +13,8 @@ import { useClientAppointments } from "@/features/clients/appointments";
 import { todayYMD } from "@/features/clients/filter";
 import { useClient } from "@/features/clients/queries";
 import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
+import { archivedVisitTag, visitRowValue } from "@/features/clients/archived-visit";
+import { useTeams } from "@/features/reference/queries";
 import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
@@ -64,6 +66,13 @@ function ClientVisitsScreen() {
     for (const s of services) m.set(s.id, s.name);
     return m;
   }, [services]);
+  // Справочник с архивом — только чтобы назвать команду архивного визита.
+  // Ключ общий с календарём: сети это не добавляет.
+  const { data: allTeams = [] } = useTeams({ includeInactive: true });
+  const teamsById = useMemo(
+    () => new Map(allTeams.map((team) => [team.id, team])),
+    [allTeams],
+  );
 
   const sorted = useMemo(
     () =>
@@ -179,7 +188,11 @@ function ClientVisitsScreen() {
                 <NavRow
                   key={a.id}
                   label={`${formatShortDateRu(a.date)}${a.time_start ? ` · ${a.time_start}` : ""}`}
-                  value={m ? `${visitValue(a)} · ${m.text}` : visitValue(a)}
+                  value={visitRowValue({
+                    tag: archivedVisitTag(a.team_id, teamsById),
+                    details: [visitValue(a)],
+                    money: m?.text,
+                  })}
                   valueColor={m?.color}
                   separated={i > 0}
                   onPress={() => open(a)}
@@ -209,13 +222,14 @@ function ClientVisitsScreen() {
                   // выбрасывала и то и другое — «звонила, просила перенести»
                   // не появлялось в истории никогда, ради чего ленту и
                   // затевали.
-                  value={[
-                    e.title,
-                    e.subtitle,
-                    appt ? m?.text : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  value={visitRowValue({
+                    // Визит архивного календаря называет свою команду
+                    // (`archived-visit.ts`) — открывается он только для
+                    // просмотра, и подпись объясняет почему.
+                    tag: appt ? archivedVisitTag(appt.team_id, teamsById) : null,
+                    details: [e.title, e.subtitle],
+                    money: appt ? m?.text : null,
+                  })}
                   valueColor={
                     appt ? m?.color : e.kind === "reminder" ? t.accent : t.sub
                   }
