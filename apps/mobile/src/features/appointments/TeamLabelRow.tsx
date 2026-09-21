@@ -74,8 +74,10 @@ export function TeamLabelRow({
   /** У события в этой плитке стоит ТИП (значок и слово другие). */
   labelIcon?: LucideIcon;
   labelPlaceholder?: string;
-  onEditTeam: () => void;
-  onEditLabel: () => void;
+  /** Нет — плитка та же, но только читается: права менять команду у
+   *  человека нет (STORY-084, одна страница записи для всех). */
+  onEditTeam?: () => void;
+  onEditLabel?: () => void;
 }) {
   const t = useThemeColors();
   return (
@@ -166,7 +168,8 @@ function IdentityCard({
   muted?: boolean;
   /** Значение не своё, а взятое у дня: тише, но на том же месте. */
   quiet?: boolean;
-  onPress: () => void;
+  /** Нет — плитка только читается: без нажатия и без подсветки. */
+  onPress?: () => void;
   accessibilityLabel: string;
   accessibilityHint: string;
 }) {
@@ -186,6 +189,7 @@ function IdentityCard({
     <Card style={{ flex: 1 }}>
     <Pressable
       onPress={onPress}
+      disabled={!onPress}
       style={({ pressed }) => ({
         flex: 1,
         flexDirection: "row",
@@ -194,11 +198,11 @@ function IdentityCard({
         gap: 8,
         paddingVertical: 9,
         paddingHorizontal: 10,
-        backgroundColor: pressed ? t.pressed : "transparent",
+        backgroundColor: pressed && onPress ? t.pressed : "transparent",
       })}
-      accessibilityRole="button"
+      accessibilityRole={onPress ? "button" : "text"}
       accessibilityLabel={accessibilityLabel}
-      accessibilityHint={accessibilityHint}
+      accessibilityHint={onPress ? accessibilityHint : undefined}
     >
       {/* ЗНАЧОК СТОИТ ВСЕГДА, И ЭТО ТРЕТИЙ ЗАХОД. Сначала у пустой метки был
           диск, посчитанный из rgba-токена, — RN красил его почти чёрным, и

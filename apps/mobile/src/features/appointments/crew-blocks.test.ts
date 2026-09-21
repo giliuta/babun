@@ -23,6 +23,9 @@ const MIXED = map({
   "record.files": "read",
   "record.client": "read",
   "record.object": "off",
+  "record.services": "read",
+  "record.amount": "off",
+  "record.payment": "read",
 });
 
 describe("карточка записи у команды спрашивает права календаря записи", () => {
@@ -32,6 +35,9 @@ describe("карточка записи у команды спрашивает �
       files: "write",
       client: true,
       object: true,
+      services: true,
+      amount: true,
+      payment: "write",
     });
   });
 
@@ -41,6 +47,9 @@ describe("карточка записи у команды спрашивает �
       files: "read",
       client: true,
       object: false,
+      services: true,
+      amount: false,
+      payment: "read",
     });
   });
 
@@ -50,6 +59,9 @@ describe("карточка записи у команды спрашивает �
       files: "hidden",
       client: false,
       object: false,
+      services: false,
+      amount: false,
+      payment: "hidden",
     });
   });
 
@@ -65,6 +77,9 @@ describe("карточка записи у команды спрашивает �
       files: "hidden",
       client: false,
       object: false,
+      services: false,
+      amount: false,
+      payment: "hidden",
     });
     assert.equal(crewBlocks({ role: undefined, map: MIXED, teamId: TEAM }).files, "hidden");
   });

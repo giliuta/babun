@@ -30,6 +30,13 @@ export interface CrewBlocks {
   client: boolean;
   /** «Объект в записи»: адрес выезда и объект. */
   object: boolean;
+  /** «Услуги в записи»: что делать — строки работ. */
+  services: boolean;
+  /** «Сумма записи»: цены в строках, скидка, «Итого». */
+  amount: boolean;
+  /** «Оплата в записи»: оплачена ли запись; сколько внесено — только вместе
+   *  с «Суммой», это деньги. */
+  payment: CrewLevel;
 }
 
 function levelOf(gate: AccessGate): CrewLevel {
@@ -62,6 +69,9 @@ export function crewBlocks(input: {
     files: gate("record.files"),
     client: gate("record.client") !== "hidden",
     object: gate("record.object") !== "hidden",
+    services: gate("record.services") !== "hidden",
+    amount: gate("record.amount") !== "hidden",
+    payment: gate("record.payment"),
   };
 }
 

@@ -47,8 +47,12 @@ export function ClientBlock({
    *  показывает `ClientHistoryLine`, но экранный читатель видит только
    *  подпись строки, и без этого он терял самое важное. */
   summary?: string | null;
-  onPick: () => void;
-  onOpenCard: () => void;
+  /** Нет — клиент записи только читается (STORY-084: одна страница записи
+   *  для всех, блок по праву). Звонок и карточка при этом остаются: это
+   *  дорога к человеку, а не правка записи. */
+  onPick?: () => void;
+  /** Нет — кружка «…» нет: карточку клиента человеку не открыть. */
+  onOpenCard?: () => void;
   /** «X» — снять выбранного. Нет обработчика — нет и кнопки: у записи клиента
    *  меняют выбором другого, а не пустотой. */
   onClear?: () => void;
@@ -60,6 +64,8 @@ export function ClientBlock({
   // Отступ правого края: с «X» кнопки стоят теснее, иначе три круга подряд
   // упираются в край карточки.
   const gap = onClear ? "mr-2" : "mr-4";
+  // Выбирать некого и нечем: блок без клиента в режиме «смотрит» пуст.
+  if (!client && !onPick) return null;
 
   return (
     <SectionCard title="Клиент">
@@ -67,15 +73,17 @@ export function ClientBlock({
         <View className="flex-row items-center">
           <Pressable
             className="flex-1 flex-row items-center px-4 py-2.5"
+            disabled={!onPick}
             onPress={() => {
+              if (!onPick) return;
               onPick();
               haptics.tap();
             }}
-            accessibilityRole="button"
+            accessibilityRole={onPick ? "button" : "text"}
             accessibilityLabel={`Клиент: ${client.full_name || "без имени"}. ${
               summary ?? client.phone ?? "ещё не обслуживали"
             }`}
-            accessibilityHint="Открывает выбор клиента"
+            accessibilityHint={onPick ? "Открывает выбор клиента" : undefined}
           >
             <View className="flex-1">
               <Text style={{ fontSize: 17, fontWeight: "700", color: t.ink }}>
@@ -112,15 +120,17 @@ export function ClientBlock({
           {/* «…» — карточка клиента: телефоны, объекты, история, долг.
               Снаружи нажимаемой области строки, иначе VoiceOver склеит их в
               один элемент. */}
-          <Pressable
-            onPress={onOpenCard}
-            className={`${gap} items-center justify-center self-center rounded-full`}
-            style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
-            accessibilityRole="button"
-            accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
-          >
-            <MoreHorizontal color={t.body} size={ICON.sm} />
-          </Pressable>
+          {onOpenCard ? (
+            <Pressable
+              onPress={onOpenCard}
+              className={`${gap} items-center justify-center self-center rounded-full`}
+              style={{ width: 32, height: 32, backgroundColor: t.rowFill }}
+              accessibilityRole="button"
+              accessibilityLabel={`Карточка клиента ${client.full_name || "без имени"}`}
+            >
+              <MoreHorizontal color={t.body} size={ICON.sm} />
+            </Pressable>
+          ) : null}
           {onClear ? (
             <Pressable
               onPress={() => {
@@ -141,7 +151,7 @@ export function ClientBlock({
           icon={UserRound}
           label="Выбрать клиента"
           hint="Открывает поиск по имени или телефону"
-          onPress={onPick}
+          onPress={onPick ?? (() => {})}
         />
       )}
       {client ? note : null}

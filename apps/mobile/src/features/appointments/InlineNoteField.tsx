@@ -23,6 +23,7 @@ export function InlineNoteField({
   placeholder,
   accessibilityLabel,
   maxLength,
+  readOnly = false,
 }: {
   note: Pick<
     ReturnType<typeof useInlineNote<unknown>>,
@@ -32,8 +33,13 @@ export function InlineNoteField({
   accessibilityLabel: string;
   /** Тот же предел, что у композера на карточке (500 у заметки клиента). */
   maxLength?: number;
+  /** Права писать нет (STORY-084, одна страница записи для всех): та же
+   *  плашка, но без клавиатуры. Пустую заметку тогда не рисуем вовсе —
+   *  поле с подсказкой звало бы печатать там, где печатать нельзя. */
+  readOnly?: boolean;
 }) {
   const t = useThemeColors();
+  if (readOnly && !note.draft.trim()) return null;
   return (
     <View
       style={{
@@ -50,6 +56,7 @@ export function InlineNoteField({
         keyboardAppearance="light"
         accessibilityLabel={accessibilityLabel}
         value={note.draft}
+        editable={!readOnly}
         onChangeText={note.setDraft}
         onFocus={note.onFocus}
         onBlur={note.onBlur}

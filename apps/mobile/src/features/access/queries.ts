@@ -17,7 +17,12 @@ import {
   type AccessChange,
   type MemberAccessMap,
 } from "./access-map";
-import { FINANCE_BLOCK_KEYS, isFinanceDataKey, lostAccess } from "./my-access";
+import {
+  FINANCE_BLOCK_KEYS,
+  isFinanceDataKey,
+  lostAccess,
+  recordLevelsChanged,
+} from "./my-access";
 
 // ПРАВА СОТРУДНИКА — ДОРОГА К СЕРВЕРУ ПО «КОНТРАКТУ v1.1» (STORY-081).
 //
@@ -167,6 +172,11 @@ export function useMyAccess() {
       const before = qc.getQueryData<MemberAccessMap>(myAccessQueryKey(tenantId));
       if (tenantId && lostAccess(before, next, FINANCE_BLOCK_KEYS)) {
         qc.removeQueries({ predicate: (query) => isFinanceDataKey(query.queryKey, tenantId) });
+      }
+      // Строки записей несут маску прежних прав — перечитать (без `await`:
+      // волна запросов не должна держать карту прав).
+      if (tenantId && recordLevelsChanged(before, next)) {
+        void qc.invalidateQueries({ queryKey: ["appointments", tenantId] });
       }
       return next;
     },

@@ -19,6 +19,7 @@ import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { crewAddress, crewBlocks } from "@/features/appointments/crew-blocks";
+import { crewMoney, crewWorkLines } from "@/features/appointments/crew-work";
 import { ActionRow, InfoRow } from "@/features/appointments/crew-rows";
 import { CrewWorkRecord } from "@/features/appointments/CrewWorkRecord";
 import { humanDay } from "@/features/appointments/helpers";
@@ -73,24 +74,12 @@ export function CrewAppointmentSheet({
   const team = appointment?.team_id
     ? teams.find((item) => item.id === appointment.team_id) ?? null
     : null;
-  const serviceNames = useMemo(() => {
-    if (!appointment) return [];
-    const byId = new Map(services.map((item) => [item.id, item.name]));
-    // СНИМОК ЗАПИСИ ПЕРВЫМ, каталог вторым. Наряд читает бригада НА ОБЪЕКТЕ:
-    // если услугу к тому времени стёрли из прайса, строка «Услуга удалена»
-    // не говорит человеку, что именно он приехал делать. Имя работы на день
-    // визита лежит в самой записи — берём его.
-    const snapshot = appointment.services ?? [];
-    if (snapshot.length > 0) {
-      return snapshot.map(
-        (line) =>
-          line.serviceName?.trim() ||
-          byId.get(line.serviceId) ||
-          "Услуга удалена",
-      );
-    }
-    return appointment.service_ids.map((id) => byId.get(id) ?? "Услуга удалена");
-  }, [appointment, services]);
+  // СНИМОК ЗАПИСИ ПЕРВЫМ, каталог вторым (`crew-work.ts`): наряд читает
+  // бригада НА ОБЪЕКТЕ, и имя работы на день визита лежит в самой записи.
+  const catalogNames = useMemo(
+    () => new Map(services.map((item) => [item.id, item.name])),
+    [services],
+  );
 
   if (!appointment) return null;
 
@@ -200,7 +189,8 @@ export function CrewAppointmentSheet({
               client={client}
               address={address}
               teamName={team?.name ?? null}
-              serviceNames={serviceNames}
+              workLines={crewWorkLines(appointment, catalogNames, blocks)}
+              money={crewMoney(appointment, blocks)}
               role={role}
               onOpenClient={(clientId) => {
                 onClose();

@@ -141,7 +141,9 @@ export function ObjectRow({
   /** Заметка третьей строкой. Запись выключает: у неё заметка объекта стоит
    *  своей плашкой под строкой, и третья строка дублировала бы её. */
   showNote?: boolean;
-  onPress: () => void;
+  /** Нет — строка только читается (STORY-084: в записи объект человеку не
+   *  меняется). Маршрут при этом остаётся: это дорога, а не правка. */
+  onPress?: () => void;
 }) {
   const t = useThemeColors();
   const target = objectTarget(loc);
@@ -163,20 +165,25 @@ export function ObjectRow({
     >
       <Pressable
         onPress={onPress}
+        disabled={!onPress}
         accessible
-        accessibilityRole="button"
+        accessibilityRole={onPress ? "button" : "text"}
         accessibilityLabel={[loc.label || "Объект", target, note]
           .filter(Boolean)
           .join(", ")}
         accessibilityHint={
-          onMore ? "Открывает выбор объекта" : "Открывает правку объекта"
+          !onPress
+            ? undefined
+            : onMore
+              ? "Открывает выбор объекта"
+              : "Открывает правку объекта"
         }
         style={({ pressed }) => ({
           flex: 1,
           flexDirection: "row",
           alignItems: "center",
           gap: 8,
-          opacity: pressed ? 0.6 : 1,
+          opacity: pressed && onPress ? 0.6 : 1,
         })}
       >
         <View style={{ flex: 1 }}>

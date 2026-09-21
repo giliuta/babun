@@ -3,6 +3,7 @@ import { Linking, Text, TextInput, View } from "react-native";
 import { MapPin, Phone, UserRound } from "lucide-react-native";
 import type { Appointment, AppointmentStatus } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
+import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -17,7 +18,8 @@ import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 
 import type { CrewBlocks } from "./crew-blocks";
-import { ActionRow, InfoRow } from "./crew-rows";
+import { ActionRow, AmountRow, InfoRow, WorkLineRow } from "./crew-rows";
+import type { CrewMoney, CrewWorkLine } from "./crew-work";
 
 const CREW_STATUSES: readonly {
   value: Exclude<AppointmentStatus, "cancelled">;
@@ -47,7 +49,8 @@ export function CrewWorkRecord({
   client,
   address,
   teamName,
-  serviceNames,
+  workLines,
+  money,
   role,
   onOpenClient,
 }: {
@@ -58,7 +61,9 @@ export function CrewWorkRecord({
   /** Уже по праву: при закрытом «Объекте» здесь пусто. */
   address: string;
   teamName: string | null;
-  serviceNames: string[];
+  /** Уже по праву: без «Услуг» пусто, без «Суммы» — без цен (`crew-work.ts`). */
+  workLines: CrewWorkLine[];
+  money: CrewMoney;
   role: "owner" | "dispatcher" | "master" | null | undefined;
   onOpenClient: (clientId: string) => void;
 }) {
@@ -181,11 +186,51 @@ export function CrewWorkRecord({
         </SectionCard>
       ) : null}
 
-      <SectionCard title="Работы">
-        <Text style={{ padding: 16, fontSize: 15, lineHeight: 21, color: t.ink }}>
-          {serviceNames.length > 0 ? serviceNames.join(" · ") : "Услуги не указаны"}
-        </Text>
-      </SectionCard>
+      {/* РАБОТЫ И «ИТОГО» — ОДИН БЛОК, как в записи у владельца («блок в
+          услугах — итого», владелец 21.09). Без «Услуг» блока нет вовсе,
+          без «Суммы» строки идут без цен и без «Итого». */}
+      {blocks.services ? (
+        <SectionCard title="Работы">
+          {workLines.length > 0 ? (
+            workLines.map((line, index) => (
+              <View
+                key={line.key}
+                style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
+              >
+                <WorkLineRow line={line} />
+              </View>
+            ))
+          ) : (
+            <Text style={{ padding: 16, fontSize: 15, lineHeight: 21, color: t.ink }}>
+              Услуги не указаны
+            </Text>
+          )}
+          {money.total !== null ? (
+            <>
+              <Divider inset={16} />
+              <TotalRow money={money} />
+            </>
+          ) : null}
+        </SectionCard>
+      ) : null}
+
+      {/* ОПЛАТА — СВОИМ БЛОКОМ, как в записи у владельца. Статус словом, а
+          сколько внесено — только вместе с «Суммой»: это деньги. «Итого»
+          переезжает сюда, лишь когда блока работ нет. */}
+      {money.payment || (!blocks.services && money.total !== null) ? (
+        <SectionCard title="Оплата">
+          {!blocks.services && money.total !== null ? <TotalRow money={money} /> : null}
+          {money.payment ? (
+            <>
+              {!blocks.services && money.total !== null ? <Divider inset={16} /> : null}
+              <AmountRow
+                label={money.payment.word}
+                value={money.payment.paid !== null ? formatEURExact(money.payment.paid) : null}
+              />
+            </>
+          ) : null}
+        </SectionCard>
+      ) : null}
 
       {blocks.files !== "hidden" ? (
         <AppointmentFilesBlock
@@ -240,5 +285,17 @@ export function CrewWorkRecord({
         </SectionCard>
       ) : null}
     </>
+  );
+}
+
+function TotalRow({ money }: { money: CrewMoney }) {
+  if (money.total === null) return null;
+  return (
+    <AmountRow
+      label="Итого"
+      value={formatEURExact(money.total)}
+      note={money.discount !== null ? `Скидка ${formatEURExact(money.discount)}` : null}
+      strong
+    />
   );
 }

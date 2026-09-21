@@ -79,6 +79,28 @@ export function isNewerAccess(eventVersion: unknown, cached: MemberAccessMap | u
   return typeof eventVersion === "number" && eventVersion > cached.version;
 }
 
+/** Сменился уровень хоть одного блока ЗАПИСИ хоть в одном календаре?
+ *  Окно записей мастера маскирует клиента, адрес, работы, суммы и оплату по
+ *  этим уровням (STORY-084), поэтому строки, пришедшие при прежних правах,
+ *  несут прежнюю маску: без перечитывания владелец поднял «Сумму», а мастер
+ *  видит «Итого €0» вместо настоящих €150. Первая загрузка — не смена. */
+export function recordLevelsChanged(
+  before: MemberAccessMap | undefined,
+  next: MemberAccessMap,
+): boolean {
+  if (!before) return false;
+  const teams = new Set([...Object.keys(before.calendars), ...Object.keys(next.calendars)]);
+  for (const team of teams) {
+    const was = before.calendars[team] ?? {};
+    const now = next.calendars[team] ?? {};
+    const keys = new Set([...Object.keys(was), ...Object.keys(now)]);
+    for (const key of keys) {
+      if (key.startsWith("record.") && was[key] !== now[key]) return true;
+    }
+  }
+  return false;
+}
+
 /** Блоки финансов: понижение любого из них стирает деньги с телефона. */
 export const FINANCE_BLOCK_KEYS: readonly string[] = [
   "finance.operations",

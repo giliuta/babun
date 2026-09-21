@@ -16,16 +16,19 @@ const block = (over: Partial<AccessBlock>): AccessBlock => ({
 });
 
 /** Реестр боевой базы на 21.09: ключи и уровни — как на сервере.
- *  Живых одиннадцать: волна 1 STORY-084 оживила оплату, волна 2 — статус и
+ *  Живых тринадцать: волна 1 STORY-084 оживила оплату, волна 2 — статус и
  *  файлы, волна 3 — клиента и объект записи (у них два положения — слово
- *  владельца: «видит или не видит»). Мешок «Категории, шаблоны, НДС» снят. */
+ *  владельца: «видит или не видит»), волна 4 — услуги и сумму (пока два
+ *  положения: «Меняет» придёт с правкой в записи). Мешок «Категории,
+ *  шаблоны, НДС» и «Заметка записи» сняты. */
 const REGISTRY: AccessBlock[] = [
   block({ key: "calendar.records", area: "calendar", scope: "calendar", live: false, title: "Календарь и записи" }),
   block({ key: "calendar.create", area: "calendar", scope: "calendar", levels: ["off", "write"], live: false, title: "Новые записи" }),
   block({ key: "record.status", area: "calendar", scope: "calendar", title: "Статус записи" }),
   block({ key: "record.client", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Клиент в записи" }),
   block({ key: "record.object", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Объект в записи" }),
-  block({ key: "record.amount", area: "calendar", scope: "calendar", live: false, title: "Сумма записи" }),
+  block({ key: "record.services", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Услуги в записи" }),
+  block({ key: "record.amount", area: "calendar", scope: "calendar", levels: ["off", "read"], title: "Сумма записи" }),
   block({ key: "record.payment", area: "calendar", scope: "calendar", title: "Оплата в записи" }),
   block({ key: "record.files", area: "calendar", scope: "calendar", title: "Фото и файлы записи" }),
   block({ key: "calendar.day_labels", area: "calendar", scope: "calendar", live: false, title: "Метка дня" }),
@@ -48,7 +51,6 @@ const REGISTRY: AccessBlock[] = [
   block({ key: "record.team", area: "calendar", scope: "calendar", live: false, title: "Команда и мастер записи" }),
   block({ key: "record.label", area: "calendar", scope: "calendar", live: false, title: "Метка записи" }),
   block({ key: "record.when", area: "calendar", scope: "calendar", live: false, title: "Время записи" }),
-  block({ key: "record.services", area: "calendar", scope: "calendar", live: false, title: "Услуги в записи" }),
   // Заведены 21.09 (STORY-084): «каждый блок — свой переключатель». Все
   // спящие: сервер их ещё не проверяет, строки на странице нет.
   block({ key: "calendar.events", area: "calendar", scope: "calendar", live: false, title: "События" }),
@@ -117,6 +119,8 @@ describe("слова прав", () => {
         "record.status",
         "record.client",
         "record.object",
+        "record.services",
+        "record.amount",
         "record.payment",
         "record.files",
         "finance.operations",

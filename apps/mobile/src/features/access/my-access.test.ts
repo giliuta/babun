@@ -9,6 +9,7 @@ import {
   isFinanceDataKey,
   isNewerAccess,
   lostAccess,
+  recordLevelsChanged,
 } from "./my-access";
 
 describe("деньги, которые стираются при понижении", () => {
@@ -138,5 +139,40 @@ describe("сигнал смены прав", () => {
       false,
     );
     assert.equal(lostAccess(undefined, before, [OPS]), false);
+  });
+});
+
+describe("строки записей перечитываются, когда меняется блок записи", () => {
+  const base = (levels: Record<string, "off" | "read" | "write">): MemberAccessMap => ({
+    tenantId: "tenant-1",
+    isOwner: false,
+    version: 1,
+    company: {},
+    calendars: { "team-1": levels },
+    attachedCalendars: ["team-1"],
+  });
+
+  test("подняли «Сумму» — перечитать: старые строки пришли с нулями", () => {
+    assert.equal(
+      recordLevelsChanged(base({ "record.amount": "off" }), base({ "record.amount": "read" })),
+      true,
+    );
+  });
+
+  test("блок записи появился впервые или пропал — тоже смена", () => {
+    assert.equal(recordLevelsChanged(base({}), base({ "record.client": "read" })), true);
+    assert.equal(recordLevelsChanged(base({ "record.object": "read" }), base({})), true);
+  });
+
+  test("финансы и первая загрузка записи не трогают", () => {
+    assert.equal(
+      recordLevelsChanged(base({ "finance.operations": "read" }), base({ "finance.operations": "write" })),
+      false,
+    );
+    assert.equal(recordLevelsChanged(undefined, base({ "record.amount": "read" })), false);
+    assert.equal(
+      recordLevelsChanged(base({ "record.amount": "read" }), base({ "record.amount": "read" })),
+      false,
+    );
   });
 });

@@ -42,7 +42,8 @@ export function TotalRow({
   /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
   custom: boolean;
   discountAmount: number;
-  onPress: () => void;
+  /** Нет — «Итого» только читается: без шеврона и без шторки (STORY-084). */
+  onPress?: () => void;
 }) {
   const t = useThemeColors();
   const note =
@@ -54,9 +55,10 @@ export function TotalRow({
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : "text"}
       accessibilityLabel={`Итого ${formatEURExact(total)}${note ? `, ${note}` : ""}`}
-      accessibilityHint="Открывает услуги, количество и скидку"
+      accessibilityHint={onPress ? "Открывает услуги, количество и скидку" : undefined}
       style={({ pressed }) => ({
         minHeight: 56,
         flexDirection: "row",
@@ -65,7 +67,7 @@ export function TotalRow({
         paddingHorizontal: 16,
         borderTopWidth: 1,
         borderTopColor: t.separator,
-        backgroundColor: pressed ? t.pressed : "transparent",
+        backgroundColor: pressed && onPress ? t.pressed : "transparent",
       })}
     >
       <View style={{ flex: 1 }}>
@@ -86,7 +88,7 @@ export function TotalRow({
       >
         {formatEURExact(total)}
       </Text>
-      <ChevronRight color={t.chevron} size={ICON.sm} />
+      {onPress ? <ChevronRight color={t.chevron} size={ICON.sm} /> : null}
     </Pressable>
   );
 }
@@ -114,7 +116,9 @@ export function WhenRow({
   duration?: number;
   allDay?: boolean;
   warning?: string | null;
-  onPress: () => void;
+  /** Нет — та же плашка, только для чтения: время записи человеку не
+   *  меняется (STORY-084, одна страница записи для всех). */
+  onPress?: () => void;
 }) {
   const t = useThemeColors();
   return (
@@ -126,6 +130,7 @@ export function WhenRow({
             только притворялась значащей. */}
         <Pressable
           onPress={onPress}
+          disabled={!onPress}
           style={({ pressed }) => ({
             flex: 1,
             flexDirection: "row",
@@ -133,9 +138,9 @@ export function WhenRow({
             justifyContent: "center",
             paddingVertical: 10,
             paddingHorizontal: 12,
-            backgroundColor: pressed ? t.pressed : "transparent",
+            backgroundColor: pressed && onPress ? t.pressed : "transparent",
           })}
-          accessibilityRole="button"
+          accessibilityRole={onPress ? "button" : "text"}
           accessibilityLabel={
             timeStart
               ? `Дата и время: ${humanDay(date)}, ${
@@ -148,7 +153,11 @@ export function WhenRow({
               : `Дата: ${humanDay(date)}`
           }
           accessibilityHint={
-            timeStart ? "Открывает выбор даты и времени" : "Открывает выбор даты"
+            !onPress
+              ? undefined
+              : timeStart
+                ? "Открывает выбор даты и времени"
+                : "Открывает выбор даты"
           }
         >
           {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:

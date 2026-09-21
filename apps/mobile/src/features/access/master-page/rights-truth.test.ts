@@ -39,7 +39,9 @@ const REGISTRY: AccessBlock[] = (
     // Волна 3: два положения — «видит или не видит» (слово владельца).
     ["record.client", "calendar", "calendar", ["off", "read"], "Клиент в записи", false, true, 34],
     ["record.object", "calendar", "calendar", ["off", "read"], "Объект в записи", false, true, 35],
-    ["record.amount", "calendar", "calendar", ["off", "read", "write"], "Сумма записи", false, false, 40],
+    // Волна 4: видны по уровню; «Меняет» придёт с правкой в записи.
+    ["record.services", "calendar", "calendar", ["off", "read"], "Услуги в записи", false, true, 36],
+    ["record.amount", "calendar", "calendar", ["off", "read"], "Сумма записи", false, true, 40],
     // Живой с 21.09 (волна 1 STORY-084): деньги записи проверяет сервер.
     ["record.payment", "calendar", "calendar", ["off", "read", "write"], "Оплата в записи", false, true, 50],
     ["record.files", "calendar", "calendar", ["off", "read", "write"], "Фото и файлы записи", false, true, 55],

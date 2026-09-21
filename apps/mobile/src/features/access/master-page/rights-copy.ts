@@ -40,7 +40,6 @@ const SENTENCES: Record<string, LevelCopy> = {
   "record.amount": {
     off: "Записи без денег: ни цены, ни долга",
     read: "Видит суммы записей, но не правит",
-    write: "Ставит и правит суммы записей",
   },
   "record.payment": {
     off: "Оплату по записи принимает кто-то другой",
@@ -247,7 +246,6 @@ const SENTENCES: Record<string, LevelCopy> = {
   "record.services": {
     off: "Что делать по записи — не видит",
     read: "Видит услуги записи, но не меняет",
-    write: "Меняет состав услуг записи",
   },
   "calendar.move": {
     off: "Записи не переносит и не копирует",
