@@ -48,6 +48,9 @@ export interface GeneratedInvoiceLine {
   /** Единица количества: «4 м» в колонке «Кол-во». Едет из услуги и с этого
    *  момента принадлежит документу. */
   unit?: string | null;
+  /** Услуга прайса, из которой строка. Выбор услуг в инвойсе отмечает её
+   *  так же, как в записи (владелец 2026-09-22: «тот же блок услуг»). */
+  serviceId?: string | null;
 }
 
 export interface GeneratedInvoiceDraft {
@@ -188,11 +191,12 @@ function buildLines(
         // У свёрнутой строки количество равно единице — подписывать «1 м»
         // нечего, слово уже стоит в названии.
         unit: null,
+        serviceId: service.serviceId ?? null,
       });
       printed = round2(printed + want);
       return;
     }
-    lines.push({ title, qty, unitPrice, description, unit });
+    lines.push({ title, qty, unitPrice, description, unit, serviceId: service.serviceId ?? null });
     printed = round2(printed + actual);
   });
 

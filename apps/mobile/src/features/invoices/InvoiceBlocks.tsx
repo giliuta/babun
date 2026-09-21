@@ -12,6 +12,7 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { FieldRow, NavRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
+import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
@@ -20,7 +21,6 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
 import { useThemeColors } from "@/theme/colors";
-import { CatalogSheet, LineSheet } from "./InvoiceLines";
 import { InvoiceDateRow } from "./InvoiceDateRow";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
@@ -69,7 +69,6 @@ export function InvoiceBlocks({
   onLineChange,
   onAddLine,
   onRemoveLine,
-  onReorderLine,
   vatMode,
   vatRate,
   onVatModeChange,
@@ -77,7 +76,6 @@ export function InvoiceBlocks({
   notes,
   onNotesChange,
   footer,
-  paper,
 }: {
   clients: Client[];
   clientId: string | null;
@@ -102,7 +100,6 @@ export function InvoiceBlocks({
   onLineChange: (line: EditableInvoiceLine) => void;
   onAddLine: (service: Service | null) => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
-  onReorderLine: (id: string, delta: -1 | 1) => void;
   vatMode: InvoiceVatMode;
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
@@ -111,15 +108,12 @@ export function InvoiceBlocks({
   onNotesChange: (next: string) => void;
   /** Действие экрана рисует маршрут: у экрана оно одно и живёт в футере. */
   footer?: ReactNode;
-  /** Миниатюра бумаги — первой, над блоками (`InvoicePaperThumb`). */
-  paper?: ReactNode;
 }) {
   const t = useThemeColors();
   const router = useRouter();
   const accounts = useAccountsWithBalances();
   const tileWidth = useTileWidth();
-  const [sheet, setSheet] = useState<"client" | "catalog" | "total" | null>(null);
-  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
   // ЗАКРЫТЫЙ СЧЁТ В СПИСКЕ — ТУПИК: сервер его всё равно отобьёт
@@ -137,7 +131,33 @@ export function InvoiceBlocks({
     () => services.filter((service) => isServiceAllowedForTeam(service, teamId)),
     [services, teamId],
   );
-  const editingLine = lines.find((line) => line.id === editingLineId) ?? null;
+  // ВЫБОР УСЛУГ — ТОТ ЖЕ, ЧТО В ЗАПИСИ (владелец 2026-09-22: «удали этот
+  // блок услуг и добавь тот, который мы постоянно используем… не могу выбрать
+  // количество»). Выбор знает услугу по id: строка инвойса помнит, из какой
+  // она услуги (`serviceId`), и количество правится степпером прямо в списке.
+  const serviceLines = lines.filter((line) => line.serviceId);
+  const selectedServiceIds = serviceLines.map((line) => line.serviceId as string);
+  const quantities = Object.fromEntries(
+    serviceLines.map((line) => [line.serviceId as string, parseDecimal(line.qty) ?? 1]),
+  );
+  const toggleService = (id: string) => {
+    const existing = lines.find((line) => line.serviceId === id);
+    if (existing) {
+      onRemoveLine(existing);
+      return;
+    }
+    const service = teamServices.find((item) => item.id === id);
+    if (service) onAddLine(service);
+  };
+  const setServiceQty = (id: string, qty: number) => {
+    const line = lines.find((item) => item.serviceId === id);
+    if (!line) {
+      if (qty > 0) toggleService(id);
+      return;
+    }
+    if (qty <= 0) onRemoveLine(line);
+    else onLineChange({ ...line, qty: String(qty) });
+  };
 
   // ПЕРЕВОД «ПОЗИЦИЯ СЧЁТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
   // «Позиции», и шторка «Итого». Числа позиции лежат СТРОКАМИ, пока их правят
@@ -187,7 +207,6 @@ export function InvoiceBlocks({
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        {paper}
         <InvoiceRequisitesBlock companyId={companyId} onCompanyChange={onCompanyChange} />
 
         {/* ДВЕ ДАТЫ ОДНИМ БЛОКОМ: когда выставлен и до какого числа ждём
@@ -227,37 +246,21 @@ export function InvoiceBlocks({
             разовая, только в этот счёт. «Итого» открывает деньги. */}
         <ServicesBlock
           title="Услуги"
-          emptyLabel="Выбрать услугу"
-          addLabel="Добавить услугу"
           lines={blockLines}
           total={totals.total}
           custom={false}
           discountAmount={0}
-          onPickServices={() => setSheet("catalog")}
-          onPickLine={(id) => setEditingLineId(id)}
+          onPickServices={() => setSheet("services")}
           onOpenTotal={() => setSheet("total")}
         />
 
-        {/* ПРИМЕЧАНИЕ — ОДНА ПОДПИСЬ, А НЕ ДВЕ: шапка блока и подсказка поля
-            называли одно и то же дважды («Комментарий» + «Примечание для
-            инвойса»). Печатается внизу бумаги, как «Notes» у AirFix #103. */}
-        <SectionCard title="Примечание">
-          <FieldRow
-            label="Примечание"
-            hideLabel
-            stacked
-            live
-            multiline
-            value={notes}
-            placeholder="Примечание для клиента"
-            onSave={onNotesChange}
-          />
-        </SectionCard>
         {/* СЧЁТ — ДЛЯ СЕБЯ, А НЕ ДЛЯ КЛИЕНТА (владелец 2026-09-21: «выбор
             счёта это уже лично для себя… оно не будет попадать в сам инвойс,
             это только для сохранения данных в финансах»). Поэтому он стоит
             ПОСЛЕДНИМ — после всего, что уйдёт клиенту, — и на бумаге его нет
-            ни строкой. Плитки те же, что в записи и в чеке. */}
+            ни строкой. Плитки те же, что в записи и в чеке.
+            СРАЗУ ПОСЛЕ «ИТОГО», как оплата в записи (владелец 2026-09-22):
+            счета — команды, их набор меняется вместе с лентой команд. */}
         <SectionCard title="Счёт">
           {openAccounts.length > 0 ? (
             <View
@@ -288,6 +291,22 @@ export function InvoiceBlocks({
           )}
         </SectionCard>
 
+        {/* ПРИМЕЧАНИЕ — ОДНА ПОДПИСЬ, А НЕ ДВЕ: шапка блока и подсказка поля
+            называли одно и то же дважды («Комментарий» + «Примечание для
+            инвойса»). Печатается внизу бумаги, как «Notes» у AirFix #103. */}
+        <SectionCard title="Примечание">
+          <FieldRow
+            label="Примечание"
+            hideLabel
+            stacked
+            live
+            multiline
+            value={notes}
+            placeholder="Примечание для клиента"
+            onSave={onNotesChange}
+          />
+        </SectionCard>
+
       </ScrollView>
       {footer}
 
@@ -306,29 +325,16 @@ export function InvoiceBlocks({
       />
 
 
-      <CatalogSheet
-        visible={sheet === "catalog"}
-        services={teamServices}
-        currency={currency}
-        onPick={(service) => {
-          onAddLine(service);
-          setSheet(null);
-        }}
+      <ServicePicker
+        visible={sheet === "services"}
         onClose={() => setSheet(null)}
-      />
-
-      <LineSheet
-        line={editingLine}
-        currency={currency}
-        first={!!editingLine && lines[0]?.id === editingLine.id}
-        last={!!editingLine && lines[lines.length - 1]?.id === editingLine.id}
-        onChange={onLineChange}
-        onReorder={onReorderLine}
-        onRemove={(line) => {
-          onRemoveLine(line);
-          setEditingLineId(null);
-        }}
-        onClose={() => setEditingLineId(null)}
+        services={teamServices}
+        selectedIds={selectedServiceIds}
+        date={issuedOn}
+        teamId={teamId}
+        onToggle={toggleService}
+        quantities={quantities}
+        onQtyChange={setServiceQty}
       />
 
       {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА. Скидки в ней нет:

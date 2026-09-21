@@ -80,6 +80,7 @@ describe("счёт по записи сходится с ней до цента"
         description:
           "Промывка теплообменника, дренаж, антибактериальная обработка",
         unit: null,
+        serviceId: "svc-clean",
       },
       {
         title: "Монтаж внутреннего блока",
@@ -87,6 +88,7 @@ describe("счёт по записи сходится с ней до цента"
         unitPrice: 100,
         description: null,
         unit: null,
+        serviceId: "svc-install",
       },
     ]);
     assert.equal(sum(draft.lines), 160);

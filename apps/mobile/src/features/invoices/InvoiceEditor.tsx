@@ -27,7 +27,6 @@ import { getStorage } from "@babun/shared/storage";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
-import { InvoicePaperThumb } from "./InvoicePaperThumb";
 import type { InvoiceLanguage } from "./dictionary";
 import {
   addDaysYmd,
@@ -135,6 +134,7 @@ export function InvoiceEditor({
     // выставленный документ заморожен, и смена единицы у услуги через месяц
     // не переписывает бумагу, которую клиент уже получил.
     unit: string | null = null,
+    serviceId: string | null = null,
   ) => ({
     id: `invoice-line-${serial.current++}`,
     title,
@@ -142,6 +142,7 @@ export function InvoiceEditor({
     qty,
     unitPrice: price,
     unit,
+    serviceId,
   });
 
   // ГЕНЕРАТОР — ОДИН НА ВСЕ ДОРОГИ К СЧЁТУ. И форма, открытая с записи, и
@@ -269,6 +270,7 @@ export function InvoiceEditor({
           String(line.unitPrice),
           line.description ?? null,
           line.unit ?? null,
+          line.serviceId ?? null,
         ),
       );
     }
@@ -480,18 +482,6 @@ export function InvoiceEditor({
   const setLine = (next: EditableInvoiceLine) =>
     setLines((current) => current.map((line) => (line.id === next.id ? next : line)));
 
-  // Общая на «Правку» (`InvoiceBlocks`) и «Документ» (`InvoicePaperScreen`):
-  // лист позиции в обоих режимах поднимает и опускает строку одной и той же
-  // функцией — второй формулы порядка заводить незачем.
-  const reorderLine = (id: string, delta: -1 | 1) =>
-    setLines((current) => {
-      const from = current.findIndex((item) => item.id === id);
-      const to = from + delta;
-      if (from < 0 || to < 0 || to >= current.length) return current;
-      const next = [...current];
-      [next[from], next[to]] = [next[to], next[from]];
-      return next;
-    });
 
   const noPrice = parsedLines.every((line) => line.unit_price < 0);
   const noTitle = parsedLines.every((line) => !line.title);
@@ -564,7 +554,10 @@ export function InvoiceEditor({
 
           Команда решает три вещи сразу: чей прайс предлагать в услугах, чьи
           кассы показывать и по какому календарю лягут деньги. */}
-      {teams.length > 1 ? (
+      {/* ЛЕНТА КОМАНД — ВСЕГДА, даже когда команда одна (владелец
+          2026-09-22: «сверху обязательно плашка с командой»): инвойс
+          выставляется НА КОМАНДУ, и её видно до первого тапа. */}
+      {teams.length > 0 ? (
         <ScopeChips
           items={teams.map((team) => ({
             id: team.id,
@@ -608,12 +601,12 @@ export function InvoiceEditor({
                       String(Number(service.price)),
                       service.description,
                       service.unit,
+                      service.id,
                     )
                   : newLine(),
               ])
             }
             onRemoveLine={removeLine}
-            onReorderLine={reorderLine}
             vatMode={vatMode}
             vatRate={Math.max(0, rate)}
             onVatModeChange={(next) => {
@@ -623,17 +616,6 @@ export function InvoiceEditor({
             totals={{ total: totals.total }}
             notes={notes}
             onNotesChange={setNotes}
-            paper={
-              <InvoicePaperThumb
-                doc={paperDoc}
-                language={language}
-                onChangeLanguage={(code) => {
-                  setLanguage(code);
-                  getStorage().set(INVOICE_LANGUAGE_KEY, code);
-                }}
-                onOpen={() => setPreviewOpen(true)}
-              />
-            }
             footer={
               /* ИТОГ ЖИВЁТ ВНИЗУ И НЕ УЕЗЖАЕТ С ПРОКРУТКОЙ. Кнопка выпуска
                  стояла последней строкой формы: чтобы увидеть, на какую сумму
@@ -679,6 +661,13 @@ export function InvoiceEditor({
         // Документ открывают и посмотреть: пока он не готов, кнопка выпуска
         // в листе погашена и говорит почему — выставить €0 мимо формы нельзя.
         blockedReason={reason?.text ?? null}
+        // ЯЗЫК БУМАГИ ВЫБИРАЮТ ТАМ, ГДЕ БУМАГУ ВИДНО: в листе документа перед
+        // выпуском (владелец 22.09 убрал миниатюру с формы).
+        language={language}
+        onChangeLanguage={(code) => {
+          setLanguage(code);
+          getStorage().set(INVOICE_LANGUAGE_KEY, code);
+        }}
         onIssue={() => {
           void submit();
         }}

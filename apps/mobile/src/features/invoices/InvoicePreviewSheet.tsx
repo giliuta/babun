@@ -1,7 +1,9 @@
 import { Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { useThemeColors } from "@/theme/colors";
+import type { InvoiceLanguage } from "./dictionary";
 import type { InvoiceDocument } from "./document";
 import { InvoicePaper } from "./InvoicePaper";
 
@@ -28,6 +30,8 @@ export function InvoicePreviewSheet({
   busy,
   label,
   blockedReason,
+  language,
+  onChangeLanguage,
   onIssue,
   onClose,
 }: {
@@ -39,6 +43,9 @@ export function InvoicePreviewSheet({
   label: string;
   /** Почему выпускать ещё нельзя. Лист открывают и просто посмотреть. */
   blockedReason?: string | null;
+  /** Язык бумаги — переключатель над документом. */
+  language: InvoiceLanguage;
+  onChangeLanguage: (next: InvoiceLanguage) => void;
   onIssue: () => void;
   onClose: () => void;
 }) {
@@ -70,7 +77,15 @@ export function InvoicePreviewSheet({
       }
     >
       {doc ? (
-        <View style={{ paddingHorizontal: SIDE, paddingBottom: 8 }}>
+        <View style={{ paddingHorizontal: SIDE, paddingBottom: 8, gap: 12 }}>
+          <SegmentedControl
+            options={[
+              { value: "ru", label: "Русский" },
+              { value: "en", label: "English" },
+            ]}
+            value={language}
+            onChange={(next) => onChangeLanguage(next as InvoiceLanguage)}
+          />
           <InvoicePaper doc={doc} />
         </View>
       ) : null}

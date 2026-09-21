@@ -68,6 +68,10 @@ export interface EditableInvoiceLine {
    *  момента принадлежит документу — как и описание. */
   unit?: string | null;
   unitPrice: string;
+  /** Услуга прайса, из которой строка. По ней выбор услуг отмечает её и
+   *  держит количество — тот же выбор, что в записи. `null` — строка пришла
+   *  из операции или старого документа и прайсу не принадлежит. */
+  serviceId?: string | null;
 }
 
 export function parseDecimal(value: string): number | null {
