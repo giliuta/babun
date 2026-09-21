@@ -2,7 +2,11 @@ import { useState } from "react";
 import { useRouter, type Href } from "expo-router";
 import { Building2 } from "lucide-react-native";
 import { iconPreset } from "@/components/ui/icon-set";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import { Pressable, View } from "react-native";
+import { Settings2 } from "lucide-react-native";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { GradientButton } from "@/components/ui/GradientButton";
+import { SelectList, SelectRow } from "@/components/ui/select-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { CompanySheet } from "@/features/companies/CompanySheet";
@@ -26,12 +30,12 @@ import { useThemeColors } from "@/theme/colors";
 // и ПОД НИМ то, что ляжет на бумагу («Основные · Airfix LTD · VAT …»);
 // незаполненный набор говорит это цветом предупреждения.
 //
-// ТАП ВЕДЁТ ТУДА, ГДЕ ОТВЕТ:
-//   • набора нет — сразу лист «Новые реквизиты»;
-//   • набор один — сразу его лист: выбирать не из чего, есть что дописать;
-//   • наборов несколько — шторка выбора с той же подписью, что на странице.
-// Лист — тот же `CompanySheet`, что на странице «Реквизиты»: второй формы
-// реквизитов в продукте нет.
+// ТАП ВСЕГДА ОТКРЫВАЕТ ШТОРКУ ВЫБОРА (владелец 2026-09-22: «нажимаю
+// реквизиты — снизу вверх шторка, выбираю, какой реквизит»). Анатомия —
+// канон шторки выбора (AGENTS 5.2): строки `SelectRow` с той же подписью, что
+// на странице «Реквизиты», тап выбирает и закрывает, в футере — «Добавить
+// реквизиты», шестерёнка в шапке ведёт на саму страницу. Новый набор
+// заводится тем же `CompanySheet`, что на странице: второй формы нет.
 
 export function InvoiceRequisitesBlock({
   companyId,
@@ -58,10 +62,10 @@ export function InvoiceRequisitesBlock({
     setEditing(target);
     setSheetOpen(true);
   };
-  const open = () => {
-    if (live.length > 1) setPicker(true);
-    else edit(company ?? null);
-  };
+  // Лист набора открывается ПОСЛЕ ухода шторки: два модальных листа в одном
+  // кадре iOS не показывает.
+  const [afterPicker, setAfterPicker] = useState<(() => void) | null>(null);
+  const open = () => setPicker(true);
 
   return (
     <>
@@ -75,30 +79,68 @@ export function InvoiceRequisitesBlock({
         />
       </SectionCard>
 
-      <PickerSheet
+      <BottomSheet
         visible={picker}
         title="Реквизиты"
-        items={live.map((c) => ({
-          id: c.id,
-          label: c.name,
-          // Та же подпись, что на странице «Реквизиты»: один набор не
-          // выглядит в выборе иначе, чем в справочнике.
-          hint: companyDetail(c),
-          icon: iconPreset(c.icon) ?? Building2,
-          color: c.color ?? t.accent,
-          onPress: () => {
-            onCompanyChange(c.id);
-            setPicker(false);
-          },
-        }))}
-        selectedId={company?.id ?? null}
-        onSettings={() => {
-          setPicker(false);
-          router.push("/requisites" as Href);
-        }}
-        settingsLabel="Реквизиты"
         onClose={() => setPicker(false)}
-      />
+        onExited={() => {
+          const run = afterPicker;
+          setAfterPicker(null);
+          run?.();
+        }}
+        // Ползунки в шапке — та же дверь на страницу, что у любой шторки
+        // выбора из справочника (`PickerSheet`).
+        headerAction={
+          <Pressable
+            onPress={() => {
+              setPicker(false);
+              router.push("/requisites" as Href);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Страница реквизитов"
+            hitSlop={10}
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Settings2 color={t.sub} size={20} strokeWidth={2} />
+          </Pressable>
+        }
+        padded={false}
+        scroll
+        footer={
+          <View style={{ paddingHorizontal: 16 }}>
+            <GradientButton
+              label="Добавить реквизиты"
+              onPress={() => {
+                setAfterPicker(() => () => edit(null));
+                setPicker(false);
+              }}
+            />
+          </View>
+        }
+      >
+        <SelectList>
+          {live.map((c) => (
+            <SelectRow
+              key={c.id}
+              icon={iconPreset(c.icon) ?? Building2}
+              color={c.color ?? t.accent}
+              title={c.name}
+              subtitle={companyDetail(c)}
+              selected={c.id === company?.id}
+              onPress={() => {
+                onCompanyChange(c.id);
+                setPicker(false);
+              }}
+            />
+          ))}
+        </SelectList>
+      </BottomSheet>
 
       <CompanySheet
         visible={sheetOpen}

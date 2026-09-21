@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
@@ -37,6 +37,13 @@ const KEY_W = 80;
 const RATE_W = 54;
 const VAT_W = 70;
 const COL_GAP = 8;
+
+/** Ставка из набранного: запятая и точка одинаковы, два знака, 0…99.99. */
+export function parseVatRate(text: string): number | null {
+  const value = Number(text.replace(",", ".").trim());
+  if (!Number.isFinite(value) || value < 0 || value >= 100) return null;
+  return Math.round(value * 100) / 100;
+}
 
 /** Последняя строка перечня работ: сумма услуг, скидка и цена после неё. */
 export function ServicesRow({
@@ -133,12 +140,30 @@ export function PayRow({
     /** Сколько налога внутри «К оплате» — считает канон `applyTxVat`. */
     amount: number;
     onModeChange: (next: TxVatMode) => void;
+    /** СТАВКУ ПИШУТ ЦИФРАМИ, КАК СКИДКУ (владелец 2026-09-22: «не выбор
+     *  ставки — чтоб я мог сам написать… я выбираю и пишу цифрами свой VAT,
+     *  оно запоминает и дальше используется»). Поле в колонке ставки, та же
+     *  анатомия, что у поля скидки строкой выше. Запоминает вызывающий
+     *  (`useRememberedVatRate`). Нет обработчика — ставка только читается. */
+    onRateChange?: (rate: number) => void;
   };
   /** Одна необязательная клавиша слева, на месте VAT: у записи со старой
    *  ручной суммой это «По услугам». */
   action?: ReactNode;
 }) {
   const t = useThemeColors();
+  // Текст поля ставки живёт своей жизнью, пока его набирают: «1» на пути к
+  // «19» не должен пересчитывать итог на каждом символе в ноль-налог.
+  const [rateText, setRateText] = useState(vat ? String(vat.rate) : "");
+  useEffect(() => {
+    if (vat) setRateText(String(vat.rate));
+  }, [vat?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const commitRate = () => {
+    if (!vat?.onRateChange) return;
+    const next = parseVatRate(rateText);
+    if (next == null) setRateText(String(vat.rate));
+    else if (next !== vat.rate) vat.onRateChange(next);
+  };
   const off = !vat || vat.mode === "none";
   const cap = {
     fontSize: 11,
@@ -200,18 +225,55 @@ export function PayRow({
         )}
         {vat ? (
           <>
-            <Text
-              style={{
-                width: RATE_W,
-                textAlign: "right",
-                fontSize: 15,
-                fontWeight: "700",
-                color: t.ink,
-                fontVariant: ["tabular-nums"],
-              }}
-            >
-              {off ? "" : vat.mode === "exclusive" ? `+${vat.rate}%` : `−${vat.rate}%`}
-            </Text>
+            {vat.onRateChange && !off ? (
+              <Rate>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+                  {vat.mode === "exclusive" ? "+" : "−"}
+                </Text>
+                <TextInput
+                  keyboardAppearance="light"
+                  value={rateText}
+                  // ЖИВЬЁМ, КАК СКИДКА: налог и «К оплате» пересчитываются на
+                  // каждом символе; неразборчивое (пусто, «1,») ждёт следующего
+                  // символа, а уход с поля возвращает последнюю верную ставку.
+                  onChangeText={(text) => {
+                    setRateText(text);
+                    const next = parseVatRate(text);
+                    if (next != null && next !== vat.rate) vat.onRateChange?.(next);
+                  }}
+                  onEndEditing={commitRate}
+                  selectTextOnFocus
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={t.placeholder}
+                  accessibilityLabel="Ставка VAT, процентов"
+                  style={{
+                    flex: 1,
+                    height: 28,
+                    paddingHorizontal: 0,
+                    textAlign: "right",
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                />
+                <Unit>%</Unit>
+              </Rate>
+            ) : (
+              <Text
+                style={{
+                  width: RATE_W,
+                  textAlign: "right",
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: t.ink,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {off ? "" : vat.mode === "exclusive" ? `+${vat.rate}%` : `−${vat.rate}%`}
+              </Text>
+            )}
             <Text
               style={{
                 width: VAT_W,

@@ -86,6 +86,8 @@ export function TotalSheet({
     mode: TxVatMode;
     rate: number;
     onModeChange: (next: TxVatMode) => void;
+    /** Ставка меняется тапом по ней (см. `PayRow`). */
+    onRateChange?: (rate: number) => void;
   };
 }) {
   const t = useThemeColors();
@@ -173,6 +175,7 @@ export function TotalSheet({
                   rate: vatControl.rate,
                   amount: money.vat,
                   onModeChange: vatControl.onModeChange,
+                  onRateChange: vatControl.onRateChange,
                 }
               : undefined
           }

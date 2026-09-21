@@ -24,6 +24,7 @@ import { buildInvoiceDocument, type InvoiceDraftSeller } from "./document";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useToast } from "@/components/ui/Toast";
 import { getStorage } from "@babun/shared/storage";
+import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
@@ -122,7 +123,9 @@ export function InvoiceEditor({
   const [language, setLanguage] = useState<InvoiceLanguage>(
     () =>
       (initial?.language === "en" ? "en" : initial ? "ru" : null) ??
-      (getStorage().get<InvoiceLanguage>(INVOICE_LANGUAGE_KEY) ?? "ru"),
+      // Английский по умолчанию (владелец 2026-09-22: «русский по сути нигде
+      // не используется тут на Кипре»).
+      (getStorage().get<InvoiceLanguage>(INVOICE_LANGUAGE_KEY) ?? "en"),
   );
   const serial = useRef(0);
   const newLine = (
@@ -224,8 +227,15 @@ export function InvoiceEditor({
   // «сколько процентов» отвечает настройка (счёт → команда → компания), как и
   // у чека и у операции. Владелец 2026-09-20: настройка отвечает за ставку, а
   // не за «включить». У выставленного счёта ставка своя и заморожена.
-  const documentRate =
-    initial?.vat_percent || vatForTeam(teamId).rate || seedVat.rate || 19;
+  // …НО ЧЕЛОВЕК МОЖЕТ ЕЁ ПОМЕНЯТЬ тапом по ставке в «Итого» (владелец
+  // 2026-09-22): ставка документа — его снимок, и сервер берёт присланную.
+  // Ставку пишут цифрами в «Итого», и написанная запоминается для следующих
+  // документов (`useRememberedVatRate`). У выставленного — своя, из снимка.
+  const rememberedRate = useRememberedVatRate();
+  const [rateOverride, setRateOverride] = useState<number | null>(
+    initial ? Number(initial.vat_percent ?? 0) : null,
+  );
+  const documentRate = rateOverride ?? rememberedRate.rate;
   // Смена команды пересаживает налоговое умолчание, пока клавиши VAT не
   // трогали руками; после ручного выбора форма человека не переспорит.
   const vatTouched = useRef(!!initial);
@@ -325,6 +335,7 @@ export function InvoiceEditor({
     appointmentId,
     teamId,
     vatMode,
+    rateOverride,
     companyId,
     accountId,
     notes,
@@ -612,6 +623,11 @@ export function InvoiceEditor({
             onVatModeChange={(next) => {
               vatTouched.current = true;
               setVatMode(next);
+            }}
+            onVatRateChange={(next) => {
+              vatTouched.current = true;
+              setRateOverride(next);
+              rememberedRate.remember(next);
             }}
             totals={{ total: totals.total }}
             notes={notes}

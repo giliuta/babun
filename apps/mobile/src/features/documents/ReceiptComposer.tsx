@@ -9,7 +9,6 @@ import {
   subtotal,
 } from "@babun/shared/local/finance/appointment-calc";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
-import { effectiveVatSettings } from "@babun/shared/local/finance/vat";
 import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
 import { NavRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -30,9 +29,9 @@ import { useClients } from "@/features/clients/queries";
 import { accountIcon } from "@/features/finances/account-ui";
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { useTeamVatOverrides, useVatSettings } from "@/features/finances/vat-queries";
 import { useServices, type Service } from "@/features/services/queries";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
+import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { companyDetail } from "@/features/companies/company-rules";
 import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
@@ -78,6 +77,9 @@ export interface ReceiptDraftState {
    *  его больше НЕ включает сама: документ печатает только то, что человек
    *  выбрал клавишей в «Итого». */
   vatMode: TxVatMode;
+  /** Ставка, выбранная тапом по ней в «Итого» (владелец 2026-09-22).
+   *  Пусто — ставка из настроек (счёт → команда → компания). */
+  vatRate?: number | null;
 }
 
 type OpenSheet = "client" | "company" | "services" | "total" | "when" | null;
@@ -156,8 +158,6 @@ export function ReceiptComposer({
   const services = useServices();
   const accounts = useAccountsWithBalances();
   const appointments = useAppointments();
-  const tenantVat = useVatSettings();
-  const teamVat = useTeamVatOverrides();
   const tileWidth = useTileWidth();
   const router = useRouter();
   const tenant = useTenant();
@@ -186,13 +186,11 @@ export function ReceiptComposer({
     () => new Map((services.data ?? []).map((s) => [s.id, s])),
     [services.data],
   );
-  // Ставка — из настроек (счёт → команда → компания), но САМ НАЛОГ включает
-  // только человек: настройка отвечает «сколько процентов», а не «брать ли».
-  const vatRate = effectiveVatSettings(
-    tenantVat.data,
-    (teamVat.data ?? []).find((o) => o.teamId === draft.teamId) ?? null,
-    (accounts.data ?? []).find((a) => a.id === draft.accountId)?.vat_mode,
-  ).rate;
+  // Ставку пишут цифрами в «Итого» и она запоминается для следующих
+  // документов (владелец 2026-09-22). Настройки ставки больше не решают, а
+  // САМ НАЛОГ по-прежнему включает только человек клавишей VAT.
+  const rememberedRate = useRememberedVatRate();
+  const vatRate = draft.vatRate ?? rememberedRate.rate;
   const liveCompanies = (companies.data ?? []).filter((c) => !c.archived_at);
   const company =
     liveCompanies.find((c) => c.id === draft.companyId) ??
@@ -402,6 +400,10 @@ export function ReceiptComposer({
           mode: draft.vatMode,
           rate: vatRate,
           onModeChange: (vatMode) => onChange({ vatMode }),
+          onRateChange: (vatRate) => {
+            onChange({ vatRate });
+            rememberedRate.remember(vatRate);
+          },
         }}
       />
 

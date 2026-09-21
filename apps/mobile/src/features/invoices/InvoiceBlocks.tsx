@@ -9,9 +9,14 @@ import {
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { isServiceAllowedForTeam } from "@/features/appointments/booking-selection";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
-import { FieldRow, NavRow } from "@/components/ui/card-rows";
+import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
+import { InlineNoteField } from "@/features/appointments/InlineNoteField";
+import { useClientNoteField } from "@/features/appointments/use-client-note-field";
+import { useAppointments } from "@/features/calendar/queries";
+import { clientHistoryText } from "@/features/clients/history-line";
+import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
@@ -21,7 +26,7 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
 import { useThemeColors } from "@/theme/colors";
-import { InvoiceDateRow } from "./InvoiceDateRow";
+import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
 
@@ -72,6 +77,7 @@ export function InvoiceBlocks({
   vatMode,
   vatRate,
   onVatModeChange,
+  onVatRateChange,
   totals,
   notes,
   onNotesChange,
@@ -85,7 +91,7 @@ export function InvoiceBlocks({
   /** У выставленного счёта дата рождения не меняется: по её году живёт номер. */
   issuedOnLocked?: boolean;
   /** `null` барабан даты выставления не отдаёт (строка не `optional`), но тип
-   *  общий на обе даты — так его принимает `InvoiceDateRow`. */
+   *  общий на обе даты — так его принимает `InvoiceDatesBlock`. */
   onIssuedOnChange: (ymd: string | null) => void;
   onDueOnChange: (ymd: string | null) => void;
   companyId: string | null;
@@ -103,6 +109,7 @@ export function InvoiceBlocks({
   vatMode: InvoiceVatMode;
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
+  onVatRateChange: (rate: number) => void;
   totals: InvoiceBlocksTotals;
   notes: string;
   onNotesChange: (next: string) => void;
@@ -116,6 +123,16 @@ export function InvoiceBlocks({
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
+  // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
+  // блок на всё»): сводка визитов и денег под именем, «…» в карточку,
+  // заметка клиента полем под блоком. Та же карта сводок кормит и шторку.
+  const appointments = useAppointments();
+  const statsById = useMemo(
+    () => buildStatsMap(clients, appointments.data ?? []),
+    [clients, appointments.data],
+  );
+  const clientStats = client ? statsById.get(client.id) : undefined;
+  const clientNote = useClientNoteField(client);
   // ЗАКРЫТЫЙ СЧЁТ В СПИСКЕ — ТУПИК: сервер его всё равно отобьёт
   // (`assert_invoice_account`), а плитка обещает. Тот же фильтр, что у листа
   // оплаты инвойса.
@@ -212,21 +229,13 @@ export function InvoiceBlocks({
         {/* ДВЕ ДАТЫ ОДНИМ БЛОКОМ: когда выставлен и до какого числа ждём
             денег. Вторая — просьба владельца «выбор даты, за какой промежуток
             времени должны оплатить». */}
-        <SectionCard title="Даты">
-          {issuedOnLocked ? (
-            <NavRow label="Выставлен" value={issuedOn} onPress={undefined} />
-          ) : (
-            <InvoiceDateRow label="Выставлен" value={issuedOn} onChange={onIssuedOnChange} />
-          )}
-          <InvoiceDateRow
-            label="Оплатить до"
-            value={dueOn}
-            optional
-            separated
-            minimum={issuedOn}
-            onChange={onDueOnChange}
-          />
-        </SectionCard>
+        <InvoiceDatesBlock
+          issuedOn={issuedOn}
+          dueOn={dueOn}
+          issuedOnLocked={issuedOnLocked}
+          onIssuedOnChange={onIssuedOnChange}
+          onDueOnChange={onDueOnChange}
+        />
 
         {/* КЛИЕНТ — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И ЧЕКЕ. Клиентом может быть и
             компания: владелец 2026-09-20 про Ольгу и её фирму — «инвойс
@@ -234,9 +243,25 @@ export function InvoiceBlocks({
             блока для компании быть не должно. */}
         <ClientBlock
           client={client}
+          stats={clientStats}
+          summary={client ? clientHistoryText(client, clientStats) : null}
           onPick={() => setSheet("client")}
-          onOpenCard={() => setSheet("client")}
-          onClear={client ? () => onClientChange(null) : undefined}
+          // «…» ведёт в карточку клиента, как в записи; выбор — тапом по имени.
+          onOpenCard={
+            client
+              ? () => router.push({ pathname: "/client", params: { id: client.id } })
+              : undefined
+          }
+          note={
+            client ? (
+              <InlineNoteField
+                note={clientNote}
+                placeholder="Заметка клиента"
+                accessibilityLabel="Заметка клиента"
+                maxLength={500}
+              />
+            ) : null
+          }
         />
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
@@ -312,6 +337,7 @@ export function InvoiceBlocks({
 
       <ClientPickerSheet
         visible={sheet === "client"}
+        statsById={statsById}
         selectedId={clientId}
         onCreate={(prefill) => {
           setSheet(null);
@@ -360,6 +386,7 @@ export function InvoiceBlocks({
           rate: vatRate,
           onModeChange: (next: TxVatMode) =>
             onVatModeChange(next === "none" ? "off" : next),
+          onRateChange: onVatRateChange,
         }}
       />
     </>

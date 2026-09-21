@@ -287,6 +287,11 @@ export interface TransactionDraft {
   /** «Без НДС» здесь — не пустое значение, а решение оператора: триггер
    *  обязан его уважать, даже когда у компании налог включён. */
   vat_mode?: "none" | "inclusive" | "exclusive" | null;
+  /** Снимок налога, выбранный человеком (ставка тапом в «Итого»). Едут
+   *  парой: `fill_transaction_vat` сверяет налог с суммой и ставкой и берёт
+   *  их вместо настроек. Пусто — ставку подставит сервер. */
+  vat_rate?: number | null;
+  vat_amount?: number | null;
   invoice_id?: string | null;
   /** Гасит этот долг. Долг — не деньги; движением денег становится ровно эта
    *  операция, поэтому платёж живёт в журнале, а не в таблице долгов. */
@@ -325,6 +330,9 @@ export async function insertTransaction(
     occurred_time: draft.occurred_time ?? null,
     receipt_url: draft.receipt_url ?? null,
     vat_mode: draft.vat_mode ?? null,
+    ...(draft.vat_rate != null && draft.vat_amount != null
+      ? { vat_rate: draft.vat_rate, vat_amount: draft.vat_amount }
+      : {}),
     invoice_id: draft.invoice_id ?? null,
     debt_id: draft.debt_id ?? null,
     refund_of_id: draft.refund_of_id ?? null,

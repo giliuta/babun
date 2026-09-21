@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View } from "react-native";
 import type { Receipt } from "@babun/shared/local/finance/receipt";
-import { applyTxVat, effectiveVatSettings } from "@babun/shared/local/finance/vat";
+import { applyTxVat } from "@babun/shared/local/finance/vat";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { RowCaption } from "@/components/ui/card-rows";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -20,7 +20,8 @@ import { ReceiptPreviewSheet } from "@/features/documents/ReceiptPreviewSheet";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useComposeReceipt } from "@/features/documents/receipts-queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
-import { useTeamVatOverrides, useVatSettings } from "@/features/finances/vat-queries";
+import { readRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { useTenantId } from "@/lib/tenant";
 import { useTenant } from "@/features/settings/tenant";
 import { useServices } from "@/features/services/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
@@ -50,8 +51,7 @@ export default function NewReceiptScreen() {
   const accounts = useAccountsWithBalances();
   const services = useServices();
   const tenant = useTenant();
-  const vat = useVatSettings();
-  const teamVat = useTeamVatOverrides();
+  const tenantIdForVat = useTenantId();
 
   const totals = receiptTotals(draft);
   const account = (accounts.data ?? []).find((a) => a.id === draft.accountId) ?? null;
@@ -68,11 +68,9 @@ export default function NewReceiptScreen() {
   // ДОСТАЁТСЯ ИЗ ПОЛУЧЕННОЙ СУММЫ (`fill_transaction_vat`), а не добавляется
   // сверху. Показать иначе значит пообещать человеку не ту цифру, что ляжет
   // на бумагу.
-  const vatRate = effectiveVatSettings(
-    vat.data,
-    (teamVat.data ?? []).find((o) => o.teamId === draft.teamId) ?? null,
-    account?.vat_mode,
-  ).rate;
+  // Та же ставка, что показала шторка «Итого»: написанная руками или
+  // запомненная с прошлого документа (`useRememberedVatRate`).
+  const vatRate = draft.vatRate ?? readRememberedVatRate(tenantIdForVat);
   // ТЕ ЖЕ ЧИСЛА, ЧТО ПОКАЗАЛА ШТОРКА «ИТОГО», И ТА ЖЕ ФУНКЦИЯ, ЧТО КЛАДЁТ
   // ДЕНЬГИ В ПРОВОДКУ (`applyTxVat`). Налог берётся ТОЛЬКО из выбора
   // человека — настройка компании отвечает за ставку, а не за «включить»
@@ -122,7 +120,13 @@ export default function NewReceiptScreen() {
           payment_method: paymentMethodForAccountKind(account.kind),
           // «Без налога» — РЕШЕНИЕ человека, а не пустое место: сервер обязан
           // его уважать, даже когда у компании налог включён.
-          vat_mode: draft.vatMode,
+          // СТАВКА ЕДЕТ СНИМКОМ ВСЕГДА, когда налог включён: её написал
+          // человек (или она запомнена с прошлого документа), и сервер не
+          // должен подменить её настройкой. `fill_transaction_vat` сверяет
+          // налог с суммой и ставкой. Ставка 0 — это «без налога».
+          ...(draft.vatMode !== "none" && vatRate > 0
+            ? { vat_mode: draft.vatMode, vat_rate: vatRate, vat_amount: money.vat }
+            : { vat_mode: "none" as const }),
           business_today: businessToday,
         },
       });

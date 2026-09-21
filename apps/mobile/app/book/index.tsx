@@ -37,7 +37,6 @@ import {
 import {
   locationAddressForBooking,
   type Client,
-  type ClientNote,
   type Location,
 } from "@babun/shared/local/clients";
 import { Spinner } from "@/components/ui/Spinner";
@@ -46,9 +45,8 @@ import { ObjectSheet } from "@/features/clients/ObjectSheet";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
-import { useJsonArrayWriter } from "@/features/clients/use-json-writer";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
-import { applyNoteEdit } from "@/features/appointments/client-note-journal";
+import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -201,7 +199,6 @@ function Text({ maxFontSizeMultiplier = 1.3, ...props }: TextProps) {
 // У цифровой клавиатуры нет клавиши возврата — даём панель «Готово» (iOS).
 const EMPTY_LOCATIONS: Location[] = [];
 const EMPTY_REQUESTS: LocationRequest[] = [];
-const EMPTY_NOTES: ClientNote[] = [];
 /** Пауза перед первым листом цепочки: столько уезжает попап слота, из
  *  которого сюда пришли. Меньше — и лист подаётся поверх закрывающегося окна,
  *  то есть не появляется вовсе. */
@@ -649,20 +646,6 @@ export default function BookScreen() {
       setAddress("");
     }
   };
-  // Последняя заметка клиента — в поле под клиентом. Журнал на карточке
-  // хранит новые первыми, но сортируем по дате: порядок массива — не закон.
-  // Импортированный `comment` (CSV) — та же заметка, показываем, если
-  // журнала ещё нет (как на карточке).
-  const latestClientNoteEntry = useMemo(() => {
-    if (!client) return null;
-    const newest = [...(client.notes ?? [])].sort((a, b) =>
-      b.created_at.localeCompare(a.created_at),
-    )[0];
-    if (newest) return { id: newest.id, text: newest.text };
-    const imported = (client.comment ?? "").trim();
-    return imported ? { id: null, text: imported } : null;
-  }, [client]);
-  const latestClientNote = latestClientNoteEntry?.text ?? "";
 
   // ═══ МЕТКА КЛИЕНТА ПРОТИВ МЕТКИ ДНЯ ═══
   //
@@ -1351,44 +1334,12 @@ export default function BookScreen() {
   // в журнал — ОДНИМ патчем вместе с журналом, как на карточке чистит её «✕».
   // Два патча подряд (журнал и отдельно comment) в офлайн-кэше затирали друг
   // другу колонку (ревью 2026-09-04).
-  const migrateImportedComment =
-    !!client &&
-    (client.notes ?? []).length === 0 &&
-    (client.comment ?? "").trim() !== "";
-  const notesWriter = useJsonArrayWriter<ClientNote>(
-    client?.notes ?? EMPTY_NOTES,
-    (next) =>
-      updateClientPatch(
-        migrateImportedComment ? { notes: next, comment: "" } : { notes: next },
-      ),
-    clientId,
-  );
-  // Поле привязано к КОНКРЕТНОЙ записи журнала (ключ — её id): стёр — снялась
-  // именно она; набрал заново после стирания — родилась новая, а не
-  // переписалась соседняя. Ключ `null` — записи ещё нет.
-  const writeClientNote = (next: string, boundId: string | null) => {
-    if (!client) return;
-    let createdId: string | null = null;
-    void notesWriter.apply((all) => {
-      const edited = applyNoteEdit(all, next, boundId, () => ({
-        id: randomUuid(),
-        created_at: new Date().toISOString(),
-      }));
-      createdId = edited.createdId;
-      return edited.notes;
-    });
-    return createdId ?? undefined;
-  };
   const writeObjectNote = (next: string, boundId: string | null) => {
     if (!boundId) return;
     void locationWriter.patchLocation(boundId, { note: next || undefined });
   };
-  const clientNote = useInlineNote<string | null>(
-    latestClientNote,
-    latestClientNoteEntry?.id ?? null,
-    writeClientNote,
-    clientId,
-  );
+  // Логика поля — общий хук: тот же блок «Клиент» ставят инвойс и чек.
+  const clientNote = useClientNoteField(client);
   const objectNote = useInlineNote<string | null>(
     selectedLocation?.note ?? "",
     locationId,
