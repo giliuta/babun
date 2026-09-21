@@ -1,4 +1,5 @@
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
 export type SegmentOption<V extends string> = {
@@ -45,7 +46,17 @@ export function SegmentedControl<V extends string>({
           <Pressable
             key={opt.value}
             disabled={disabled}
-            onPress={() => onChange(opt.value)}
+            onPress={() => {
+              // ТИК ЗАПЕЧЁН В ПРИМИТИВ. Сегмент — дискретный выбор, и канон
+              // требует отклика в палец на каждом; без него самое весомое
+              // действие страницы прав («Меняет» → «Скрыт» для денег) молчит,
+              // хотя фильтр-чип рядом тикает.
+              // Тик — на СМЕНУ, а не на касание: повторный тап по уже
+              // выбранному ничего не меняет, и отклик на него читается как
+              // «что-то произошло».
+              if (!active) haptics.tap();
+              onChange(opt.value);
+            }}
             accessibilityRole="radio"
             accessibilityLabel={opt.label}
             accessibilityState={{ selected: active, disabled: !!disabled }}

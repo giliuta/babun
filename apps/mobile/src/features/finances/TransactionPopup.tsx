@@ -121,6 +121,7 @@ export function TransactionPopup({
   onClientOpen,
   onDelete,
   onRefund,
+  allow,
 }: {
   visible: boolean;
   transaction: FinanceTransaction | null;
@@ -134,6 +135,10 @@ export function TransactionPopup({
   onClientOpen: (clientId: string) => void;
   onDelete: (tx: FinanceTransaction) => Promise<void>;
   onRefund: (tx: FinanceTransaction, amount: number) => Promise<void>;
+  /** Что этому человеку открыто по уровню (этап 2 доступа). Не передано —
+   *  открыто всё, как было: витрину зовут и с экранов без уровней. Ряд
+   *  действия не рисуется вовсе — «видно, но при нажатии отказ» не бывает. */
+  allow?: { refund?: boolean; invoice?: boolean; remove?: boolean };
 }) {
   const t = useThemeColors();
   const [showRefundForm, setShowRefundForm] = useState(false);
@@ -208,13 +213,16 @@ export function TransactionPopup({
   );
   const refundRemaining = refundRemainingCents / 100;
   const canRefund =
-    tx.type === "income" && !isAppointmentLedger && refundRemainingCents > 0;
+    (allow?.refund ?? true) &&
+    tx.type === "income" &&
+    !isAppointmentLedger &&
+    refundRemainingCents > 0;
   // Перевод УДАЛЯЕТСЯ, но не правится и не возвращается: сервер запрещает
   // редактировать ноги, а onDelete сверху отменяет перевод целиком — обе
   // ноги атомарно по transfer_group_id. Это единственная дверь к отмене
   // перевода с главного экрана.
-  const canDelete = !isAppointmentLedger && !tx.invoice_id;
-  const canInvoice = tx.type === "income";
+  const canDelete = (allow?.remove ?? true) && !isAppointmentLedger && !tx.invoice_id;
+  const canInvoice = (allow?.invoice ?? true) && tx.type === "income";
 
   const refundCents = parseMoneyInputToCents(refundAmount);
   const refundNum = (refundCents ?? 0) / 100;

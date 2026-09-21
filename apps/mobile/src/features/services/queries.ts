@@ -10,7 +10,9 @@ import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 import { allServicesQueryKey } from "@/lib/company-query-keys";
 import { pickLiveServices } from "@/features/reference/reference-select";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { useDataRole, type UserRole } from "@/features/settings/tenant";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import {
   dispatcherServiceJsonToService,
   masterServiceJsonToService,
@@ -107,7 +109,7 @@ export async function fetchServices(
  *  (`pickLiveServices`). */
 export function useServices() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   const selectLive = useCallback((rows: Service[]) => pickLiveServices(rows, role), [role]);
   return useQuery({
@@ -138,15 +140,24 @@ export function useServices() {
  *  и обходить их нельзя — поэтому для них возвращается ровно то же, что и в
  *  `useServices` (их проекции и так не фильтруют по активности иначе). */
 export function useAllServices() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  // ЧИТАЕТСЯ В КОМПАНИИ ЭКРАНА. Аналитика клиентов открывается из вкладки
+  // «Клиенты», а та в «Команде 1» показывает СВОЮ компанию (STORY-082): с
+  // активной компанией устройства «Топ услуг» остался бы без имён — работы
+  // одной компании, справочник другой. Вне вкладки источника нет, и всё
+  // работает как раньше.
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const role = scope ? scope.role : roleQuery.data;
+  const ready = scope ? true : roleQuery.isSuccess && roleQuery.data != null;
+  const client = scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
   return useQuery({
     queryKey: allServicesQueryKey(tenantId, role),
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && ready && role != null,
     staleTime: 5 * 60_000,
     queryFn: () =>
-      fetchServices(supabase, tenantId as string, role as UserRole, {
+      fetchServices(client, tenantId as string, role as UserRole, {
         archived: true,
       }),
   });
@@ -226,7 +237,7 @@ export interface ServiceInput {
 
 export function useCreateService() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: ServiceInput) => {
@@ -305,7 +316,7 @@ export function useCreateService() {
  */
 export function useReorderServices() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: readonly string[]) => {

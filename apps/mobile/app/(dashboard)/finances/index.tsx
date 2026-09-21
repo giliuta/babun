@@ -22,6 +22,7 @@ import { LoadingBar } from "@/components/ui/LoadingBar";
 import { useThemeColors } from "@/theme/colors";
 import { usePullRefresh } from "@/lib/pull-refresh";
 import { useTeams, type Team } from "@/features/reference/queries";
+import { useMyAccess } from "@/features/access/queries";
 import { useCurrentRole, usePlanAllows } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
 import { useAppointments } from "@/features/calendar/queries";
@@ -36,6 +37,7 @@ import {
 import { OperationSheet } from "@/features/finances/OperationSheet";
 import { AccountsPanel } from "@/features/finances/AccountsPanel";
 import { FinancesFooter } from "@/features/finances/FinancesFooter";
+import { financePageAccess } from "@/features/finances/finance-page-access";
 import { incomeDeals } from "@/features/finances/income-deals";
 import { materialExpenseRows } from "@/features/finances/material-expenses";
 import { useFinanceRoute } from "@/features/finances/use-finance-route";
@@ -61,7 +63,6 @@ import {
   type DebtDirection,
 } from "@babun/shared/local/finance/debt";
 import { TransactionPopup } from "@/features/finances/TransactionPopup";
-import { canEditTransaction } from "@babun/shared/local/finance/transaction";
 import { NO_TEAM, sortAccountRows } from "@/features/finances/accounts-sections";
 import {
   hasTeamlessMoney,
@@ -253,10 +254,17 @@ function FinancesContent() {
     setAccountId,
     changeScope,
   } = useFinanceRoute(params, accountsQuery.data);
+  // УРОВЕНЬ ЧЕЛОВЕКА В ВЫБРАННОМ КАЛЕНДАРЕ — ОДНИМ ПРАВИЛОМ НА ВЕСЬ ЭКРАН
+  // (`finance-page-access.ts`). Экран только читает ответы: что живое, что
+  // серое, что можно править. Владелец карты прав не ждёт.
+  const myAccessQuery = useMyAccess();
+  const access = financePageAccess({ role, map: myAccessQuery.data, scope });
   // Гасим РАЗРЕЗ документов, а не только плитку: в «Документы» приходят и
-  // адресом `?view=documents`, и возвратом из записи.
-  const view: HomeView =
-    !canUseDocuments && routeView === "documents" ? "all" : routeView;
+  // адресом `?view=documents`, и возвратом из записи. Закрытая уровнем панель
+  // уходит туда же — на общий вид, а не показывает пустоту.
+  const view: HomeView = access.view(
+    !canUseDocuments && routeView === "documents" ? "all" : routeView,
+  );
   // Открыта панель документов: у шапки другой предмет поиска, и она обязана
   // сказать об этом словами подсказки.
   const documentsView = view === "documents";
@@ -342,7 +350,9 @@ function FinancesContent() {
   // ЧИП «БЕЗ КОМАНДЫ» ЖИВЁТ, ПОКА У ДЕНЕГ НЕТ КОМАНДЫ: счета-сироты ИЛИ записи,
   // долги и строки журнала без команды не на счёте команды. Раньше его держали
   // только сироты, и такие деньги не показывались нигде (находки 2026-09-15).
-  const needsNoTeamChip = hasOrphanAccounts || hasTeamless;
+  // Сотруднику чипа «Без команды» нет вовсе: общие счета компании и деньги без
+  // команды — не его календарь, а сервер ему их и не отдаёт.
+  const needsNoTeamChip = access.noTeamChip && (hasOrphanAccounts || hasTeamless);
   const scopeChipTeams = useMemo(
     () => (needsNoTeamChip ? [...teams, NO_TEAM_CHIP] : teams),
     [needsNoTeamChip, teams],
@@ -449,6 +459,9 @@ function FinancesContent() {
   );
 
   const materialSummary = useMemo(() => {
+    // Материалы записей — деньги из записей: сотруднику записи приходят с
+    // нулями, и такая цифра была бы выдумкой (`access.recordMoney`).
+    if (!access.recordMoney) return { amount: 0, appointmentCount: 0 };
     let amount = 0;
     let appointmentCount = 0;
     for (const appointment of scopedAppointments) {
@@ -461,7 +474,7 @@ function FinancesContent() {
       appointmentCount += 1;
     }
     return { amount, appointmentCount };
-  }, [period.from, period.to, scope, scopedAppointments, services]);
+  }, [access.recordMoney, period.from, period.to, scope, scopedAppointments, services]);
 
   // ОДНИ И ТЕ ЖЕ ДЕНЬГИ СЧИТАЮТСЯ ОДИН РАЗ.
   //
@@ -531,7 +544,7 @@ function FinancesContent() {
     // repository, so «total − paid_amount» would flag every completed
     // visit as fully unpaid (same helper as the dashboard).
     let debt = 0;
-    for (const a of scopedAppointments) {
+    for (const a of access.recordMoney ? scopedAppointments : []) {
       // ОДНА КОРЗИНА. Завершённый визит без оплаты и прошедшая запись, по
       // которой бригадир не отчитался, — для владельца это одни и те же
       // неполученные деньги: «всё равно нужно принимать решение по клиенту»
@@ -557,6 +570,7 @@ function FinancesContent() {
       debt: debt + manualIncomingDebt,
     };
   }, [
+    access.recordMoney,
     manualIncomingDebt,
     scopedTransactions,
     scopedAppointments,
@@ -567,6 +581,18 @@ function FinancesContent() {
     scope,
     materialSummary.amount,
   ]);
+
+  // ПЛИТКА ЗАКРЫТОГО БЛОКА — СЕРАЯ И ПО НУЛЯМ (владелец 15.09), а не последнее,
+  // что успело приехать до понижения прав.
+  const shownTotals = useMemo(
+    () => ({
+      income: access.ops === "locked" ? 0 : totals.income,
+      expense: access.ops === "locked" ? 0 : totals.expense,
+      profit: access.ops === "locked" ? 0 : totals.profit,
+      debt: access.debts === "locked" ? 0 : totals.debt,
+    }),
+    [access.debts, access.ops, totals],
+  );
 
   // Σ refunds already issued against each income — caps further refunds.
   // NOT computed from the period-windowed txs: a refund is dated TODAY and
@@ -730,12 +756,14 @@ function FinancesContent() {
   // считала их всегда, теперь и список их называет поимённо.
   const materialRows = useMemo(
     () =>
-      materialExpenseRows(scopedAppointments, services, {
-        from: period.from,
-        to: period.to,
-        teamId: scope,
-      }),
-    [period.from, period.to, scope, scopedAppointments, services],
+      access.recordMoney
+        ? materialExpenseRows(scopedAppointments, services, {
+            from: period.from,
+            to: period.to,
+            teamId: scope,
+          })
+        : [],
+    [access.recordMoney, period.from, period.to, scope, scopedAppointments, services],
   );
 
   // ГЛАВНАЯ ЛЕНТА СЧИТАЕТ ЗАПИСЯМИ, А НЕ ПРОВОДКАМИ (владелец 2026-09-09:
@@ -800,13 +828,15 @@ function FinancesContent() {
     const debtBlocks =
       view === "all"
         ? [
-            ...debtRows(scopedAppointments, clients, services, {
-              from: period.from,
-              to: period.to,
-              today: businessToday,
-              teamId: scope,
-              invoicedAppointmentIds: invoicedAppointments,
-            }),
+            ...(access.recordMoney
+              ? debtRows(scopedAppointments, clients, services, {
+                  from: period.from,
+                  to: period.to,
+                  today: businessToday,
+                  teamId: scope,
+                  invoicedAppointmentIds: invoicedAppointments,
+                })
+              : []),
             ...manualDebtRows(
               debts,
               debtPaid,
@@ -841,6 +871,7 @@ function FinancesContent() {
       return a.key < b.key ? 1 : -1;
       });
   }, [
+    access.recordMoney,
     view,
     query,
     scopedTransactions,
@@ -936,6 +967,11 @@ function FinancesContent() {
     >
       <Pressable
         onPress={openFinanceSettings}
+        // ДВЕРЬ ОТКРЫТА ВСЕМ (владелец 20.09: «я могу зайти туда, но блоков
+        // уже внутри шестерёнки не будет»). Раньше у сотрудника шестерёнка
+        // была серой и глухой — визуал шапки менялся вместе с правами.
+        // Страница за ней показывает то, что человеку открыто, и ничего, если
+        // не открыто ничего (`finances/settings-rows.ts`).
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel="Настройки финансов"
@@ -984,6 +1020,9 @@ function FinancesContent() {
           keyboardAppearance="light"
           autoCapitalize="none"
           returnKeyType="search"
+          // Искать нечего, когда ленты нет: у закрытых «Доходов и расходов»
+          // поле серое и не принимает ввод.
+          editable={access.search}
           clearButtonMode="while-editing"
           maxFontSizeMultiplier={1.3}
           className="flex-1 text-[15px]"
@@ -991,26 +1030,26 @@ function FinancesContent() {
         />
       </View>
 
-      {/* Аналитика — как в Клиентах, и с тем же гейтом: бригадиру не
-          показываем кнопку, которой у него нет. */}
-      {role === "owner" ? (
-        <Pressable
-          onPress={() => router.push("/cabinet/insights")}
-          hitSlop={6}
-          accessibilityRole="button"
-          accessibilityLabel="Аналитика по финансам"
-          style={({ pressed }) => ({
-            width: 44,
-            height: 44,
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: t.radius.card,
-            backgroundColor: pressed ? t.pressed : "transparent",
-          })}
-        >
-          <BarChart3 color={t.sub} size={21} strokeWidth={2} />
-        </Pressable>
-      ) : null}
+      {/* Аналитика — как в Клиентах: значок стоит всегда (владелец 20.09:
+          «справа значок аналитики — он есть; если на него тапнуть,
+          открывается, ну значит не будет данных там»). Что человек увидит
+          внутри, решают его же права на записи и деньги. */}
+      <Pressable
+        onPress={() => router.push("/cabinet/insights")}
+        hitSlop={6}
+        accessibilityRole="button"
+        accessibilityLabel="Аналитика по финансам"
+        style={({ pressed }) => ({
+          width: 44,
+          height: 44,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: t.radius.card,
+          backgroundColor: pressed ? t.pressed : "transparent",
+        })}
+      >
+        <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+      </Pressable>
     </View>
   );
 
@@ -1042,7 +1081,15 @@ function FinancesContent() {
       ? scopedTransactions.find((x) => x.id === row.txId)
       : null;
     if (!tx) return;
-    if (canEditTransaction(tx)) {
+    // ПРАВКА — ПО УРОВНЮ КАЛЕНДАРЯ САМОЙ СТРОКИ, а не выбранного чипа: у
+    // сотрудника сервер отдаёт на правку только свой расход на счёте своей
+    // команды. Нельзя — открывается витрина, а не форма с кнопкой в отказ.
+    if (
+      access.txEditable(tx, {
+        account: allAccounts.find((a) => a.id === tx.account_id) ?? null,
+        debt: debts.find((d) => d.id === tx.debt_id) ?? null,
+      })
+    ) {
       setEditingTx(tx);
       setOpOpen(true);
       return;
@@ -1094,10 +1141,13 @@ function FinancesContent() {
           period={period}
           onOpenPresets={() => setPresetOpen(true)}
           onOpenCustom={() => setWheelsOpen(true)}
-          totals={totals}
-          accounts={accountsSummary}
+          totals={shownTotals}
+          accounts={access.accounts === "locked" ? { total: 0 } : accountsSummary}
           invoices={invoiceSummary}
           showDocuments={canUseDocuments}
+          lockAccounts={access.accounts === "locked"}
+          lockOps={access.ops === "locked"}
+          lockDebts={access.debts === "locked"}
           view={view}
           onTap={toggleView}
         />
@@ -1142,9 +1192,13 @@ function FinancesContent() {
             onOpen={pushOnce}
             onOpenRecord={openRecordRow}
             refreshControl={refreshControl}
+            canOpenSettings={access.settings}
           />
         ) : view === "documents" ? (
           <DocumentsPanel
+            // Документы выставляет владелец: у остальных панель не обещает
+            // кнопку, которой у них нет (владелец 20.09).
+            canIssue={access.documents}
             invoices={scopedInvoices}
             payments={invoicePayments}
             appointments={scopedAppointments}
@@ -1171,7 +1225,7 @@ function FinancesContent() {
           />
         ) : view === "debt" ? (
           <DebtorsList
-            appointments={scopedAppointments}
+            appointments={access.recordMoney ? scopedAppointments : []}
             clients={clients}
             services={services}
             teamId={scope}
@@ -1248,6 +1302,11 @@ function FinancesContent() {
           setEditingTx(null);
           setOpOpen(true);
         }}
+        // Главное действие экрана — по уровню ВЫБРАННОГО календаря: «Смотрит»
+        // гасит кнопку и называет причину словами, закрытый блок — просто
+        // гасит (страница и так серая по нулям).
+        enabled={access.footer(view).enabled}
+        reason={access.footer(view).reason}
       />
 
       <TransactionPopup
@@ -1266,6 +1325,22 @@ function FinancesContent() {
               : Number.POSITIVE_INFINITY
             : 0
         }
+        // Что этому человеку открыто: возврат и инвойс пока владельческие, а
+        // удаление — ровно то же правило, что у правки строки. Отмена перевода
+        // сотруднику не открывается: вторую ногу знает только сама витрина, а
+        // сервер требует «Меняет» по обоим счетам.
+        allow={{
+          refund: access.refunds,
+          invoice: access.documents,
+          remove: popupTx
+            ? popupTx.type === "transfer"
+              ? access.owner
+              : access.txEditable(popupTx, {
+                  account: allAccounts.find((a) => a.id === popupTx.account_id) ?? null,
+                  debt: debts.find((d) => d.id === popupTx.debt_id) ?? null,
+                })
+            : false,
+        }}
         onClose={() => setPopupTx(null)}
         onInvoice={(tx) => {
           setPopupTx(null);
@@ -1316,6 +1391,17 @@ function FinancesContent() {
         debtPayment={debtPayment}
         businessToday={businessToday}
         transaction={editingTx}
+        // Лист знает только «можно ли писать» — правило живёт на экране: у
+        // сотрудника это свой расход на счёте своей команды, а новая операция
+        // — «Меняет» в выбранном календаре.
+        canWrite={
+          editingTx
+            ? access.txEditable(editingTx, {
+                account: allAccounts.find((a) => a.id === editingTx.account_id) ?? null,
+                debt: debts.find((d) => d.id === editingTx.debt_id) ?? null,
+              })
+            : access.ops === "write"
+        }
         onInvoice={(tx) => {
           setOpOpen(false);
           openTransactionInvoice(tx);
@@ -1353,6 +1439,9 @@ function FinancesContent() {
         // под окном шторки не виден — и возвращается этим.
         onReopen={reopenDebtSheet}
         paid={editingDebt ? debtPaid.get(editingDebt.id) ?? 0 : 0}
+        // Долг правится по уровню СВОЕГО календаря, а гасится ещё и уровнем
+        // «Доходов и расходов»: платёж — это операция журнала.
+        canWrite={editingDebt ? access.debtEditable(editingDebt) : access.debts === "write"}
         onPay={(payment) => {
           // Одна шторка закрывается, следом открывается другая: два окна в
           // один кадр iOS не показывает («already presenting»).

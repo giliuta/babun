@@ -27,6 +27,25 @@ export const clientsQueryKey = (tenantId: string | null, role: Role) =>
 export const clientTagsQueryKey = (tenantId: string | null, role: Role) =>
   ["client-tags", tenantId, rolePart(role)] as const;
 
+// ИСТОЧНИК ВКЛАДКИ «КЛИЕНТЫ» — ТРЕТИЙ ЭЛЕМЕНТ НЕ РОЛЬ, А ВИД ДОСТУПА.
+//
+// У своей компании вид совпадает с ролью, и ключ остаётся прежним — прогрев
+// греет то же самое. У компании-работодателя вид собран из уровней («Смотрит»
+// или «Меняет», все клиенты или из его календарей, видны ли телефоны).
+// Владелец поменял уровень — у списка другой ключ, и он перечитывается сам,
+// без ручных сбросов и без риска показать данные по старому праву.
+export const sourceClientsQueryKey = (tenantId: string | null, view: string) =>
+  ["clients", tenantId, view] as const;
+
+export const sourceClientTagsQueryKey = (tenantId: string | null, view: string) =>
+  ["client-tags", tenantId, view] as const;
+
+export const sourceClientQueryKey = (
+  id: string,
+  tenantId: string | null,
+  view: string,
+) => ["client", id, tenantId, view] as const;
+
 // С 2026-09-15 `useTeams` читает только вариант с «all» (активные отбираются
 // `select`); ключ без суффикса остался лишь у плана прогрева — до его правки.
 export const teamsQueryKey = (
@@ -151,6 +170,12 @@ export const accessBlocksQueryKey = () => ["access-blocks"] as const;
 
 export const memberAccessQueryKey = (tenantId: string | null, userId: string | null) =>
   ["member-access", tenantId, userId] as const;
+
+/** СВОЯ карта прав человека в компании (`my_access_map`, этап 2). Компания во
+ *  втором сегменте: переход её бережёт, уход из компании стирает, а сигнал
+ *  `access_changed {tenant_id}` находит ровно этот ключ. */
+export const myAccessQueryKey = (tenantId: string | null) =>
+  ["my-access", tenantId] as const;
 
 export const calendarMembersQueryKey = (tenantId: string | null, teamId: string | null) =>
   ["calendar-members", tenantId, teamId] as const;

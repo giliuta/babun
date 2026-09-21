@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import type { DebtDirection } from "@babun/shared/local/finance/debt";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { useToast } from "@/components/ui/Toast";
+import { useThemeColors } from "@/theme/colors";
 import { haptics } from "@/lib/haptics";
 import type { Team } from "@/features/reference/queries";
 import { AccountEditorSheet } from "./account-editor/AccountEditorSheet";
@@ -47,6 +48,8 @@ export function FinancesFooter({
   onIssueInvoice,
   onAddDebt,
   onAddOperation,
+  enabled = true,
+  reason = null,
 }: {
   view: HomeView;
   docFilter: DocumentFilter;
@@ -67,7 +70,14 @@ export function FinancesFooter({
   onIssueInvoice: () => void;
   onAddDebt: () => void;
   onAddOperation: () => void;
+  /** Действие экрана открыто уровнем ЭТОГО календаря (этап 2 доступа). `false`
+   *  — кнопка серая и не нажимается; `reason` называет причину словами над
+   *  ней («Только просмотр»). У закрытого блока причины нет: страница и так
+   *  серая по нулям. */
+  enabled?: boolean;
+  reason?: string | null;
 }) {
+  const t = useThemeColors();
   const toast = useToast();
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferFromId, setTransferFromId] = useState<string | null>(null);
@@ -84,6 +94,7 @@ export function FinancesFooter({
       accountsAction.kind === "transfer" ? (
         <GradientButton
           label="Сделать перевод"
+          disabled={!enabled}
           onPress={() => {
             setTransferFromId(accountsAction.fromId);
             setTransferOpen(true);
@@ -92,13 +103,18 @@ export function FinancesFooter({
       ) : accountsAction.kind === "needs-second" ? (
         <GradientButton
           label="Сделать перевод"
+          disabled={!enabled}
           onPress={() => {
             haptics.warning();
             toast(TRANSFER_NEEDS_SECOND, "info");
           }}
         />
       ) : (
-        <GradientButton label="Добавить счёт" onPress={() => setCreateOpen(true)} />
+        <GradientButton
+          label="Добавить счёт"
+          disabled={!enabled}
+          onPress={() => setCreateOpen(true)}
+        />
       )
     ) : view === "documents" && docFilter === "receipt" ? (
       // ЧЕК ВЫПИСЫВАЕТСЯ КНОПКОЙ (владелец 2026-09-20: «чек не сразу
@@ -111,9 +127,9 @@ export function FinancesFooter({
       //
       // Чек, собранный здесь, ВСЕГДА записывает приход на выбранный счёт
       // (см. `useComposeReceipt`): бумага без денег была бы подделкой.
-      <GradientButton label="Выписать чек" onPress={onIssueReceipt} />
+      <GradientButton label="Выписать чек" disabled={!enabled} onPress={onIssueReceipt} />
     ) : view === "documents" ? (
-      <GradientButton label="Выставить инвойс" onPress={onIssueInvoice} />
+      <GradientButton label="Выставить инвойс" disabled={!enabled} onPress={onIssueInvoice} />
     ) : view === "debt" ? (
       // ДОЛГ — СВОЯ СУЩНОСТЬ, И ЗАВОДИТСЯ ОН СВОЕЙ ШТОРКОЙ (владелец
       // 2026-09-10: «почему, когда я нажимаю „Добавить долг“, открывается
@@ -123,6 +139,7 @@ export function FinancesFooter({
       // деньги, деньги будут платежом.
       <GradientButton
         label={debtSide === "incoming" ? "Добавить долг" : "Добавить свой долг"}
+        disabled={!enabled}
         onPress={onAddDebt}
       />
     ) : (
@@ -138,13 +155,25 @@ export function FinancesFooter({
               ? "Добавить расход"
               : "Добавить операцию"
         }
+        disabled={!enabled}
         onPress={onAddOperation}
       />
     );
 
   return (
     <>
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}>
+      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10, gap: 6 }}>
+        {/* ПРИЧИНА — СЛОВАМИ НАД КНОПКОЙ, как в «Финансах дня»: серая кнопка
+            без объяснения читается как поломка. */}
+        {reason ? (
+          <Text
+            className="text-center text-[13px]"
+            style={{ color: t.sub }}
+            maxFontSizeMultiplier={1.3}
+          >
+            {reason}
+          </Text>
+        ) : null}
         {button}
       </View>
       <TransferSheet

@@ -32,6 +32,14 @@
 // the cache stores that — nothing to preserve here. The photo viewer
 // fetches blobs on demand (online-only), matching web + the repo contract.
 
+// ЗАСОВ — ПЕРЕД ОПТИМИСТИЧНОЙ СТРОКОЙ, А НЕ ПЕРЕД ОТПРАВКОЙ.
+//
+// Эти обёртки офлайн-первые: строка ложится в SQLite СРАЗУ, а на сервер
+// уезжает после. В режиме просмотра чужими глазами отправку отобьёт засов
+// (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
+// у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
+// которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
@@ -219,6 +227,7 @@ export async function createAppointment(
   input: Appointment,
   tenantId: string,
 ): Promise<Appointment> {
+  assertWritesAllowed("createAppointment");
   const id = input.id || randomUuid();
   const nowIso = new Date().toISOString();
   // Two projections (rule 4):
@@ -285,6 +294,7 @@ export async function updateAppointment(
   patch: Partial<Appointment>,
   tenantId: string,
 ): Promise<Appointment> {
+  assertWritesAllowed("updateAppointment");
   const existing = await readCachedAppointment(id, tenantId);
   const expectedUpdatedAt = existing?.updated_at ?? null;
 
@@ -373,6 +383,7 @@ export async function deleteAppointment(
   id: string,
   tenantId: string,
 ): Promise<void> {
+  assertWritesAllowed("deleteAppointment");
   // v452 — non-UUID ids are local orphans (the row never made it to
   // Supabase because an earlier insert failed). Skip the network + queue
   // entirely so we don't keep re-enqueueing dead ops — a standalone

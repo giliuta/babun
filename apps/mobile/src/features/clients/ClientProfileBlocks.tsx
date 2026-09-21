@@ -21,6 +21,9 @@ interface ClientProfileBlocksProps {
   draft: boolean;
   tags: ClientTag[];
   update: (patch: Partial<Client>) => Promise<boolean>;
+  /** Инвойсы и чеки клиента. У клиента компании, где человек только
+   *  работает, их нет: это деньги той компании (STORY-082). */
+  showDocuments?: boolean;
 }
 
 // БЛОКИ КАРТОЧКИ — НА `SectionCard`, КАК НА СТРАНИЦЕ ЗАПИСИ (владелец
@@ -43,6 +46,7 @@ export function ClientProfileBlocks({
   draft,
   tags,
   update,
+  showDocuments = true,
 }: ClientProfileBlocksProps) {
   const [objectsOpen, setObjectsOpen] = useState(false);
   // Правка объекта — лист, а не страница (владелец 2026-08-06). Страницы
@@ -124,7 +128,7 @@ export function ClientProfileBlocks({
           с разбивкой по записям»). В черновике её нет: документы живут у
           записей, а записей у несохранённого клиента не бывает. */}
       <NotesBlock client={client} update={update} />
-      {!draft ? <DocumentationBlock clientId={client.id} /> : null}
+      {!draft && showDocuments ? <DocumentationBlock clientId={client.id} /> : null}
       <PersonalBlock client={client} update={update} tags={tags} />
       {/* Строки «Ещё» больше нет (владелец 2026-08-02: «чтобы внизу
           уменьшить»). Мессенджеры и почта уехали к номерам — их добавляют

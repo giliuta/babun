@@ -33,6 +33,7 @@ import { haptics } from "@/lib/haptics";
 import { confirmThen } from "@/lib/confirm";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // ДОКУМЕНТАЦИЯ КЛИЕНТА — ПОЛНОЦЕННАЯ СТРАНИЦА (владелец 2026-08-03: «вложения
 // надо исправлять — полноценно открывается страница, где вся документация о
@@ -54,7 +55,17 @@ function dateRu(iso: string): string {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
-export default function ClientAttachmentsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientAttachmentsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="card-sub">
+      <ClientAttachmentsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientAttachmentsScreen() {
   const t = useThemeColors();
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const id = clientId ?? "";

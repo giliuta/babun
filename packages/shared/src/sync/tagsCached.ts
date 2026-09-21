@@ -16,6 +16,14 @@
 // cache layer header. Tag membership for a client requires online
 // connectivity to mutate. Decision #2 from G0: full re-pull on each sync.
 
+// ЗАСОВ — ПЕРЕД ОПТИМИСТИЧНОЙ СТРОКОЙ, А НЕ ПЕРЕД ОТПРАВКОЙ.
+//
+// Эти обёртки офлайн-первые: строка ложится в SQLite СРАЗУ, а на сервер
+// уезжает после. В режиме просмотра чужими глазами отправку отобьёт засов
+// (`write-guard.ts`), но местная копия к тому времени уже записана, и откат
+// у неё молчащий — не удался, и в кэше владельца остаётся призрак строки,
+// которой на сервере никогда не было. Поэтому спрашиваем до всего.
+import { assertWritesAllowed } from "./write-guard";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../db/database.types";
 import {
@@ -35,6 +43,8 @@ import {
   type CachedTag,
 } from "../db/cache/sql";
 import { isOnline } from "./network";
+import { OnlineOnlyWriteError } from "./cache-errors";
+import type { CachedWriteOptions } from "./clientsCached";
 import { kickReplayer, MAX_ATTEMPTS } from "./replayer";
 import {
   enqueueOpAndEmit,
@@ -157,7 +167,10 @@ export async function createClientTag(
     position?: number;
   },
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<ClientTag> {
+  assertWritesAllowed("createClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const id = randomUuid();
   const optimisticRow: CachedTag = {
     id,
@@ -199,7 +212,7 @@ export async function createClientTag(
       });
       return created;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         await cacheDelete("tags", id).catch(() => {});
         throw err;
       }
@@ -240,7 +253,10 @@ export async function updateClientTag(
     hidden?: boolean;
   },
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<ClientTag> {
+  assertWritesAllowed("updateClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const existing = await readCachedTag(id, tenantId);
   const merged: CachedTag | null = existing
     ? { ...existing, ...patch }
@@ -269,7 +285,7 @@ export async function updateClientTag(
       });
       return updated;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         if (existing) await cacheUpsert("tags", existing).catch(() => {});
         throw err;
       }
@@ -313,7 +329,10 @@ export async function deleteClientTag(
   supabase: DbSupabase,
   id: string,
   tenantId: string,
+  opts?: CachedWriteOptions,
 ): Promise<void> {
+  assertWritesAllowed("deleteClientTag");
+  if (opts?.onlineOnly && !isOnline()) throw new OnlineOnlyWriteError(opts.onlineOnly);
   const existing = await readCachedTag(id, tenantId);
   const deleteOp = {
     table: "tags" as const,
@@ -329,7 +348,7 @@ export async function deleteClientTag(
       await repoDeleteClientTag(supabase, id, tenantId);
       return;
     } catch (err) {
-      if (!isTransientNetworkError(err)) {
+      if (!isTransientNetworkError(err) || opts?.onlineOnly) {
         if (existing) await cacheUpsert("tags", existing).catch(() => {});
         throw err;
       }

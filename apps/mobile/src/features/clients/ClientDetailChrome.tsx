@@ -26,6 +26,12 @@ interface ClientDetailChromeProps {
   onToggleBlacklist: () => void;
   onArchive: () => void;
   onDelete: () => void;
+  /** Карточка правится: без этого в меню нет «Напомнить». */
+  canEdit?: boolean;
+  /** Хозяйство базы — чёрный список, архив, удаление. У клиента компании,
+   *  где человек только работает, этих строк нет: пометки общие для всей
+   *  компании, и ведёт их её владелец. */
+  canManage?: boolean;
 }
 
 export function ClientDetailChrome({
@@ -43,6 +49,8 @@ export function ClientDetailChrome({
   onToggleBlacklist,
   onArchive,
   onDelete,
+  canEdit = true,
+  canManage = true,
 }: ClientDetailChromeProps) {
   const t = useThemeColors();
   // Кнопки хедера живут ВЫШЕ прокрутки с полями и фокус у поля не забирают:
@@ -106,13 +114,17 @@ export function ClientDetailChrome({
         visible={menuOpen}
         title="Клиент"
         items={[
-          {
-            id: "remind",
-            label: "Напомнить",
-            icon: Bell,
-            color: t.accent,
-            onPress: onRemind,
-          },
+          ...(canEdit
+            ? [
+                {
+                  id: "remind",
+                  label: "Напомнить",
+                  icon: Bell,
+                  color: t.accent,
+                  onPress: onRemind,
+                },
+              ]
+            : []),
           {
             id: "share",
             label: "Поделиться",
@@ -120,6 +132,8 @@ export function ClientDetailChrome({
             color: t.accent,
             onPress: onShare,
           },
+          ...(canManage
+            ? [
           {
             id: "blacklist",
             label: blacklisted ? "Убрать из чёрного списка" : "В чёрный список",
@@ -145,6 +159,8 @@ export function ClientDetailChrome({
             color: t.danger,
             onPress: onDelete,
           },
+              ]
+            : []),
         ]}
         onClose={onCloseMenu}
       />

@@ -5,6 +5,8 @@ import type { Database } from "@babun/shared/db/database.types";
 import { LargeSecureStore } from "@/lib/secure-store";
 import { getActiveTenantId } from "@/lib/active-tenant";
 import { applyTenantHeader } from "@/lib/tenant-header";
+import { isWriteRequest } from "@/lib/write-requests";
+import { WritesBlockedError, writesBlocked } from "@babun/shared/sync/write-guard";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -45,6 +47,15 @@ function fetchWithActiveTenant(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  // ПРОСМОТР ЧУЖИМИ ГЛАЗАМИ НИЧЕГО НЕ ПИШЕТ. Пока идёт зеркало, запросы
+  // уходят токеном владельца, и кнопка, которую видно «его глазами», создала
+  // бы настоящие данные. Отбиваем здесь: это единственное место, через
+  // которое проходит КАЖДЫЙ запрос — строки, функции, файлы
+  // (`@babun/shared/sync/write-guard`).
+  if (writesBlocked() && isWriteRequest(init?.method ?? "GET", requestUrl(input))) {
+    return Promise.reject(new WritesBlockedError(requestUrl(input)));
+  }
+
   // Явный заголовок вызывающего побеждает фоновый — так прогрев чужой
   // компании называет её сам (`bind-tenant.ts`). Правило и его тест — в
   // `tenant-header.ts`.

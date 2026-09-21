@@ -1,5 +1,5 @@
-import ClientDetailScreen from "../(dashboard)/clients/[id]";
-import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBoundary";
+import { ClientDetailScreen } from "../(dashboard)/clients/[id]";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // КЛИЕНТ ИЗ ЗАПИСИ — ПОВЕРХ ЗАПИСИ, А НЕ ВМЕСТО НЕЁ (2026-09-03).
 //
@@ -22,12 +22,15 @@ import { RoleCapabilityBoundary } from "@/features/settings/RoleCapabilityBounda
 // поля тем, что уже набрали в поиске клиента. Реальный id открывает обычную
 // карточку: смотреть телефоны, объекты, историю и долг того, кому едешь.
 //
-// Тот же гейт способности, что у вкладки «Клиенты» (`clients/_layout.tsx`):
-// заводить клиента из записи может тот же, кто заводит его из списка.
+// КОМПАНИЯ ЗДЕСЬ ВСЕГДА КАЛЕНДАРНАЯ (`forceActive`, STORY-082): запись
+// делается в открытом календаре, и клиент заводится в ту же компанию — даже
+// если вкладка «Клиенты» показывает другую, свою. Прежний гейт по роли
+// (`operate-clients`) снят вместе с гейтом вкладки: пускает не роль, а
+// источник, и он же решает, что можно на карточке.
 export default function BookClientScreen() {
   return (
-    <RoleCapabilityBoundary capability="operate-clients" title="Клиент">
+    <ClientsCompanyRoute kind="card" forceActive>
       <ClientDetailScreen />
-    </RoleCapabilityBoundary>
+    </ClientsCompanyRoute>
   );
 }

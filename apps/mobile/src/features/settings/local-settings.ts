@@ -36,7 +36,12 @@ import {
 } from "@babun/shared/local/personal-event-types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+// РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
+// запроса и в форму чтения: на зеркальной роли каждый вход и выход из
+// режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
+// владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
+// настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
+import { useCurrentRole, useDataRole } from "@/features/settings/tenant";
 import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
@@ -137,7 +142,7 @@ function safeSaveOperationalCalendarSettings(
 
 export function useCalendarSettings() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: calendarSettingsQueryKey(tenantId, role),
@@ -176,7 +181,7 @@ export function useCalendarSettings() {
 
 export function useSaveCalendarSettings() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   const scope = `${tenantId ?? "no-tenant"}:${role ?? "role-pending"}`;
   const queryKey = [
@@ -456,7 +461,7 @@ function cacheServerLocationLabels(
 
 export function useLocationLabels() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: ["location-labels", tenantId, role ?? "role-pending"],
@@ -513,7 +518,7 @@ export function useLocationLabels() {
 
 export function useSaveLocationLabels() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (l: LocationLabel[]) => {
@@ -606,7 +611,7 @@ function rowToEventType(r: EventTypeRow): PersonalEventType {
 
 export function usePersonalEventTypes() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: ["event-types", tenantId, role ?? "role-pending"],
@@ -670,7 +675,7 @@ export function usePersonalEventTypes() {
 
 export function useSavePersonalEventTypes() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   const mutationKey = [
     "event-types",

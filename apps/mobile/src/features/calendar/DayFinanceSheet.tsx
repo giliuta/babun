@@ -43,6 +43,9 @@ import {
 import { confirmThen } from "@/lib/confirm";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 // ФИНАНСЫ ДНЯ — ЛИСТ СНИЗУ С ПЛИТКАМИ КАК В «ФИНАНСАХ» (владелец 2026-09-08:
 // «тапаю внизу — снизу поднимается плашка; сверху четыре блока, как в
@@ -108,6 +111,18 @@ export function DayFinanceSheet({
   const { data: clients = [] } = useClients();
   const { data: categories = [] } = useFinanceCategories();
   const setExtras = useSetDayExtras();
+  // «СМОТРИТ» — ЛИСТ ТОТ ЖЕ, ИЗМЕНЕНИЯ ЗАКРЫТЫ (этап 2 доступа; план: кнопка
+  // на месте, серая, причина словами). Уровень — «Доходы и расходы» в ЭТОМ
+  // календаре; сервер проверяет то же, так что серое не врёт.
+  const role = useCurrentRole().data;
+  const financeGate = accessGate({
+    role,
+    map: useMyAccess().data,
+    blockKey: "finance.operations",
+    scope: "calendar",
+    teamId,
+  });
+  const canWrite = financeGate === "write";
   const [view, setView] = useState<DayView>("all");
 
   // Лист остаётся смонтированным с dateYmd=null: последний открытый день и
@@ -287,7 +302,10 @@ export function DayFinanceSheet({
       const id = tx.appointment_id;
       return () => openRecord(id);
     }
-    if (canEditTransaction(tx)) {
+    // Сотрудник правит только расходы: доход несёт выданный чек, и его
+    // исправление переписало бы документ клиента. Доходы правит владелец —
+    // сервер отказывает сотруднику ровно так же.
+    if (canWrite && canEditTransaction(tx) && (role === "owner" || tx.type === "expense")) {
       return () => openOperation(tx, tx.type === "expense" ? "expense" : "income");
     }
     return undefined;
@@ -353,9 +371,14 @@ export function DayFinanceSheet({
         footer={
           <View
             pointerEvents={closing ? "none" : "auto"}
-            style={{ paddingHorizontal: 16, paddingTop: 8 }}
+            style={{ paddingHorizontal: 16, paddingTop: 8, gap: 6 }}
           >
-            <GradientButton label={cta.label} onPress={cta.onPress} />
+            {canWrite ? null : (
+              <Text style={{ fontSize: 13, color: t.sub, textAlign: "center" }}>
+                Только просмотр
+              </Text>
+            )}
+            <GradientButton label={cta.label} onPress={cta.onPress} disabled={!canWrite} />
           </View>
         }
       >
@@ -478,7 +501,7 @@ export function DayFinanceSheet({
                   amount={e.amount}
                   outflow={e.kind === "expense"}
                   separated={i > 0 || listTx.length > 0 || (view === "all" && dayPlan.length > 0)}
-                  onRemove={teamId ? () => askRemoveLegacy(e) : undefined}
+                  onRemove={teamId && canWrite ? () => askRemoveLegacy(e) : undefined}
                 />
               ))}
             </RowGroup>

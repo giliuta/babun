@@ -15,6 +15,7 @@ import {
   FileUp,
   X,
 } from "lucide-react-native";
+import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
 import { Screen } from "@/components/ui/Screen";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -312,6 +313,8 @@ export function ImportWizardSheet({
       presentationStyle="pageSheet"
       onRequestClose={close}
     >
+      {/* `pageSheet` закрывает почти весь экран вместе с корневой плашкой. */}
+      <MirrorBanner inModal />
       <Screen>
         <WizardHeader
           subtitle={STEP_SUB[step]}

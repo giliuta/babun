@@ -8,6 +8,7 @@ import type {
 } from "@babun/shared/local/appointments";
 import { randomUuid } from "@babun/shared/sync";
 import { formatEURExact, moneySymbol } from "@babun/shared/common/utils/money";
+import { usePaymentRights } from "./usePaymentRights";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { useToast } from "@/components/ui/Toast";
 import { chooseOption } from "@/lib/choose";
@@ -17,7 +18,7 @@ import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import { useInvoices } from "@/features/invoices/queries";
-import { useCurrentRole, usePlanAllows, useTenant } from "@/features/settings/tenant";
+import { usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { useBusinessNow } from "./business-now";
 import {
   useTeamPaymentAccounts,
@@ -61,6 +62,10 @@ import {
 // поля или «Снять» в тосте — сервер пишет сторно «деньги не поступили», не
 // возврат. Деньги ждут кнопки только у новой записи: уходят с «Создать запись».
 
+/** Права на оплату записи у этого человека в этом календаре нет: сервер
+ *  откажет, поэтому плитки гаснут заранее и называют причину. */
+const NO_PAYMENT_RIGHT = "Принимать оплату в этом календаре вам не разрешили";
+
 export interface PendingPayment {
   accountId: string;
   /** Евро с копейками. */
@@ -95,7 +100,6 @@ export function PaymentBlock({
   const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
-  const role = useCurrentRole().data;
   const currency = useTenant().data?.currency;
   const businessNow = useBusinessNow();
   const tileWidth = useTileWidth();
@@ -106,7 +110,15 @@ export function PaymentBlock({
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  const canCreateAccount = role === "owner"; // RLS accounts_owner_all: счёт заводит только владелец
+  // СЧЁТ ЗАВОДИТ ТОТ, КТО МЕНЯЕТ СЧЕТА В ЭТОМ КАЛЕНДАРЕ (уровни финансов,
+  // 2026-09-15). Раньше дверь была только у владельца: политика счетов не
+  // знала уровней, и «Заведите счёт» сотруднику заканчивалось отказом.
+  // Все три права блока — одним расчётом (`payment-rights.ts`, с тестом).
+  const {
+    createAccount: canCreateAccount,
+    seeHistory: canSeeHistory,
+    takeMoney: canTakeMoney,
+  } = usePaymentRights(teamId);
   const canUseDocuments = usePlanAllows("documents");
 
   const invoice = useMemo(() => {
@@ -154,7 +166,8 @@ export function PaymentBlock({
   const kindForTap: PaymentKind = started ? "settlement" : "prepayment";
   const amountCents = amountMode ? amountCentsFromInput(partText) : outstanding;
   const problem = amountProblem(amountCents, outstanding);
-  const acceptsMoney = outstanding > 0 && (started || amountMode) && !billUnsaved;
+  const acceptsMoney =
+    outstanding > 0 && (started || amountMode) && !billUnsaved && canTakeMoney;
 
   const runCancel = (
     appointmentId: string,
@@ -180,6 +193,11 @@ export function PaymentBlock({
 
   const handleTileTap = (account: PaymentAccountOption) => {
     if (outstanding <= 0 || busy) return;
+    if (!canTakeMoney) {
+      haptics.warning();
+      toast(NO_PAYMENT_RIGHT, "info");
+      return;
+    }
     if (billUnsaved) {
       haptics.warning();
       toast("Итог изменился — сначала сохраните запись", "info");
@@ -240,6 +258,12 @@ export function PaymentBlock({
     account: PaymentAccountOption,
     accountRowsForTile: PaymentRow[],
   ) => {
+    // Снять оплату — тоже запись денег: то же право, что у приёма.
+    if (!canTakeMoney) {
+      haptics.warning();
+      toast(NO_PAYMENT_RIGHT, "info");
+      return;
+    }
     const cancellable = accountRowsForTile.filter((row) => row.cancellable);
     if (!appointment || cancellable.length === 0) {
       toast("Этот платёж снимается в карточке записи", "info");
@@ -319,13 +343,13 @@ export function PaymentBlock({
   // могли ничего: «часть суммы» не от чего отсчитывать при нуле, инвойс не на
   // что выписывать, история платежей пуста. Три мёртвых тапа — и полоса в
   // сорок точек, в которой нет ни слова, только они, прижатые вправо.
-  const canSplit = outstanding > 0;
+  const canSplit = outstanding > 0 && canTakeMoney;
   // ДОКУМЕНТОВ НА БЕСПЛАТНОМ ТАРИФЕ НЕТ ВОВСЕ: `enforce_plan_limits` отобьёт
   // вставку инвойса, а канон запрещает живой контрол над запрещённым —
   // значка «Инвойс» просто нет. Уже выписанный документ открыть можно: он
   // существует, и прятать дорогу к нему значило бы потерять бумагу.
   const canInvoice = Boolean(invoice) || (outstanding > 0 && canUseDocuments);
-  const hasHistory = rows.length > 0;
+  const hasHistory = canSeeHistory && rows.length > 0;
   const anyAction = Boolean(teamId) && (canSplit || canInvoice || hasHistory);
   // Строка состояния нужна, когда ей ЕСТЬ ЧТО СКАЗАТЬ: подпись, поле суммы или
   // хоть одно живое действие. Иначе блок начинается сразу со счетов.

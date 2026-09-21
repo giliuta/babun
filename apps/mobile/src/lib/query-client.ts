@@ -6,6 +6,7 @@ import {
   focusManager,
   onlineManager,
 } from "@tanstack/react-query";
+import { isWritesBlockedError } from "@babun/shared/sync/write-guard";
 import { notify } from "./notify";
 import { getActiveTenantId } from "./active-tenant";
 import {
@@ -58,8 +59,18 @@ export const queryClient = new QueryClient({
   //     user would get TWO stacked alerts: this generic one plus the
   //     screen's specific one.
   mutationCache: new MutationCache({
-    onError: (_error, _variables, _context, mutation) => {
+    onError: (error, _variables, _context, mutation) => {
       if (mutation.options.onError || mutation.meta?.errorHandled) return;
+      // ОТБИТАЯ ЗАПИСЬ — НЕ ПОЛОМКА СВЯЗИ. В режиме «его глазами» приложение
+      // не пишет намеренно, и «проверьте соединение» отправило бы человека
+      // чинить исправную сеть.
+      if (isWritesBlockedError(error)) {
+        // Формулировка ОДНА и живёт в самой ошибке: экраны со своим разбором
+        // печатают `error.message`, и две разные фразы про одно и то же
+        // читались бы как две разные беды.
+        notify("Это просмотр", (error as Error).message);
+        return;
+      }
       // Через notify, а не Alert.alert: на вебе последний — пустая
       // функция, и эта сетка ловила бы ошибки в полной тишине.
       notify(

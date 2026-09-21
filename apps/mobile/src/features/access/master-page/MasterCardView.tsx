@@ -118,8 +118,16 @@ export interface MasterCardViewProps {
   teamIds: readonly string[];
   /** Нет — календари только показываются. */
   onOpenCalendars?: () => void;
+  /** Показывать ли блок календарей. У НОВОГО мастера его нет: календарь
+   *  задан тем, из которого нажали «Добавить мастера», и выбирать нечего
+   *  (владелец 21.09: «календарь будет уже зафиксирован»). */
+  showCalendars?: boolean;
   /** `null` — реестр прав ещё едет: строки разделов стоят без слова. */
   areaLevels: Record<RightsArea, AreaLevel> | null;
+  /** Разделы, у которых есть хоть один живой блок. Пусто — раздела нет на
+   *  карточке: строка «Календарь — Скрыт» у мастера означала бы настройку,
+   *  которой сервер не держит (STORY-083). */
+  liveAreas?: readonly RightsArea[];
   onOpenArea: (area: RightsArea) => void;
   footer?: ReactNode;
 }
@@ -128,6 +136,7 @@ const noop = () => {};
 
 export function MasterCardView(p: MasterCardViewProps) {
   const t = useThemeColors();
+  const areas = p.liveAreas ?? RIGHTS_AREAS;
   const check = <Check color={t.success} size={18} strokeWidth={2.5} />;
   const chosen = p.teamIds
     .map((id) => p.teams.find((team) => team.id === id))
@@ -243,6 +252,7 @@ export function MasterCardView(p: MasterCardViewProps) {
               календаря; первый — домашний, без отдельной метки. Где выбора
               нет (сотрудник), пусто — словами, а строки — показание без
               кнопки: мёртвых тапов на карточке нет (`calendarsBlockMode`). */}
+          {p.showCalendars ? (
           <SectionCard title="Календари" padded={false}>
             {calendarsMode === "choose" ? (
               <ChooseRow
@@ -307,24 +317,30 @@ export function MasterCardView(p: MasterCardViewProps) {
               </>
             )}
           </SectionCard>
+          ) : null}
 
-          {/* ПРАВА — ЧЕТЫРЕ РАЗДЕЛА ОДНИМ СЛОВОМ, БЕЗ СЧЁТЧИКОВ. Слово тише,
-              когда раздел скрыт: нетронутый мастер читается «Скрыт ×4». */}
-          <SectionCard title="Права" padded={false}>
-            {RIGHTS_AREAS.map((area, i) => {
-              const level = p.areaLevels?.[area];
-              return (
-                <NavRow
-                  key={area}
-                  label={AREA_TITLE[area]}
-                  value={level ? levelWord(level) : undefined}
-                  valueColor={level ? levelColor(t, level) : undefined}
-                  separated={i > 0}
-                  onPress={() => p.onOpenArea(area)}
-                />
-              );
-            })}
-          </SectionCard>
+          {/* ПРАВА — РАЗДЕЛЫ ОДНИМ СЛОВОМ, БЕЗ СЧЁТЧИКОВ. Слово тише, когда
+              раздел скрыт: нетронутый мастер читается «Скрыт ×4».
+              Разделов столько, сколько ДЕРЖИТ СЕРВЕР: раздел, у которого все
+              блоки спят, с карточки убран — он обещал бы настройку, которой
+              нет (STORY-083). */}
+          {areas.length > 0 ? (
+            <SectionCard title="Права" padded={false}>
+              {areas.map((area, i) => {
+                const level = p.areaLevels?.[area];
+                return (
+                  <NavRow
+                    key={area}
+                    label={AREA_TITLE[area]}
+                    value={level ? levelWord(level) : undefined}
+                    valueColor={level ? levelColor(t, level) : undefined}
+                    separated={i > 0}
+                    onPress={() => p.onOpenArea(area)}
+                  />
+                );
+              })}
+            </SectionCard>
+          ) : null}
         </ScrollView>
 
         {/* ГЛАВНОЕ ДЕЙСТВИЕ — ВНИЗУ, ВСЕГДА (AGENTS 7.1): 20 по бокам, 8 сверху,

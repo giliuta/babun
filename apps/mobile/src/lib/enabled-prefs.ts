@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getStorage } from "@babun/shared/storage";
 import { useTenantId } from "@/lib/tenant";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 
 // «ЧТО ВООБЩЕ ПРЕДЛАГАТЬ И В КАКОМ ПОРЯДКЕ» — один механизм на все такие
 // наборы: способы связи, что можно добавить, карты для маршрута.
@@ -18,6 +19,19 @@ import { useTenantId } from "@/lib/tenant";
 // Почему ПО ТЕНАНТУ: мастер работает на две фирмы с одного телефона, и
 // выключенное/переставленное в одной не должно пропадать в другой.
 // Почему местно (MMKV): это привычка ЭТОГО телефона, а не свойство фирмы.
+
+// НАБОРЫ ПОКАЗА ЖИВУТ У КОМПАНИИ, А КОМПАНИЯ — У ЭКРАНА.
+//
+// Способы связи и картографические сервисы хранятся на устройстве ключом
+// компании. Вкладка «Клиенты» открывается в СВОЕЙ компании, даже когда в
+// календаре стоит чужая (STORY-082): иначе «Настройки клиентов» показали бы
+// способы связи чужой компании и там же их и переставляли. Вне вкладки
+// источника нет — берётся активная компания, как раньше.
+function usePrefsTenantId(): string | null {
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  return scope?.tenantId ?? activeTenantId;
+}
 
 export function createEnabledPrefs<T extends string>(opts: {
   /** Префикс ключа в MMKV; к нему приклеивается tenantId. */
@@ -142,7 +156,7 @@ export function createEnabledPrefs<T extends string>(opts: {
     canMove,
     /** Включённые, в порядке показа. */
     use() {
-      const tenantId = useTenantId();
+      const tenantId = usePrefsTenantId();
       const { data } = useQuery({
         queryKey: [queryKey, tenantId],
         queryFn: () => read(tenantId),
@@ -155,7 +169,7 @@ export function createEnabledPrefs<T extends string>(opts: {
     },
     /** Полный порядок — для страницы настройки (там видно и выключенное). */
     useOrder() {
-      const tenantId = useTenantId();
+      const tenantId = usePrefsTenantId();
       const { data } = useQuery({
         queryKey: [queryKey, tenantId, "order"],
         queryFn: () => readOrder(tenantId),
@@ -166,7 +180,7 @@ export function createEnabledPrefs<T extends string>(opts: {
     },
     useToggle() {
       const qc = useQueryClient();
-      const tenantId = useTenantId();
+      const tenantId = usePrefsTenantId();
       return useMutation<T[], Error, T>({
         // Локальная запись — не должна ждать сети.
         networkMode: "always",
@@ -190,7 +204,7 @@ export function createEnabledPrefs<T extends string>(opts: {
     },
     useReorder() {
       const qc = useQueryClient();
-      const tenantId = useTenantId();
+      const tenantId = usePrefsTenantId();
       return useMutation<T[], Error, T[]>({
         networkMode: "always",
         mutationFn: async (next: T[]) => {

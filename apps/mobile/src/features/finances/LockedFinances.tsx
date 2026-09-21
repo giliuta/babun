@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Text, View } from "react-native";
-import { Search, Settings } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Pressable, Text, View } from "react-native";
+import { BarChart3, Search, Settings } from "lucide-react-native";
 import {
   getCurrentCyprusTime,
   getCurrentTimeInZone,
@@ -38,6 +39,7 @@ const NO_ROWS: RecordRow[] = [];
 
 export function LockedFinances() {
   const t = useThemeColors();
+  const router = useRouter();
   const teams = useTeams().data ?? [];
   const [scope, setScope] = useState<string | null>(null);
   // Выбор выводится, а не хранится: пока человек не тапнул, подсвечена первая
@@ -56,12 +58,13 @@ export function LockedFinances() {
 
   return (
     <Screen edges={["top"]}>
-      {/* ШАПКА — КАК У ОТКРЫТЫХ ФИНАНСОВ, но серая и глухая: шестерёнка ведёт в
-          денежные настройки, поиск ищет по операциям — ни того, ни другого у
-          этого человека нет. Для VoiceOver шапки нет вовсе. */}
+      {/* ШАПКА — КАК У ОТКРЫТЫХ ФИНАНСОВ, И ДВЕРИ В НЕЙ ЖИВЫЕ (владелец 20.09:
+          «сверху слева должна быть шестерёнка… я могу зайти туда, но блоков
+          уже внутри шестерёнки не будет»; «справа значок аналитики — он есть,
+          если на него тапнуть, открывается, ну значит не будет данных там»).
+          Серым и глухим остаётся только поиск: искать в пустой ленте нечего, и
+          для VoiceOver его нет. */}
       <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -73,17 +76,25 @@ export function LockedFinances() {
           borderBottomColor: t.separator,
         }}
       >
-        <View
-          style={{
+        <Pressable
+          onPress={() => router.push("/finances/settings")}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Настройки финансов"
+          style={({ pressed }) => ({
             width: 44,
             height: 44,
             alignItems: "center",
             justifyContent: "center",
-          }}
+            borderRadius: t.radius.card,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
         >
-          <Settings color={t.muted} size={21} strokeWidth={2} />
-        </View>
+          <Settings color={t.sub} size={21} strokeWidth={2} />
+        </Pressable>
         <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
           className="h-9 flex-1 flex-row items-center gap-1.5 px-2.5"
           style={{ borderRadius: t.radius.input, backgroundColor: t.fill }}
         >
@@ -97,6 +108,22 @@ export function LockedFinances() {
             Сумма, счёт, заметка
           </Text>
         </View>
+        <Pressable
+          onPress={() => router.push("/cabinet/insights")}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Аналитика по финансам"
+          style={({ pressed }) => ({
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: t.radius.card,
+            backgroundColor: pressed ? t.pressed : "transparent",
+          })}
+        >
+          <BarChart3 color={t.sub} size={21} strokeWidth={2} />
+        </Pressable>
       </View>
 
       <View style={{ flex: 1 }}>

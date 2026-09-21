@@ -309,6 +309,11 @@ function argValues(token: string, role: string): unknown[] {
       return [T];
     case "role":
     case "roleQuery.data":
+    // Вкладка «Клиенты» строит ключ от ИСТОЧНИКА (STORY-082), и у своей
+    // компании его роль — это роль человека в ней: ключ тот же, что греет
+    // прогрев. У компании-работодателя ключ другой (там уровни), и прогрев
+    // её не греет вовсе.
+    case "scope.role":
       return [role];
     case "true":
       return [true];
@@ -428,7 +433,12 @@ describe("контракт: каждый ключ прогрева — тот, �
     const body = hookBody(sourceOf(REFERENCE), "useTeams", REFERENCE);
     assert.match(body, /queryKey:\s*teamsQueryKey\(\s*tenantId\s*,\s*role\s*,\s*true\s*\)/);
     assert.match(body, /fetchTeams\([^)]*,\s*true\s*\)/);
-    assert.match(body, /select:\s*includeInactive\s*\?\s*undefined\s*:\s*pickLiveTeams\b/);
+    // Отсев архивных живёт в `select` — где именно, тест не диктует: с 20.09
+    // там же зеркало отбирает прикреплённые календари. Важно, что вариант с
+    // архивом не попал ни в ключ (проверено выше), ни в чтение, а активные
+    // отбираются на устройстве.
+    assert.match(body, /select[,:]/);
+    assert.match(body, /includeInactive\s*\?\s*rows\s*:\s*pickLiveTeams\(rows\)/);
   });
 
   test("журнал и долги: хук строит ключ всей компании, команда и счёт — только select", () => {

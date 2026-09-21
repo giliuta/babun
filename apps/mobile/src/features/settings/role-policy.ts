@@ -86,8 +86,15 @@ export function can(
 // телефон. Данных компании там нет, поэтому и закрывать их нечем.
 const PERSONAL_CABINET_ROUTES = ["/cabinet/invitations", "/cabinet/profile"] as const;
 
+// «Сводка» открыта всем ролям (владелец 20.09: «справа значок аналитики — он
+// есть; если на него тапнуть, открывается, ну значит не будет данных там»).
+// Экран считает по тому, что человек и так вправе прочитать: свои записи, свои
+// клиенты, свои деньги. Без доступа он показывает нули, а не отказ.
+const INSIGHTS_ROUTE = "/cabinet/insights";
+
 const DISPATCHER_CABINET_ROUTES = new Set([
   "/cabinet",
+  INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
@@ -99,6 +106,7 @@ const DISPATCHER_CABINET_ROUTES = new Set([
 
 const MASTER_CABINET_ROUTES = new Set([
   "/cabinet",
+  INSIGHTS_ROUTE,
   "/cabinet/account",
   "/cabinet/business",
   "/cabinet/inventory",
@@ -130,23 +138,37 @@ export function canAccessCabinetPath(
   return false;
 }
 
-const UUID_PATH_SEGMENT =
-  "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
-const ASSIGNED_CLIENT_DETAIL_PATH = new RegExp(
-  `^/clients/${UUID_PATH_SEGMENT}$`,
-);
-
-/** Masters may open only a concrete assigned-client card. The list, create
- * flow and client settings remain closed; the card query itself is an
- * assignment-scoped safe RPC, so a guessed UUID resolves to no data. */
-export function canAccessClientPath(
-  role: UserRole | null | undefined,
-  pathname: string,
-): boolean {
-  const path = normalizePath(pathname);
-  if (role === "owner" || role === "dispatcher") return true;
-  return role === "master" && ASSIGNED_CLIENT_DETAIL_PATH.test(path);
+/**
+ * РОЛЬ, КОТОРОЙ СУДИТСЯ ЭКРАН КАБИНЕТА (STORY-082, владелец 20.09).
+ *
+ * Аналитику клиентов открывают из вкладки «Клиенты», а та в чужой команде
+ * показывает СВОЮ компанию и передаёт её в `?tenant=`. Судить такой экран
+ * ролью в компании, открытой в календаре, неверно: владелец своей компании
+ * упирался бы в «Недостаточно прав» только потому, что в календаре стоит
+ * чужая.
+ *
+ * Компания из ссылки не верится на слово: роль в ней берётся из СВОИХ
+ * членств (`tenant_members`). Чужой или выдуманный идентификатор не находит
+ * строки — и всё решает прежняя, активная роль. Данные экрана всё равно
+ * закрыты правилами базы; здесь — только дверь.
+ */
+export function cabinetScreenRole(
+  activeRole: UserRole | null | undefined,
+  screenTenantId: string | null,
+  memberships: readonly { tenantId: string; role: string }[] | undefined,
+): UserRole | null | undefined {
+  if (!screenTenantId) return activeRole;
+  const row = memberships?.find((m) => m.tenantId === screenTenantId);
+  if (!row || !isUserRole(row.role)) return activeRole;
+  return row.role;
 }
+
+// ДОРОГУ ВО ВКЛАДКУ «КЛИЕНТЫ» БОЛЬШЕ НЕ РЕШАЕТ РОЛЬ (STORY-082, 19.09).
+// Здесь жил `canAccessClientPath`: мастеру был открыт ровно один адрес —
+// карточка клиента его записи, — а список и настройки закрывала граница
+// роли. Теперь вкладка открывается всем, а что показать и что можно, решает
+// ИСТОЧНИК (`features/clients/clients-company.ts`): своя компания, компания,
+// где человеку открыли клиентов уровнями, или клиент записи.
 
 // ─────────────────────────────────────────────────────────────────────
 // ТАРИФ — ВТОРАЯ ПОЛОВИНА ДВЕРИ.

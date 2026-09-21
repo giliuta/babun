@@ -18,6 +18,9 @@ import {
 } from "@/lib/tenant-prefetch";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { myInvitationsKeyRoot } from "@/features/access/inbox-queries";
+import type { MemberAccessMap } from "@/features/access/access-map";
+import { isNewerAccess } from "@/features/access/my-access";
+import { myAccessQueryKey } from "@/lib/company-query-keys";
 
 /** Mounts the offline-sync replayer subscription for the app lifetime.
  *  Native-only: the replayer drains the SQLite queue via getSql(), which is
@@ -114,8 +117,32 @@ function AccessSignalsMount() {
         void queryClient.invalidateQueries({ queryKey: ["masters", tenantId] });
       }
     });
+    // ПРАВА МЕНЯЮТСЯ СРАЗУ (владелец 15.09: «чтоб всё сразу менялось в живом
+    // времени»). Сервер шлёт `access_changed {tenant_id, version}` на каждую
+    // смену уровней и прикрепления; уровней в сигнале нет — телефон
+    // перечитывает свою карту, если номер новее того, что уже есть. Повтор и
+    // запоздавший сигнал ничего не делают.
+    channel.on("broadcast", { event: "access_changed" }, (message) => {
+      const payload = message.payload as { tenant_id?: unknown; version?: unknown } | undefined;
+      const tenantId = payload?.tenant_id;
+      if (typeof tenantId !== "string") return;
+      const key = myAccessQueryKey(tenantId);
+      if (!isNewerAccess(payload?.version, queryClient.getQueryData<MemberAccessMap>(key))) return;
+      void queryClient.invalidateQueries({ queryKey: key });
+    });
+    // Сигнал, пропущенный за время обрыва, broadcast не повторяет: после
+    // переподключения карта перечитывается сама.
+    let dropped = false;
     void supabase.realtime.setAuth().then(() => {
-      if (!cancelled) channel.subscribe();
+      if (cancelled) return;
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (dropped) void queryClient.invalidateQueries({ queryKey: ["my-access"] });
+          dropped = false;
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          dropped = true;
+        }
+      });
     });
     return () => {
       cancelled = true;

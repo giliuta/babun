@@ -32,7 +32,7 @@ import {
   toggleTeam,
   type MasterDraft,
 } from "./master-draft";
-import { RIGHTS_AREAS, areaLevelsOf } from "./rights-rows";
+import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
 
 // КАРТОЧКА МАСТЕРА — ОДНА НА ТРИ СЛУЧАЯ (владелец 15.09: «„Добавить мастера"
 // должен сразу открывать полную страницу мастера, как добавление клиента»).
@@ -224,6 +224,7 @@ function MasterDraftCard({
           Keyboard.dismiss();
           setCalendarsOpen(true);
         }}
+        liveAreas={blocks ? liveAreasOf(blocks, RIGHTS_AREAS) : []}
         areaLevels={blocks ? areaLevelsOf(blocks, draft) : null}
         onOpenArea={openArea}
         footer={

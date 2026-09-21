@@ -16,6 +16,7 @@ import { buildTimeline, type TimelineEvent } from "@/features/clients/timeline";
 import { useAllServices } from "@/features/services/queries";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // ИСТОРИЯ ЗАПИСЕЙ — полноценная страница (владелец 2026-07-26: «должна быть
 // просто история записей: нажимаю — и там абсолютно все записи по этому
@@ -38,7 +39,17 @@ function yearOf(date: string): string {
   return date.slice(0, 4);
 }
 
-export default function ClientVisitsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientVisitsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="card-sub">
+      <ClientVisitsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientVisitsScreen() {
   const t = useThemeColors();
   const { clientId } = useLocalSearchParams<{ clientId: string }>();
   const { data: client } = useClient(clientId ?? "");

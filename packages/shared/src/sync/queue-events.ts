@@ -29,6 +29,7 @@ import {
   type CachedTable,
   type QueuedOp,
 } from "../db/cache/sql";
+import { assertWritesAllowed } from "./write-guard";
 
 // The atomic cache helpers live in the SQL cache layer (one layer below
 // this pub/sub) and know nothing about emitQueueChange. Re-export their
@@ -57,6 +58,11 @@ export function subscribeQueueChange(cb: Listener): () => void {
   };
 }
 
+// ЗАСОВ НА ВХОДЕ В ОЧЕРЕДЬ. Офлайн-запись ложится сюда и уезжает потом —
+// значит в режиме просмотра чужими глазами тап создал бы операцию, которая
+// уйдёт в базу уже ПОСЛЕ выхода из режима. Отбиваем на входе, а не при
+// отправке: в очереди её потом никто не опознает (`sync/write-guard.ts`).
+
 // ─── Producer wrappers ────────────────────────────────────────────────
 // Thin shims around the cache-layer queue primitives that fire the
 // pub/sub event after the write succeeds. The cached wrappers + replayer
@@ -66,6 +72,7 @@ export function subscribeQueueChange(cb: Listener): () => void {
 export async function enqueueOpAndEmit(
   op: Omit<QueuedOp, "id" | "created_at" | "attempts">,
 ): Promise<void> {
+  assertWritesAllowed(`${op.op} ${op.table}`);
   await enqueueOp(op);
   emitQueueChange();
 }
@@ -79,6 +86,7 @@ export async function enqueueOpWithCacheUpsertAndEmit<T extends CachedRow>(
   table: CachedTable,
   row: T,
 ): Promise<void> {
+  assertWritesAllowed(`${op.op} ${op.table}`);
   await enqueueOpWithCacheUpsert(op, table, row);
   emitQueueChange();
 }
@@ -90,6 +98,7 @@ export async function enqueueOpWithCacheDeleteAndEmit(
   table: CachedTable,
   id: string,
 ): Promise<void> {
+  assertWritesAllowed(`${op.op} ${op.table}`);
   await enqueueOpWithCacheDelete(op, table, id);
   emitQueueChange();
 }

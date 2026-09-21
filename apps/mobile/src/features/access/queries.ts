@@ -5,9 +5,11 @@ import {
   accessBlocksQueryKey,
   calendarMembersQueryKey,
   memberAccessQueryKey,
+  myAccessQueryKey,
 } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useMirror } from "./mirror/mirror-state";
 
 import {
   parseAccessBlocks,
@@ -15,6 +17,7 @@ import {
   type AccessChange,
   type MemberAccessMap,
 } from "./access-map";
+import { FINANCE_BLOCK_KEYS, isFinanceDataKey, lostAccess } from "./my-access";
 
 // ПРАВА СОТРУДНИКА — ДОРОГА К СЕРВЕРУ ПО «КОНТРАКТУ v1.1» (STORY-081).
 //
@@ -131,8 +134,80 @@ export function useMemberAccess(userId: string | undefined) {
   });
 }
 
+/** Страховочный опрос своей карты. Главная дорога — сигнал `access_changed`
+ *  (владелец 14.09: «подписка, не опрос»); опрос ловит только пропущенный
+ *  сигнал, поэтому редкий и не мешает очереди после перехода. */
+const MY_ACCESS_BACKSTOP_MS = 5 * 60_000;
+
+/** СВОИ ПРАВА человека в активной компании (этап 2): по ним экраны решают,
+ *  скрыт блок, смотрит человек или меняет (`my-access.ts`). Карта приходит
+ *  без уровней неживых блоков — сервер их ещё не проверяет. Смену прав
+ *  приносит сигнал `access_changed` (`AppProviders` → `AccessSignalsMount`). */
+export function useMyAccess() {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  // ЗЕРКАЛО ОТВЕЧАЕТ ЗА ВСЕХ СРАЗУ. Пока владелец смотрит «его глазами»,
+  // карта прав — его, и каждый экран, который спрашивает `accessGate`,
+  // показывает то, что увидит этот человек. Запрос при этом не отменяется:
+  // выход из режима возвращает свои права мгновенно, без похода в сеть.
+  const mirror = useMirror();
+  const query = useQuery({
+    queryKey: myAccessQueryKey(tenantId),
+    enabled: !!tenantId,
+    networkMode: "always",
+    refetchInterval: MY_ACCESS_BACKSTOP_MS,
+    refetchIntervalInBackground: false,
+    queryFn: async (): Promise<MemberAccessMap> => {
+      const { data, error } = await supabase.rpc("my_access_map");
+      if (error) throw new AccessRequestError(error);
+      const next = parseMemberAccessMap(data);
+      // ЗАБРАЛИ ДОСТУП К ДЕНЬГАМ — ОНИ УХОДЯТ С ТЕЛЕФОНА СРАЗУ (план доступа:
+      // «понижение стирает данные блока»). Иначе закрытая вкладка ещё показала
+      // бы прежние суммы из памяти, пока экран не сходит в сеть.
+      const before = qc.getQueryData<MemberAccessMap>(myAccessQueryKey(tenantId));
+      if (tenantId && lostAccess(before, next, FINANCE_BLOCK_KEYS)) {
+        qc.removeQueries({ predicate: (query) => isFinanceDataKey(query.queryKey, tenantId) });
+      }
+      return next;
+    },
+  });
+  // Компанию сверяет сам `useMirror`: зеркало действует только в той, для
+  // которой собрано.
+  return mirror ? { ...query, data: mirror.map } : query;
+}
+
 /** Переключил — применилось: сервер возвращает новую карту, она и ложится в
  *  кэш, без второго чтения. */
+// КАЛЕНДАРИ СОТРУДНИКА ПРАВЯТСЯ ИЗ ПРИЛОЖЕНИЯ (владелец 20.09: «хочу полное
+// редактирование правил для мастера»).
+//
+// Функция `set_member_calendars` жила на сервере с 14.09, но приложение её не
+// звало ни из одного экрана: карточка сотрудника показывала календари
+// строками и не давала ни прикрепить, ни открепить. Это ломало и права:
+// уровни ставятся В КАЛЕНДАРЕ, и человека, которого не к чему прикрепить,
+// нельзя было настроить вовсе.
+//
+// Ответ сервера — та же карта прав, что у `set_member_access`: прикрепление
+// меняет и её (уровни в откреплённом календаре не считаются), поэтому кладём
+// ответ в тот же ключ.
+export function useSetMemberCalendars(userId: string) {
+  const tenantId = useTenantId();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (teamIds: readonly string[]) => {
+      const { data, error } = await supabase.rpc("set_member_calendars", {
+        p_user_id: userId,
+        p_team_ids: [...teamIds],
+      });
+      if (error) throw new AccessRequestError(error);
+      return parseMemberAccessMap(data);
+    },
+    onSuccess: (next) => {
+      qc.setQueryData(memberAccessQueryKey(tenantId, userId), next);
+    },
+  });
+}
+
 export function useSetMemberAccess(userId: string) {
   const tenantId = useTenantId();
   const qc = useQueryClient();

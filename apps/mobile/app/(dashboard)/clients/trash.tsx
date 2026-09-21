@@ -14,6 +14,7 @@ import {
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
 import { confirmAction } from "@/lib/confirm";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // «НЕДАВНО УДАЛЁННЫЕ» — как в Фото на iPhone.
 //
@@ -24,7 +25,17 @@ import { confirmAction } from "@/lib/confirm";
 // Владелец 2026-08-08: «если удаляешь клиента, он сначала перемещается в
 // настройки, удалённые контакты, на 30 дней — как фотографии в iPhone».
 
-export default function ClientTrashScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientTrashScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientTrashScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientTrashScreen() {
   const t = useThemeColors();
   const trashed = useTrashedClients();
   const restore = useRestoreClient();

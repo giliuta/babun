@@ -40,7 +40,7 @@ const REGISTRY: AccessBlock[] = (
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
     ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
-    ["finance.settings", "finance", "company", OFF_READ_WRITE, 160],
+    ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
     ["clients.contacts", "clients", "company", ["off", "read"], 230],
@@ -55,7 +55,12 @@ const REGISTRY: AccessBlock[] = (
   levels,
   title: key,
   ownerOnly: area === "owner",
-  live: false,
+  // ЖИВЫЕ — ИНАЧЕ ПРОВЕРЯТЬ НЕЧЕГО. Свёртку считает `visibleLevel`, а она
+  // берёт главный блок среди ПРЕДЛАГАЕМЫХ: в реестре, где не живёт ни один
+  // блок, страница не предлагает ничего и сворачивать некому. Боевую форму
+  // — неживой родитель над живыми зависимыми — проверяет `rights-truth.test`
+  // на реестре, снятом с базы.
+  live: true,
   position,
 }));
 
@@ -178,12 +183,16 @@ describe("черновик нового мастера", () => {
       draft = withLevel(draft, byKey("record.amount"), "read", teamId);
       draft = withLevel(draft, byKey("record.payment"), "read", teamId);
       draft = withLevel(draft, byKey("calendar.day_labels"), "read", teamId);
+      draft = withLevel(draft, byKey("finance.operations"), "write", teamId);
     }
     draft = withLevel(draft, byKey("calendar.settings"), "read", null);
     draft = withLevel(draft, records, "off", "team-1");
     assert.equal(draft.calendarLevels["team-1"], undefined);
     assert.equal(draftLevel(byKey("calendar.create"), draft, "team-2"), "write");
     assert.equal(draftLevel(byKey("calendar.day_labels"), draft, "team-2"), "read");
+    // Деньги скрытого календаря сброшены вместе с ним, в соседнем — на месте.
+    assert.equal(draftLevel(byKey("finance.operations"), draft, "team-1"), "off");
+    assert.equal(draftLevel(byKey("finance.operations"), draft, "team-2"), "write");
     assert.equal(draftLevel(byKey("calendar.settings"), draft, null), "read");
 
     let clients = withLevel(emptyMasterDraft("team-1"), byKey("clients"), "read", null);
@@ -217,7 +226,14 @@ describe("черновик нового мастера", () => {
     ]);
     assert.deepEqual(
       dependantResets(REGISTRY, byKey("calendar.records"), "off", "team-1").map((c) => c.block),
-      ["calendar.create", "record.status", "record.amount", "record.payment", "calendar.day_labels"],
+      [
+        "calendar.create",
+        "record.status",
+        "record.amount",
+        "record.payment",
+        "calendar.day_labels",
+        "finance.operations",
+      ],
     );
     assert.deepEqual(dependantResets(REGISTRY, byKey("calendar.records"), "read", "team-1"), []);
     assert.deepEqual(dependantResets(REGISTRY, byKey("services"), "off", null), []);

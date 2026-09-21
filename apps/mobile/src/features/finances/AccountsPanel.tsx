@@ -62,6 +62,7 @@ export function AccountsPanel({
   onOpen,
   onOpenRecord,
   refreshControl,
+  canOpenSettings = true,
 }: {
   /** Ровно тот набор, который просуммирован плиткой «Счета»: плитки и цифра
    *  над ними обязаны сходиться пальцем. */
@@ -76,6 +77,10 @@ export function AccountsPanel({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onOpen: (href: string) => void;
+  /** Дверь на страницу «Счета» (порядок, правка, архив). В срезе 1 она
+   *  владельческая: уровни внутри самой страницы — следующий шаг, а ползунков,
+   *  которые упрутся в отказ, быть не должно. */
+  canOpenSettings?: boolean;
   /** Та же дверь строки, что у остальных панелей «Финансов». */
   onOpenRecord: (row: RecordRow) => void;
   /** Pull-to-refresh хозяина экрана (U86) — один жест на все панели. */
@@ -103,7 +108,7 @@ export function AccountsPanel({
   const header = (
     <PanelHeader
       title={panelCount("Счета", rows.length)}
-      onSettings={() => onOpen("/accounts/settings")}
+      onSettings={canOpenSettings ? () => onOpen("/accounts/settings") : undefined}
       settingsLabel="Счета: порядок и настройки"
     />
   );

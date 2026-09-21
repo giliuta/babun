@@ -11,6 +11,7 @@ import {
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionEyebrow } from "@/components/ui/SectionEyebrow";
 import { Divider } from "@/components/ui/Divider";
 import { SettingsRow } from "@/components/ui/SettingsRow";
@@ -21,7 +22,8 @@ import {
 } from "@/features/finances/vat-queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
-import { useTenant, type Tenant } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
+import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
 
@@ -68,6 +70,9 @@ export default function FinanceSettingsScreen() {
   // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
   // общий со страницей «Счета», так что дверь и страница не назовут разные
   // числа.
+  // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
+  // его причины — `features/finances/settings-rows.ts`.
+  const rows = financeSettingsRows(useCurrentRole().data);
   const accounts = useAccountsWithBalances({ includeInactive: true });
   const openCount = accounts.data?.filter((a) => a.is_active).length;
   const closedCount = accounts.data?.filter((a) => !a.is_active).length;
@@ -75,82 +80,120 @@ export default function FinanceSettingsScreen() {
   return (
     <Screen>
       <ScreenHeader title="Настройки финансов" />
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-        <SectionEyebrow>Деньги</SectionEyebrow>
-        <SectionCard>
-          {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ (владелец
-              2026-09-15: «эту настройку поставь в шестерёнку, и там счета,
-              чтоб была одна и та же страница»). Остатки, порядок, скрытие,
-              «Добавить счёт» и закрытые счета — всё там; двух разных страниц
-              счетов у продукта нет.
-              Соседство с «Счетами клиентам» ниже различают подписи: здесь
-              числа счетов, там номер следующего инвойса. */}
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Wallet}
-            title="Счета"
-            sub={accountsDoorLine(openCount, closedCount)}
-            onPress={() => router.push("/accounts/settings")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.purple}
-            icon={Tags}
-            title="Категории операций"
-            sub="На что уходят и откуда приходят деньги"
-            onPress={() => router.push("/cabinet/categories")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.teal}
-            icon={Receipt}
-            title="Шаблоны операций"
-            sub="Повторяющиеся расходы в один тап"
-            onPress={() => router.push("/cabinet/templates")}
-          />
-        </SectionCard>
+      {rows.any ? (
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+          {rows.moneyGroup ? (
+            <>
+              <SectionEyebrow>Деньги</SectionEyebrow>
+              <SectionCard>
+                {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ (владелец
+                    2026-09-15: «эту настройку поставь в шестерёнку, и там счета,
+                    чтоб была одна и та же страница»). Остатки, порядок, скрытие,
+                    «Добавить счёт» и закрытые счета — всё там; двух разных
+                    страниц счетов у продукта нет.
+                    Соседство с «Счетами клиентам» ниже различают подписи: здесь
+                    числа счетов, там номер следующего инвойса.
+                    РАЗДЕЛИТЕЛЬ ПРИНАДЛЕЖИТ СВОЕЙ СТРОКЕ и живёт под её же
+                    условием: иначе погашенная строка оставляет висеть волосинку. */}
+                {rows.accounts ? (
+                  <SettingsRow
+                    tile={SETTINGS_TILE.blue}
+                    icon={Wallet}
+                    title="Счета"
+                    sub={accountsDoorLine(openCount, closedCount)}
+                    onPress={() => router.push("/accounts/settings")}
+                  />
+                ) : null}
+                {rows.categories ? (
+                  <>
+                    {rows.accounts ? <Divider inset={56} /> : null}
+                    <SettingsRow
+                      tile={SETTINGS_TILE.purple}
+                      icon={Tags}
+                      title="Категории операций"
+                      sub="На что уходят и откуда приходят деньги"
+                      onPress={() => router.push("/cabinet/categories")}
+                    />
+                  </>
+                ) : null}
+                {rows.templates ? (
+                  <>
+                    {rows.accounts || rows.categories ? <Divider inset={56} /> : null}
+                    <SettingsRow
+                      tile={SETTINGS_TILE.teal}
+                      icon={Receipt}
+                      title="Шаблоны операций"
+                      sub="Повторяющиеся расходы в один тап"
+                      onPress={() => router.push("/cabinet/templates")}
+                    />
+                  </>
+                ) : null}
+              </SectionCard>
+            </>
+          ) : null}
 
-        <SectionEyebrow>Документы</SectionEyebrow>
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.red}
-            icon={Percent}
-            // ПРОСТО «НДС»: страны на этой странице нет и не было — она
-            // живёт в «Реквизитах компании» (`cabinet/business.tsx`), рядом с
-            // адресом и телефоном. Дверь обещала настройку, которой за ней
-            // нет, и человек шёл искать страну туда, где её никогда не стояло.
-            title="НДС"
-            sub={vatSummaryLine(vat.data)}
-            onPress={() => router.push("/finances/vat")}
-          />
-          <Divider inset={56} />
-          {/* Списка счетов здесь нет: его открывает плитка «Документы» на
-              «Финансах». Эта дверь — в НАСТРОЙКИ документа: что подставлять в
-              новый счёт и какой у него номер. Оба вопроса про одну бумагу и
-              живут на одной странице. */}
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={FileText}
-            title="Счета клиентам"
-            sub={invoiceLine(tenant.data, nextNumber.data)}
-            onPress={() => router.push("/finances/invoices")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile="neutral"
-            icon={Building2}
-            title="Реквизиты компании"
-            sub="Печатаются в инвойсах и чеках"
-            onPress={() => router.push("/cabinet/business")}
-          />
-        </SectionCard>
+          {rows.documentsGroup ? (
+            <>
+              <SectionEyebrow>Документы</SectionEyebrow>
+              <SectionCard>
+                {rows.vat ? (
+                  <SettingsRow
+                    tile={SETTINGS_TILE.red}
+                    icon={Percent}
+                    // ПРОСТО «НДС»: страны на этой странице нет и не было — она
+                    // живёт в «Реквизитах компании» (`cabinet/business.tsx`),
+                    // рядом с адресом и телефоном. Дверь обещала настройку,
+                    // которой за ней нет, и человек шёл искать страну туда, где
+                    // её никогда не стояло.
+                    title="НДС"
+                    sub={vatSummaryLine(vat.data)}
+                    onPress={() => router.push("/finances/vat")}
+                  />
+                ) : null}
+                {/* Списка счетов здесь нет: его открывает плитка «Документы» на
+                    «Финансах». Эта дверь — в НАСТРОЙКИ документа: что подставлять
+                    в новый счёт и какой у него номер. Оба вопроса про одну бумагу
+                    и живут на одной странице. */}
+                {rows.invoices ? (
+                  <>
+                    {rows.vat ? <Divider inset={56} /> : null}
+                    <SettingsRow
+                      tile={SETTINGS_TILE.blue}
+                      icon={FileText}
+                      title="Счета клиентам"
+                      sub={invoiceLine(tenant.data, nextNumber.data)}
+                      onPress={() => router.push("/finances/invoices")}
+                    />
+                  </>
+                ) : null}
+                {rows.requisites ? (
+                  <>
+                    {rows.vat || rows.invoices ? <Divider inset={56} /> : null}
+                    <SettingsRow
+                      tile="neutral"
+                      icon={Building2}
+                      title="Реквизиты компании"
+                      sub="Печатаются в инвойсах и чеках"
+                      onPress={() => router.push("/cabinet/business")}
+                    />
+                  </>
+                ) : null}
+              </SectionCard>
+            </>
+          ) : null}
 
-        {/* «Отчёта бухгалтеру» в продукте нет (владелец 2026-08-11). Сводный
-            CSV за период не имел ни остатка на начало, ни на конец, поэтому не
-            сводился ни с банком, ни с кассой. Выписку по счёту владелец
-            2026-09-15 тоже снял со страницы счёта («никаких кнопок внутри»),
-            так что сюда её не возвращаем без его слова. */}
-      </ScrollView>
+          {/* «Отчёта бухгалтеру» в продукте нет (владелец 2026-08-11). Сводный
+              CSV за период не имел ни остатка на начало, ни на конец, поэтому не
+              сводился ни с банком, ни с кассой. Выписку по счёту владелец
+              2026-09-15 тоже снял со страницы счёта («никаких кнопок внутри»),
+              так что сюда её не возвращаем без его слова. */}
+        </ScrollView>
+      ) : (
+        // Строк не открыли ни одной: страница остаётся собой, а тело
+        // говорит одной строкой — без подписи и без кнопки (канон пустых
+        // состояний, LOCKED 2026-08-27).
+        <EmptyState fill title="Настроек пока нет" />
+      )}
     </Screen>
   );
 }

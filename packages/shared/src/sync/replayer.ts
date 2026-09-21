@@ -45,6 +45,7 @@ import { rowToClient } from "../db/repositories/clients";
 // Go through the emit-wrappers so the OfflineIndicator badge updates the
 // moment the replayer succeeds/fails an op, instead of waiting for the 5-s
 // safety poll.
+import { writesBlocked } from "./write-guard";
 import {
   removeOpAndEmit as removeOp,
   bumpAttemptAndEmit as bumpAttempt,
@@ -229,6 +230,14 @@ async function drain(opts: ReplayerOptions): Promise<void> {
   // честно. Fail-closed: клиент объявил себя привязанным — значит он не для
   // выгрузки, даже если привязан к той же компании.
   if (boundTenantOf(opts.supabase)) return;
+
+  // ПОКА ИДЁТ ПРОСМОТР ЧУЖИМИ ГЛАЗАМИ, ОЧЕРЕДЬ НЕ ТРОГАЕМ. Засов отбивает
+  // отправку, а слив этого не знает: каждая операция получила бы отказ,
+  // трижды (`MAX_ATTEMPTS`) — и вся несохранённая офлайн-работа владельца
+  // легла бы «ждать ручного повтора» из-за одного перехода Wi-Fi↔LTE за
+  // полминуты предпросмотра. Выходим целиком, как при привязанном клиенте:
+  // операции остаются в очереди и уедут, когда просмотр кончится.
+  if (writesBlocked()) return;
 
   for (const op of ops) {
     if (op.attempts >= MAX_ATTEMPTS) {

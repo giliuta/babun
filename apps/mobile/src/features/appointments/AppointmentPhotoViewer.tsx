@@ -12,6 +12,7 @@ import type {
   AppointmentPhotoRecord,
   PhotoKind,
 } from "@babun/shared/db/repositories/appointment-photos";
+import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
 import { useThemeColors } from "@/theme/colors";
 import { Spinner } from "@/components/ui/Spinner";
 
@@ -46,6 +47,9 @@ export function AppointmentPhotoViewer({
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View className="flex-1" style={{ backgroundColor: t.canvas }}>
+        {/* Подложка непрозрачная на весь экран — корневой плашки под ней не
+            видно (`MirrorBanner`, разбор в листе бригады). */}
+        <MirrorBanner inModal />
         <Pressable
           onPress={onClose}
           accessibilityRole="button"

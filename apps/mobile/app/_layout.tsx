@@ -7,6 +7,8 @@ import { router, Stack, type ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { AppProviders } from "@/providers/AppProviders";
+import { MirrorProvider } from "@/features/access/mirror/mirror-state";
+import { MirrorBanner, MirrorInsetShim } from "@/features/access/mirror/MirrorBanner";
 import { useSession } from "@/providers/SessionProvider";
 import { ChoiceSheetHost } from "@/components/ui/ChoiceSheet";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -189,13 +191,28 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AppProviders>
+      {/* РЕЖИМ «ЕГО ГЛАЗАМИ» — НАД ВСЕМ ПРИЛОЖЕНИЕМ: пока он включён, права и
+          роль отвечают за сотрудника, и это должно действовать в любом экране,
+          включая границы разделов (`access/mirror/mirror-state.tsx`). */}
+      <MirrorProvider>
       <ToastProvider>
         {/* Хост выбора «что сделать»: любой chooseOption() рисуется нижним
             листом, а не системным попапом посередине. */}
         <ChoiceSheetHost>
-          <RootNavigator />
+          {/* ПЛАШКА РЕЖИМА — НАД ВСЕМИ МАРШРУТАМИ, А НЕ ТОЛЬКО НАД ВКЛАДКАМИ.
+              Стояла она внутри `(dashboard)`, и экраны-соседи — запись,
+              карточка клиента по ссылке, счета, документы — оставались в
+              режиме без единого признака и без выхода: владелец не понимал,
+              почему приложение перестало сохранять. */}
+          <View style={{ flex: 1 }}>
+            <MirrorBanner />
+            <MirrorInsetShim>
+              <RootNavigator />
+            </MirrorInsetShim>
+          </View>
         </ChoiceSheetHost>
       </ToastProvider>
+      </MirrorProvider>
     </AppProviders>
   );
 }

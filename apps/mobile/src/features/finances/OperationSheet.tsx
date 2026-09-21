@@ -69,6 +69,7 @@ import {
 } from "./queries";
 import { useAccountsWithBalances } from "./accounts";
 import { accountIcon } from "./account-ui";
+import { useCurrentRole } from "@/features/settings/tenant";
 
 /** Финансы онлайн-only НА ЗАПИСЬ (ТЗ §8): без сети кнопка гасится и называет
  *  причину. Крутящаяся кнопка страшнее отказа — по ней не понять, записалась
@@ -88,6 +89,11 @@ const NO_TEAM_REASON =
 const CLOSED_ACCOUNT_REASON =
   "Счёт этой операции закрыт. Изменить или удалить её можно, когда счёт снова открыт.";
 
+/** Уровень «Смотрит» в деньгах этого календаря: форму открыли прочитать.
+ *  Причина названа до нажатия — серая кнопка без слов читается как поломка. */
+const READ_ONLY_REASON =
+  "Только просмотр — записывать операции в этом календаре вам нельзя.";
+
 export function OperationSheet({
   visible,
   onClose,
@@ -102,6 +108,7 @@ export function OperationSheet({
   onClientOpen,
   onRefund,
   refundedTotal = 0,
+  canWrite = true,
   onExited,
 }: {
   visible: boolean;
@@ -140,6 +147,11 @@ export function OperationSheet({
   /** Сколько уже вернули — по нему прячем «Создать возврат» и не даём
    *  опустить сумму дохода ниже возвращённого. */
   refundedTotal?: number;
+  /** Уровень «Меняет» в деньгах этого календаря (его передаёт экран, который
+   *  форму открыл). `false` — форма только читает: кнопка погашена с
+   *  причиной, строки удаления нет. По умолчанию `true`: у владельца и у
+   *  прежних вызовов форма остаётся прежней. */
+  canWrite?: boolean;
   /** Лист полностью ушёл — тому, кто открывал форму поверх своего листа
    *  (разбор дня в календаре), пора вернуть свой. */
   onExited?: () => void;
@@ -156,11 +168,17 @@ export function OperationSheet({
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
   );
-  // `account_balances` owner-only и на отказе БРОСАЕТ. Пустой список счетов из
-  // этого делать нельзя: форма сказала бы «у команды нет активного счёта», то
-  // есть соврала бы про устройство компании вместо того, чтобы назвать сбой.
+  // `account_balances` с уровнями финансов (2026-09-15) отдаёт сотруднику
+  // видимые ему остатки, а на отказе по-прежнему БРОСАЕТ. Пустой список счетов
+  // из этого делать нельзя: форма сказала бы «у команды нет активного счёта»,
+  // то есть соврала бы про устройство компании вместо того, чтобы назвать сбой.
   const accountsFailed =
     accountsQuery.data === undefined && accountsQuery.error !== null;
+  // ВЛАДЕЛЬЧЕСКИЕ ДВЕРИ ЭТОЙ ФОРМЫ. Сотрудник пишет только доход и расход на
+  // счёт своего календаря (уровни финансов, 2026-09-15): бакет чеков,
+  // справочник категорий, настройки счёта, инвойс и возврат сервер отдаёт
+  // только владельцу — живой контрол над запрещённым канон не допускает.
+  const isOwner = useCurrentRole().data === "owner";
   const insert = useInsertTransaction();
   const update = useUpdateTransaction();
   const del = useDeleteTransaction();
@@ -368,7 +386,10 @@ export function OperationSheet({
   // 'none', и присланный снимок `vat_amount` — то есть клавиша операции
   // сильнее пина счёта и на записи тоже.
   const tenantVatOn = (vatSettingsQuery.data?.mode ?? "off") !== "off";
-  const vatVisible = tenantVatOn && vat.rate > 0;
+  // КЛАВИШИ — ТОЛЬКО ТОМУ, КТО ВИДИТ НАСТРОЙКУ НАЛОГА. Сотруднику настройки
+  // НДС не отдаются: «Без НДС» у него вышло бы не выбором, а последствием
+  // отказа чтения — и молча уносило бы налог из операции компании.
+  const vatVisible = isOwner && tenantVatOn && vat.rate > 0;
 
   // Дефолт счёта = счёт команды операции (командный раньше общего). Эффект
   // (а не разовый сет при открытии), потому что счета приезжают асинхронно
@@ -444,6 +465,7 @@ export function OperationSheet({
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
   const canSave =
+    canWrite &&
     amountCents != null &&
     // КАТЕГОРИЯ ОБЯЗАТЕЛЬНА (владелец 2026-09-10: «чтобы создать операцию,
     // нужно обязательно выбрать категорию»). Кнопка её не спрашивала, и деньги
@@ -603,8 +625,11 @@ export function OperationSheet({
 
   // Строки «Ещё»: разделители считаются от реально показанных соседей.
   const showClientRow = !!transaction?.client_id && !!onClientOpen;
-  const showInvoiceRow = transaction?.type === "income" && !!onInvoice;
+  // ДОКУМЕНТЫ И ВОЗВРАТЫ — ВЛАДЕЛЬЧЕСКИЕ (уровни финансов, 2026-09-15):
+  // сотрудник пишет только доход и расход, поэтому этих строк у него нет.
+  const showInvoiceRow = isOwner && transaction?.type === "income" && !!onInvoice;
   const showRefundRow =
+    isOwner &&
     !!transaction &&
     transaction.type === "income" &&
     !!onRefund &&
@@ -613,6 +638,8 @@ export function OperationSheet({
     // Остаток к возврату — по округлённым центам (moneySign), а не через
     // самодельный эпсилон: сравниваем ровно то, что напечатано.
     moneySign(transaction.amount - refundedTotal) > 0;
+  // Карточка «Ещё» живёт, пока в ней есть хоть одна строка: у сотрудника на
+  // просмотре не остаётся ни одной, и пустая шапка была бы мусором.
   // ЧЕК ПО УЖЕ ПРИНЯТЫМ ДЕНЬГАМ — ЗДЕСЬ, А НЕ В СОСТАВИТЕЛЕ. Аудит денег
   // 2026-09-20 поймал ловушку: после снятия автовыписки единственная кнопка
   // «Выписать чек» вела в составитель, а он ЗАВОДИТ НОВЫЙ ПРИХОД. Человек,
@@ -624,11 +651,17 @@ export function OperationSheet({
   // отдаёт тот же документ, второго номера не бывает.
   const showReceiptRow =
     transaction?.type === "income" && !!transaction.client_id && !transaction.refund_of_id;
+  const showMoreCard =
+    showClientRow ||
+    showInvoiceRow ||
+    showReceiptRow ||
+    showRefundRow ||
+    (txAccountClosed ? isOwner : canWrite);
 
   // Причина погашенной кнопки — ровно одна и самая важная. Офлайн и
   // закрытый счёт — закрытые двери (нейтральный цвет), остальное — ошибки
   // ввода.
-  const reason: { text: string; error: boolean } | null = !online
+  const inputReason: { text: string; error: boolean } | null = !online
     ? { text: OFFLINE_OPERATION, error: false }
     : accountsFailed
       ? {
@@ -684,6 +717,11 @@ export function OperationSheet({
                             error: true,
                           }
                         : null;
+  // ТОЛЬКО ПРОСМОТР СИЛЬНЕЕ ПРИЧИН ВВОДА: заполнять форму дальше незачем,
+  // если записать её этому человеку всё равно нельзя.
+  const reason = canWrite
+    ? inputReason
+    : { text: READ_ONLY_REASON, error: false };
 
   return (
     <BottomSheet
@@ -937,21 +975,25 @@ export function OperationSheet({
           />
         </SectionCard>
 
-        {/* 7. ФАЙЛ — та же строка, что у долга и у файлов записи. */}
-        <SectionCard title="Файл" dense>
-          <OperationReceiptRow
-            receiptUrl={receiptUrl}
-            onPick={setReceiptUrl}
-            disabled={busy}
-          />
-        </SectionCard>
+        {/* 7. ФАЙЛ — та же строка, что у долга и у файлов записи. Бакет чеков
+            владельческий: у сотрудника выбор файла закончился бы отказом
+            хранилища, поэтому строки у него нет вовсе. */}
+        {isOwner ? (
+          <SectionCard title="Файл" dense>
+            <OperationReceiptRow
+              receiptUrl={receiptUrl}
+              onPick={setReceiptUrl}
+              disabled={busy || !canWrite}
+            />
+          </SectionCard>
+        ) : null}
 
         {/* 8. Действия этой операции. Раньше они жили в отдельной витрине,
             и до правки надо было пройти лишний экран. Теперь всё в одной
             форме: открыл — правь, а рядом то, что ещё можно сделать.
             «Удалить» — последняя строка этого же списка: красной кнопки в
             шапке у канонического листа нет. */}
-        {isEdit && transaction ? (
+        {isEdit && transaction && showMoreCard ? (
           <SectionCard title="Ещё">
             {showClientRow ? (
               <ActionRow
@@ -995,26 +1037,29 @@ export function OperationSheet({
               />
             ) : null}
             {txAccountClosed && txAccountId ? (
-              // Выход из тупика закрытого счёта: «Открыть снова» — в его листе.
+              // Выход из тупика закрытого счёта: «Открыть снова» — в его листе,
+              // а счёт открывает владелец, поэтому и дверь его.
+              isOwner ? (
+                <ActionRow
+                  separated={showClientRow || showInvoiceRow || showRefundRow}
+                  label="Открыть настройки счёта"
+                  onPress={() => {
+                    onClose();
+                    // Переход — когда лист уехал: страница поднимает шторку
+                    // счёта, и поверх уезжающего листа она не появлялась.
+                    setTimeout(() => router.push(accountEditHref(txAccountId)), SHEET_EXIT_MS);
+                  }}
+                />
+              ) : null
+            ) : canWrite ? (
               <ActionRow
-                separated={showClientRow || showInvoiceRow || showReceiptRow || showRefundRow}
-                label="Открыть настройки счёта"
-                onPress={() => {
-                  onClose();
-                  // Переход — когда лист уехал: страница поднимает шторку счёта,
-                  // и поверх уезжающего листа она не появлялась.
-                  setTimeout(() => router.push(accountEditHref(txAccountId)), SHEET_EXIT_MS);
-                }}
-              />
-            ) : (
-              <ActionRow
-                separated={showClientRow || showInvoiceRow || showReceiptRow || showRefundRow}
+                separated={showClientRow || showInvoiceRow || showRefundRow}
                 tone="danger"
                 label="Удалить операцию"
                 dimmed={busy}
                 onPress={remove}
               />
-            )}
+            ) : null}
           </SectionCard>
         ) : null}
       </View>
@@ -1060,8 +1105,13 @@ export function OperationSheet({
         }))}
         selectedId={categoryId}
         // Дверь паркует лист операции: иначе страница категорий открывается
-        // ПОД ним и до неё не дотянуться (владелец 2026-09-10).
-        onSettings={() => doorway.open(() => router.push(categoriesHref))}
+        // ПОД ним и до неё не дотянуться (владелец 2026-09-10). Справочник
+        // категорий владельческий — сотруднику шестерёнки нет.
+        onSettings={
+          isOwner
+            ? () => doorway.open(() => router.push(categoriesHref))
+            : undefined
+        }
         settingsLabel="Категории операций"
         onClose={() => setCategoryPickerOpen(false)}
       />

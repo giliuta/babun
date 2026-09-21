@@ -74,12 +74,29 @@ import { ClientProfileBlocks } from "@/features/clients/ClientProfileBlocks";
 import { useClientDraft } from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import {
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
 import { humanDay } from "@/features/appointments/helpers";
 import { notify } from "@/lib/notify";
 import { confirmThen } from "@/lib/confirm";
 import { deliverCreatedClient } from "@/features/appointments/pending-client";
 
-export default function ClientDetailScreen() {
+// КАРТОЧКА ОТКРЫВАЕТСЯ В КОМПАНИИ СВОЕЙ СТРОКИ (STORY-082): `?tenant=` несёт
+// компанию, ворота решают, чья она, и объявляют источник блокам.
+export default function ClientDetailRoute() {
+  return (
+    <ClientsCompanyRoute kind="card">
+      <ClientDetailScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+/** Тело карточки без ворот: общий адрес `/client` оборачивает его своими —
+ *  там компания всегда календарная. */
+export function ClientDetailScreen() {
   const t = useThemeColors();
   const {
     id,
@@ -90,6 +107,8 @@ export default function ClientDetailScreen() {
   const pathname = usePathname();
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
+  const scope = useClientsScopeOrNull();
+  const caps = useClientsCapabilities();
 
   // «new» → черновик без запросов; иначе обычная карточка с сервера.
   const isDraft = id === "new";
@@ -250,7 +269,17 @@ export default function ClientDetailScreen() {
     );
   }
 
-  if (role === "master") {
+  // КЛИЕНТ СВОЕЙ ЗАПИСИ — СТАРАЯ ДОРОГА МАСТЕРА БЕЗ БАЗЫ. У него карточки в
+  // продукте нет вовсе: он пришёл из своей заявки и видит только то, ради чего
+  // её открыл, — как связаться и какие работы за человеком.
+  //
+  // СОТРУДНИК С «СМОТРИТ» СЮДА НЕ ПОПАДАЕТ (владелец 20.09: «визуал целой
+  // страницы мы полностью сохраняем, а потом просто отключаем, что будет
+  // работать»). Раньше попадал, и вместо карточки клиента ему открывалась
+  // ДРУГАЯ страница — со своим кеглем, своими разделителями и своим языком.
+  // Теперь он видит ту же карточку, только блоки в ней не правятся
+  // (`canEdit`), денег в ней нет и хозяйство базы скрыто.
+  if (scope ? scope.kind === "record" : role === "master") {
     return (
       <MasterClientOperationalView
         client={c}
@@ -433,6 +462,8 @@ export default function ClientDetailScreen() {
         onToggleBlacklist={onToggleBlacklist}
         onArchive={onArchive}
         onDelete={onDelete}
+        canEdit={caps.edit}
+        canManage={caps.manage}
       />
 
       <KeyboardAvoidingView
@@ -487,8 +518,10 @@ export default function ClientDetailScreen() {
           update={update}
           // Сводка под номером = вход в историю записей. Записей нет — вести
           // некуда, и сводка остаётся просто текстом (мёртвых тапов не держим).
+          // Визиты — история СВОЕЙ компании (`card-sub`): у клиента
+          // работодателя такой двери нет, и шеврон не ведёт в отказ.
           onOpenHistory={
-            !isDraft && appointments.length > 0
+            !isDraft && caps.manage && appointments.length > 0
               ? () => {
                   router.push({
                     pathname: "/clients/visits",
@@ -535,7 +568,9 @@ export default function ClientDetailScreen() {
         {/* Дубли ищутся не только при создании: карточка живёт годами, а
             второй «тот же человек» заводится позже — импортом или звонком с
             другого номера. */}
-        {!isDraft ? <DuplicateNotice client={c} /> : null}
+        {/* Слияние дублей двигает записи через активный календарь — у клиента
+            чужой компании этой дороги нет. */}
+        {!isDraft && caps.manage ? <DuplicateNotice client={c} /> : null}
 
         <ClientContactRow client={c} stats={stats} draft={isDraft} />
 
@@ -546,6 +581,8 @@ export default function ClientDetailScreen() {
           draft={isDraft}
           tags={tags}
           update={update}
+          // Инвойсы и чеки — деньги компании: у клиента работодателя их нет.
+          showDocuments={caps.money}
         />
       </ScrollView>
       </KeyboardAvoidingView>

@@ -14,7 +14,12 @@ import { debtReminderSms } from "@babun/shared/common/utils/messenger-links";
 import { getStorage } from "@babun/shared/storage";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
-import { useCurrentRole } from "@/features/settings/tenant";
+// РОЛЬ ЗДЕСЬ — СВОЯ (`useDataRole`), А НЕ ЗЕРКАЛЬНАЯ. Она входит в КЛЮЧ
+// запроса и в форму чтения: на зеркальной роли каждый вход и выход из
+// режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
+// владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
+// настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
+import { useDataRole } from "@/features/settings/tenant";
 import {
   isConfirmedNetworkUnavailable,
   isMissingSmsTemplatesContract,
@@ -84,7 +89,7 @@ async function fetchTemplates(): Promise<{
 
 export function useSmsTemplates() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: ["sms-templates", tenantId, role ?? "role-pending"],
@@ -122,7 +127,7 @@ export function useSmsTemplates() {
 
 export function useSaveSmsTemplates() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (list: SmsTemplate[]) => {

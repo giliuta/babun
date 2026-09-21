@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -43,6 +43,19 @@ import {
   type ClientsFilter,
 } from "@/features/clients/filter";
 import { useClientFilters } from "@/features/clients/useClientFilters";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import {
+  useClientsCapabilities,
+  useClientsScopeOrNull,
+} from "@/features/clients/company-scope";
+import { useClientsSources } from "@/features/clients/sources";
+import { useGuestSources } from "@/features/clients/guest-sources";
+import {
+  clientCardHref,
+  clientsInsightsHref,
+  clientsSettingsHref,
+  type ClientsScope,
+} from "@/features/clients/clients-company";
 import {
   loadDayFilter,
   saveDayFilter,
@@ -68,7 +81,6 @@ import { BulkSmsSheet } from "@/features/clients/BulkSmsSheet";
 import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useAppointments } from "@/features/calendar/queries";
 import { useCities, useTeams } from "@/features/reference/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
@@ -84,11 +96,33 @@ import { useThemeColors } from "@/theme/colors";
 // СВАЙПЫ (2026-08-06): вправо — «Записать», влево — «Напомнить» и «В архив».
 // Телефон для них не нужен; в режиме выбора свайпы отключены целиком.
 
-export default function ClientsListScreen() {
+// ОБЩАЯ СТРАНИЦА (STORY-082): ворота говорят, чья это компания, экран
+// склеивает её список с клиентами компаний, где человеку их открыли.
+export default function ClientsListRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientsListScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+/** Склейка без дублей: первая строка с этим id побеждает (своя компания
+ *  идёт первой). */
+function uniqueById<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    out.push(row);
+  }
+  return out;
+}
+
+function ClientsListScreen() {
   const t = useThemeColors();
   const router = useRouter();
   const toast = useToast();
-  const { data: role } = useCurrentRole();
   // Экран настроек возвращается сюда с nonce-параметром:
   // «Импорт из CSV» → openImport.
   const params = useLocalSearchParams<{
@@ -96,13 +130,27 @@ export default function ClientsListScreen() {
     /** «Из контактов телефона» → openContacts. */
     openContacts?: string;
   }>();
+  const scope = useClientsScopeOrNull();
+  const caps = useClientsCapabilities();
+  const sources = useClientsSources();
+  // Гости — компании, где человеку открыли клиентов; своя читается обычными
+  // хуками вкладки (у них источник из контекста).
+  const guestScopes = useMemo(
+    () => sources.list.filter((source) => source.tenantId !== scope?.tenantId),
+    [sources.list, scope?.tenantId],
+  );
+  const guests = useGuestSources(guestScopes);
   const { data, isLoading, isRefetching, refetch, error } = useClients();
   // Контрол обновления отражает ЖЕСТ, а не любое дообновление: иначе список
   // сам уезжал вниз с застывшей системной вертушкой.
-  const pull = usePullRefresh(refetch);
-  const { data: tags = [] } = useClientTags();
-  const { data: appointments = [] } = useAppointments();
-  const { data: teams = [] } = useTeams();
+  const refreshAll = useCallback(
+    () => Promise.all([refetch(), guests.refetch()]),
+    [refetch, guests],
+  );
+  const pull = usePullRefresh(refreshAll);
+  const { data: ownTags = [] } = useClientTags();
+  const { data: ownAppointments = [] } = useAppointments();
+  const { data: ownTeams = [] } = useTeams();
   const { data: cities = [] } = useCities();
   const { data: cardFields = DEFAULT_CARD_FIELDS } = useCardFields();
   // Сортировка — персистентная настройка списка (первая строка листа
@@ -138,7 +186,40 @@ export default function ClientsListScreen() {
     if (params.openImport) setImportOpen(true);
   }, [params.openImport, params.openContacts]);
 
-  const clients = useMemo(() => data ?? [], [data]);
+  // ОДИН СПИСОК ИЗ НЕСКОЛЬКИХ КОМПАНИЙ. Строка знает свою компанию: по ней
+  // открывается карточка и по ней решается, что со строкой можно.
+  const clients = useMemo(
+    () => uniqueById([...(data ?? []), ...guests.list.flatMap((guest) => guest.clients)]),
+    [data, guests.list],
+  );
+  const guestOf = useMemo(() => {
+    const byClient = new Map<string, ClientsScope>();
+    for (const guest of guests.list) {
+      for (const client of guest.clients) byClient.set(client.id, guest.scope);
+    }
+    return byClient;
+  }, [guests.list]);
+  const appointments = useMemo(
+    () => uniqueById([...ownAppointments, ...guests.list.flatMap((guest) => guest.appointments)]),
+    [ownAppointments, guests.list],
+  );
+  // Склейка справочников идёт ПО ИДЕНТИФИКАТОРУ: одна и та же компания может
+  // прийти и своим хуком, и гостевым источником (её календарь открыт), а два
+  // одинаковых ключа в списке — это и предупреждение React, и две одинаковые
+  // строки в фильтре.
+  const teams = useMemo(
+    () => uniqueById([...ownTeams, ...guests.list.flatMap((guest) => guest.teams)]),
+    [ownTeams, guests.list],
+  );
+  const tags = useMemo(
+    () => uniqueById([...ownTags, ...guests.list.flatMap((guest) => guest.tags)]),
+    [ownTags, guests.list],
+  );
+  // Деньги чужой компании сотруднику не приходят вовсе — в строке их нет.
+  const guestCardFields = useMemo(
+    () => ({ ...cardFields, exp: false, inc: false, debt: false }),
+    [cardFields],
+  );
 
   // Per-client roll-up (visits / money / debt / last team) — one pass
   // over appointments, shared by the cards, the sort and the filter.
@@ -476,7 +557,7 @@ export default function ClientsListScreen() {
           }}
         >
           <Pressable
-            onPress={() => router.push("/clients/settings")}
+            onPress={() => router.push(clientsSettingsHref())}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel="Настройки клиентов"
@@ -522,9 +603,9 @@ export default function ClientsListScreen() {
             />
           </View>
 
-          {role === "owner" ? (
+          {scope ? (
             <Pressable
-              onPress={() => router.push("/cabinet/insights")}
+              onPress={() => router.push(clientsInsightsHref(scope))}
               hitSlop={6}
               accessibilityRole="button"
               accessibilityLabel="Аналитика по клиентам"
@@ -603,19 +684,26 @@ export default function ClientsListScreen() {
             const teamName = stats?.lastTeamId
               ? (teams.find((tm) => tm.id === stats.lastTeamId)?.name ?? null)
               : null;
+            // ГОСТЬ — клиент компании, где человек работает. Его карточка
+            // открывается в ЕГО компании, а жесты своей базы (записать,
+            // напомнить, архив) и массовый выбор к нему не относятся: это
+            // хозяйство владельца той компании.
+            const guest = guestOf.get(item.id);
             return (
               <ClientRow
                 client={item}
                 stats={stats}
                 teamName={teamName}
                 tags={tags}
-                cardFields={cardFields}
-                selectionMode={selecting}
+                cardFields={guest ? guestCardFields : cardFields}
+                selectionMode={selecting && !guest}
                 picked={selectedIds.has(item.id)}
                 onPress={() =>
-                  selecting
-                    ? toggleId(item.id)
-                    : router.push(`/clients/${item.id}`)
+                  guest
+                    ? router.push(clientCardHref(item.id, guest.tenantId))
+                    : selecting
+                      ? toggleId(item.id)
+                      : router.push(`/clients/${item.id}`)
                 }
                 evidence={segmentEvidence(item, filter.segments, stats)}
                 onSwipeOpen={(row) => {
@@ -624,12 +712,14 @@ export default function ClientsListScreen() {
                   }
                   openSwipe.current = row;
                 }}
-                onBook={() => bookFor(item)}
-                onRemind={() => setRemindClient(item)}
-                onArchive={() => confirmArchiveOne(item)}
-                onLongPress={() =>
-                  selecting ? toggleId(item.id) : setMenuClient(item)
-                }
+                onBook={!guest && caps.book ? () => bookFor(item) : undefined}
+                onRemind={!guest && caps.edit ? () => setRemindClient(item) : undefined}
+                onArchive={!guest && caps.manage ? () => confirmArchiveOne(item) : undefined}
+                onLongPress={() => {
+                  if (guest) return;
+                  if (selecting) toggleId(item.id);
+                  else setMenuClient(item);
+                }}
               />
             );
           }}
@@ -655,23 +745,14 @@ export default function ClientsListScreen() {
               <EmptyState
                 title="Ничего не найдено"
                 subtitle="Измените запрос или сбросьте фильтры"
-                action={{
-                  label: "Сбросить",
-                  onPress: () => {
-                    setQuery("");
-                    setFilter(resetFilters());
-                  },
-                }}
               />
             ) : (
               <EmptyState
                 icon={<Users color={t.faint} size={40} strokeWidth={1.5} />}
                 title="Пока нет клиентов"
-                subtitle="Телефон — и клиент в базе, остальное добавите на карточке"
-                action={{
-                  label: "Создать клиента",
-                  onPress: () => router.push("/clients/new"),
-                }}
+                // Подписи здесь нет: канон пустых состояний (LOCKED
+                // 2026-08-27) оставляет объяснения ошибкам. Что делать
+                // дальше, говорит футер — он на месте у всех.
               />
             )
           }
@@ -697,12 +778,17 @@ export default function ClientsListScreen() {
           onArchive={onArchive}
         />
       ) : (
+        // КНОПКА НА СВОЁМ МЕСТЕ И СЕРАЯ, как в «Финансах» (владелец 20.09:
+        // «визуал целой страницы мы полностью сохраняем, а потом просто
+        // отключаем, что будет работать, а что нет»). Исчезающий футер менял
+        // рост страницы вместе с правами.
         <View
           style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 }}
         >
           <GradientButton
             label="Создать клиента"
             onPress={() => router.push("/clients/new")}
+            disabled={!caps.create}
           />
         </View>
       )}

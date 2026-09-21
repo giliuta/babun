@@ -40,6 +40,9 @@ import { shareClientsCsv } from "@/features/clients/bulk-export";
 import { useClients, useClientTags } from "@/features/clients/queries";
 import { useAppointments } from "@/features/calendar/queries";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
+import { useClientsCapabilities } from "@/features/clients/company-scope";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // v811 — «Настройки клиентов». Открывается шестерёнкой из хедера списка
 // (порт web ClientsSettingsScreen). Группы:
@@ -50,9 +53,24 @@ import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 //     маппинг колонок → превью+валидация → импорт с прогрессом/резюмом).
 //     Экспорт CSV выполняется через системный share sheet.
 
-export default function ClientsSettingsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientsSettingsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientsSettingsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientsSettingsScreen() {
   const router = useRouter();
   const toast = useToast();
+  // ХОЗЯЙСТВО БАЗЫ — У ТОГО, ЧЬЯ БАЗА (владелец 20.09: «в клиентах оно
+  // открывает в любом случае настройки МОИХ клиентов»). Дверь открыта всем,
+  // но у человека без своей компании править здесь нечего: страница остаётся
+  // собой, а тело говорит одной строкой.
+  const caps = useClientsCapabilities();
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
   const clientsQuery = useClients();
   const tagsQuery = useClientTags();
@@ -114,138 +132,145 @@ export default function ClientsSettingsScreen() {
   return (
     <Screen>
       <ScreenHeader title="Настройки клиентов" />
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ paddingBottom: 24 }}
-      >
-        <SectionEyebrow>Отображение</SectionEyebrow>
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Eye}
-            title="Что показывать на карточке"
-            sub={cardFieldsSummary(prefs)}
-            onPress={() => router.push("/clients/card-fields")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.green}
-            icon={MessageCircle}
-            title="Способы связи"
-            // НАБОР ОДИН, И ПОДПИСЬ ОДНА (владелец 2026-09-04: «зачем „можно
-            // добавить в карточку“ или „у номера“ — немного странно»). Раньше
-            // строка складывала два списка — перечисление каналов и счётчик
-            // полей — и читалась как каша из двух настроек.
-            sub={enabledWays
-              .map((id) => contactWayDef(id)?.label)
-              .filter(Boolean)
-              .join(" · ")}
-            onPress={() => router.push("/clients/channels")}
-          />
-
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Navigation}
-            title="Карты для маршрута"
-            sub={mapServicesSummary(mapServices)}
-            onPress={() => router.push("/clients/maps")}
-          />
-        </SectionCard>
-
-        {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
-            («Вилла», «Дом»), метки, теги. Владелец 2026-08-02: «всё, что
-            можно делать в клиентах, потом редактировать и исправлять».
-            Экраны справочников общие с Кабинетом — заводить вторые не
-            нужно, нужен вход отсюда, из места, где ими пользуются. */}
-        <SectionEyebrow>Справочники</SectionEyebrow>
-        <SectionCard>
-          <SettingsRow
-            tile={SETTINGS_TILE.teal}
-            icon={Home}
-            title="Типы объектов"
-            sub="Вилла, дом, квартира, офис"
-            onPress={() => router.push("/clients/object-types")}
-          />
-
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.purple}
-            icon={Tags}
-            title="Теги клиентов"
-            sub={
-              tagsQuery.isLoading
-                ? "Загрузка…"
-                : tagsQuery.isError
-                  ? "Не удалось загрузить"
-                  : tags.length > 0
-                    ? `Создано: ${tags.length}`
-                    : "Создать первый тег"
-            }
-            onPress={() => router.push("/clients/tags")}
-          />
-        </SectionCard>
-
-        <SectionEyebrow>Данные</SectionEyebrow>
-        <SectionCard>
-          {/* Контакты телефона — первый способ, а не второй: у малого
-              сервиса база лежит именно там, а CSV требует сначала где-то
-              собрать таблицу, то есть не сделать никогда. В сборке без
-              нативного модуля строки нет вовсе. */}
-          {CONTACTS_AVAILABLE ? (
-            <>
+      {caps.manage ? (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 24 }}
+        >
+            <SectionEyebrow>Отображение</SectionEyebrow>
+            <SectionCard>
               <SettingsRow
                 tile={SETTINGS_TILE.blue}
-                icon={Smartphone}
-                title="Из контактов телефона"
-                sub="Выбрать, кого добавить"
-                onPress={() => backToList("openContacts")}
+                icon={Eye}
+                title="Что показывать на карточке"
+                sub={cardFieldsSummary(prefs)}
+                onPress={() => router.push("/clients/card-fields")}
               />
               <Divider inset={56} />
-            </>
-          ) : null}
-          <SettingsRow
-            tile={SETTINGS_TILE.blue}
-            icon={Upload}
-            title="Импорт из CSV"
-            sub="Загрузить клиентов из файла"
-            onPress={() => backToList("openImport")}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile={SETTINGS_TILE.green}
-            icon={Download}
-            title="Выгрузить всех клиентов"
-            sub={
-              clientsQuery.isLoading
-                ? "Загрузка…"
-                : clientsQuery.isError
-                  ? "Повторить загрузку и выгрузить"
-                  : `${clients.length} в CSV`
-            }
-            onPress={() => void exportAll()}
-          />
-          <Divider inset={56} />
-          <SettingsRow
-            tile="neutral"
-            icon={Archive}
-            title="Архив клиентов"
-            sub="Убраны из работы, история цела"
-            onPress={() => router.push("/clients/archive")}
-          />
-          <Divider inset={56} />
-          {/* Две полки рядом и подписаны по-разному: архив — без срока,
-              корзина — со счётчиком. Иначе «куда он делся» повторится, уже
-              с двумя одинаковыми на вид дверями. */}
-          <SettingsRow
-            tile={SETTINGS_TILE.red}
-            icon={Trash2}
-            title="Недавно удалённые"
-            sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
-            onPress={() => router.push("/clients/trash")}
-          />
-        </SectionCard>
-      </ScrollView>
+              <SettingsRow
+                tile={SETTINGS_TILE.green}
+                icon={MessageCircle}
+                title="Способы связи"
+                // НАБОР ОДИН, И ПОДПИСЬ ОДНА (владелец 2026-09-04: «зачем „можно
+                // добавить в карточку“ или „у номера“ — немного странно»). Раньше
+                // строка складывала два списка — перечисление каналов и счётчик
+                // полей — и читалась как каша из двух настроек.
+                sub={enabledWays
+                  .map((id) => contactWayDef(id)?.label)
+                  .filter(Boolean)
+                  .join(" · ")}
+                onPress={() => router.push("/clients/channels")}
+              />
+  
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={Navigation}
+                title="Карты для маршрута"
+                sub={mapServicesSummary(mapServices)}
+                onPress={() => router.push("/clients/maps")}
+              />
+            </SectionCard>
+  
+            {/* СПРАВОЧНИКИ — то, из чего собирается карточка: типы объектов
+                («Вилла», «Дом»), метки, теги. Владелец 2026-08-02: «всё, что
+                можно делать в клиентах, потом редактировать и исправлять».
+                Экраны справочников общие с Кабинетом — заводить вторые не
+                нужно, нужен вход отсюда, из места, где ими пользуются. */}
+            <SectionEyebrow>Справочники</SectionEyebrow>
+            <SectionCard>
+              <SettingsRow
+                tile={SETTINGS_TILE.teal}
+                icon={Home}
+                title="Типы объектов"
+                sub="Вилла, дом, квартира, офис"
+                onPress={() => router.push("/clients/object-types")}
+              />
+  
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.purple}
+                icon={Tags}
+                title="Теги клиентов"
+                sub={
+                  tagsQuery.isLoading
+                    ? "Загрузка…"
+                    : tagsQuery.isError
+                      ? "Не удалось загрузить"
+                      : tags.length > 0
+                        ? `Создано: ${tags.length}`
+                        : "Создать первый тег"
+                }
+                onPress={() => router.push("/clients/tags")}
+              />
+            </SectionCard>
+  
+            <SectionEyebrow>Данные</SectionEyebrow>
+            <SectionCard>
+              {/* Контакты телефона — первый способ, а не второй: у малого
+                  сервиса база лежит именно там, а CSV требует сначала где-то
+                  собрать таблицу, то есть не сделать никогда. В сборке без
+                  нативного модуля строки нет вовсе. */}
+              {CONTACTS_AVAILABLE ? (
+                <>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.blue}
+                    icon={Smartphone}
+                    title="Из контактов телефона"
+                    sub="Выбрать, кого добавить"
+                    onPress={() => backToList("openContacts")}
+                  />
+                  <Divider inset={56} />
+                </>
+              ) : null}
+              <SettingsRow
+                tile={SETTINGS_TILE.blue}
+                icon={Upload}
+                title="Импорт из CSV"
+                sub="Загрузить клиентов из файла"
+                onPress={() => backToList("openImport")}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile={SETTINGS_TILE.green}
+                icon={Download}
+                title="Выгрузить всех клиентов"
+                sub={
+                  clientsQuery.isLoading
+                    ? "Загрузка…"
+                    : clientsQuery.isError
+                      ? "Повторить загрузку и выгрузить"
+                      : `${clients.length} в CSV`
+                }
+                onPress={() => void exportAll()}
+              />
+              <Divider inset={56} />
+              <SettingsRow
+                tile="neutral"
+                icon={Archive}
+                title="Архив клиентов"
+                sub="Убраны из работы, история цела"
+                onPress={() => router.push("/clients/archive")}
+              />
+              <Divider inset={56} />
+              {/* Две полки рядом и подписаны по-разному: архив — без срока,
+                  корзина — со счётчиком. Иначе «куда он делся» повторится, уже
+                  с двумя одинаковыми на вид дверями. */}
+              <SettingsRow
+                tile={SETTINGS_TILE.red}
+                icon={Trash2}
+                title="Недавно удалённые"
+                sub={`Хранятся ${TRASH_DAYS} дней, потом стираются`}
+                onPress={() => router.push("/clients/trash")}
+              />
+            </SectionCard>
+        </ScrollView>
+      ) : (
+        // Строк не открыли ни одной: страница остаётся собой, а тело
+        // говорит одной строкой — без подписи и без кнопки (канон пустых
+        // состояний, LOCKED 2026-08-27).
+        <EmptyState fill title="Настроек пока нет" />
+      )}
 
     </Screen>
   );

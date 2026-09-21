@@ -1,58 +1,28 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { useMemo } from "react";
+import { Linking, Modal, ScrollView, Text } from "react-native";
 import { useRouter } from "expo-router";
-import { ExternalLink, MapPin, Phone, UserRound } from "lucide-react-native";
+import { ExternalLink, MapPin } from "lucide-react-native";
 import type {
   Appointment,
-  AppointmentStatus,
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
 
-import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
+import { MirrorBanner } from "@/features/access/mirror/MirrorBanner";
+import { useMyAccess } from "@/features/access/queries";
 import { Divider } from "@/components/ui/Divider";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ICON } from "@/components/ui/tokens";
-import { useToast } from "@/components/ui/Toast";
-import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useClients } from "@/features/clients/queries";
 import { useTeams } from "@/features/reference/queries";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { AppointmentFilesBlock } from "@/features/appointments/AppointmentFilesBlock";
+import { crewAddress, crewBlocks } from "@/features/appointments/crew-blocks";
+import { ActionRow, InfoRow } from "@/features/appointments/crew-rows";
+import { CrewWorkRecord } from "@/features/appointments/CrewWorkRecord";
 import { humanDay } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
-import { notify } from "@/lib/notify";
-
-const CREW_STATUSES: readonly {
-  value: Exclude<AppointmentStatus, "cancelled">;
-  label: string;
-}[] = [
-  { value: "scheduled", label: "Запланировано" },
-  { value: "in_progress", label: "В работе" },
-  { value: "completed", label: "Выполнено" },
-];
-
-function canCrewSelectStatus(
-  current: AppointmentStatus,
-  next: Exclude<AppointmentStatus, "cancelled">,
-): boolean {
-  return (
-    current === next ||
-    (current === "scheduled" && next === "in_progress") ||
-    (current === "in_progress" && next === "completed")
-  );
-}
 
 const REPEAT_LABELS: Record<PersonalEventRepeat["kind"], string> = {
   none: "Не повторяется",
@@ -74,9 +44,9 @@ function externalUrl(value: string): string {
   return /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`;
 }
 
-/** Restricted appointment detail. Work records expose the two writes allowed
- * to a master (forward status + comment). Team events are read-only for a
- * master and for an operator who is not the event's creator. */
+/** Restricted appointment detail. Work records show each block by the
+ * person's level in the record's calendar (`crew-blocks.ts`). Team events are
+ * read-only for a master and for an operator who is not the event's creator. */
 export function CrewAppointmentSheet({
   appointment,
   onClose,
@@ -86,29 +56,20 @@ export function CrewAppointmentSheet({
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  const toast = useToast();
-  const update = useUpdateAppointment();
   const { data: clients = [] } = useClients();
   const { data: teams = [] } = useTeams();
   // Наряд только ЧИТАЕТ услуги — значит читает все, включая убранные:
   // команда не должна видеть в сегодняшнем наряде безымянную «Услуга».
   const { data: services = [] } = useAllServices();
-  // Файлы записи удаляют владелец и диспетчер — так пускает сервер;
-  // мастеру корзинку не рисуем (15.09).
+  // В зеркале роль и карта — его: карточка показывает то, что увидит он.
   const role = useCurrentRole().data;
-  const [comment, setComment] = useState("");
-  const [savedComment, setSavedComment] = useState("");
-  const [status, setStatus] = useState<AppointmentStatus>("scheduled");
+  const access = useMyAccess().data;
 
-  useEffect(() => {
-    setComment(appointment?.comment ?? "");
-    setSavedComment(appointment?.comment ?? "");
-    setStatus(appointment?.status ?? "scheduled");
-  }, [appointment?.id, appointment?.comment, appointment?.status]);
-
-  const client = appointment?.client_id
-    ? clients.find((item) => item.id === appointment.client_id) ?? null
-    : null;
+  const blocks = crewBlocks({ role, map: access, teamId: appointment?.team_id ?? null });
+  const client =
+    blocks.client && appointment?.client_id
+      ? clients.find((item) => item.id === appointment.client_id) ?? null
+      : null;
   const team = appointment?.team_id
     ? teams.find((item) => item.id === appointment.team_id) ?? null
     : null;
@@ -133,27 +94,19 @@ export function CrewAppointmentSheet({
 
   if (!appointment) return null;
 
-  const phone = client?.phone?.trim() ?? "";
-  const address = (appointment.address || client?.address || "").trim();
-  const commentChanged = comment.trim() !== savedComment.trim();
   const isEvent = appointment.kind === "event" || appointment.kind === "personal";
-
-  const patch = async (next: Partial<Appointment>, success: string) => {
-    try {
-      await update.mutateAsync({ id: appointment.id, patch: next });
-      if (next.status) setStatus(next.status);
-      if (next.comment !== undefined) setSavedComment(next.comment);
-      toast(success, "success");
-    } catch (error) {
-      notify(
-        "Не удалось сохранить",
-        error instanceof Error ? error.message : "Попробуйте ещё раз",
-      );
-    }
-  };
+  // Адрес события — его собственный, а не объект выезда: «Объект в записи»
+  // его не касается.
+  const address = isEvent
+    ? (appointment.address || client?.address || "").trim()
+    : crewAddress(appointment.address, client?.address, blocks);
 
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
+      {/* ЛИСТ — ОТДЕЛЬНОЕ ОКНО, И КОРНЕВАЯ ПЛАШКА ПОД НИМ НЕ ВИДНА. А это
+          главный экран зеркала: при роли мастера тап по любой записи ведёт
+          сюда, и владелец оказывался в режиме без признака и без выхода. */}
+      <MirrorBanner inModal />
       <Screen edges={["top"]}>
         <ScreenHeader
           title={client?.full_name || appointment.comment || "Заявка"}
@@ -241,185 +194,22 @@ export function CrewAppointmentSheet({
               </Text>
             </>
           ) : (
-            <>
-          <SectionCard title="Статус">
-            {status === "cancelled" ? (
-              <Text style={{ padding: 16, fontSize: 15, color: t.danger }}>
-                Запись отменена диспетчером
-              </Text>
-            ) : (
-              <View className="flex-row flex-wrap gap-2 p-3">
-                {CREW_STATUSES.map((item) => (
-                  <Chip
-                    key={item.value}
-                    label={item.label}
-                    radio
-                    selected={status === item.value}
-                    disabled={!canCrewSelectStatus(status, item.value)}
-                    dimmed={!canCrewSelectStatus(status, item.value)}
-                    onPress={() => {
-                      if (status !== item.value) {
-                        void patch({ status: item.value }, `Статус: ${item.label}`);
-                      }
-                    }}
-                  />
-                ))}
-              </View>
-            )}
-          </SectionCard>
-
-          <SectionCard title="Выезд">
-            <InfoRow label="Когда" value={`${humanDay(appointment.date)}, ${appointment.time_start}–${appointment.time_end}`} />
-            <Divider inset={16} />
-            <InfoRow label="Команда" value={team?.name ?? "Не указана"} />
-            {address ? (
-              <>
-                <Divider inset={16} />
-                <ActionRow
-                  icon={<MapPin color={t.accent} size={ICON.sm} />}
-                  title={address}
-                  subtitle={appointment.address_note || "Открыть маршрут"}
-                  onPress={() =>
-                    void Linking.openURL(
-                      `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
-                    )
-                  }
-                />
-              </>
-            ) : null}
-          </SectionCard>
-
-          <SectionCard title="Клиент">
-            <InfoRow label="Имя" value={client?.full_name || "Без имени"} />
-            {phone ? (
-              <>
-                <Divider inset={16} />
-                <ActionRow
-                  icon={<Phone color={t.accent} size={ICON.sm} />}
-                  title={phone}
-                  subtitle="Позвонить"
-                  onPress={() =>
-                    void Linking.openURL(`tel:${phone.replace(/[^+\d]/g, "")}`)
-                  }
-                />
-              </>
-            ) : null}
-            {client ? (
-              <>
-                <Divider inset={16} />
-                <ActionRow
-                  icon={<UserRound color={t.accent} size={ICON.sm} />}
-                  title="Открыть карточку клиента"
-                  subtitle="Контакты и назначенные выезды"
-                  onPress={() => {
-                    onClose();
-                    router.push(`/clients/${client.id}`);
-                  }}
-                />
-              </>
-            ) : null}
-          </SectionCard>
-
-          <SectionCard title="Работы">
-            <Text style={{ padding: 16, fontSize: 15, lineHeight: 21, color: t.ink }}>
-              {serviceNames.length > 0 ? serviceNames.join(" · ") : "Услуги не указаны"}
-            </Text>
-          </SectionCard>
-
-          <AppointmentFilesBlock
-                appointmentId={appointment.id}
-                clientId={null}
-                locationId={appointment.location_id}
-                canUpload={status !== "cancelled"}
-                canDelete={role !== "master"}
-                pending={[]}
-                onPendingChange={() => {}}
-              />
-
-          <SectionCard title="Заметка команды" padded>
-            <TextInput
-              keyboardAppearance="light"
-              accessibilityLabel="Комментарий к заявке"
-              value={comment}
-              onChangeText={setComment}
-              multiline
-              placeholder="Что важно знать по заявке"
-              placeholderTextColor={t.placeholder}
-              style={{
-                minHeight: 88,
-                borderRadius: t.radius.card,
-                borderWidth: 1,
-                borderColor: t.separator,
-                padding: 12,
-                fontSize: 15,
-                lineHeight: 20,
-                color: t.ink,
-                textAlignVertical: "top",
+            <CrewWorkRecord
+              appointment={appointment}
+              blocks={blocks}
+              client={client}
+              address={address}
+              teamName={team?.name ?? null}
+              serviceNames={serviceNames}
+              role={role}
+              onOpenClient={(clientId) => {
+                onClose();
+                router.push(`/clients/${clientId}`);
               }}
             />
-            <View style={{ marginTop: 12 }}>
-              <Button
-                label="Сохранить заметку"
-                onPress={() => void patch({ comment: comment.trim() }, "Заметка сохранена")}
-                disabled={!commentChanged || update.isPending}
-                loading={update.isPending}
-              />
-            </View>
-          </SectionCard>
-            </>
           )}
         </ScrollView>
       </Screen>
     </Modal>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  const t = useThemeColors();
-  return (
-    <View style={{ minHeight: 52, paddingHorizontal: 16, paddingVertical: 10 }}>
-      <Text style={{ fontSize: 12, color: t.faint }}>{label}</Text>
-      <Text style={{ marginTop: 2, fontSize: 15, color: t.ink }}>{value}</Text>
-    </View>
-  );
-}
-
-function ActionRow({
-  icon,
-  title,
-  subtitle,
-  onPress,
-}: {
-  icon: ReactNode;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-}) {
-  const t = useThemeColors();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${subtitle}`}
-      style={({ pressed }) => ({
-        minHeight: 56,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        backgroundColor: pressed ? t.pressed : "transparent",
-      })}
-    >
-      {icon}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={2} style={{ fontSize: 15, color: t.ink }}>
-          {title}
-        </Text>
-        <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 12, color: t.sub }}>
-          {subtitle}
-        </Text>
-      </View>
-    </Pressable>
   );
 }

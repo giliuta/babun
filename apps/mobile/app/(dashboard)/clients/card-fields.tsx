@@ -12,6 +12,7 @@ import {
   useToggleCardField,
   type CardField,
 } from "@/features/clients/card-prefs";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // v811 — «Что показывать на карточке». Вложенный экран под «Настройками
 // клиентов» (порт web CardFieldsScreen). Тоггл пишет в MMKV и обновляет
@@ -38,7 +39,17 @@ const ROWS: FieldRow[] = [
   { field: "meta", label: "Команда, метка, теги", dot: (t) => t.faint },
 ];
 
-export default function CardFieldsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function CardFieldsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <CardFieldsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function CardFieldsScreen() {
   const t = useThemeColors();
   const { data: prefs = DEFAULT_CARD_FIELDS } = useCardFields();
   const toggle = useToggleCardField();

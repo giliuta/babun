@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { createBlankClient, type Client } from "@babun/shared/local/clients";
 import { findClientByPhoneE164 } from "@babun/shared/db/repositories/clients";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { listClients as listClientsCached } from "@babun/shared/sync/clientsCached";
-import { useCreateClient } from "@/features/clients/queries";
+import { listMemberClients, useCreateClient } from "@/features/clients/queries";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { clientCardHref } from "@/features/clients/clients-company";
 import {
   countryDialCode,
   formatPhoneAsYouType,
@@ -37,7 +40,14 @@ export function useClientDraft(
   { forBooking = false, name, phone }: ClientDraftOptions = {},
 ) {
   const router = useRouter();
-  const tenantId = useTenantId();
+  const activeTenantId = useTenantId();
+  // Черновик заводит клиента В КОМПАНИЮ ИСТОЧНИКА: во вкладке это своя
+  // компания (даже когда в календаре открыта чужая), из записи — компания
+  // календаря (там источника нет, и берётся активная).
+  const scope = useClientsScopeOrNull();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const draftClient =
+    scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase;
   const create = useCreateClient();
   // Код страны берём из профиля КОМПАНИИ (tenants.country), а не из константы
   // продукта: у кипрской фирмы поле открывается с «+357», у греческой — с
@@ -89,23 +99,30 @@ export function useClientDraft(
    *  Тот же приём уже применён на экране чата. */
   const findDuplicate = useCallback(async (key: string): Promise<Client | null> => {
     if (!tenantId) return null;
+    const sameNumber = (list: readonly Client[]) =>
+      list.find((c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key) ?? null;
+    // В компании, где человек работает, таблица клиентов ему закрыта — дубль
+    // ищется тем же окном, которым он её читает.
+    if (scope?.kind === "member") {
+      try {
+        return sameNumber(await listMemberClients(tenantBoundClient(tenantId)));
+      } catch {
+        return null;
+      }
+    }
     try {
-      return (await findClientByPhoneE164(supabase, key, tenantId)) ?? null;
+      return (await findClientByPhoneE164(draftClient, key, tenantId)) ?? null;
     } catch {
       try {
-        const cached = await listClientsCached(supabase, tenantId);
-        return (
-          cached.find(
-            (c) => (c.phone_e164 ?? tryToE164(c.phone ?? "")) === key,
-          ) ?? null
-        );
+        const cached = await listClientsCached(draftClient, tenantId);
+        return sameNumber(cached);
       } catch {
         // Ни сети, ни кэша — создать разрешаем, финальный арбитр всё равно
         // UNIQUE-индекс в базе (23505 обрабатывается ниже).
         return null;
       }
     }
-  }, [tenantId]);
+  }, [tenantId, scope?.kind, draftClient]);
 
   const sequence = useRef(0);
   // Засов «идёт создание» — синхронный, в отличие от create.isPending.
@@ -214,7 +231,11 @@ export function useClientDraft(
         router.back();
         return created.id;
       }
-      router.replace(`/clients/${created.id}`);
+      router.replace(
+        scope && !scope.isActive
+          ? clientCardHref(created.id, scope.tenantId)
+          : `/clients/${created.id}`,
+      );
       // Засов не снимаем: экран уже уехал на карточку созданного клиента, и
       // повторное создание из этого черновика недопустимо.
       return created.id;

@@ -17,8 +17,11 @@ import { supabase } from "@/lib/supabase";
 import { tenantBoundClient } from "@/lib/tenant-bound-client";
 import { useTenantId } from "@/lib/tenant";
 import { useAllServices } from "@/features/services/queries";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { listMasterAppointmentsSafePaged } from "./master-appointments";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
 import {
   appointmentsQueryKey,
   dayExtrasQueryKey,
@@ -143,17 +146,30 @@ export { appointmentsQueryKey };
 
 // All tenant appointments (RLS-scoped) — shared cache key with the per-client
 // hook (which adds a `select` filter on top of the same data).
+// ЗАПИСИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. В календаре это компания устройства, а
+// на вкладке «Клиенты» — компания её источника (STORY-082): там список и
+// статистика («последний визит», «команда», фильтр по команде) должны быть
+// про ту же компанию, чьи клиенты в списке. Вне вкладки источника нет, и всё
+// работает как раньше.
 export function useAppointments() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  const role = scope ? scope.role : roleQuery.data;
+  const ready = scope ? true : roleQuery.isSuccess && roleQuery.data != null;
+  const guest = scope?.kind === "member" || scope?.kind === "record";
   return useQuery({
     queryKey: appointmentsQueryKey(tenantId, role),
     // Fail closed: no broad cached list is mounted before the membership role
     // is confirmed. Masters always bypass the SQLite/SWR wrapper.
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && ready && role != null,
     queryFn: () => {
-      if (role === "master") return listMasterAppointmentsSafePaged(supabase);
+      if (guest || role === "master") {
+        return listMasterAppointmentsSafePaged(
+          scope && !scope.isActive ? tenantBoundClient(tenantId as string) : supabase,
+        );
+      }
       if (role === "owner" || role === "dispatcher") {
         return listAppointmentsPaged(tenantId as string);
       }
@@ -166,11 +182,19 @@ export function useAppointments() {
 // DayExtrasMap shape). Feeds computeDayFinance in the day-finance footer.
 export function useDayExtras() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
+  // Ручные операции дня — часть «Доходов и расходов» (этап 2 доступа): читает
+  // тот, кто смотрит этот блок хотя бы в одном календаре, а не только владелец.
+  const gate = accessGate({
+    role,
+    map: useMyAccess().data,
+    blockKey: "finance.operations",
+    scope: "calendar",
+  });
   return useQuery({
     queryKey: dayExtrasQueryKey(tenantId, role),
-    enabled: !!tenantId && roleQuery.isSuccess && role === "owner",
+    enabled: !!tenantId && roleQuery.isSuccess && (gate === "read" || gate === "write"),
     queryFn: () => listDayExtras(supabase, tenantId as string),
   });
 }
@@ -182,7 +206,8 @@ export function useDayExtras() {
 // ТОЛЬКО свой ключ (не всю карту — образец: useUpdateAppointment).
 export function useSetDayExtras() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
+  const myAccess = useMyAccess().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -194,8 +219,17 @@ export function useSetDayExtras() {
       dateKey: string;
       extras: DayExtra[];
     }) => {
-      if (role !== "owner") {
-        throw new Error("Ручные доходы и расходы доступны только владельцу.");
+      // Менять ручные операции может тот, у кого «Доходы и расходы» в ЭТОМ
+      // календаре — «Меняет»; сервер проверяет то же (`replace_day_extras`).
+      const gate = accessGate({
+        role,
+        map: myAccess,
+        blockKey: "finance.operations",
+        scope: "calendar",
+        teamId,
+      });
+      if (gate !== "write") {
+        throw new Error("Менять доходы и расходы в этом календаре вам не открыто.");
       }
       return setDayExtras(supabase, tenantId as string, teamId, dateKey, extras);
     },

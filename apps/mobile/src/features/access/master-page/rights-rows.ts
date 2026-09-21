@@ -7,6 +7,7 @@ import {
   type AccessRefusal,
   type MemberAccessMap,
 } from "../access-map";
+import { offeredBlocks } from "./rights-copy";
 import {
   MIXED_WORD,
   areaLevel,
@@ -78,11 +79,26 @@ export type LevelReader = (block: AccessBlock, teamId: string | null) => AccessL
  *  (их переключают чипы), потом блоки всей компании — отдельной карточки
  *  «Во всех календарях» нет (замечание судей 15.09). Строка зависимого, чей
  *  главный блок скрыт, свёрнута. */
+/** Разделы, в которых есть хоть один живой блок: только они стоят на карточке
+ *  и только в них есть что открывать на странице прав. */
+export function liveAreasOf(
+  allBlocks: readonly AccessBlock[],
+  areas: readonly RightsArea[],
+): RightsArea[] {
+  const live = new Set(offeredBlocks(allBlocks).map((block) => block.area));
+  return areas.filter((area) => live.has(area));
+}
+
 export function rightsSections(
-  blocks: readonly AccessBlock[],
+  allBlocks: readonly AccessBlock[],
   levelOf: LevelReader,
   teamId: string | null,
 ): RightsSection[] {
+  // ТОЛЬКО ЖИВЫЕ БЛОКИ (STORY-083). Пятнадцать из двадцати одного сервер не
+  // проверяет и не отказывает при записи: владелец ставил положение, видел
+  // слово и не получал ничего. Список живых не зашит — он приходит реестром,
+  // и оживший блок появляется строкой сам.
+  const blocks = offeredBlocks(allBlocks);
   const byKey = new Map(blocks.map((block) => [block.key, block]));
   const read = (block: AccessBlock) =>
     levelOf(block, block.scope === "calendar" ? teamId : null);
@@ -143,20 +159,6 @@ export function levelChanges(
   ];
 }
 
-/** Что уходит в `set_member_access` со страницы прав сотрудника: сам блок и
- *  сброс ВСЕХ его зависимых, живых и неживых. Уровень неживого блока хранится
- *  (перенос прав 14.09 и приём приглашения его пишут, миграция 20260915110000
- *  больше не отказывает неживым) и заработает, когда блок оживёт. Оставить
- *  его при скрытом главном — выдать право на то, чего человек не видит.
- *  Отдельное имя — шов под тест: фильтр по живости в экран не вернуть молча. */
-export function memberLevelChanges(
-  blocks: readonly AccessBlock[],
-  block: AccessBlock,
-  level: AccessLevel,
-  teamId: string | null,
-): AccessChange[] | null {
-  return levelChanges(blocks, block, level, teamId);
-}
 
 /** Карта с применёнными изменениями — до ответа сервера, чтобы строка сменила
  *  слово под пальцем. Исходная карта не меняется: при отказе она и есть откат.

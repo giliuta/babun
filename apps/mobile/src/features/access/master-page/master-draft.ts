@@ -5,6 +5,7 @@ import {
   type AccessChange,
   type AccessLevel,
 } from "../access-map";
+import { offeredBlocks } from "./rights-copy";
 
 // НОВЫЙ МАСТЕР — ЧЕРНОВИК КАРТОЧКИ (владелец 15.09: «„Добавить мастера" —
 // сразу полная карточка мастера, как создание клиента: имя, почта, телефон;
@@ -74,12 +75,21 @@ export function draftLevel(
  *  тоже. Зависимые живут в той же области действия, что и главный
  *  (реестр `access_blocks`, 14.09): календарные — в том же календаре. */
 export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
+  // Деньги календаря — тоже под «Календарём и записями» (этап 2): сервер
+  // открывает финансы в календаре, только если сам календарь не скрыт
+  // (`access_calendars`), а карта прав такой календарь не несёт вовсе. Без
+  // свёртки владелец выставил бы «Меняет» в деньгах скрытого календаря — и у
+  // человека не открылось бы ничего.
   "calendar.records": [
     "calendar.create",
     "record.status",
     "record.amount",
     "record.payment",
     "calendar.day_labels",
+    "finance.operations",
+    "finance.accounts",
+    "finance.debts",
+    "finance.documents",
   ],
   clients: ["clients.scope", "clients.contacts"],
 };
@@ -273,16 +283,39 @@ export function isDraftDirty(draft: MasterDraft, initialTeamId: string | null): 
 
 /** Положение, которое видно на странице прав: свёрнутый зависимый стоит на
  *  умолчании, что бы в нём ни лежало (например, в приглашении, прочитанном с
- *  сервера) — иначе слово раздела и отправленное разошлись бы с экраном. */
-function shownLevel(blocks: readonly AccessBlock[], draft: MasterDraft) {
-  const byKey = new Map(blocks.map((block) => [block.key, block]));
-  return (block: AccessBlock, teamId: string | null): AccessLevel => {
-    const folded = isBlockFolded(block.key, (parentKey) => {
+ *  сервера) — иначе слово раздела и отправленное разошлись бы с экраном.
+ *
+ *  ОДИН РАСЧЁТ НА ПЯТЬ ПОВЕРХНОСТЕЙ. Этим же положением обязаны говорить
+ *  строка страницы, слово раздела, сводка «Сможет», зеркало и то, что уходит
+ *  на сервер. Пока свёртка была написана в каждом месте заново, три копии
+ *  врали: сводка обещала телефоны при скрытых клиентах, а отправка молчала.
+ *
+ *  СВОРАЧИВАТЬ МОЖЕТ ТОЛЬКО ТОТ, У КОГО НА СТРАНИЦЕ ЕСТЬ СТРОКА. Главный
+ *  блок берётся из ПРЕДЛАГАЕМЫХ (`offeredBlocks`), а не из всего реестра:
+ *  неживой `calendar.records` — родитель всех финансовых блоков — навсегда
+ *  стоял бы на своём умолчании `off` и сворачивал живые «Доходы и расходы».
+ *  Владелец ставил «Меняет», экран показывал «Меняет», а на сервер не
+ *  уходило НИЧЕГО, и поднять родителя было нельзя: строки у него нет. */
+export function visibleLevel(blocks: readonly AccessBlock[], draft: MasterDraft) {
+  const folded = foldedBlock(blocks, draft);
+  return (block: AccessBlock, teamId: string | null): AccessLevel =>
+    folded(block, teamId) ? defaultLevel(block) : draftLevel(block, draft, teamId);
+}
+
+/** Свёрнут ли блок: его главный скрыт, строки на странице нет вовсе.
+ *
+ *  Положения свёрнутого блока мало: у «Каких клиентов» положения «Скрыт» не
+ *  существует, и свёрнутый он честно отвечает «Только клиенты его
+ *  календарей» — фразой, которая на карточке читалась как ОБЕЩАНИЕ, хотя
+ *  клиенты у человека скрыты целиком. Обещать может только та строка, которую
+ *  владельцу показали. */
+export function foldedBlock(blocks: readonly AccessBlock[], draft: MasterDraft) {
+  const byKey = new Map(offeredBlocks(blocks).map((block) => [block.key, block]));
+  return (block: AccessBlock, teamId: string | null): boolean =>
+    isBlockFolded(block.key, (parentKey) => {
       const parent = byKey.get(parentKey);
       return parent ? draftLevel(parent, draft, teamId) : "write";
     });
-    return folded ? defaultLevel(block) : draftLevel(block, draft, teamId);
-  };
 }
 
 /** Положение раздела целиком — «mixed», когда блоки или календари расходятся. */
@@ -302,8 +335,13 @@ export function areaLevel(
 ): AreaLevel {
   let seen: AccessLevel | null = null;
   const teamIds = [...new Set(draft.teamIds)];
-  const shown = shownLevel(blocks, draft);
-  for (const block of blocks) {
+  const shown = visibleLevel(blocks, draft);
+  // СЧИТАЕТСЯ ТОЛЬКО ТО, ЧТО ВЛАДЕЛЕЦ МОЖЕТ ПОСТАВИТЬ. Мёртвые блоки раздела
+  // («Инвойсы и чеки», «Категории, шаблоны, НДС») вечно стоят на своём
+  // умолчании, и раздел с ними всегда «Разное»: владелец выставил бы все три
+  // живых блока «Финансов» в «Меняет», а карточка продолжала бы отвечать
+  // «Разное» — про блоки, строки которых на странице нет.
+  for (const block of offeredBlocks(blocks)) {
     if (block.area !== area || block.ownerOnly || !block.levels.includes("off")) continue;
     const levels =
       block.scope === "calendar"
@@ -353,7 +391,7 @@ export function draftAccessChanges(
   draft: MasterDraft,
 ): AccessChange[] {
   const teamIds = [...new Set(draft.teamIds)];
-  const shown = shownLevel(blocks, draft);
+  const shown = visibleLevel(blocks, draft);
   const out: AccessChange[] = [];
   for (const block of blocks) {
     if (block.ownerOnly || block.area === "owner") continue;

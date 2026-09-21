@@ -26,6 +26,7 @@ import {
   myCalendarsQueryKey,
   type MyCalendar,
 } from "@/features/settings/workspaces";
+import { myMembershipsQueryKey } from "@/features/settings/my-memberships-key";
 import { switchTenant } from "@/features/settings/switch-tenant";
 import { isUserRole } from "@/features/settings/role-policy";
 
@@ -95,6 +96,8 @@ async function evict(tenantId: string): Promise<boolean> {
   }
   calendars = calendars.filter((calendar) => calendar.tenantId !== tenantId);
   queryClient.setQueryData(feedKey, calendars);
+  // Членство ушло — список своих компаний тоже устарел.
+  void queryClient.invalidateQueries({ queryKey: myMembershipsQueryKey(userId) });
   forgetWarmCompany(tenantId);
 
   if (getActiveTenantId() === tenantId) {

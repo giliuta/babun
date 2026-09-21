@@ -172,6 +172,8 @@ import {
 } from "@/features/reference/queries";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { useCurrentRole } from "@/features/settings/tenant";
+import { accessGate } from "@/features/access/my-access";
+import { useMyAccess } from "@/features/access/queries";
 import { haptics } from "@/lib/haptics";
 import {
   useTeamSchedule,
@@ -282,16 +284,11 @@ export default function CalendarTab() {
   const calSettings = calSettingsQuery.data;
   const roleQuery = useCurrentRole();
   const role = roleQuery.data;
+  const myAccessQuery = useMyAccess();
   const { session } = useSession();
   const isCrew = role === "master";
   const canManageBookings = role === "owner" || role === "dispatcher";
   const canManageDayLabels = canManageBookings;
-  const canViewCompanyFinance = role === "owner";
-  // Полоса «Доход / Расход» под сеткой: право (владелец) И желание (настройка
-  // «Что показывать»). `undefined` — согласие: у тенанта без строки настроек
-  // полоса была всегда, и молчание не должно её отбирать.
-  const showDayFinance =
-    canViewCompanyFinance && calSettings?.showDayFinance !== false;
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
       canMutateCalendarAppointment(role, session?.user.id, appointment),
@@ -721,6 +718,23 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? calendarTeams[0]?.id ?? null;
   const activeTeam = calendarTeams.find((tm) => tm.id === activeTeamId);
+  // ДЕНЬГИ В КАЛЕНДАРЕ — ПО УРОВНЮ «ДОХОДЫ И РАСХОДЫ» В ЭТОМ КАЛЕНДАРЕ (этап 2
+  // доступа, владелец 15.09: «чтоб всё сразу менялось в живом времени»).
+  // Раньше — только владельцу, какие бы права ни выставили сотруднику. Смена
+  // уровня приходит сигналом и перерисовывает полосу сразу.
+  // Полоса «Доход / Расход» под сеткой: право И желание (настройка «Что
+  // показывать»). `undefined` — согласие: у тенанта без строки настроек
+  // полоса была всегда, и молчание не должно её отбирать.
+  const financeGate = accessGate({
+    role,
+    map: myAccessQuery.data,
+    blockKey: "finance.operations",
+    scope: "calendar",
+    teamId: activeTeamId,
+  });
+  const canViewCompanyFinance = financeGate === "read" || financeGate === "write";
+  const showDayFinance =
+    canViewCompanyFinance && calSettings?.showDayFinance !== false;
   // Подсветка чипа своего календаря — см. `onPickOwn`: пока переход смены
   // календаря не закоммичен, лента показывает тапнутый чип, а не прежний.
   const [chipTeamId, showChipTeam] = useOptimistic(activeTeamId);
@@ -2516,11 +2530,13 @@ export default function CalendarTab() {
         // удаление, где настройки календаря лежали под аккордеоном.
         // activeTeamId здесь всегда есть: без команд экран занят first-run
         // гейтом выше.
-        onGear={
-          role === "owner"
-            ? () => router.push(`/calendar?team=${activeTeamId}`)
-            : undefined
-        }
+        // ШЕСТЕРЁНКА ЕСТЬ ВСЕГДА (владелец 20.09: «сверху слева должна быть
+        // шестерёнка, что там, что там… я могу зайти туда, но блоков уже
+        // внутри шестерёнки не будет»). Раньше её выдавали только владельцу, и
+        // в чужой команде шапка календаря стояла без неё — визуал страницы
+        // менялся вместе с ролью. Теперь страница настроек открыта всем, а
+        // какие строки на ней есть, решает `calendar/settings-rows.ts`.
+        onGear={() => router.push(`/calendar?team=${activeTeamId}`)}
         onTitlePress={() => setMiniCalOpen(true)}
         onToday={goToday}
       />

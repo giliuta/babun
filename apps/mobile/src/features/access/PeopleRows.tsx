@@ -6,6 +6,7 @@ import type { Database } from "@babun/shared/db/database.types";
 import { useThemeColors } from "@/theme/colors";
 import { readableForeground } from "@/theme/readable-color";
 
+import { waitSubtitle } from "./invitation-wait";
 import type { CalendarMember } from "./queries";
 
 // СТРОКИ ЛЮДЕЙ КАЛЕНДАРЯ в «Мастерах» (STORY-081): кто уже с доступом и кто
@@ -83,9 +84,19 @@ export function PendingInvitationRow({
           {invitation.full_name || invitation.email}
         </Text>
         <Text style={{ fontSize: 14, color: t.sub }} numberOfLines={1}>
-          {invitation.full_name ? `${invitation.email} · ждёт ответа` : "Ждёт ответа"}
+          {/* СРОК НАЗЫВАЕТСЯ СРАЗУ. Приглашение живёт семь дней и молчало об
+              этом: «Ждёт ответа» стояло и в первый день, и в седьмой
+              (`invitation-wait.ts`). */}
+          {invitation.full_name
+            ? `${invitation.email} · ${waitSubtitle(invitation.expires_at, new Date())}`
+            : capitalize(waitSubtitle(invitation.expires_at, new Date()))}
         </Text>
       </View>
     </Pressable>
   );
+}
+
+/** «ждёт ответа · осталось 3 дня» → «Ждёт ответа · осталось 3 дня». */
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

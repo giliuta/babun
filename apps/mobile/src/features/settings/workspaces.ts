@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { BOUND_TENANT_FIELD } from "@babun/shared/sync/replayer";
+import { useMirror } from "@/features/access/mirror/mirror-state";
 import { supabase } from "@/lib/supabase";
 import { useSession } from "@/providers/SessionProvider";
 import { useTenantId } from "@/lib/tenant";
@@ -230,13 +231,19 @@ export function useCalendarChips(opts: {
     optsRef.current.onPickOwn(arrival.teamId);
   }, [activeTenantId]);
 
-  const foreign = myCalendars.filter((c) => !isActiveCompany(c));
+  // ЧУЖИХ КОМПАНИЙ В ЗЕРКАЛЕ НЕТ. Лента строится по календарям ВОШЕДШЕГО, а у
+  // владельца их несколько компаний: в предпросмотре сотрудника одной фирмы
+  // была видна вторая — и дверь в неё. Сотрудник видит только свою.
+  const inMirror = useMirror() !== null;
+  const calendars = inMirror ? myCalendars.filter(isActiveCompany) : myCalendars;
+
+  const foreign = calendars.filter((c) => !isActiveCompany(c));
   // Состав и порядок ряда — чистая функция в листе `calendar-chips.ts`: там
   // она проверяется тестом, а здесь, рядом с react-native и supabase, раннер
   // тестов её не поднимет.
   const items = composeCalendarChips({
     own: opts.own,
-    myCalendars,
+    myCalendars: calendars,
     activeTenantId,
   });
 

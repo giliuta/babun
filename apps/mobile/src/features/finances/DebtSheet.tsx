@@ -27,6 +27,7 @@ import { useRouter } from "expo-router";
 import { formatHM } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
+import { VIEW_ONLY_REASON } from "./finance-page-access";
 import { useDebtDraft } from "./use-debt-draft";
 
 // ФОРМА ДОЛГА — ТЕ ЖЕ БЛОКИ, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «почему,
@@ -47,6 +48,7 @@ export function DebtSheet({
   teamName,
   initialDirection = "incoming",
   paid = 0,
+  canWrite = true,
   onPay,
   onClose,
   onReopen,
@@ -68,6 +70,10 @@ export function DebtSheet({
     clientId: string | null;
     direction: DebtDirection;
   }) => void;
+  /** Долги этого календаря человек только смотрит (этап 2 доступа): форма
+   *  открыта целиком, «Сохранить» серая с причиной, а карточки «Ещё» с оплатой
+   *  и удалением нет вовсе. */
+  canWrite?: boolean;
   onClose: () => void;
   /** Открыть лист заново после похода за новым клиентом: карточка клиента —
    *  отдельный маршрут, а под открытым окном `Modal` его не видно, поэтому
@@ -139,7 +145,17 @@ export function DebtSheet({
       maxHeightRatio={0.86}
       footer={
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          {reason ? (
+          {/* Причина «Смотрит» вытесняет остальные: пока права нет, ни сумма,
+              ни клиент кнопку не оживят. */}
+          {!canWrite ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 13, lineHeight: 18, textAlign: "center", color: th.sub }}
+            >
+              {VIEW_ONLY_REASON}
+            </Text>
+          ) : reason ? (
             <Text
               accessibilityLiveRegion="polite"
               maxFontSizeMultiplier={1.3}
@@ -156,7 +172,7 @@ export function DebtSheet({
           <Button
             label={isEdit ? "Сохранить" : "Записать долг"}
             onPress={save}
-            disabled={!canSave}
+            disabled={!canSave || !canWrite}
             loading={busy}
           />
         </View>
@@ -284,7 +300,7 @@ export function DebtSheet({
           />
         </SectionCard>
 
-        {isEdit && debt ? (
+        {isEdit && debt && canWrite ? (
           <SectionCard title="Ещё" dense>
             {/* ГАСИТСЯ ДОЛГ ОБЫЧНОЙ ОПЕРАЦИЕЙ. Своей кнопки «оплачено» у него
                 нет нарочно: она поставила бы галочку, не сдвинув ни одного

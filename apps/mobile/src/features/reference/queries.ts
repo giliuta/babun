@@ -20,12 +20,34 @@ import {
   mastersQueryKey,
   teamsQueryKey,
 } from "@/lib/company-query-keys";
-import { useCurrentRole, type UserRole } from "@/features/settings/tenant";
+import { useDataRole, type UserRole } from "@/features/settings/tenant";
+import { useMirror } from "@/features/access/mirror/mirror-state";
+import { useClientsScopeOrNull } from "@/features/clients/company-scope";
+import { tenantBoundClient } from "@/lib/tenant-bound-client";
+
 import {
   operationalMasterJsonToMaster,
   operationalTeamJsonToTeam,
 } from "@/features/settings/master-reference";
 import { pickLiveTeams, pickTeamLabels } from "./reference-select";
+
+// СПРАВОЧНИКИ ЧИТАЮТСЯ В КОМПАНИИ ЭКРАНА. Вкладка «Клиенты» открывается в
+// своей компании, даже когда в календаре стоит чужая (STORY-082), и команды
+// с метками ей нужны СВОИ — иначе в фильтре «Команда» рядом встают команды
+// двух компаний. Вне вкладки источника нет, и всё как раньше — активная
+// компания устройства.
+function useReferenceCompany() {
+  const scope = useClientsScopeOrNull();
+  const activeTenantId = useTenantId();
+  const roleQuery = useDataRole();
+  const tenantId = scope?.tenantId ?? activeTenantId;
+  return {
+    tenantId,
+    role: scope ? scope.role : roleQuery.data,
+    ready: scope ? true : roleQuery.isSuccess && roleQuery.data != null,
+    client: scope && !scope.isActive ? tenantBoundClient(scope.tenantId) : supabase,
+  };
+}
 
 type Tables = Database["public"]["Tables"];
 export type Team = Tables["teams"]["Row"];
@@ -83,20 +105,37 @@ export async function fetchTeams(
 }
 
 export function useTeams(opts?: { includeInactive?: boolean }) {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
+  const { tenantId, role, ready, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
+  // ЗЕРКАЛО ПОКАЗЫВАЕТ ТОЛЬКО ЕГО КАЛЕНДАРИ. Список приходит по токену
+  // ВЛАДЕЛЬЦА, то есть полный: в предпросмотре лента показывала команды, к
+  // которым человек не прикреплён вовсе (замечено глазами 20.09), — а
+  // настоящему сотруднику сервер отдаёт только его.
+  const mirror = useMirror();
+  const attached =
+    mirror && mirror.map.tenantId === tenantId
+      ? new Set(mirror.map.attachedCalendars)
+      : null;
+  const select = useCallback(
+    (rows: Team[]) => {
+      const live = includeInactive ? rows : pickLiveTeams(rows);
+      return attached ? live.filter((team) => attached.has(team.id)) : live;
+    },
+    // Набор прикреплений меняется вместе с режимом; строка — чтобы новый
+    // Set каждого рендера не пересобирал `select` впустую.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [includeInactive, attached ? [...attached].sort().join(",") : null],
+  );
   return useQuery({
     // ОДИН ЗАПРОС НА ОБА ВАРИАНТА (2026-09-15). Календарь зовёт хук и так, и
     // с архивом — это были два запроса за одной таблицей в каждой волне после
     // перехода. Читаем полный список, активные отбираются на устройстве тем же
     // условием, что стояло в запросе (`reference-select.ts`, с тестом).
     queryKey: teamsQueryKey(tenantId, role, true),
-    enabled: !!tenantId && roleQuery.isSuccess && role != null,
+    enabled: !!tenantId && ready && role != null,
     queryFn: () =>
-      fetchTeams(supabase, tenantId as string, role as UserRole, true),
-    select: includeInactive ? undefined : pickLiveTeams,
+      fetchTeams(client, tenantId as string, role as UserRole, true),
+    select,
   });
 }
 
@@ -106,7 +145,7 @@ export function useTeams(opts?: { includeInactive?: boolean }) {
 // edit. Keyed by id → its own cache entry, invalidated by the ["teams"] wipe.
 export function useTeam(id: string | undefined) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   return useQuery({
     queryKey: ["teams", tenantId, roleQuery.data ?? "role-pending", "one", id],
     enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
@@ -125,7 +164,7 @@ export function useTeam(id: string | undefined) {
 
 export function useCreateTeam() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -190,7 +229,7 @@ export async function fetchMasters(
 
 export function useMasters(opts?: { includeInactive?: boolean }) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   const includeInactive = !!opts?.includeInactive;
   return useQuery({
@@ -204,7 +243,7 @@ export function useMasters(opts?: { includeInactive?: boolean }) {
 // Single-master read for the master hub. See useTeam for the by-id rationale.
 export function useMaster(id: string | undefined) {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  const roleQuery = useDataRole();
   return useQuery({
     queryKey: ["masters", tenantId, roleQuery.data ?? "role-pending", "one", id],
     enabled: !!tenantId && !!id && roleQuery.isSuccess && roleQuery.data === "owner",
@@ -223,7 +262,7 @@ export function useMaster(id: string | undefined) {
 
 export function useCreateMaster() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -277,7 +316,7 @@ export function useCities(opts?: {
   includeInactive?: boolean;
   teamId?: string | null;
 }) {
-  const tenantId = useTenantId();
+  const { tenantId, client } = useReferenceCompany();
   const includeInactive = !!opts?.includeInactive;
   const teamId = opts?.teamId ?? null;
   // КЛЮЧ — ВЕСЬ СПРАВОЧНИК КОМПАНИИ, КОМАНДА — `select` (2026-09-15). Ключ по
@@ -292,7 +331,7 @@ export function useCities(opts?: {
     queryKey: citiesQueryKey(tenantId, includeInactive, null),
     enabled: !!tenantId,
     queryFn: () =>
-      fetchCities(supabase, tenantId as string, includeInactive, null),
+      fetchCities(client, tenantId as string, includeInactive, null),
     select,
   });
 }
@@ -317,7 +356,7 @@ export async function fetchCities(
 
 export function useCreateCity() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     // `color` — v492 labels: custom tags («Германия», «День ног») get a
@@ -367,7 +406,7 @@ type RefUpdate<Table extends RefTable> = Tables[Table]["Update"];
 
 function assertCanWriteReference(
   table: RefTable,
-  role: ReturnType<typeof useCurrentRole>["data"],
+  role: ReturnType<typeof useDataRole>["data"],
 ): void {
   if (table === "cities") {
     if (role === "owner" || role === "dispatcher") return;
@@ -443,7 +482,7 @@ async function updateRefRow<Table extends RefTable>(args: {
 
 function useRefUpdate<Table extends RefTable>(table: Table) {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -464,7 +503,7 @@ function useRefUpdate<Table extends RefTable>(table: Table) {
 
 function useRefDelete(table: RefTable) {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -502,7 +541,7 @@ export const useUpdateCity = () => useRefUpdate("cities");
  */
 export function useReorderCities() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (ids: readonly string[]) => {
@@ -592,7 +631,7 @@ export function useServiceUsageCount() {
 export function usePurgeService() {
   const qc = useQueryClient();
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   return useMutation({
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error("Нет активного аккаунта.");
@@ -650,7 +689,7 @@ function deriveLeadHelperIds(
 
 export function useUpdateTeamMembers() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
@@ -709,7 +748,7 @@ export function useUpdateTeamMembers() {
 // all tenant teams, in-loop per affected team (rare, gated behind delete).
 export function useRemoveMasterFromTeams() {
   const tenantId = useTenantId();
-  const role = useCurrentRole().data;
+  const role = useDataRole().data;
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({

@@ -20,6 +20,9 @@ describe("ключи запросов компании не изменили ф�
     same(keys.currentRoleQueryKey(T), ["current-role", T]);
     same(keys.currentRoleQueryKey(null), ["current-role", null]);
   });
+  test("своя карта прав: компания вторым сегментом — её находит сигнал", () => {
+    same(keys.myAccessQueryKey(T), ["my-access", T]);
+  });
   test("записи, клиенты, теги", () => {
     same(keys.appointmentsQueryKey(T, "owner"), ["appointments", T, "owner"]);
     same(keys.appointmentsQueryKey(T, undefined), ["appointments", T, "role-pending"]);

@@ -6,13 +6,17 @@ import { areaWord, draftLevel, emptyMasterDraft, toggleTeam, withLevel } from ".
 import {
   draftFromMemberAccess,
   levelChanges,
-  memberLevelChanges,
   rightsSections,
   withMemberChanges,
 } from "./rights-rows";
 
 // Реестр — копия строк `access_blocks` (миграция 20260914140000), как в
 // тесте черновика: свёртка проверяется на настоящих ключах.
+//
+// ЖИВОСТЬ ЗДЕСЬ ВКЛЮЧЕНА У ВСЕХ (STORY-083): страница с 20.09 предлагает
+// только те блоки, которые сервер правда проверяет (`offeredBlocks`), а этот
+// тест про ПОРЯДОК и СВЁРТКУ строк — ему нужен полный реестр. Правило «неживое
+// не показываем» проверяется отдельно, ниже и в `rights-copy.test.ts`.
 const OFF_READ_WRITE: AccessLevel[] = ["off", "read", "write"];
 const REGISTRY: AccessBlock[] = (
   [
@@ -24,7 +28,7 @@ const REGISTRY: AccessBlock[] = (
     ["calendar.day_labels", "calendar", "calendar", OFF_READ_WRITE, 60],
     ["calendar.settings", "calendar", "company", OFF_READ_WRITE, 70],
     ["finance.operations", "finance", "calendar", OFF_READ_WRITE, 110],
-    ["finance.settings", "finance", "company", OFF_READ_WRITE, 160],
+    ["finance.vat", "finance", "company", OFF_READ_WRITE, 175],
     ["clients", "clients", "company", OFF_READ_WRITE, 210],
     ["clients.scope", "clients", "company", ["own", "all"], 220],
     ["clients.contacts", "clients", "company", ["off", "read"], 230],
@@ -39,7 +43,7 @@ const REGISTRY: AccessBlock[] = (
   levels,
   title: key,
   ownerOnly: area === "owner",
-  live: false,
+  live: true,
   position,
 }));
 
@@ -60,13 +64,17 @@ const CALENDAR_DEPENDANTS = [
   "calendar.day_labels",
 ];
 
+// Деньги календаря в реестре теста — «Доходы и расходы»; остальные блоки
+// финансов в копию реестра не входят.
+const FINANCE_CALENDAR_DEPENDANTS = ["finance.operations"];
+
 describe("страница прав — какие строки видны", () => {
   test("в разделе сначала блоки календаря, потом блоки компании", () => {
     const shuffled = REGISTRY.map((b) =>
-      b.key === "finance.settings" ? { ...b, position: 100 } : b,
+      b.key === "finance.vat" ? { ...b, position: 100 } : b,
     ).sort((a, b) => a.position - b.position);
     const sections = rightsSections(shuffled, () => "write", "team-1");
-    assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.settings"]);
+    assert.deepEqual(keysOf(sections, "finance"), ["finance.operations", "finance.vat"]);
   });
 
   test("«Календарь и записи» скрыт — пять строк свёрнуты только в этом календаре", () => {
@@ -81,6 +89,17 @@ describe("страница прав — какие строки видны", () 
       assert.equal(shown.includes(key), true, `${key} не виден при открытом главном`);
     }
     assert.deepEqual(hidden, ["calendar.records", "calendar.settings"]);
+  });
+
+  test("«Календарь и записи» скрыт — деньги этого календаря тоже свёрнуты, VAT компании нет", () => {
+    let draft = toggleTeam(emptyMasterDraft("team-1"), "team-2");
+    draft = withLevel(draft, block("calendar.records"), "read", "team-2");
+    const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
+    assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-1"), "finance"), ["finance.vat"]);
+    assert.deepEqual(keysOf(rightsSections(REGISTRY, levelOf, "team-2"), "finance"), [
+      ...FINANCE_CALENDAR_DEPENDANTS,
+      "finance.vat",
+    ]);
   });
 
   test("«Клиенты» скрыты — «Какие клиенты» и «Телефоны» свёрнуты", () => {
@@ -103,7 +122,7 @@ describe("страница прав — какие строки видны", () 
     const levelOf = (b: AccessBlock, teamId: string | null) => draftLevel(b, draft, teamId);
     const sections = rightsSections(REGISTRY, levelOf, null);
     assert.deepEqual(keysOf(sections, "calendar"), ["calendar.settings"]);
-    assert.deepEqual(keysOf(sections, "finance"), ["finance.settings"]);
+    assert.deepEqual(keysOf(sections, "finance"), ["finance.vat"]);
     assert.equal(
       sections.some((section) => section.rows.length === 0),
       false,
@@ -153,6 +172,7 @@ describe("сотрудник на карточке мастера", () => {
       [
         "calendar.records@team-1=off",
         ...CALENDAR_DEPENDANTS.map((key) => `${key}@team-1=off`),
+        ...FINANCE_CALENDAR_DEPENDANTS.map((key) => `${key}@team-1=off`),
       ],
     );
     assert.equal(levelChanges(REGISTRY, block("calendar.records"), "read", null), null);
@@ -165,7 +185,7 @@ describe("сотрудник на карточке мастера", () => {
     const registry = REGISTRY.map((b) => (b.key === "calendar.records" ? { ...b, live: true } : b));
     const records = registry.find((b) => b.key === "calendar.records");
     assert.ok(records);
-    const changes = memberLevelChanges(registry, records, "off", "team-1");
+    const changes = levelChanges(registry, records, "off", "team-1");
     assert.ok(changes);
     assert.deepEqual(changes[0], { block: "calendar.records", team_id: "team-1", level: "off" });
     assert.ok(
@@ -197,5 +217,25 @@ describe("сотрудник на карточке мастера", () => {
     assert.equal(next.calendars["team-1"]?.clients, undefined, "и в календарь не лёг");
     assert.equal(map.calendars["team-1"]?.["calendar.records"], "write");
     assert.equal(map.calendars["team-2"], undefined);
+  });
+});
+
+describe("страница не предлагает того, что сервер не держит", () => {
+  test("неживой блок не даёт строки, даже если он первый в разделе", () => {
+    const sleeping = REGISTRY.map((b) =>
+      b.key === "calendar.records" || b.key === "calendar.create" ? { ...b, live: false } : b,
+    );
+    const sections = rightsSections(sleeping, () => "write", "team-1");
+    const calendar = sections.find((section) => section.area === "calendar");
+    const keys = calendar?.rows.map((row) => row.block.key) ?? [];
+    assert.ok(!keys.includes("calendar.records"), "спящий блок снова предлагается");
+    assert.ok(!keys.includes("calendar.create"), "спящий зависимый снова предлагается");
+    // Остальные строки раздела на месте: спит не весь раздел, а блок.
+    assert.ok(keys.includes("record.status"));
+  });
+
+  test("все блоки спят — разделов нет вовсе", () => {
+    const asleep = REGISTRY.map((b) => ({ ...b, live: false }));
+    assert.deepEqual(rightsSections(asleep, () => "write", "team-1"), []);
   });
 });

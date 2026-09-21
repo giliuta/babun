@@ -29,6 +29,7 @@ import {
   useSetClientTagHidden,
   useUpdateClientTag,
 } from "@/features/clients/queries";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // ТЕГИ КЛИЕНТОВ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -55,7 +56,17 @@ const ROW_H = 52;
 
 type Editing = { mode: "create" } | { mode: "edit"; tag: ClientTag };
 
-export default function ClientTagsScreen() {
+// Экран вкладки «Клиенты»: компанию называет источник, а не роль
+// (STORY-082).
+export default function ClientTagsScreenRoute() {
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <ClientTagsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function ClientTagsScreen() {
   const t = useThemeColors();
   const toast = useToast();
   const tagsQuery = useClientTags();

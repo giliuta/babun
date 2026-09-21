@@ -7,6 +7,7 @@ import {
 import type { Database } from "@babun/shared/db/database.types";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
+import { useMirror } from "@/features/access/mirror/mirror-state";
 import {
   effectivePlan,
   isUserRole,
@@ -73,7 +74,31 @@ export { currentRoleQueryKey };
 // Role of the signed-in user within the active tenant (tenant_members via
 // the current_user_role() RPC from 20260430_008). RLS gates tenants UPDATE
 // to owner only — screens use this to disable what would fail anyway.
+/** РОЛЬ ДЛЯ ЧТЕНИЯ ДАННЫХ — ВСЕГДА СВОЯ, ДАЖЕ В ЗЕРКАЛЕ.
+ *
+ *  Сервер отдаёт строки по токену того, кто спрашивает. Если в зеркале
+ *  попросить данные «как мастер», сервер ответит про ВЛАДЕЛЬЦА как про
+ *  мастера — то есть пустотой: он нигде не мастер. Поэтому читающие хуки
+ *  (записи, команды, услуги, клиенты) берут роль отсюда, а решают, что
+ *  показать, — по зеркальной `useCurrentRole`. Так владелец видит СВОИ данные
+ *  в ЕГО интерфейсе, и плашка честно называет это: «права его, данные ваши». */
+export function useDataRole() {
+  return useRoleQuery();
+}
+
 export function useCurrentRole() {
+  // ЗЕРКАЛО: пока владелец смотрит «его глазами», роль — его (мастер или
+  // диспетчер). Владельцем в зеркале не бывают: иначе экраны открыли бы всё
+  // и показали бы неправду (`access/mirror/mirror-state.tsx`).
+  //
+  // Компанию сверяет сам `useMirror`: права сотрудника за переключением
+  // компании не едут.
+  const mirror = useMirror();
+  const query = useRoleQuery();
+  return mirror ? { ...query, data: mirror.role } : query;
+}
+
+function useRoleQuery() {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: currentRoleQueryKey(tenantId),
@@ -128,7 +153,12 @@ export function usePlanAllows(capability: PlanCapability): boolean {
 
 export function useTenant() {
   const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
+  // РОЛЬ ЗДЕСЬ — СВОЯ, А НЕ ЗЕРКАЛЬНАЯ: это чтение данных компании (профиль,
+  // тариф, реквизиты), и сервер отдаёт его по токену владельца. Зеркальная
+  // роль меняла бы ключ запроса на каждый вход и выход из режима, а на
+  // старых базах запасной путь отдал бы владельцу урезанный профиль без
+  // тарифа — и `usePlanAllows` поехал бы вслед.
+  const roleQuery = useDataRole();
   const role = roleQuery.data;
   return useQuery({
     queryKey: tenantQueryKey(tenantId, role),

@@ -17,6 +17,11 @@ import { useAppointments } from "@/features/calendar/queries";
 import { useClients } from "@/features/clients/queries";
 import { useAllServices } from "@/features/services/queries";
 import { useTeams } from "@/features/reference/queries";
+import { useCurrentRole } from "@/features/settings/tenant";
+import { useMyAccess } from "@/features/access/queries";
+import { bestCalendarLevel } from "@/features/access/my-access";
+import { useLocalSearchParams } from "expo-router";
+import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 
 // «Сводка» — mobile port of apps/web/src/app/dashboard/insights/page.tsx.
 // KPI tiles + top-3 leaderboards by period. Pure derivations over the same
@@ -198,7 +203,24 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: "year", label: "Год" },
 ];
 
-export default function InsightsScreen() {
+// АНАЛИТИКА КЛИЕНТОВ ОТКРЫВАЕТСЯ ИЗ ВКЛАДКИ «КЛИЕНТЫ», А ТАМ КОМПАНИЯ СВОЯ.
+//
+// Кабинет смотрит на компанию УСТРОЙСТВА, а вкладка «Клиенты» — общая
+// страница: в «Команде 1» её список и её шапка — про свою компанию
+// (STORY-082). Поэтому шапка клиентов передаёт свою компанию в `?tenant=`, и
+// тогда экран берёт её источником. Без хвоста — как было: компания
+// устройства, и «Финансы» ведут сюда по-прежнему.
+export default function InsightsRoute() {
+  const { tenant } = useLocalSearchParams<{ tenant?: string }>();
+  if (!tenant) return <InsightsScreen />;
+  return (
+    <ClientsCompanyRoute kind="tab">
+      <InsightsScreen />
+    </ClientsCompanyRoute>
+  );
+}
+
+function InsightsScreen() {
   const t = useThemeColors();
   const [period, setPeriod] = useState<PeriodKey>("week");
   // Записи — становой хребет всех KPI: их загрузку/ошибку показываем
@@ -213,6 +235,17 @@ export default function InsightsScreen() {
   } = useAppointments();
   const { data: clients = [] } = useClients();
   const { data: teams = [] } = useTeams();
+  // ДЕНЬГИ В СВОДКЕ — ПО ФИНАНСОВОМУ ПРАВУ, А НЕ ПО ТОМУ, ЧТО ЭКРАН ОТКРЫТ.
+  //
+  // «Сводка» с 20.09 открыта всем ролям (значок аналитики стоит всегда), и её
+  // числа считаются из ЗАПИСЕЙ, а не из «Финансов». У мастера записи приходят
+  // с нулями, а вот диспетчеру — с суммами: выручка компании утекала бы мимо
+  // блока «Доходы и расходы». Поэтому денежные плитка и подборки живут по
+  // тому же уровню, что и сами «Финансы», — хоть в одном календаре.
+  const role = useCurrentRole().data;
+  const myAccess = useMyAccess().data;
+  const moneyLevel = myAccess ? bestCalendarLevel(myAccess, "finance.operations") : undefined;
+  const canSeeMoney = role === "owner" || moneyLevel === "read" || moneyLevel === "write";
   // Аналитика считает ПРОШЛОЕ: убранная услуга остаётся в топе со
   // своим именем, а не выпадает в голый id.
   const { data: services = [] } = useAllServices();
@@ -326,13 +359,17 @@ export default function InsightsScreen() {
 
         <View className="flex-row gap-2.5 px-4">
           <KpiTile label="Записей" value={String(currentApts.length)} delta={toDeltaPct(countDelta)} color={t.accent} t={t} />
-          <KpiTile label="Выручка" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
+          {canSeeMoney ? (
+            <KpiTile label="Выручка" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
+          ) : null}
           <KpiTile label="Завершено" value={String(completedApts.length)} delta={toDeltaPct(completedDelta)} color={t.accent} t={t} />
         </View>
 
-        <LeaderCard title="Топ команды" items={topTeams} t={t} />
+        {/* «Топ команды» и «Топ клиенты» ранжируют по деньгам — им тот же
+            ключ, что и плитке выручки. «Топ услуги» считает штуки и остаётся. */}
+        {canSeeMoney ? <LeaderCard title="Топ команды" items={topTeams} t={t} /> : null}
         <LeaderCard title="Топ услуги" items={topServices} t={t} />
-        <LeaderCard title="Топ клиенты" items={topClients} t={t} />
+        {canSeeMoney ? <LeaderCard title="Топ клиенты" items={topClients} t={t} /> : null}
       </ScrollView>
     </Screen>
   );

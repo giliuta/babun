@@ -118,8 +118,19 @@ export function SummaryToggle({
       // Строка 38pt + зазор 6pt между рядами: цель касания добирает до 44
       // за счёт зазора, вид не меняется (тот же приём, что у Chip).
       hitSlop={{ top: 3, bottom: 3 }}
-      className="flex-1 flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
+      className="flex-row items-center rounded-[10px] px-3.5 active:opacity-70"
       style={{
+        // РОВНО ПОЛОВИНА РЯДА, А НЕ «СКОЛЬКО ПОПРОСИТ СОДЕРЖИМОЕ». Ширину
+        // задаёт сетка, а не длина подписи: иначе «Счета | Документы» едут
+        // относительно «Доход | Расход» — на узком экране совпадали, на
+        // широком разъезжались на 12pt (поймано владельцем 20.09 на Pro Max,
+        // измерено по пикселям: 572 и 646 против 609 и 609 у соседних рядов).
+        // Базис нулевой и `minWidth: 0` — длинная подпись ужимается внутри
+        // своей половины, а не отбирает место у соседней плитки.
+        flexBasis: 0,
+        flexGrow: 1,
+        flexShrink: 1,
+        minWidth: 0,
         minHeight: 38,
         // `1a` — тот же тинт, что у выбранного чипа: 10% цвета читается как
         // подсветка, но не спорит со значением, набранным тем же цветом.
@@ -172,6 +183,9 @@ export function FinanceOverview({
   view,
   onTap,
   locked = false,
+  lockAccounts = false,
+  lockOps = false,
+  lockDebts = false,
 }: {
   teams: Team[];
   scopeTeamId: string | null;
@@ -193,6 +207,13 @@ export function FinanceOverview({
    *  серые и не нажимаются; лента команд остаётся живой — по ней уходят в
    *  компанию, где деньги этого человека есть. */
   locked?: boolean;
+  /** ЗАКРЫТ ОТДЕЛЬНЫЙ БЛОК, а не весь раздел (уровни доступа, этап 2): человек
+   *  видит «Доходы и расходы» этой команды, но не видит её счета или долги.
+   *  Такая плитка серая, по нулям и не нажимается — как при закрытом разделе,
+   *  только поодиночке. */
+  lockAccounts?: boolean;
+  lockOps?: boolean;
+  lockDebts?: boolean;
 }) {
   const t = useThemeColors();
 
@@ -312,7 +333,7 @@ export function FinanceOverview({
             value={formatEUR(accounts.total)}
             quiet={moneySign(accounts.total) === 0}
             active={view === "accounts"}
-            locked={locked}
+            locked={locked || lockAccounts}
             onPress={() => onTap("accounts")}
           />
           {/* ДОКУМЕНТ — НЕ ДЕНЬГИ (владелец 2026-08-11: «какой смысл в
@@ -371,7 +392,7 @@ export function FinanceOverview({
             value={formatEUR(totals.income)}
             quiet={moneySign(totals.income) === 0}
             active={view === "income"}
-            locked={locked}
+            locked={locked || lockOps}
             onPress={() => onTap("income")}
           />
           {/* МИНУСА ЗДЕСЬ НЕТ (владелец 2026-08-15: «расход и так даёт минус»).
@@ -383,7 +404,7 @@ export function FinanceOverview({
             value={formatEUR(totals.expense)}
             quiet={moneySign(totals.expense) === 0}
             active={view === "expense"}
-            locked={locked}
+            locked={locked || lockOps}
             onPress={() => onTap("expense")}
           />
         </View>
@@ -395,7 +416,7 @@ export function FinanceOverview({
             value={formatEUR(totals.debt)}
             quiet={moneySign(totals.debt) === 0}
             active={view === "debt"}
-            locked={locked}
+            locked={locked || lockDebts}
             onPress={() => onTap("debt")}
           />
           {/* Минус печатает сам форматтер — по округлённым центам, а не по
@@ -406,7 +427,7 @@ export function FinanceOverview({
             value={formatEUR(totals.profit)}
             quiet={moneySign(totals.profit) === 0}
             active={view === "profit"}
-            locked={locked}
+            locked={locked || lockOps}
             onPress={() => onTap("profit")}
           />
         </View>

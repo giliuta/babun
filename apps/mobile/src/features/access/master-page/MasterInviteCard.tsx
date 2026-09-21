@@ -36,7 +36,8 @@ import {
   withLiveTeams,
   type MasterDraft,
 } from "./master-draft";
-import { areaLevelsOf } from "./rights-rows";
+import { RIGHTS_AREAS, areaLevelsOf, liveAreasOf } from "./rights-rows";
+import { waitSubtitle } from "../invitation-wait";
 
 // ПРИГЛАШЕНИЕ БЕЗ ОТВЕТА — ТА ЖЕ КАРТОЧКА МАСТЕРА (владелец 15.09: всё, что
 // заполнено до «Пригласить», можно поправить, пока человек не ответил).
@@ -217,7 +218,7 @@ export function MasterInviteCard({
     <>
       <MasterCardView
         title={draft.name.trim() || draft.email}
-        subtitle="Ждёт ответа"
+        subtitle={capitalizeWait(waitSubtitle(row.expires_at, new Date()))}
         onBack={back}
         headerRight={
           <HeaderMenuButton label="Действия с приглашением" onPress={() => void openMenu()} />
@@ -258,6 +259,11 @@ export function MasterInviteCard({
           Keyboard.dismiss();
           setSheetTeamIds(draft.teamIds);
         }}
+        // ТРИ КАРТОЧКИ — ОДНО ТЕЛО, ОДНИ ДАННЫЕ. Без `liveAreas` приглашение
+        // рисовало все четыре раздела, включая «Календарь» и «Компанию», где
+        // нет ни одного живого блока: тап открывал страницу, на которой
+        // такого раздела нет вовсе.
+        liveAreas={liveAreasOf(blocks, RIGHTS_AREAS)}
         areaLevels={areaLevelsOf(blocks, draft)}
         onOpenArea={(area) =>
           router.push(`/calendar/masters/${invitationSegment(row.id)}/rights?area=${area}` as Href)
@@ -279,4 +285,9 @@ export function MasterInviteCard({
       />
     </>
   );
+}
+
+/** Шапка карточки начинается с большой буквы. */
+function capitalizeWait(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   allow,
+  cabinetScreenRole,
   can,
   canAccessCabinetPath,
-  canAccessClientPath,
   effectivePlan,
   isUserRole,
   planAllows,
@@ -90,11 +90,13 @@ describe("role policy", () => {
       "/cabinet/invitations",
       "/cabinet/profile",
     ];
+    // «Сводка» переехала из владельческих в общие (владелец 20.09: значок
+    // аналитики стоит всегда, «открывается, ну значит не будет данных там»).
+    const sharedLinks = ["/cabinet/insights"];
     const ownerOnlyLinks = [
       "/cabinet/accounts",
       "/cabinet/categories",
       "/cabinet/event-types",
-      "/cabinet/insights",
       "/cabinet/labels",
       "/cabinet/loyalty",
       "/cabinet/services",
@@ -107,20 +109,14 @@ describe("role policy", () => {
     for (const path of masterLinks) {
       assert.equal(canAccessCabinetPath("master", path), true, path);
     }
+    for (const path of sharedLinks) {
+      assert.equal(canAccessCabinetPath("dispatcher", path), true, path);
+      assert.equal(canAccessCabinetPath("master", path), true, path);
+    }
     for (const path of ownerOnlyLinks) {
       assert.equal(canAccessCabinetPath("dispatcher", path), false, path);
       assert.equal(canAccessCabinetPath("master", path), false, path);
     }
-  });
-
-  test("allows a master only an exact assigned-client detail route", () => {
-    const id = "00000000-0000-4000-8000-000000000001";
-    assert.equal(canAccessClientPath("master", `/clients/${id}`), true);
-    assert.equal(canAccessClientPath("master", "/clients"), false);
-    assert.equal(canAccessClientPath("master", "/clients/settings"), false);
-    assert.equal(canAccessClientPath("master", "/clients/archive"), false);
-    assert.equal(canAccessClientPath("master", `/clients/${id}/edit`), false);
-    assert.equal(canAccessClientPath("dispatcher", "/clients/settings"), true);
   });
 });
 
@@ -177,5 +173,47 @@ describe("тариф", () => {
     // Без тарифного вопроса дверь спрашивает только роль — иначе каждый
     // существующий вызов пришлось бы переписывать.
     assert.equal(allow({ role: "dispatcher", plan: "free" }, "operate-calendar"), true);
+  });
+});
+
+describe("роль экрана Кабинета", () => {
+  const MINE = "2bc7907e-b149-44a9-92ff-a5e73403031c";
+  const EMPLOYER = "11365a87-bef9-4f6c-a030-b15083fe646b";
+  const memberships = [
+    { tenantId: MINE, role: "owner" },
+    { tenantId: EMPLOYER, role: "master" },
+  ];
+
+  test("без компании в ссылке судит активная роль", () => {
+    assert.equal(cabinetScreenRole("master", null, memberships), "master");
+  });
+
+  test("своя компания в ссылке — владелец, хотя в календаре открыта чужая", () => {
+    assert.equal(cabinetScreenRole("master", MINE, memberships), "owner");
+    // И дверь аналитики при этом открыта.
+    assert.equal(
+      canAccessCabinetPath(cabinetScreenRole("master", MINE, memberships), "/cabinet/categories"),
+      true,
+    );
+  });
+
+  test("чужой идентификатор в ссылке ничего не открывает", () => {
+    // Адрес намеренно владельческий: «Сводка» с 20.09 открыта всем ролям, и
+    // на ней подмену ссылки было бы не видно.
+    const alien = "aaaaaaaa-1111-2222-3333-444444444444";
+    assert.equal(cabinetScreenRole("master", alien, memberships), "master");
+    assert.equal(
+      canAccessCabinetPath(cabinetScreenRole("master", alien, memberships), "/cabinet/categories"),
+      false,
+    );
+  });
+
+  test("неизвестная строка роли в членстве не считается ролью", () => {
+    const broken = [{ tenantId: MINE, role: "superuser" }];
+    assert.equal(cabinetScreenRole("master", MINE, broken), "master");
+  });
+
+  test("членства ещё не пришли — судит активная роль", () => {
+    assert.equal(cabinetScreenRole("owner", MINE, undefined), "owner");
   });
 });
