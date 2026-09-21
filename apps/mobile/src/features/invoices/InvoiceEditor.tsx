@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Text, View } from "react-native";
-import { useRouter } from "expo-router";
 import type { Appointment } from "@babun/shared/local/appointments";
 import type { Client } from "@babun/shared/local/clients";
 import type { VatSettings } from "@babun/shared/local/finance/vat";
@@ -27,11 +26,9 @@ import { useToast } from "@/components/ui/Toast";
 import { getStorage } from "@babun/shared/storage";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
-import { ModeSwitch } from "./ModeSwitch";
 import { ScopeChips } from "@/components/ui/ScopeChips";
-import { InvoicePaperScreen } from "./InvoicePaperScreen";
+import { InvoicePaperThumb } from "./InvoicePaperThumb";
 import type { InvoiceLanguage } from "./dictionary";
-import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import {
   addDaysYmd,
   type EditableInvoiceLine,
@@ -119,12 +116,7 @@ export function InvoiceEditor({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useThemeColors();
-  const router = useRouter();
   const toast = useToast();
-  // ДВА РЕЖИМА ОДНОГО ЭКРАНА, А НЕ СПЛИТ. Так устроены все телефонные
-  // редакторы инвойсов: правка — это форма, документ — отдельный вид, и
-  // выставляют его именно с документа, глядя на то, что уйдёт клиенту.
-  const [mode, setMode] = useState<"edit" | "paper">("edit");
   /** ЯЗЫК БУМАГИ. У выставленного счёта — свой, у нового — тот, на котором
    *  выставили прошлый: у компании клиентская база обычно одноязычная, и
    *  спрашивать одно и то же каждый раз незачем. */
@@ -280,13 +272,20 @@ export function InvoiceEditor({
         ),
       );
     }
-    return [
-      newLine(
-        prefill?.title?.trim() || generator.defaultLineTitle,
-        "1",
-        prefill?.amount && prefill.amount > 0 ? String(prefill.amount) : "",
-      ),
-    ];
+    // СЧЁТ «С НУЛЯ» НАЧИНАЕТСЯ ПУСТЫМ (владелец 2026-09-22). Раньше здесь
+    // стояла строка-пустышка «Услуги ×1 €0», которую сначала надо было
+    // удалить или переименовать. Строку заводит только то, о чём уже
+    // известно, — операция с суммой; иначе блок услуг зовёт «Выбрать услугу».
+    if (prefill?.amount && prefill.amount > 0) {
+      return [
+        newLine(
+          prefill.title?.trim() || generator.defaultLineTitle,
+          "1",
+          String(prefill.amount),
+        ),
+      ];
+    }
+    return [];
   });
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт. `null` — сервер возьмёт основные:
@@ -304,10 +303,6 @@ export function InvoiceEditor({
   // подтверждал кнопкой одну бумагу, клиент получал другую (аудит бумаги
   // 2026-09-21).
   const companies = useCompanies();
-  /** Выбор клиента С БУМАГИ. В режиме «Документ» тап по зоне получателя правит
-   *  её на месте — это и есть зеркало-редактор, и отправлять человека в форму
-   *  значило бы отменить его смысл. В форме тот же лист поднимают блоки. */
-  const [clientPickerOpen, setClientPickerOpen] = useState(false);
 
   // Валюта документа — одна на компанию; форма обязана говорить в ней же,
   // а не в зашитом евро.
@@ -355,21 +350,6 @@ export function InvoiceEditor({
         unit_price: parseMoneyAmount(line.unitPrice) ?? -1,
       })),
     [lines],
-  );
-  // БУМАГА ВЫСТАВЛЕННОГО ДОКУМЕНТА МОЖЕТ ПОКАЗЫВАТЬ МЕНЬШЕ СТРОК, ЧЕМ В
-  // ФОРМЕ: `paperDoc` ниже печатает только валидные позиции (тот же фильтр,
-  // что здесь) — иначе тап по бумаге открыл бы не ту позицию. У нового счёта
-  // бумага не фильтрует ничего (см. ветку `draftDocument` в `paperDoc`), и
-  // список остаётся тем же самым.
-  const paperLines = useMemo(
-    () =>
-      initial
-        ? lines.filter((_, index) => {
-            const parsed = parsedLines[index];
-            return parsed.qty > 0 && parsed.unit_price >= 0;
-          })
-        : lines,
-    [initial, lines, parsedLines],
   );
   const rate = vatMode === "off" ? 0 : documentRate;
   const totals = calculateInvoiceTotals(
@@ -595,34 +575,7 @@ export function InvoiceEditor({
           onSelect={changeTeam}
         />
       ) : null}
-      {mode === "paper" ? (
-        <InvoicePaperScreen
-          mode={mode}
-          onChangeMode={setMode}
-          doc={paperDoc}
-          language={language}
-          onChangeLanguage={(code) => {
-            setLanguage(code);
-            getStorage().set(INVOICE_LANGUAGE_KEY, code);
-          }}
-          error={error}
-          submitting={submitting}
-          actionLabel={actionLabel}
-          onSubmit={submit}
-          currency={currency}
-          lines={paperLines}
-          onChangeLine={setLine}
-          onRemoveLine={removeLine}
-          onReorderLine={reorderLine}
-          issuedOn={issuedOn}
-          dueOn={dueOn}
-          onChangeIssuedOn={changeIssuedOn}
-          onChangeDueOn={setDueOn}
-          onPressClient={() => setClientPickerOpen(true)}
-        />
-      ) : (
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ModeSwitch mode={mode} onChange={setMode} />
           {/* ФОРМА СЧЁТА — БЛОКАМИ, КАК ЗАПИСЬ И ЧЕК. Сами блоки живут в
               `InvoiceBlocks.tsx`: реквизиты, даты, клиент, услуги с «Итого»,
               счёт и комментарий. Здесь остаётся только состояние документа и
@@ -670,6 +623,17 @@ export function InvoiceEditor({
             totals={{ total: totals.total }}
             notes={notes}
             onNotesChange={setNotes}
+            paper={
+              <InvoicePaperThumb
+                doc={paperDoc}
+                language={language}
+                onChangeLanguage={(code) => {
+                  setLanguage(code);
+                  getStorage().set(INVOICE_LANGUAGE_KEY, code);
+                }}
+                onOpen={() => setPreviewOpen(true)}
+              />
+            }
             footer={
               /* ИТОГ ЖИВЁТ ВНИЗУ И НЕ УЕЗЖАЕТ С ПРОКРУТКОЙ. Кнопка выпуска
                  стояла последней строкой формы: чтобы увидеть, на какую сумму
@@ -706,32 +670,21 @@ export function InvoiceEditor({
             }
           />
         </KeyboardAvoidingView>
-      )}
 
       <InvoicePreviewSheet
         visible={previewOpen}
         doc={paperDoc}
         busy={submitting}
         label={actionVerb}
+        // Документ открывают и посмотреть: пока он не готов, кнопка выпуска
+        // в листе погашена и говорит почему — выставить €0 мимо формы нельзя.
+        blockedReason={reason?.text ?? null}
         onIssue={() => {
           void submit();
         }}
         onClose={() => setPreviewOpen(false)}
       />
 
-      <ClientPickerSheet
-        visible={clientPickerOpen}
-        selectedId={clientId}
-        onCreate={(prefillClient) => {
-          setClientPickerOpen(false);
-          router.push({ pathname: "/client", params: { id: "new", ...prefillClient } });
-        }}
-        onSelect={(picked) => {
-          setClientId(picked.id);
-          setClientPickerOpen(false);
-        }}
-        onClose={() => setClientPickerOpen(false)}
-      />
 
       {/* ЛИСТОВ ВЫБОРА ЗАЯВКИ И КОМАНДЫ ЗДЕСЬ БОЛЬШЕ НЕТ. Клиента выбирают в его блоке — тем
           же `ClientPickerSheet`, что в записи и чеке (и с «Создать клиента»

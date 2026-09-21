@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useRouter, type Href } from "expo-router";
-import { Building2 } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import type { Client } from "@babun/shared/local/clients";
 import {
   invoiceLineTotal,
@@ -10,25 +9,20 @@ import {
 import { accountsForTeam } from "@babun/shared/local/finance/integrity";
 import { isServiceAllowedForTeam } from "@/features/appointments/booking-selection";
 import type { TxVatMode } from "@babun/shared/local/finance/vat";
-import { Field } from "@/components/ui/Field";
-import { NavRow } from "@/components/ui/card-rows";
-import { PickerSheet } from "@/components/ui/PickerSheet";
+import { FieldRow, NavRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
 import { TotalSheet } from "@/features/appointments/TotalSheet";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
-import { useCompanies, defaultCompany } from "@/features/companies/queries";
-import { companyDetail } from "@/features/companies/company-rules";
 import { accountIcon } from "@/features/finances/account-ui";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import type { Service } from "@/features/services/queries";
-import { useTenant } from "@/features/settings/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { iconPreset } from "@/components/ui/icon-set";
 import { CatalogSheet, LineSheet } from "./InvoiceLines";
 import { InvoiceDateRow } from "./InvoiceDateRow";
+import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
@@ -83,6 +77,7 @@ export function InvoiceBlocks({
   notes,
   onNotesChange,
   footer,
+  paper,
 }: {
   clients: Client[];
   clientId: string | null;
@@ -116,20 +111,17 @@ export function InvoiceBlocks({
   onNotesChange: (next: string) => void;
   /** Действие экрана рисует маршрут: у экрана оно одно и живёт в футере. */
   footer?: ReactNode;
+  /** Миниатюра бумаги — первой, над блоками (`InvoicePaperThumb`). */
+  paper?: ReactNode;
 }) {
   const t = useThemeColors();
   const router = useRouter();
-  const tenant = useTenant();
-  const companies = useCompanies();
   const accounts = useAccountsWithBalances();
   const tileWidth = useTileWidth();
-  const [sheet, setSheet] = useState<"client" | "company" | "catalog" | "total" | null>(null);
+  const [sheet, setSheet] = useState<"client" | "catalog" | "total" | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
-  const liveCompanies = (companies.data ?? []).filter((c) => !c.archived_at);
-  const company =
-    liveCompanies.find((c) => c.id === companyId) ?? defaultCompany(companies.data ?? []);
   // ЗАКРЫТЫЙ СЧЁТ В СПИСКЕ — ТУПИК: сервер его всё равно отобьёт
   // (`assert_invoice_account`), а плитка обещает. Тот же фильтр, что у листа
   // оплаты инвойса.
@@ -195,17 +187,8 @@ export function InvoiceBlocks({
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        {/* РЕКВИЗИТЫ — ЧЕМ ПОДПИСАН СЧЁТ. Тот же блок и тот же лист, что в
-            чеке: набор выбирают, а не заводят здесь. Основной подставляется
-            сам — документ не должен требовать выбора там, где ответ известен. */}
-        <SectionCard title="Реквизиты">
-          <NavRow
-            label={company?.name ?? tenant.data?.legal_name ?? tenant.data?.name ?? "Компания"}
-            value={company?.business_address ?? tenant.data?.business_address ?? null}
-            placeholder="Реквизиты не заполнены"
-            onPress={() => setSheet("company")}
-          />
-        </SectionCard>
+        {paper}
+        <InvoiceRequisitesBlock companyId={companyId} onCompanyChange={onCompanyChange} />
 
         {/* ДВЕ ДАТЫ ОДНИМ БЛОКОМ: когда выставлен и до какого числа ждём
             денег. Вторая — просьба владельца «выбор даты, за какой промежуток
@@ -255,14 +238,19 @@ export function InvoiceBlocks({
           onOpenTotal={() => setSheet("total")}
         />
 
-        <SectionCard title="Комментарий" padded>
-          <Field
-            label="Примечание для инвойса"
-            value={notes}
-            onChangeText={onNotesChange}
-            placeholder="Условия оплаты или дополнительная информация"
+        {/* ПРИМЕЧАНИЕ — ОДНА ПОДПИСЬ, А НЕ ДВЕ: шапка блока и подсказка поля
+            называли одно и то же дважды («Комментарий» + «Примечание для
+            инвойса»). Печатается внизу бумаги, как «Notes» у AirFix #103. */}
+        <SectionCard title="Примечание">
+          <FieldRow
+            label="Примечание"
+            hideLabel
+            stacked
+            live
             multiline
-            style={{ minHeight: 88, textAlignVertical: "top" }}
+            value={notes}
+            placeholder="Примечание для клиента"
+            onSave={onNotesChange}
           />
         </SectionCard>
         {/* СЧЁТ — ДЛЯ СЕБЯ, А НЕ ДЛЯ КЛИЕНТА (владелец 2026-09-21: «выбор
@@ -317,33 +305,6 @@ export function InvoiceBlocks({
         onClose={() => setSheet(null)}
       />
 
-      <PickerSheet
-        visible={sheet === "company"}
-        title="Реквизиты"
-        items={liveCompanies.map((c) => ({
-          id: c.id,
-          label: c.name,
-          // Та же подпись, что на странице «Реквизиты»: один набор
-          // не выглядит в выборе иначе, чем в справочнике.
-          hint: companyDetail(c),
-          // Вид набора — его собственный: две фирмы в списке различает
-          // плитка, а не чтение имени. Нет вида — прежний «дом» акцентом.
-          icon: iconPreset(c.icon) ?? Building2,
-          color: c.color ?? t.accent,
-          onPress: () => onCompanyChange(c.id),
-        }))}
-        selectedId={company?.id ?? null}
-        // «Реквизиты» — дверь в справочник, а не вторая форма: набор заводят
-        // один раз и печатают им годами.
-        onSettings={() => {
-          setSheet(null);
-          // `as Href`: маршрут новый, и сгенерированные типы роутера узнают
-          // о нём только после пересборки — каст тот же, что у соседних дверей.
-          router.push("/requisites" as Href);
-        }}
-        settingsLabel="Реквизиты"
-        onClose={() => setSheet(null)}
-      />
 
       <CatalogSheet
         visible={sheet === "catalog"}

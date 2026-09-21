@@ -24,6 +24,11 @@ export function companyDetail(company: Described): string {
   return company.archived_at ? `${lead} · скрыты` : lead;
 }
 
+/** Есть ли у набора хоть что-то для бумаги, кроме внутреннего названия. */
+export function companyFilled(company: Described): boolean {
+  return Boolean(company.legal_name || company.vat_number || firstLine(company.business_address));
+}
+
 function firstLine(text: string | null): string {
   return (text ?? "").split("\n")[0]?.trim() ?? "";
 }

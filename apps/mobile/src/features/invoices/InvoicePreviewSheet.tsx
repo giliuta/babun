@@ -1,6 +1,7 @@
-import { View } from "react-native";
+import { Text, View } from "react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { useThemeColors } from "@/theme/colors";
 import type { InvoiceDocument } from "./document";
 import { InvoicePaper } from "./InvoicePaper";
 
@@ -26,6 +27,7 @@ export function InvoicePreviewSheet({
   doc,
   busy,
   label,
+  blockedReason,
   onIssue,
   onClose,
 }: {
@@ -35,9 +37,12 @@ export function InvoicePreviewSheet({
   /** «Сохранить» у выставленного, «Выставить инвойс» у нового — слово решает
    *  экран, потому что оно же стоит на его кнопке. */
   label: string;
+  /** Почему выпускать ещё нельзя. Лист открывают и просто посмотреть. */
+  blockedReason?: string | null;
   onIssue: () => void;
   onClose: () => void;
 }) {
+  const t = useThemeColors();
   return (
     <BottomSheet
       visible={visible}
@@ -47,7 +52,20 @@ export function InvoicePreviewSheet({
       maxHeightRatio={0.9}
       footer={
         <View style={{ paddingHorizontal: SIDE }}>
-          <GradientButton label={label} loading={busy} onPress={onIssue} />
+          {blockedReason ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 13, color: t.sub, textAlign: "center", marginBottom: 8 }}
+            >
+              {blockedReason}
+            </Text>
+          ) : null}
+          <GradientButton
+            label={label}
+            loading={busy}
+            disabled={!!blockedReason}
+            onPress={onIssue}
+          />
         </View>
       }
     >

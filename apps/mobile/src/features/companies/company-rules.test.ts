@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   canSaveCompany,
   companyDetail,
+  companyFilled,
   defaultHeir,
   formatIban,
   isCompanyDraftDirty,
@@ -55,6 +56,14 @@ describe("companyDetail", () => {
       companyDetail({ ...row, archived_at: "2026-09-22", legal_name: "X" }),
       "X · скрыты",
     );
+  });
+});
+
+describe("companyFilled", () => {
+  test("an internal name alone is not requisites", () => {
+    assert.equal(companyFilled(row), false);
+    assert.equal(companyFilled({ ...row, vat_number: "60184450X" }), true);
+    assert.equal(companyFilled({ ...row, business_address: "\n  \n" }), false);
   });
 });
 
