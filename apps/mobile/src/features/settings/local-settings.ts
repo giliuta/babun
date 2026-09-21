@@ -15,12 +15,6 @@ import {
 } from "@babun/shared/local/calendar-settings";
 import { updateCalendarSettings } from "@babun/shared/db/repositories/calendar-settings";
 import {
-  loadLoyalty,
-  saveLoyalty,
-  type LoyaltySettings,
-  type LoyaltyTier,
-} from "@babun/shared/local/loyalty";
-import {
   hasLocationLabelsServerSync,
   loadLocationLabels,
   markLocationLabelsServerSynced,
@@ -41,7 +35,7 @@ import { useTenantId } from "@/lib/tenant";
 // режима «его глазами» менял бы ключ, гнал холодную волну запросов, а строки
 // владельца ложились бы под ключ «master» — тот самый, который потом возьмёт
 // настоящий мастер на этом устройстве. Показ решает `useCurrentRole`.
-import { useCurrentRole, useDataRole } from "@/features/settings/tenant";
+import { useDataRole } from "@/features/settings/tenant";
 import { fetchCalendarSettings } from "@/features/settings/company-fetchers";
 import { calendarSettingsQueryKey } from "@/lib/company-query-keys";
 import {
@@ -51,7 +45,6 @@ import {
 import {
   isConfirmedNetworkUnavailable,
   isMissingCalendarSettingsContract,
-  isMissingLoyaltySettingsContract,
   isMissingPersonalEventTypesContract,
   type ServerReadError,
 } from "@/features/settings/server-read-fallback";
@@ -68,8 +61,8 @@ export type { LocationLabel } from "@babun/shared/local/location-labels";
 export type { PersonalEventType } from "@babun/shared/local/personal-event-types";
 
 // Settings live in the canonical Supabase tables (calendar_settings,
-// tenant_loyalty_settings, personal_event_types — same as web), so changes
-// sync across devices. MMKV via the storage seam is only a write-through
+// personal_event_types — same as web), so changes sync across devices.
+// MMKV via the storage seam is only a write-through
 // cache: every successful read/save refreshes it. Reads may fall back for a
 // rolling deployment or a confirmed transport outage; permission and
 // validation errors remain visible to the user, and writes never hide network
@@ -246,134 +239,6 @@ export function useSaveCalendarSettings() {
     onSettled: () => {
       if (saveStateRef.current.pending.size === 0) {
         void qc.invalidateQueries({ queryKey });
-      }
-    },
-    meta: { errorHandled: true }, // call sites alert themselves
-  });
-}
-
-// ─── Loyalty (tenant_loyalty_settings, one row per tenant) ───────────
-type LoyaltyRow = Database["public"]["Tables"]["tenant_loyalty_settings"]["Row"];
-
-function safeLoadLoyalty(): LoyaltySettings {
-  try {
-    return loadLoyalty();
-  } catch {
-    return { enabled: false, tiers: [] };
-  }
-}
-
-function safeSaveLoyalty(settings: LoyaltySettings): void {
-  try {
-    saveLoyalty(settings);
-  } catch {
-    // Canonical query data remains usable even if MMKV is unavailable.
-  }
-}
-
-function rowToLoyalty(r: LoyaltyRow): LoyaltySettings {
-  const tiers = Array.isArray(r.tiers)
-    ? (r.tiers as unknown[]).filter(
-        (t): t is LoyaltyTier =>
-          typeof t === "object" &&
-          t !== null &&
-          typeof (t as LoyaltyTier).threshold === "number" &&
-          typeof (t as LoyaltyTier).percent === "number",
-      )
-    : [];
-  return {
-    enabled: r.enabled,
-    tiers: [...tiers].sort((a, b) => a.threshold - b.threshold),
-  };
-}
-
-export function useLoyalty() {
-  const tenantId = useTenantId();
-  const roleQuery = useCurrentRole();
-  const role = roleQuery.data;
-  return useQuery({
-    queryKey: ["loyalty", tenantId, role ?? "role-pending"],
-    enabled:
-      !!tenantId &&
-      roleQuery.isSuccess &&
-      (role === "owner" || role === "dispatcher"),
-    networkMode: "always",
-    queryFn: async (): Promise<LoyaltySettings> => {
-      const cached = safeLoadLoyalty();
-      const activeTenantId = tenantId as string;
-      try {
-        const { data, error } = await supabase
-          .from("tenant_loyalty_settings")
-          .select("*")
-          .eq("tenant_id", activeTenantId)
-          .maybeSingle();
-        if (error) throw serverOperationError("useLoyalty", error);
-        if (data) {
-          const settings = rowToLoyalty(data);
-          safeSaveLoyalty(settings);
-          return settings;
-        }
-        // No row yet — the device value seeds the first canonical save.
-        return cached;
-      } catch (error) {
-        const readError = asServerReadError(error);
-        if (
-          isConfirmedNetworkUnavailable(readError) ||
-          isMissingLoyaltySettingsContract(readError)
-        ) {
-          return cached;
-        }
-        throw error;
-      }
-    },
-  });
-}
-
-export function useSaveLoyalty() {
-  const tenantId = useTenantId();
-  const role = useCurrentRole().data;
-  const qc = useQueryClient();
-  const mutationKey = [
-    "loyalty",
-    tenantId,
-    role ?? "role-pending",
-  ] as const;
-  return useMutation({
-    mutationKey,
-    networkMode: "always",
-    mutationFn: async (s: LoyaltySettings) => {
-      if (role !== "owner") {
-        throw new Error("Настраивать программу лояльности может только владелец.");
-      }
-      if (!tenantId) throw new Error("Нет активной компании");
-      const { data, error } = await supabase
-        .from("tenant_loyalty_settings")
-        .upsert(
-          {
-            tenant_id: tenantId,
-            enabled: s.enabled,
-            tiers: s.tiers as unknown as LoyaltyRow["tiers"],
-          },
-          { onConflict: "tenant_id" },
-        )
-        .select("tenant_id")
-        .maybeSingle();
-      if (error) throw serverOperationError("useSaveLoyalty", error);
-      if (!data || data.tenant_id !== tenantId) {
-        throw new Error("Сохранение программы лояльности не подтверждено сервером");
-      }
-      return s;
-    },
-    onSuccess: (s) => {
-      safeSaveLoyalty(s);
-      qc.setQueryData(
-        ["loyalty", tenantId, role ?? "role-pending"],
-        s,
-      );
-    },
-    onSettled: () => {
-      if (qc.isMutating({ mutationKey }) <= 1) {
-        void qc.invalidateQueries({ queryKey: mutationKey });
       }
     },
     meta: { errorHandled: true }, // call sites alert themselves

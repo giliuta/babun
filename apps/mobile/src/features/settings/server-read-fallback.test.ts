@@ -3,7 +3,6 @@ import { describe, test } from "node:test";
 import {
   isConfirmedNetworkUnavailable,
   isMissingCalendarSettingsContract,
-  isMissingLoyaltySettingsContract,
   isMissingPersonalEventTypesContract,
   isMissingSmsTemplatesContract,
 } from "./server-read-fallback";
@@ -69,13 +68,6 @@ describe("server read cache fallback", () => {
 
   test("recognizes rolling-deploy gaps for other cached settings tables", () => {
     assert.equal(
-      isMissingLoyaltySettingsContract({
-        code: "PGRST205",
-        message: "Could not find the table public.tenant_loyalty_settings",
-      }),
-      true,
-    );
-    assert.equal(
       isMissingPersonalEventTypesContract({
         code: "42P01",
         message: 'relation "personal_event_types" does not exist',
@@ -87,7 +79,6 @@ describe("server read cache fallback", () => {
       { code: "23505", message: "duplicate key" },
       { code: "22023", message: "invalid settings" },
     ]) {
-      assert.equal(isMissingLoyaltySettingsContract(error), false);
       assert.equal(isMissingPersonalEventTypesContract(error), false);
     }
   });

@@ -98,7 +98,6 @@ describe("role policy", () => {
       "/cabinet/categories",
       "/cabinet/event-types",
       "/cabinet/labels",
-      "/cabinet/loyalty",
       "/cabinet/services",
       "/cabinet/templates",
     ];

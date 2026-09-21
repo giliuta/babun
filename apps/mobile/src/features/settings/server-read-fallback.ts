@@ -64,12 +64,6 @@ function isMissingTableContract(
   ).test(text);
 }
 
-export function isMissingLoyaltySettingsContract(
-  error: ServerReadError,
-): boolean {
-  return isMissingTableContract(error, "tenant_loyalty_settings");
-}
-
 export function isMissingPersonalEventTypesContract(
   error: ServerReadError,
 ): boolean {
