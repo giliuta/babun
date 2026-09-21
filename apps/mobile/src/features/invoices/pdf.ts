@@ -19,9 +19,12 @@ export function buildInvoicePdfHtml(
 }
 
 function renderInvoiceHtml(doc: InvoiceDocument): string {
-  const lineRows = doc.lines.map((line, index) => `
+  // ВИД — КАК У ИНВОЙСА AIRFIX #103 (владелец 2026-09-22), тот же, что у
+  // экранной `InvoicePaper`: логотип слева, INVOICE и номер справа, FROM и
+  // BILL TO колонками, таблица в рамке, итоги столбиком, внизу «Notes &
+  // payment instructions» и номер документа. Оба рендера правятся вместе.
+  const lineRows = doc.lines.map((line) => `
     <tr>
-      <td class="line-number">${index + 1}</td>
       <td class="line-title">${escapeHtml(line.title || doc.dict.untitled)}${
         line.description
           ? `<div class="muted small">${escapeHtml(line.description)}</div>`
@@ -29,21 +32,31 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       }</td>
       <td class="number">${escapeHtml(line.qty)}</td>
       <td class="number">${escapeHtml(line.unitPrice)}</td>
-      <td class="number total-cell">${escapeHtml(line.total)}</td>
+      <td class="number">${escapeHtml(line.total)}</td>
     </tr>`).join("");
 
   const paymentRows = doc.payments.map((payment) => `
       <tr>
         <td>${escapeHtml(payment.date)}</td>
-        <td>${escapeHtml(payment.title)}${payment.details ? `<div class="muted small">${escapeHtml(payment.details)}</div>` : ""}</td>
+        <td>${escapeHtml(payment.title)}${payment.details ? ` · ${escapeHtml(payment.details)}` : ""}</td>
         <td class="number ${payment.refund ? "refund" : "payment"}">${escapeHtml(payment.amount)}</td>
       </tr>`).join("");
 
   const totalRows = doc.totals.map((total) => `
-        <div class="total-row${total.grand ? " grand-total" : ""}">
-          <span>${escapeHtml(total.label)}</span>
-          <strong>${escapeHtml(total.value)}</strong>
-        </div>`).join("");
+        <tr class="${total.grand ? "grand" : ""}">
+          <td class="total-label">${escapeHtml(total.label)}</td>
+          <td class="total-value">${escapeHtml(total.value)}</td>
+        </tr>`).join("");
+
+  const party = (title: string, name: string, lines: string[]) => `
+      <div class="party">
+        <div class="eyebrow">${escapeHtml(title)}</div>
+        <div class="party-name">${escapeHtml(name)}</div>
+        ${lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
+      </div>`;
+
+  const showStatus = doc.draft || doc.statusLabel !== doc.dict.status_issued;
+  const noteLines = [...doc.payTo, ...(doc.notes ? [doc.notes] : [])];
 
   return `<!doctype html>
 <html lang="${doc.dict.locale.slice(0, 2)}">
@@ -52,136 +65,100 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
   <title>${escapeHtml(doc.dict.invoiceEyebrow)} ${escapeHtml(doc.number)}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    @page { size: A4; margin: 34px 38px 42px; }
+    @page { size: A4; margin: 40px 44px 44px; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      color: #172033;
+      color: #374151;
       background: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
-      font-size: 11px;
-      line-height: 1.42;
+      font-size: 13px;
+      line-height: 1.45;
       -webkit-print-color-adjust: exact;
     }
     .page { width: 100%; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 26px; }
-    .brand { max-width: 58%; }
-    .logo { max-width: 190px; max-height: 64px; margin-bottom: 8px; }
-    .brand-name { font-size: 20px; font-weight: 750; letter-spacing: -0.2px; color: #111827; margin-bottom: 5px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 30px; }
+    .logo { max-width: 120px; max-height: 120px; }
     .doc { text-align: right; }
-    .eyebrow { color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: 1.15px; text-transform: uppercase; }
-    h1 { margin: 3px 0 5px; color: #111827; font-size: 25px; line-height: 1.12; letter-spacing: -0.45px; }
-    .status { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #eef3ff; color: #3157a4; font-size: 9px; font-weight: 700; }
-    .party-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 22px; }
-    .party { min-height: 112px; padding: 14px 15px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; }
-    .party-title { margin-bottom: 7px; color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; }
-    .party-name { margin-bottom: 5px; color: #111827; font-size: 13px; font-weight: 700; }
-    .detail { color: #475569; margin-top: 2px; overflow-wrap: anywhere; }
-    table { width: 100%; border-collapse: collapse; }
+    h1 { margin: 0 0 8px; color: #111827; font-size: 30px; font-weight: 800; letter-spacing: 0.3px; }
+    .doc-line { color: #6b7280; font-size: 14px; margin-top: 2px; }
+    .status { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 9px; font-weight: 700; }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 26px; }
+    .eyebrow { color: #374151; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
+    .party-name { margin: 10px 0 4px; color: #111827; font-size: 17px; font-weight: 700; }
+    .detail { color: #374151; margin-top: 2px; overflow-wrap: anywhere; }
+    table.lines { width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; }
     thead { display: table-header-group; }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    th { padding: 9px 8px; border-bottom: 1px solid #cbd5e1; color: #64748b; font-size: 9px; font-weight: 700; letter-spacing: .45px; text-align: left; text-transform: uppercase; }
-    td { padding: 10px 8px; border-bottom: 1px solid #e8edf3; vertical-align: top; }
-    .line-number { width: 24px; color: #94a3b8; }
-    .line-title { color: #111827; font-weight: 600; }
+    .lines th { padding: 12px; background: #f3f4f6; border: 1px solid #e5e7eb; color: #111827; font-size: 14px; font-weight: 600; text-align: right; }
+    .lines th:first-child { text-align: left; }
+    .lines td { padding: 12px; font-size: 14px; border: 1px solid #e5e7eb; vertical-align: top; }
+    .line-title { color: #111827; font-weight: 600; font-size: 15px; }
+    .col-qty { width: 56px; }
+    .col-money { width: 124px; }
+    .lines th { white-space: nowrap; }
     .number { text-align: right; white-space: nowrap; }
-    .total-cell { color: #111827; font-weight: 700; }
-    .totals-wrap { display: flex; justify-content: flex-end; margin: 15px 0 22px; }
-    .totals { width: 265px; padding: 12px 15px; border-radius: 12px; background: #f6f8fb; }
-    .total-row { display: flex; justify-content: space-between; gap: 18px; padding: 4px 0; }
-    .grand-total { margin-top: 7px; padding-top: 10px; border-top: 1px solid #d9e0e9; color: #111827; font-size: 15px; font-weight: 800; }
-    .section { margin-top: 19px; break-inside: avoid; }
-    .section h2 { margin: 0 0 8px; color: #111827; font-size: 13px; }
-    .settlement { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 9px; }
-    .metric { padding: 10px 11px; border: 1px solid #e2e8f0; border-radius: 10px; }
-    .metric-label { color: #64748b; font-size: 9px; }
-    .metric-value { margin-top: 3px; color: #111827; font-size: 12px; font-weight: 750; }
-    .payment { color: #16794b; font-weight: 700; }
-    .refund { color: #b42318; font-weight: 700; }
-    .notes { padding: 12px 14px; border-left: 3px solid #9db4e2; border-radius: 3px 10px 10px 3px; background: #f6f8fb; color: #334155; white-space: pre-wrap; }
-    .footer { margin-top: 28px; padding-top: 11px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 8px; }
-    .muted { color: #64748b; }
-    .small { margin-top: 2px; font-size: 9px; }
+    .totals { margin-left: auto; border-collapse: collapse; }
+    .totals td { padding: 12px; font-size: 15px; }
+    .total-label { text-align: right; color: #111827; }
+    .total-value { width: 124px; text-align: right; font-weight: 700; color: #111827; border-bottom: 1px solid #e5e7eb; }
+    .grand td { font-size: 17px; font-weight: 700; }
+    .grand .total-value { border: 1px solid #e5e7eb; }
+    .section { margin-top: 26px; break-inside: avoid; }
+    .section .eyebrow { margin-bottom: 6px; }
+    .note { white-space: pre-wrap; color: #374151; margin-top: 2px; }
+    table.payments { width: 100%; border-collapse: collapse; }
+    .payments td { padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+    .payment { color: #047857; font-weight: 700; }
+    .refund { color: #b91c1c; font-weight: 700; }
+    .footer { margin-top: 40px; color: #9ca3af; font-size: 11px; text-align: right; }
+    .muted { color: #6b7280; }
+    .small { margin-top: 2px; font-size: 12px; font-weight: 400; }
   </style>
 </head>
 <body>
   <main class="page">
     <header class="header">
-      <div class="brand">
-        ${doc.logoUrl ? `<img class="logo" src="${escapeHtml(doc.logoUrl)}" alt="" />` : ""}
-        <div class="brand-name">${escapeHtml(doc.seller.name)}</div>
-        ${doc.seller.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
-      </div>
+      <div>${doc.logoUrl ? `<img class="logo" src="${escapeHtml(doc.logoUrl)}" alt="" />` : ""}</div>
       <div class="doc">
-        <div class="eyebrow">${escapeHtml(doc.dict.invoiceEyebrow)}</div>
-        <h1>${escapeHtml(doc.number)}</h1>
-        <span class="status">${escapeHtml(doc.statusLabel)}</span>
+        <h1>${escapeHtml(doc.dict.invoice)}</h1>
+        <div class="doc-line">${escapeHtml(doc.number)}</div>
+        <div class="doc-line">${escapeHtml(doc.dict.issuedShort(doc.issuedShort))}</div>
+        ${doc.dueShort ? `<div class="doc-line">${escapeHtml(doc.dict.dueShort(doc.dueShort))}</div>` : ""}
+        ${showStatus ? `<span class="status">${escapeHtml(doc.statusLabel)}</span>` : ""}
       </div>
     </header>
 
-    <!-- КАРТОЧКИ «ПРОДАВЕЦ» ЗДЕСЬ НЕТ, И ЭТО НЕ ЗАБЫВЧИВОСТЬ: продавец уже
-         напечатан в шапке слева, вместе с логотипом. Две одинаковые колонки
-         имени, адреса, VAT и телефона подряд — это дубль, а не «подробнее»;
-         на экране InvoicePaper продавец тоже один. -->
-    <section class="party-grid">
-      <div class="party">
-        <div class="party-title">${escapeHtml(doc.dict.recipient)}</div>
-        <div class="party-name">${escapeHtml(doc.client.name)}</div>
-        ${doc.client.lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
-      </div>
+    <section class="parties">
+      ${party(doc.dict.seller, doc.seller.name, doc.seller.lines)}
+      ${party(doc.dict.recipient, doc.client.name, doc.client.lines)}
     </section>
 
-    <section class="party-grid">
-      <div class="party" style="min-height:0">
-        <div class="party-title">${escapeHtml(doc.dict.issuedOn)}</div>
-        <div class="party-name">${escapeHtml(doc.issuedOn)}</div>
-      </div>
-      <div class="party" style="min-height:0">
-        <div class="party-title">${escapeHtml(doc.dict.dueOn)}</div>
-        <div class="party-name">${escapeHtml(doc.dueOn)}</div>
-      </div>
-    </section>
-
-    <table aria-label="${escapeHtml(doc.dict.linesTableLabel)}">
+    <table class="lines" aria-label="${escapeHtml(doc.dict.linesTableLabel)}">
       <thead>
-        <tr><th></th><th>${escapeHtml(doc.dict.lineTitle)}</th><th class="number">${escapeHtml(doc.dict.qty)}</th><th class="number">${escapeHtml(doc.dict.price)}</th><th class="number">${escapeHtml(doc.dict.amount)}</th></tr>
+        <tr><th>${escapeHtml(doc.dict.lineTitle)}</th><th class="col-qty">${escapeHtml(doc.dict.qty)}</th><th class="col-money">${escapeHtml(doc.dict.price)}, ${escapeHtml(doc.currency)}</th><th class="col-money">${escapeHtml(doc.dict.amount)}, ${escapeHtml(doc.currency)}</th></tr>
       </thead>
       <tbody>${lineRows || `
-        <tr><td colspan="5" class="muted">${escapeHtml(doc.dict.linesEmpty)}</td></tr>
+        <tr><td colspan="4" class="muted">${escapeHtml(doc.dict.linesEmpty)}</td></tr>
       `}</tbody>
     </table>
 
-    <div class="totals-wrap">
-      <div class="totals">${totalRows}</div>
-    </div>
+    <table class="totals"><tbody>${totalRows}</tbody></table>
 
-    ${doc.payTo.length > 0 ? `
+    ${noteLines.length > 0 ? `
       <section class="section">
-        <h2>${escapeHtml(doc.dict.payTo)}</h2>
+        <div class="eyebrow">${escapeHtml(doc.dict.notesAndPayment)}</div>
         ${doc.payTo.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
-        <div class="muted small">${escapeHtml(doc.dict.paymentPurpose(doc.number))}</div>
+        ${doc.notes ? `<div class="note">${escapeHtml(doc.notes)}</div>` : ""}
       </section>
     ` : ""}
 
-    ${doc.settlement.length > 0 ? `
+    ${paymentRows ? `
       <section class="section">
-        <h2>${escapeHtml(doc.dict.payment)}</h2>
-        <div class="settlement">
-          <div class="metric"><div class="metric-label">${escapeHtml(doc.dict.status)}</div><div class="metric-value">${escapeHtml(doc.statusLabel)}</div></div>
-          ${doc.settlement.map((metric) => `
-            <div class="metric"><div class="metric-label">${escapeHtml(metric.label)}</div><div class="metric-value">${escapeHtml(metric.value)}</div></div>
-          `).join("")}
-        </div>
-        ${paymentRows ? `
-          <table aria-label="${escapeHtml(doc.dict.paymentsTableLabel)}">
-            <thead><tr><th>${escapeHtml(doc.dict.paymentsDate)}</th><th>${escapeHtml(doc.dict.paymentsOperation)}</th><th class="number">${escapeHtml(doc.dict.amount)}</th></tr></thead>
-            <tbody>${paymentRows}</tbody>
-          </table>
-        ` : `<div class="muted">${escapeHtml(doc.dict.paymentsEmpty)}</div>`}
+        <div class="eyebrow">${escapeHtml(doc.dict.payment)}</div>
+        <table class="payments" aria-label="${escapeHtml(doc.dict.paymentsTableLabel)}"><tbody>${paymentRows}</tbody></table>
       </section>
     ` : ""}
-
-    ${doc.notes ? `<section class="section"><h2>${escapeHtml(doc.dict.notes)}</h2><div class="notes">${escapeHtml(doc.notes)}</div></section>` : ""}
 
     <footer class="footer">${escapeHtml(doc.footer)}</footer>
   </main>

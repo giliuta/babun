@@ -9,7 +9,6 @@ import {
 import type { Tenant } from "@/features/settings/tenant";
 import {
   formatInvoiceDate,
-  formatInvoiceMoney,
   invoiceVatMode,
 } from "./format";
 import {
@@ -75,6 +74,11 @@ export interface InvoiceDocument {
    *  Не указан». Флаг отвечает на вопрос, на который строка ответить не
    *  может. */
   dueOnKnown: boolean;
+  /** Коротко под номером: «18/09/2026» (en-GB) или «18.09.2026». */
+  issuedShort: string;
+  dueShort: string | null;
+  /** Валюта — в шапке колонок таблицы: «Price, EUR», как у AirFix #103. */
+  currency: string;
   lines: DocumentLine[];
   totals: DocumentTotal[];
   /** Реквизиты для оплаты — печатаются отдельным блоком под итогом. */
@@ -219,40 +223,49 @@ function issuedDocument({
     logoUrl: clean(seller?.logo_url) || clean(tenant?.logo_url) || null,
     seller: {
       name: sellerName,
+      // ПОРЯДОК — КАК В ШАПКЕ AIRFIX #103 (владелец 2026-09-22): номера, связь,
+      // и адрес ПОСЛЕДНИМ, строками — так, как его набрали в реквизитах.
+      // РЕГ. НОМЕР ПЕЧАТАЕТ И ЧЕК (`receipt-document.ts`): два документа
+      // одной фирмы не имеют права представлять её по-разному.
       lines: compact([
-        seller
-          ? firstNonEmpty(seller.address, seller.business_address)
-          : firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
-        prefixed("VAT", seller ? clean(seller.vat_number) : clean(tenant?.vat_number)),
-        // РЕГ. НОМЕР ПЕЧАТАЕТ И ЧЕК (`receipt-document.ts`): два документа
-        // одной фирмы не имеют права представлять её по-разному.
+        prefixed(dict.vatNo, seller ? clean(seller.vat_number) : clean(tenant?.vat_number)),
         prefixed(dict.regNumber, seller ? clean(seller.reg_number) : ""),
-        seller ? clean(seller.contact_email) : clean(tenant?.contact_email),
         seller ? clean(seller.contact_phone) : clean(tenant?.contact_phone),
+        seller ? clean(seller.contact_email) : clean(tenant?.contact_email),
+        ...addressLines(
+          seller
+            ? firstNonEmpty(seller.address, seller.business_address)
+            : firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
+        ),
       ]),
     },
     client: {
       name: (recipient ? clean(recipient.full_name) : clean(client?.full_name))
         || dict.recipientMissing,
       lines: compact([
-        recipient
-          ? firstNonEmpty(recipient.primary_address, recipient.address)
-          : client
-            ? primaryClientAddress(client)
-            : "",
-        recipient ? clean(recipient.email) : clean(client?.email),
         recipient ? clean(recipient.phone) : clean(client?.phone),
+        recipient ? clean(recipient.email) : clean(client?.email),
+        ...addressLines(
+          recipient
+            ? firstNonEmpty(recipient.primary_address, recipient.address)
+            : client
+              ? primaryClientAddress(client)
+              : "",
+        ),
       ]),
     },
     issuedOn: formatInvoiceDate(invoice.issued_on, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(invoice.due_on, dict.locale, dict.notSet),
     dueOnKnown: !!invoice.due_on,
+    issuedShort: shortDate(invoice.issued_on, dict.locale),
+    dueShort: invoice.due_on ? shortDate(invoice.due_on, dict.locale) : null,
+    currency: invoice.currency,
     lines: invoice.lines.map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: formatInvoiceMoney(line.unit_price, invoice.currency, dict.locale),
-      total: formatInvoiceMoney(line.total, invoice.currency, dict.locale),
+      unitPrice: paperMoney(line.unit_price, invoice.currency, dict.locale),
+      total: paperMoney(line.total, invoice.currency, dict.locale),
     })),
     totals: totalRows({
       dict,
@@ -270,11 +283,11 @@ function issuedDocument({
     settlement: [
       {
         label: dict.paid,
-        value: formatInvoiceMoney(settlement.paid, invoice.currency, dict.locale),
+        value: paperMoney(settlement.paid, invoice.currency, dict.locale),
       },
       {
         label: dict.remaining,
-        value: formatInvoiceMoney(settlement.remaining, invoice.currency, dict.locale),
+        value: paperMoney(settlement.remaining, invoice.currency, dict.locale),
       },
     ],
     payments: payments.map((payment) => {
@@ -288,7 +301,7 @@ function issuedDocument({
         date: formatInvoiceDate(payment.occurred_on, dict.locale, dict.notSet),
         title: refund ? dict.refundRow : dict.paymentRow,
         details: [account, method].filter(Boolean).join(" · "),
-        amount: `${refund ? "−" : ""}${formatInvoiceMoney(Math.abs(payment.amount), invoice.currency, dict.locale)}`,
+        amount: `${refund ? "−" : ""}${paperMoney(Math.abs(payment.amount), invoice.currency, dict.locale)}`,
         refund,
       };
     }),
@@ -343,44 +356,49 @@ function draftDocument({
         (company ? firstNonEmpty(company.legal_name, company.name) : "")
         || firstNonEmpty(tenant?.legal_name, tenant?.name)
         || dict.sellerMissing,
+      // Порядок — тот же, что у выставленного (см. `issuedDocument`).
       lines: company
         ? compact([
-            firstNonEmpty(
-              company.business_address,
-              joinParts(tenant?.address, tenant?.city),
-            ),
-            prefixed("VAT", clean(company.vat_number)),
+            prefixed(dict.vatNo, clean(company.vat_number)),
             prefixed(dict.regNumber, clean(company.reg_number)),
-            firstNonEmpty(company.contact_email, tenant?.contact_email),
             firstNonEmpty(company.contact_phone, tenant?.contact_phone),
+            firstNonEmpty(company.contact_email, tenant?.contact_email),
+            ...addressLines(
+              firstNonEmpty(company.business_address, joinParts(tenant?.address, tenant?.city)),
+            ),
           ])
         : compact([
-            firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
-            prefixed("VAT", clean(tenant?.vat_number)),
-            clean(tenant?.contact_email),
+            prefixed(dict.vatNo, clean(tenant?.vat_number)),
             clean(tenant?.contact_phone),
+            clean(tenant?.contact_email),
+            ...addressLines(
+              firstNonEmpty(tenant?.business_address, joinParts(tenant?.address, tenant?.city)),
+            ),
           ]),
     },
     client: {
       name: clean(client?.full_name) || dict.recipientMissing,
       lines: compact([
-        client ? primaryClientAddress(client) : "",
-        clean(client?.email),
         clean(client?.phone),
+        clean(client?.email),
+        ...addressLines(client ? primaryClientAddress(client) : ""),
       ]),
     },
     issuedOn: formatInvoiceDate(draft.issuedOn, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(draft.dueOn, dict.locale, dict.notSet),
     dueOnKnown: !!draft.dueOn,
+    issuedShort: shortDate(draft.issuedOn, dict.locale),
+    dueShort: draft.dueOn ? shortDate(draft.dueOn, dict.locale) : null,
+    currency: draft.currency,
     lines: draft.lines.map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
-      unitPrice: formatInvoiceMoney(line.unitPrice, draft.currency, dict.locale),
+      unitPrice: paperMoney(line.unitPrice, draft.currency, dict.locale),
       // ОДИН СЧЁТ НА ВЕСЬ ПРОДУКТ: своё `round2(qty * price)` в double
       // печатало в строке 3,01 там, где итог документа (и сервер) говорят
       // 3,02 — на одном экране два разных числа за одну и ту же позицию.
-      total: formatInvoiceMoney(
+      total: paperMoney(
         invoiceLineTotal(line.qty, line.unitPrice),
         draft.currency,
         dict.locale,
@@ -424,11 +442,11 @@ function totalRows(input: {
     return [
       {
         label: dict.subtotal,
-        value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
+        value: paperMoney(input.subtotalNet, input.currency, dict.locale),
       },
       {
         label: dict.grandTotal,
-        value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+        value: paperMoney(input.total, input.currency, dict.locale),
         grand: true,
       },
     ];
@@ -439,15 +457,15 @@ function totalRows(input: {
   return [
     {
       label: dict.netAmount,
-      value: formatInvoiceMoney(input.subtotalNet, input.currency, dict.locale),
+      value: paperMoney(input.subtotalNet, input.currency, dict.locale),
     },
     {
-      label: `${vatLabel} · ${formatPercent(input.vatPercent, dict.locale)}`,
-      value: formatInvoiceMoney(input.vatAmount, input.currency, dict.locale),
+      label: `${vatLabel} ${formatPercent(input.vatPercent, dict.locale)}`,
+      value: paperMoney(input.vatAmount, input.currency, dict.locale),
     },
     {
       label: dict.grandTotal,
-      value: formatInvoiceMoney(input.total, input.currency, dict.locale),
+      value: paperMoney(input.total, input.currency, dict.locale),
       grand: true,
     },
   ];
@@ -457,6 +475,42 @@ function primaryClientAddress(client: Client): string {
   const primary = client.locations.find((location) => location.isPrimary)
     ?? client.locations.find((location) => clean(location.address));
   return clean(primary?.address) || joinParts(client.address, client.city);
+}
+
+/** Адрес так, как его набрали: перенос строки в реквизитах — перенос на
+ *  бумаге (лист реквизитов это обещает подписью под полем). */
+function addressLines(value: string): string[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+/** ДЕНЬГИ НА БУМАГЕ — ВСЕГДА С КОПЕЙКАМИ: «€50.00», как на инвойсе AirFix
+ *  #103. Экраны приложения печатают «€50» (`formatInvoiceMoney`) — там это
+ *  стиль продукта, а в документе клиенту круглая сумма без копеек читается
+ *  как незаполненная колонка. */
+function paperMoney(value: number, currency = "EUR", locale = "ru-RU"): string {
+  if (!Number.isFinite(value)) return "—";
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+/** «18/09/2026» для en-GB, «18.09.2026» для ru-RU — как в шапке #103. */
+function shortDate(ymd: string | null, locale: string): string {
+  if (!ymd) return "";
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
 function prefixed(label: string, value: string): string {

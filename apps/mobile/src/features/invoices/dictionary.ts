@@ -40,6 +40,13 @@ export interface InvoiceDictionary {
   grandTotal: string;
   /** Регистрационный номер юрлица в строках продавца — как у чека. */
   regNumber: string;
+  /** Подпись VAT-номера в строках сторон («VAT No.: 60184450X»). */
+  vatNo: string;
+  /** Даты под номером в шапке, коротко — как у AirFix #103: «Issued 18/09/2026». */
+  issuedShort: (date: string) => string;
+  dueShort: (date: string) => string;
+  /** Нижний блок бумаги: примечание и реквизиты для оплаты одним блоком. */
+  notesAndPayment: string;
   /** Номер черновику ещё не выдан: настоящий рождается на сервере в момент
    *  выставления, и показать угаданный значит однажды показать не тот. */
   numberPending: string;
@@ -106,20 +113,25 @@ const RU: InvoiceDictionary = {
   // закон от 09.08 и меняется ВЕЗДЕ, где его читает человек: бумага, шторка
   // «Итого», форма операции. Один документ, говорящий на двух языках про один
   // налог, читается как два разных налога.
-  vatInclusive: "VAT включён в цены",
-  vatExclusive: "VAT начислен сверху",
-  netAmount: "Без VAT",
+  // КОРОТКО, КАК НА БУМАГЕ AIRFIX #103 («Tax 19%»), а не фразой: итоги —
+  // столбик цифр, и длинная подпись выдавливала сумму (владелец 22.09).
+  vatInclusive: "в т.ч. VAT",
+  vatExclusive: "VAT",
+  netAmount: "Сумма без VAT",
   vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "К оплате",
   regNumber: "Рег. №",
+  vatNo: "VAT №",
+  issuedShort: (date) => `Выставлен ${date}`,
+  dueShort: (date) => `Оплатить до ${date}`,
+  notesAndPayment: "Примечание и оплата",
   numberPending: "Номер присвоится при выставлении",
   paymentPurpose: (number) => `В назначении платежа укажите номер ${number}.`,
   method_cash: "Наличные",
   method_card: "Карта",
   method_bank: "Банк",
   method_other: "Другое",
-  footer: (number, currency) =>
-    `Документ сформирован из данных инвойса ${number}. Валюта: ${currency}.`,
+  footer: (number) => `Инвойс ${number}`,
   payTo: "Реквизиты для оплаты",
   bank: "Банк",
   payment: "Оплата",
@@ -168,20 +180,23 @@ const EN: InvoiceDictionary = {
   amount: "Amount",
   untitled: "Untitled",
   subtotal: "Subtotal",
-  vatInclusive: "VAT included in prices",
-  vatExclusive: "VAT added on top",
-  netAmount: "Net amount",
+  vatInclusive: "incl. VAT",
+  vatExclusive: "VAT",
+  netAmount: "Subtotal",
   vatOf: (percent) => `VAT · ${percent}`,
-  grandTotal: "Total due",
+  grandTotal: "Total",
   regNumber: "Reg. No",
+  vatNo: "VAT No.",
+  issuedShort: (date) => `Issued ${date}`,
+  dueShort: (date) => `Due ${date}`,
+  notesAndPayment: "Notes & payment instructions",
   numberPending: "Number will be assigned on issue",
   paymentPurpose: (number) => `Please quote invoice ${number} as the payment reference.`,
   method_cash: "Cash",
   method_card: "Card",
   method_bank: "Bank transfer",
   method_other: "Other",
-  footer: (number, currency) =>
-    `Document generated from invoice ${number}. Currency: ${currency}.`,
+  footer: (number) => `Inv. ${number}`,
   payTo: "Payment details",
   bank: "Bank",
   payment: "Payment",
