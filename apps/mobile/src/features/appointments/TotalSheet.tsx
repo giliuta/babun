@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
+import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
@@ -8,7 +9,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { parseMoneyInput } from "@/features/appointments/helpers";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
-import type { AppointmentService } from "@babun/shared/local/appointments";
 
 // ДЕНЬГИ ЗАПИСИ ОДНИМ ЛИСТОМ (владелец 2026-09-04: «когда я открываю „Итого“,
 // открывается снизу вверх шторка, где прописаны каждая услуга, количество их,
@@ -39,35 +39,39 @@ export function TotalSheet({
   visible,
   onClose,
   lines,
-  nameFor,
   onQtyChange,
   onPriceChange,
-  discountKind,
-  discountValue,
-  onDiscountKindChange,
-  onDiscountValueChange,
+  discount,
   total,
-  customTotal,
+  customTotal = false,
   onResetTotal,
   vat: vatControl,
 }: {
   visible: boolean;
   onClose: () => void;
-  lines: readonly AppointmentService[];
-  /** Имя строки — снимок записи, а не сегодняшний прайс. */
-  nameFor: (line: AppointmentService) => string;
-  onQtyChange: (serviceId: string, qty: number) => void;
-  /** Цена ОДНОЙ услуги в этой записи. Прайс не трогается: это снимок строки. */
-  onPriceChange: (serviceId: string, price: number) => void;
-  discountKind: DiscountKind;
-  /** Сырой текст поля скидки — разбор живёт у формы. */
-  discountValue: string;
-  onDiscountKindChange: (kind: DiscountKind) => void;
-  onDiscountValueChange: (value: string) => void;
+  /** СТРОКА — ТА ЖЕ, ЧТО У БЛОКА «УСЛУГИ» (`ServicesBlockLine`). Лист считал
+   *  деньги ТОЛЬКО записи (`AppointmentService`), и позиция инвойса, у которой
+   *  нет ни `serviceId`, ни длительности, в него не помещалась. Перевод
+   *  «своя сущность → строка» делает вызывающий — как и в самом блоке. */
+  lines: readonly ServicesBlockLine[];
+  onQtyChange: (lineId: string, qty: number) => void;
+  /** Цена ОДНОЙ штуки В ЭТОМ ДОКУМЕНТЕ. Прайс не трогается: это снимок строки. */
+  onPriceChange: (lineId: string, price: number) => void;
+  /** СКИДКА ЕСТЬ НЕ У ВСЯКОГО ДОКУМЕНТА. У записи и чека она своя строка, у
+   *  инвойса её нет вовсе — сервер не знает такого поля, и рисовать поле,
+   *  которое никуда не поедет, нельзя. Нет скидки — нет и строки. */
+  discount?: {
+    kind: DiscountKind;
+    /** Сырой текст поля — разбор живёт у формы. */
+    value: string;
+    onKindChange: (kind: DiscountKind) => void;
+    onValueChange: (value: string) => void;
+  };
   total: number;
-  /** У записи, сохранённой со «своей» суммой: её можно вернуть к расчёту. */
-  customTotal: boolean;
-  onResetTotal: () => void;
+  /** У записи, сохранённой со «своей» суммой: её можно вернуть к расчёту.
+   *  У документов такого прошлого нет — поэтому по умолчанию `false`. */
+  customTotal?: boolean;
+  onResetTotal?: () => void;
   /** НАЛОГ — РЕШЕНИЕ ВЫЗЫВАЮЩЕГО, А НЕ ЭТОЙ ШТОРКИ.
    *
    *  Владелец 2026-09-20, увидев чек: «НДС почему-то добавляется, или он
@@ -128,9 +132,8 @@ export function TotalSheet({
             <ColumnHeader />
             {lines.map((line, index) => (
               <ServiceLine
-                key={line.serviceId}
+                key={line.id}
                 line={line}
-                name={nameFor(line)}
                 separated={index > 0}
                 onQtyChange={onQtyChange}
                 onPriceChange={onPriceChange}
@@ -139,18 +142,20 @@ export function TotalSheet({
             {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
                 «скидку закинуть туда, где надпись „Услуги“, и справа будет
                 точная цена»). Справа — цена работ после скидки. */}
-            <ServicesRow
-              discountValue={discountValue}
-              onDiscountValueChange={onDiscountValueChange}
-              percent={discountKind === "percent"}
-              onPercentChange={(next) =>
-                onDiscountKindChange(next ? "percent" : "fixed")
-              }
-              discountAmount={
-                lines.reduce((sum, line) => sum + line.totalPrice, 0) - total
-              }
-              afterDiscount={total}
-            />
+            {discount ? (
+              <ServicesRow
+                discountValue={discount.value}
+                onDiscountValueChange={discount.onValueChange}
+                percent={discount.kind === "percent"}
+                onPercentChange={(next) =>
+                  discount.onKindChange(next ? "percent" : "fixed")
+                }
+                discountAmount={
+                  lines.reduce((sum, line) => sum + line.total, 0) - total
+                }
+                afterDiscount={total}
+              />
+            ) : null}
           </View>
         ) : (
           <EmptyState title="Услуги ещё не выбраны" />
@@ -179,7 +184,7 @@ export function TotalSheet({
                прежней разметкой итога она на полдня уехала под
                `display: "none"` — единственный выход из ручной суммы
                пропал с экрана молча (аудит кода 2026-09-20). */
-            customTotal ? (
+            customTotal && onResetTotal ? (
               <Pressable
                 onPress={() => {
                   haptics.tap();
@@ -247,18 +252,17 @@ function ColumnHeader() {
 
 function ServiceLine({
   line,
-  name,
   separated,
   onQtyChange,
   onPriceChange,
 }: {
-  line: AppointmentService;
-  name: string;
+  line: ServicesBlockLine;
   /** Не первая строка списка — волосок сверху. */
   separated?: boolean;
-  onQtyChange: (serviceId: string, qty: number) => void;
-  onPriceChange: (serviceId: string, price: number) => void;
+  onQtyChange: (lineId: string, qty: number) => void;
+  onPriceChange: (lineId: string, price: number) => void;
 }) {
+  const name = line.name;
   const t = useThemeColors();
   // ЧЕРНОВИКИ — СВОИ У КАЖДОГО ПОЛЯ. Пока набирают «13», строка не должна
   // превращаться в «€13» и терять то, что человек ещё не дописал; число уходит
@@ -266,7 +270,7 @@ function ServiceLine({
   const [unitDraft, setUnitDraft] = useState<string | null>(null);
   const [totalDraft, setTotalDraft] = useState<string | null>(null);
   const unitShown = unitDraft ?? String(Number(line.pricePerUnit.toFixed(2)));
-  const totalShown = totalDraft ?? String(Number(line.totalPrice.toFixed(2)));
+  const totalShown = totalDraft ?? String(Number(line.total.toFixed(2)));
 
   // ОДНА СТРОКА НА УСЛУГУ, ЧЕТЫРЕ КОЛОНКИ. Было две строки: во второй стояли
   // цветная точка услуги и её длительность — и то и другое здесь лишнее
@@ -298,8 +302,8 @@ function ServiceLine({
       </Text>
       <QtyStepper
         name={name}
-        qty={line.quantity}
-        onChange={(next) => onQtyChange(line.serviceId, next)}
+        qty={line.qty}
+        onChange={(next) => onQtyChange(line.id, next)}
       />
       {/* ЦЕНА ЗА ОДНУ И СУММА СТРОКИ — ПРАВЯТСЯ ОБЕ (владелец 2026-09-07:
           «в итого редактировать могу либо по количеству за штуку, либо общую
@@ -313,7 +317,7 @@ function ServiceLine({
         onChange={(next) => {
           setUnitDraft(next);
           setTotalDraft(null);
-          onPriceChange(line.serviceId, parseMoneyInput(next));
+          onPriceChange(line.id, parseMoneyInput(next));
         }}
         onBlur={() => setUnitDraft(null)}
       />
@@ -326,8 +330,8 @@ function ServiceLine({
           setTotalDraft(next);
           setUnitDraft(null);
           const total = parseMoneyInput(next);
-          const qty = Math.max(1, line.quantity);
-          onPriceChange(line.serviceId, Math.round((total / qty) * 100) / 100);
+          const qty = Math.max(1, line.qty);
+          onPriceChange(line.id, Math.round((total / qty) * 100) / 100);
         }}
         onBlur={() => setTotalDraft(null)}
       />

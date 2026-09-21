@@ -196,12 +196,22 @@ export function ReceiptComposer({
     liveCompanies.find((c) => c.id === draft.companyId) ??
     defaultCompany(companies.data ?? []);
   const totals = receiptTotals(draft);
+  // ПЕРЕВОД «РАБОТА → СТРОКА БЛОКА» — ОДИН НА ЭКРАН: его читают и блок
+  // «Услуги», и шторка «Итого». Две копии разошлись бы на первой же правке.
+  const blockLines = useMemo(
+    () =>
+      draft.lines.map((line) => ({
+        id: line.serviceId,
+        name: line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга удалена",
+        subtitle: durationLabel(line.duration),
+        unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
+        qty: line.quantity,
+        pricePerUnit: line.pricePerUnit,
+        total: line.totalPrice,
+      })),
+    [catalog, draft.lines],
+  );
   const openAccounts = accountsForTeam(accounts.data ?? [], draft.teamId);
-
-  const unitFor = (line: AppointmentService) =>
-    line.unit ?? catalog.get(line.serviceId)?.unit ?? null;
-  const nameFor = (line: AppointmentService) =>
-    line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга удалена";
 
   const setLines = (lines: AppointmentService[]) => onChange({ lines });
 
@@ -275,15 +285,7 @@ export function ReceiptComposer({
             ни слова, пока человек его не выбрал (владелец 2026-09-20: «если
             НДС не выбирается, то и в чеке ничего об этом не говорится»). */}
         <ServicesBlock
-          lines={draft.lines.map((line) => ({
-            id: line.serviceId,
-            name: nameFor(line),
-            subtitle: durationLabel(line.duration),
-            qty: line.quantity,
-            unit: unitFor(line),
-            pricePerUnit: line.pricePerUnit,
-            total: line.totalPrice,
-          }))}
+          lines={blockLines}
           total={totals.total}
           custom={false}
           discountAmount={totals.discountAmount}
@@ -380,17 +382,16 @@ export function ReceiptComposer({
       <TotalSheet
         visible={sheet === "total"}
         onClose={() => setSheet(null)}
-        lines={draft.lines}
-        nameFor={nameFor}
+        lines={blockLines}
         onQtyChange={changeQty}
         onPriceChange={changePrice}
-        discountKind={draft.discountType}
-        discountValue={draft.discountValue}
-        onDiscountKindChange={(discountType) => onChange({ discountType })}
-        onDiscountValueChange={(discountValue) => onChange({ discountValue })}
+        discount={{
+          kind: draft.discountType,
+          value: draft.discountValue,
+          onKindChange: (discountType) => onChange({ discountType }),
+          onValueChange: (discountValue) => onChange({ discountValue }),
+        }}
         total={totals.total}
-        customTotal={false}
-        onResetTotal={() => undefined}
         vat={{
           mode: draft.vatMode,
           rate: vatRate,

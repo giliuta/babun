@@ -50,21 +50,32 @@ export function ServicesBlock({
   title = "Услуги",
   lines,
   emptyLabel = "Выбрать услугу",
+  addLabel,
   total,
   custom,
   discountAmount,
   onPickServices,
+  onPickLine,
   onOpenTotal,
 }: {
   /** Шапка блока: «Услуги» у записи и чека, «Позиции» у инвойса. */
   title?: string;
   lines: readonly ServicesBlockLine[];
   emptyLabel?: string;
+  /** Строка-дверь ПОД списком. Есть только у документа со своими строками
+   *  (инвойс): у записи и чека список услуг многовыборный, и вторую услугу
+   *  берут тем же тапом по строке, что открывает список. У инвойса тап по
+   *  строке правит ИМЕННО ЕЁ, и без этой двери вторую позицию не добавить. */
+  addLabel?: string;
   total: number;
   /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
   custom: boolean;
   discountAmount: number;
   onPickServices: () => void;
+  /** Тап по строке правит САМУ СТРОКУ (позиция инвойса — свой текст, своё
+   *  описание). Не передан — тап открывает список услуг заново, как просил
+   *  владелец для записи 2026-09-04. */
+  onPickLine?: (lineId: string) => void;
   onOpenTotal: () => void;
 }) {
   const t = useThemeColors();
@@ -108,7 +119,8 @@ export function ServicesBlock({
               <Pressable
                 className="flex-row items-center px-4 py-2.5"
                 onPress={() => {
-                  onPickServices();
+                  if (onPickLine) onPickLine(line.id);
+                  else onPickServices();
                   haptics.tap();
                 }}
                 style={({ pressed }) => ({
@@ -116,7 +128,7 @@ export function ServicesBlock({
                 })}
                 accessibilityRole="button"
                 accessibilityLabel={`${line.name}${line.subtitle ? `, ${line.subtitle}` : ""}, ${formatEURExact(line.total)}`}
-                accessibilityHint="Открывает выбор услуг"
+                accessibilityHint={onPickLine ? "Открывает строку" : "Открывает выбор услуг"}
               >
                 {/* ЦВЕТНОЙ ТОЧКИ БОЛЬШЕ НЕТ (владелец 2026-09-08: «убираем
                     полностью цвет — я понял, что он вообще не нужен»). */}
@@ -162,6 +174,19 @@ export function ServicesBlock({
               </Pressable>
             </View>
           ))}
+          {/* ДВЕРЬ ДЛЯ ВТОРОЙ ПОЗИЦИИ — ТА ЖЕ СТРОКА, ЧТО В ПУСТОМ БЛОКЕ.
+              Своей клавиши у блока нет: у пустого состояния и у списка одна
+              грамматика. */}
+          {addLabel ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
+              <ChooseRow
+                icon={Briefcase}
+                label={addLabel}
+                hint="Открывает список услуг"
+                onPress={onPickServices}
+              />
+            </View>
+          ) : null}
           {/* ИТОГ — ДВЕРЬ, А НЕ ПОЛЕ (владелец 2026-09-04: «когда я открываю
               „Итого“, открывается шторка, где прописаны каждая услуга,
               количество их, и там же скидки»). Скидка называется прямо в

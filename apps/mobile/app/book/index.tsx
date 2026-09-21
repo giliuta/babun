@@ -976,6 +976,25 @@ export default function BookScreen() {
     };
   }, [discountType, discountValue, discountReason]);
 
+  // ПЕРЕВОД «УСЛУГА ЗАПИСИ → СТРОКА БЛОКА» — ОДИН НА ЭКРАН. Его читают и блок
+  // «Услуги», и шторка «Итого»; две копии этого перевода разъехались бы на
+  // первой же правке — имя строки в одном месте бралось бы из снимка, в другом
+  // из сегодняшнего прайса.
+  const serviceLines = useMemo(
+    () =>
+      selectedServices.map((line) => ({
+        id: line.serviceId,
+        name: line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена",
+        // Вторая строка у записи — длительность работы.
+        subtitle: durationLabel(line.duration),
+        qty: line.quantity,
+        unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
+        pricePerUnit: line.pricePerUnit,
+        total: line.totalPrice,
+      })),
+    [catalog, nameById, selectedServices],
+  );
+
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
   const automaticTotal = Math.max(0, computedTotal - discountAmount);
   const effectiveTotal = customTotal
@@ -2504,16 +2523,7 @@ export default function BookScreen() {
                   «такой же блок, как в записи», а вторая копия разметки назавтра
                   разошлась бы с первой. Вид не менялся ни на пиксель. */}
               <ServicesBlock
-                lines={selectedServices.map((line) => ({
-                  id: line.serviceId,
-                  name: line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена",
-                  // Вторая строка у записи — длительность работы.
-                  subtitle: durationLabel(line.duration),
-                  qty: line.quantity,
-                  unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
-                  pricePerUnit: line.pricePerUnit,
-                  total: line.totalPrice,
-                }))}
+                lines={serviceLines}
                 total={effectiveTotal}
                 custom={customTotal}
                 discountAmount={discountAmount}
@@ -3095,20 +3105,19 @@ export default function BookScreen() {
       <TotalSheet
         visible={totalSheetOpen}
         onClose={() => setTotalSheetOpen(false)}
-        lines={selectedServices}
-        nameFor={(line) =>
-          line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена"
-        }
+        lines={serviceLines}
         onQtyChange={setQty}
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
         onPriceChange={setLinePrice}
         // «Без скидки» больше не выбирают: ноль в поле и есть её отсутствие,
         // а переключатель говорит только, ЧЕМ считать вписанное.
-        discountKind={discountType ?? "fixed"}
-        discountValue={discountValue}
-        onDiscountKindChange={setDiscountType}
-        onDiscountValueChange={setDiscountValue}
+        discount={{
+          kind: discountType ?? "fixed",
+          value: discountValue,
+          onKindChange: setDiscountType,
+          onValueChange: setDiscountValue,
+        }}
         total={effectiveTotal}
         customTotal={customTotal}
         onResetTotal={() => setCustomTotal(false)}
