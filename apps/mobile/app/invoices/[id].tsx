@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Share, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { Share2 } from "lucide-react-native";
+import { MoreHorizontal, Share2 } from "lucide-react-native";
 import {
   calculateInvoicePaymentRefundable,
   calculateInvoiceSettlement,
@@ -37,10 +37,10 @@ import {
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
-import { buildInvoiceDocument, objectAddressLines } from "@/features/invoices/document";
-import { invoiceDictionary } from "@/features/invoices/dictionary";
+import { buildInvoiceDocument } from "@/features/invoices/document";
 import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
+import { InvoicePaper } from "@/features/invoices/InvoicePaper";
 import {
   useCancelInvoice,
   useCreditNoteLinks,
@@ -51,7 +51,6 @@ import {
   useRefundInvoicePayment,
   useSetInvoiceStatus,
 } from "@/features/invoices/queries";
-import { useTeams } from "@/features/reference/queries";
 import { useTenant } from "@/features/settings/tenant";
 import { useCalendarSettings } from "@/features/settings/local-settings";
 import { haptics } from "@/lib/haptics";
@@ -68,8 +67,6 @@ export default function InvoiceDetailScreen() {
   const clients = useMemo(() => clientsQuery.data ?? [], [clientsQuery.data]);
   const appointmentsQuery = useAppointments();
   const appointments = useMemo(() => appointmentsQuery.data ?? [], [appointmentsQuery.data]);
-  const teamsQuery = useTeams({ includeInactive: true });
-  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
   const accountsQuery = useAccountsWithBalances();
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const tenantQuery = useTenant();
@@ -101,7 +98,6 @@ export default function InvoiceDetailScreen() {
     [clients, invoice.data?.client_id],
   );
   const appointment = appointments.find((item) => item.id === invoice.data?.appointment_id);
-  const team = teams.find((item) => item.id === invoice.data?.brigade_id);
   const payments = useMemo(() => paymentRows.data?.[id] ?? [], [id, paymentRows.data]);
   const settlement = useMemo(
     () => invoice.data ? calculateInvoiceSettlement(invoice.data, payments) : null,
@@ -253,7 +249,6 @@ export default function InvoiceDetailScreen() {
     creditLinks.isLoading ||
     clientsQuery.isLoading ||
     appointmentsQuery.isLoading ||
-    teamsQuery.isLoading ||
     accountsQuery.isLoading ||
     tenantQuery.isLoading ||
     calendarSettingsQuery.isLoading;
@@ -271,7 +266,6 @@ export default function InvoiceDetailScreen() {
     (creditLinks.data === undefined ? creditLinks.error : null) ||
     (clientsQuery.data === undefined ? clientsQuery.error : null) ||
     (appointmentsQuery.data === undefined ? appointmentsQuery.error : null) ||
-    (teamsQuery.data === undefined ? teamsQuery.error : null) ||
     (accountsQuery.data === undefined ? accountsQuery.error : null) ||
     (tenantQuery.data === undefined ? tenantQuery.error : null) ||
     (calendarSettingsQuery.data === undefined
@@ -294,7 +288,6 @@ export default function InvoiceDetailScreen() {
               creditLinks.refetch(),
               clientsQuery.refetch(),
               appointmentsQuery.refetch(),
-              teamsQuery.refetch(),
               accountsQuery.refetch(),
               tenantQuery.refetch(),
               calendarSettingsQuery.refetch(),
@@ -318,19 +311,6 @@ export default function InvoiceDetailScreen() {
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
       || (clientsQuery.isSuccess && !!row.client_id);
-  // Объект — из снимка документа: подпись и точный адрес, как на бумаге.
-  const snapshotObject = row.client_snapshot?.object ?? null;
-  const invoiceObject = snapshotObject
-    ? [snapshotObject.label, objectAddressLines(snapshotObject.address_parts, invoiceDictionary("ru")).join(", ")]
-        .filter(Boolean)
-        .join(" · ")
-    : null;
-  // Скидка — строка с минусом на сервере; на экране она в итогах.
-  const serviceLines = row.lines.filter((line) => line.unit_price >= 0);
-  const servicesTotal = serviceLines.reduce((sum, line) => sum + line.total, 0);
-  const discountTotal = row.lines
-    .filter((line) => line.unit_price < 0)
-    .reduce((sum, line) => sum - line.total, 0);
   const status = invoiceDisplayStatus(row, businessToday, settlement);
   // Отменённый (сторнированный) инвойс и кредит-нота денег не ждут.
   const awaitsPayment =
@@ -381,208 +361,161 @@ export default function InvoiceDetailScreen() {
     } as unknown as Href);
   };
 
+  // БУМАГА — ТА ЖЕ, ЧТО УХОДИТ PDF (владелец 2026-09-22: «почему не
+  // открывается полноценный PDF, который я выставил… внизу — принять
+  // оплату»). Страница — это сам документ: статус строкой над ним, бумага,
+  // под ней только то, чего на бумаге нет (связи и платежи с возвратом).
+  const paperDoc = buildInvoiceDocument({
+    invoice: row,
+    tenant: tenant ?? undefined,
+    client,
+    settlement,
+    payments,
+    accountNames: accountById,
+    businessToday,
+    language: row.language as "ru" | "en" | undefined,
+  });
+  const canCancel = !isCreditNote && row.status === "issued";
+  const openMenu = async () => {
+    const options = [
+      { label: "Поделиться PDF" },
+      { label: "Поделиться текстом" },
+      ...(canCancel ? [{ label: "Отменить инвойс", destructive: true }] : []),
+    ];
+    const index = await chooseOption(row.number, options);
+    if (index === 0) void sharePdf();
+    if (index === 1) void shareInvoice();
+    if (index === 2) void cancelInvoice();
+  };
+
   return (
     <Screen edges={["top"]}>
       <ScreenHeader
         title={row.number}
         right={
-          <Pressable
-            onPress={pdfBusy ? undefined : sharePdf}
-            disabled={pdfBusy}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Поделиться PDF"
-            className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
-          >
-            {/* Сборка PDF занимает секунды: немая иконка под пальцем читается
-                как поломка — на время работы в слоте крутится спиннер. */}
-            {pdfBusy ? (
-              <Spinner size={18} label="Готовим PDF" />
-            ) : (
-              <Share2 color={t.body} size={ICON.sm} />
-            )}
-          </Pressable>
+          <View style={{ flexDirection: "row" }}>
+            <Pressable
+              onPress={pdfBusy ? undefined : sharePdf}
+              disabled={pdfBusy}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Поделиться PDF"
+              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+            >
+              {/* Сборка PDF занимает секунды: немая иконка под пальцем
+                  читается как поломка — на время работы крутится спиннер. */}
+              {pdfBusy ? (
+                <Spinner size={18} label="Готовим PDF" />
+              ) : (
+                <Share2 color={t.body} size={ICON.sm} />
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => void openMenu()}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Ещё действия"
+              className="h-11 w-11 items-center justify-center rounded-full active:opacity-60"
+            >
+              <MoreHorizontal color={t.body} size={ICON.sm} />
+            </Pressable>
+          </View>
         }
       />
 
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
-        <View className="items-center px-4 pb-4 pt-5">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 24 }}
+      >
+        <View style={{ paddingHorizontal: 16, gap: 12, marginBottom: 4 }}>
+        {/* Статус — одной строкой над бумагой: на самой бумаге его нет. */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           {isCreditNote ? (
             <Badge label="Кредит-нота" variant="neutral" />
           ) : (
             <InvoiceStatusBadge invoice={row} settlement={settlement} today={businessToday} />
           )}
-          <Text
-            className="mt-3 text-[38px] font-bold"
-            style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-          >
-            {formatInvoiceMoney(row.total, row.currency)}
-          </Text>
-          <Text className="mt-1 text-sm" style={{ color: isOverdue ? t.danger : t.sub }}>
-            {isCreditNote
-              ? `Сторно инвойса ${(stornoOfId && numberById.get(stornoOfId)) || ""}`.trimEnd()
-              : isOverdue
-                ? `Оплата просрочена · до ${formatInvoiceDate(row.due_on)}`
-                : INVOICE_STATUS_LABELS[status]}
-          </Text>
           {isCreditNote ? null : (
             <Text
-              className="mt-2 text-sm"
-              style={{ color: t.body, fontVariant: ["tabular-nums"] }}
+              className="text-sm"
+              style={{ color: isOverdue ? t.danger : t.sub, fontVariant: ["tabular-nums"] }}
             >
-              Оплачено {formatInvoiceMoney(settlement.paid, row.currency)} · остаток{" "}
-              {formatInvoiceMoney(settlement.remaining, row.currency)}
+              {isOverdue
+                ? `Просрочен · остаток ${formatInvoiceMoney(settlement.remaining, row.currency)}`
+                : settlement.paid > 0
+                  ? `Оплачено ${formatInvoiceMoney(settlement.paid, row.currency)} · остаток ${formatInvoiceMoney(settlement.remaining, row.currency)}`
+                  : awaitsPayment
+                    ? `Ждёт оплату · ${formatInvoiceMoney(settlement.remaining, row.currency)}`
+                    : INVOICE_STATUS_LABELS[status]}
             </Text>
           )}
         </View>
 
         {unassigned ? (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-            {/* ВЫСТАВЛЕННЫЙ ДОКУМЕНТ НЕ ПРАВИТСЯ (владелец 2026-09-22: «после
-                того как выставили инвойс, редактировать нельзя — только PDF,
-                удалить или кредит-нота»). Привязка клиента была той же
-                правкой и стирала реквизиты и счёт документа. */}
-            <NoticeBar
-              tone="info"
-              message="Документ ни к кому не привязан. Выставленный инвойс не меняется — нужен другой получатель: отмените его и выставьте новый."
-            />
-          </View>
+          /* ВЫСТАВЛЕННЫЙ ДОКУМЕНТ НЕ ПРАВИТСЯ (владелец 2026-09-22): привязка
+             клиента была той же правкой и стирала реквизиты и счёт. */
+          <NoticeBar
+            tone="info"
+            message="Документ ни к кому не привязан. Выставленный инвойс не меняется — нужен другой получатель: отмените его и выставьте новый."
+          />
         ) : null}
 
-        <SectionCard title="Документ">
-          <InfoRow label="Выставлен" value={formatInvoiceDate(row.issued_on)} />
-          <Divider inset={16} />
-          {isCreditNote ? (
-            // Кредит-нота не ждёт оплаты — вместо срока ссылка на исходник.
-            stornoOfId ? (
+        <InvoicePaper doc={paperDoc} />
+        </View>
+
+        {/* То, чего на бумаге нет: откуда документ и что с ним стало. */}
+        {appointment || stornoOfId || creditNoteId || (client && !clientIsArchived) ? (
+          <SectionCard title="Связи">
+            {client && !clientIsArchived ? (
+              <ValueRow
+                label="Клиент"
+                value={recipientName ?? client.full_name}
+                onPress={() => router.push(`/clients/${client.id}`)}
+              />
+            ) : null}
+            {appointment ? (
               <>
+                {client && !clientIsArchived ? <Divider inset={16} /> : null}
+                <ValueRow
+                  label="Заявка"
+                  value={`${formatInvoiceDate(appointment.date)} · ${appointment.time_start}`}
+                  onPress={openLinkedAppointment}
+                />
+              </>
+            ) : null}
+            {stornoOfId ? (
+              <>
+                <Divider inset={16} />
                 <ValueRow
                   label="Сторнирует"
                   value={numberById.get(stornoOfId) ?? "Открыть инвойс"}
                   onPress={() => router.push(`/invoices/${stornoOfId}` as Href)}
                 />
-                <Divider inset={16} />
               </>
-            ) : null
-          ) : (
-            <>
-              <InfoRow label="Оплатить до" value={formatInvoiceDate(row.due_on)} />
-              <Divider inset={16} />
-            </>
-          )}
-          {creditNoteId ? (
-            <>
-              <ValueRow
-                label="Кредит-нота"
-                value={numberById.get(creditNoteId) ?? "Открыть"}
-                onPress={() => router.push(`/invoices/${creditNoteId}` as Href)}
-              />
-              <Divider inset={16} />
-            </>
-          ) : null}
-          <InfoRow label="Валюта" value={row.currency} />
-        </SectionCard>
+            ) : null}
+            {creditNoteId ? (
+              <>
+                <Divider inset={16} />
+                <ValueRow
+                  label="Кредит-нота"
+                  value={numberById.get(creditNoteId) ?? "Открыть"}
+                  onPress={() => router.push(`/invoices/${creditNoteId}` as Href)}
+                />
+              </>
+            ) : null}
+          </SectionCard>
+        ) : null}
 
-        <SectionCard title="Получатель">
-          {recipientName && client && !clientIsArchived ? (
-            <ValueRow
-              label="Клиент"
-              value={recipientName}
-              onPress={() => router.push(`/clients/${client.id}`)}
-            />
-          ) : recipientName ? (
-            <InfoRow
-              label="Клиент"
-              value={clientIsArchived ? `${recipientName} · Архив` : recipientName}
-              muted={clientIsArchived}
-            />
-          ) : (
-            <InfoRow label="Клиент" value="Не привязан" muted />
-          )}
-          {invoiceObject ? (
-            <>
-              <Divider inset={16} />
-              <InfoRow label="Объект" value={invoiceObject} />
-            </>
-          ) : null}
-          <Divider inset={16} />
-          {appointment ? (
-            <ValueRow
-              label="Заявка"
-              value={`${formatInvoiceDate(appointment.date)} · ${appointment.time_start}`}
-              onPress={openLinkedAppointment}
-            />
-          ) : (
-            <InfoRow label="Заявка" value="Не привязана" muted />
-          )}
-          <Divider inset={16} />
-          <InfoRow label="Команда" value={team?.name ?? "Не выбрана"} muted={!team} />
-        </SectionCard>
-
-        <SectionCard title="Позиции">
-          {serviceLines.map((line, index) => (
-            <View key={line.id}>
-              {index ? <Divider inset={16} /> : null}
-              <View className="flex-row px-4 py-3">
-                <View className="flex-1 pr-3">
-                  <Text className="text-base font-medium" style={{ color: t.ink }}>{line.title}</Text>
-                  <Text className="mt-0.5 text-[13px]" style={{ color: t.sub }}>
-                    {line.qty} × {formatInvoiceMoney(line.unit_price, row.currency)}
-                  </Text>
-                </View>
-                <Text
-                  className="text-base font-semibold"
-                  style={{ color: t.ink, fontVariant: ["tabular-nums"] }}
-                >
-                  {formatInvoiceMoney(line.total, row.currency)}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </SectionCard>
-
-        {/* ИТОГО — КАК НА БУМАГЕ: скидка строкой итогов, а не позицией
-            (владелец 2026-09-22), налог словом VAT. */}
-        <SectionCard title="Итого">
-          {discountTotal > 0 ? (
-            <>
-              <InfoRow label="Сумма" value={formatInvoiceMoney(servicesTotal, row.currency)} />
-              <Divider inset={16} />
-              <InfoRow label="Скидка" value={formatInvoiceMoney(-discountTotal, row.currency)} />
-              <Divider inset={16} />
-            </>
-          ) : null}
-          <InfoRow label="Без VAT" value={formatInvoiceMoney(row.subtotal_net, row.currency)} />
-          {row.vat_amount > 0 ? (
-            <>
-              <Divider inset={16} />
-              <InfoRow label={`VAT ${row.vat_percent}%`} value={formatInvoiceMoney(row.vat_amount, row.currency)} />
-            </>
-          ) : null}
-          <Divider inset={16} />
-          <InfoRow label="К оплате" value={formatInvoiceMoney(row.total, row.currency)} strong />
-        </SectionCard>
-
-        {isCreditNote ? null : (
-        <SectionCard title="Оплата">
-          <InfoRow
-            label="Оплачено"
-            value={formatInvoiceMoney(settlement.paid, row.currency)}
-          />
-          <Divider inset={16} />
-          <InfoRow
-            label="Остаток"
-            value={formatInvoiceMoney(settlement.remaining, row.currency)}
-            strong
-          />
-          {payments.length > 0 ? (
-            payments.map((payment) => {
+        {/* Платежи — со счётом и возвратом: на бумаге этого действия нет. */}
+        {!isCreditNote && payments.length > 0 ? (
+          <SectionCard title="Платежи">
+            {payments.map((payment, index) => {
               const refundable = calculateInvoicePaymentRefundable(payment, payments);
               const refundDestination = invoicePaymentRefundDestination(payment, payments);
               const refundInAppointment = refundDestination === "appointment";
               return (
                 <View key={payment.id}>
-                  <Divider inset={16} />
+                  {index > 0 ? <Divider inset={16} /> : null}
                   <PaymentHistoryRow
                     payment={payment}
                     accountName={payment.account_id ? accountById.get(payment.account_id) : undefined}
@@ -601,61 +534,24 @@ export default function InvoiceDetailScreen() {
                   />
                 </View>
               );
-            })
-          ) : row.status === "paid" ? (
-            <>
-              <Divider inset={16} />
-              <Text className="px-4 py-3 text-sm leading-5" style={{ color: t.sub }}>
-                Оплата отмечена ранее; детальной операции в журнале нет.
-              </Text>
-            </>
-          ) : (
-            <>
-              <Divider inset={16} />
-              <Text className="px-4 py-3 text-sm" style={{ color: t.sub }}>
-                Платежей пока нет.
-              </Text>
-            </>
-          )}
-        </SectionCard>
-        )}
-
-        {row.notes ? (
-          <SectionCard title="Комментарий" padded>
-            <Text className="text-[15px] leading-5" style={{ color: t.body }}>{row.notes}</Text>
+            })}
           </SectionCard>
         ) : null}
-
-        <View className="mx-4 mt-5" style={{ gap: 9 }}>
-          {awaitsPayment ? (
-            <Button
-              label={settlement.paid > 0 ? "Добавить платёж" : "Принять оплату"}
-              onPress={openPayment}
-            />
-          ) : null}
-          {!isCreditNote && row.status === "issued" ? (
-            /* ОДНА КРАСНАЯ КНОПКА НА ОТКАЗ: что именно произойдёт —
-               кредит-нота или аннулирование — спрашивается подтверждением,
-               в момент решения и словами последствия (см. `cancelInvoice`). */
-            <Button
-              label="Отменить инвойс"
-              variant="secondary"
-              tone="danger"
-              onPress={() => void cancelInvoice()}
-              loading={cancel.isPending || setStatus.isPending}
-              disabled={cancel.isPending || setStatus.isPending}
-            />
-          ) : null}
-          <Button
-            label="Поделиться PDF"
-            variant="secondary"
-            onPress={sharePdf}
-            loading={pdfBusy}
-            disabled={(!tenant && !row.seller_snapshot) || pdfBusy}
-          />
-          <Button label="Поделиться текстом" variant="secondary" onPress={shareInvoice} />
-        </View>
       </ScrollView>
+
+      {/* ДЕЙСТВИЕ ЭКРАНА ОДНО И ЖИВЁТ ВНИЗУ (AGENTS: главное действие — в
+          футере): пока документ ждёт денег — «Принять оплату». */}
+      {awaitsPayment ? (
+        <View
+          className="px-4 pb-7 pt-3"
+          style={{ backgroundColor: t.surface, borderTopWidth: 1, borderTopColor: t.separator }}
+        >
+          <Button
+            label={`${settlement.paid > 0 ? "Добавить платёж" : "Принять оплату"} · ${formatInvoiceMoney(settlement.remaining, row.currency)}`}
+            onPress={openPayment}
+          />
+        </View>
+      ) : null}
 
       <InvoicePaymentSheet
         visible={paymentOpen}
@@ -695,33 +591,6 @@ export default function InvoiceDetailScreen() {
         presetTeamId={row.brigade_id}
       />
     </Screen>
-  );
-}
-
-function InfoRow({
-  label,
-  value,
-  muted,
-  strong,
-}: {
-  label: string;
-  value: string;
-  muted?: boolean;
-  strong?: boolean;
-}) {
-  const t = useThemeColors();
-  return (
-    <View className="flex-row items-center justify-between px-4 py-3" style={{ minHeight: 48 }}>
-      <Text className="text-base" style={{ color: t.ink }}>{label}</Text>
-      <Text
-        className={strong ? "ml-3 text-lg font-bold" : "ml-3 flex-1 text-right text-base"}
-        // Только стилем: `tabular-nums` в className в этом стеке — пустышка.
-        style={{ color: muted ? t.faint : t.ink, fontVariant: ["tabular-nums"] }}
-        numberOfLines={2}
-      >
-        {value}
-      </Text>
-    </View>
   );
 }
 
