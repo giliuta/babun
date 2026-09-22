@@ -73,6 +73,7 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
+  onAddCustom,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -88,7 +89,11 @@ export function ServicePicker({
   quantities: Record<string, number>;
   /** Ноль убирает услугу из записи. */
   onQtyChange: (id: string, qty: number) => void;
+  /** «Своя услуга» — разовая строка вне прайса (владелец 2026-09-22). Есть
+   *  только у документа со своими строками (инвойс); нет — строки нет. */
+  onAddCustom?: () => void;
 }) {
+  const t = useThemeColors();
   const router = useRouter();
   const servicesHref = useReferenceHref().services;
   const doorway = useSheetDoorway();
@@ -192,6 +197,8 @@ export function ServicePicker({
             // кнопки посередине листа нет: пустое состояние — это слова.
             <GradientButton label="Добавить услугу" onPress={openServices} />
           ) : (
+            <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
             <GradientButton
               // ОДНО СЛОВО НА ВСЕ ЛИСТЫ ЗАПИСИ (владелец 2026-09-04: «сведи к
               // одному слову»). Метка, команда, цвет и время говорят
@@ -208,6 +215,36 @@ export function ServicePicker({
                   : undefined
               }
             />
+            </View>
+            {/* «＋» СПРАВА ВНИЗУ — СВОЯ УСЛУГА (владелец 2026-09-22): та же
+                форма, что создаёт услугу в прайсе, но строка уходит только в
+                документ. Есть только там, где строки свои (инвойс). */}
+            {onAddCustom ? (
+              <Pressable
+                onPress={() => {
+                  haptics.tap();
+                  onAddCustom();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Своя услуга"
+                style={({ pressed }) => ({
+                  width: 52,
+                  height: 52,
+                  borderRadius: 26,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: t.fill,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                {/* Знак «＋», а не значок: общий «плюс создания» в продукте
+                    запрещён (ui-policy); тот же знак, что у «＋ Описание». */}
+                <NativeText style={{ fontSize: 26, lineHeight: 30, fontWeight: "500", color: t.accent }}>
+                  ＋
+                </NativeText>
+              </Pressable>
+            ) : null}
+            </View>
           )}
         </View>
       }

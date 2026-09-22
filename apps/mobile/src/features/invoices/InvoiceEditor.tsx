@@ -648,6 +648,12 @@ export function InvoiceEditor({
                   : newLine(),
               ])
             }
+            onAddCustomLine={(line) =>
+              setLines((current) => [
+                ...current,
+                newLine(line.title, "1", line.unitPrice, line.description),
+              ])
+            }
             onRemoveLine={removeLine}
             vatMode={vatMode}
             vatRate={Math.max(0, rate)}

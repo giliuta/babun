@@ -395,7 +395,8 @@ find apps/mobile/src apps/mobile/app -name "*.tsx" -exec wc -l {} + | awk '$1>40
 | Логика черновика клиента | `src/features/clients/useClientDraft.ts` | — |
 | Объект (создание = правка) | `src/features/clients/ObjectSheet.tsx` + `ObjectFields.tsx` | — |
 | Метки (справочник) | `src/features/reference/screens/LabelsScreen.tsx` | `cabinet/labels.tsx`, `calendar/labels.tsx` |
-| Услуги (справочник + форма) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
+| Услуги (справочник) | `app/(dashboard)/cabinet/services.tsx` | `calendar/services.tsx`, `(shared)/services.tsx` |
+| Форма услуги (прайс + своя услуга документа) | `src/features/services/ServiceSheet.tsx` | инвойс: «＋» в `ServicePicker` |
 | Типы объектов | `src/features/reference/screens/ObjectTypesScreen.tsx` | `cabinet/`, `clients/`, `(shared)/` |
 | Типы событий | `src/features/reference/screens/EventTypesScreen.tsx` | `cabinet/`, `calendar/`, `(shared)/` |
 | Запись и событие (форма) | `app/book/index.tsx` | — |
