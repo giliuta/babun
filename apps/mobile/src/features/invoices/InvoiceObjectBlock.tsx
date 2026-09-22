@@ -125,6 +125,8 @@ export function InvoiceObjectBlock({
             locations={locations}
             selectedId={locationId}
             onSelect={(loc) => onLocationChange(loc.id)}
+            // Повторный тап по выбранному объекту снимает его с инвойса.
+            onDeselect={() => onLocationChange(null)}
             onAdd={() => setAdding(true)}
             onClose={() => setPicker(false)}
           />

@@ -5,6 +5,7 @@ import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { BottomSheet } from "@/components/ui/BottomSheet";
+import { SwipeRow } from "@/components/ui/SwipeRow";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { parseMoneyInput } from "@/features/appointments/helpers";
@@ -44,6 +45,7 @@ export function TotalSheet({
   onPriceChange,
   onAddLine,
   onNameChange,
+  onRemoveLine,
   discount,
   total,
   customTotal = false,
@@ -67,6 +69,9 @@ export function TotalSheet({
   onAddLine?: () => void;
   /** Имя своей строки (`editableName`) правится прямо в таблице. */
   onNameChange?: (lineId: string, name: string) => void;
+  /** Убрать свою строку — свайпом «Удалить» (владелец 2026-09-22). У строк
+   *  прайса свой путь: количество в ноль или снятие в выборе услуг. */
+  onRemoveLine?: (lineId: string) => void;
   /** СКИДКА ЕСТЬ НЕ У ВСЯКОГО ДОКУМЕНТА. У записи и чека она своя строка, у
    *  инвойса её нет вовсе — сервер не знает такого поля, и рисовать поле,
    *  которое никуда не поедет, нельзя. Нет скидки — нет и строки. */
@@ -162,14 +167,32 @@ export function TotalSheet({
           >
             <ColumnHeader />
             {lines.map((line, index) => (
-              <ServiceLine
-                key={line.id}
-                line={line}
-                separated={index > 0}
-                onQtyChange={onQtyChange}
-                onPriceChange={onPriceChange}
-                onNameChange={onNameChange}
-              />
+              line.editableName !== undefined && onRemoveLine ? (
+                <SwipeRow
+                  key={line.id}
+                  label="Удалить"
+                  color={t.danger}
+                  onAction={() => onRemoveLine(line.id)}
+                  accessibilityLabel={`Удалить услугу ${line.editableName}`.trim()}
+                >
+                  <ServiceLine
+                    line={line}
+                    separated={index > 0}
+                    onQtyChange={onQtyChange}
+                    onPriceChange={onPriceChange}
+                    onNameChange={onNameChange}
+                  />
+                </SwipeRow>
+              ) : (
+                <ServiceLine
+                  key={line.id}
+                  line={line}
+                  separated={index > 0}
+                  onQtyChange={onQtyChange}
+                  onPriceChange={onPriceChange}
+                  onNameChange={onNameChange}
+                />
+              )
             ))}
             {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
                 «скидку закинуть туда, где надпись „Услуги“, и справа будет

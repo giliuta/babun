@@ -49,6 +49,7 @@ export function ClientPickerSheet({
   statsById,
   onCreate,
   onSelect,
+  onDeselect,
   onClear,
   clearLabel,
   onClose,
@@ -73,6 +74,9 @@ export function ClientPickerSheet({
    *  у инвойса и у «кто привёл» создавать некого. */
   onCreate?: (prefill: { name?: string; phone?: string }) => void;
   onSelect: (client: Client) => void;
+  /** ПОВТОРНЫЙ ТАП ПО ВЫБРАННОМУ СНИМАЕТ ВЫБОР (владелец 2026-09-22: «нажимаю
+   *  ещё раз на Андрея — он снимается»). Нет пропа — тап всегда выбирает. */
+  onDeselect?: () => void;
   /** «Убрать» — снять уже выбранного. */
   onClear?: () => void;
   clearLabel?: string;
@@ -132,7 +136,8 @@ export function ClientPickerSheet({
   const pick = (client: Client) => {
     haptics.tap();
     setQ("");
-    onSelect(client);
+    if (onDeselect && client.id === selectedId) onDeselect();
+    else onSelect(client);
     close();
   };
 

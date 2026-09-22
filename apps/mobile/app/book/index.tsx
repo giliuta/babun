@@ -1418,15 +1418,17 @@ export default function BookScreen() {
       return { ...p, [id]: { ...current, locked: { ...current.locked, serviceName: name } } };
     });
   };
-  // Пустая своя строка (добавили и не заполнили) при закрытии «Итого» уходит.
+  /** Убрать свою строку — свайпом в «Итого». */
+  const removeCustomLine = (id: string) => {
+    setServiceIds((p) => p.filter((x) => x !== id));
+  };
+  // СВОЯ СТРОКА БЕЗ НАЗВАНИЯ УХОДИТ САМА (владелец 2026-09-22: «стираем имя
+  // услуги — и она удаляется»).
   const closeTotalSheet = () => {
     const empty = new Set(
       selectedServices
         .filter(
-          (line) =>
-            isCustomServiceId(line.serviceId)
-            && !(line.serviceName ?? "").trim()
-            && line.pricePerUnit === 0,
+          (line) => isCustomServiceId(line.serviceId) && !(line.serviceName ?? "").trim(),
         )
         .map((line) => line.serviceId),
     );
@@ -3070,6 +3072,10 @@ export default function BookScreen() {
             : undefined
         }
         onSelect={(loc) => pickLocation(loc.id)}
+        onDeselect={() => {
+          setLocationId(null);
+          haptics.tap();
+        }}
         onAdd={kind === "event" ? openEventObjectAdd : () => setObjectSheet(true)}
         onClose={() => setObjectPicker(false)}
       />
@@ -3098,8 +3104,16 @@ export default function BookScreen() {
         statsById={statsById}
         clients={clients}
         recentIds={recentClientIds}
+        selectedId={clientId}
         onSelect={(pickedClient) => {
           pickClient(pickedClient);
+          setClientPickerOpen(false);
+        }}
+        // ПОВТОРНЫЙ ТАП ПО ВЫБРАННОМУ СНИМАЕТ ЕГО (владелец 2026-09-22).
+        // Объект уходит вместе с клиентом: чужому он не принадлежит.
+        onDeselect={() => {
+          setClientId(null);
+          setLocationId(null);
           setClientPickerOpen(false);
         }}
         // СОЗДАНИЕ — ТОЛЬКО КАРТОЧКОЙ КЛИЕНТА, И ОНА ОТКРЫВАЕТСЯ ПОВЕРХ
@@ -3158,6 +3172,7 @@ export default function BookScreen() {
         onQtyChange={setQty}
         onAddLine={kind === "work" ? addCustomLine : undefined}
         onNameChange={setLineName}
+        onRemoveLine={removeCustomLine}
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
         onPriceChange={setLinePrice}

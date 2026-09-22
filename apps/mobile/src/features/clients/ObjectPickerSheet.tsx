@@ -39,6 +39,7 @@ export function ObjectPickerSheet({
   selectedId,
   ownerNameFor,
   onSelect,
+  onDeselect,
   onAdd,
   onClose,
 }: {
@@ -50,6 +51,8 @@ export function ObjectPickerSheet({
    *  неразличимы. У записи клиент уже выбран — там подписи нет. */
   ownerNameFor?: (location: Location) => string | null;
   onSelect: (location: Location) => void;
+  /** Повторный тап по выбранному снимает выбор (владелец 2026-09-22). */
+  onDeselect?: () => void;
   /** Открыть лист добавления объекта — после того, как этот уедет. */
   onAdd: () => void;
   onClose: () => void;
@@ -104,7 +107,8 @@ export function ObjectPickerSheet({
               selected={chosen}
               accessibilityLabel={[label, target, owner].filter(Boolean).join(", ")}
               onPress={() => {
-                onSelect(loc);
+                if (onDeselect && chosen) onDeselect();
+                else onSelect(loc);
                 onClose();
               }}
             />

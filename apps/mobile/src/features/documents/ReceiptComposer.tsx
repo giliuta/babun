@@ -256,10 +256,13 @@ export function ReceiptComposer({
     ]);
   const renameLine = (id: string, name: string) =>
     setLines(draft.lines.map((l) => (l.serviceId === id ? { ...l, serviceName: name } : l)));
-  /** Пустая своя строка при закрытии «Итого» уходит. */
+  /** Убрать свою строку — свайпом в «Итого». */
+  const removeCustomLine = (id: string) =>
+    setLines(draft.lines.filter((l) => l.serviceId !== id));
+  /** Своя строка без названия уходит сама (владелец 2026-09-22). */
   const closeTotal = () => {
     const kept = draft.lines.filter(
-      (l) => !(isCustomServiceId(l.serviceId) && !(l.serviceName ?? "").trim() && l.pricePerUnit === 0),
+      (l) => !(isCustomServiceId(l.serviceId) && !(l.serviceName ?? "").trim()),
     );
     if (kept.length !== draft.lines.length) setLines(kept);
     setSheet(null);
@@ -399,6 +402,10 @@ export function ReceiptComposer({
           onChange({ clientId: picked.id });
           setSheet(null);
         }}
+        onDeselect={() => {
+          onChange({ clientId: null });
+          setSheet(null);
+        }}
         onClose={() => setSheet(null)}
       />
 
@@ -420,6 +427,7 @@ export function ReceiptComposer({
         onPriceChange={changePrice}
         onAddLine={addCustomLine}
         onNameChange={renameLine}
+        onRemoveLine={removeCustomLine}
         discount={{
           kind: draft.discountType,
           value: draft.discountValue,
