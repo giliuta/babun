@@ -428,3 +428,25 @@ export function duplicateAppointment(apt: Appointment): Appointment {
     updated_at: now,
   };
 }
+
+// ─── Своя (разовая) услуга ─────────────────────────────────────────────
+// Владелец 2026-09-22: «в „Итого“ справа — добавить ещё одну услугу, не из
+// прайса». Такая строка живёт только в своём документе: у неё нет услуги в
+// справочнике, поэтому id — не uuid прайса, а `custom:<uuid>`. Имя, цена и
+// время (0) едут снимком строки (`serviceName`, `pricePerUnit`, `duration`),
+// и для всех читателей она выглядит как услуга, стёртая из прайса, — такие
+// строки продукт читает давно. Сервер хранит id текстом и не сверяет с прайсом.
+
+export const CUSTOM_SERVICE_PREFIX = "custom:";
+
+export function isCustomServiceId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.startsWith(CUSTOM_SERVICE_PREFIX);
+}
+
+export function newCustomServiceId(): string {
+  const uuid =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${CUSTOM_SERVICE_PREFIX}${uuid}`;
+}

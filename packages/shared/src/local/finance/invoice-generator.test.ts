@@ -437,3 +437,24 @@ describe("имя услуги переживает удаление из пра�
     assert.equal(draft.lines[0].unit, "м");
   });
 });
+
+describe("своя строка записи в инвойсе", () => {
+  test("приходит своей строкой: имя снимка, без услуги прайса", () => {
+    const draft = generateInvoiceFromAppointment(
+      appointment({
+        total_amount: 250,
+        services: [
+          service({ serviceId: "svc-clean", quantity: 1, pricePerUnit: 50 }),
+          service({ serviceId: "custom:abc", serviceName: "Демонтаж", quantity: 1, pricePerUnit: 200, originalPrice: 0, duration: 0 }),
+        ],
+      }),
+      settings(),
+      name,
+    );
+    assert.ok(draft);
+    assert.deepEqual(
+      draft.lines.map((line) => [line.title, line.serviceId]),
+      [["Чистка сплит-системы", "svc-clean"], ["Демонтаж", null]],
+    );
+  });
+});

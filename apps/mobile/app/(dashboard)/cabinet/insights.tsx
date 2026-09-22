@@ -294,9 +294,15 @@ function InsightsScreen() {
 
   const topServices = useMemo((): LeaderItem[] => {
     const map = new Map<string, number>();
+    // Имя со снимка строки: у своей услуги записи (`custom:…`) прайса нет,
+    // и без снимка в топе стоял бы её id.
+    const snapshotName = new Map<string, string>();
     for (const a of currentApts) {
       if (a.services && a.services.length > 0) {
-        for (const s of a.services) map.set(s.serviceId, (map.get(s.serviceId) ?? 0) + (s.quantity ?? 1));
+        for (const s of a.services) {
+          map.set(s.serviceId, (map.get(s.serviceId) ?? 0) + (s.quantity ?? 1));
+          if (s.serviceName?.trim()) snapshotName.set(s.serviceId, s.serviceName.trim());
+        }
       } else {
         for (const sid of a.service_ids ?? []) map.set(sid, (map.get(sid) ?? 0) + 1);
       }
@@ -306,7 +312,7 @@ function InsightsScreen() {
       .slice(0, 3)
       .map(([id, count]) => ({
         id,
-        name: serviceName.get(id) ?? id,
+        name: serviceName.get(id) ?? snapshotName.get(id) ?? "Услуга удалена",
         value: count,
         valueLabel: formatCountRu(count, FORMS_RAZ),
       }));

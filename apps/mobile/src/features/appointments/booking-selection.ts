@@ -1,3 +1,5 @@
+import { isCustomServiceId } from "@babun/shared/local/appointments";
+
 export interface BookingServiceRef {
   id: string;
   /** Команда-владелец услуги. С 2026-08-17 их ровно одна: списка команд и
@@ -44,6 +46,9 @@ export function reconcileBookingSelection({
   const serviceMap = new Map(services.map((service) => [service.id, service]));
   return {
     serviceIds: serviceIds.filter((id) => {
+      // Своя строка записи не из прайса — команде она не принадлежит, и смена
+      // команды её не уносит (владелец 2026-09-22).
+      if (isCustomServiceId(id)) return true;
       const service = serviceMap.get(id);
       return service != null && isServiceAllowedForTeam(service, teamId);
     }),

@@ -1,3 +1,4 @@
+import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
@@ -203,11 +204,13 @@ export function ReceiptComposer({
       draft.lines.map((line) => ({
         id: line.serviceId,
         name: line.serviceName ?? catalog.get(line.serviceId)?.name ?? "Услуга удалена",
-        subtitle: durationLabel(line.duration),
+        subtitle: isCustomServiceId(line.serviceId) ? null : durationLabel(line.duration),
         unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
         qty: line.quantity,
         pricePerUnit: line.pricePerUnit,
         total: line.totalPrice,
+        // Своя строка (владелец 2026-09-22): имя правится в «Итого».
+        ...(isCustomServiceId(line.serviceId) ? { editableName: line.serviceName ?? "" } : {}),
       })),
     [catalog, draft.lines],
   );
@@ -234,6 +237,32 @@ export function ReceiptComposer({
     setLines(
       draft.lines.map((l) => (l.serviceId === id ? recalc(l, { quantity: qty }) : l)),
     );
+  };
+
+  /** Своя строка чека — не из прайса, как в записи и инвойсе. */
+  const addCustomLine = () =>
+    setLines([
+      ...draft.lines,
+      {
+        serviceId: newCustomServiceId(),
+        quantity: 1,
+        pricePerUnit: 0,
+        originalPrice: 0,
+        totalPrice: 0,
+        duration: 0,
+        serviceName: "",
+        unit: null,
+      },
+    ]);
+  const renameLine = (id: string, name: string) =>
+    setLines(draft.lines.map((l) => (l.serviceId === id ? { ...l, serviceName: name } : l)));
+  /** Пустая своя строка при закрытии «Итого» уходит. */
+  const closeTotal = () => {
+    const kept = draft.lines.filter(
+      (l) => !(isCustomServiceId(l.serviceId) && !(l.serviceName ?? "").trim() && l.pricePerUnit === 0),
+    );
+    if (kept.length !== draft.lines.length) setLines(kept);
+    setSheet(null);
   };
 
   const changePrice = (id: string, price: number) =>
@@ -290,6 +319,7 @@ export function ReceiptComposer({
           custom={false}
           discountAmount={totals.discountAmount}
           onPickServices={() => setSheet("services")}
+          onPickLine={(id) => setSheet(isCustomServiceId(id) ? "total" : "services")}
           onOpenTotal={() => setSheet("total")}
         />
 
@@ -385,10 +415,12 @@ export function ReceiptComposer({
 
       <TotalSheet
         visible={sheet === "total"}
-        onClose={() => setSheet(null)}
+        onClose={closeTotal}
         lines={blockLines}
         onQtyChange={changeQty}
         onPriceChange={changePrice}
+        onAddLine={addCustomLine}
+        onNameChange={renameLine}
         discount={{
           kind: draft.discountType,
           value: draft.discountValue,

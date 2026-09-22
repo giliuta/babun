@@ -32,6 +32,7 @@ import type {
   Discount,
   PersonalEventRepeat,
 } from "@babun/shared/local/appointments";
+import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import {
 } from "@babun/shared/local/appointments";
 import {
@@ -998,11 +999,14 @@ export default function BookScreen() {
         id: line.serviceId,
         name: line.serviceName ?? nameById.get(line.serviceId) ?? "Услуга удалена",
         // Вторая строка у записи — длительность работы.
-        subtitle: durationLabel(line.duration),
+        // У своей строки времени нет — второй строки тоже.
+        subtitle: isCustomServiceId(line.serviceId) ? null : durationLabel(line.duration),
         qty: line.quantity,
         unit: line.unit ?? catalog.get(line.serviceId)?.unit ?? null,
         pricePerUnit: line.pricePerUnit,
         total: line.totalPrice,
+        // Своя строка: имя правится в «Итого».
+        ...(isCustomServiceId(line.serviceId) ? { editableName: line.serviceName ?? "" } : {}),
       })),
     [catalog, nameById, selectedServices],
   );
@@ -1390,6 +1394,44 @@ export default function BookScreen() {
   // ЦЕНА УСЛУГИ В ЭТОЙ ЗАПИСИ. Ноль законен: бывает «сделали бесплатно».
   const setLinePrice = (id: string, price: number) => {
     setOverrides((p) => ({ ...p, [id]: { ...p[id], price: Math.max(0, price) } }));
+  };
+  // СВОЯ СТРОКА ЗАПИСИ (владелец 2026-09-22: «в „Итого“ справа — добавить
+  // ещё одну услугу»). Не из прайса: имя, цена и время 0 держит замок
+  // снимка (`locked`), как у сохранённой строки, — `buildServices` читает
+  // их оттуда, каталог ей не нужен.
+  const addCustomLine = () => {
+    const id = newCustomServiceId();
+    setServiceIds((p) => [...p, id]);
+    setOverrides((p) => ({
+      ...p,
+      [id]: {
+        qty: 1,
+        price: 0,
+        locked: { pricePerUnit: 0, originalPrice: 0, duration: 0, serviceName: "", unit: null },
+      },
+    }));
+  };
+  const setLineName = (id: string, name: string) => {
+    setOverrides((p) => {
+      const current = p[id];
+      if (!current?.locked) return p;
+      return { ...p, [id]: { ...current, locked: { ...current.locked, serviceName: name } } };
+    });
+  };
+  // Пустая своя строка (добавили и не заполнили) при закрытии «Итого» уходит.
+  const closeTotalSheet = () => {
+    const empty = new Set(
+      selectedServices
+        .filter(
+          (line) =>
+            isCustomServiceId(line.serviceId)
+            && !(line.serviceName ?? "").trim()
+            && line.pricePerUnit === 0,
+        )
+        .map((line) => line.serviceId),
+    );
+    if (empty.size > 0) setServiceIds((p) => p.filter((id) => !empty.has(id)));
+    setTotalSheetOpen(false);
   };
   const setQty = (id: string, qty: number) => {
     if (qty < 1) {
@@ -2533,6 +2575,10 @@ export default function BookScreen() {
                 custom={customTotal}
                 discountAmount={discountAmount}
                 onPickServices={() => setServicePickerOpen(true)}
+                // Своя строка правится в «Итого», строка прайса — выбором.
+                onPickLine={(id) =>
+                  isCustomServiceId(id) ? setTotalSheetOpen(true) : setServicePickerOpen(true)
+                }
                 onOpenTotal={() => setTotalSheetOpen(true)}
               />
 
@@ -3111,9 +3157,11 @@ export default function BookScreen() {
           или процентах, итог. Открывается строкой «Итого». */}
       <TotalSheet
         visible={totalSheetOpen}
-        onClose={() => setTotalSheetOpen(false)}
+        onClose={closeTotalSheet}
         lines={serviceLines}
         onQtyChange={setQty}
+        onAddLine={kind === "work" ? addCustomLine : undefined}
+        onNameChange={setLineName}
         // ЦЕНА ПРАВИТСЯ У СТРОКИ, А НЕ У ИТОГА (владелец 2026-09-04). Пишем в
         // `overrides` — снимок ЭТОЙ записи; прайс команды не трогается.
         onPriceChange={setLinePrice}
