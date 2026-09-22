@@ -7,7 +7,7 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { Briefcase, ListPlus } from "lucide-react-native";
+import { Briefcase, Settings2 } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -73,7 +73,6 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
-  onAddCustom,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -89,10 +88,6 @@ export function ServicePicker({
   quantities: Record<string, number>;
   /** Ноль убирает услугу из записи. */
   onQtyChange: (id: string, qty: number) => void;
-  /** Своя услуга не из прайса — тот же значок, что в шапке «Итого»
-   *  (владелец 2026-09-22: «должно быть параллельно»). Строку заполняют в
-   *  «Итого», поэтому вызывающий закрывает выбор и открывает его. */
-  onAddCustom?: () => void;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -185,21 +180,25 @@ export function ServicePicker({
       visible={visible && !doorway.parked}
       onClose={close}
       title="Услуги"
+      // ПОЛЗУНКИ В ШАПКЕ — ДВЕРЬ В ПРАЙС, как у любой шторки выбора из
+      // справочника (владелец 2026-09-22: «значок, как везде, когда переходим
+      // в настройки»). Добавление своей строки живёт только в «Итого».
       headerAction={
-        onAddCustom ? (
-          <Pressable
-            onPress={() => {
-              haptics.tap();
-              onAddCustom();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Добавить свою услугу"
-            hitSlop={10}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-          >
-            <ListPlus color={t.accent} size={24} strokeWidth={2} />
-          </Pressable>
-        ) : undefined
+        <Pressable
+          onPress={openServices}
+          accessibilityRole="button"
+          accessibilityLabel="Страница услуг"
+          hitSlop={10}
+          style={({ pressed }) => ({
+            width: 32,
+            height: 32,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <Settings2 color={t.sub} size={20} strokeWidth={2} />
+        </Pressable>
       }
       padded={false}
       scroll

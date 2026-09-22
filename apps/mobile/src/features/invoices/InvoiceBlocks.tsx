@@ -1,4 +1,3 @@
-import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -376,11 +375,6 @@ export function InvoiceBlocks({
 
       <ServicePicker
         visible={sheet === "services"}
-        onAddCustom={() => {
-          onAddCustomLine();
-          setSheet(null);
-          setTimeout(() => setSheet("total"), SHEET_EXIT_MS + 350);
-        }}
         onClose={() => setSheet(null)}
         services={teamServices}
         selectedIds={selectedServiceIds}
