@@ -5,32 +5,20 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 
-// НИЖНИЕ СТРОКИ ШТОРКИ «ИТОГО»: СКИДКА → VAT → К ОПЛАТЕ.
+// ДВЕ ИТОГОВЫЕ СТРОКИ ДЕНЕЖНОГО ЛИСТА.
 //
-// Владелец 2026-09-22: «вылижи этот блок — всё красиво столбиками:
-// количество, услуги, скидки, VAT, итого, к оплате… ровненько, чтоб всё было
-// на своём месте». Раньше скидка и налог стояли своей сеткой (клавиша 80,
-// ставка 54, налог 70) и не совпадали со столбцами услуг над ними, а налог
-// жил отдельной карточкой со своей шапкой. Теперь это ОДНА ТАБЛИЦА с одной
-// сеткой `TOTAL_GRID`:
+// Владелец 2026-09-20, после восьми отвергнутых видов выбора налога и живой
+// примерки на своём экране: «скидку закинуть туда, где надпись „Услуги“, и
+// справа будет точная цена; а VAT закинуть к итоговой стоимости». Значит
+// органов ровно два, и каждый стоит в своей итоговой строке: скидка закрывает
+// перечень работ, налог закрывает деньги клиента.
 //
-//   столбец 1 (гибкий)  — имя услуги · клавиша «Скидка» · клавиша «VAT» · «К оплате»
-//   столбец 2 (qty)      — количество · процент/сумма скидки · ставка
-//   столбец 3 (price)    — цена за одну · «−€5» · налог в евро
-//   столбец 4 (sum)      — сумма строки · после скидки · (пусто) · итог
-//
-// СВОЕЙ АРИФМЕТИКИ ЗДЕСЬ НЕТ: налог считает канон `applyTxVat`
-// (`local/finance/vat.ts`) у вызывающего — та же функция, что кладёт деньги
-// в проводку, и которой вторит серверная `fill_transaction_vat`.
-
-/** Сетка шторки «Итого» — одна на шапку, строки услуг и строки денег. */
-export const TOTAL_GRID = {
-  qty: 84,
-  price: 66,
-  sum: 76,
-  gap: 8,
-  padX: 14,
-} as const;
+// СВОЕЙ АРИФМЕТИКИ ЗДЕСЬ НЕТ. Налог считает канон `applyTxVat`
+// (`local/finance/vat.ts`) — та же функция, что кладёт деньги в проводку и
+// которой вторит серверная `fill_transaction_vat`. Здесь стояла своя копия
+// формулы в double, и на реальных деньгах она расходилась с каноном на цент
+// (нетто €42,50 при 19 % «сверху»: €50,57 против €50,58) — то есть бумага и
+// журнал по одной работе называли РАЗНЫЕ суммы.
 
 const NEXT: Record<TxVatMode, TxVatMode> = {
   none: "exclusive",
@@ -44,6 +32,12 @@ const SPOKEN: Record<TxVatMode, string> = {
   inclusive: "налог внутри цены",
 };
 
+/** Клавиша одной ширины на обе строки — иначе строка едет под пальцем. */
+const KEY_W = 80;
+const RATE_W = 54;
+const VAT_W = 70;
+const COL_GAP = 8;
+
 /** Ставка из набранного: запятая и точка одинаковы, два знака, 0…99.99. */
 export function parseVatRate(text: string): number | null {
   const value = Number(text.replace(",", ".").trim());
@@ -51,19 +45,281 @@ export function parseVatRate(text: string): number | null {
   return Math.round(value * 100) / 100;
 }
 
-/** Строка таблицы: волосок сверху, четыре столбца сетки. */
-function GridRow({ children, strong }: { children: ReactNode; strong?: boolean }) {
+/** Последняя строка перечня работ: сумма услуг, скидка и цена после неё. */
+export function ServicesRow({
+  discountValue,
+  onDiscountValueChange,
+  percent,
+  onPercentChange,
+  discountAmount,
+  afterDiscount,
+}: {
+  discountValue: string;
+  onDiscountValueChange: (next: string) => void;
+  percent: boolean;
+  onPercentChange: (next: boolean) => void;
+  /** Сколько скидка съела в деньгах. */
+  discountAmount: number;
+  afterDiscount: number;
+}) {
+  const t = useThemeColors();
+  return (
+    <Row>
+      {/* Слова «Услуги» здесь нет: колонка уже подписана в шапке, а строку
+          открывает её орган — клавиша скидки (владелец 20.09). */}
+      <Key
+        label={percent ? "Скидка в процентах" : "Скидка в валюте"}
+        hint="Переключить проценты и валюту"
+        onPress={() => onPercentChange(!percent)}
+      >
+        Скидка
+      </Key>
+      <Rate>
+        <TextInput
+          keyboardAppearance="light"
+          value={discountValue}
+          onChangeText={onDiscountValueChange}
+          selectTextOnFocus
+          keyboardType="decimal-pad"
+          placeholder="0"
+          placeholderTextColor={t.placeholder}
+          accessibilityLabel="Скидка"
+          style={{
+            flex: 1,
+            height: 28,
+            paddingHorizontal: 0,
+            textAlign: "right",
+            fontSize: 15,
+            fontWeight: "700",
+            color: t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        />
+        <Unit>{percent ? "%" : "€"}</Unit>
+      </Rate>
+      {/* ПРОЦЕНТ — И СРАЗУ В ЕВРО (владелец 20.09: «если выбираю процент и
+          пишу процент, то правее от процента пишется в евро»). В колонке та
+          же ширина, что у налога внизу, — числа стоят друг под другом. */}
+      <Text
+        style={{
+          width: VAT_W,
+          textAlign: "right",
+          fontSize: 15,
+          fontWeight: "700",
+          color: t.sub,
+          fontVariant: ["tabular-nums"],
+        }}
+      >
+        {percent && discountAmount > 0 ? `−${formatEURExact(discountAmount)}` : ""}
+      </Text>
+      <Sum value={afterDiscount} />
+    </Row>
+  );
+}
+
+/** Второй блок — такой же таблицей, как работы: своя шапка колонок, под ней
+ *  строка «клавиша · ставка · налог · к оплате» (владелец 20.09: «второй блок
+ *  назовём так же, как первый; добавляем кнопку VAT, потом процент, потом
+ *  отдельное число»).
+ *
+ *  НАЛОГ — НЕОБЯЗАТЕЛЬНАЯ ЧАСТЬ СТРОКИ. С 22.09 он есть у записи, чека и
+ *  инвойса: запись хранит режим и ставку (`appointments.vat_rate`), и оплата
+ *  ложится на счёт с выделенным налогом. Без `vat` (старая запись со «своей
+ *  суммой») строка печатает только итог. */
+export function PayRow({
+  total,
+  vat,
+  action,
+}: {
+  total: number;
+  vat?: {
+    mode: TxVatMode;
+    rate: number;
+    /** Сколько налога внутри «К оплате» — считает канон `applyTxVat`. */
+    amount: number;
+    onModeChange: (next: TxVatMode) => void;
+    /** СТАВКУ ПИШУТ ЦИФРАМИ, КАК СКИДКУ (владелец 2026-09-22: «не выбор
+     *  ставки — чтоб я мог сам написать… я выбираю и пишу цифрами свой VAT,
+     *  оно запоминает и дальше используется»). Поле в колонке ставки, та же
+     *  анатомия, что у поля скидки строкой выше. Запоминает вызывающий
+     *  (`useRememberedVatRate`). Нет обработчика — ставка только читается. */
+    onRateChange?: (rate: number) => void;
+  };
+  /** Одна необязательная клавиша слева, на месте VAT: у записи со старой
+   *  ручной суммой это «По услугам». */
+  action?: ReactNode;
+}) {
+  const t = useThemeColors();
+  // Текст поля ставки живёт своей жизнью, пока его набирают: «1» на пути к
+  // «19» не должен пересчитывать итог на каждом символе в ноль-налог.
+  const [rateText, setRateText] = useState(vat ? String(vat.rate) : "");
+  useEffect(() => {
+    if (vat) setRateText(String(vat.rate));
+  }, [vat?.rate]); // eslint-disable-line react-hooks/exhaustive-deps
+  const commitRate = () => {
+    if (!vat?.onRateChange) return;
+    const next = parseVatRate(rateText);
+    if (next == null) setRateText(String(vat.rate));
+    else if (next !== vat.rate) vat.onRateChange(next);
+  };
+  const off = !vat || vat.mode === "none";
+  const cap = {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    letterSpacing: 0.6,
+    textTransform: "uppercase" as const,
+    color: t.faint,
+  };
+  return (
+    <View
+      style={{
+        borderRadius: t.radius.input,
+        backgroundColor: t.rowFill,
+        overflow: "hidden",
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: COL_GAP,
+          paddingHorizontal: 12,
+          paddingTop: 8,
+          paddingBottom: 4,
+        }}
+      >
+        <Text style={[cap, { width: KEY_W }]}>Итого</Text>
+        {vat ? (
+          <>
+            <Text style={[cap, { width: RATE_W, textAlign: "right" }]}>Ставка</Text>
+            <Text style={[cap, { width: VAT_W, textAlign: "right" }]}>Налог</Text>
+          </>
+        ) : null}
+        <Text style={[cap, { flex: 1, textAlign: "right" }]}>К оплате</Text>
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: COL_GAP,
+          minHeight: 46,
+          paddingHorizontal: 12,
+          paddingBottom: 6,
+        }}
+      >
+        {vat ? (
+          <Key
+            label={`VAT: ${SPOKEN[vat.mode]}`}
+            hint="Переключить: сверху цены, внутри цены, без налога"
+            struck={off}
+            onPress={() => vat.onModeChange(NEXT[vat.mode])}
+          >
+            VAT
+          </Key>
+        ) : (
+          // Ширина клавиши держится и пустой: «К оплате» обязано стоять на
+          // том же месте, что у документа с налогом.
+          <View style={{ width: KEY_W, justifyContent: "center" }}>{action}</View>
+        )}
+        {vat ? (
+          <>
+            {vat.onRateChange && !off ? (
+              <Rate>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
+                  {vat.mode === "exclusive" ? "+" : "−"}
+                </Text>
+                <TextInput
+                  keyboardAppearance="light"
+                  value={rateText}
+                  // ЖИВЬЁМ, КАК СКИДКА: налог и «К оплате» пересчитываются на
+                  // каждом символе; неразборчивое (пусто, «1,») ждёт следующего
+                  // символа, а уход с поля возвращает последнюю верную ставку.
+                  onChangeText={(text) => {
+                    setRateText(text);
+                    const next = parseVatRate(text);
+                    if (next != null && next !== vat.rate) vat.onRateChange?.(next);
+                  }}
+                  onEndEditing={commitRate}
+                  selectTextOnFocus
+                  keyboardType="decimal-pad"
+                  placeholder="0"
+                  placeholderTextColor={t.placeholder}
+                  accessibilityLabel="Ставка VAT, процентов"
+                  style={{
+                    flex: 1,
+                    height: 28,
+                    paddingHorizontal: 0,
+                    textAlign: "right",
+                    fontSize: 15,
+                    fontWeight: "700",
+                    color: t.ink,
+                    fontVariant: ["tabular-nums"],
+                  }}
+                />
+                <Unit>%</Unit>
+              </Rate>
+            ) : (
+              <Text
+                style={{
+                  width: RATE_W,
+                  textAlign: "right",
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: t.ink,
+                  fontVariant: ["tabular-nums"],
+                }}
+              >
+                {off ? "" : vat.mode === "exclusive" ? `+${vat.rate}%` : `−${vat.rate}%`}
+              </Text>
+            )}
+            <Text
+              style={{
+                width: VAT_W,
+                textAlign: "right",
+                fontSize: 15,
+                fontWeight: "700",
+                color: t.ink,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {off ? "" : formatEURExact(vat.amount)}
+            </Text>
+          </>
+        ) : null}
+        <Text
+          style={{
+            flex: 1,
+            textAlign: "right",
+            fontSize: 20,
+            fontWeight: "700",
+            color: t.ink,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {formatEURExact(total)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function Row({
+  strong,
+  children,
+}: {
+  strong?: boolean;
+  children: ReactNode;
+}) {
   const t = useThemeColors();
   return (
     <View
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: TOTAL_GRID.gap,
-        minHeight: strong ? 56 : 48,
-        paddingHorizontal: TOTAL_GRID.padX,
-        paddingVertical: 4,
-        borderTopWidth: 1,
+        gap: COL_GAP,
+        minHeight: strong ? 48 : 44,
+        paddingHorizontal: 12,
+        borderTopWidth: strong ? 0 : 1,
         borderTopColor: t.separator,
       }}
     >
@@ -72,99 +328,55 @@ function GridRow({ children, strong }: { children: ReactNode; strong?: boolean }
   );
 }
 
-/** Число в столбце — справа, моноширинные цифры. */
-function Cell({
-  width,
-  children,
-  tone = "ink",
-  size = 15,
-}: {
-  width: number;
-  children?: ReactNode;
-  tone?: "ink" | "sub";
-  size?: number;
-}) {
-  const t = useThemeColors();
+/** Колонка числа рядом с клавишей: число прижато к своей единице. */
+function Rate({ children }: { children?: ReactNode }) {
   return (
-    <Text
-      numberOfLines={1}
-      maxFontSizeMultiplier={1.2}
+    <View
       style={{
-        width,
-        textAlign: "right",
-        fontSize: size,
-        fontWeight: "700",
-        color: tone === "sub" ? t.sub : t.ink,
-        fontVariant: ["tabular-nums"],
+        width: RATE_W,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 3,
       }}
     >
+      {children}
+    </View>
+  );
+}
+
+function Unit({ children }: { children: ReactNode }) {
+  const t = useThemeColors();
+  return (
+    <Text style={{ fontSize: 14, fontWeight: "600", color: t.sub }}>
       {children}
     </Text>
   );
 }
 
-/** Поле числа в столбце количества — та же «пилюля», что у цены услуги,
- *  с единицей внутри: «10 %», «5 €», «+19 %». */
-function InputPill({
-  value,
-  onChangeText,
-  onEndEditing,
-  prefix,
-  unit,
-  accessibilityLabel,
-}: {
-  value: string;
-  onChangeText: (next: string) => void;
-  onEndEditing?: () => void;
-  prefix?: string;
-  unit: string;
-  accessibilityLabel: string;
-}) {
+/** Сумма строки — в той же колонке, что «СУММА» у работ. */
+function Sum({ value }: { value: number }) {
   const t = useThemeColors();
   return (
-    <View
+    <Text
       style={{
-        width: TOTAL_GRID.qty,
-        height: 34,
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 8,
-        gap: 2,
-        borderRadius: t.radius.input,
-        backgroundColor: t.fill,
+        // Прижата к правому краю, как «К ОПЛАТЕ» строкой ниже: две итоговые
+        // суммы шторки стоят одна под другой (владелец 2026-09-22: «итого
+        // чётко по колонкам»).
+        flex: 1,
+        minWidth: 96,
+        textAlign: "right",
+        fontSize: 15,
+        fontWeight: "700",
+        color: t.ink,
+        fontVariant: ["tabular-nums"],
       }}
     >
-      {prefix ? (
-        <Text style={{ fontSize: 15, fontWeight: "700", color: t.sub }}>{prefix}</Text>
-      ) : null}
-      <TextInput
-        keyboardAppearance="light"
-        value={value}
-        onChangeText={onChangeText}
-        onEndEditing={onEndEditing}
-        selectTextOnFocus
-        keyboardType="decimal-pad"
-        placeholder="0"
-        placeholderTextColor={t.placeholder}
-        accessibilityLabel={accessibilityLabel}
-        maxFontSizeMultiplier={1.2}
-        style={{
-          flex: 1,
-          height: 34,
-          padding: 0,
-          textAlign: "right",
-          fontSize: 15,
-          fontWeight: "700",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
-        }}
-      />
-      <Text style={{ fontSize: 14, fontWeight: "600", color: t.sub }}>{unit}</Text>
-    </View>
+      {formatEURExact(value)}
+    </Text>
   );
 }
 
-/** Клавиша в первом столбце: «Скидка» (€ ↔ %) и «VAT» (по кругу). */
+/** Подпись-клавиша постоянной ширины, как «%» у скидки. */
 function Key({
   children,
   label,
@@ -180,168 +392,36 @@ function Key({
 }) {
   const t = useThemeColors();
   return (
-    <View style={{ flex: 1, alignItems: "flex-start" }}>
-      <Pressable
-        onPress={() => {
-          haptics.tap();
-          onPress();
-        }}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        accessibilityHint={hint}
-        hitSlop={6}
-        style={({ pressed }) => ({
-          minWidth: 76,
-          height: 32,
-          paddingHorizontal: 12,
-          alignItems: "center",
-          justifyContent: "center",
-          borderRadius: t.radius.input,
-          backgroundColor: t.surface,
-          boxShadow: t.cardShadow,
-          opacity: pressed ? 0.6 : 1,
-        })}
-      >
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: "700",
-            color: struck ? t.faint : t.ink,
-            textDecorationLine: struck ? "line-through" : "none",
-          }}
-        >
-          {children}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
-/** Скидка: клавиша «Скидка» меняет € ↔ %, число — в столбце количества,
- *  «−€5» — в столбце цены, сумма после скидки — в столбце суммы. */
-export function DiscountRow({
-  value,
-  onValueChange,
-  percent,
-  onPercentChange,
-  amount,
-  after,
-}: {
-  value: string;
-  onValueChange: (next: string) => void;
-  percent: boolean;
-  onPercentChange: (next: boolean) => void;
-  /** Сколько скидка съела в деньгах. */
-  amount: number;
-  /** Сумма работ после скидки. */
-  after: number;
-}) {
-  return (
-    <GridRow>
-      <Key
-        label={percent ? "Скидка в процентах" : "Скидка в валюте"}
-        hint="Переключить проценты и валюту"
-        onPress={() => onPercentChange(!percent)}
-      >
-        Скидка
-      </Key>
-      <InputPill
-        value={value}
-        onChangeText={onValueChange}
-        unit={percent ? "%" : "€"}
-        accessibilityLabel="Скидка"
-      />
-      <Cell width={TOTAL_GRID.price} tone="sub">
-        {amount > 0 ? `−${formatEURExact(amount)}` : ""}
-      </Cell>
-      <Cell width={TOTAL_GRID.sum}>{formatEURExact(after)}</Cell>
-    </GridRow>
-  );
-}
-
-/** VAT: клавиша по кругу (сверху → внутри → без), ставка цифрами в столбце
- *  количества — как скидка, пересчёт на каждом символе, — налог в евро в
- *  столбце цены. Запоминает ставку вызывающий (`useRememberedVatRate`). */
-export function VatRow({
-  mode,
-  rate,
-  amount,
-  onModeChange,
-  onRateChange,
-}: {
-  mode: TxVatMode;
-  rate: number;
-  /** Сколько налога внутри «К оплате». */
-  amount: number;
-  onModeChange: (next: TxVatMode) => void;
-  onRateChange?: (rate: number) => void;
-}) {
-  const off = mode === "none";
-  // Текст поля живёт своей жизнью, пока его набирают: «1» на пути к «19»
-  // пересчитывает итог, но неразборчивое («1,») ждёт следующего символа.
-  const [text, setText] = useState(String(rate));
-  useEffect(() => {
-    setText(String(rate));
-  }, [rate]);
-  return (
-    <GridRow>
-      <Key
-        label={`VAT: ${SPOKEN[mode]}`}
-        hint="Переключить: сверху цены, внутри цены, без налога"
-        struck={off}
-        onPress={() => onModeChange(NEXT[mode])}
-      >
-        VAT
-      </Key>
-      {off ? (
-        <Cell width={TOTAL_GRID.qty} tone="sub" />
-      ) : onRateChange ? (
-        <InputPill
-          value={text}
-          prefix={mode === "exclusive" ? "+" : "в т.ч."}
-          unit="%"
-          accessibilityLabel="Ставка VAT, процентов"
-          onChangeText={(next) => {
-            setText(next);
-            const parsed = parseVatRate(next);
-            if (parsed != null && parsed !== rate) onRateChange(parsed);
-          }}
-          onEndEditing={() => {
-            if (parseVatRate(text) == null) setText(String(rate));
-          }}
-        />
-      ) : (
-        <Cell width={TOTAL_GRID.qty}>{`${mode === "exclusive" ? "+" : ""}${rate}%`}</Cell>
-      )}
-      <Cell width={TOTAL_GRID.price} tone="sub">
-        {off ? "" : formatEURExact(amount)}
-      </Cell>
-      <Cell width={TOTAL_GRID.sum} />
-    </GridRow>
-  );
-}
-
-/** «К оплате» — последняя строка таблицы, крупно. Слева — необязательная
- *  клавиша (у записи со старой ручной суммой это «По услугам»). */
-export function DueRow({ total, action }: { total: number; action?: ReactNode }) {
-  const t = useThemeColors();
-  return (
-    <GridRow strong>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 16, fontWeight: "700", color: t.ink }}>К оплате</Text>
-        {action}
-      </View>
+    <Pressable
+      onPress={() => {
+        haptics.tap();
+        onPress();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      hitSlop={6}
+      style={({ pressed }) => ({
+        width: KEY_W,
+        height: 28,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: t.radius.input,
+        backgroundColor: t.surface,
+        boxShadow: t.cardShadow,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
       <Text
-        maxFontSizeMultiplier={1.2}
         style={{
-          fontSize: 22,
-          fontWeight: "800",
-          color: t.ink,
-          fontVariant: ["tabular-nums"],
+          fontSize: 15,
+          fontWeight: "700",
+          color: struck ? t.faint : t.ink,
+          textDecorationLine: struck ? "line-through" : "none",
         }}
       >
-        {formatEURExact(total)}
+        {children}
       </Text>
-    </GridRow>
+    </Pressable>
   );
 }
