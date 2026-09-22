@@ -24,6 +24,8 @@ import { buildInvoiceDocument, type InvoiceDraftSeller } from "./document";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useToast } from "@/components/ui/Toast";
 import { getStorage } from "@babun/shared/storage";
+import { applyDiscount, round2 } from "@babun/shared/local/finance/appointment-calc";
+import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { InvoiceBlocks } from "./InvoiceBlocks";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
@@ -260,7 +262,7 @@ export function InvoiceEditor({
   );
   const [lines, setLines] = useState<EditableInvoiceLine[]>(() => {
     if (initial) {
-      return initial.lines.map((line) =>
+      return initial.lines.filter((line) => line.unit_price >= 0).map((line) =>
         newLine(
           line.title,
           String(line.qty),
@@ -298,6 +300,18 @@ export function InvoiceEditor({
       ];
     }
     return [];
+  });
+  // СКИДКА — КАК В ЗАПИСИ (владелец 2026-09-22: «в „Итого“ нет скидки —
+  // в записи клиента она есть… можно выдавать скидку»). Та же пара «евро или
+  // процент + число», та же шторка «Итого». На сервер уходит одной строкой
+  // счёта с флагом `discount` и отрицательной ценой; налог — после скидки.
+  // У выставленного счёта скидка уже напечатана строкой — её и поднимаем.
+  const [discountKind, setDiscountKind] = useState<DiscountKind>(
+    initial?.lines.some((line) => line.unit_price < 0) ? "fixed" : "percent",
+  );
+  const [discountValue, setDiscountValue] = useState<string>(() => {
+    const stored = initial?.lines.find((line) => line.unit_price < 0);
+    return stored ? String(-stored.unit_price) : "";
   });
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт. `null` — сервер возьмёт основные:
@@ -339,6 +353,8 @@ export function InvoiceEditor({
     companyId,
     accountId,
     notes,
+    discountKind,
+    discountValue,
     lines: lines.map((line) => [line.title, line.description, line.qty, line.unitPrice, line.unit]),
   });
   const bornAs = useRef(shape);
@@ -365,8 +381,27 @@ export function InvoiceEditor({
     [lines],
   );
   const rate = vatMode === "off" ? 0 : documentRate;
+  const validLines = parsedLines.filter((line) => line.qty > 0 && line.unit_price >= 0);
+  const linesSum = calculateInvoiceTotals(validLines, "off", 0).total;
+  const discountNumber = Number(discountValue.replace(",", "."));
+  const discountAmount =
+    Number.isFinite(discountNumber) && discountNumber > 0
+      ? round2(linesSum - applyDiscount(linesSum, { type: discountKind, value: discountNumber }))
+      : 0;
+  /** Строка скидки для сервера и бумаги — на языке бумаги. */
+  const discountLine: InvoiceLineDraft | null =
+    discountAmount > 0
+      ? {
+          title: language === "en" ? "Discount" : "Скидка",
+          qty: 1,
+          unit_price: -discountAmount,
+          discount: true,
+        }
+      : null;
+  const withDiscount = (list: InvoiceLineDraft[]) =>
+    discountLine ? [...list, discountLine] : list;
   const totals = calculateInvoiceTotals(
-    parsedLines.filter((line) => line.qty > 0 && line.unit_price >= 0),
+    withDiscount(validLines),
     vatMode,
     Math.max(0, rate),
   );
@@ -409,8 +444,7 @@ export function InvoiceEditor({
               subtotal_net: totals.subtotal_net,
               vat_amount: totals.vat_amount,
               total: totals.total,
-              lines: parsedLines
-                .filter((line) => line.qty > 0 && line.unit_price >= 0)
+              lines: withDiscount(validLines)
                 .map((line, index) => ({
                   id: `${initial.id}-draft-${index}`,
                   invoice_id: initial.id,
@@ -453,14 +487,16 @@ export function InvoiceEditor({
               issuedOn,
               dueOn,
               clientId,
-              lines: parsedLines.map((line) => ({
+              lines: withDiscount(parsedLines).map((line) => ({
                 title: line.title,
                 qty: line.qty,
                 // Зеркало обязано печатать «4 м» ровно так же, как это уедет
                 // на сервер: единица едет и в черновик, иначе она появлялась
                 // бы только у выставленного документа.
                 unit: line.unit ?? null,
-                unitPrice: Math.max(0, line.unit_price),
+                // Скидку бумага печатает минусом; у прочих строк «−1» —
+                // это «цена ещё не набрана», и печатается ноль.
+                unitPrice: line.discount ? line.unit_price : Math.max(0, line.unit_price),
               })),
               vatMode,
               vatPercent: Math.max(0, rate),
@@ -540,7 +576,7 @@ export function InvoiceEditor({
         brigade_id: teamId,
         vat_mode: vatMode,
         vat_percent: rate,
-        lines: parsedLines,
+        lines: withDiscount(parsedLines),
         notes: notes.trim() || null,
         link_to_tx_id: initial ? null : prefill?.transactionId ?? null,
       });
@@ -623,6 +659,13 @@ export function InvoiceEditor({
             onVatModeChange={(next) => {
               vatTouched.current = true;
               setVatMode(next);
+            }}
+            discount={{
+              kind: discountKind,
+              value: discountValue,
+              amount: discountAmount,
+              onKindChange: setDiscountKind,
+              onValueChange: setDiscountValue,
             }}
             onVatRateChange={(next) => {
               vatTouched.current = true;

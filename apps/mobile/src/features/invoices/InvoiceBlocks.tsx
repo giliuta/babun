@@ -19,7 +19,7 @@ import { clientHistoryText } from "@/features/clients/history-line";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
 import { ServicePicker } from "@/features/appointments/BookingPickers";
 import { ServicesBlock } from "@/features/appointments/ServicesBlock";
-import { TotalSheet } from "@/features/appointments/TotalSheet";
+import { TotalSheet, type DiscountKind } from "@/features/appointments/TotalSheet";
 import { PaymentTile, TILE_GAP, useTileWidth } from "@/features/appointments/PaymentTiles";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { accountIcon } from "@/features/finances/account-ui";
@@ -78,6 +78,7 @@ export function InvoiceBlocks({
   vatRate,
   onVatModeChange,
   onVatRateChange,
+  discount,
   totals,
   notes,
   onNotesChange,
@@ -110,6 +111,14 @@ export function InvoiceBlocks({
   vatRate: number;
   onVatModeChange: (mode: InvoiceVatMode) => void;
   onVatRateChange: (rate: number) => void;
+  /** Скидка документа — та же пара, что у записи; `amount` уже в евро. */
+  discount: {
+    kind: DiscountKind;
+    value: string;
+    amount: number;
+    onKindChange: (kind: DiscountKind) => void;
+    onValueChange: (value: string) => void;
+  };
   totals: InvoiceBlocksTotals;
   notes: string;
   onNotesChange: (next: string) => void;
@@ -274,7 +283,7 @@ export function InvoiceBlocks({
           lines={blockLines}
           total={totals.total}
           custom={false}
-          discountAmount={0}
+          discountAmount={discount.amount}
           onPickServices={() => setSheet("services")}
           onOpenTotal={() => setSheet("total")}
         />
@@ -363,9 +372,10 @@ export function InvoiceBlocks({
         onQtyChange={setServiceQty}
       />
 
-      {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА. Скидки в ней нет:
-          у счёта её не знает сервер. Налог приходит сюда и возвращается
-          обратно — шторка его не включает сама. */}
+      {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА: скидка (с
+          22.09 — строкой счёта с флагом, миграция 20260922030000) и налог.
+          Налог приходит сюда и возвращается обратно — шторка его не
+          включает сама. */}
       <TotalSheet
         visible={sheet === "total"}
         onClose={() => setSheet(null)}
@@ -378,7 +388,15 @@ export function InvoiceBlocks({
         // `calculateInvoiceTotals` в режиме «в цене» уже очищено от налога, и
         // шторка снимала его ВТОРОЙ раз: счёт на €119 показывал «К оплате
         // €99,99». Чек передаёт сюда ровно так же — сырую сумму.
-        total={linesSum}
+        // После скидки: так шторка считает свою строку скидки (сумма строк −
+        // это число) и налог — с суммы после скидки, как запись и сервер.
+        total={Math.max(0, linesSum - discount.amount)}
+        discount={{
+          kind: discount.kind,
+          value: discount.value,
+          onKindChange: discount.onKindChange,
+          onValueChange: discount.onValueChange,
+        }}
         vat={{
           // «off» у счёта и «none» у операции — одно и то же слово на двух
           // диалектах; канон считает налог по `TxVatMode`.
