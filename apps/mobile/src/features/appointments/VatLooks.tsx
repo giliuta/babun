@@ -34,7 +34,7 @@ const SPOKEN: Record<TxVatMode, string> = {
 
 /** Клавиша одной ширины на обе строки — иначе строка едет под пальцем. */
 const KEY_W = 80;
-const RATE_W = 54;
+const RATE_W = 76;
 const VAT_W = 70;
 const COL_GAP = 8;
 
@@ -183,7 +183,7 @@ export function PayRow({
           flexDirection: "row",
           alignItems: "center",
           gap: COL_GAP,
-          paddingHorizontal: 12,
+          paddingHorizontal: 14,
           paddingTop: 8,
           paddingBottom: 4,
         }}
@@ -191,7 +191,7 @@ export function PayRow({
         <Text style={[cap, { width: KEY_W }]}>Итого</Text>
         {vat ? (
           <>
-            <Text style={[cap, { width: RATE_W, textAlign: "right" }]}>Ставка</Text>
+            <Text style={[cap, { width: RATE_W, textAlign: "center" }]}>Ставка</Text>
             <Text style={[cap, { width: VAT_W, textAlign: "right" }]}>Налог</Text>
           </>
         ) : null}
@@ -203,7 +203,7 @@ export function PayRow({
           alignItems: "center",
           gap: COL_GAP,
           minHeight: 46,
-          paddingHorizontal: 12,
+          paddingHorizontal: 14,
           paddingBottom: 6,
         }}
       >
@@ -225,9 +225,7 @@ export function PayRow({
           <>
             {vat.onRateChange && !off ? (
               <Rate>
-                <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
-                  {vat.mode === "exclusive" ? "+" : "−"}
-                </Text>
+                <Unit>{vat.mode === "exclusive" ? "+" : "−"}</Unit>
                 <TextInput
                   keyboardAppearance="light"
                   value={rateText}
@@ -259,18 +257,22 @@ export function PayRow({
                 <Unit>%</Unit>
               </Rate>
             ) : (
-              <Text
-                style={{
-                  width: RATE_W,
-                  textAlign: "right",
-                  fontSize: 15,
-                  fontWeight: "700",
-                  color: t.ink,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {off ? "" : vat.mode === "exclusive" ? `+${vat.rate}%` : `−${vat.rate}%`}
-              </Text>
+              // Налог выключен — место столбца держится пустым, чтобы «Налог»
+              // и «К оплате» не съезжали под пальцем.
+              <View style={{ width: RATE_W, alignItems: "flex-end" }}>
+                {off ? null : (
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "700",
+                      color: t.ink,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {vat.mode === "exclusive" ? `+${vat.rate}%` : `−${vat.rate}%`}
+                  </Text>
+                )}
+              </View>
             )}
             <Text
               style={{
@@ -318,7 +320,7 @@ function Row({
         alignItems: "center",
         gap: COL_GAP,
         minHeight: strong ? 48 : 44,
-        paddingHorizontal: 12,
+        paddingHorizontal: 14,
         borderTopWidth: strong ? 0 : 1,
         borderTopColor: t.separator,
       }}
@@ -329,14 +331,23 @@ function Row({
 }
 
 /** Колонка числа рядом с клавишей: число прижато к своей единице. */
+/** Число рядом с клавишей — ПИЛЮЛЕЙ одной ширины у скидки и у ставки
+ *  (владелец 2026-09-22: «где ноль процентик и ставка — чтоб столбиками,
+ *  ровненько»). Знак, число и единица внутри, число прижато к единице —
+ *  «0 %» над «+19 %» стоят рамка в рамку. */
 function Rate({ children }: { children?: ReactNode }) {
+  const t = useThemeColors();
   return (
     <View
       style={{
         width: RATE_W,
+        height: 32,
         flexDirection: "row",
         alignItems: "center",
-        gap: 3,
+        gap: 2,
+        paddingHorizontal: 8,
+        borderRadius: t.radius.input,
+        backgroundColor: t.fill,
       }}
     >
       {children}
