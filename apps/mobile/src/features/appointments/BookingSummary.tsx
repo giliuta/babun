@@ -58,7 +58,9 @@ export function TotalRow({
       disabled={!onPress}
       accessibilityRole={onPress ? "button" : "text"}
       accessibilityLabel={`Итого ${formatEURExact(total)}${note ? `, ${note}` : ""}`}
-      accessibilityHint={onPress ? "Открывает услуги, количество и скидку" : undefined}
+      accessibilityHint={
+        onPress ? "Открывает услуги, количество и скидку" : undefined
+      }
       style={({ pressed }) => ({
         minHeight: 56,
         flexDirection: "row",
@@ -71,9 +73,14 @@ export function TotalRow({
       })}
     >
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>Итого</Text>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: t.ink }}>
+          Итого
+        </Text>
         {note ? (
-          <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub, marginTop: 1 }}>
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 13, color: t.sub, marginTop: 1 }}
+          >
             {note}
           </Text>
         ) : null}
@@ -102,12 +109,16 @@ export function WhenRow({
   warning,
   onPress,
   until,
+  dateLabel,
 }: {
   date: string;
   /** СРОК ДОКУМЕНТА ВМЕСТО ВРЕМЕНИ (22.09, инвойс: «время выставления — как у
    *  нас по архитектуре»). Та же плашка: день · «до 29 сентября» · пилюля
    *  «7 дней». Без `timeStart` — только у документа со сроком. */
   until?: { text: string; pill?: string | null };
+  /** Как напечатать день вместо «вт, 22 сентября» — у инвойса числами, как
+   *  даты периода в «Финансах» (владелец 22.09: «цифрами — немного покруче»). */
+  dateLabel?: string;
   /** Время. НЕТ — плашка печатает ОДИН ДЕНЬ: у чека деньги приняты в такой-то
    *  день, а не в 18:43 (владелец 2026-09-20: «чётко по времени не надо, это
    *  дата… как выборка обычная»). Плашка при этом та же самая — он просил
@@ -182,19 +193,21 @@ export function WhenRow({
               numberOfLines={1}
               style={{ fontSize: 15, fontWeight: "600", color: t.ink }}
             >
-              {humanDay(date)}
+              {dateLabel ?? humanDay(date)}
             </Text>
-            {timeStart || until ? (
+            {timeStart || (until && until.text) ? (
               <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
             ) : null}
             {until && !timeStart ? (
               <>
-                <Text
-                  numberOfLines={1}
-                  style={{ fontSize: 16, fontWeight: "700", color: t.ink }}
-                >
-                  {until.text}
-                </Text>
+                {until.text ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontSize: 16, fontWeight: "700", color: t.ink }}
+                  >
+                    {until.text}
+                  </Text>
+                ) : null}
                 {until.pill ? (
                   <View
                     style={{
@@ -204,7 +217,10 @@ export function WhenRow({
                       backgroundColor: t.fill,
                     }}
                   >
-                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 13, color: t.sub }}
+                    >
                       {until.pill}
                     </Text>
                   </View>
@@ -246,7 +262,10 @@ export function WhenRow({
                       backgroundColor: t.fill,
                     }}
                   >
-                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 13, color: t.sub }}
+                    >
                       {durationLabel(duration ?? 0)}
                     </Text>
                   </View>
@@ -260,12 +279,23 @@ export function WhenRow({
       {warning ? (
         <View
           className="mt-2 flex-row items-center gap-2 rounded-[10px] px-3 py-2.5"
-          style={{ backgroundColor: `${t.warning}14`, borderWidth: 1, borderColor: `${t.warning}33` }}
+          style={{
+            backgroundColor: `${t.warning}14`,
+            borderWidth: 1,
+            borderColor: `${t.warning}33`,
+          }}
           accessibilityLiveRegion="assertive"
           accessibilityRole="alert"
         >
           <AlertTriangle color={t.warning} size={ICON.sm} />
-          <Text style={{ fontSize: 13, fontWeight: "500", color: t.warning, flex: 1 }}>
+          <Text
+            style={{
+              fontSize: 13,
+              fontWeight: "500",
+              color: t.warning,
+              flex: 1,
+            }}
+          >
             {warning}
           </Text>
         </View>

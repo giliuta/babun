@@ -116,7 +116,8 @@ function parseYmd(s: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-function dmyShort(s: string): string {
+/** «22.09.26» — числами, как даты периода в шапке «Финансов». */
+export function dmyShort(s: string): string {
   const d = parseYmd(s);
   return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${String(
     d.getFullYear(),

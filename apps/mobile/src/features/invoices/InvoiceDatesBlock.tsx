@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/Button";
 import { DateSpinner } from "@/components/ui/DateSpinner";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { WhenRow } from "@/features/appointments/BookingSummary";
-import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
+import { formatYMD, parseYMD } from "@/features/appointments/helpers";
+import { dmyShort } from "@/features/finances/period";
 import { useThemeColors } from "@/theme/colors";
 
 // ДАТЫ ИНВОЙСА — ПО АРХИТЕКТУРЕ «КОГДА» ЗАПИСИ.
@@ -15,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 // плашка (`WhenRow`: день · время · пилюля длительности), тап — одна шторка с
 // сегментом «Начало | Конец», барабаном и «Применить». У чека — та же
 // плашка с одним днём. Инвойс берёт ровно это:
-//   • плашка `WhenRow`: «вт, 22 сентября · до 29 сентября · 7 дней»;
+//   • плашка `WhenRow`: «22.09.26 – 29.09.26 · 7 дней» (числами, как период);
 //   • шторка «Даты»: сегмент «Выставлен | Оплатить до», барабан даты,
 //     «Применить» в футере, «Без срока» тихой строкой под ним.
 // Две половины со своими листами (22.09 утром) ушли — второй способ показать
@@ -41,11 +42,6 @@ function daysLabel(days: number): string {
         ? "дня"
         : "дней";
   return `${days} ${word}`;
-}
-
-/** «29 сентября» — день без недели, как второе число в плашке. */
-function shortDay(ymd: string): string {
-  return humanDay(ymd).replace(/^[^,]+,\s*/, "");
 }
 
 type Field = "issued" | "due";
@@ -90,10 +86,16 @@ export function InvoiceDatesBlock({
 
   return (
     <>
+      {/* ЧИСЛАМИ, КАК ПЕРИОД В «ФИНАНСАХ» (владелец 22.09: «не вторник 22
+          сентября, а цифрами — 22.09.26 — и срок так же»): «22.09.26 –
+          29.09.26 · 7 дней». */}
       <WhenRow
         date={issuedOn}
+        dateLabel={
+          dueOn ? `${dmyShort(issuedOn)} – ${dmyShort(dueOn)}` : dmyShort(issuedOn)
+        }
         until={{
-          text: dueOn ? `до ${shortDay(dueOn)}` : "без срока",
+          text: dueOn ? "" : "без срока",
           pill: days != null ? daysLabel(days) : null,
         }}
         onPress={() => setOpen(true)}
@@ -107,9 +109,9 @@ export function InvoiceDatesBlock({
             style={{ fontSize: 17, fontWeight: "600", color: t.ink, textAlign: "center" }}
           >
             {field === "issued"
-              ? `Выставлен · ${humanDay(draftIssued)}`
+              ? `Выставлен · ${dmyShort(draftIssued)}`
               : draftDue
-                ? `Оплатить до · ${humanDay(draftDue)}`
+                ? `Оплатить до · ${dmyShort(draftDue)}`
                 : "Оплатить до · без срока"}
           </Text>
 
