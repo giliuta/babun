@@ -31,23 +31,14 @@ import {
   type PriceEntryMode,
 } from "@/features/services/economics";
 
-// ФОРМА УСЛУГИ — ОДНА НА ПРАЙС И НА СВОЮ УСЛУГУ ДОКУМЕНТА.
-//
-// Жила внутри страницы прайса. Владелец 2026-09-22 про разовую услугу в
-// инвойсе: «не надо придумывать новый блок — возьми чётко тот, который мы
-// используем в создании нормальной услуги». Поэтому форма вынесена сюда как
-// есть, а режим `oneOff` лишь меняет, куда она отдаёт результат: в строку
-// документа, а не в прайс. Параметров календаря (график, перерыв, онлайн) у
-// строки документа не бывает — они скрыты.
+// ФОРМА УСЛУГИ ПРАЙСА — своим файлом, а не внутри страницы (страница была
+// 1457 строк). Вид и поведение — те же, что были на странице.
 
 export type ServiceEditing =
   // `copy` — источник из ДРУГОЙ команды: имя не получает «копия» (в новой
   // команде это не копия, а своя услуга) и пишется связь для отчётов.
   | { mode: "create"; from?: Service; copy?: boolean }
-  | { mode: "edit"; service: Service }
-  // Своя услуга документа: форма та же, в прайс не пишет. `from` — строка,
-  // которую правят (название, цена, описание).
-  | { mode: "oneOff"; from?: { name: string; price: number; description: string | null } };
+  | { mode: "edit"; service: Service };
 
 // ─── Редактор услуги ─────────────────────────────────────────────────
 // Канонический нижний лист, а не самописный `Modal animationType="slide"`: та
@@ -59,7 +50,6 @@ export function ServiceSheet({
   busy,
   onClose,
   onSave,
-  onRemove,
 }: {
   editing: ServiceEditing | null;
   /** Per-team-контекст: новая услуга сразу привязана к этой команде. */
@@ -67,9 +57,6 @@ export function ServiceSheet({
   busy: boolean;
   onClose: () => void;
   onSave: (draft: ServiceInput, serviceId?: string) => void;
-  /** Своя услуга документа: убрать строку из документа. Тихая красная
-   *  строка под кнопкой — как «Без срока» у дат. */
-  onRemove?: () => void;
   /** Дубль из шапки листа — вторая дверь к тому же, что делает свайп вправо
    *  по строке прайса (который перехватывает системный жест «назад»). */
 }) {
@@ -80,9 +67,6 @@ export function ServiceSheet({
   const service = editing?.mode === "edit" ? editing.service : null;
   /** Источник дубля: лист открыт на СОЗДАНИЕ, но поля засеяны чужими. */
   const source = editing?.mode === "create" ? editing.from : undefined;
-  /** Своя услуга документа: форма та же, результат уходит в строку счёта. */
-  const oneOff = editing?.mode === "oneOff";
-  const oneOffFrom = editing?.mode === "oneOff" ? editing.from : undefined;
 
   const [name, setName] = useState("");
   const [color, setColor] = useState<string | null>(null);
@@ -230,12 +214,6 @@ export function ServiceSheet({
     );
     setHasBufferAfter(Number(from?.buffer_after_min ?? 0) > 0);
     setOpenRow(null);
-    if (oneOffFrom) {
-      setName(oneOffFrom.name);
-      setPrice(String(oneOffFrom.price));
-      setDescription(oneOffFrom.description ?? "");
-      setHasDescription(!!oneOffFrom.description?.trim());
-    }
   }
 
   // Владелец услуги — команда, чей прайс открыт. Спрашивать её в форме
@@ -251,8 +229,7 @@ export function ServiceSheet({
     service?.team_id ??
     (isForeignCopy ? lockedTeamId : source?.team_id ?? lockedTeamId) ??
     null;
-  // Своей услуге команда не нужна: она не ложится в прайс команды.
-  const canSubmit = name.trim().length > 0 && (oneOff || !!ownerTeam) && !busy;
+  const canSubmit = name.trim().length > 0 && !!ownerTeam && !busy;
 
   const updateEconomics = (next: ServiceEconomicsDraft) => {
     setEconomics(next);
@@ -351,7 +328,7 @@ export function ServiceSheet({
     onSave(
       {
         name: name.trim(),
-        team_id: (ownerTeam ?? "") as string,
+        team_id: ownerTeam as string,
         ...(color ? { color } : {}),
         icon,
         description: description.trim() || null,
@@ -427,7 +404,7 @@ export function ServiceSheet({
       // это то, что человек и так видит: он тапнул по строке прайса. Имя в
       // шапке отвечает на другой вопрос — «ту ли я открыл», — который в списке
       // из сорока строк задают всерьёз.
-      title={service ? service.name : oneOff ? (oneOffFrom?.name ?? "Своя услуга") : "Новая услуга"}
+      title={service ? service.name : "Новая услуга"}
       scroll
       scrollRef={scrollRef}
       avoidKeyboard
@@ -446,27 +423,11 @@ export function ServiceSheet({
       footer={
         <View style={{ paddingHorizontal: GUTTER }}>
         <Button
-          label={service || oneOffFrom ? "Сохранить" : oneOff ? "Добавить в документ" : "Создать"}
+          label={service ? "Сохранить" : "Создать"}
           onPress={submit}
           disabled={!canSubmit}
           loading={busy}
         />
-        {onRemove ? (
-          <Pressable
-            onPress={onRemove}
-            accessibilityRole="button"
-            style={({ pressed }) => ({
-              minHeight: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: pressed ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
-              Убрать из документа
-            </Text>
-          </Pressable>
-        ) : null}
         </View>
       }
     >
@@ -671,10 +632,6 @@ export function ServiceSheet({
         }
       />
 
-      {/* ПАРАМЕТРЫ ПРАЙСА — ГРАФИК, ПЕРЕРЫВ, ОНЛАЙН — у своей услуги документа
-          не бывает: она живёт одной строкой счёта, а не в календаре. */}
-      {oneOff ? null : (
-        <>
       {/* РАБОЧИЕ ДНИ — ПАРАМЕТР, КОТОРЫЙ ДОБАВЛЯЮТ, А НЕ ФОРМА, КОТОРУЮ
           ЗАПОЛНЯЮТ (владелец 2026-08-29). Пока его нет — одна строчка-кнопка,
           как «＋ Описание» у названия. Заведён — семь плиток и крестик,
@@ -911,8 +868,6 @@ export function ServiceSheet({
           </Text>
         </View>
       </View>
-        </>
-      )}
 
       {/* ПОД ТАБЛИЦЕЙ — ТОЛЬКО ОШИБКА (владелец 2026-08-21: «внизу не нужно
           писать, это полная хуета»). Тихая строка-проверка «а что будет на

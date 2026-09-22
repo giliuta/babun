@@ -29,8 +29,7 @@ import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
 import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
-import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
-import { ServiceSheet, type ServiceEditing } from "@/features/services/ServiceSheet";
+import { CustomServiceRow } from "./CustomServiceRow";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
 //
@@ -115,7 +114,8 @@ export function InvoiceBlocks({
   onLineChange: (line: EditableInvoiceLine) => void;
   onAddLine: (service: Service | null) => void;
   /** Своя (разовая) услуга — строка вне прайса (владелец 2026-09-22). */
-  onAddCustomLine: (line: { title: string; unitPrice: string; description: string | null }) => void;
+  /** Своя услуга — пустая строка прямо в блоке (владелец 2026-09-22). */
+  onAddCustomLine: () => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
   vatMode: InvoiceVatMode;
   vatRate: number;
@@ -140,11 +140,11 @@ export function InvoiceBlocks({
   const accounts = useAccountsWithBalances();
   const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
-  // СВОЯ УСЛУГА — ФОРМОЙ ПРАЙСА (владелец 2026-09-22: «возьми чётко тот
-  // блок, который используем в создании нормальной услуги»). `lineId` —
-  // правка существующей строки, `null` — новая.
-  const [oneOff, setOneOff] = useState<{ editing: ServiceEditing; lineId: string | null } | null>(null);
-  const oneOffLine = oneOff?.lineId ? lines.find((line) => line.id === oneOff.lineId) ?? null : null;
+  // СВОЯ УСЛУГА — СТРОКОЙ ПРЯМО В БЛОКЕ (владелец 2026-09-22: «„＋ Добавить“
+  // возле „Услуги“ — и сразу внизу пишу услугу, количество, цену и сумму»).
+  // Фокус получает только что добавленная строка.
+  const [justAdded, setJustAdded] = useState(false);
+  const customLines = lines.filter((line) => !line.serviceId);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
   // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
@@ -290,35 +290,47 @@ export function InvoiceBlocks({
         />
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
-            шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»). Тап
-            по услуге правит ЕЁ — название, описание, количество, цену;
-            «Добавить услугу» открывает прайс, и там же «Своя услуга» —
-            разовая, только в этот счёт. «Итого» открывает деньги. */}
+            шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»).
+            Услуги прайса — строками выбора (тап открывает прайс); своя
+            услуга — строкой, которую правят прямо здесь, её заводит
+            «＋ Добавить» в шапке. «Итого» открывает деньги. */}
         <ServicesBlock
           title="Услуги"
-          lines={blockLines}
+          lines={blockLines.filter((line) => lines.find((item) => item.id === line.id)?.serviceId)}
+          action={{
+            label: "＋ Добавить",
+            onPress: () => {
+              onAddCustomLine();
+              setJustAdded(true);
+            },
+          }}
+          extra={
+            customLines.length > 0 ? (
+              <View>
+                {customLines.map((line, index) => (
+                  <View
+                    key={line.id}
+                    style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
+                  >
+                    <CustomServiceRow
+                      line={line}
+                      autoFocus={
+                        justAdded
+                        && index === customLines.length - 1
+                        && !line.title
+                      }
+                      onChange={onLineChange}
+                      onRemove={() => onRemoveLine(line)}
+                    />
+                  </View>
+                ))}
+              </View>
+            ) : undefined
+          }
           total={totals.total}
           custom={false}
           discountAmount={discount.amount}
           onPickServices={() => setSheet("services")}
-          // Своя строка правится своей шторкой; строка из прайса — выбором.
-          onPickLine={(id) => {
-            const line = lines.find((item) => item.id === id);
-            if (line && !line.serviceId) {
-              setOneOff({
-                lineId: id,
-                editing: {
-                  mode: "oneOff",
-                  from: {
-                    name: line.title,
-                    price: parseMoneyAmount(line.unitPrice) ?? 0,
-                    description: line.description ?? null,
-                  },
-                },
-              });
-            }
-            else setSheet("services");
-          }}
           onOpenTotal={() => setSheet("total")}
         />
 
@@ -404,36 +416,8 @@ export function InvoiceBlocks({
         onToggle={toggleService}
         quantities={quantities}
         onQtyChange={setServiceQty}
-        // Шторка своей услуги — после ухода выбора: два модальных листа в
-        // одном кадре iOS не показывает.
-        onAddCustom={() => {
-          setSheet(null);
-          setTimeout(
-            () => setOneOff({ lineId: null, editing: { mode: "oneOff" } }),
-            SHEET_EXIT_MS + 350,
-          );
-        }}
       />
 
-      <ServiceSheet
-        editing={oneOff?.editing ?? null}
-        busy={false}
-        onClose={() => setOneOff(null)}
-        onSave={(draft) => {
-          const line = {
-            title: draft.name,
-            unitPrice: String(draft.price),
-            description: draft.description ?? null,
-          };
-          if (oneOffLine) onLineChange({ ...oneOffLine, ...line });
-          else onAddCustomLine(line);
-          setOneOff(null);
-        }}
-        onRemove={oneOffLine ? () => {
-          onRemoveLine(oneOffLine);
-          setOneOff(null);
-        } : undefined}
-      />
 
       {/* ДЕНЬГИ СЧЁТА — ТА ЖЕ ШТОРКА, ЧТО У ЗАПИСИ И ЧЕКА: скидка (с
           22.09 — строкой счёта с флагом, миграция 20260922030000) и налог.

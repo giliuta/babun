@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Briefcase } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
@@ -57,6 +58,8 @@ export function ServicesBlock({
   onPickServices,
   onPickLine,
   onOpenTotal,
+  action,
+  extra,
 }: {
   /** Шапка блока: «Услуги» у записи и чека, «Позиции» у инвойса. */
   title?: string;
@@ -77,11 +80,17 @@ export function ServicesBlock({
    *  владелец для записи 2026-09-04. */
   onPickLine?: (lineId: string) => void;
   onOpenTotal: () => void;
+  /** Действие в шапке блока — у инвойса «＋ Добавить» свою услугу (владелец
+   *  2026-09-22). У записи и чека его нет. */
+  action?: { label: string; onPress: () => void };
+  /** Строки, которые документ правит прямо в блоке (своя услуга инвойса):
+   *  стоят под услугами прайса и над «Итого». */
+  extra?: ReactNode;
 }) {
   const t = useThemeColors();
 
   return (
-    <SectionCard title={title}>
+    <SectionCard title={title} action={action}>
       {lines.length === 0 ? (
         <>
           {/* ТА ЖЕ ДВЕРЬ, ЧТО У КЛИЕНТА И ОБЪЕКТА (аудит 2026-09-06):
@@ -93,6 +102,9 @@ export function ServicesBlock({
             hint="Открывает список услуг"
             onPress={onPickServices}
           />
+          {extra ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>{extra}</View>
+          ) : null}
           <TotalRow
             total={total}
             custom={custom}
@@ -174,6 +186,9 @@ export function ServicesBlock({
               </Pressable>
             </View>
           ))}
+          {extra ? (
+            <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>{extra}</View>
+          ) : null}
           {/* ДВЕРЬ ДЛЯ ВТОРОЙ ПОЗИЦИИ — ТА ЖЕ СТРОКА, ЧТО В ПУСТОМ БЛОКЕ.
               Своей клавиши у блока нет: у пустого состояния и у списка одна
               грамматика. */}

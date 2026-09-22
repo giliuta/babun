@@ -520,6 +520,15 @@ export function InvoiceEditor({
       ? { text: "Заполните услугу: что и за сколько", error: false }
       : noPrice && totals.total <= 0
         ? { text: "Укажите цену услуги", error: false }
+      // СВОЮ УСЛУГУ ЕЩЁ ДОПИСЫВАЮТ — это подсказка, а не ошибка: строка
+      // только что добавлена «＋ Добавить», и красный текст под пустыми
+      // полями ругал человека за то, что он не успел напечатать.
+      : lines.some(
+            (line) =>
+              !line.serviceId
+              && (!line.title.trim() || parseMoneyAmount(line.unitPrice) == null),
+          )
+        ? { text: "Допишите свою услугу: название и цену", error: false }
       : parsedLines.some(
             (line) => !line.title || line.qty <= 0 || line.unit_price < 0,
           )
@@ -648,11 +657,8 @@ export function InvoiceEditor({
                   : newLine(),
               ])
             }
-            onAddCustomLine={(line) =>
-              setLines((current) => [
-                ...current,
-                newLine(line.title, "1", line.unitPrice, line.description),
-              ])
+            onAddCustomLine={() =>
+              setLines((current) => [...current, newLine("", "1", "")])
             }
             onRemoveLine={removeLine}
             vatMode={vatMode}
