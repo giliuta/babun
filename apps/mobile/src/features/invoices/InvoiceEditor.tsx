@@ -25,6 +25,7 @@ import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useToast } from "@/components/ui/Toast";
 import { getStorage } from "@babun/shared/storage";
 import { applyDiscount, round2 } from "@babun/shared/local/finance/appointment-calc";
+import { inputFromGross } from "@babun/shared/local/finance/vat";
 import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { InvoiceBlocks } from "./InvoiceBlocks";
@@ -174,11 +175,31 @@ export function InvoiceEditor({
     );
     return (id: string) => byId.get(id);
   }, [services]);
+  const sourceAppointment = prefill?.appointmentId
+    ? appointments.find((item) => item.id === prefill.appointmentId) ?? null
+    : null;
+  /** НАЛОГ ЗАПИСИ ПЕРЕЕЗЖАЕТ В ИНВОЙС (22.09). «К оплате» записи уже
+   *  включает VAT: при «сверху» строки счёта раскладываются на сумму ДО
+   *  налога, и инвойс начисляет его сам той же ставкой — иначе налог вошёл бы
+   *  в цены и был начислен второй раз. */
+  const appointmentVat =
+    sourceAppointment &&
+    (sourceAppointment.vat_mode === "inclusive" || sourceAppointment.vat_mode === "exclusive") &&
+    (sourceAppointment.vat_rate ?? 0) > 0
+      ? { mode: sourceAppointment.vat_mode, rate: Number(sourceAppointment.vat_rate) }
+      : null;
   const generate = (appointmentId: string): GeneratedInvoiceDraft | null => {
     const appointment = appointments.find((item) => item.id === appointmentId);
-    return appointment
-      ? generateInvoiceFromAppointment(appointment, generator, serviceName)
-      : null;
+    if (!appointment) return null;
+    const vat = appointment.id === sourceAppointment?.id ? appointmentVat : null;
+    const base =
+      vat?.mode === "exclusive"
+        ? {
+            ...appointment,
+            total_amount: inputFromGross(appointment.total_amount, "exclusive", vat.rate),
+          }
+        : appointment;
+    return generateInvoiceFromAppointment(base, generator, serviceName);
   };
   // Черновик по записи, с которой пришли. Считается ОДИН РАЗ при рождении
   // формы: пересчёт на каждый рендер стирал бы то, что человек уже правит.
@@ -222,7 +243,7 @@ export function InvoiceEditor({
   // за настройками не следует.
   const seedVat = useRef(vatForTeam(initialTeamId)).current;
   const [vatMode, setVatMode] = useState<InvoiceVatMode>(
-    initial ? invoiceVatMode(initial) : seedVat.mode,
+    initial ? invoiceVatMode(initial) : appointmentVat?.mode ?? seedVat.mode,
   );
   // СТАВКА — ИЗ ДЕЙСТВУЮЩЕЙ НАСТРОЙКИ, А НЕ ИЗ ПОЛЯ ФОРМЫ. Поле жило в блоке
   // «Налог»; блока больше нет, и человек выбирает клавишей VAT только РЕЖИМ —
@@ -235,12 +256,12 @@ export function InvoiceEditor({
   // документов (`useRememberedVatRate`). У выставленного — своя, из снимка.
   const rememberedRate = useRememberedVatRate();
   const [rateOverride, setRateOverride] = useState<number | null>(
-    initial ? Number(initial.vat_percent ?? 0) : null,
+    initial ? Number(initial.vat_percent ?? 0) : appointmentVat?.rate ?? null,
   );
   const documentRate = rateOverride ?? rememberedRate.rate;
   // Смена команды пересаживает налоговое умолчание, пока клавиши VAT не
   // трогали руками; после ручного выбора форма человека не переспорит.
-  const vatTouched = useRef(!!initial);
+  const vatTouched = useRef(!!initial || !!appointmentVat);
   const changeTeam = (id: string | null) => {
     setTeamId(id);
     if (vatTouched.current) return;

@@ -201,7 +201,13 @@ export interface Appointment {
    *  «без НДС» для денег этой записи — сильнее счёта. null — как у счёта,
    *  команды и компании. Меняется только до первой оплаты и только дверью
    *  `set_appointment_vat_mode`: в патч записи поле не пишется. */
-  vat_mode?: "on" | "off" | null;
+  vat_mode?: "on" | "off" | "none" | "inclusive" | "exclusive" | null;
+  /** СТАВКА VAT ЗАПИСИ (22.09, миграция 20260922040000). Вместе с
+   *  `vat_mode` 'exclusive' | 'inclusive' | 'none' — выбор «Итого» записи:
+   *  «К оплате» (`total_amount`) уже включает налог, а оплата ложится на
+   *  счёт с выделенным налогом по этой ставке. Старые 'on' | 'off' пишет
+   *  только дверь `set_appointment_vat_mode`. */
+  vat_rate?: number | null;
   /** Mirror — total actually received so far. The trigger uses
    *  total_amount for the income row; this field lets the UI show
    *  «частично оплачено» (paid_amount < total_amount). */

@@ -423,6 +423,7 @@ export type Database = {
           total_duration: number
           updated_at: string
           vat_mode: string | null
+          vat_rate: number | null
         }
         Insert: {
           address?: string
@@ -478,6 +479,7 @@ export type Database = {
           total_duration?: number
           updated_at?: string
           vat_mode?: string | null
+          vat_rate?: number | null
         }
         Update: {
           address?: string
@@ -533,6 +535,7 @@ export type Database = {
           total_duration?: number
           updated_at?: string
           vat_mode?: string | null
+          vat_rate?: number | null
         }
         Relationships: [
           {

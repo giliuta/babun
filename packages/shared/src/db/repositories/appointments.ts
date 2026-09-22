@@ -99,8 +99,10 @@ export function rowToAppointment(r: Row): Appointment {
     // Счёт, выбранный при приёме денег. Без него сервер угадывает счёт по
     // способу оплаты — и промахивается, когда счёта такого вида у команды нет.
     payment_account_id: r.payment_account_id ?? null,
-    // НДС записи — только чтение: пишет его дверь `set_appointment_vat_mode`.
+    // НДС записи: выбор «Итого» (режим + ставка, 22.09); старые 'on'/'off'
+    // пишет дверь `set_appointment_vat_mode`.
     vat_mode: (r.vat_mode ?? null) as Appointment["vat_mode"],
+    vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
     paid_amount:
       r.paid_amount === null || r.paid_amount === undefined
         ? undefined
@@ -179,6 +181,8 @@ function appointmentToInsert(a: Appointment, tenantId: string): Insert {
     total_amount: a.total_amount,
     custom_total: a.custom_total,
     discount_amount: a.discount_amount,
+    ...(a.vat_mode !== undefined ? { vat_mode: a.vat_mode } : {}),
+    ...(a.vat_rate !== undefined ? { vat_rate: a.vat_rate } : {}),
     prepaid_amount: a.prepaid_amount,
     // v-W4 — payment mirror columns (see rowToAppointment). Undefined
     // lets the DB default (payment_status='unpaid') stand.
@@ -250,6 +254,8 @@ function appointmentToUpdate(patch: Partial<Appointment>): Update {
   if (patch.kind !== undefined) out.kind = patch.kind;
   if (patch.status !== undefined) out.status = patch.status;
   if (patch.total_amount !== undefined) out.total_amount = patch.total_amount;
+  if (patch.vat_mode !== undefined) out.vat_mode = patch.vat_mode;
+  if (patch.vat_rate !== undefined) out.vat_rate = patch.vat_rate;
   if (patch.custom_total !== undefined) out.custom_total = patch.custom_total;
   if (patch.discount_amount !== undefined)
     out.discount_amount = patch.discount_amount;

@@ -47,6 +47,8 @@ import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { LabelPickerSheet } from "@/features/reference/LabelPickerSheet";
 import { useInlineNote } from "@/features/appointments/use-inline-note";
 import { useClientNoteField } from "@/features/appointments/use-client-note-field";
+import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
+import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { InlineNoteField } from "@/features/appointments/InlineNoteField";
 import { randomUuid } from "@babun/shared/sync/uuid";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
@@ -437,6 +439,15 @@ export default function BookScreen() {
     null,
   );
   const [discountValue, setDiscountValue] = useState("");
+  // VAT ЗАПИСИ — В «ИТОГО», КАК У ЧЕКА И ИНВОЙСА (владелец 2026-09-22:
+  // «скидка, всё высчитывается, потом VAT начисляется; к счёту привязывается —
+  // заходят деньги туда плюсом VAT»). Режим — клавишей VAT, ставка — цифрами,
+  // написанная запоминается для следующих документов. «К оплате» записи
+  // (`total_amount`) включает налог, а оплата ложится на счёт с выделенным
+  // налогом по этой ставке (сервер, миграция 20260922040000).
+  const rememberedVatRate = useRememberedVatRate();
+  const [recordVatMode, setRecordVatMode] = useState<TxVatMode>("none");
+  const [recordVatRate, setRecordVatRate] = useState<number | null>(null);
   // Причина скидки осталась только у старых записей — программу лояльности
   // сняли 20.09 по слову владельца, и её больше никто не выставляет сам.
   const [discountReason, setDiscountReason] = useState<string | null>(null);
@@ -824,6 +835,12 @@ export default function BookScreen() {
       editing.global_discount ? String(editing.global_discount.value) : "",
     );
     setDiscountReason(editing.global_discount?.reason ?? null);
+    setRecordVatMode(
+      editing.vat_mode === "inclusive" || editing.vat_mode === "exclusive"
+        ? editing.vat_mode
+        : "none",
+    );
+    setRecordVatRate(editing.vat_rate ?? null);
     setStatus(editing.status);
     setReminderOn(editing.reminder_enabled);
     setColorOverride(editing.color_override ?? null);
@@ -991,7 +1008,14 @@ export default function BookScreen() {
   );
 
   const discountAmount = globalDiscountAmount(selectedServices, globalDiscount);
-  const automaticTotal = Math.max(0, computedTotal - discountAmount);
+  /** Услуги минус скидка — то, с чего считается налог. */
+  const beforeVat = Math.max(0, computedTotal - discountAmount);
+  const vatRateInUse = recordVatRate ?? rememberedVatRate.rate;
+  // «К оплате» — после налога. Ставка 0 и «без налога» — та же сумма.
+  const automaticTotal =
+    recordVatMode !== "none" && vatRateInUse > 0
+      ? applyTxVat(beforeVat, recordVatMode, vatRateInUse).gross
+      : beforeVat;
   const effectiveTotal = customTotal
     ? parseMoneyInput(totalDraft)
     : automaticTotal;
@@ -1523,6 +1547,13 @@ export default function BookScreen() {
       city,
       global_discount: globalDiscount,
       discount_amount: discountAmount,
+      // Налог пишется только у рабочей записи с расчётной суммой: у старой
+      // «своей суммы» его не выбирали, и тихо навешивать нельзя.
+      ...(kind === "work" && !customTotal
+        ? recordVatMode !== "none" && vatRateInUse > 0
+          ? { vat_mode: recordVatMode, vat_rate: vatRateInUse }
+          : { vat_mode: "none" as const, vat_rate: null }
+        : {}),
       reminder_enabled: reminderOn && Boolean(client?.phone),
     };
     return patch;
@@ -1865,6 +1896,7 @@ export default function BookScreen() {
         // Скидкой считается ВПИСАННОЕ, а не выбранная валюта: переключить
         // «€ | %» и ничего не набрать — не значит тронуть запись.
         parseMoneyInput(discountValue) > 0 ||
+        recordVatMode !== "none" ||
         status !== "scheduled" ||
         reminderOn ||
         pendingPayment != null ||
@@ -3093,9 +3125,24 @@ export default function BookScreen() {
           onKindChange: setDiscountType,
           onValueChange: setDiscountValue,
         }}
-        total={effectiveTotal}
+        // До налога: шторка сама считает из этой суммы строку скидки (сумма
+        // строк − это число) и налог — как у чека и инвойса.
+        total={customTotal ? effectiveTotal : beforeVat}
         customTotal={customTotal}
         onResetTotal={() => setCustomTotal(false)}
+        vat={
+          kind === "work" && !customTotal
+            ? {
+                mode: recordVatMode,
+                rate: vatRateInUse,
+                onModeChange: setRecordVatMode,
+                onRateChange: (rate) => {
+                  setRecordVatRate(rate);
+                  rememberedVatRate.remember(rate);
+                },
+              }
+            : undefined
+        }
       />
       <LabelPickerSheet
         visible={labelSheetOpen}

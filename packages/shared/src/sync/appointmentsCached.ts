@@ -512,9 +512,10 @@ function makeServerRow(
     // БЕЗ ЭТОЙ СТРОКИ офлайн-реплей молча терял бы выбранный счёт, и деньги
     // ложились бы на угаданный — ровно то, от чего мы уходим.
     payment_account_id: input.payment_account_id ?? null,
-    // НДС записи пишет только дверь `set_appointment_vat_mode`; новая запись
-    // уходит без выбора — «как у счёта».
+    // НДС записи — выбор «Итого» (режим + ставка): без этих строк офлайн-
+    // реплей терял бы налог, и оплата легла бы на счёт по настройкам.
     vat_mode: input.vat_mode ?? null,
+    vat_rate: input.vat_rate ?? null,
     paid_amount: input.paid_amount ?? 0,
     // STORY-055 — created_by is filled server-side by the BEFORE
     // INSERT trigger; the optimistic cache row carries null and gets
@@ -546,6 +547,8 @@ function patchToRow(patch: Partial<Appointment>): Partial<CachedAppointment> {
   if (patch.kind !== undefined) out.kind = patch.kind;
   if (patch.status !== undefined) out.status = patch.status;
   if (patch.total_amount !== undefined) out.total_amount = patch.total_amount;
+  if (patch.vat_mode !== undefined) out.vat_mode = patch.vat_mode;
+  if (patch.vat_rate !== undefined) out.vat_rate = patch.vat_rate;
   if (patch.custom_total !== undefined) out.custom_total = patch.custom_total;
   if (patch.discount_amount !== undefined) out.discount_amount = patch.discount_amount;
   if (patch.prepaid_amount !== undefined) out.prepaid_amount = patch.prepaid_amount;

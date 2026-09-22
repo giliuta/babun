@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
-import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
+import {
+  DiscountRow,
+  DueRow,
+  TOTAL_GRID,
+  VatRow,
+} from "@/features/appointments/VatLooks";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -116,96 +121,81 @@ export function TotalSheet({
       }
     >
       <View style={{ paddingHorizontal: SIDE, paddingBottom: 10, gap: 8 }}>
-        {lines.length > 0 ? (
-          /* ОДНА КАРТОЧКА НА ВЕСЬ СПИСОК, СТРОКИ — ВОЛОСКОМ (владелец
-             2026-09-08: «это не одна услуга будет, а там будет чистка, потом
-             заправка и так далее — куча услуг, чтоб каждую можно было
-             редактировать»). Карточка на каждую услугу читалась как пять
-             отдельных предметов: пять подложек, пять зазоров, пять радиусов.
-             Работы одной записи — один список, и колонки в нём обязаны стоять
-             друг под другом. */
-          <View
-            style={{
-              borderRadius: t.radius.input,
-              backgroundColor: t.rowFill,
-              overflow: "hidden",
-            }}
-          >
-            <ColumnHeader />
-            {lines.map((line, index) => (
-              <ServiceLine
-                key={line.id}
-                line={line}
-                separated={index > 0}
-                onQtyChange={onQtyChange}
-                onPriceChange={onPriceChange}
-              />
-            ))}
-            {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
-                «скидку закинуть туда, где надпись „Услуги“, и справа будет
-                точная цена»). Справа — цена работ после скидки. */}
-            {discount ? (
-              <ServicesRow
-                discountValue={discount.value}
-                onDiscountValueChange={discount.onValueChange}
-                percent={discount.kind === "percent"}
-                onPercentChange={(next) =>
-                  discount.onKindChange(next ? "percent" : "fixed")
-                }
-                discountAmount={
-                  lines.reduce((sum, line) => sum + line.total, 0) - total
-                }
-                afterDiscount={total}
-              />
-            ) : null}
-          </View>
-        ) : (
-          <EmptyState title="Услуги ещё не выбраны" />
-        )}
-
-        {/* ИТОГ — ПОСЛЕДНЯЯ СТРОКА ЛИСТА. У документа в ней ещё ставка и
-            налог, у записи — только сумма и, у старых записей с ручным
-            числом, клавиша «По услугам». */}
-        <PayRow
-          total={shownTotal}
-          vat={
-            vatControl && money
-              ? {
-                  mode: vatControl.mode,
-                  rate: vatControl.rate,
-                  amount: money.vat,
-                  onModeChange: vatControl.onModeChange,
-                  onRateChange: vatControl.onRateChange,
-                }
-              : undefined
-          }
-          action={
-            /* «ПО УСЛУГАМ» ОСТАЁТСЯ ТОЛЬКО ДЛЯ ЗАПИСЕЙ СО СТАРОЙ РУЧНОЙ
-               СУММОЙ: вписать новую больше нельзя, а вернуть посчитанную —
-               можно, иначе такая запись навсегда осталась бы со своим
-               числом, не сходящимся со строками. Клавиша ЖИВАЯ: вместе с
-               прежней разметкой итога она на полдня уехала под
-               `display: "none"` — единственный выход из ручной суммы
-               пропал с экрана молча (аудит кода 2026-09-20). */
-            customTotal && onResetTotal ? (
-              <Pressable
-                onPress={() => {
-                  haptics.tap();
-                  onResetTotal();
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Вернуть сумму по услугам"
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "600", color: t.accent }}>
-                  По услугам
-                </Text>
-              </Pressable>
-            ) : null
-          }
-        />
-
+        {/* ОДНА ТАБЛИЦА НА ВСЁ (владелец 2026-09-22: «всё красиво
+            столбиками — количество, услуги, скидки, VAT, итого, к оплате»).
+            Шапка колонок сказана один раз сверху; ниже услуги, скидка,
+            налог и «К оплате» — в тех же столбцах. */}
+        <View
+          style={{
+            borderRadius: t.radius.input,
+            backgroundColor: t.rowFill,
+            overflow: "hidden",
+          }}
+        >
+          {lines.length > 0 ? (
+            <>
+              <ColumnHeader />
+              {lines.map((line, index) => (
+                <ServiceLine
+                  key={line.id}
+                  line={line}
+                  separated={index > 0}
+                  onQtyChange={onQtyChange}
+                  onPriceChange={onPriceChange}
+                />
+              ))}
+            </>
+          ) : (
+            <EmptyState title="Услуги ещё не выбраны" />
+          )}
+          {discount && lines.length > 0 ? (
+            <DiscountRow
+              value={discount.value}
+              onValueChange={discount.onValueChange}
+              percent={discount.kind === "percent"}
+              onPercentChange={(next) =>
+                discount.onKindChange(next ? "percent" : "fixed")
+              }
+              amount={Math.max(
+                0,
+                lines.reduce((sum, line) => sum + line.total, 0) - total,
+              )}
+              after={total}
+            />
+          ) : null}
+          {vatControl && money ? (
+            <VatRow
+              mode={vatControl.mode}
+              rate={vatControl.rate}
+              amount={money.vat}
+              onModeChange={vatControl.onModeChange}
+              onRateChange={vatControl.onRateChange}
+            />
+          ) : null}
+          <DueRow
+            total={shownTotal}
+            action={
+              customTotal && onResetTotal ? (
+                <Pressable
+                  onPress={() => {
+                    haptics.tap();
+                    onResetTotal();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Вернуть сумму по услугам"
+                  hitSlop={8}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                >
+                  <Text
+                    style={{ fontSize: 13, fontWeight: "600", color: t.accent }}
+                  >
+                    По услугам
+                  </Text>
+                </Pressable>
+              ) : null
+            }
+          />
+        </View>
       </View>
     </BottomSheet>
   );
@@ -213,10 +203,13 @@ export function TotalSheet({
 
 /** Ширины колонок — ОДНИ на шапку и на строки: иначе подпись и число
  *  разъезжаются на первом же длинном имени. */
-const COL_QTY = 78;
-const COL_PRICE = 52;
-const COL_SUM = 58;
-const COL_GAP = 8;
+// Сетка — ОБЩАЯ со строками скидки, налога и «К оплате» (`TOTAL_GRID`):
+// количество, процент скидки и ставка стоят в одном столбце, цена, «−€5» и
+// налог — в другом, суммы — в третьем.
+const COL_QTY = TOTAL_GRID.qty;
+const COL_PRICE = TOTAL_GRID.price;
+const COL_SUM = TOTAL_GRID.sum;
+const COL_GAP = TOTAL_GRID.gap;
 
 /** ШАПКА КОЛОНОК — ВМЕСТО ПОДПИСЕЙ В КАЖДОЙ СТРОКЕ (владелец 2026-09-08:
  *  «названия — красивый блок, потом количество — тоже красивый блок, потом
@@ -238,7 +231,7 @@ function ColumnHeader() {
         flexDirection: "row",
         alignItems: "center",
         gap: COL_GAP,
-        paddingHorizontal: 14,
+        paddingHorizontal: TOTAL_GRID.padX,
         paddingTop: 8,
         paddingBottom: 4,
       }}
@@ -291,7 +284,7 @@ function ServiceLine({
         alignItems: "center",
         gap: COL_GAP,
         minHeight: 46,
-        paddingHorizontal: 14,
+        paddingHorizontal: TOTAL_GRID.padX,
         paddingVertical: 4,
         borderTopWidth: separated ? 1 : 0,
         borderTopColor: t.separator,
@@ -482,7 +475,12 @@ function StepButton({
     >
       <Text
         maxFontSizeMultiplier={1}
-        style={{ fontSize: 18, fontWeight: "600", color: t.ink, lineHeight: 22 }}
+        style={{
+          fontSize: 18,
+          fontWeight: "600",
+          color: t.ink,
+          lineHeight: 22,
+        }}
       >
         {icon === "minus" ? "−" : "+"}
       </Text>
