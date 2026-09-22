@@ -5,8 +5,6 @@ import type { Client } from "@babun/shared/local/clients";
 import type { VatSettings } from "@babun/shared/local/finance/vat";
 import {
   calculateInvoiceTotals,
-  invoiceLineTotal,
-  type InvoiceLedgerWithLines,
   type InvoiceLineDraft,
   type InvoiceVatMode,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -36,7 +34,6 @@ import {
   addDaysYmd,
   type EditableInvoiceLine,
   formatInvoiceMoney,
-  invoiceVatMode,
   parseDecimal,
   parseMoneyAmount,
 } from "./format";
@@ -74,7 +71,6 @@ export interface InvoiceEditorValue {
 }
 
 export function InvoiceEditor({
-  initial,
   prefill,
   vatForTeam,
   clients,
@@ -88,7 +84,6 @@ export function InvoiceEditor({
   onSubmit,
   onDirtyChange,
 }: {
-  initial?: InvoiceLedgerWithLines;
   prefill?: InvoicePrefill;
   /** Действующий НДС по команде (счёт → команда → компания, счёта у инвойса
    *  нет). Резолвер тот же, что у операций: греческая команда получает свои
@@ -116,9 +111,7 @@ export function InvoiceEditor({
    *  (владелец 2026-09-22: инвойсы уходят в министерство, а там принимают
    *  греческий или английский). Не запоминается ни за устройством, ни за
    *  клиентом: русский — разовый выбор в шторке предпросмотра. */
-  const [language, setLanguage] = useState<InvoiceLanguage>(() =>
-    initial ? (initial.language === "en" ? "en" : "ru") : "en",
-  );
+  const [language, setLanguage] = useState<InvoiceLanguage>("en");
   const serial = useRef(0);
   const newLine = (
     title = "",
@@ -192,8 +185,18 @@ export function InvoiceEditor({
   };
   // Черновик по записи, с которой пришли. Считается ОДИН РАЗ при рождении
   // формы: пересчёт на каждый рендер стирал бы то, что человек уже правит.
+  // ИНВОЙС ИЗ ДОХОДА (разбор 2026-09-22, баг 5): сервер требует, чтобы итог
+  // счёта совпал с пришедшими деньгами до цента. Услуги записи годятся,
+  // только если доход — вся её сумма; частичная оплата — одна строка на сумму
+  // дохода.
+  const incomeAmount =
+    prefill?.transactionId && (prefill.amount ?? 0) > 0 ? round2(prefill.amount as number) : null;
   const seed = useRef(
-    !initial && prefill?.appointmentId ? generate(prefill.appointmentId) : null,
+    prefill?.appointmentId &&
+      (incomeAmount == null ||
+        (sourceAppointment != null && round2(sourceAppointment.total_amount) === incomeAmount))
+      ? generate(prefill.appointmentId)
+      : null,
   ).current;
 
   // Future issue dates remain intentionally available (the server permits
@@ -201,12 +204,11 @@ export function InvoiceEditor({
   // Счёт по записи датируется днём визита — как и раньше, но теперь эту дату
   // называет генератор, а не параметр в адресе.
   const firstIssuedOn =
-    initial?.issued_on ?? seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
+    seed?.issuedOn ?? prefill?.issuedOn ?? businessToday;
   const [issuedOn, setIssuedOn] = useState(firstIssuedOn);
   const [dueOn, setDueOn] = useState<string | null>(
     // Срок — из настроек компании, а не зашитая неделя (владелец 2026-08-15).
-    initial?.due_on ??
-      seed?.dueOn ??
+    seed?.dueOn ??
       addDaysYmd(firstIssuedOn, Math.max(0, generator.dueDays)),
   );
   // Общая на «Правку» (строка-дверь) и «Документ» (барабан бумаги): смена
@@ -217,17 +219,20 @@ export function InvoiceEditor({
     if (dueOn && dueOn < value) setDueOn(value);
   };
   const [clientId, setClientId] = useState<string | null>(
-    initial?.client_id ?? seed?.clientId ?? prefill?.clientId ?? null,
+    seed?.clientId ?? prefill?.clientId ?? null,
   );
   /** ОБЪЕКТ СЧЁТА (владелец 2026-09-22): у счёта из записи — объект записи,
    *  у выставленного — свой; при выборе клиента — его основной объект. */
   const [locationId, setLocationId] = useState<string | null>(
-    initial ? initial.location_id ?? null : sourceAppointment?.location_id ?? null,
+    sourceAppointment?.location_id ?? null,
   );
   // ЗАЯВКА ПРИЕЗЖАЕТ, НО НЕ МЕНЯЕТСЯ ЗДЕСЬ: счёт по работе открывают ИЗ
   // работы, и форма только несёт её дальше на сервер.
-  const appointmentId = initial?.appointment_id ?? prefill?.appointmentId ?? null;
-  const initialTeamId = initial?.brigade_id ?? seed?.teamId ?? prefill?.teamId ?? null;
+  const appointmentId = prefill?.appointmentId ?? null;
+  // Первая команда — сразу при рождении, а не эффектом после: иначе форма
+  // запоминала себя без команды, и пустой счёт при «назад» спрашивал
+  // «Черновик не сохранён» (разбор 2026-09-22, баг 6).
+  const initialTeamId = seed?.teamId ?? prefill?.teamId ?? teams[0]?.id ?? null;
   // КОМАНДА РЕШАЕТ ТРИ ВЕЩИ СРАЗУ: чей прайс предлагать в услугах, чьи кассы
   // показывать и по какому календарю лягут деньги. Поэтому она наверху,
   // лентой, и видна всегда — а не строкой в анкете, куда надо долистать.
@@ -236,9 +241,14 @@ export function InvoiceEditor({
   // сеется один раз при рождении, выставленный документ хранит свой налог и
   // за настройками не следует.
   const seedVat = useRef(vatForTeam(initialTeamId)).current;
-  const [vatMode, setVatMode] = useState<InvoiceVatMode>(
-    initial ? invoiceVatMode(initial) : appointmentVat?.mode ?? seedVat.mode,
-  );
+  // Деньги дохода уже пришли С НАЛОГОМ: строка на его сумму считает VAT «в
+  // цене». «Сверху» начислил бы налог второй раз, и итог разошёлся бы с
+  // доходом — сервер отказал бы. Услуги записи с её «сверху» уже разложены
+  // на сумму до налога (`generate`), им режим записи.
+  const [vatMode, setVatMode] = useState<InvoiceVatMode>(() => {
+    const mode = appointmentVat?.mode ?? seedVat.mode;
+    return incomeAmount != null && !seed && mode === "exclusive" ? "inclusive" : mode;
+  });
   // СТАВКА — ИЗ ДЕЙСТВУЮЩЕЙ НАСТРОЙКИ, А НЕ ИЗ ПОЛЯ ФОРМЫ. Поле жило в блоке
   // «Налог»; блока больше нет, и человек выбирает клавишей VAT только РЕЖИМ —
   // «сколько процентов» отвечает настройка (счёт → команда → компания), как и
@@ -250,12 +260,12 @@ export function InvoiceEditor({
   // документов (`useRememberedVatRate`). У выставленного — своя, из снимка.
   const rememberedRate = useRememberedVatRate();
   const [rateOverride, setRateOverride] = useState<number | null>(
-    initial ? Number(initial.vat_percent ?? 0) : appointmentVat?.rate ?? null,
+    appointmentVat?.rate ?? null,
   );
   const documentRate = rateOverride ?? rememberedRate.rate;
   // Смена команды пересаживает налоговое умолчание, пока клавиши VAT не
   // трогали руками; после ручного выбора форма человека не переспорит.
-  const vatTouched = useRef(!!initial || !!appointmentVat);
+  const vatTouched = useRef(!!appointmentVat || incomeAmount != null);
   const changeTeam = (id: string | null) => {
     setTeamId(id);
     if (vatTouched.current) return;
@@ -273,20 +283,9 @@ export function InvoiceEditor({
   // Приписка компании подставляется в НОВЫЙ документ; выставленный хранит
   // свою и не переписывается вслед за настройкой.
   const [notes, setNotes] = useState(
-    initial?.notes ?? seed?.notes ?? generator.footerNote ?? "",
+    seed?.notes ?? generator.footerNote ?? "",
   );
   const [lines, setLines] = useState<EditableInvoiceLine[]>(() => {
-    if (initial) {
-      return initial.lines.filter((line) => line.unit_price >= 0).map((line) =>
-        newLine(
-          line.title,
-          String(line.qty),
-          String(line.unit_price),
-          line.description,
-          line.unit,
-        ),
-      );
-    }
     // Счёт по записи расписан её услугами; счёт «с нуля» и счёт по операции —
     // одна строка с тем, что о ней известно.
     if (seed) {
@@ -321,20 +320,15 @@ export function InvoiceEditor({
   // процент + число», та же шторка «Итого». На сервер уходит одной строкой
   // счёта с флагом `discount` и отрицательной ценой; налог — после скидки.
   // У выставленного счёта скидка уже напечатана строкой — её и поднимаем.
-  const [discountKind, setDiscountKind] = useState<DiscountKind>(
-    initial?.lines.some((line) => line.unit_price < 0) ? "fixed" : "percent",
-  );
-  const [discountValue, setDiscountValue] = useState<string>(() => {
-    const stored = initial?.lines.find((line) => line.unit_price < 0);
-    return stored ? String(-stored.unit_price) : "";
-  });
+  const [discountKind, setDiscountKind] = useState<DiscountKind>("percent");
+  const [discountValue, setDiscountValue] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   /** Какими реквизитами подписан счёт. `null` — сервер возьмёт основные:
    *  документ не должен требовать выбора там, где ответ и так известен. */
-  const [companyId, setCompanyId] = useState<string | null>(initial?.company_id ?? null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
   /** Куда клиент должен заплатить (владелец 2026-09-20). Подсказка платежу, а
    *  не сам платёж: деньги придут отдельной операцией. */
-  const [accountId, setAccountId] = useState<string | null>(initial?.account_id ?? null);
+  const [accountId, setAccountId] = useState<string | null>(null);
   /** ПРЕВЬЮ — ОБЯЗАТЕЛЬНЫЙ ШАГ (владелец 2026-09-20: «сначала делается превью
    *  этого инвойса, и потом я нажимаю сохранить»). */
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -463,51 +457,7 @@ export function InvoiceEditor({
 
   const paperDoc = useMemo(
     () =>
-      initial
-        ? buildInvoiceDocument({
-            language,
-            invoice: {
-              ...initial,
-              due_on: dueOn,
-              notes: notes.trim() || null,
-              vat_percent: Math.max(0, rate),
-              subtotal_net: totals.subtotal_net,
-              vat_amount: totals.vat_amount,
-              total: totals.total,
-              lines: withDiscount(validLines)
-                .map((line, index) => ({
-                  id: `${initial.id}-draft-${index}`,
-                  invoice_id: initial.id,
-                  position: index + 1,
-                  title: line.title,
-                  description: line.description ?? null,
-                  qty: line.qty,
-                  unit: line.unit ?? null,
-                  unit_price: line.unit_price,
-                  // Через invoiceLineTotal, а не своим умножением: бумага
-                  // выставленного счёта печатает этот total как есть, а строку
-                  // итогов считает calculateInvoiceTotals. Своя формула давала
-                  // на 1,5 × €2,01 позицию 3,01 против подытога 3,02 — два
-                  // разных числа за одну позицию на одном листе.
-                  total: invoiceLineTotal(line.qty, line.unit_price),
-                })),
-            },
-            tenant,
-            client: selectedClient ?? undefined,
-            settlement: {
-              income: 0,
-              refunded: 0,
-              paid: 0,
-              remaining: totals.total,
-              overpaid: 0,
-              isPartial: false,
-              isPaid: false,
-            },
-            payments: [],
-            businessToday,
-            sellerPreview: paperSeller,
-          })
-        : buildInvoiceDocument({
+      buildInvoiceDocument({
             language,
             tenant,
             client: selectedClient ?? undefined,
@@ -520,6 +470,9 @@ export function InvoiceEditor({
               clientId,
               lines: withDiscount(parsedLines).map((line) => ({
                 title: line.title,
+                // Описание услуги печатает и выставленный документ — превью
+                // обязано показать его так же (разбор 2026-09-22, баг 4).
+                description: line.description ?? null,
                 qty: line.qty,
                 // Зеркало обязано печатать «4 м» ровно так же, как это уедет
                 // на сервер: единица едет и в черновик, иначе она появлялась
@@ -539,7 +492,7 @@ export function InvoiceEditor({
             },
           }),
     // Пересобираем на каждое изменение формы — в этом весь смысл зеркала.
-    [initial, tenant, selectedClient, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
+    [tenant, selectedClient, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
      clientId, parsedLines, vatMode, rate, totals, notes, businessToday,
      currency, language],
   );
@@ -585,7 +538,12 @@ export function InvoiceEditor({
             }
           : totals.total <= 0
             ? { text: "Итог инвойса должен быть больше нуля", error: true }
-            : null;
+            : incomeAmount != null && round2(totals.total) !== incomeAmount
+              ? {
+                  text: `Итог должен совпадать с доходом — ${formatInvoiceMoney(incomeAmount, currency)}`,
+                  error: true,
+                }
+              : null;
 
   const submit = async () => {
     setError(null);
@@ -610,14 +568,14 @@ export function InvoiceEditor({
         vat_percent: rate,
         lines: withDiscount(parsedLines),
         notes: notes.trim() || null,
-        link_to_tx_id: initial ? null : prefill?.transactionId ?? null,
+        link_to_tx_id: prefill?.transactionId ?? null,
       });
     } catch (submissionError) {
       setError((submissionError as Error).message);
     }
   };
 
-  const actionVerb = initial ? "Сохранить" : "Выставить инвойс";
+  const actionVerb = "Выставить инвойс";
   // Кнопка называет сумму: она и есть ответ на вопрос «на сколько документ».
   const actionLabel = `${actionVerb} · ${formatInvoiceMoney(totals.total, currency)}`;
 
@@ -657,17 +615,15 @@ export function InvoiceEditor({
             clientId={clientId}
             onClientChange={changeClient}
             locationId={locationId}
-            onLocationChange={initial ? undefined : setLocationId}
+            onLocationChange={setLocationId}
             issuedOn={issuedOn}
             dueOn={dueOn}
-            issuedOnLocked={!!initial}
             onIssuedOnChange={changeIssuedOn}
             onDueOnChange={setDueOn}
             companyId={companyId}
             onCompanyChange={setCompanyId}
-            // Номер правят только у нового счёта: у выставленного он свой.
             number={
-              initial || !pickedCompany
+              !pickedCompany
                 ? undefined
                 : { companyId: pickedCompany.id, year: issuedYear, next: series.data ?? null }
             }

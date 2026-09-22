@@ -26,7 +26,8 @@ import {
 } from "@/features/clients/card-attachments";
 import { ReceiptSheet } from "@/features/documents/ReceiptSheet";
 import { useReceipts } from "@/features/documents/receipts-queries";
-import { useInvoices } from "@/features/invoices/queries";
+import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
+import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
 import { AppointmentPhotoViewer } from "./AppointmentPhotoViewer";
 import { docTitle, isVideoPath, pendingDocs, pendingMedia, type PendingFile } from "./appointment-files";
 import {
@@ -103,6 +104,7 @@ export function AppointmentFilesBlock({
   const uploadDoc = useUploadAttachments(clientId ?? "", appointmentId);
   const removeDoc = useDeleteAttachment(clientId ?? "");
   const invoicesQuery = useInvoices();
+  const creditLinks = useCreditNoteLinks();
   const receiptsQuery = useReceipts({ appointmentId, enabled: saved });
   // ЧЕК ОТКРЫВАЕТСЯ ЗДЕСЬ ЖЕ, ЛИСТОМ С «ВЫСЛАТЬ ЧЕК» (STORY-068): раньше плитка
   // уводила на экран всех чеков клиента, и до отправки было три экрана. Имя
@@ -125,11 +127,13 @@ export function AppointmentFilesBlock({
   const invoices = useMemo(
     () =>
       saved
-        ? (invoicesQuery.data ?? []).filter(
-            (inv) => inv.appointment_id === appointmentId && inv.status !== "void" && inv.status !== "cancelled",
+        ? liveAppointmentInvoices(
+            invoicesQuery.data ?? [],
+            appointmentId,
+            creditLinks.data?.originalByNoteId ?? new Map(),
           )
         : [],
-    [invoicesQuery.data, appointmentId, saved],
+    [invoicesQuery.data, creditLinks.data, appointmentId, saved],
   );
   const receipts = useMemo(
     () => (saved ? (receiptsQuery.data ?? []).filter((r) => r.status !== "void") : []),

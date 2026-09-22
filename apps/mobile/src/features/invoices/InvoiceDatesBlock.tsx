@@ -21,9 +21,6 @@ import { useThemeColors } from "@/theme/colors";
 //     «Применить» в футере, «Без срока» тихой строкой под ним.
 // Две половины со своими листами (22.09 утром) ушли — второй способ показать
 // «когда», которого в продукте больше нигде нет.
-//
-// У выставленного документа дата выставления заморожена (по её году живёт
-// номер): сегмента нет, шторка правит только срок.
 
 function daysBetween(from: string, to: string): number {
   const a = Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8, 10));
@@ -49,19 +46,17 @@ type Field = "issued" | "due";
 export function InvoiceDatesBlock({
   issuedOn,
   dueOn,
-  issuedOnLocked,
   onIssuedOnChange,
   onDueOnChange,
 }: {
   issuedOn: string;
   dueOn: string | null;
-  issuedOnLocked?: boolean;
   onIssuedOnChange: (ymd: string | null) => void;
   onDueOnChange: (ymd: string | null) => void;
 }) {
   const t = useThemeColors();
   const [open, setOpen] = useState(false);
-  const [field, setField] = useState<Field>(issuedOnLocked ? "due" : "issued");
+  const [field, setField] = useState<Field>("issued");
   const [draftIssued, setDraftIssued] = useState(issuedOn);
   const [draftDue, setDraftDue] = useState<string | null>(dueOn);
 
@@ -70,14 +65,14 @@ export function InvoiceDatesBlock({
     if (!open) return;
     setDraftIssued(issuedOn);
     setDraftDue(dueOn);
-    setField(issuedOnLocked ? "due" : "issued");
-  }, [open, issuedOn, dueOn, issuedOnLocked]);
+    setField("issued");
+  }, [open, issuedOn, dueOn]);
 
   const days = dueOn ? daysBetween(issuedOn, dueOn) : null;
   const shownDue = draftDue ?? draftIssued;
 
   const apply = () => {
-    if (!issuedOnLocked && draftIssued !== issuedOn) onIssuedOnChange(draftIssued);
+    if (draftIssued !== issuedOn) onIssuedOnChange(draftIssued);
     // Срок раньше выставления не бывает — подтягиваем к дню выставления.
     const due = draftDue && draftDue < draftIssued ? draftIssued : draftDue;
     if (due !== dueOn) onDueOnChange(due);
@@ -115,16 +110,14 @@ export function InvoiceDatesBlock({
                 : "Оплатить до · без срока"}
           </Text>
 
-          {issuedOnLocked ? null : (
-            <SegmentedControl
-              options={[
-                { value: "issued", label: "Выставлен" },
-                { value: "due", label: "Оплатить до" },
-              ]}
-              value={field}
-              onChange={setField}
-            />
-          )}
+          <SegmentedControl
+            options={[
+              { value: "issued", label: "Выставлен" },
+              { value: "due", label: "Оплатить до" },
+            ]}
+            value={field}
+            onChange={setField}
+          />
 
           <View style={{ alignItems: "center" }}>
             {field === "issued" ? (

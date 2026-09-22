@@ -14,8 +14,8 @@ import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { EditInvoiceDraft, IssueInvoiceDraft } from "./invoices";
-import { issueInvoice, updateInvoice } from "./invoices";
+import type { IssueInvoiceDraft } from "./invoices";
+import { issueInvoice } from "./invoices";
 
 const TENANT = "11111111-1111-4111-8111-111111111111";
 const REQUEST_ID = "33333333-3333-4333-8333-333333333333";
@@ -33,17 +33,6 @@ const lines = [
 const issueDraft: IssueInvoiceDraft = {
   request_id: REQUEST_ID,
   issued_on: "2026-08-25",
-  due_on: "2026-09-01",
-  client_id: null,
-  appointment_id: null,
-  brigade_id: null,
-  vat_mode: "off",
-  vat_percent: 0,
-  notes: "Спасибо",
-  lines,
-};
-
-const editDraft: EditInvoiceDraft = {
   due_on: "2026-09-01",
   client_id: null,
   appointment_id: null,
@@ -202,19 +191,6 @@ describe("строка счёта доезжает до сервера цели�
     expect(sent).toEqual(expected);
   });
 
-  it("правка счёта шлёт тот же набор полей", async () => {
-    const calls: Array<Record<string, unknown>> = [];
-    await updateInvoice(fakeSupabase({ calls }), REQUEST_ID, "2026-08-25", editDraft);
-
-    expect(calls[0]?.name).toBe("update_invoice_draft");
-    expect((calls[0]?.p_lines as unknown[])[0]).toEqual({
-      title: "Трасса",
-      description: "Штробление и изоляция",
-      unit: "м",
-      qty: 4,
-      unit_price: 20,
-    });
-  });
 });
 
 describe("контрольное чтение инвойса", () => {
@@ -238,16 +214,6 @@ describe("контрольное чтение инвойса", () => {
     ).rejects.toThrow("Контрольное чтение инвойса не совпало");
   });
 
-  it("ловит потерянное описание и при правке счёта", async () => {
-    await expect(
-      updateInvoice(
-        fakeSupabase({ savedLines: [lineRow({ description: null })] }),
-        REQUEST_ID,
-        "2026-08-25",
-        editDraft,
-      ),
-    ).rejects.toThrow("Контрольное чтение инвойса не совпало");
-  });
 
   it("пропускает документ, совпавший до последнего поля", async () => {
     const saved = await issueInvoice(fakeSupabase({}), TENANT, issueDraft);
@@ -295,14 +261,4 @@ describe("подтверждение записи сервером", () => {
     ).rejects.toThrow("нет прав");
   });
 
-  it("не принимает правку счёта, который вернулся не в статусе issued", async () => {
-    await expect(
-      updateInvoice(
-        fakeSupabase({ rpc: { data: invoiceRow({ status: "paid" }), error: null } }),
-        REQUEST_ID,
-        "2026-08-25",
-        editDraft,
-      ),
-    ).rejects.toThrow("сохранение не подтверждено сервером");
-  });
 });

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useRouter, type Href } from "expo-router";
-import { Building2 } from "lucide-react-native";
+import { Building2, Settings2 } from "lucide-react-native";
 import { iconPreset } from "@/components/ui/icon-set";
 import { Pressable, View } from "react-native";
-import { Settings2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SelectList, SelectRow } from "@/components/ui/select-rows";

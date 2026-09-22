@@ -54,22 +54,6 @@ export interface IssueInvoiceDraft {
   location_id?: string | null;
 }
 
-export interface EditInvoiceDraft {
-  due_on?: string | null;
-  client_id?: string | null;
-  appointment_id?: string | null;
-  brigade_id?: string | null;
-  vat_mode: InvoiceVatMode;
-  vat_percent: number;
-  lines: InvoiceLineDraft[];
-  notes?: string | null;
-  /** Набор реквизитов и счёт — их принимает и правка (миграция
-   *  20260921010000). ПРАВКА ЗАМЕНЯЕТ ЧЕРНОВИК ЦЕЛИКОМ: не прислать поле
-   *  значит стереть выбранное, а не «оставить как было». */
-  company_id?: string | null;
-  account_id?: string | null;
-}
-
 function rowToInvoice(r: Row): InvoiceLedger {
   return {
     id: r.id,
@@ -276,67 +260,6 @@ export async function setInvoiceLanguage(
     .update({ language })
     .eq("id", id);
   if (error) throw new Error(`setInvoiceLanguage: ${error.message}`);
-}
-
-/** Edit an unpaid invoice atomically under the database invoice-row lock. */
-export async function updateInvoice(
-  supabase: DbSupabase,
-  id: string,
-  issuedOn: string,
-  draft: EditInvoiceDraft,
-): Promise<InvoiceLedgerWithLines> {
-  const lines = validateInvoiceDraft({ ...draft, issued_on: issuedOn });
-  const totals = calculateInvoiceTotals(lines, draft.vat_mode, draft.vat_percent);
-  assertInvoiceTotal(totals.total);
-  const { data, error } = await supabase.rpc(
-    "update_invoice_draft",
-    rpcArgs<"update_invoice_draft">({
-      p_invoice_id: id,
-      p_due_on: draft.due_on ?? null,
-      p_client_id: draft.client_id ?? null,
-      p_appointment_id: draft.appointment_id ?? null,
-      p_brigade_id: draft.brigade_id ?? null,
-      p_vat_mode: draft.vat_mode,
-      p_vat_percent: draft.vat_percent,
-      p_company_id: draft.company_id ?? null,
-      p_account_id: draft.account_id ?? null,
-      p_lines: lines.map((line) => ({
-        title: line.title,
-        description: line.description ?? null,
-        unit: line.unit ?? null,
-        qty: line.qty,
-        unit_price: line.unit_price,
-        ...(line.discount ? { discount: true } : {}),
-      })),
-      p_notes: draft.notes?.trim() || null,
-    }),
-  );
-  if (error || !data || data.id !== id || data.status !== "issued") {
-    throw new Error(
-      `updateInvoice: ${error?.message ?? "сохранение не подтверждено сервером"}`,
-    );
-  }
-  const saved = await getInvoice(supabase, id);
-  if (!saved) {
-    throw new Error("Инвойс сохранён, но контрольное чтение не подтверждено");
-  }
-  assertInvoiceControlRead(saved, lines, totals, {
-    issuedOn,
-    dueOn: draft.due_on ?? null,
-    clientId: draft.client_id ?? null,
-    appointmentId: draft.appointment_id ?? null,
-    brigadeId: draft.brigade_id ?? null,
-    notes: draft.notes ?? null,
-    vatMode: draft.vat_mode,
-    vatPercent: draft.vat_percent,
-    allowResolvedReferences: false,
-    // РЕКВИЗИТЫ И СЧЁТ СВЕРЯЮТСЯ И ПОСЛЕ ПРАВКИ. При выставлении это уже
-    // делалось; у правки поля просто забыли — а ошибка здесь означает НЕ ТОГО
-    // продавца (чужой номер НДС и чужой IBAN) на настоящем счёте.
-    companyId: draft.company_id ?? null,
-    accountId: draft.account_id ?? null,
-  });
-  return saved;
 }
 
 function assertInvoiceControlRead(

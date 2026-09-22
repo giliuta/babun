@@ -26,26 +26,24 @@ import { ValueRow } from "@/components/ui/ValueRow";
 import { ICON } from "@/components/ui/tokens";
 import { chooseOption } from "@/lib/choose";
 import { useAppointments } from "@/features/calendar/queries";
-import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
 import { useClients } from "@/features/clients/queries";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
 import {
   formatInvoiceDate,
   formatInvoiceMoney,
-  invoiceVatMode,
   todayYmd,
 } from "@/features/invoices/format";
 import { InvoicePaymentSheet } from "@/features/invoices/InvoicePaymentSheet";
 import { InvoiceRefundSheet } from "@/features/invoices/InvoiceRefundSheet";
 import { shareInvoicePdf } from "@/features/invoices/share-pdf";
-import { buildInvoiceDocument } from "@/features/invoices/document";
+import { buildInvoiceDocument, objectAddressLines } from "@/features/invoices/document";
+import { invoiceDictionary } from "@/features/invoices/dictionary";
 import { buildInvoiceShareText } from "@/features/invoices/text";
 import { InvoiceStatusBadge } from "@/features/invoices/InvoiceStatusBadge";
 import {
   useCancelInvoice,
   useCreditNoteLinks,
-  useEditInvoice,
   useInvoice,
   useInvoicePayments,
   useInvoices,
@@ -119,8 +117,6 @@ export default function InvoiceDetailScreen() {
   // документ — сверху пишет, что он ни к чему не присвоен, и предлагает
   // выбрать клиента, чтобы не потерялся»). Идёт тем же путём, что правка
   // инвойса: сервер пересобирает снимок клиента и печатает его на бумаге.
-  const [pickClientOpen, setPickClientOpen] = useState(false);
-  const edit = useEditInvoice(id, invoice.data?.issued_on ?? businessToday);
   // Счёт компании обслуживает подключённые к нему команды — сервер такую
   // оплату принимает, а экран её запрещал: инвойс команды нельзя было
   // оплатить на общий Revolut, хотя деньги приходят именно туда.
@@ -322,6 +318,13 @@ export default function InvoiceDetailScreen() {
     ? client.deleted_at != null
     : row.client_snapshot?.archived === true
       || (clientsQuery.isSuccess && !!row.client_id);
+  // Объект — из снимка документа: подпись и точный адрес, как на бумаге.
+  const snapshotObject = row.client_snapshot?.object ?? null;
+  const invoiceObject = snapshotObject
+    ? [snapshotObject.label, objectAddressLines(snapshotObject.address_parts, invoiceDictionary("ru")).join(", ")]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const status = invoiceDisplayStatus(row, businessToday, settlement);
   // Отменённый (сторнированный) инвойс и кредит-нота денег не ждут.
   const awaitsPayment =
@@ -334,35 +337,6 @@ export default function InvoiceDetailScreen() {
     !!row.due_on &&
     row.due_on < businessToday;
   const unassigned = !row.client_id && !isCreditNote;
-  // Сервер меняет реквизиты только у неоплаченного инвойса без операций
-  // (сторож prevent_settled_invoice_rewrite): оплаченную бумагу не трогаем.
-  const canAssignClient =
-    unassigned && row.status === "issued" && settlement.paid === 0;
-  const assignClient = async (clientId: string) => {
-    setPickClientOpen(false);
-    try {
-      await edit.mutateAsync({
-        due_on: row.due_on,
-        client_id: clientId,
-        appointment_id: row.appointment_id,
-        brigade_id: row.brigade_id,
-        vat_mode: invoiceVatMode(row),
-        vat_percent: row.vat_percent,
-        lines: row.lines.map((line) => ({
-          title: line.title,
-          qty: line.qty,
-          unit_price: line.unit_price,
-          description: line.description,
-          unit: line.unit,
-        })),
-        notes: row.notes,
-      });
-      haptics.success();
-    } catch (error) {
-      notify("Не удалось привязать клиента", (error as Error).message);
-    }
-  };
-
   const openPayment = () => {
     if (paymentAccounts.length > 0) {
       setPaymentOpen(true);
@@ -458,18 +432,13 @@ export default function InvoiceDetailScreen() {
 
         {unassigned ? (
           <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            {/* ВЫСТАВЛЕННЫЙ ДОКУМЕНТ НЕ ПРАВИТСЯ (владелец 2026-09-22: «после
+                того как выставили инвойс, редактировать нельзя — только PDF,
+                удалить или кредит-нота»). Привязка клиента была той же
+                правкой и стирала реквизиты и счёт документа. */}
             <NoticeBar
               tone="info"
-              message={
-                canAssignClient
-                  ? "Документ ни к кому не привязан"
-                  : "Документ ни к кому не привязан. Привязать можно только неоплаченный инвойс без операций."
-              }
-              action={
-                canAssignClient
-                  ? { label: "Выбрать клиента", onPress: () => setPickClientOpen(true) }
-                  : undefined
-              }
+              message="Документ ни к кому не привязан. Выставленный инвойс не меняется — нужен другой получатель: отмените его и выставьте новый."
             />
           </View>
         ) : null}
@@ -521,15 +490,15 @@ export default function InvoiceDetailScreen() {
               value={clientIsArchived ? `${recipientName} · Архив` : recipientName}
               muted={clientIsArchived}
             />
-          ) : canAssignClient ? (
-            <ValueRow
-              label="Клиент"
-              value="Выбрать"
-              onPress={() => setPickClientOpen(true)}
-            />
           ) : (
             <InfoRow label="Клиент" value="Не привязан" muted />
           )}
+          {invoiceObject ? (
+            <>
+              <Divider inset={16} />
+              <InfoRow label="Объект" value={invoiceObject} />
+            </>
+          ) : null}
           <Divider inset={16} />
           {appointment ? (
             <ValueRow
@@ -648,13 +617,6 @@ export default function InvoiceDetailScreen() {
               onPress={openPayment}
             />
           ) : null}
-          {!isCreditNote && row.status === "issued" && payments.length === 0 ? (
-            <Button
-              label="Редактировать"
-              variant="secondary"
-              onPress={() => router.push(`/invoices/edit/${row.id}` as Href)}
-            />
-          ) : null}
           {!isCreditNote && row.status === "issued" ? (
             /* ОДНА КРАСНАЯ КНОПКА НА ОТКАЗ: что именно произойдёт —
                кредит-нота или аннулирование — спрашивается подтверждением,
@@ -688,6 +650,7 @@ export default function InvoiceDetailScreen() {
         businessToday={businessToday}
         brigadeId={row.brigade_id}
         accounts={paymentAccounts}
+        preferredAccountId={row.account_id ?? null}
         submitting={pay.isPending}
         onSubmit={async (value) => {
           await pay.mutateAsync(value);
@@ -714,12 +677,6 @@ export default function InvoiceDetailScreen() {
         accountId={null}
         onClose={() => setAccountCreateOpen(false)}
         presetTeamId={row.brigade_id}
-      />
-      <ClientPickerSheet
-        visible={pickClientOpen}
-        title="Клиент инвойса"
-        onSelect={(client) => void assignClient(client.id)}
-        onClose={() => setPickClientOpen(false)}
       />
     </Screen>
   );

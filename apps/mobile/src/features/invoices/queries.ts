@@ -4,9 +4,7 @@ import {
   issueInvoice,
   listInvoices,
   setInvoiceLanguage,
-  updateInvoice,
   updateInvoiceStatus,
-  type EditInvoiceDraft,
   type IssueInvoiceDraft,
 } from "@babun/shared/db/repositories/invoices";
 import {
@@ -195,29 +193,6 @@ export function useIssueInvoice() {
       if (language && language !== "ru") {
         try {
           await setInvoiceLanguage(supabase, invoice.id, language);
-          return { ...invoice, language };
-        } catch {
-          return invoice;
-        }
-      }
-      return invoice;
-    },
-    onSuccess: () => invalidateInvoices(qc),
-    meta: { errorHandled: true },
-  });
-}
-
-export function useEditInvoice(id: string, issuedOn: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({
-      language,
-      ...draft
-    }: EditInvoiceDraft & { language?: "ru" | "en" }) => {
-      const invoice = await updateInvoice(supabase, id, issuedOn, draft);
-      if (language && language !== invoice.language) {
-        try {
-          await setInvoiceLanguage(supabase, id, language);
           return { ...invoice, language };
         } catch {
           return invoice;

@@ -81,6 +81,7 @@ export function InvoicePaymentSheet({
   businessToday,
   brigadeId,
   accounts,
+  preferredAccountId,
   submitting,
   onSubmit,
   onClose,
@@ -93,6 +94,10 @@ export function InvoicePaymentSheet({
   businessToday: string;
   brigadeId: string | null;
   accounts: AccountWithBalance[];
+  /** Счёт, выбранный при выставлении инвойса («куда ждём деньги»): лист
+   *  открывается на нём, если он жив и служит команде (разбор 2026-09-22,
+   *  баг 7 — выбор сохранялся и нигде не использовался). */
+  preferredAccountId?: string | null;
   submitting: boolean;
   onSubmit: (value: {
     request_id: string;
@@ -120,17 +125,25 @@ export function InvoicePaymentSheet({
     }
     if (initializedForOpen.current) return;
     initializedForOpen.current = true;
-    const initialMethod = defaultPaymentMethod(accounts, brigadeId);
-    const matching = accountsForPaymentMethod(accounts, brigadeId, initialMethod)[0];
+    const preferredMethod = preferredAccountId
+      ? PAYMENT_METHODS.find((candidate) =>
+          accountsForPaymentMethod(accounts, brigadeId, candidate)
+            .some((account) => account.id === preferredAccountId),
+        )
+      : undefined;
+    const initialMethod = preferredMethod ?? defaultPaymentMethod(accounts, brigadeId);
+    const matching = preferredMethod
+      ? preferredAccountId
+      : accountsForPaymentMethod(accounts, brigadeId, initialMethod)[0]?.id;
     setMethod(initialMethod);
-    setAccountId(matching?.id ?? null);
+    setAccountId(matching ?? null);
     // Префилл — той же грамматикой, что набирает человек: «116,70», а не
     // машинное «116.7» с точкой (как в TransferSheet).
     setAmount(formatMoneyForInput(remaining));
     setOccurredOn(businessToday);
     setRequestId(randomUuid());
     setError(null);
-  }, [visible, accounts, brigadeId, remaining, businessToday]);
+  }, [visible, accounts, brigadeId, preferredAccountId, remaining, businessToday]);
 
   const activeAccounts = useMemo(
     () =>

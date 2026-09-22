@@ -17,7 +17,8 @@ import { useThemeColors } from "@/theme/colors";
 import { accountIcon } from "@/features/finances/account-ui";
 import { PaymentHistorySheet } from "@/features/finances/PaymentHistorySheet";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
-import { useInvoices } from "@/features/invoices/queries";
+import { useCreditNoteLinks, useInvoices } from "@/features/invoices/queries";
+import { liveAppointmentInvoices } from "@/features/invoices/appointment-invoices";
 import { usePlanAllows, useTenant } from "@/features/settings/tenant";
 import { useBusinessNow } from "./business-now";
 import {
@@ -105,6 +106,7 @@ export function PaymentBlock({
   const record = useRecordPayment();
   const cancel = useCancelPayment();
   const invoicesQuery = useInvoices();
+  const creditLinks = useCreditNoteLinks();
   const [partText, setPartText] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -119,17 +121,15 @@ export function PaymentBlock({
   } = usePaymentRights(teamId);
   const canUseDocuments = usePlanAllows("documents");
 
-  const invoice = useMemo(() => {
-    if (!appointment) return null;
-    return (
-      invoicesQuery.data?.find(
-        (inv) =>
-          inv.appointment_id === appointment.id &&
-          inv.status !== "void" &&
-          inv.status !== "cancelled",
-      ) ?? null
-    );
-  }, [appointment, invoicesQuery.data]);
+  const invoice = useMemo(
+    () =>
+      liveAppointmentInvoices(
+        invoicesQuery.data ?? [],
+        appointment?.id,
+        creditLinks.data?.originalByNoteId ?? new Map(),
+      )[0] ?? null,
+    [appointment?.id, invoicesQuery.data, creditLinks.data],
+  );
 
   const started = visitStarted(
     { date: visit.date, time_start: visit.timeStart },

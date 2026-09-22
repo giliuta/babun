@@ -64,7 +64,6 @@ export function InvoiceBlocks({
   onLocationChange,
   issuedOn,
   dueOn,
-  issuedOnLocked,
   onIssuedOnChange,
   onDueOnChange,
   companyId,
@@ -92,14 +91,11 @@ export function InvoiceBlocks({
   clients: Client[];
   clientId: string | null;
   onClientChange: (id: string | null) => void;
-  /** Объект клиента, под который выписан счёт. `onLocationChange` нет —
-   *  блок не показывается (у выставленного документа объект заморожен). */
+  /** Объект клиента, под который выписан счёт. */
   locationId: string | null;
-  onLocationChange?: (id: string | null) => void;
+  onLocationChange: (id: string | null) => void;
   issuedOn: string;
   dueOn: string | null;
-  /** У выставленного счёта дата рождения не меняется: по её году живёт номер. */
-  issuedOnLocked?: boolean;
   /** `null` барабан даты выставления не отдаёт (строка не `optional`), но тип
    *  общий на обе даты — так его принимает `InvoiceDatesBlock`. */
   onIssuedOnChange: (ymd: string | null) => void;
@@ -256,7 +252,6 @@ export function InvoiceBlocks({
         <InvoiceDatesBlock
           issuedOn={issuedOn}
           dueOn={dueOn}
-          issuedOnLocked={issuedOnLocked}
           onIssuedOnChange={onIssuedOnChange}
           onDueOnChange={onDueOnChange}
         />
@@ -290,7 +285,7 @@ export function InvoiceBlocks({
 
         {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ (владелец 2026-09-22: «под
             каждый объект свой инвойс»); его точный адрес — адрес на бумаге. */}
-        {client && onLocationChange ? (
+        {client ? (
           <InvoiceObjectBlock
             client={client}
             locationId={locationId}
