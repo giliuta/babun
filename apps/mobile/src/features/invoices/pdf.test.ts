@@ -62,6 +62,7 @@ const client = {
     id: "location-1",
     label: "Дом",
     address: "Основной адрес 5",
+    addressParts: { street: "Основной адрес 5" },
     mapUrl: "",
     isPrimary: true,
   }],
@@ -70,7 +71,8 @@ const client = {
 describe("invoice PDF HTML", () => {
   it("includes legal requisites, recipient, totals and safe escaped lines", () => {
     const html = buildInvoicePdfHtml({
-      invoice,
+      // Адрес получателя — точный адрес ОБЪЕКТА счёта (владелец 2026-09-22).
+      invoice: { ...invoice, location_id: "location-1" },
       tenant,
       client,
       settlement: {
@@ -102,6 +104,8 @@ describe("invoice PDF HTML", () => {
     assert.match(html, /CY00 0000/);
     assert.match(html, /Иван &amp; Мария/);
     assert.match(html, /Основной адрес 5/);
+    // Телефона клиента на бумаге нет (владелец 2026-09-22).
+    assert.doesNotMatch(html, /\+357 111111/);
     assert.match(html, /Сервис &lt;премиум&gt;/);
     assert.match(html, /Частично оплачен/);
     // Способ `transfer` во всём продукте называется «Банк»: «Перевод» —

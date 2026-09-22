@@ -1,8 +1,9 @@
-import type { Client } from "@babun/shared/local/clients";
+import type { Client, Location } from "@babun/shared/local/clients";
 import {
   invoiceDisplayStatus,
   invoiceLineTotal,
   type InvoiceLedgerWithLines,
+  type InvoiceObjectAddressParts,
   type InvoicePaymentLedger,
   type InvoiceSettlement,
 } from "@babun/shared/local/finance/invoice-ledger";
@@ -161,6 +162,9 @@ export interface DraftDocumentInput extends BaseInput {
    *  а сервер подписывал выбранным набором (`resolve_company_id`): человек
    *  подтверждал кнопкой одну бумагу, клиент получал другую. */
   company?: InvoiceDraftSeller | null;
+  /** Объект, под который выписан счёт: его ТОЧНЫЙ адрес — единственный адрес
+   *  получателя на бумаге (владелец 2026-09-22). */
+  location?: Location | null;
 }
 
 export function buildInvoiceDocument(
@@ -239,21 +243,28 @@ function issuedDocument({
         ),
       ]),
     },
-    client: {
-      name: (recipient ? clean(recipient.full_name) : clean(client?.full_name))
-        || dict.recipientMissing,
-      lines: compact([
-        recipient ? clean(recipient.phone) : clean(client?.phone),
-        recipient ? clean(recipient.email) : clean(client?.email),
-        ...addressLines(
-          recipient
-            ? firstNonEmpty(recipient.primary_address, recipient.address)
-            : client
-              ? primaryClientAddress(client)
-              : "",
+    // ПОЛУЧАТЕЛЬ (владелец 2026-09-22): юрназвание и реквизиты — из карточки
+    // клиента, телефона на бумаге нет, адрес — только точный адрес ОБЪЕКТА
+    // счёта. Снимок старше объектов (`object` нет вовсе) печатает свой адрес
+    // как раньше: выставленный документ не переписывается задним числом.
+    client: recipient
+      ? {
+          name: firstNonEmpty(recipient.legal_name, recipient.full_name)
+            || dict.recipientMissing,
+          lines: compact([
+            prefixed(dict.vatNo, clean(recipient.vat_number)),
+            prefixed(dict.regNumber, clean(recipient.reg_number)),
+            clean(recipient.email),
+            ...(recipient.object === undefined
+              ? addressLines(firstNonEmpty(recipient.primary_address, recipient.address))
+              : objectAddressLines(recipient.object?.address_parts, dict)),
+          ]),
+        }
+      : clientParty(
+          client,
+          client?.locations.find((loc) => loc.id === invoice.location_id) ?? null,
+          dict,
         ),
-      ]),
-    },
     issuedOn: formatInvoiceDate(invoice.issued_on, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(invoice.due_on, dict.locale, dict.notSet),
     dueOnKnown: !!invoice.due_on,
@@ -336,6 +347,7 @@ function draftDocument({
   tenant,
   client,
   company,
+  location,
   language,
 }: DraftDocumentInput): InvoiceDocument {
   const dict = invoiceDictionary(language);
@@ -376,14 +388,7 @@ function draftDocument({
             ),
           ]),
     },
-    client: {
-      name: clean(client?.full_name) || dict.recipientMissing,
-      lines: compact([
-        clean(client?.phone),
-        clean(client?.email),
-        ...addressLines(client ? primaryClientAddress(client) : ""),
-      ]),
-    },
+    client: clientParty(client, location ?? null, dict),
     issuedOn: formatInvoiceDate(draft.issuedOn, dict.locale, dict.notSet),
     dueOn: formatInvoiceDate(draft.dueOn, dict.locale, dict.notSet),
     dueOnKnown: !!draft.dueOn,
@@ -471,10 +476,47 @@ function totalRows(input: {
   ];
 }
 
-function primaryClientAddress(client: Client): string {
-  const primary = client.locations.find((location) => location.isPrimary)
-    ?? client.locations.find((location) => clean(location.address));
-  return clean(primary?.address) || joinParts(client.address, client.city);
+/** Получатель черновика — те же правила, что у снимка сервера
+ *  (`build_invoice_client_snapshot_with_object`). */
+function clientParty(
+  client: Client | undefined,
+  location: Location | null,
+  dict: InvoiceDictionary,
+): DocumentParty {
+  // Реквизиты клиента заводит карточка клиента (сессия 012); читаем их
+  // структурно, чтобы бумага не зависела от того, когда поля лягут в тип.
+  const requisites = client as
+    | (Client & { legal_name?: string | null; vat_number?: string | null; reg_number?: string | null })
+    | undefined;
+  return {
+    name: firstNonEmpty(requisites?.legal_name, client?.full_name) || dict.recipientMissing,
+    lines: compact([
+      prefixed(dict.vatNo, clean(requisites?.vat_number)),
+      prefixed(dict.regNumber, clean(requisites?.reg_number)),
+      clean(client?.email),
+      ...objectAddressLines(location?.addressParts ?? null, dict),
+    ]),
+  };
+}
+
+/** ТОЧНЫЙ АДРЕС ОБЪЕКТА строками бумаги: «Makariou 12, Sunny Court» /
+ *  «Floor 3, Apt 5» / «Limassol 4000». Без «где» (улицы, комплекса или
+ *  города) адреса нет вовсе — как у сервера: «эт. 3, кв. 5» никуда не ведёт. */
+export function objectAddressLines(
+  parts: InvoiceObjectAddressParts | null | undefined,
+  dict: InvoiceDictionary,
+): string[] {
+  const part = (key: keyof InvoiceObjectAddressParts) => clean(parts?.[key]);
+  if (!part("street") && !part("complex") && !part("city")) return [];
+  return compact([
+    [part("street"), part("complex")].filter(Boolean).join(", "),
+    [
+      part("entrance") ? dict.addrEntrance(part("entrance")) : "",
+      part("floor") ? dict.addrFloor(part("floor")) : "",
+      part("apartment") ? dict.addrApartment(part("apartment")) : "",
+    ].filter(Boolean).join(", "),
+    [part("city"), part("zip")].filter(Boolean).join(" "),
+  ]);
 }
 
 /** Адрес так, как его набрали: перенос строки в реквизитах — перенос на

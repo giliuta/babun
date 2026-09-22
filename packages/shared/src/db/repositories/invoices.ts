@@ -49,6 +49,9 @@ export interface IssueInvoiceDraft {
   /** Счёт, куда клиенту предложено заплатить (`accounts.id`) — подсказка
    *  платежу, а не сам платёж. Сервер его не подставляет по умолчанию. */
   account_id?: string | null;
+  /** Объект клиента (id элемента `clients.locations`, миграция
+   *  20260922060000). Не задан у счёта из записи — сервер берёт её объект. */
+  location_id?: string | null;
 }
 
 export interface EditInvoiceDraft {
@@ -82,6 +85,7 @@ function rowToInvoice(r: Row): InvoiceLedger {
     brigade_id: r.brigade_id,
     company_id: r.company_id,
     account_id: r.account_id,
+    location_id: r.location_id ?? null,
     subtotal_net: Number(r.subtotal_net ?? 0),
     vat_percent: Number(r.vat_percent ?? 19),
     vat_amount: Number(r.vat_amount ?? 0),
@@ -182,6 +186,7 @@ export async function issueInvoice(
       p_link_to_tx_id: draft.link_to_tx_id ?? null,
       p_company_id: draft.company_id ?? null,
       p_account_id: draft.account_id ?? null,
+      p_location_id: draft.location_id ?? null,
     }),
   );
   if (error || !data || data.id !== draft.request_id || data.tenant_id !== tenantId) {

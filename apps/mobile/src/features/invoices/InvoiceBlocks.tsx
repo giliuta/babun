@@ -28,6 +28,8 @@ import type { Service } from "@/features/services/queries";
 import { useThemeColors } from "@/theme/colors";
 import { InvoiceDatesBlock } from "./InvoiceDatesBlock";
 import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
+import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
+import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
@@ -58,6 +60,8 @@ export function InvoiceBlocks({
   clients,
   clientId,
   onClientChange,
+  locationId,
+  onLocationChange,
   issuedOn,
   dueOn,
   issuedOnLocked,
@@ -65,6 +69,7 @@ export function InvoiceBlocks({
   onDueOnChange,
   companyId,
   onCompanyChange,
+  number,
   teamId,
   accountId,
   onAccountChange,
@@ -87,6 +92,10 @@ export function InvoiceBlocks({
   clients: Client[];
   clientId: string | null;
   onClientChange: (id: string | null) => void;
+  /** Объект клиента, под который выписан счёт. `onLocationChange` нет —
+   *  блок не показывается (у выставленного документа объект заморожен). */
+  locationId: string | null;
+  onLocationChange?: (id: string | null) => void;
   issuedOn: string;
   dueOn: string | null;
   /** У выставленного счёта дата рождения не меняется: по её году живёт номер. */
@@ -97,6 +106,8 @@ export function InvoiceBlocks({
   onDueOnChange: (ymd: string | null) => void;
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
+  /** Номер следующего инвойса реквизитов — только у нового счёта. */
+  number?: InvoiceNumberTarget;
   /** Команда документа — от неё зависит, ЧЬИ кассы показывать. */
   teamId: string | null;
   accountId: string | null;
@@ -233,7 +244,11 @@ export function InvoiceBlocks({
         contentContainerStyle={{ paddingBottom: 32 }}
         keyboardShouldPersistTaps="handled"
       >
-        <InvoiceRequisitesBlock companyId={companyId} onCompanyChange={onCompanyChange} />
+        <InvoiceRequisitesBlock
+          companyId={companyId}
+          onCompanyChange={onCompanyChange}
+          number={number}
+        />
 
         {/* ДВЕ ДАТЫ ОДНИМ БЛОКОМ: когда выставлен и до какого числа ждём
             денег. Вторая — просьба владельца «выбор даты, за какой промежуток
@@ -272,6 +287,16 @@ export function InvoiceBlocks({
             ) : null
           }
         />
+
+        {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ (владелец 2026-09-22: «под
+            каждый объект свой инвойс»); его точный адрес — адрес на бумаге. */}
+        {client && onLocationChange ? (
+          <InvoiceObjectBlock
+            client={client}
+            locationId={locationId}
+            onLocationChange={onLocationChange}
+          />
+        ) : null}
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
             шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»). Тап

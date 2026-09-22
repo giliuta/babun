@@ -19,6 +19,7 @@ import {
   type Company,
 } from "@/features/companies/queries";
 import { notify } from "@/lib/notify";
+import { InvoiceNumberRow, type InvoiceNumberTarget } from "./InvoiceNumberRow";
 import { useThemeColors } from "@/theme/colors";
 
 // БЛОК «РЕКВИЗИТЫ» ИНВОЙСА — ЧЕМ ПОДПИСАН ДОКУМЕНТ.
@@ -40,9 +41,12 @@ import { useThemeColors } from "@/theme/colors";
 export function InvoiceRequisitesBlock({
   companyId,
   onCompanyChange,
+  number,
 }: {
   companyId: string | null;
   onCompanyChange: (id: string | null) => void;
+  /** Строка «Номер» — серия этих реквизитов; у выставленного счёта её нет. */
+  number?: InvoiceNumberTarget;
 }) {
   const t = useThemeColors();
   const router = useRouter();
@@ -77,6 +81,7 @@ export function InvoiceRequisitesBlock({
           subColor={empty ? t.warning : undefined}
           onPress={open}
         />
+        {number ? <InvoiceNumberRow target={number} /> : null}
       </SectionCard>
 
       <BottomSheet

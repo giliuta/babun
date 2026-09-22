@@ -109,8 +109,34 @@ export interface InvoiceClientSnapshot {
   address: string | null;
   city: string | null;
   primary_address: string | null;
+  /** Реквизиты клиента — из его карточки («Информация о клиенте»).
+   *  Необязательные: фикстуры, написанные до их разбора, их не знают. */
+  legal_name?: string | null;
+  vat_number?: string | null;
+  reg_number?: string | null;
+  /** ОБЪЕКТ СЧЁТА (миграция 20260922060000). `undefined` — снимок старше
+   *  объектов; `null` — объект не выбран; адрес на бумагу — только
+   *  `address_parts` (точный адрес), иначе адреса нет вовсе. */
+  object?: InvoiceObjectSnapshot | null;
   archived: boolean;
   deleted_at: string | null;
+}
+
+/** Точный адрес объекта: части, из которых бумага собирает строку. */
+export interface InvoiceObjectAddressParts {
+  street?: string;
+  complex?: string;
+  entrance?: string;
+  floor?: string;
+  apartment?: string;
+  city?: string;
+  zip?: string;
+}
+
+export interface InvoiceObjectSnapshot {
+  id: string | null;
+  label: string | null;
+  address_parts: InvoiceObjectAddressParts | null;
 }
 
 export interface InvoiceLedger {
@@ -135,6 +161,8 @@ export interface InvoiceLedger {
    *  `payment_id`, который проставляет `record_invoice_payment`.
    *  Необязательное по той же причине, что и `company_id` выше. */
   account_id?: string | null;
+  /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
+  location_id?: string | null;
   subtotal_net: number;
   vat_percent: number;
   vat_amount: number;
@@ -450,9 +478,28 @@ export function parseInvoiceClientSnapshot(
     address: stringValue(row.address),
     city: stringValue(row.city),
     primary_address: stringValue(row.primary_address),
+    legal_name: stringValue(row.legal_name),
+    vat_number: stringValue(row.vat_number),
+    reg_number: stringValue(row.reg_number),
+    ...("object" in row ? { object: parseInvoiceObjectSnapshot(row.object) } : {}),
     archived: row.archived === true,
     deleted_at: stringValue(row.deleted_at),
   };
+}
+
+function parseInvoiceObjectSnapshot(value: unknown): InvoiceObjectSnapshot | null {
+  const row = asObject(value);
+  if (!row) return null;
+  const partsRow = asObject(row.address_parts);
+  let parts: InvoiceObjectAddressParts | null = null;
+  if (partsRow) {
+    parts = {};
+    for (const key of ["street", "complex", "entrance", "floor", "apartment", "city", "zip"] as const) {
+      const part = stringValue(partsRow[key]);
+      if (part) parts[key] = part;
+    }
+  }
+  return { id: stringValue(row.id), label: stringValue(row.label), address_parts: parts };
 }
 
 function localDateKey(date: Date): string {

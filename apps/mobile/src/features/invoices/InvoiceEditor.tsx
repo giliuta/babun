@@ -23,12 +23,12 @@ import type { Tenant } from "@/features/settings/tenant";
 import { buildInvoiceDocument, type InvoiceDraftSeller } from "./document";
 import { useCompanies, defaultCompany } from "@/features/companies/queries";
 import { useToast } from "@/components/ui/Toast";
-import { getStorage } from "@babun/shared/storage";
 import { applyDiscount, round2 } from "@babun/shared/local/finance/appointment-calc";
 import { inputFromGross } from "@babun/shared/local/finance/vat";
 import type { DiscountKind } from "@/features/appointments/TotalSheet";
 import { useRememberedVatRate } from "@/features/finances/remembered-vat-rate";
 import { InvoiceBlocks } from "./InvoiceBlocks";
+import { useNextInvoiceSeries } from "./queries";
 import { InvoicePreviewSheet } from "./InvoicePreviewSheet";
 import { ScopeChips } from "@/components/ui/ScopeChips";
 import type { InvoiceLanguage } from "./dictionary";
@@ -51,9 +51,6 @@ export interface InvoicePrefill {
   issuedOn?: string | null;
 }
 
-/** Язык прошлого счёта — предложение для следующего, а не настройка. */
-const INVOICE_LANGUAGE_KEY = "invoice.language";
-
 export interface InvoiceEditorValue {
   issued_on: string;
   due_on: string | null;
@@ -70,6 +67,8 @@ export interface InvoiceEditorValue {
   /** Набор реквизитов, которым подписан счёт. `null` — сервер подставит
    *  основные (`resolve_company_id`, миграция 20260921000000). */
   company_id: string | null;
+  /** Объект клиента, под который выписан счёт (миграция 20260922060000). */
+  location_id?: string | null;
   /** Счёт, на который ждём деньги. */
   account_id: string | null;
 }
@@ -85,10 +84,8 @@ export function InvoiceEditor({
   teams,
   businessToday,
   tenant,
-  nextNumber,
   submitting,
   onSubmit,
-  onIssuedOnChange,
   onDirtyChange,
 }: {
   initial?: InvoiceLedgerWithLines;
@@ -107,28 +104,20 @@ export function InvoiceEditor({
   businessToday: string;
   /** Реквизиты и логотип компании — их печатает документ. */
   tenant?: Tenant;
-  /** Номер, который документ получит при выставлении. */
-  nextNumber?: string;
   submitting: boolean;
   onSubmit: (value: InvoiceEditorValue) => Promise<void>;
-  /** Дата выставления — наружу: предпросмотр номера считается по её ГОДУ,
-   *  а серию года знает только сервер. */
-  onIssuedOnChange?: (ymd: string) => void;
   /** «В форме есть несохранённое» — наружу, к кнопке «Назад». Экран сам
    *  спрашивает, уходить ли: молча стирать заполненный счёт нельзя. */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const t = useThemeColors();
   const toast = useToast();
-  /** ЯЗЫК БУМАГИ. У выставленного счёта — свой, у нового — тот, на котором
-   *  выставили прошлый: у компании клиентская база обычно одноязычная, и
-   *  спрашивать одно и то же каждый раз незачем. */
-  const [language, setLanguage] = useState<InvoiceLanguage>(
-    () =>
-      (initial?.language === "en" ? "en" : initial ? "ru" : null) ??
-      // Английский по умолчанию (владелец 2026-09-22: «русский по сути нигде
-      // не используется тут на Кипре»).
-      (getStorage().get<InvoiceLanguage>(INVOICE_LANGUAGE_KEY) ?? "en"),
+  /** ЯЗЫК БУМАГИ. У выставленного счёта — свой, у нового — ВСЕГДА английский
+   *  (владелец 2026-09-22: инвойсы уходят в министерство, а там принимают
+   *  греческий или английский). Не запоминается ни за устройством, ни за
+   *  клиентом: русский — разовый выбор в шторке предпросмотра. */
+  const [language, setLanguage] = useState<InvoiceLanguage>(() =>
+    initial ? (initial.language === "en" ? "en" : "ru") : "en",
   );
   const serial = useRef(0);
   const newLine = (
@@ -229,6 +218,11 @@ export function InvoiceEditor({
   };
   const [clientId, setClientId] = useState<string | null>(
     initial?.client_id ?? seed?.clientId ?? prefill?.clientId ?? null,
+  );
+  /** ОБЪЕКТ СЧЁТА (владелец 2026-09-22): у счёта из записи — объект записи,
+   *  у выставленного — свой; при выборе клиента — его основной объект. */
+  const [locationId, setLocationId] = useState<string | null>(
+    initial ? initial.location_id ?? null : sourceAppointment?.location_id ?? null,
   );
   // ЗАЯВКА ПРИЕЗЖАЕТ, НО НЕ МЕНЯЕТСЯ ЗДЕСЬ: счёт по работе открывают ИЗ
   // работы, и форма только несёт её дальше на сервер.
@@ -355,11 +349,6 @@ export function InvoiceEditor({
   // а не в зашитом евро.
   const currency = tenant?.currency || "EUR";
 
-  // Год даты выставления решает серию номера — родитель перезапрашивает
-  // предпросмотр, когда дата уезжает в другой год.
-  useEffect(() => {
-    onIssuedOnChange?.(issuedOn);
-  }, [issuedOn, onIssuedOnChange]);
 
   // ЧЕРНОВИК НЕ ПРОПАДАЕТ МОЛЧА. Форма сравнивает себя с той, какой родилась:
   // перечислять «тронутые» поля по одному — способ однажды забыть новое.
@@ -367,6 +356,7 @@ export function InvoiceEditor({
     issuedOn,
     dueOn,
     clientId,
+    locationId,
     appointmentId,
     teamId,
     vatMode,
@@ -389,6 +379,16 @@ export function InvoiceEditor({
     [clients],
   );
   const selectedClient = clientId ? clientById.get(clientId) : null;
+  const selectedLocation =
+    selectedClient?.locations.find((loc) => loc.id === locationId) ?? null;
+  // Новый клиент — его основной объект (как в записи: `isPrimary` — «первый
+  // объект для автовыбора»); объект прежнего клиента новому не принадлежит.
+  const changeClient = (id: string | null) => {
+    setClientId(id);
+    const next = id ? clientById.get(id) : null;
+    const primary = next?.locations.find((loc) => loc.isPrimary) ?? next?.locations[0];
+    setLocationId(primary?.id ?? null);
+  };
 
   const parsedLines = useMemo<InvoiceLineDraft[]>(
     () =>
@@ -432,11 +432,20 @@ export function InvoiceEditor({
   // ФОРМЫ: строки, срок, налог и комментарий берутся из состояния, и только
   // неизменяемое (номер, дата выставления, юридические снимки сторон) — из
   // выставленного документа. Витрина сохранённой версии живёт на /invoices/[id].
-  const paperSeller: InvoiceDraftSeller | null = useMemo(() => {
+  const pickedCompany = useMemo(() => {
     const rows = companies.data ?? [];
-    const picked =
+    return (
       rows.filter((row) => !row.archived_at).find((row) => row.id === companyId)
-      ?? defaultCompany(rows);
+      ?? defaultCompany(rows)
+    );
+  }, [companies.data, companyId]);
+  // НОМЕР — ИЗ СЕРИИ ЭТИХ РЕКВИЗИТОВ И ГОДА ДАТЫ ВЫСТАВЛЕНИЯ (миграция
+  // 20260922050000): сменил набор или год — сервер считает заново.
+  const issuedYear = Number(issuedOn.slice(0, 4));
+  const series = useNextInvoiceSeries(issuedYear, pickedCompany?.id ?? companyId);
+  const nextNumber = series.data?.number ?? undefined;
+  const paperSeller: InvoiceDraftSeller | null = useMemo(() => {
+    const picked = pickedCompany;
     if (!picked) return null;
     return {
       name: picked.name,
@@ -450,7 +459,7 @@ export function InvoiceEditor({
       contact_phone: picked.contact_phone,
       logo_url: picked.logo_url,
     };
-  }, [companies.data, companyId]);
+  }, [pickedCompany]);
 
   const paperDoc = useMemo(
     () =>
@@ -502,6 +511,7 @@ export function InvoiceEditor({
             language,
             tenant,
             client: selectedClient ?? undefined,
+            location: selectedLocation,
             company: paperSeller,
             draft: {
               number: nextNumber ?? "",
@@ -529,7 +539,7 @@ export function InvoiceEditor({
             },
           }),
     // Пересобираем на каждое изменение формы — в этом весь смысл зеркала.
-    [initial, tenant, selectedClient, paperSeller, nextNumber, issuedOn, dueOn,
+    [initial, tenant, selectedClient, selectedLocation, paperSeller, nextNumber, issuedOn, dueOn,
      clientId, parsedLines, vatMode, rate, totals, notes, businessToday,
      currency, language],
   );
@@ -593,6 +603,7 @@ export function InvoiceEditor({
         issued_on: issuedOn,
         due_on: dueOn,
         client_id: clientId,
+        location_id: locationId,
         appointment_id: appointmentId,
         brigade_id: teamId,
         vat_mode: vatMode,
@@ -644,7 +655,9 @@ export function InvoiceEditor({
           <InvoiceBlocks
             clients={clients}
             clientId={clientId}
-            onClientChange={setClientId}
+            onClientChange={changeClient}
+            locationId={locationId}
+            onLocationChange={initial ? undefined : setLocationId}
             issuedOn={issuedOn}
             dueOn={dueOn}
             issuedOnLocked={!!initial}
@@ -652,6 +665,12 @@ export function InvoiceEditor({
             onDueOnChange={setDueOn}
             companyId={companyId}
             onCompanyChange={setCompanyId}
+            // Номер правят только у нового счёта: у выставленного он свой.
+            number={
+              initial || !pickedCompany
+                ? undefined
+                : { companyId: pickedCompany.id, year: issuedYear, next: series.data ?? null }
+            }
             teamId={teamId}
             accountId={accountId}
             onAccountChange={setAccountId}
@@ -744,10 +763,7 @@ export function InvoiceEditor({
         // ЯЗЫК БУМАГИ ВЫБИРАЮТ ТАМ, ГДЕ БУМАГУ ВИДНО: в листе документа перед
         // выпуском (владелец 22.09 убрал миниатюру с формы).
         language={language}
-        onChangeLanguage={(code) => {
-          setLanguage(code);
-          getStorage().set(INVOICE_LANGUAGE_KEY, code);
-        }}
+        onChangeLanguage={setLanguage}
         onIssue={() => {
           void submit();
         }}

@@ -42,6 +42,10 @@ export interface InvoiceDictionary {
   regNumber: string;
   /** Подпись VAT-номера в строках сторон («VAT No.: 60184450X»). */
   vatNo: string;
+  /** Части точного адреса объекта на бумаге: «Floor 3» / «эт. 3». */
+  addrEntrance: (value: string) => string;
+  addrFloor: (value: string) => string;
+  addrApartment: (value: string) => string;
   /** Даты под номером в шапке, коротко — как у AirFix #103: «Issued 18/09/2026». */
   issuedShort: (date: string) => string;
   dueShort: (date: string) => string;
@@ -122,6 +126,9 @@ const RU: InvoiceDictionary = {
   grandTotal: "К оплате",
   regNumber: "Рег. №",
   vatNo: "VAT №",
+  addrEntrance: (value) => `подъезд ${value}`,
+  addrFloor: (value) => `эт. ${value}`,
+  addrApartment: (value) => `кв. ${value}`,
   issuedShort: (date) => `Выставлен ${date}`,
   dueShort: (date) => `Оплатить до ${date}`,
   notesAndPayment: "Примечание и оплата",
@@ -187,6 +194,9 @@ const EN: InvoiceDictionary = {
   grandTotal: "Total",
   regNumber: "Reg. No",
   vatNo: "VAT No.",
+  addrEntrance: (value) => `Entrance ${value}`,
+  addrFloor: (value) => `Floor ${value}`,
+  addrApartment: (value) => `Apt ${value}`,
   issuedShort: (date) => `Issued ${date}`,
   dueShort: (date) => `Due ${date}`,
   notesAndPayment: "Notes & payment instructions",

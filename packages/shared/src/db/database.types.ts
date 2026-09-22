@@ -950,6 +950,8 @@ export type Database = {
           created_at: string
           iban: string | null
           icon: string | null
+          invoice_next_number: number | null
+          invoice_next_year: number | null
           id: string
           is_default: boolean
           legal_name: string | null
@@ -971,6 +973,8 @@ export type Database = {
           created_at?: string
           iban?: string | null
           icon?: string | null
+          invoice_next_number?: number | null
+          invoice_next_year?: number | null
           id?: string
           is_default?: boolean
           legal_name?: string | null
@@ -992,6 +996,8 @@ export type Database = {
           created_at?: string
           iban?: string | null
           icon?: string | null
+          invoice_next_number?: number | null
+          invoice_next_year?: number | null
           id?: string
           is_default?: boolean
           legal_name?: string | null
@@ -1981,6 +1987,7 @@ export type Database = {
           issued_on: string
           kind: string
           language: string
+          location_id: string | null
           notes: string | null
           number: string
           payment_id: string | null
@@ -2013,6 +2020,7 @@ export type Database = {
           issued_on?: string
           kind?: string
           language?: string
+          location_id?: string | null
           notes?: string | null
           number: string
           payment_id?: string | null
@@ -2045,6 +2053,7 @@ export type Database = {
           issued_on?: string
           kind?: string
           language?: string
+          location_id?: string | null
           notes?: string | null
           number?: string
           payment_id?: string | null
@@ -4200,6 +4209,7 @@ export type Database = {
           p_issued_on: string
           p_lines: Json
           p_link_to_tx_id?: string
+          p_location_id?: string
           p_notes?: string
           p_request_id: string
           p_vat_mode: string
@@ -4298,6 +4308,13 @@ export type Database = {
       }
       my_access_map: { Args: never; Returns: Json }
       my_invitations: { Args: never; Returns: Json }
+      next_company_invoice_number: {
+        Args: { p_company_id: string | null; p_tenant_id: string; p_year: number }
+        Returns: {
+          number: string
+          seq: number
+        }[]
+      }
       next_invoice_number: {
         Args: { p_tenant_id: string; p_year: number }
         Returns: {
@@ -4787,6 +4804,10 @@ export type Database = {
       set_appointment_vat_mode: {
         Args: { p_appointment_id: string; p_vat_mode: string | null }
         Returns: Database["public"]["Tables"]["appointments"]["Row"]
+      }
+      set_company_invoice_next_number: {
+        Args: { p_company_id: string; p_number: number; p_year: number }
+        Returns: Database["public"]["Tables"]["companies"]["Row"]
       }
       set_member_access: {
         Args: { p_changes: Json; p_user_id: string }
