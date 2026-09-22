@@ -1,6 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
+import { takeCreatedClient } from "@/features/appointments/pending-client";
 import type { Client } from "@babun/shared/local/clients";
 import {
   invoiceLineTotal,
@@ -140,6 +141,19 @@ export function InvoiceBlocks({
   const accounts = useAccountsWithBalances();
   const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
+
+  // КЛИЕНТ, СОЗДАННЫЙ РАДИ ИНВОЙСА, ВСТАЁТ В ИНВОЙС (владелец 22.09: «создаю
+  // нового клиента — он должен сразу выбираться, а остаётся старый»). Тот же
+  // ящик, что у записи и чека (`pending-client.ts`): карточка кладёт id при
+  // «Готово», форма забирает его, получив фокус.
+  useFocusEffect(
+    useCallback(() => {
+      const created = takeCreatedClient();
+      if (created) onClientChange(created);
+      // onClientChange меняется каждый рендер; ящик и так опустошается чтением.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const client = clients.find((c) => c.id === clientId) ?? null;
   // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
