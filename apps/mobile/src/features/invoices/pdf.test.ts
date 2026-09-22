@@ -62,7 +62,8 @@ const client = {
     id: "location-1",
     label: "Дом",
     address: "Основной адрес 5",
-    addressParts: { street: "Основной адрес 5" },
+    // Адрес печатается из «Точного адреса» (город заполнен) — владелец 22.09.
+    addressParts: { street: "Основной адрес 5", city: "Лимасол" },
     mapUrl: "",
     isPrimary: true,
   }],

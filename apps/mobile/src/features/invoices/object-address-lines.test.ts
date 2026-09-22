@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { objectAddressLines } from "./document";
+import { hasExactAddress, objectAddressLines } from "./document";
 import { invoiceDictionary } from "./dictionary";
 
 // АДРЕС ПОЛУЧАТЕЛЯ — ТОЛЬКО ТОЧНЫЙ АДРЕС ОБЪЕКТА (владелец 2026-09-22):
@@ -31,5 +31,12 @@ describe("objectAddressLines", () => {
   it("prints nothing without a street, complex or city", () => {
     assert.deepEqual(objectAddressLines({ floor: "3", apartment: "5" }, invoiceDictionary("en")), []);
     assert.deepEqual(objectAddressLines(null, invoiceDictionary("en")), []);
+  });
+
+  it("only the exact-address block puts an address on the invoice", () => {
+    assert.equal(hasExactAddress({ street: "Karpathou 9" }), false);
+    assert.equal(hasExactAddress({ street: "Karpathou 9", floor: "3" }), true);
+    assert.equal(hasExactAddress({ city: "Limassol" }), true);
+    assert.equal(hasExactAddress(null), false);
   });
 });

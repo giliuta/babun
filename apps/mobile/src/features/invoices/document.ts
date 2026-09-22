@@ -540,9 +540,23 @@ function clientParty(
       prefixed(dict.vatNo, clean(requisites?.vat_number)),
       prefixed(dict.regNumber, clean(requisites?.reg_number)),
       clean(client?.email),
-      ...objectAddressLines(location?.addressParts ?? null, dict),
+      ...(hasExactAddress(location?.addressParts)
+        ? objectAddressLines(location?.addressParts ?? null, dict)
+        : []),
     ]),
   };
+}
+
+/** АДРЕС НА ИНВОЙС — ТОЛЬКО ИЗ «ТОЧНОГО АДРЕСА» (владелец 2026-09-22: «если
+ *  пишем в точный адрес — в инвойсе адрес есть, а обычный адрес не
+ *  выставляется»). Главная строка объекта хранится как `street`; адрес
+ *  печатается, когда заполнено хоть одно поле блока «Точный адрес». То же
+ *  правило у сервера (`invoice_object_snapshot`, миграция 20260922090000). */
+export function hasExactAddress(
+  parts: InvoiceObjectAddressParts | null | undefined,
+): boolean {
+  return (["complex", "entrance", "floor", "apartment", "city", "zip"] as const)
+    .some((key) => clean(parts?.[key]) !== "");
 }
 
 /** ТОЧНЫЙ АДРЕС ОБЪЕКТА строками бумаги: «Makariou 12, Sunny Court» /

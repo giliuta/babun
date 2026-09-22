@@ -8,7 +8,7 @@ import { ObjectRow } from "@/features/clients/blocks/ObjectsBlock";
 import { ObjectEditSheet } from "@/features/clients/ObjectEditSheet";
 import { ObjectPickerSheet } from "@/features/clients/ObjectPickerSheet";
 import { ObjectSheet } from "@/features/clients/ObjectSheet";
-import { hasAddressPlace } from "@/features/clients/object-address";
+import { hasExactAddress } from "./document";
 import { useUpdateClientById } from "@/features/clients/queries";
 import { useLocationWriter } from "@/features/clients/use-location-writer";
 import { useThemeColors } from "@/theme/colors";
@@ -26,8 +26,9 @@ import { useThemeColors } from "@/theme/colors";
 //   • объект выбран — строка `ObjectRow`: тап меняет объект, «…» — правка.
 // Заметки у объекта здесь нет (владелец: «в целом она и не нужна»).
 //
-// АДРЕС НА БУМАГЕ — ТОЛЬКО ТОЧНЫЙ АДРЕС ОБЪЕКТА. Нет его — адреса на инвойсе
-// нет вовсе; об этом строка под объектом говорит словами до выпуска.
+// АДРЕС НА БУМАГЕ — ТОЛЬКО ИЗ БЛОКА «ТОЧНЫЙ АДРЕС» объекта (`hasExactAddress`).
+// Одна главная строка адреса на инвойс не идёт; об этом строка под объектом
+// говорит словами до выпуска.
 
 const EMPTY_LOCATIONS: Location[] = [];
 
@@ -87,7 +88,7 @@ export function InvoiceObjectBlock({
               onPress={() => setPicker(true)}
               onMore={() => setEditing(true)}
             />
-            {hasAddressPlace(selected.addressParts) ? null : (
+            {hasExactAddress(selected.addressParts) ? null : (
               <Text
                 style={{
                   paddingHorizontal: 16,
@@ -96,7 +97,7 @@ export function InvoiceObjectBlock({
                   color: t.warning,
                 }}
               >
-                Точного адреса нет — на инвойсе адреса не будет
+                «Точный адрес» не заполнен — на инвойсе адреса не будет
               </Text>
             )}
           </View>
