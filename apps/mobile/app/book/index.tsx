@@ -1,3 +1,4 @@
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
@@ -2575,10 +2576,6 @@ export default function BookScreen() {
                 custom={customTotal}
                 discountAmount={discountAmount}
                 onPickServices={() => setServicePickerOpen(true)}
-                // Своя строка правится в «Итого», строка прайса — выбором.
-                onPickLine={(id) =>
-                  isCustomServiceId(id) ? setTotalSheetOpen(true) : setServicePickerOpen(true)
-                }
                 onOpenTotal={() => setTotalSheetOpen(true)}
               />
 
@@ -3124,6 +3121,17 @@ export default function BookScreen() {
       <ServicePicker
         visible={servicePickerOpen}
         onClose={() => setServicePickerOpen(false)}
+        // Своя услуга — строка сразу, заполняют её в «Итого»: выбор уходит,
+        // «Итого» встаёт после его отъезда (два листа в кадре iOS не кажет).
+        onAddCustom={
+          kind === "work"
+            ? () => {
+                addCustomLine();
+                setServicePickerOpen(false);
+                setTimeout(() => setTotalSheetOpen(true), SHEET_EXIT_MS + 350);
+              }
+            : undefined
+        }
         services={teamServices}
         selectedIds={serviceIds}
         // Каталог знает день записи: услуга, которую по вторникам не делают,

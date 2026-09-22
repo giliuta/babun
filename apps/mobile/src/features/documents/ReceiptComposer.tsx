@@ -1,3 +1,4 @@
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { isCustomServiceId, newCustomServiceId } from "@babun/shared/local/appointments";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -319,7 +320,6 @@ export function ReceiptComposer({
           custom={false}
           discountAmount={totals.discountAmount}
           onPickServices={() => setSheet("services")}
-          onPickLine={(id) => setSheet(isCustomServiceId(id) ? "total" : "services")}
           onOpenTotal={() => setSheet("total")}
         />
 
@@ -405,6 +405,11 @@ export function ReceiptComposer({
 
       <ServicePicker
         visible={sheet === "services"}
+        onAddCustom={() => {
+          addCustomLine();
+          setSheet(null);
+          setTimeout(() => setSheet("total"), SHEET_EXIT_MS + 350);
+        }}
         services={services.data ?? []}
         selectedIds={draft.lines.map((l) => l.serviceId)}
         quantities={Object.fromEntries(draft.lines.map((l) => [l.serviceId, l.quantity]))}

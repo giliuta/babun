@@ -1,3 +1,4 @@
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useMemo, useState, type ReactNode } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -298,12 +299,6 @@ export function InvoiceBlocks({
           custom={false}
           discountAmount={discount.amount}
           onPickServices={() => setSheet("services")}
-          // Своя строка правится в «Итого» (там же её завели), строка
-          // прайса — выбором услуг.
-          onPickLine={(id) => {
-            const line = lines.find((item) => item.id === id);
-            setSheet(line && !line.serviceId ? "total" : "services");
-          }}
           onOpenTotal={() => setSheet("total")}
         />
 
@@ -381,6 +376,11 @@ export function InvoiceBlocks({
 
       <ServicePicker
         visible={sheet === "services"}
+        onAddCustom={() => {
+          onAddCustomLine();
+          setSheet(null);
+          setTimeout(() => setSheet("total"), SHEET_EXIT_MS + 350);
+        }}
         onClose={() => setSheet(null)}
         services={teamServices}
         selectedIds={selectedServiceIds}

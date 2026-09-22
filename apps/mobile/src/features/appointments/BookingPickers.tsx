@@ -7,7 +7,7 @@ import {
   View,
   type TextProps,
 } from "react-native";
-import { Briefcase } from "lucide-react-native";
+import { Briefcase, ListPlus } from "lucide-react-native";
 import { formatEURExact } from "@babun/shared/common/utils/money";
 
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -73,6 +73,7 @@ export function ServicePicker({
   quantities,
   onToggle,
   onQtyChange,
+  onAddCustom,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -88,7 +89,12 @@ export function ServicePicker({
   quantities: Record<string, number>;
   /** Ноль убирает услугу из записи. */
   onQtyChange: (id: string, qty: number) => void;
+  /** Своя услуга не из прайса — тот же значок, что в шапке «Итого»
+   *  (владелец 2026-09-22: «должно быть параллельно»). Строку заполняют в
+   *  «Итого», поэтому вызывающий закрывает выбор и открывает его. */
+  onAddCustom?: () => void;
 }) {
+  const t = useThemeColors();
   const router = useRouter();
   const servicesHref = useReferenceHref().services;
   const doorway = useSheetDoorway();
@@ -117,23 +123,29 @@ export function ServicePicker({
   const offDayLabel = date
     ? `Не делаем по ${OFF_DAY_WORD[isoWeekdayOf(date)]}`
     : "";
+  // Подвал считает только услуги прайса: своя строка документа здесь не
+  // видна и цены в прайсе не имеет — иначе «Применить · 1 · €0».
+  const catalogIds = useMemo(
+    () => selectedIds.filter((id) => services.some((s) => s.id === id)),
+    [selectedIds, services],
+  );
   const totalQty = useMemo(
-    () => selectedIds.reduce((n, id) => n + (quantities[id] ?? 1), 0),
-    [selectedIds, quantities],
+    () => catalogIds.reduce((n, id) => n + (quantities[id] ?? 1), 0),
+    [catalogIds, quantities],
   );
   // ЦЕНА — ПО ЛЕСТНИЦЕ КОЛИЧЕСТВА, КАК В ФОРМЕ: подвал считал по базовой цене
   // и обещал «€150», а «Итого» на форме — €135 по опту от трёх.
   const subtotal = useMemo(
     () =>
       round2(
-        selectedIds.reduce((sum, id) => {
+        catalogIds.reduce((sum, id) => {
           const svc = services.find((s) => s.id === id);
           if (!svc) return sum;
           const qty = quantities[id] ?? 1;
           return sum + unitPriceFor(svc, qty) * qty;
         }, 0),
       ),
-    [selectedIds, services, quantities],
+    [catalogIds, services, quantities],
   );
   const close = () => {
     setQ("");
@@ -173,6 +185,22 @@ export function ServicePicker({
       visible={visible && !doorway.parked}
       onClose={close}
       title="Услуги"
+      headerAction={
+        onAddCustom ? (
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              onAddCustom();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить свою услугу"
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          >
+            <ListPlus color={t.accent} size={24} strokeWidth={2} />
+          </Pressable>
+        ) : undefined
+      }
       padded={false}
       scroll
       avoidKeyboard
@@ -197,13 +225,13 @@ export function ServicePicker({
               // одному слову»). Метка, команда, цвет и время говорят
               // «Применить» — услуги говорят то же.
               label={
-                selectedIds.length > 0
+                catalogIds.length > 0
                   ? `Применить · ${totalQty} · ${formatEURExact(subtotal)}`
                   : "Применить"
               }
               onPress={close}
               accessibilityHint={
-                selectedIds.length > 0
+                catalogIds.length > 0
                   ? `Работ: ${totalQty} на ${formatEURExact(subtotal)}`
                   : undefined
               }
