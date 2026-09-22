@@ -29,7 +29,6 @@ import { InvoiceRequisitesBlock } from "./InvoiceRequisitesBlock";
 import { InvoiceObjectBlock } from "./InvoiceObjectBlock";
 import type { InvoiceNumberTarget } from "./InvoiceNumberRow";
 import { parseDecimal, parseMoneyAmount, type EditableInvoiceLine } from "./format";
-import { CustomServiceRow } from "./CustomServiceRow";
 
 // ИНВОЙС — ИЗ ТЕХ ЖЕ БЛОКОВ, ЧТО ЗАПИСЬ И ЧЕК.
 //
@@ -114,7 +113,8 @@ export function InvoiceBlocks({
   onLineChange: (line: EditableInvoiceLine) => void;
   onAddLine: (service: Service | null) => void;
   /** Своя (разовая) услуга — строка вне прайса (владелец 2026-09-22). */
-  /** Своя услуга — пустая строка прямо в блоке (владелец 2026-09-22). */
+  /** Своя услуга — пустая строка, её заводит «＋ Добавить» в «Итого»
+   *  (владелец 2026-09-22). */
   onAddCustomLine: () => void;
   onRemoveLine: (line: EditableInvoiceLine) => void;
   vatMode: InvoiceVatMode;
@@ -140,11 +140,6 @@ export function InvoiceBlocks({
   const accounts = useAccountsWithBalances();
   const tileWidth = useTileWidth();
   const [sheet, setSheet] = useState<"client" | "services" | "total" | null>(null);
-  // СВОЯ УСЛУГА — СТРОКОЙ ПРЯМО В БЛОКЕ (владелец 2026-09-22: «„＋ Добавить“
-  // возле „Услуги“ — и сразу внизу пишу услугу, количество, цену и сумму»).
-  // Фокус получает только что добавленная строка.
-  const [justAdded, setJustAdded] = useState(false);
-  const customLines = lines.filter((line) => !line.serviceId);
 
   const client = clients.find((c) => c.id === clientId) ?? null;
   // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
@@ -222,6 +217,8 @@ export function InvoiceBlocks({
           // `round(qty * price * 100) / 100` в double печатало в карточке
           // позиции €3,01 там, где бумага, PDF и сервер считают €3,02.
           total: invoiceLineTotal(qty, price),
+          // Своя строка: имя правится в «Итого».
+          ...(line.serviceId ? {} : { editableName: line.title }),
         };
       }),
     [lines],
@@ -291,46 +288,22 @@ export function InvoiceBlocks({
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
             шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»).
-            Услуги прайса — строками выбора (тап открывает прайс); своя
-            услуга — строкой, которую правят прямо здесь, её заводит
-            «＋ Добавить» в шапке. «Итого» открывает деньги. */}
+            Услуги прайса — строками выбора (тап открывает прайс). Своя
+            услуга заводится «＋ Добавить» в шапке «Итого» и правится там же
+            (владелец 2026-09-22). «Итого» открывает деньги. */}
         <ServicesBlock
           title="Услуги"
-          lines={blockLines.filter((line) => lines.find((item) => item.id === line.id)?.serviceId)}
-          action={{
-            label: "＋ Добавить",
-            onPress: () => {
-              onAddCustomLine();
-              setJustAdded(true);
-            },
-          }}
-          extra={
-            customLines.length > 0 ? (
-              <View>
-                {customLines.map((line, index) => (
-                  <View
-                    key={line.id}
-                    style={{ borderTopWidth: index > 0 ? 1 : 0, borderTopColor: t.separator }}
-                  >
-                    <CustomServiceRow
-                      line={line}
-                      autoFocus={
-                        justAdded
-                        && index === customLines.length - 1
-                        && !line.title
-                      }
-                      onChange={onLineChange}
-                      onRemove={() => onRemoveLine(line)}
-                    />
-                  </View>
-                ))}
-              </View>
-            ) : undefined
-          }
+          lines={blockLines}
           total={totals.total}
           custom={false}
           discountAmount={discount.amount}
           onPickServices={() => setSheet("services")}
+          // Своя строка правится в «Итого» (там же её завели), строка
+          // прайса — выбором услуг.
+          onPickLine={(id) => {
+            const line = lines.find((item) => item.id === id);
+            setSheet(line && !line.serviceId ? "total" : "services");
+          }}
           onOpenTotal={() => setSheet("total")}
         />
 
@@ -425,7 +398,21 @@ export function InvoiceBlocks({
           включает сама. */}
       <TotalSheet
         visible={sheet === "total"}
-        onClose={() => setSheet(null)}
+        // Пустая своя строка (добавили и не заполнили) при закрытии уходит —
+        // в услугах остаются только названные.
+        onClose={() => {
+          for (const line of lines) {
+            if (!line.serviceId && !line.title.trim() && !parseMoneyAmount(line.unitPrice)) {
+              onRemoveLine(line);
+            }
+          }
+          setSheet(null);
+        }}
+        onAddLine={onAddCustomLine}
+        onNameChange={(id, title) => {
+          const line = lines.find((item) => item.id === id);
+          if (line) onLineChange({ ...line, title });
+        }}
         lines={blockLines}
         onQtyChange={(id, qty) => writeNumber(id, "qty", qty)}
         onPriceChange={(id, price) => writeNumber(id, "unitPrice", price)}

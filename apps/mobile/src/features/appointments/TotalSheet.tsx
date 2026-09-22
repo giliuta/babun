@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
+import { ListPlus } from "lucide-react-native";
 import { PayRow, ServicesRow } from "@/features/appointments/VatLooks";
 import type { ServicesBlockLine } from "@/features/appointments/ServicesBlock";
 import { applyTxVat, type TxVatMode } from "@babun/shared/local/finance/vat";
@@ -41,6 +42,8 @@ export function TotalSheet({
   lines,
   onQtyChange,
   onPriceChange,
+  onAddLine,
+  onNameChange,
   discount,
   total,
   customTotal = false,
@@ -57,6 +60,13 @@ export function TotalSheet({
   onQtyChange: (lineId: string, qty: number) => void;
   /** Цена ОДНОЙ штуки В ЭТОМ ДОКУМЕНТЕ. Прайс не трогается: это снимок строки. */
   onPriceChange: (lineId: string, price: number) => void;
+  /** Значок «добавить строку» справа в шапке — своя строка документа (владелец
+   *  2026-09-22: «открываю „Итого“, сверху справа „Добавить“, выбираю и
+   *  количество, и всё; при закрытии она сразу в услугах с названием»). Есть
+   *  только у инвойса. */
+  onAddLine?: () => void;
+  /** Имя своей строки (`editableName`) правится прямо в таблице. */
+  onNameChange?: (lineId: string, name: string) => void;
   /** СКИДКА ЕСТЬ НЕ У ВСЯКОГО ДОКУМЕНТА. У записи и чека она своя строка, у
    *  инвойса её нет вовсе — сервер не знает такого поля, и рисовать поле,
    *  которое никуда не поедет, нельзя. Нет скидки — нет и строки. */
@@ -105,6 +115,25 @@ export function TotalSheet({
       visible={visible}
       onClose={onClose}
       title="Итого"
+      headerAction={
+        onAddLine ? (
+          <Pressable
+            onPress={() => {
+              haptics.tap();
+              onAddLine();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Добавить свою услугу"
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+          >
+            {/* ЗНАЧОК, А НЕ СЛОВО (владелец 22.09: «можно просто значок»).
+                «Список с плюсом» — добавить строку в перечень; общий «плюс
+                создания» продукт запрещает (ui-policy). */}
+            <ListPlus color={t.accent} size={24} strokeWidth={2} />
+          </Pressable>
+        ) : undefined
+      }
       padded={false}
       scroll
       avoidKeyboard
@@ -139,6 +168,7 @@ export function TotalSheet({
                 separated={index > 0}
                 onQtyChange={onQtyChange}
                 onPriceChange={onPriceChange}
+                onNameChange={onNameChange}
               />
             ))}
             {/* СУММА РАБОТ И СКИДКА — последняя строка перечня (владелец 20.09:
@@ -258,14 +288,17 @@ function ServiceLine({
   separated,
   onQtyChange,
   onPriceChange,
+  onNameChange,
 }: {
   line: ServicesBlockLine;
   /** Не первая строка списка — волосок сверху. */
   separated?: boolean;
   onQtyChange: (lineId: string, qty: number) => void;
   onPriceChange: (lineId: string, price: number) => void;
+  onNameChange?: (lineId: string, name: string) => void;
 }) {
   const name = line.name;
+  const nameEditable = line.editableName !== undefined && !!onNameChange;
   const t = useThemeColors();
   // ЧЕРНОВИКИ — СВОИ У КАЖДОГО ПОЛЯ. Пока набирают «13», строка не должна
   // превращаться в «€13» и терять то, что человек ещё не дописал; число уходит
@@ -297,12 +330,36 @@ function ServiceLine({
         borderTopColor: t.separator,
       }}
     >
-      <Text
-        numberOfLines={2}
-        style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
-      >
-        {name}
-      </Text>
+      {nameEditable ? (
+        <TextInput
+          keyboardAppearance="light"
+          value={line.editableName}
+          onChangeText={(next) => onNameChange?.(line.id, next)}
+          placeholder="Название"
+          placeholderTextColor={t.placeholder}
+          // Новая строка — курсор сразу в имени.
+          autoFocus={!line.editableName}
+          accessibilityLabel="Название своей услуги"
+          maxFontSizeMultiplier={1.2}
+          style={{
+            flex: 1,
+            height: 34,
+            paddingHorizontal: 8,
+            borderRadius: t.radius.input,
+            backgroundColor: t.fill,
+            fontSize: 15,
+            fontWeight: "600",
+            color: t.ink,
+          }}
+        />
+      ) : (
+        <Text
+          numberOfLines={2}
+          style={{ flex: 1, fontSize: 15, fontWeight: "600", color: t.ink }}
+        >
+          {name}
+        </Text>
+      )}
       <QtyStepper
         name={name}
         qty={line.qty}
