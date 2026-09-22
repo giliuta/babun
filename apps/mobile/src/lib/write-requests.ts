@@ -38,6 +38,7 @@ export const READ_RPCS: ReadonlySet<string> = new Set([
   "location_request_lookup",
   "my_access_map",
   "my_invitations",
+  "next_company_invoice_number",
   "next_invoice_number",
   "read_operational_calendar_settings_safe",
   "read_sms_templates_safe",
@@ -74,6 +75,7 @@ export const WRITE_RPCS: ReadonlySet<string> = new Set([
   "set_appointment_prepayment",
   // Живёт в ещё не накатанной миграции `20260920200000_companies_registry`:
   // волатильность спросить не у кого, а дело её — ставить умолчание.
+  "set_company_invoice_next_number",
   "set_default_company",
   "set_member_access",
   "set_member_calendars",
