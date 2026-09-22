@@ -325,6 +325,12 @@ export default function InvoiceDetailScreen() {
         .filter(Boolean)
         .join(" · ")
     : null;
+  // Скидка — строка с минусом на сервере; на экране она в итогах.
+  const serviceLines = row.lines.filter((line) => line.unit_price >= 0);
+  const servicesTotal = serviceLines.reduce((sum, line) => sum + line.total, 0);
+  const discountTotal = row.lines
+    .filter((line) => line.unit_price < 0)
+    .reduce((sum, line) => sum - line.total, 0);
   const status = invoiceDisplayStatus(row, businessToday, settlement);
   // Отменённый (сторнированный) инвойс и кредит-нота денег не ждут.
   const awaitsPayment =
@@ -514,7 +520,7 @@ export default function InvoiceDetailScreen() {
         </SectionCard>
 
         <SectionCard title="Позиции">
-          {row.lines.map((line, index) => (
+          {serviceLines.map((line, index) => (
             <View key={line.id}>
               {index ? <Divider inset={16} /> : null}
               <View className="flex-row px-4 py-3">
@@ -535,12 +541,22 @@ export default function InvoiceDetailScreen() {
           ))}
         </SectionCard>
 
+        {/* ИТОГО — КАК НА БУМАГЕ: скидка строкой итогов, а не позицией
+            (владелец 2026-09-22), налог словом VAT. */}
         <SectionCard title="Итого">
-          <InfoRow label="Без НДС" value={formatInvoiceMoney(row.subtotal_net, row.currency)} />
+          {discountTotal > 0 ? (
+            <>
+              <InfoRow label="Сумма" value={formatInvoiceMoney(servicesTotal, row.currency)} />
+              <Divider inset={16} />
+              <InfoRow label="Скидка" value={formatInvoiceMoney(-discountTotal, row.currency)} />
+              <Divider inset={16} />
+            </>
+          ) : null}
+          <InfoRow label="Без VAT" value={formatInvoiceMoney(row.subtotal_net, row.currency)} />
           {row.vat_amount > 0 ? (
             <>
               <Divider inset={16} />
-              <InfoRow label={`НДС ${row.vat_percent}%`} value={formatInvoiceMoney(row.vat_amount, row.currency)} />
+              <InfoRow label={`VAT ${row.vat_percent}%`} value={formatInvoiceMoney(row.vat_amount, row.currency)} />
             </>
           ) : null}
           <Divider inset={16} />
