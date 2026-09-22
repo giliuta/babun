@@ -55,7 +55,6 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
         ${lines.map((line) => `<div class="detail">${escapeHtml(line)}</div>`).join("")}
       </div>`;
 
-  const showStatus = doc.draft || doc.statusLabel !== doc.dict.status_issued;
   const noteLines = [...doc.payTo, ...(doc.notes ? [doc.notes] : [])];
 
   return `<!doctype html>
@@ -77,12 +76,11 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
       -webkit-print-color-adjust: exact;
     }
     .page { width: 100%; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 30px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; margin-bottom: 18px; }
     .logo { max-width: 120px; max-height: 120px; }
     .doc { text-align: right; }
     h1 { margin: 0 0 8px; color: #111827; font-size: 30px; font-weight: 800; letter-spacing: 0.3px; }
     .doc-line { color: #6b7280; font-size: 14px; margin-top: 2px; }
-    .status { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 999px; background: #eef2ff; color: #3730a3; font-size: 9px; font-weight: 700; }
     .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-bottom: 26px; }
     .eyebrow { color: #374151; font-size: 10px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; }
     .party-name { margin: 10px 0 4px; color: #111827; font-size: 17px; font-weight: 700; }
@@ -98,11 +96,11 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
     .col-money { width: 124px; }
     .lines th { white-space: nowrap; }
     .number { text-align: right; white-space: nowrap; }
-    .totals { margin-left: auto; border-collapse: collapse; }
-    .totals td { padding: 12px; font-size: 15px; }
-    .total-label { text-align: right; color: #111827; }
-    .total-value { width: 124px; text-align: right; font-weight: 700; color: #111827; border-bottom: 1px solid #e5e7eb; }
-    .grand td { font-size: 17px; font-weight: 700; }
+    .totals { margin-left: auto; margin-top: 8px; border-collapse: collapse; }
+    .totals td { padding: 3px 12px; font-size: 14px; }
+    .total-label { text-align: right; color: #374151; }
+    .total-value { width: 124px; text-align: right; font-weight: 600; color: #111827; }
+    .grand td { padding: 10px 12px; font-size: 17px; font-weight: 700; color: #111827; }
     .grand .total-value { border: 1px solid #e5e7eb; }
     .section { margin-top: 26px; break-inside: avoid; }
     .section .eyebrow { margin-bottom: 6px; }
@@ -125,7 +123,6 @@ function renderInvoiceHtml(doc: InvoiceDocument): string {
         <div class="doc-line">${escapeHtml(doc.number)}</div>
         <div class="doc-line">${escapeHtml(doc.dict.issuedShort(doc.issuedShort))}</div>
         ${doc.dueShort ? `<div class="doc-line">${escapeHtml(doc.dict.dueShort(doc.dueShort))}</div>` : ""}
-        ${showStatus ? `<span class="status">${escapeHtml(doc.statusLabel)}</span>` : ""}
       </div>
     </header>
 

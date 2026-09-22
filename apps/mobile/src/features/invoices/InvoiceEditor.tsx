@@ -375,13 +375,12 @@ export function InvoiceEditor({
   const selectedClient = clientId ? clientById.get(clientId) : null;
   const selectedLocation =
     selectedClient?.locations.find((loc) => loc.id === locationId) ?? null;
-  // Новый клиент — его основной объект (как в записи: `isPrimary` — «первый
-  // объект для автовыбора»); объект прежнего клиента новому не принадлежит.
+  // ОБЪЕКТ ВЫБИРАЮТ ТОЛЬКО НАЖАТИЕМ (владелец 2026-09-22: «выбираю клиента —
+  // объект сразу не выбирается»). Смена клиента снимает объект: чужой объект
+  // новому клиенту не принадлежит.
   const changeClient = (id: string | null) => {
     setClientId(id);
-    const next = id ? clientById.get(id) : null;
-    const primary = next?.locations.find((loc) => loc.isPrimary) ?? next?.locations[0];
-    setLocationId(primary?.id ?? null);
+    if (id !== clientId) setLocationId(null);
   };
 
   const parsedLines = useMemo<InvoiceLineDraft[]>(

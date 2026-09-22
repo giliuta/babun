@@ -36,6 +36,11 @@ export interface InvoiceDictionary {
   vatInclusive: string;
   vatExclusive: string;
   netAmount: string;
+  /** Скидка — строкой итогов, а не услугой в таблице (владелец 2026-09-22). */
+  discount: string;
+  /** База налога прямо в его строке: «VAT 19% on €110.00» — отдельная
+   *  строка «сумма после скидки» делала итоги лестницей из пяти сумм. */
+  vatOn: (amount: string) => string;
   vatOf: (percent: string) => string;
   grandTotal: string;
   /** Регистрационный номер юрлица в строках продавца — как у чека. */
@@ -77,7 +82,6 @@ export interface InvoiceDictionary {
   paymentRow: string;
   refundRow: string;
   notes: string;
-  draftFooter: (number: string) => string;
   /** Только в PDF: шапка-эйбрау, заголовки таблицы платежей и пустое её
    *  состояние. На экранной бумаге этого блока нет. */
   invoiceEyebrow: string;
@@ -122,6 +126,8 @@ const RU: InvoiceDictionary = {
   vatInclusive: "в т.ч. VAT",
   vatExclusive: "VAT",
   netAmount: "Сумма без VAT",
+  discount: "Скидка",
+  vatOn: (amount) => `с ${amount}`,
   vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "К оплате",
   regNumber: "Рег. №",
@@ -148,10 +154,6 @@ const RU: InvoiceDictionary = {
   paymentRow: "Платёж",
   refundRow: "Возврат",
   notes: "Комментарий",
-  draftFooter: (number) =>
-    number
-      ? `Черновик. Номер ${number} закрепится за документом при выставлении.`
-      : "Черновик. Номер закрепится за документом при выставлении.",
   invoiceEyebrow: "Инвойс",
   paymentsDate: "Дата",
   paymentsOperation: "Операция",
@@ -190,6 +192,8 @@ const EN: InvoiceDictionary = {
   vatInclusive: "incl. VAT",
   vatExclusive: "VAT",
   netAmount: "Subtotal",
+  discount: "Discount",
+  vatOn: (amount) => `on ${amount}`,
   vatOf: (percent) => `VAT · ${percent}`,
   grandTotal: "Total",
   regNumber: "Reg. No",
@@ -216,10 +220,6 @@ const EN: InvoiceDictionary = {
   paymentRow: "Payment",
   refundRow: "Refund",
   notes: "Notes",
-  draftFooter: (number) =>
-    number
-      ? `Draft. Number ${number} will be assigned when the invoice is issued.`
-      : "Draft. The number will be assigned when the invoice is issued.",
   invoiceEyebrow: "Invoice",
   paymentsDate: "Date",
   paymentsOperation: "Operation",

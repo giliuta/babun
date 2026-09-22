@@ -27,8 +27,6 @@ const PAPER = {
   muted: "#6b7280",
   line: "#e5e7eb",
   head: "#f3f4f6",
-  accentFill: "#eef2ff",
-  accent: "#3730a3",
   green: "#047857",
   red: "#b91c1c",
 } as const;
@@ -36,18 +34,17 @@ const PAPER = {
 const COL = { qty: 44, price: 74, amount: 84 } as const;
 
 export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
-  // Статус печатается, только когда он что-то говорит клиенту: черновик,
-  // оплачен, просрочен, отменён. У обычного выставленного документа — нет,
-  // как на бумаге #103.
-  const showStatus = doc.draft || doc.statusLabel !== doc.dict.status_issued;
-
+  // СТАТУСА НА БУМАГЕ НЕТ (владелец 2026-09-22: «что такое Draft под
+  // датой?»). Бумага уходит клиенту и в министерство; «черновик», «оплачен»,
+  // «просрочен» — состояние в приложении, а не часть документа. Превью
+  // печатается ровно той бумагой, какой документ выйдет.
   return (
     <View
       style={{
         backgroundColor: "#ffffff",
         borderRadius: 6,
         paddingHorizontal: 20,
-        paddingTop: 22,
+        paddingTop: 16,
         paddingBottom: 16,
         borderWidth: 1,
         borderColor: PAPER.line,
@@ -80,26 +77,11 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               {doc.dict.dueShort(doc.dueShort)}
             </Text>
           ) : null}
-          {showStatus ? (
-            <View
-              style={{
-                marginTop: 5,
-                paddingHorizontal: 7,
-                paddingVertical: 2,
-                borderRadius: 999,
-                backgroundColor: PAPER.accentFill,
-              }}
-            >
-              <Text style={{ fontSize: 8, fontWeight: "700", color: PAPER.accent }}>
-                {doc.statusLabel}
-              </Text>
-            </View>
-          ) : null}
         </View>
       </View>
 
       {/* Стороны: кто выставил и кому. */}
-      <View style={{ flexDirection: "row", gap: 16, marginTop: 20 }}>
+      <View style={{ flexDirection: "row", gap: 16, marginTop: 14 }}>
         <PartyColumn title={doc.dict.seller} party={doc.seller} />
         <PartyColumn title={doc.dict.recipient} party={doc.client} />
       </View>
@@ -152,12 +134,18 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
         )}
       </View>
 
-      {/* Итоги — столбиком справа под колонкой сумм; итог в рамке. */}
-      <View style={{ alignItems: "flex-end" }}>
+      {/* Итоги — столбиком справа под колонкой сумм, без клеток: строки
+          тонкие, в рамке только итог (владелец 2026-09-22: «всё как будто
+          на лапе стоит — сделай компактнее»). */}
+      <View style={{ alignItems: "flex-end", marginTop: 6 }}>
         {doc.totals.map((total, index) => (
           <View
             key={`${total.label}-${index}`}
-            style={{ flexDirection: "row", alignItems: "stretch" }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginTop: total.grand ? 6 : 0,
+            }}
           >
             <Text
               style={{
@@ -165,7 +153,7 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
                 fontWeight: total.grand ? "700" : "400",
                 color: total.grand ? PAPER.ink : PAPER.body,
                 textAlign: "right",
-                paddingVertical: 7,
+                paddingVertical: total.grand ? 6 : 2,
                 paddingHorizontal: 8,
               }}
             >
@@ -175,15 +163,13 @@ export function InvoicePaper({ doc }: { doc: InvoiceDocument }) {
               style={{
                 width: COL.amount,
                 fontSize: total.grand ? 12 : 10,
-                fontWeight: "700",
+                fontWeight: total.grand ? "700" : "600",
                 color: PAPER.ink,
                 textAlign: "right",
-                paddingVertical: 7,
+                paddingVertical: total.grand ? 6 : 2,
                 paddingHorizontal: 8,
                 borderWidth: total.grand ? 1 : 0,
                 borderColor: PAPER.line,
-                borderTopWidth: 1,
-                borderTopColor: PAPER.line,
               }}
             >
               {total.value}

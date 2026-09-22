@@ -12,8 +12,6 @@ import type { TxVatMode } from "@babun/shared/local/finance/vat";
 import { FieldRow } from "@/components/ui/card-rows";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { ClientBlock } from "@/features/appointments/ClientBlock";
-import { InlineNoteField } from "@/features/appointments/InlineNoteField";
-import { useClientNoteField } from "@/features/appointments/use-client-note-field";
 import { useAppointments } from "@/features/calendar/queries";
 import { clientHistoryText } from "@/features/clients/history-line";
 import { buildStatsMap } from "@babun/shared/local/selectors/client-stats";
@@ -140,15 +138,15 @@ export function InvoiceBlocks({
 
   const client = clients.find((c) => c.id === clientId) ?? null;
   // ТОТ ЖЕ БЛОК «КЛИЕНТ», ЧТО В ЗАПИСИ (владелец 2026-09-22: «один единый
-  // блок на всё»): сводка визитов и денег под именем, «…» в карточку,
-  // заметка клиента полем под блоком. Та же карта сводок кормит и шторку.
+  // блок на всё»): сводка визитов и денег под именем, «…» в карточку. Та же
+  // карта сводок кормит и шторку. Заметки клиента в инвойсе нет (владелец
+  // 2026-09-22: «в клиенте есть заметка, но в целом она не нужна»).
   const appointments = useAppointments();
   const statsById = useMemo(
     () => buildStatsMap(clients, appointments.data ?? []),
     [clients, appointments.data],
   );
   const clientStats = client ? statsById.get(client.id) : undefined;
-  const clientNote = useClientNoteField(client);
   // ЗАКРЫТЫЙ СЧЁТ В СПИСКЕ — ТУПИК: сервер его всё равно отобьёт
   // (`assert_invoice_account`), а плитка обещает. Тот же фильтр, что у листа
   // оплаты инвойса.
@@ -271,27 +269,15 @@ export function InvoiceBlocks({
               ? () => router.push({ pathname: "/client", params: { id: client.id } })
               : undefined
           }
-          note={
-            client ? (
-              <InlineNoteField
-                note={clientNote}
-                placeholder="Заметка клиента"
-                accessibilityLabel="Заметка клиента"
-                maxLength={500}
-              />
-            ) : null
-          }
         />
 
         {/* ОБЪЕКТ — ПОД КЛИЕНТОМ, КАК В ЗАПИСИ (владелец 2026-09-22: «под
             каждый объект свой инвойс»); его точный адрес — адрес на бумаге. */}
-        {client ? (
-          <InvoiceObjectBlock
-            client={client}
-            locationId={locationId}
-            onLocationChange={onLocationChange}
-          />
-        ) : null}
+        <InvoiceObjectBlock
+          client={client}
+          locationId={locationId}
+          onLocationChange={onLocationChange}
+        />
 
         {/* УСЛУГИ И «ИТОГО» — ТОТ ЖЕ БЛОК, ЧТО В ЗАПИСИ И В ЧЕКЕ, с той же
             шапкой (владелец 2026-09-21: «я бы назвал целый блок услуги»). Тап

@@ -271,7 +271,10 @@ function issuedDocument({
     issuedShort: shortDate(invoice.issued_on, dict.locale),
     dueShort: invoice.due_on ? shortDate(invoice.due_on, dict.locale) : null,
     currency: invoice.currency,
-    lines: invoice.lines.map((line) => ({
+    // СКИДКА — НЕ УСЛУГА (владелец 2026-09-22: «дискаунт вынести, а не как
+    // услугу»). На сервере она строка с отрицательной ценой; на бумаге её
+    // строки в таблице нет — она стоит в итогах под «Subtotal».
+    lines: invoice.lines.filter((line) => line.unit_price >= 0).map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
@@ -286,6 +289,7 @@ function issuedDocument({
       vatPercent: invoice.vat_percent,
       vatMode,
       total: invoice.total,
+      discount: splitDiscount(invoice.lines.map((line) => line.total)),
     }),
     payTo: compact([
       prefixed("IBAN", seller ? clean(seller.iban) : clean(tenant?.iban)),
@@ -395,7 +399,7 @@ function draftDocument({
     issuedShort: shortDate(draft.issuedOn, dict.locale),
     dueShort: draft.dueOn ? shortDate(draft.dueOn, dict.locale) : null,
     currency: draft.currency,
-    lines: draft.lines.map((line) => ({
+    lines: draft.lines.filter((line) => line.unitPrice >= 0).map((line) => ({
       title: line.title,
       description: line.description?.trim() || null,
       qty: formatQty(line.qty, line.unit, dict.locale),
@@ -417,6 +421,9 @@ function draftDocument({
       vatPercent: draft.vatPercent,
       vatMode: draft.vatMode,
       total: draft.total,
+      discount: splitDiscount(
+        draft.lines.map((line) => invoiceLineTotal(line.qty, line.unitPrice)),
+      ),
     }),
     payTo: compact([
       prefixed("IBAN", company ? clean(company.iban) : clean(tenant?.iban)),
@@ -426,8 +433,18 @@ function draftDocument({
     settlement: [],
     payments: [],
     notes: clean(draft.notes),
-    footer: dict.draftFooter(draft.number),
+    // ПРЕВЬЮ = БУМАГА, КАКОЙ ОНА ВЫЙДЕТ (владелец 2026-09-22 не понял
+    // «Draft. Number … will be assigned…»): подвал тот же, что у выставленной.
+    footer: draft.number ? dict.footer(draft.number, draft.currency) : dict.numberPending,
   };
+}
+
+/** Сумма услуг и скидка документа: скидка — строки с минусом. */
+function splitDiscount(lineTotals: readonly number[]): { services: number; amount: number } | null {
+  const discount = lineTotals.filter((total) => total < 0).reduce((sum, total) => sum - total, 0);
+  if (discount <= 0) return null;
+  const services = lineTotals.filter((total) => total >= 0).reduce((sum, total) => sum + total, 0);
+  return { services: Math.round(services * 100) / 100, amount: Math.round(discount * 100) / 100 };
 }
 
 function totalRows(input: {
@@ -438,7 +455,36 @@ function totalRows(input: {
   vatPercent: number;
   vatMode: "off" | "inclusive" | "exclusive";
   total: number;
+  discount?: { services: number; amount: number } | null;
 }): DocumentTotal[] {
+  // СО СКИДКОЙ: «Subtotal» — сумма услуг, «Discount» — минусом, дальше
+  // налог и итог, как в «Итого» записи (скидка, потом VAT). Четыре строки,
+  // не пять: база налога «сверху» — в строке налога («VAT 19% on €110.00»),
+  // владелец 2026-09-22: «очень много разных сумм, человек запутается».
+  if (input.discount) {
+    const { dict, discount } = input;
+    const money = (value: number) => paperMoney(value, input.currency, dict.locale);
+    const hasVat = input.vatMode !== "off" && input.vatAmount > 0;
+    const vatLabel =
+      input.vatMode === "inclusive" ? dict.vatInclusive : dict.vatExclusive;
+    return [
+      { label: dict.subtotal, value: money(discount.services) },
+      { label: dict.discount, value: money(-discount.amount) },
+      ...(hasVat
+        ? [
+            {
+              label:
+                `${vatLabel} ${formatPercent(input.vatPercent, dict.locale)}` +
+                (input.vatMode === "exclusive"
+                  ? ` ${dict.vatOn(money(input.subtotalNet))}`
+                  : ""),
+              value: money(input.vatAmount),
+            },
+          ]
+        : []),
+      { label: dict.grandTotal, value: money(input.total), grand: true },
+    ];
+  }
   // Документ БЕЗ НАЛОГА не должен говорить о налоге дважды («Без НДС» и снова
   // «Без НДС · €0») — это выглядело как ошибка счёта. Строка налога появляется
   // только там, где налог есть.

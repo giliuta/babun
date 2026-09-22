@@ -9,8 +9,10 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { LogoRow } from "@/features/settings/LogoRow";
+import { getStorage } from "@babun/shared/storage";
+import { useTenantId } from "@/lib/tenant";
 import { useThemeColors } from "@/theme/colors";
-import { canSaveCompany, normalizeCompanyDraft } from "./company-rules";
+import { canSaveCompany, isCompanyDraftDirty, normalizeCompanyDraft } from "./company-rules";
 import type { Company, CompanyDraft } from "./queries";
 
 // КАРТОЧКА РЕКВИЗИТОВ — ОДНА ФОРМА НА СОЗДАНИЕ И НА ПРАВКУ (тот же закон, что у
@@ -46,6 +48,37 @@ const EMPTY: CompanyDraft = {
   contact_phone: null,
   contact_email: null,
 };
+
+function companyToDraft(company: Company | null): CompanyDraft {
+  if (!company) return EMPTY;
+  return {
+    name: company.name,
+    // Без цвета и значка правка открывалась «без вида» и первым же
+    // сохранением стирала выбранный.
+    color: company.color,
+    icon: company.icon,
+    logo_url: company.logo_url,
+    legal_name: company.legal_name,
+    business_address: company.business_address,
+    vat_number: company.vat_number,
+    reg_number: company.reg_number,
+    iban: company.iban,
+    bank_name: company.bank_name,
+    contact_phone: company.contact_phone,
+    contact_email: company.contact_email,
+  };
+}
+
+/** Черновик на устройстве — пережить перезапуск приложения (см. ниже). */
+function readStoredDraft(storageKey: string | null): CompanyDraft | null {
+  if (!storageKey) return null;
+  try {
+    const stored = getStorage().get<CompanyDraft>(storageKey);
+    return stored && typeof stored.name === "string" ? { ...EMPTY, ...stored } : null;
+  } catch {
+    return null;
+  }
+}
 
 type TextKey =
   | "legal_name"
@@ -84,41 +117,53 @@ export function CompanySheet({
   // сохранения?» здесь нельзя: жест уже увёз лист вниз. Поэтому набранное
   // просто не теряется — открыли тот же набор снова, и всё на месте.
   // Черновик сбрасывается, только когда открыли ДРУГОЙ набор или сохранили.
+  //
+  // …И ДОЖИВАЕТ ДО ПЕРЕЗАПУСКА ПРИЛОЖЕНИЯ (владелец 2026-09-22: «заполняю,
+  // заполняю — через время выбивает на календарь»). Реквизиты — длинная
+  // анкета; перезапуск (iOS выгрузил приложение в фоне, обновление сборки)
+  // стирал всё набранное. Пока набор отличается от сохранённого, черновик
+  // лежит на устройстве, отдельно на компанию и на набор; «Сохранить» его
+  // убирает.
+  const tenantId = useTenantId();
   const key = company?.id ?? "new";
+  const storageKey = tenantId ? `companies.draft.${tenantId}.${key}` : null;
   const [hydratedKey, setHydratedKey] = useState<string | null>(null);
   useEffect(() => {
     if (!visible || hydratedKey === key) return;
-    setDraft(
-      company
-        ? {
-            name: company.name,
-            // Без цвета и значка правка открывалась «без вида» и первым же
-            // сохранением стирала выбранный.
-            color: company.color,
-            icon: company.icon,
-            logo_url: company.logo_url,
-            legal_name: company.legal_name,
-            business_address: company.business_address,
-            vat_number: company.vat_number,
-            reg_number: company.reg_number,
-            iban: company.iban,
-            bank_name: company.bank_name,
-            contact_phone: company.contact_phone,
-            contact_email: company.contact_email,
-          }
-        : EMPTY,
-    );
+    setDraft(readStoredDraft(storageKey) ?? companyToDraft(company));
     setHydratedKey(key);
-  }, [visible, key, company, hydratedKey]);
+  }, [visible, key, company, hydratedKey, storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || hydratedKey !== key) return;
+    try {
+      if (isCompanyDraftDirty(companyToDraft(company), draft)) {
+        getStorage().set(storageKey, draft);
+      } else {
+        getStorage().remove(storageKey);
+      }
+    } catch {
+      // Хранилище недоступно — черновик живёт в памяти, как раньше.
+    }
+  }, [draft, storageKey, hydratedKey, key, company]);
 
   // Сохранение прошло — лист закрыт, запись ушла: следующее открытие берёт
   // свежую строку из базы, а не старый черновик. Неудача оставляет лист
   // открытым, и черновик живёт дальше.
   const wasSaving = useRef(false);
   useEffect(() => {
-    if (wasSaving.current && !saving && !visible) setHydratedKey(null);
+    if (wasSaving.current && !saving && !visible) {
+      setHydratedKey(null);
+      if (storageKey) {
+        try {
+          getStorage().remove(storageKey);
+        } catch {
+          // см. выше
+        }
+      }
+    }
     wasSaving.current = saving;
-  }, [saving, visible]);
+  }, [saving, visible, storageKey]);
 
   const set = (patch: Partial<CompanyDraft>) =>
     setDraft((prev) => ({ ...prev, ...patch }));
