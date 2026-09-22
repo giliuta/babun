@@ -101,8 +101,13 @@ export function WhenRow({
   allDay,
   warning,
   onPress,
+  until,
 }: {
   date: string;
+  /** СРОК ДОКУМЕНТА ВМЕСТО ВРЕМЕНИ (22.09, инвойс: «время выставления — как у
+   *  нас по архитектуре»). Та же плашка: день · «до 29 сентября» · пилюля
+   *  «7 дней». Без `timeStart` — только у документа со сроком. */
+  until?: { text: string; pill?: string | null };
   /** Время. НЕТ — плашка печатает ОДИН ДЕНЬ: у чека деньги приняты в такой-то
    *  день, а не в 18:43 (владелец 2026-09-20: «чётко по времени не надо, это
    *  дата… как выборка обычная»). Плашка при этом та же самая — он просил
@@ -150,14 +155,18 @@ export function WhenRow({
                       ? `с ${timeStart} до ${timeEnd}, ${durationLabel(duration ?? 0)}`
                       : timeStart
                 }`
-              : `Дата: ${humanDay(date)}`
+              : until
+                ? `Даты: ${humanDay(date)}, ${until.text}${until.pill ? `, ${until.pill}` : ""}`
+                : `Дата: ${humanDay(date)}`
           }
           accessibilityHint={
             !onPress
               ? undefined
               : timeStart
                 ? "Открывает выбор даты и времени"
-                : "Открывает выбор даты"
+                : until
+                  ? "Открывает выбор дат"
+                  : "Открывает выбор даты"
           }
         >
           {/* ОДНОЙ СТРОКОЙ: ДЕНЬ · ВРЕМЯ · ДЛИТЕЛЬНОСТЬ (владелец 2026-09-04:
@@ -175,7 +184,33 @@ export function WhenRow({
             >
               {humanDay(date)}
             </Text>
-            {timeStart ? <Text style={{ fontSize: 15, color: t.separator }}>·</Text> : null}
+            {timeStart || until ? (
+              <Text style={{ fontSize: 15, color: t.separator }}>·</Text>
+            ) : null}
+            {until && !timeStart ? (
+              <>
+                <Text
+                  numberOfLines={1}
+                  style={{ fontSize: 16, fontWeight: "700", color: t.ink }}
+                >
+                  {until.text}
+                </Text>
+                {until.pill ? (
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: t.radius.pill,
+                      backgroundColor: t.fill,
+                    }}
+                  >
+                    <Text numberOfLines={1} style={{ fontSize: 13, color: t.sub }}>
+                      {until.pill}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
             {!timeStart ? null : allDay ? (
               <Text style={{ fontSize: 15, fontWeight: "700", color: t.ink }}>
                 весь день

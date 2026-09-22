@@ -1,22 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Card } from "@/components/ui/Card";
-import { DateWheelSheet } from "@/components/ui/DateWheelSheet";
-import { humanDay } from "@/features/appointments/helpers";
+import { BottomSheet } from "@/components/ui/BottomSheet";
+import { Button } from "@/components/ui/Button";
+import { DateSpinner } from "@/components/ui/DateSpinner";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { WhenRow } from "@/features/appointments/BookingSummary";
+import { formatYMD, humanDay, parseYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
 
-// ДАТЫ ИНВОЙСА — ПЛАШКОЙ, КАК «ВРЕМЯ» В ЗАПИСИ И ДАТА В ЧЕКЕ.
+// ДАТЫ ИНВОЙСА — ПО АРХИТЕКТУРЕ «КОГДА» ЗАПИСИ.
 //
-// Владелец 2026-09-22: «измени блок даты, сделай его более красивым». Было две
-// строки-настройки «Выставлен · 22 сен ›» в карточке с капс-шапкой — анкета.
-// Стало то, чем в продукте уже показывают день: белая плашка без шапки
-// (`WhenRow` у записи и чека), только разрезанная на две половины — когда
-// выставлен и до какого числа ждём денег. Под сроком — сколько это дней: срок
-// на глаз читают днями, а не датой.
+// Владелец 2026-09-22: «перестроить выставление времени — как у нас по
+// архитектуре заведено и как мы уже делали». У записи «когда» — одна белая
+// плашка (`WhenRow`: день · время · пилюля длительности), тап — одна шторка с
+// сегментом «Начало | Конец», барабаном и «Применить». У чека — та же
+// плашка с одним днём. Инвойс берёт ровно это:
+//   • плашка `WhenRow`: «вт, 22 сентября · до 29 сентября · 7 дней»;
+//   • шторка «Даты»: сегмент «Выставлен | Оплатить до», барабан даты,
+//     «Применить» в футере, «Без срока» тихой строкой под ним.
+// Две половины со своими листами (22.09 утром) ушли — второй способ показать
+// «когда», которого в продукте больше нигде нет.
 //
-// Тап по половине — тот же канонический барабан `DateWheelSheet`, что был у
-// строк. У выставленного документа дата выставления заморожена (по её году
-// живёт номер), и её половина не нажимается.
+// У выставленного документа дата выставления заморожена (по её году живёт
+// номер): сегмента нет, шторка правит только срок.
 
 function daysBetween(from: string, to: string): number {
   const a = Date.UTC(+from.slice(0, 4), +from.slice(5, 7) - 1, +from.slice(8, 10));
@@ -24,7 +30,7 @@ function daysBetween(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000);
 }
 
-function termLabel(days: number): string {
+function daysLabel(days: number): string {
   if (days <= 0) return "в день выставления";
   const mod10 = days % 10;
   const mod100 = days % 100;
@@ -34,8 +40,15 @@ function termLabel(days: number): string {
       : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)
         ? "дня"
         : "дней";
-  return `через ${days} ${word}`;
+  return `${days} ${word}`;
 }
+
+/** «29 сентября» — день без недели, как второе число в плашке. */
+function shortDay(ymd: string): string {
+  return humanDay(ymd).replace(/^[^,]+,\s*/, "");
+}
+
+type Field = "issued" | "due";
 
 export function InvoiceDatesBlock({
   issuedOn,
@@ -51,92 +64,110 @@ export function InvoiceDatesBlock({
   onDueOnChange: (ymd: string | null) => void;
 }) {
   const t = useThemeColors();
-  const [sheet, setSheet] = useState<"issued" | "due" | null>(null);
+  const [open, setOpen] = useState(false);
+  const [field, setField] = useState<Field>(issuedOnLocked ? "due" : "issued");
+  const [draftIssued, setDraftIssued] = useState(issuedOn);
+  const [draftDue, setDraftDue] = useState<string | null>(dueOn);
 
-  const half = (
-    key: "issued" | "due",
-    caption: string,
-    value: string,
-    hint: string | null,
-    muted: boolean,
-    disabled: boolean,
-  ) => (
-    <Pressable
-      onPress={() => setSheet(key)}
-      disabled={disabled}
-      accessibilityRole={disabled ? "text" : "button"}
-      accessibilityLabel={`${caption}: ${value}${hint ? `, ${hint}` : ""}`}
-      accessibilityHint={disabled ? undefined : "Открывает выбор даты"}
-      style={({ pressed }) => ({
-        flex: 1,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        backgroundColor: pressed && !disabled ? t.pressed : "transparent",
-      })}
-    >
-      <Text style={{ fontSize: 12, fontWeight: "600", color: t.sub }}>{caption}</Text>
-      <Text
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.3}
-        style={{
-          fontSize: 16,
-          fontWeight: "700",
-          color: muted ? t.placeholder : t.ink,
-          marginTop: 2,
-        }}
-      >
-        {value}
-      </Text>
-      {hint ? (
-        <Text style={{ fontSize: 12, color: t.sub, marginTop: 1 }}>{hint}</Text>
-      ) : null}
-    </Pressable>
-  );
+  // Открытие всегда с текущих дат, а не с того, что крутили в прошлый раз.
+  useEffect(() => {
+    if (!open) return;
+    setDraftIssued(issuedOn);
+    setDraftDue(dueOn);
+    setField(issuedOnLocked ? "due" : "issued");
+  }, [open, issuedOn, dueOn, issuedOnLocked]);
+
+  const days = dueOn ? daysBetween(issuedOn, dueOn) : null;
+  const shownDue = draftDue ?? draftIssued;
+
+  const apply = () => {
+    if (!issuedOnLocked && draftIssued !== issuedOn) onIssuedOnChange(draftIssued);
+    // Срок раньше выставления не бывает — подтягиваем к дню выставления.
+    const due = draftDue && draftDue < draftIssued ? draftIssued : draftDue;
+    if (due !== dueOn) onDueOnChange(due);
+    setOpen(false);
+  };
 
   return (
-    <View className="mx-4 mt-2">
-      <Card style={{ flexDirection: "row", alignItems: "stretch" }}>
-        {half("issued", "Выставлен", humanDay(issuedOn), null, false, !!issuedOnLocked)}
-        <View style={{ width: 1, backgroundColor: t.separator, marginVertical: 10 }} />
-        {half(
-          "due",
-          "Оплатить до",
-          dueOn ? humanDay(dueOn) : "без срока",
-          dueOn ? termLabel(daysBetween(issuedOn, dueOn)) : null,
-          !dueOn,
-          false,
-        )}
-      </Card>
+    <>
+      <WhenRow
+        date={issuedOn}
+        until={{
+          text: dueOn ? `до ${shortDay(dueOn)}` : "без срока",
+          pill: days != null ? daysLabel(days) : null,
+        }}
+        onPress={() => setOpen(true)}
+      />
 
-      <DateWheelSheet
-        visible={sheet === "issued"}
-        title="Выставлен"
-        value={issuedOn}
-        seed={issuedOn}
-        onApply={(ymd) => {
-          onIssuedOnChange(ymd);
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-      />
-      <DateWheelSheet
-        visible={sheet === "due"}
-        title="Оплатить до"
-        value={dueOn}
-        // «Оплатить до» раньше выставления не бывает.
-        seed={issuedOn}
-        minimumDate={issuedOn}
-        clearLabel={dueOn ? "Убрать срок" : undefined}
-        onApply={(ymd) => {
-          onDueOnChange(ymd);
-          setSheet(null);
-        }}
-        onClear={() => {
-          onDueOnChange(null);
-          setSheet(null);
-        }}
-        onClose={() => setSheet(null)}
-      />
-    </View>
+      <BottomSheet padded={false} visible={open} onClose={() => setOpen(false)}>
+        <View style={{ paddingHorizontal: 20, paddingBottom: 28, paddingTop: 4, gap: 10 }}>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.2}
+            style={{ fontSize: 17, fontWeight: "600", color: t.ink, textAlign: "center" }}
+          >
+            {field === "issued"
+              ? `Выставлен · ${humanDay(draftIssued)}`
+              : draftDue
+                ? `Оплатить до · ${humanDay(draftDue)}`
+                : "Оплатить до · без срока"}
+          </Text>
+
+          {issuedOnLocked ? null : (
+            <SegmentedControl
+              options={[
+                { value: "issued", label: "Выставлен" },
+                { value: "due", label: "Оплатить до" },
+              ]}
+              value={field}
+              onChange={setField}
+            />
+          )}
+
+          <View style={{ alignItems: "center" }}>
+            {field === "issued" ? (
+              <DateSpinner
+                value={parseYMD(draftIssued)}
+                onChange={(next) => setDraftIssued(formatYMD(next))}
+              />
+            ) : (
+              <DateSpinner
+                value={parseYMD(shownDue)}
+                minimumDate={parseYMD(draftIssued)}
+                onChange={(next) => setDraftDue(formatYMD(next))}
+              />
+            )}
+          </View>
+
+          {field === "due" ? (
+            <Text style={{ fontSize: 13, color: t.sub, textAlign: "center" }}>
+              {draftDue
+                ? `Срок оплаты — ${daysLabel(daysBetween(draftIssued, draftDue))}`
+                : "Срок не назначен — крутите барабан, чтобы поставить"}
+            </Text>
+          ) : null}
+
+          <Button label="Применить" onPress={apply} />
+
+          {field === "due" && draftDue ? (
+            <Pressable
+              onPress={() => setDraftDue(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Без срока оплаты"
+              style={({ pressed }) => ({
+                minHeight: 44,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, fontWeight: "600", color: t.danger }}>
+                Без срока
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </BottomSheet>
+    </>
   );
 }
