@@ -140,6 +140,11 @@ export function PaymentTile({
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.3}
+            // ДЛИННОЕ ИМЯ СНАЧАЛА УЖИМАЕТСЯ, ПОТОМ РЕЖЕТСЯ (прогон 2026-09-23:
+            // «Revolut Busi…» в трёх плитках на ряд). До 85 % — ещё читается
+            // и не выпадает из ряда соседей.
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
             style={{
               flexShrink: 1,
               fontSize: 12,

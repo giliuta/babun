@@ -29,6 +29,7 @@ import { accountDaysOnHand } from "./accounts-sections";
 import { dayPhrase } from "./period";
 import {
   accountOwnerLabel,
+  transferSpansTeams,
   defaultTransferTarget,
   transferGroups,
 } from "./transfer-options";
@@ -202,9 +203,11 @@ export function TransferSheet({
   // ОДНО ПРАВИЛО ИМЕНИ на весь лист: в карточках счёт называется полностью,
   // «Наличка · Команда 2». Условной дописки команды больше нет — в СПИСКЕ её
   // говорит заголовок группы, и там строка остаётся голым именем.
+  const spansTeams = useMemo(() => transferSpansTeams(accounts), [accounts]);
   const label = useMemo(
-    () => (account: AccountWithBalance) => accountOwnerLabel(account, teamName),
-    [teamName],
+    () => (account: AccountWithBalance) =>
+      accountOwnerLabel(account, teamName, spansTeams),
+    [teamName, spansTeams],
   );
   // Порядок списка по-прежнему считается от команды ИСТОЧНИКА: её счета идут
   // первыми — в них сдают и из них переводят чаще всего.

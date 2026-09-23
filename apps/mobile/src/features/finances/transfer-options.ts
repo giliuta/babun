@@ -41,13 +41,30 @@ export interface TransferGroup<T extends TransferAccount> {
 export function accountOwnerLabel(
   account: TransferAccount,
   teamName: TeamNameResolver,
+  /** `false` — все счета перевода одной команды (`transferSpansTeams`):
+   *  хвост «· Y&D» у каждого имени тогда шум, а не сведения. */
+  showTeam = true,
 ): string {
+  if (!showTeam) return account.name;
   const team = teamName(account.brigade_id);
   // Счёт без команды — не «общий», а осиротевший: владельца удалили или он
   // остался от старой схемы. Молчать об этом нельзя, деньги на нём настоящие.
   const owner =
     team ?? (account.brigade_id ? "Команда удалена" : "Без команды");
   return `${account.name} · ${owner}`;
+}
+
+/**
+ * НУЖНО ЛИ НАЗЫВАТЬ КОМАНДУ В ИМЕНИ СЧЁТА (живой прогон 2026-09-23). У
+ * компании с одной командой лист говорил «Наличные · Y&D → Карта · Y&D» и
+ * «После перевода: Наличные · Y&D €0 · Карта · Y&D €593» — половина строки
+ * повторяла то, что и так одно. Команда нужна, только когда счета перевода
+ * принадлежат разным владельцам (в том числе «без команды»).
+ */
+export function transferSpansTeams(
+  accounts: readonly Pick<TransferAccount, "brigade_id">[],
+): boolean {
+  return new Set(accounts.map((a) => a.brigade_id)).size > 1;
 }
 
 /**

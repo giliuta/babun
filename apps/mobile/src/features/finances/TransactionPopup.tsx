@@ -196,10 +196,11 @@ export function TransactionPopup({
       : tx.type === "expense" || tx.type === "refund"
         ? t.danger
         : t.ink;
+  // ПЕРЕВОД БЕЗ ЗНАКА (прогон 2026-09-23): в ленте всех счетов он «€55»,
+  // а карточка того же перевода печатала «−€55» — минус читается как расход.
+  // Деньги переехали; откуда и куда — строки ниже.
   const sign =
-    tx.type === "income" || (tx.type === "transfer" && tx.amount > 0)
-      ? ""
-      : "−";
+    tx.type === "income" || tx.type === "transfer" ? "" : "−";
 
   // Auto rows are the immutable financial mirror of an appointment. They may
   // only be refunded through that appointment; a generic refund here would
@@ -298,14 +299,16 @@ export function TransactionPopup({
   // Перевод отвечает «откуда и куда ушли деньги» обеими ногами; пока вторая
   // не найдена — обычная строка «Счёт».
   if (transferLegs) {
-    metaRows.push({
-      label: "Откуда",
-      value: accountDisplayName(transferLegs.from, ownerName(transferLegs.from)),
-    });
-    metaRows.push({
-      label: "Куда",
-      value: accountDisplayName(transferLegs.to, ownerName(transferLegs.to)),
-    });
+    // ВЛАДЕЛЕЦ У ИМЕНИ — ТОЛЬКО КОГДА КОМАНДЫ СТОРОН РАЗНЫЕ (прогон
+    // 2026-09-23): «Наличные · Y&D», «Карта · Y&D» и строкой ниже «Команда
+    // Y&D» — одно слово трижды. Та же мера, что в листе перевода
+    // (`transferSpansTeams`).
+    const acrossTeams =
+      transferLegs.from.brigade_id !== transferLegs.to.brigade_id;
+    const legName = (a: Account) =>
+      acrossTeams ? accountDisplayName(a, ownerName(a)) : a.name;
+    metaRows.push({ label: "Откуда", value: legName(transferLegs.from) });
+    metaRows.push({ label: "Куда", value: legName(transferLegs.to) });
   } else if (account) {
     metaRows.push({ label: "Счёт", value: account.name });
   }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   accountOwnerLabel,
+  transferSpansTeams,
   defaultTransferTarget,
   transferGroups,
   type TransferAccount,
@@ -235,5 +236,15 @@ describe("получатель по умолчанию", () => {
       })?.id,
       "c",
     );
+  });
+});
+
+describe("команда в имени — только когда счета разных команд", () => {
+  test("одна команда — голое имя; две или бесхозный счёт — с командой", () => {
+    assert.equal(transferSpansTeams([YURA_CASH]), false);
+    assert.equal(transferSpansTeams([YURA_CASH, YURA_CASH]), false);
+    assert.equal(transferSpansTeams([YURA_CASH, DIMA_CASH]), true);
+    assert.equal(transferSpansTeams([YURA_CASH, ORPHAN]), true);
+    assert.equal(accountOwnerLabel(YURA_CASH, teamName, false), "Наличные");
   });
 });
