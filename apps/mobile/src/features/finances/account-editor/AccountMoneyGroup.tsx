@@ -20,6 +20,7 @@ import { useAccountVatDue } from "../vat-queries";
 import {
   CLOSED_ACCOUNT_OPENING_FROZEN,
   FROZEN_FIELDS_CAPTION,
+  FROZEN_OPENING_CAPTION,
   ORPHAN_FROZEN_FIELDS_CAPTION,
 } from "../account-alerts";
 import { teamControl } from "./editor-logic";
@@ -74,6 +75,17 @@ export function AccountMoneyGroup({
   const control = teamControl(
     account,
     activeTeams.map((team) => team.id),
+  );
+  // ГРУППЫ «КОМАНДА» НЕТ, КОГДА ВЫБИРАТЬ НЕ ИЗ ЧЕГО (прогон 2026-09-23): у
+  // компании с одной командой строка «Команда · Y&D» — единственная в своей
+  // группе и ничего не решает. Тот же закон, что у листа создания: «у тенанта
+  // с одной командой вопрос не задаётся вовсе». Счёт удалённой или архивной
+  // команды и счёт «Без команды» группу держат — там она и есть новость.
+  const showTeam = !(
+    control === "fixed"
+    && account.brigade_id !== null
+    && activeTeams.length <= 1
+    && activeTeams.some((team) => team.id === account.brigade_id)
   );
 
   // Основной счёт уникален внутри (тенант, команда); у счетов старой схемы
@@ -151,13 +163,16 @@ export function AccountMoneyGroup({
           text={
             account.brigade_id === null
               ? ORPHAN_FROZEN_FIELDS_CAPTION
-              : FROZEN_FIELDS_CAPTION
+              : showTeam
+                ? FROZEN_FIELDS_CAPTION
+                : FROZEN_OPENING_CAPTION
           }
         />
       ) : openingFrozen ? (
         <RowCaption text={CLOSED_ACCOUNT_OPENING_FROZEN} />
       ) : null}
 
+      {showTeam ? (
       <RowGroup title="Команда">
         {/* ЧЕЙ ЭТО СЧЁТ. Пустая команда — не «команду удалили», а счёт старой
             схемы: его отдают команде целиком (`scope` и `brigade_id` одной
@@ -191,6 +206,7 @@ export function AccountMoneyGroup({
           </View>
         )}
       </RowGroup>
+      ) : null}
 
       {/* ОПЛАТА ЗАПИСИ — СВОЕЙ ГРУППОЙ (владелец 2026-09-23: «настройка того,
           будет ли он впадать в оплату при записи, — собрать правильно по
