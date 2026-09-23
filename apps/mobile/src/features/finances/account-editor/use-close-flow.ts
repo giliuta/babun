@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { moneySign } from "@babun/shared/common/utils/money";
 import { useQueryClient } from "@tanstack/react-query";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { useToast } from "@/components/ui/Toast";
@@ -95,7 +96,8 @@ export function useCloseFlow({
   const [preset, setPreset] = useState<{
     fromId: string | null;
     toId: string | null;
-    amount: number;
+    /** `null` — весь остаток источника (так лист перевода решает сам). */
+    amount: number | null;
   } | null>(null);
   /** Что спросить, когда лист уехал. */
   const afterExit = useRef<(() => void) | null>(null);
@@ -189,6 +191,28 @@ export function useCloseFlow({
     setParked(true);
   };
 
+  /**
+   * «ПЕРЕВЕСТИ» ИЗ ЛИСТА СЧЁТА (владелец 2026-09-23, идея из отчёта по
+   * счетам: «сдать наличные на карту» — самое частое действие со счётом, а
+   * дверь к нему была только на «Финансах»). Лист уезжает с дороги (два листа
+   * в одном кадре iOS не покажет), открывается тот же лист перевода, что в
+   * футере «Финансов», с этим счётом источником и всем его остатком; по
+   * закрытии лист счёта возвращается — вопроса о скрытии здесь нет.
+   */
+  const startTransfer = (account: AccountWithBalance) => {
+    closingFrom.current = null;
+    // С деньгами счёт — источник; пустой или в минусе — получатель: с него
+    // переводить нечего, а пополнить его — ровно то, что с ним делают.
+    const outgoing = moneySign(account.balance) > 0;
+    setPreset({
+      fromId: outgoing ? account.id : null,
+      toId: outgoing ? null : account.id,
+      amount: null,
+    });
+    afterExit.current = () => setTransferOpen(true);
+    setParked(true);
+  };
+
   const onSheetExited = () => {
     const run = afterExit.current;
     afterExit.current = null;
@@ -223,6 +247,7 @@ export function useCloseFlow({
     /** Лист уехал на время разговора: `visible && !parked`. */
     parked,
     start,
+    startTransfer,
     onSheetExited,
     transfer: {
       visible: transferOpen,

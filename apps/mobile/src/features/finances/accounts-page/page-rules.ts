@@ -4,6 +4,10 @@ import {
   type ClosableAccount,
   type CloseDecision,
 } from "../close-decision";
+import { FORMS_DEN, formatCountRu } from "@babun/shared/common/utils/plural-ru";
+import { moneySign } from "@babun/shared/common/utils/money";
+import type { AccountKind } from "@babun/shared/local/finance/account";
+import { accountDaysOnHand, type AccountMovementDates } from "../accounts-sections";
 import { routeParam } from "../finance-route";
 
 // СТРАНИЦА «СЧЕТА» ЗА ШЕСТЕРЁНКОЙ — ЕЁ РЕШЕНИЯ ЧИСТЫМИ ФУНКЦИЯМИ.
@@ -90,6 +94,27 @@ export function accountRowMark(
 ): string | null {
   if (!account.show_in_payments) return "Не в оплате";
   return account.is_primary && groupSize > 1 ? "Основной" : null;
+}
+
+/**
+ * «НА РУКАХ N ДНЕЙ» У КАССЫ (владелец 2026-09-23: «давай делай» — идея из
+ * отчёта по счетам). Наличные копятся у мастера, и главный вопрос о кассе —
+ * не «сколько», а «как давно не сдавали». Срок считается тем же правилом, что
+ * в листе перевода (`accountDaysOnHand`: с последней сдачи, а если её не было
+ * — с первой операции), и печатается тихой строкой под именем.
+ *
+ * Только у кассы и только когда в ней есть деньги: пустая касса «на руках»
+ * ничего не держит, а у карты и банка деньги лежат не у человека. Сегодняшние
+ * деньги (0 дней) не новость — строки нет.
+ */
+export function cashOnHandLine(
+  account: AccountMovementDates & { kind: AccountKind; balance: number },
+  today: string,
+): string | null {
+  if (account.kind !== "cash" || moneySign(account.balance) <= 0) return null;
+  const days = accountDaysOnHand(account, today);
+  if (days === null || days < 1) return null;
+  return `на руках ${formatCountRu(days, FORMS_DEN)}`;
 }
 
 /**

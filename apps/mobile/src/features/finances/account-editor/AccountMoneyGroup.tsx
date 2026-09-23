@@ -8,6 +8,7 @@ import {
 import { Divider } from "@/components/ui/Divider";
 import { SwitchRow } from "@/components/ui/SwitchRow";
 import {
+  ActionRow,
   FieldRow,
   NavRow,
   RowCaption,
@@ -39,6 +40,7 @@ export function AccountMoneyGroup({
   save,
   busy,
   alertError,
+  onTransfer,
 }: {
   account: AccountWithBalance;
   accounts: readonly AccountWithBalance[];
@@ -50,8 +52,15 @@ export function AccountMoneyGroup({
   /** Идёт другая правка счёта — переключатели ждут её ответа. */
   busy: boolean;
   alertError: AlertError;
+  /** Открыть перевод с этого счёта (или на него, если денег нет). */
+  onTransfer: () => void;
 }) {
   const setPrimary = useSetPrimaryAccount();
+  // ПЕРЕВОДИТЬ ЕСТЬ КУДА, только если рядом есть другой открытый счёт; у
+  // закрытого счёта денег в оборотах нет вовсе.
+  const canTransfer =
+    account.is_active
+    && accounts.some((other) => other.is_active && other.id !== account.id);
   // VAT СКОБКОЙ ПРИ СУММЕ, а не отдельной настройкой (владелец 2026-09-23:
   // «общая сумма, и в скобочках — сколько VAT мы должны будем заплатить; это
   // мелочь»). Нет налога — нет и скобки.
@@ -118,6 +127,12 @@ export function AccountMoneyGroup({
       <RowGroup title="Деньги">
         {/* На счёте — факт, а не поле: остаток меняют операции и переводы. */}
         <NavRow label="На счёте" value={onHand} />
+        {canTransfer ? (
+          // ДЕЙСТВИЕ С ДЕНЬГАМИ СТОИТ У ДЕНЕГ: строкой группы «Деньги», а не
+          // второй кнопкой в футере — действие листа одно, а это — операция
+          // над суммой строкой выше; подпись о заморозке остаётся под своим полем.
+          <ActionRow label="Перевести" separated onPress={onTransfer} />
+        ) : null}
         {openingFrozen ? (
           // ЗАМОРОЖЕННОЕ ПОЛЕ — ФАКТ, А НЕ ДВЕРЬ. `NavRow` без `onPress` теряет
           // шеврон, нажатие и роль кнопки; причина живёт одной подписью под

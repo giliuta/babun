@@ -116,6 +116,7 @@ export function EditAccountSheet({
                 save={save}
                 busy={update.isPending}
                 alertError={alertError}
+                onTransfer={() => flow.startTransfer(account)}
               />
               <AccountCloseGroup
                 account={account}

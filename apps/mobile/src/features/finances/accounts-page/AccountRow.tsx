@@ -36,6 +36,7 @@ export const ACCOUNT_ROW_H = 52;
 export function AccountRow({
   account,
   mark,
+  sub,
   handle,
   onPress,
   onHide,
@@ -48,6 +49,10 @@ export function AccountRow({
    *  Место ему уступает имя (единственная тянущаяся колонка строки): длинное
    *  имя сжимается до многоточия, а метка и сумма остаются целы. */
   mark?: string | null;
+  /** Тихая строка под именем (`cashOnHandLine`): «на руках 17 дней». Две
+   *  строки 16 + 13 pt укладываются в те же 52 pt — шаг перетаскивания не
+   *  меняется. */
+  sub?: string | null;
   handle: ReactNode;
   onPress: () => void;
   onHide: () => void;
@@ -82,7 +87,7 @@ export function AccountRow({
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={[account.name, mark, amount]
+          accessibilityLabel={[account.name, sub, mark, amount]
             .filter(Boolean)
             .join(", ")}
           accessibilityHint="Открывает правку счёта"
@@ -109,13 +114,24 @@ export function AccountRow({
             fallback={accountIcon(account)}
             size={28}
           />
-          <Text
-            numberOfLines={1}
-            maxFontSizeMultiplier={1.3}
-            style={{ flex: 1, marginLeft: 12, fontSize: 16, color: t.ink }}
-          >
-            {account.name}
-          </Text>
+          <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+              style={{ fontSize: 16, color: t.ink }}
+            >
+              {account.name}
+            </Text>
+            {sub ? (
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.2}
+                style={{ fontSize: 13, color: t.sub }}
+              >
+                {sub}
+              </Text>
+            ) : null}
+          </View>
           {mark ? (
             <Text
               numberOfLines={1}

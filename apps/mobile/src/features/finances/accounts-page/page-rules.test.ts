@@ -4,6 +4,7 @@ import type { ClosableAccount } from "../close-decision";
 import {
   accountEditParam,
   accountRowMark,
+  cashOnHandLine,
   hideDecision,
   hideDecisionAfterTransfer,
   presetTeamFor,
@@ -129,5 +130,49 @@ describe("тихая метка строки счёта", () => {
 
   test("обычный счёт молчит", () => {
     assert.equal(accountRowMark(row({}), 3), null);
+  });
+});
+
+describe("касса: на руках N дней", () => {
+  const cash = (patch: Partial<{
+    kind: "cash" | "card" | "bank" | "other";
+    balance: number;
+    last_outflow_on: string | null;
+    first_tx_on: string | null;
+  }>) => ({
+    kind: "cash" as const,
+    balance: 383,
+    last_outflow_on: null,
+    first_tx_on: "2026-09-06",
+    ...patch,
+  });
+
+  test("срок с первой операции, если кассу ещё не сдавали", () => {
+    assert.equal(cashOnHandLine(cash({}), "2026-09-23"), "на руках 17 дней");
+  });
+
+  test("срок с последней сдачи, и русское число", () => {
+    assert.equal(
+      cashOnHandLine(cash({ last_outflow_on: "2026-09-22" }), "2026-09-23"),
+      "на руках 1 день",
+    );
+    assert.equal(
+      cashOnHandLine(cash({ last_outflow_on: "2026-09-20" }), "2026-09-23"),
+      "на руках 3 дня",
+    );
+  });
+
+  test("не касса, пустая касса и сегодняшние деньги — строки нет", () => {
+    assert.equal(cashOnHandLine(cash({ kind: "card" }), "2026-09-23"), null);
+    assert.equal(cashOnHandLine(cash({ balance: 0 }), "2026-09-23"), null);
+    assert.equal(cashOnHandLine(cash({ balance: -40 }), "2026-09-23"), null);
+    assert.equal(
+      cashOnHandLine(cash({ last_outflow_on: "2026-09-23" }), "2026-09-23"),
+      null,
+    );
+    assert.equal(
+      cashOnHandLine(cash({ first_tx_on: null }), "2026-09-23"),
+      null,
+    );
   });
 });
