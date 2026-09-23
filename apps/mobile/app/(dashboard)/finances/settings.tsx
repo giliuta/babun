@@ -170,13 +170,16 @@ export default function FinanceSettingsScreen() {
                   <>
                     {rows.vat || rows.invoices ? <Divider inset={56} /> : null}
                     <SettingsRow
-                      tile="neutral"
+                      // Цветная плитка, как у соседей (прогон 2026-09-23):
+                      // голый глиф в ряду плиток читался как строка другого
+                      // рода. Зелёный — «наружу и вовне»: этим подписаны
+                      // документы клиенту.
+                      tile={SETTINGS_TILE.green}
                       icon={Building2}
                       title="Реквизиты"
                       sub="Чем подписаны чеки и инвойсы"
                       onPress={() => router.push("/finances/requisites")}
                     />
-
                   </>
                 ) : null}
               </SectionCard>

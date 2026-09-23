@@ -482,20 +482,24 @@ export function TransferSheet({
               Гасить в списке больше нечего — любая пара счетов допустима. */}
           {groups.map((group) => (
             <View key={group.teamId ?? "orphans"} style={{ marginBottom: 12 }}>
-              <Text
-                maxFontSizeMultiplier={1.3}
-                style={{
-                  marginBottom: 6,
-                  marginHorizontal: 4,
-                  fontSize: 12,
-                  fontWeight: "700",
-                  letterSpacing: 0.6,
-                  textTransform: "uppercase",
-                  color: t.faint,
-                }}
-              >
-                {group.title}
-              </Text>
+              {/* Одна команда на все счета — заголовок называл бы то, из чего
+                  не выбирают (прогон 2026-09-23); та же мера, что у имён. */}
+              {spansTeams ? (
+                <Text
+                  maxFontSizeMultiplier={1.3}
+                  style={{
+                    marginBottom: 6,
+                    marginHorizontal: 4,
+                    fontSize: 12,
+                    fontWeight: "700",
+                    letterSpacing: 0.6,
+                    textTransform: "uppercase",
+                    color: t.faint,
+                  }}
+                >
+                  {group.title}
+                </Text>
+              ) : null}
               <ValueOptionList
                 options={group.accounts.map((account) => ({
                   id: account.id,
