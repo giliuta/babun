@@ -73,9 +73,12 @@ export function RecordRowsPanel({
       // перевод переехал между своими счетами — в компании денег от него не
       // прибавилось. Сложенные с доходом, они давали числа, которые не значат
       // ничего: «€185» при 128 в кассе, «€55» в день без единой продажи.
+      // Кроме перевода, чья вторая нога вне ленты (`crossesSlice`): в ленте
+      // одного счёта он и есть пришедшее или ушедшее.
       net: data.reduce(
         (sum, row) =>
-          !countEveryTone && (row.tone === "debt" || row.tone === "transfer")
+          !countEveryTone
+          && (row.tone === "debt" || (row.tone === "transfer" && !row.crossesSlice))
             ? sum
             : sum + row.amount,
         0,

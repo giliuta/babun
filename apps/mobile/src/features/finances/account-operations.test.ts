@@ -146,6 +146,23 @@ describe("accountOperationRows", () => {
     assert.equal(both.find((row) => row.title === "Андрей")?.amount, 195);
   });
 
+  test("в ленте одного счёта перевод несёт знак: с наличных ушло, на карту пришло", () => {
+    const out = rowsFor(CASH).find((row) => row.title === "Перевод");
+    const into = rowsFor(CARD).find((row) => row.title === "Перевод");
+    assert.equal(out?.amount, -55);
+    assert.equal(out?.crossesSlice, true);
+    assert.equal(into?.amount, 55);
+    assert.equal(into?.crossesSlice, true);
+    // Подпись «откуда → куда» остаётся той же в обеих лентах.
+    assert.equal(out?.subtitle, "Наличные → Карта");
+  });
+
+  test("в ленте всех счетов перевод нейтрален: без знака и мимо итога дня", () => {
+    const both = rowsFor(CASH, CARD).find((row) => row.title === "Перевод");
+    assert.equal(both?.amount, 55);
+    assert.equal(both?.crossesSlice, undefined);
+  });
+
   test("свежее сверху", () => {
     const dated = accountOperationRows(
       [

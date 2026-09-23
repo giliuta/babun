@@ -59,7 +59,11 @@ export function RecordRowView({
           : t.danger;
   const extraColor = toneColor;
   const money = toneColor(tone);
-  const amount = `${row.amount < 0 ? "−" : ""}${formatEUR(Math.abs(row.amount))}`;
+  // Плюс печатается только у перевода, пересекающего ленту: цвет у него
+  // нейтральный, и без знака «€55» на «Карте» не отличить от ушедших €55.
+  const sign =
+    row.amount < 0 ? "−" : row.crossesSlice && row.amount > 0 ? "+" : "";
+  const amount = `${sign}${formatEUR(Math.abs(row.amount))}`;
   // ЧТО и КОГДА — под именем клиента; дата не печатается, она заголовок дня.
   const what = whatLine(row);
   // Правая подпись: сначала то, что по этой же работе НЕ ЗАКРЫТО, потом своя
