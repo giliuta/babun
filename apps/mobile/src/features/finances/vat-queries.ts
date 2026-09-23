@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { VatMode, VatSettings } from "@babun/shared/local/finance/vat";
+import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
+import {
+  summarizeVat,
+  type VatMode,
+  type VatSettings,
+} from "@babun/shared/local/finance/vat";
 
+import { accountVatDueQueryKey } from "@/lib/company-query-keys";
 import { supabase } from "@/lib/supabase";
 import { useTenantId } from "@/lib/tenant";
 
@@ -142,4 +148,43 @@ export function vatSummaryLine(v: VatSettings | undefined): string {
   if (!v) return "Загрузка…";
   if (v.mode === "off") return "Выключен";
   return `${VAT_MODE_LABELS[v.mode]} · ${v.rate}%`;
+}
+
+/** Сколько проводок читать за один заход: предел PostgREST — тысяча строк. */
+const VAT_PAGE = 1000;
+
+/**
+ * VAT К УПЛАТЕ ПО СЧЁТУ (владелец 2026-09-23: «общая сумма, а в скобочках —
+ * сколько VAT мы должны будем заплатить с этого счёта»). Та же формула, что у
+ * отчёта по налогу (`summarizeVat`): собранное с клиентов минус уплаченное
+ * поставщикам; переводы и «Без VAT» не считаются. Читаются только проводки с
+ * налогом — остальные в сумму ничего не дают.
+ */
+export function useAccountVatDue(accountId: string, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: accountVatDueQueryKey(tenantId, accountId),
+    enabled: enabled && !!tenantId,
+    queryFn: async (): Promise<number> => {
+      const rows: FinanceTransaction[] = [];
+      for (let from = 0; ; from += VAT_PAGE) {
+        const { data, error } = await supabase
+          .from("finance_transactions")
+          .select("id, type, amount, vat_mode, vat_amount")
+          .eq("account_id", accountId)
+          .not("vat_amount", "is", null)
+          .order("id")
+          .range(from, from + VAT_PAGE - 1);
+        if (error) throw new Error(error.message);
+        const page = (data ?? []).map((r) => ({
+          ...r,
+          amount: Number(r.amount),
+          vat_amount: r.vat_amount == null ? null : Number(r.vat_amount),
+        })) as unknown as FinanceTransaction[];
+        rows.push(...page);
+        if (page.length < VAT_PAGE) break;
+      }
+      return summarizeVat(rows).due;
+    },
+  });
 }

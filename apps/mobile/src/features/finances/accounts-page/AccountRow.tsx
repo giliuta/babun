@@ -25,15 +25,17 @@ export const ACCOUNT_ROW_H = 52;
 // другого места увидеть деньги счёта у этой двери нет. Цифра тихая
 // (моноширинная, вторым цветом): она справка, а не герой строки; минус — долг.
 //
-// ПРАВОЙ КРОМКИ НЕТ. Разрушительного у открытого счёта со свайпа не бывает:
-// удаление пустого счёта живёт словом в правке, где его видно до нажатия, а
-// «Скрыть» никогда не удаляет (`hideDecision`).
+// ПРАВОЙ КРОМКИ НЕТ. Разрушительного у открытого счёта не бывает вовсе:
+// «Скрыть» никогда не удаляет (`hideDecision`), а стереть пустой счёт можно
+// только из «Закрытых счетов» — правой кромкой там (владелец 2026-09-23:
+// «в архив и потом удалить»).
 //
 // Ручка — ВНЕ нажимаемой области, но ВНУТРИ заливки строки: вложенная в
 // `Pressable`, она отдавала бы короткий тап правке, а оставленная без цвета —
 // светлой полосой выдавала бы себя за отдельную колонку.
 export function AccountRow({
   account,
+  mark,
   handle,
   onPress,
   onHide,
@@ -42,6 +44,10 @@ export function AccountRow({
     AccountWithBalance,
     "name" | "color" | "icon" | "kind" | "balance"
   >;
+  /** Тихое слово перед суммой (`accountRowMark`): «Основной», «Не в оплате».
+   *  Место ему уступает имя (единственная тянущаяся колонка строки): длинное
+   *  имя сжимается до многоточия, а метка и сумма остаются целы. */
+  mark?: string | null;
   handle: ReactNode;
   onPress: () => void;
   onHide: () => void;
@@ -76,7 +82,9 @@ export function AccountRow({
         <Pressable
           onPress={onPress}
           accessibilityRole="button"
-          accessibilityLabel={`${account.name}, ${amount}`}
+          accessibilityLabel={[account.name, mark, amount]
+            .filter(Boolean)
+            .join(", ")}
           accessibilityHint="Открывает правку счёта"
           // Свайпа для VoiceOver не существует — то же действие ротором.
           accessibilityActions={[{ name: "hide", label: "Скрыть" }]}
@@ -108,6 +116,18 @@ export function AccountRow({
           >
             {account.name}
           </Text>
+          {mark ? (
+            <Text
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+              // Приглушается РАЗМЕРОМ (закон 2026-07-27), не серостью: 13pt
+              // рядом с 16pt имени и 15pt суммой — справка, а не третий герой
+              // строки.
+              style={{ marginLeft: 8, fontSize: 13, color: t.sub }}
+            >
+              {mark}
+            </Text>
+          ) : null}
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={1.3}

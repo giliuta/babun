@@ -8,7 +8,6 @@ import { FieldLabel } from "@/components/ui/Field";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { MoneyField } from "@/components/ui/MoneyField";
 import { NameColorField } from "@/components/ui/picker-fields";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import { GUTTER } from "@/components/ui/tokens";
 import { useThemeColors } from "@/theme/colors";
 import { useTenant } from "@/features/settings/tenant";
@@ -18,16 +17,10 @@ import { useAccountsWithBalances, useInsertAccount } from "../accounts";
 import { OFFLINE_ACCOUNT_CREATE } from "../account-alerts";
 import { kindForIcon } from "../account-kind";
 import { accountIcon } from "../account-ui";
-import {
-  useTeamVatOverrides,
-  useVatSettings,
-  vatSummaryLine,
-} from "../vat-queries";
 import { duplicateNameNote, findDuplicateName } from "./account-names";
 import { ACCOUNT_NAME_MAX } from "./name-commit";
 import { TeamChips } from "./TeamChips";
 import { ACCOUNT_SHEET_RATIO } from "./types";
-import { accountVatView } from "./vat-view";
 
 // НОВЫЙ СЧЁТ — режим создания листа счёта (`AccountEditorSheet`).
 //
@@ -37,8 +30,12 @@ import { accountVatView } from "./vat-view";
 // деньги, и прятать их под сгибом неправильно.
 //
 // Дальше: название, цвет и значок ОДНОЙ СТРОКОЙ (владелец 2026-09-15: «названия,
-// цвет и иконка — это всё одна строчка») → чей счёт → с НДС ли он. Наборы
-// значков и цветов ОБЩИЕ НА ПРОДУКТ, первая восьмёрка значков — про деньги.
+// цвет и иконка — это всё одна строчка») → чей счёт. Наборы значков и цветов
+// ОБЩИЕ НА ПРОДУКТ, первая восьмёрка значков — про деньги.
+//
+// НАЛОГА У СЧЁТА НЕТ (владелец 2026-09-23: «VAT мы уже пишем в „Итого“»):
+// переключатель «С НДС» снят, новый счёт уходит без своего режима — налог
+// решает «Итого» записи и клавиши операции.
 //
 // ВАЛЮТЫ У СЧЁТА НЕТ (владелец 2026-08-15): компания работает в одной валюте
 // (`tenants.currency`), и она же подписывает сумму здесь.
@@ -69,8 +66,6 @@ export function CreateAccountSheet({
   const online = useIsOnline();
   const insert = useInsertAccount();
   const currency = useTenant().data?.currency;
-  const vatSettings = useVatSettings();
-  const teamVatOverrides = useTeamVatOverrides();
   // Активные команды — из них выбирается владелец счёта.
   const teamsQuery = useTeams();
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
@@ -84,12 +79,6 @@ export function CreateAccountSheet({
   /** Значок и цвет — узнавание счёта в списке. Оба необязательны. */
   const [icon, setIcon] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
-  /** «С НДС» счёта. Новый счёт — БЕЗ НДС (владелец 2026-09-15: «по умолчанию
-   *  всегда без НДС»; «С НДС» включают руками у карты или банка компании). До
-   *  этого пустое значение наследовало компанию, и у компании «с НДС» лист
-   *  открывался с включённым переключателем — каждая касса молча становилась
-   *  налоговой. */
-  const [vatMode, setVatMode] = useState<"on" | "off">("off");
   /** Отказ сервера печатается НАД кнопкой, а не алертом: набранное остаётся на
    *  экране, и повтор не начинается с чистой формы. */
   const [failure, setFailure] = useState<string | null>(null);
@@ -111,7 +100,6 @@ export function CreateAccountSheet({
     setOpening("");
     setIcon(null);
     setColor(null);
-    setVatMode("off");
     setFailure(null);
   }, [visible]);
   // Команда ставится, когда справочник есть, — один раз на открытие, чтобы
@@ -131,17 +119,6 @@ export function CreateAccountSheet({
     ? parseMoneyInputToCents(opening, { allowNegative: true, allowZero: true })
     : 0;
   const ownerName = teams.find((x) => x.id === teamId)?.name ?? null;
-
-  // НДС СПРАШИВАЕТСЯ ТОЛЬКО У ТЕХ, КТО С НИМ РАБОТАЕТ. Переключатель стартует
-  // выключенным; подпись под ним — что значит «С НДС» у выбранной команды. Пока
-  // настройки не пришли, строки нет — счёт уходит без НДС, это верный ответ.
-  const vatView = accountVatView({
-    company: { data: vatSettings.data, failed: vatSettings.isError },
-    overrides: { data: teamVatOverrides.data, failed: teamVatOverrides.isError },
-    teamId,
-    accountMode: vatMode,
-    summary: vatSummaryLine,
-  });
 
   const duplicate = useMemo(
     () => findDuplicateName(accountsQuery.data ?? [], name, teamId),
@@ -193,7 +170,6 @@ export function CreateAccountSheet({
         opening_balance: openingCents / 100,
         icon,
         color,
-        vat_mode: vatMode,
       });
       haptics.success();
       onCreated?.(created.id);
@@ -277,7 +253,7 @@ export function CreateAccountSheet({
       }
     >
       {/* Снизу 16pt: причина погашенной кнопки стоит в футере прямо под
-          последней строкой, и на 8pt она прилипала к подписи «С НДС». */}
+          последней строкой, и на 8pt она прилипала к ней. */}
       <View style={{ paddingHorizontal: GUTTER, paddingBottom: 16 }}>
         {/* 1. СКОЛЬКО НА СЧЕТУ — первым и крупно. Минус разрешён: счёт заводят
             и в долге. */}
@@ -340,16 +316,6 @@ export function CreateAccountSheet({
           </View>
         ) : null}
 
-        {/* 4. С НДС ЛИ СЧЁТ — только у компании, которая с налогом работает. */}
-        {vatView.kind === "switch" ? (
-          <SwitchRow
-            label="С НДС"
-            hint={vatView.hint}
-            value={vatView.value}
-            inset={false}
-            onChange={(next) => setVatMode(next ? "on" : "off")}
-          />
-        ) : null}
       </View>
     </BottomSheet>
   );

@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 import type { ClosableAccount } from "../close-decision";
 import {
   accountEditParam,
+  accountRowMark,
   hideDecision,
   hideDecisionAfterTransfer,
   presetTeamFor,
@@ -100,5 +101,33 @@ describe("команда нового счёта", () => {
       null,
     );
     assert.equal(presetTeamFor([]), null);
+  });
+});
+
+describe("тихая метка строки счёта", () => {
+  const row = (patch: Partial<{ is_primary: boolean; show_in_payments: boolean }>) => ({
+    is_primary: false,
+    show_in_payments: true,
+    ...patch,
+  });
+
+  test("основной счёт помечен, когда у команды есть из чего выбирать", () => {
+    assert.equal(accountRowMark(row({ is_primary: true }), 2), "Основной");
+  });
+
+  test("единственный счёт команды метки не получает", () => {
+    assert.equal(accountRowMark(row({ is_primary: true }), 1), null);
+  });
+
+  test("счёт вне оплаты заявок говорит об этом даже основным", () => {
+    assert.equal(
+      accountRowMark(row({ is_primary: true, show_in_payments: false }), 2),
+      "Не в оплате",
+    );
+    assert.equal(accountRowMark(row({ show_in_payments: false }), 1), "Не в оплате");
+  });
+
+  test("обычный счёт молчит", () => {
+    assert.equal(accountRowMark(row({}), 3), null);
   });
 });

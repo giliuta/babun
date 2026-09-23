@@ -1,10 +1,8 @@
 import { useMemo } from "react";
 import { ScrollView } from "react-native";
-import { useRouter } from "expo-router";
 import { isOnline, useIsOnline } from "@babun/shared/sync";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { useSheetDoorway } from "@/components/ui/use-sheet-doorway";
 import { notify } from "@/lib/notify";
 import { useThemeColors } from "@/theme/colors";
 import { useTeams } from "@/features/reference/queries";
@@ -17,7 +15,6 @@ import { TransferSheet } from "../TransferSheet";
 import { AccountCloseGroup } from "./AccountCloseGroup";
 import { AccountMoneyGroup } from "./AccountMoneyGroup";
 import { AccountNameCard } from "./AccountNameCard";
-import { AccountVatGroup } from "./AccountVatGroup";
 import { editorView, type EditorView } from "./editor-logic";
 import { ACCOUNT_SHEET_RATIO, accountSaver, type AlertError } from "./types";
 import { useCloseFlow } from "./use-close-flow";
@@ -25,7 +22,12 @@ import { useCloseFlow } from "./use-close-flow";
 // ПРАВКА СЧЁТА — режим правки листа счёта (`AccountEditorSheet`). Здесь всё,
 // что было на странице настроек счёта (владелец 2026-09-15: «тапнуть на тот же
 // созданный и то же самое редактировать уже созданный счёт»). Порядок: имя и
-// вид первой строкой → деньги → команда → НДС → закрытие.
+// вид первой строкой → деньги → команда → оплата записи → скрытие.
+//
+// НАЛОГА У СЧЁТА НЕТ (владелец 2026-09-23: «VAT мы уже пишем в „Итого“, нам
+// без разницы — счёт с VAT или без»). Налог решается там, где вносятся
+// деньги: в «Итого» записи и клавишами операции; счёт только показывает,
+// сколько VAT на нём к уплате (`AccountMoneyGroup`).
 //
 // КНОПКИ В ФУТЕРЕ НЕТ: каждая строка пишет сама, на уходе из поля или на
 // переключении, и каждая сообщает о своём отказе (`accountSaver`). Закрытый
@@ -40,9 +42,7 @@ export function EditAccountSheet({
   onClose: () => void;
 }) {
   const t = useThemeColors();
-  const router = useRouter();
   const online = useIsOnline();
-  const doorway = useSheetDoorway();
 
   const accountsQuery = useAccountsWithBalances({ includeInactive: true });
   const accounts = useMemo(
@@ -86,9 +86,9 @@ export function EditAccountSheet({
     <>
       <BottomSheet
         padded={false}
-        // Лист уезжает с дороги дважды: на страницу НДС (возвращается по
-        // «назад») и на время разговора о закрытии (`use-close-flow`).
-        visible={visible && !doorway.parked && !flow.parked}
+        // Лист уезжает с дороги на время разговора о скрытии или удалении
+        // (`use-close-flow`).
+        visible={visible && !flow.parked}
         onClose={onClose}
         // Имени в шапке нет: оно стоит первой строкой листа, и одно и то же
         // слово дважды в одном кадре — шум.
@@ -116,12 +116,6 @@ export function EditAccountSheet({
                 save={save}
                 busy={update.isPending}
                 alertError={alertError}
-              />
-              <AccountVatGroup
-                account={account}
-                save={save}
-                busy={update.isPending}
-                openPage={(href) => doorway.open(() => router.push(href))}
               />
               <AccountCloseGroup
                 account={account}

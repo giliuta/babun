@@ -156,6 +156,13 @@ export const accountRowsQueryKey = (
 export const accountBalancesQueryKey = (tenantId: string | null) =>
   ["accounts", tenantId, "balances"] as const;
 
+/** VAT к уплате по одному счёту. Под «accounts»: любая правка денег, которая
+ *  сбрасывает остатки, сбрасывает и его. */
+export const accountVatDueQueryKey = (
+  tenantId: string | null,
+  accountId: string,
+) => ["accounts", tenantId, "vat-due", accountId] as const;
+
 /** Кассы, куда можно принять деньги по заявке команды. Сбрасывается вместе со
  *  счетами (`invalidateAccounts`), поэтому первый сегмент — свой, отдельный. */
 export const paymentAccountsQueryKey = (

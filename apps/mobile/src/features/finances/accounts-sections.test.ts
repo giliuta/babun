@@ -8,6 +8,7 @@ import {
   daysBetweenYmd,
   financeAccountsHref,
   NO_TEAM,
+  sumAccountBalances,
   teamAccounts,
   type SectionAccount,
   type SectionTeam,
@@ -253,5 +254,26 @@ describe("возраст остатка", () => {
       null,
     );
     assert.equal(daysBetweenYmd("не дата", "2026-08-10"), null);
+  });
+});
+
+describe("подытог группы", () => {
+  test("складывает остатки и не рассыпается на копейках", () => {
+    assert.equal(
+      sumAccountBalances([{ balance: 383.1 }, { balance: 210.2 }]),
+      593.3,
+    );
+    // Наивное сложение здесь даёт 0.30000000000000004 — и подытог печатался
+    // бы на копейку мимо плитки «Счета».
+    assert.equal(sumAccountBalances([{ balance: 0.1 }, { balance: 0.2 }]), 0.3);
+    assert.equal(
+      sumAccountBalances([{ balance: 1.1 }, { balance: 2.2 }, { balance: 3.3 }]),
+      6.6,
+    );
+  });
+
+  test("минус уменьшает подытог, пустая группа даёт ноль", () => {
+    assert.equal(sumAccountBalances([{ balance: 100 }, { balance: -40.5 }]), 59.5);
+    assert.equal(sumAccountBalances([]), 0);
   });
 });

@@ -24,6 +24,7 @@ import {
 } from "@/features/finances/accounts-page/AccountRow";
 import {
   accountEditParam,
+  accountRowMark,
   presetTeamFor,
 } from "@/features/finances/accounts-page/page-rules";
 import { useHideAccount } from "@/features/finances/accounts-page/use-hide-account";
@@ -36,6 +37,7 @@ import {
   accountOrderGroups,
   closedCountValue,
   financeAccountsHref,
+  sumAccountBalances,
 } from "@/features/finances/accounts-sections";
 import { useTeams } from "@/features/reference/queries";
 
@@ -213,7 +215,14 @@ export default function AccountsScreen() {
           ) : null}
           {groups.map((group) => (
             <View key={group.key} style={{ marginTop: 12 }}>
-              {group.title ? <RowGroupHeader title={group.title} /> : null}
+              {/* ПОДЫТОГ СТОИТ НАД ГРУППОЙ, А НЕ ПОД НЕЙ: это заголовок
+                  раздела с числом, как везде в продукте. У компании с одной
+                  командой имени нет — тогда строку называет слово «На
+                  счетах»: сумма без подписи читается как чей-то остаток. */}
+              <RowGroupHeader
+                title={group.title ?? "На счетах"}
+                value={money(sumAccountBalances(group.accounts))}
+              />
               {/* ПОРЯДОК — РУЧКОЙ, КАК ВЕЗДЕ (владелец 2026-09-12: «шесть
                   точек справа для передвижения… везде одно и то же»). Каждая
                   группа — свой список: `position` нумеруется внутри команды,
@@ -233,6 +242,7 @@ export default function AccountsScreen() {
                   {(account, _index, handle) => (
                     <AccountRow
                       account={account}
+                      mark={accountRowMark(account, group.accounts.length)}
                       handle={handle}
                       onPress={() => setEditor({ open: true, id: account.id })}
                       onHide={() => hider.hide(account)}

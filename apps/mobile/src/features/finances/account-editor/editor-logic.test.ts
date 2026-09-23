@@ -1,22 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import type { ClosableAccount } from "../close-decision";
 import {
   accountEditHref,
   editorView,
   stepAfterAnswer,
-  stepAfterTransfer,
   teamControl,
 } from "./editor-logic";
 
-const acc = (over: Partial<ClosableAccount> & { id: string }): ClosableAccount => ({
-  balance: 0,
-  has_history: true,
-  is_active: true,
-  is_primary: false,
-  brigade_id: "t1",
-  ...over,
-});
 
 describe("адрес правки счёта", () => {
   test("страница «Счета» с открытым листом, id экранируется", () => {
@@ -91,24 +81,5 @@ describe("после ответа на вопрос о закрытии", () => 
       stepAfterAnswer({ kind: "transfer", direction: "in", amount: 5 }, true),
       "transfer",
     );
-  });
-});
-
-describe("после перевода ради закрытия", () => {
-  const before = acc({ id: "a", balance: 50 });
-
-  test("остаток ушёл — спрашиваем снова по свежему", () => {
-    const fresh = [acc({ id: "a", balance: 0 }), acc({ id: "b", balance: 50 })];
-    const step = stepAfterTransfer(before, fresh);
-    assert.equal(step.kind, "ask");
-    if (step.kind === "ask") {
-      assert.equal(step.account.balance, 0);
-      assert.equal(step.decision.kind, "close");
-    }
-  });
-
-  test("перевод отменили или данных нет — лист возвращается", () => {
-    assert.deepEqual(stepAfterTransfer(before, [acc({ id: "a", balance: 50 })]), { kind: "return" });
-    assert.deepEqual(stepAfterTransfer(before, undefined), { kind: "return" });
   });
 });

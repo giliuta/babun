@@ -1,9 +1,5 @@
 import type { Href } from "expo-router";
-import {
-  closeDecisionAfterTransfer,
-  type ClosableAccount,
-  type CloseDecision,
-} from "../close-decision";
+import type { ClosableAccount, CloseDecision } from "../close-decision";
 
 // ЛИСТ СЧЁТА — ЧИСТЫЕ РЕШЕНИЯ, без экрана.
 //
@@ -78,14 +74,3 @@ export function stepAfterAnswer(
   return decision.kind;
 }
 
-/** После перевода ради закрытия: спросить снова по свежему остатку или вернуть
- *  лист (перевод отменили, данных нет, счёт уже закрыт). */
-export function stepAfterTransfer<A extends ClosableAccount>(
-  before: ClosableAccount,
-  fresh: readonly A[] | undefined,
-):
-  | { kind: "return" }
-  | { kind: "ask"; account: A; decision: CloseDecision<A> } {
-  const next = closeDecisionAfterTransfer(before, fresh);
-  return next ? { kind: "ask", ...next } : { kind: "return" };
-}

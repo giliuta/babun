@@ -11,10 +11,13 @@ import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwipeRow } from "@/components/ui/SwipeRow";
 import { RowGroup } from "@/components/ui/card-rows";
 import { useToast } from "@/components/ui/Toast";
+import { confirmThen } from "@/lib/confirm";
 import { AccountEditorSheet } from "@/features/finances/account-editor/AccountEditorSheet";
+import { deleteAccountAlert } from "@/features/finances/account-alerts";
 import { accountIcon } from "@/features/finances/account-ui";
 import {
   useAccountsWithBalances,
+  useDeleteAccount,
   useReopenAccount,
   useSoftCloseAccount,
   type AccountWithBalance,
@@ -35,10 +38,11 @@ import { useThemeColors } from "@/theme/colors";
 // могу также тапнуть на тот же созданный и то же самое редактировать»).
 // «Открыть снова» живёт в ней словом и здесь — левой кромкой.
 //
-// ЦИФРЫ ЗДЕСЬ НЕТ — ЕСТЬ СОСТОЯНИЕ. У закрытого счёта печатается «Закрыт», а
-// не «€0»: ноль в денежной колонке читается как правда о деньгах («на счету
-// пусто»), хотя означает совсем другое — счёт не участвует в подсчётах вовсе.
-// Исключение ровно одно: если на закрытом счёте остались деньги, сумма
+// ЦИФРЫ ЗДЕСЬ НЕТ. У закрытого счёта справа пусто, а не «€0»: ноль в денежной
+// колонке читается как правда о деньгах («на счету пусто»), хотя означает
+// совсем другое — счёт не участвует в подсчётах вовсе. Слово «Закрыт» тоже
+// снято (2026-09-23): страница называется «Закрытые счета». Исключение ровно
+// одно: если на закрытом счёте остались деньги, сумма
 // печатается янтарём. Такой счёт закрыли, не сдав остаток, и эти деньги не
 // видно больше нигде в продукте — единственное место, где о них можно
 // сказать, это здесь.
@@ -65,6 +69,7 @@ export default function AccountsArchiveScreen() {
 
   const reopen = useReopenAccount();
   const close = useSoftCloseAccount();
+  const remove = useDeleteAccount();
   // `id` отдельно от `open`: уезжающая шторка не меняет содержимое на полпути.
   const [editor, setEditor] = useState<{ open: boolean; id: string | null }>({
     open: false,
@@ -107,6 +112,28 @@ export default function AccountsArchiveScreen() {
           "error",
         ),
     });
+  };
+
+  // СТЕРЕТЬ — ТОЛЬКО ОТСЮДА И ТОЛЬКО ПУСТОЙ (владелец 2026-09-23: «добавить в
+  // архив и потом удалить… по нашей архитектуре»). Вопрос перед действием
+  // обязателен: удаление безвозвратно, «Отменить» после него нечем.
+  const erase = (account: AccountWithBalance) => {
+    const text = deleteAccountAlert(account.name, account.balance);
+    confirmThen(
+      text.title,
+      { message: text.message, confirmLabel: text.confirm, destructive: true },
+      () =>
+        remove.mutateAsync(account.id).then(
+          () => toast(`Счёт «${account.name}» удалён`),
+          (e: unknown) =>
+            toast(
+              isOnline()
+                ? `Не удалось удалить счёт: ${e instanceof Error ? e.message : String(e)}`
+                : "Без сети счёт не удалить — счета живут на сервере.",
+              "error",
+            ),
+        ),
+    );
   };
 
   // ЧЕЙ БЫЛ СЧЁТ. У счёта один владелец — команда (владелец 2026-08-15).
@@ -173,15 +200,23 @@ export default function AccountsArchiveScreen() {
               const left = moneySign(account.balance) !== 0;
               return (
                 <View key={account.id}>
-                  {index > 0 ? <Divider inset={48} /> : null}
+                  {/* Линия начинается под текстом: 16 поля + 28 плитки + 12 зазора. */}
+                  {index > 0 ? <Divider inset={56} /> : null}
                   <SwipeRow
-                    // ВОЗВРАТ — НА ЛЕВОЙ КРОМКЕ (владелец 2026-09-10: «свайп
-                    // вправо — это удалить, а не скрыть»). Правая закреплена
-                    // за разрушительным; закрытый счёт удалить нельзя — на нём
-                    // висит история операций, — поэтому правой кромки у строки
-                    // нет вовсе, и ход влево упирается в ноль. «Открыть» — то
-                    // же по смыслу, что «Показать» у скрытой услуги или метки,
-                    // и живёт там же, где они, тем же зелёным.
+                    // ВОЗВРАТ — НА ЛЕВОЙ КРОМКЕ, УДАЛЕНИЕ — НА ПРАВОЙ
+                    // (владелец 2026-09-10: «свайп вправо — это удалить, а не
+                    // скрыть»). «Открыть» — то же по смыслу, что «Показать» у
+                    // скрытой услуги или метки, и живёт там же, тем же
+                    // зелёным. Правая кромка есть только у счёта БЕЗ
+                    // операций: операции держат доход и отчёты, и сервер
+                    // такой счёт не отдаст (`on delete restrict`) — кромка,
+                    // которая всегда отбивается, хуже её отсутствия.
+                    label={account.has_history ? undefined : "Удалить"}
+                    color={t.danger}
+                    accessibilityLabel={`Удалить счёт ${account.name}`}
+                    onAction={
+                      account.has_history ? undefined : () => erase(account)
+                    }
                     leading={{
                       label: "Открыть",
                       color: t.success,
@@ -191,14 +226,24 @@ export default function AccountsArchiveScreen() {
                     }}
                   >
                     <SettingsRow
-                      // Выбранные значок и цвет — те же, что в живом списке:
-                      // закрытый счёт узнают тем же пальцем.
-                      icon={accountIcon(account)}
-                      tile={account.color ?? "neutral"}
+                      // ТОТ ЖЕ ОБЛИК, ЧТО В ЖИВОМ СПИСКЕ (живой прогон
+                      // 2026-09-23): квадратная плитка блока «Вид» и заливка
+                      // строки. Здесь стоял старый диск — у счёта без цвета
+                      // он превращался в голый глиф, и имена в соседних
+                      // строках стояли вразнобой.
+                      appearance={{
+                        color: account.color,
+                        icon: account.icon,
+                        fallback: accountIcon(account),
+                      }}
                       title={account.name}
                       sub={subtitle(account)}
-                      value={left ? money(account.balance) : "Закрыт"}
-                      valueColor={left ? t.warning : t.faint}
+                      // Слова «Закрыт» в строке нет: страница так и
+                      // называется, и повтор в каждой строке — шум. Справа
+                      // остаётся только то, что просит внимания, —
+                      // невыведенные деньги.
+                      value={left ? money(account.balance) : undefined}
+                      valueColor={left ? t.warning : undefined}
                       a11yLabel={[
                         account.name,
                         subtitle(account),
@@ -208,9 +253,15 @@ export default function AccountsArchiveScreen() {
                       ].join(", ")}
                       // Свайпа для VoiceOver не существует — то же действие
                       // отдаём ротором, теми же словами.
-                      a11yActions={[{ name: "reopen", label: "Открыть снова" }]}
+                      a11yActions={[
+                        { name: "reopen", label: "Открыть снова" },
+                        ...(account.has_history
+                          ? []
+                          : [{ name: "delete", label: "Удалить" }]),
+                      ]}
                       onA11yAction={(name) => {
                         if (name === "reopen") openAgain(account, left);
+                        if (name === "delete") erase(account);
                       }}
                       onPress={() => setEditor({ open: true, id: account.id })}
                     />

@@ -2,6 +2,7 @@ import { View } from "react-native";
 import {
   formatMoneyForInput,
   money,
+  moneySign,
   parseMoneyInputToCents,
 } from "@babun/shared/common/utils/money";
 import { Divider } from "@/components/ui/Divider";
@@ -15,6 +16,7 @@ import {
 import { notify } from "@/lib/notify";
 import type { Team } from "@/features/reference/queries";
 import { useSetPrimaryAccount, type AccountWithBalance } from "../accounts";
+import { useAccountVatDue } from "../vat-queries";
 import {
   CLOSED_ACCOUNT_OPENING_FROZEN,
   FROZEN_FIELDS_CAPTION,
@@ -24,10 +26,10 @@ import { teamControl } from "./editor-logic";
 import { TeamChips } from "./TeamChips";
 import type { AlertError, SaveAccount } from "./types";
 
-// ДЕНЬГИ И КОМАНДА СЧЁТА: сколько на нём, с чего он начался, чей он, основной
-// ли он у команды и принимает ли оплату заявок. Строки «Тип счёта» нет
-// (владелец 2026-09-15: «тип вообще убираем») — тип задаёт значок в первой
-// строке листа.
+// ДЕНЬГИ, КОМАНДА И ОПЛАТА ЗАПИСИ: сколько на счёте (и сколько в этом VAT к
+// уплате), с чего он начался, чей он, основной ли он у команды и стоит ли
+// плиткой в блоке «Оплата» записи. Строки «Тип счёта» нет (владелец
+// 2026-09-15: «тип вообще убираем») — тип задаёт значок в первой строке листа.
 export function AccountMoneyGroup({
   account,
   accounts,
@@ -49,6 +51,14 @@ export function AccountMoneyGroup({
   alertError: AlertError;
 }) {
   const setPrimary = useSetPrimaryAccount();
+  // VAT СКОБКОЙ ПРИ СУММЕ, а не отдельной настройкой (владелец 2026-09-23:
+  // «общая сумма, и в скобочках — сколько VAT мы должны будем заплатить; это
+  // мелочь»). Нет налога — нет и скобки.
+  const vatDue = useAccountVatDue(account.id, true).data ?? 0;
+  const onHand =
+    moneySign(vatDue) !== 0
+      ? `${money(account.balance)} (VAT ${money(vatDue)})`
+      : money(account.balance);
 
   // Ответ на «можно ли ещё править» приезжает ВМЕСТЕ со счётом
   // (`account_balances.has_history`) и зеркалит серверный
@@ -73,24 +83,29 @@ export function AccountMoneyGroup({
     (a) =>
       a.is_primary && a.id !== account.id && a.brigade_id === account.brigade_id,
   );
-  const primaryHint = account.is_primary
-    ? "Сюда по умолчанию попадают деньги, если счёт не выбран вручную."
-    : currentPrimary
-      ? `Куда по умолчанию попадают деньги. Сейчас это «${currentPrimary.name}».`
-      : "Куда по умолчанию попадают деньги, если счёт не выбран вручную.";
+  const primaryHint = !account.show_in_payments
+    ? "Основным может быть только счёт, который стоит в оплате записи."
+    : account.is_primary
+      ? "Сюда по умолчанию попадают деньги, если счёт не выбран вручную."
+      : currentPrimary
+        ? `Куда по умолчанию попадают деньги. Сейчас это «${currentPrimary.name}».`
+        : "Куда по умолчанию попадают деньги, если счёт не выбран вручную.";
 
-  // ПОДПИСЬ ГОВОРИТ ПОСЛЕДСТВИЕ, А НЕ МЕХАНИКУ. Выключенный счёт никуда не
-  // девается: он остаётся плиткой на «Финансах», в переводах и в отчётах — он
-  // только перестаёт принимать деньги заявок.
+  // ПОДПИСЬ ГОВОРИТ ПОСЛЕДСТВИЕ, А НЕ МЕХАНИКУ, И СЛОВАМИ ПРОДУКТА: «запись» и
+  // «оплата», а не «заявка» и «бригадир» старого словаря. Выключенный счёт
+  // никуда не девается: он остаётся на «Финансах», в переводах, операциях и
+  // отчётах — он только перестаёт стоять плиткой в блоке «Оплата» записи
+  // (сервер: `list_payment_accounts_safe` и
+  // `resolve_appointment_payment_account` читают тот же флаг).
   const paymentsHint = account.show_in_payments
-    ? "Бригадир видит счёт при оплате заявки и может зачислить деньги сюда."
-    : "Счёт остаётся на «Финансах» и в переводах, но оплату заявок не принимает.";
+    ? "Плитка счёта стоит в блоке «Оплата» записи — деньги можно зачислить сюда."
+    : "В записи счёта нет. На «Финансах», в переводах и операциях он остаётся.";
 
   return (
     <>
       <RowGroup title="Деньги">
         {/* На счёте — факт, а не поле: остаток меняют операции и переводы. */}
-        <NavRow label="На счёте" value={money(account.balance)} />
+        <NavRow label="На счёте" value={onHand} />
         {openingFrozen ? (
           // ЗАМОРОЖЕННОЕ ПОЛЕ — ФАКТ, А НЕ ДВЕРЬ. `NavRow` без `onPress` теряет
           // шеврон, нажатие и роль кнопки; причина живёт одной подписью под
@@ -175,6 +190,41 @@ export function AccountMoneyGroup({
             />
           </View>
         )}
+      </RowGroup>
+
+      {/* ОПЛАТА ЗАПИСИ — СВОЕЙ ГРУППОЙ (владелец 2026-09-23: «настройка того,
+          будет ли он впадать в оплату при записи, — собрать правильно по
+          нашей архитектуре»). Оба переключателя отвечают на один вопрос —
+          куда ложатся деньги записи — и стояли под «Командой» чужими
+          соседями. */}
+      <RowGroup title="Оплата записи">
+        {/* ПРИНИМАЕТ ЛИ СЧЁТ ДЕНЬГИ ЗАПИСИ. Решает не тип счёта, а сам счёт:
+            накопительный или резервный лежит рядом с рабочей кассой, и одного
+            промаха пальцем хватает, чтобы выручка ушла туда, откуда её
+            достанут через месяц. */}
+        <SwitchRow
+          label="В оплате записи"
+          hint={paymentsHint}
+          value={account.show_in_payments}
+          disabled={!account.is_active || busy}
+          onChange={(next) => {
+            // ОСНОВНОЙ ВСЕГДА В ОПЛАТЕ. Спрятанный основной — это «деньги
+            // записи по умолчанию идут туда, куда их положить нельзя»: сервер
+            // молча перешагнёт его, и человек узнает об этом по деньгам.
+            if (!next && account.is_primary) {
+              notify(
+                "Это основной счёт команды",
+                "Сначала сделайте основным другой счёт — сюда по умолчанию "
+                  + "ложатся деньги записи.",
+              );
+              return;
+            }
+            void save(
+              { show_in_payments: next },
+              "Не удалось изменить оплату записи",
+            );
+          }}
+        />
         {/* Куда по умолчанию падают деньги. Развязано с порядком плиток:
             поднять «Карту Ани» повыше для удобства чтения и переадресовать все
             оплаты команды — разные решения. */}
@@ -183,29 +233,15 @@ export function AccountMoneyGroup({
           label="Основной счёт команды"
           hint={primaryHint}
           value={account.is_primary}
-          disabled={!account.is_active || setPrimary.isPending}
+          disabled={
+            !account.is_active
+            || setPrimary.isPending
+            || (!account.show_in_payments && !account.is_primary)
+          }
           onChange={(next) =>
             void setPrimary
               .mutateAsync({ account, primary: next })
               .catch(alertError("Не удалось сменить основной счёт"))
-          }
-        />
-        {/* ПРИНИМАЕТ ЛИ ЭТОТ СЧЁТ ДЕНЬГИ ЗАЯВОК. Решает не тип счёта, а сам
-            счёт: накопительный или резервный лежит рядом с рабочей кассой, и
-            одного промаха пальцем хватает, чтобы выручка ушла туда, откуда её
-            достанут через месяц. Обе серверные двери — пикер бригадира и
-            автоподбор — уважают эту колонку. */}
-        <Divider inset={16} />
-        <SwitchRow
-          label="Показывать при оплате заявок"
-          hint={paymentsHint}
-          value={account.show_in_payments}
-          disabled={!account.is_active || busy}
-          onChange={(next) =>
-            void save(
-              { show_in_payments: next },
-              "Не удалось изменить приём оплаты",
-            )
           }
         />
       </RowGroup>
