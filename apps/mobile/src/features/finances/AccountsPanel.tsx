@@ -1,6 +1,8 @@
 import { useMemo, type ReactElement } from "react";
-import { ScrollView, View, type RefreshControlProps } from "react-native";
+import { ScrollView, Text, View, type RefreshControlProps } from "react-native";
 import { money, moneySign } from "@babun/shared/common/utils/money";
+import { haptics } from "@/lib/haptics";
+import { accountEditHref } from "./account-editor/editor-logic";
 import type { FinanceTransaction } from "@babun/shared/local/finance/transaction";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { GUTTER } from "@/components/ui/tokens";
@@ -17,6 +19,7 @@ import { sortAccountRows } from "./accounts-sections";
 import { PanelHeader, panelCount } from "./PanelHeader";
 import {
   dropAccountNames,
+  rowsNet,
   type RecordRow,
   type RecordRowRefs,
 } from "./record-rows";
@@ -105,6 +108,14 @@ export function AccountsPanel({
     return selected ? dropAccountNames(feed) : feed;
   }, [transactions, ids, refs, selected]);
 
+  // ОБОРОТ ВЫБРАННОГО СЧЁТА ЗА ПЕРИОД (владелец 2026-09-23, идея из отчёта
+  // по счетам): остаток говорит «сколько лежит», а заголовок ленты — «сколько
+  // прошло через счёт за период». Правило то же, что у итога дня (`rowsNet`),
+  // поэтому число сходится с суммой дней ниже пальцем. У ленты всех счетов его
+  // нет: там это «Прибыль» плитки выше, второй раз одно число не печатаем.
+  const periodNet = selected ? rowsNet(operationRows) : null;
+  const netSign = periodNet === null ? 0 : moneySign(periodNet);
+
   const header = (
     <PanelHeader
       title={panelCount("Счета", rows.length)}
@@ -167,6 +178,17 @@ export function AccountsPanel({
             // деньги.
             amountColor={sign < 0 ? t.danger : sign === 0 ? t.sub : undefined}
             onPress={() => onSelect(isSelected ? null : account.id)}
+            // ДОЛГОЕ НАЖАТИЕ — НАСТРОЙКИ ЭТОГО СЧЁТА (владелец 2026-09-15:
+            // «переход в настройки нужно продумать по-другому» — тап занят
+            // выбором ленты). Та же шторка, что на странице «Счета».
+            onLongPress={
+              canOpenSettings
+                ? () => {
+                    haptics.tap();
+                    onOpen(accountEditHref(account.id) as string);
+                  }
+                : undefined
+            }
             // «Выбран» озвучивает `accessibilityState` плитки — в подписи
             // слово было бы повтором. Подсказку отдельным `accessibilityHint`
             // плитка пока не принимает, поэтому действие остаётся в подписи.
@@ -193,6 +215,22 @@ export function AccountsPanel({
           одна, ползунки шапки «Счета». */}
       <PanelHeader
         title={panelCount(selected ? selected.name : "Операции", operationRows.length)}
+        right={
+          periodNet !== null && netSign !== 0 ? (
+            <Text
+              maxFontSizeMultiplier={1.3}
+              accessibilityLabel={`За период ${netSign > 0 ? "плюс" : "минус"} ${money(Math.abs(periodNet))}`}
+              style={{
+                fontSize: 13,
+                fontWeight: "600",
+                fontVariant: ["tabular-nums"],
+                color: netSign > 0 ? t.success : t.danger,
+              }}
+            >
+              {`${netSign > 0 ? "+" : "−"}${money(Math.abs(periodNet))}`}
+            </Text>
+          ) : undefined
+        }
       />
       <RecordRowsPanel
         rows={operationRows}

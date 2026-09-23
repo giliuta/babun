@@ -121,6 +121,35 @@ export function appointmentServiceNames(
     .filter(Boolean);
 }
 
+/**
+ * ДВИЖЕНИЕ ДЕНЕГ ПО СТРОКАМ ЛЕНТЫ — одно правило на итог дня и на оборот
+ * выбранного счёта за период (владелец 2026-09-23, идея из отчёта по счетам).
+ *
+ * Складывается только пришедшее и ушедшее. Долг ещё не пришёл, а перевод,
+ * обе ноги которого в ленте, переехал между показанными счетами — денег от
+ * него не прибавилось. Перевод с одной ногой в ленте (`crossesSlice`) — для
+ * этой ленты настоящий приход или расход и входит.
+ *
+ * `countEveryTone` — однородный список (долги): там сумма строк и есть итог.
+ * Считается в центах: сумма десятков строк иначе копит float-пыль.
+ */
+export function rowsNet(
+  rows: readonly Pick<RecordRow, "amount" | "tone" | "crossesSlice">[],
+  countEveryTone = false,
+): number {
+  let cents = 0;
+  for (const row of rows) {
+    if (
+      !countEveryTone
+      && (row.tone === "debt" || (row.tone === "transfer" && !row.crossesSlice))
+    ) {
+      continue;
+    }
+    cents += Math.round(row.amount * 100);
+  }
+  return cents / 100;
+}
+
 export function recordRows(
   transactions: readonly FinanceTransaction[],
   refs: RecordRowRefs,

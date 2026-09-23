@@ -5,6 +5,7 @@ import type { FinanceTransaction } from "@babun/shared/local/finance/transaction
 import { accountOperationRows } from "./account-operations";
 import {
   dropAccountNames,
+  rowsNet,
   whatLine,
   type RecordRow,
   type RecordRowRefs,
@@ -161,6 +162,24 @@ describe("accountOperationRows", () => {
     const both = rowsFor(CASH, CARD).find((row) => row.title === "Перевод");
     assert.equal(both?.amount, 55);
     assert.equal(both?.crossesSlice, undefined);
+  });
+
+  test("оборот счёта за период: пришедшее минус ушедшее, перевод со знаком", () => {
+    // Наличные: Андрей 160 + Товары 50 − бензин 20 − перевод 55 = 135.
+    assert.equal(rowsNet(rowsFor(CASH)), 135);
+    // Карта: Андрей 35 + перевод 55 = 90.
+    assert.equal(rowsNet(rowsFor(CARD)), 90);
+    // Все счета: перевод нейтрален — 160 + 35 + 50 − 20 = 225 = 135 + 90.
+    assert.equal(rowsNet(rowsFor(CASH, CARD)), 225);
+  });
+
+  test("долг в оборот не входит, у однородного списка — входит", () => {
+    const rows = [
+      { amount: 100, tone: "income" as const },
+      { amount: 40, tone: "debt" as const },
+    ];
+    assert.equal(rowsNet(rows), 100);
+    assert.equal(rowsNet(rows, true), 140);
   });
 
   test("свежее сверху", () => {

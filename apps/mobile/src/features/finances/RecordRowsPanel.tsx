@@ -10,7 +10,7 @@ import { useThemeColors } from "@/theme/colors";
 import { humanDay } from "@/features/appointments/helpers";
 import { PanelHeader } from "./PanelHeader";
 import { RecordRowView, type RecordRowTone } from "./RecordRow";
-import type { RecordRow } from "./record-rows";
+import { rowsNet, type RecordRow } from "./record-rows";
 
 // РАЗРЕЗ ДЕНЕГ РАСКРЫВАЕТСЯ НА МЕСТЕ, ПОД ПЛИТКАМИ (владелец 2026-09-09:
 // «не надо делать вообще отдельную страницу — оно должно быть внизу, под
@@ -75,14 +75,7 @@ export function RecordRowsPanel({
       // ничего: «€185» при 128 в кассе, «€55» в день без единой продажи.
       // Кроме перевода, чья вторая нога вне ленты (`crossesSlice`): в ленте
       // одного счёта он и есть пришедшее или ушедшее.
-      net: data.reduce(
-        (sum, row) =>
-          !countEveryTone
-          && (row.tone === "debt" || (row.tone === "transfer" && !row.crossesSlice))
-            ? sum
-            : sum + row.amount,
-        0,
-      ),
+      net: rowsNet(data, countEveryTone),
       data,
     }));
   }, [rows, countEveryTone]);

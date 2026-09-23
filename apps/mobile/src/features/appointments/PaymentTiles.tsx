@@ -40,6 +40,7 @@ export function PaymentTile({
   compact,
   disabled,
   onPress,
+  onLongPress,
   accessibilityLabel,
 }: {
   icon: LucideIcon;
@@ -68,6 +69,9 @@ export function PaymentTile({
   compact?: boolean;
   disabled?: boolean;
   onPress: () => void;
+  /** Долгое нажатие — вторая дверь плитки, если она у места есть (панель
+   *  «Счета»: настройки этого счёта). В оплате записи его нет. */
+  onLongPress?: () => void;
   accessibilityLabel: string;
 }) {
   const t = useThemeColors();
@@ -76,6 +80,7 @@ export function PaymentTile({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
@@ -83,6 +88,17 @@ export function PaymentTile({
         disabled: Boolean(disabled),
         selected: pending || Boolean(selected),
       }}
+      // Долгое нажатие VoiceOver не делает — то же действие ротором.
+      accessibilityActions={
+        onLongPress ? [{ name: "longpress", label: "Настройки" }] : undefined
+      }
+      onAccessibilityAction={
+        onLongPress
+          ? (event) => {
+              if (event.nativeEvent.actionName === "longpress") onLongPress();
+            }
+          : undefined
+      }
       style={({ pressed }) => ({
         width,
         height: compact
