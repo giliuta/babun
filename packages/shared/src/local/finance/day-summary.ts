@@ -60,9 +60,15 @@ export function computeDayFinance(
   services: Service[],
   extras: DayExtra[],
 ): DayFinanceTotals {
-  const earnedFromAppts = appointments
-    .filter(isClosable)
-    .reduce((sum, a) => sum + getPaidAmount(a), 0);
+  // ПРИШЕДШИЕ ДЕНЬГИ — С ЛЮБОЙ ЗАПИСИ, А НЕ ТОЛЬКО С ВЫПОЛНЕННОЙ (владелец
+  // 2026-09-24: «если не заплатили — это не доход», и наоборот: заплатили —
+  // доход). Раньше считались только завершённые записи, и предоплата €255 по
+  // ещё запланированному визиту в кассе была, а в «Доходе» дня — нет, хотя
+  // «Финансы» её показывали. Полный возврат `getPaidAmount` сам сводит к нулю.
+  const earnedFromAppts = appointments.reduce(
+    (sum, a) => sum + getPaidAmount(a),
+    0,
+  );
 
   const materialCost = appointments
     .filter(isClosable)

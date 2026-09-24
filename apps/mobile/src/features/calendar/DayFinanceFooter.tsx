@@ -2,10 +2,7 @@ import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import {
-  computeDayFinance,
-  getDayMode,
-} from "@babun/shared/local/finance/day-summary";
+import { computeDayFinance } from "@babun/shared/local/finance/day-summary";
 import { getDayExtras } from "@babun/shared/local/day-extras";
 import { formatYMD } from "@/features/appointments/helpers";
 import { useThemeColors } from "@/theme/colors";
@@ -17,16 +14,18 @@ import { useTransactions } from "@/features/finances/queries";
 // Thin money strip pinned under the day/week grid — per-day Доход (green) over
 // Расход (red), aligned to the day columns (gutter width = the hour rail).
 //
-// Web parity (web DayFinanceFooter + shared day-summary): «Доход» is
-// contextual — past days show what was actually EARNED (paid), today and
-// future show the day's PLANNED revenue so a booked tomorrow never reads €0.
+// «ДОХОД» — ТОЛЬКО ПРИШЕДШИЕ ДЕНЬГИ, В ЛЮБОЙ ДЕНЬ (владелец 2026-09-24: «при
+// открытии записывает в доход ожидаемую сумму; если не заплатили — это не
+// считается доходом»). Раньше сегодня и будущие дни показывали ПЛАН — сумму
+// записей, оплаченных или нет, — и неоплаченная запись на €135 стояла зелёным
+// «доходом». План дня живёт в шторке дня (тап по столбцу), а полоса под
+// сеткой говорит только о деньгах, которые уже есть.
 // «Расход» comes from computeDayFinance (materials + manual expenses +
 // day extras), never a hardcoded zero.
 export function DayFinanceFooter({
   days,
   appointments,
   teamId,
-  todayYmd,
   onTapDay,
 }: {
   days: Date[];
@@ -34,8 +33,9 @@ export function DayFinanceFooter({
   /** Active team filter — day extras are stored per (team, date), so with
    *  no team selected extras are skipped (same as web's personal tab). */
   teamId: string | null;
-  /** Business-timezone today (YYYY-MM-DD) — drives earned vs planned. */
-  todayYmd: string;
+  /** Сегодня в поясе компании. Полоса его больше не читает (доход — только
+   *  оплаченное), проп остаётся, чтобы не трогать экран календаря. */
+  todayYmd?: string;
   onTapDay?: (d: Date) => void;
 }) {
   const t = useThemeColors();
@@ -80,11 +80,7 @@ export function DayFinanceFooter({
         return {
           d,
           ymd,
-          // Past → actually earned; today/future → planned revenue.
-          income:
-            getDayMode(ymd, todayYmd) === "past"
-              ? totals.earned
-              : totals.planned,
+          income: totals.earned,
           spent: totals.spent,
           // VoiceOver: «пятница, 18 июля», а не сырое YYYY-MM-DD.
           dateLabel: d.toLocaleDateString("ru-RU", {
@@ -94,7 +90,7 @@ export function DayFinanceFooter({
           }),
         };
       }),
-    [days, byDate, sharedServices, extrasMap, ledgerExtras, teamId, todayYmd],
+    [days, byDate, sharedServices, extrasMap, ledgerExtras, teamId],
   );
 
   // САМА ПОЛОСА БОЛЬШЕ НЕ РЕШАЕТ, ПОКАЗЫВАТЬСЯ ЛИ ЕЙ. Здесь стояло «пустая
