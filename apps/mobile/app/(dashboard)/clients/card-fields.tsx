@@ -1,7 +1,8 @@
 import { Fragment } from "react";
-import { ScrollView, Switch, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Info } from "lucide-react-native";
 import { Screen } from "@/components/ui/Screen";
+import { SwitchControl } from "@/components/ui/SwitchControl";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Divider } from "@/components/ui/Divider";
@@ -98,7 +99,7 @@ function CardFieldsScreen() {
                       </Text>
                     ) : null}
                   </View>
-                  <Switch
+                  <SwitchControl
                     value={on}
                     disabled={locked}
                     onValueChange={() => {

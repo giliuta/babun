@@ -273,6 +273,7 @@ export function LinkRow({
             number={phone}
             telegramUsername={telegramUsername}
             label={title}
+            smsName={name}
           />
         ) : null}
       </View>
@@ -339,6 +340,7 @@ export function LinkRow({
           number={phone}
           telegramUsername={telegramUsername}
           label={title}
+          smsName={name}
         />
       ) : null}
     </View>

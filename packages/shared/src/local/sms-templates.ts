@@ -53,7 +53,9 @@ export const AVAILABLE_TOKENS = [
   { token: "[Цена]", label: "Цена" },
   { token: "[Сумма]", label: "Сумма долга" },
   { token: "[Компания]", label: "Компания" },
-  { token: "[СсылкаНаОтмену]", label: "Ссылка на отмену" },
+  // [СсылкаНаОтмену] из палитры снят (STORY-089): страницы отмены у продукта
+  // нет, и шаблон с этим токеном не заполнился бы никогда. Старые тексты с
+  // ним читаются по-прежнему — алиас ниже остаётся.
 ] as const;
 
 // Russian → canonical English keys used by the context dictionary
@@ -85,6 +87,23 @@ export function createBlankTemplate(kind: TemplateKind = "new_appointment"): Sms
     body: "",
     enabled: true,
   };
+}
+
+/** Каноническое (английское) имя токена: «Имя» → «Name», «Name» → «Name».
+ *  Незнакомый токен возвращается как есть. */
+export function canonicalTokenKey(key: string): string {
+  return TOKEN_ALIASES[key] ?? key;
+}
+
+/** Канонические имена всех токенов шаблона — без повторов, в порядке
+ *  появления: «[Имя], ждём [Дата] в [Время]» → Name, Date, Time. */
+export function templateTokenKeys(body: string): string[] {
+  const keys: string[] = [];
+  for (const match of body.matchAll(/\[([\p{L}\p{N}_]+)\]/gu)) {
+    const key = canonicalTokenKey(match[1]);
+    if (!keys.includes(key)) keys.push(key);
+  }
+  return keys;
 }
 
 // Render a template by substituting tokens. Accepts both English

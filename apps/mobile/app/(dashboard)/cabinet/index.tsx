@@ -10,7 +10,9 @@
 // подпись с живым состоянием, а не пояснение:
 //   • карта человека → «Профиль»;
 //   • МОИ КОМПАНИИ — приглашения и компании, где он состоит (роль, календари);
-//   • КОМПАНИЯ — «Архив» (только владельцу): удалённые календари, откуда их
+//   • КОМПАНИЯ — «SMS» (только владельцу; STORY-089: «собственный кабинет
+//     отправки СМС» — шаблоны, со второй волны баланс и отправка) и «Архив»
+//     (только владельцу): удалённые календари, откуда их
 //     возвращают или стирают навсегда. Это не настройка раздела, а место
 //     хранения — и поставил его сюда сам владелец (2026-09-21: «архив засунь
 //     в Кабинет»);
@@ -36,6 +38,7 @@ import { ArchiveRow } from "@/features/cabinet/ArchiveRow";
 import { CompaniesSection } from "@/features/cabinet/CompaniesSection";
 import { NotificationsRow } from "@/features/cabinet/NotificationsRow";
 import { PersonCard } from "@/features/cabinet/PersonCard";
+import { SmsRow } from "@/features/cabinet/SmsRow";
 import { useCurrentRole } from "@/features/settings/tenant";
 import { signOutAndWipe } from "@/lib/auth-clear";
 import { useThemeColors } from "@/theme/colors";
@@ -66,6 +69,8 @@ export default function CabinetHome() {
           <>
             <SectionEyebrow>Компания</SectionEyebrow>
             <SectionCard>
+              <SmsRow />
+              <Divider inset={48} />
               <ArchiveRow />
             </SectionCard>
           </>

@@ -101,7 +101,9 @@ import {
   type DraftOpen,
 } from "@/features/clients/useClientDraft";
 import ClientContactRow from "@/features/clients/ClientContactRow";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { clientSmsVars } from "@/features/sms/client-sms-vars";
 import { ClientsCompanyRoute } from "@/features/clients/ClientsCompanyRoute";
 import { shareText } from "@/features/clients/client-share";
 import {
@@ -341,6 +343,25 @@ export function ClientDetailScreen() {
     [c, appointments],
   );
 
+  // ШАБЛОНЫ SMS ИЗ КАРТОЧКИ (STORY-089): имя, долг и ближайшая запись
+  // клиента — «SMS» у его номера предложит шаблоны, которые ими заполняются.
+  const { data: smsTeams = [] } = useTeams({ includeInactive: true });
+  const companyName = useTenant().data?.name ?? null;
+  const clientSmsContext = useMemo(
+    () =>
+      c
+        ? clientSmsVars({
+            client: c,
+            appointments,
+            teams: smsTeams,
+            company: companyName,
+            debt: caps.money ? (stats?.debt ?? 0) : null,
+            showMoney: caps.money,
+          })
+        : null,
+    [appointments, c, caps.money, companyName, smsTeams, stats?.debt],
+  );
+
   // heroUnitId больше не нужен: состояния ТО ушли из «Что дальше» в свою
   // группу «Обслуживание» целиком — дублировать нечего.
 
@@ -568,7 +589,9 @@ export function ClientDetailScreen() {
   };
 
   return (
-    <>
+    // Все номера страницы — клиента, его людей, доп. номера — предлагают
+    // шаблоны SMS, заполненные этим клиентом (STORY-089).
+    <SmsComposeProvider vars={clientSmsContext}>
       <Stack.Screen options={{ gestureEnabled: !isDraftDirty }} />
       <Screen edges={["top"]}>
       {/* «Готово» из правого верхнего угла снесено: единственное действие
@@ -809,7 +832,7 @@ export function ClientDetailScreen() {
       {people.door}
       {split.sheet}
     </Screen>
-    </>
+    </SmsComposeProvider>
   );
 }
 

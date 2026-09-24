@@ -68,6 +68,8 @@ export function presetLevel(block: AccessBlock, preset: PresetKey): AccessLevel 
   }
   if (block.key === "clients" || block.key === "clients.contacts") return clamp(block, "read");
   if (block.key === "clients.scope") return clamp(block, "own");
+  // Пишет клиентам своих записей — шаблоны SMS читает (STORY-089).
+  if (block.key === "company.sms_templates") return clamp(block, "read");
   return weakest(block);
 }
 

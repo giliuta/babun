@@ -145,7 +145,10 @@ import {
   type LocationRequest,
 } from "@/features/clients/location-request-link";
 import { useLocationRequests } from "@/features/clients/location-requests";
-import { useCurrentRole } from "@/features/settings/tenant";
+import { useCurrentRole, useTenant } from "@/features/settings/tenant";
+import { SmsComposeProvider } from "@/features/sms/SmsCompose";
+import { smsVars } from "@/features/sms/sms-compose";
+import { addressedAs, firstName } from "@/features/clients/sms-name";
 import {
   clientHistoryText,
 } from "@/features/clients/history-line";
@@ -1050,6 +1053,28 @@ export default function BookScreen() {
   const effectiveTotal = customTotal
     ? parseMoneyInput(totalDraft)
     : automaticTotal;
+
+  // ЧТО ПОДСТАВИТ ШАБЛОН SMS ИЗ ЭТОЙ ЗАПИСИ (STORY-089): «SMS» у номера
+  // клиента открывает шаблоны, заполненные ровно тем, что на экране. Сумму
+  // берёт только тот, кому деньги записи видны, — иначе SMS показала бы ему
+  // цену, которую страница прячет.
+  const companyName = useTenant().data?.name ?? null;
+  const recordSmsVars = useMemo(
+    () =>
+      client
+        ? smsVars({
+            name: addressedAs(client, firstName(client)),
+            date,
+            time: timeStart,
+            calendar: team?.name ?? null,
+            services: serviceLines.map((line) => line.name),
+            address,
+            total: can.showMoney ? effectiveTotal : null,
+            company: companyName,
+          })
+        : null,
+    [address, can.showMoney, client, companyName, date, effectiveTotal, serviceLines, team?.name, timeStart],
+  );
 
   // Keep the editable total in sync with catalog pricing until the operator
   // explicitly changes it. A manual amount then stays stable while services
@@ -2457,21 +2482,23 @@ export default function BookScreen() {
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
               {can.showClient ? (
-              <ClientBlock
-                client={client}
-                stats={clientStats}
-                summary={clientHistory}
-                onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
-                onOpenCard={openClientCard}
-                note={
-                  <InlineNoteField
-                    note={clientNote}
-                    placeholder="Заметка клиента"
-                    accessibilityLabel="Заметка клиента"
-                    maxLength={500}
-                  />
-                }
-              />
+              <SmsComposeProvider vars={recordSmsVars}>
+                <ClientBlock
+                  client={client}
+                  stats={clientStats}
+                  summary={clientHistory}
+                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onOpenCard={openClientCard}
+                  note={
+                    <InlineNoteField
+                      note={clientNote}
+                      placeholder="Заметка клиента"
+                      accessibilityLabel="Заметка клиента"
+                      maxLength={500}
+                    />
+                  }
+                />
+              </SmsComposeProvider>
               ) : null}
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
@@ -2839,29 +2866,31 @@ export default function BookScreen() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
-              <ClientBlock
-                client={client}
-                stats={clientStats}
-                summary={clientHistory}
-                onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
-                onOpenCard={openClientCard}
-                onClear={
-                  can.editClient
-                    ? () => {
-                        setClientId(null);
-                        setLocationId(null);
-                      }
-                    : undefined
-                }
-                note={
-                  <InlineNoteField
-                    note={clientNote}
-                    placeholder="Заметка клиента"
-                    accessibilityLabel="Заметка клиента"
-                    maxLength={500}
-                  />
-                }
-              />
+              <SmsComposeProvider vars={recordSmsVars}>
+                <ClientBlock
+                  client={client}
+                  stats={clientStats}
+                  summary={clientHistory}
+                  onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
+                  onOpenCard={openClientCard}
+                  onClear={
+                    can.editClient
+                      ? () => {
+                          setClientId(null);
+                          setLocationId(null);
+                        }
+                      : undefined
+                  }
+                  note={
+                    <InlineNoteField
+                      note={clientNote}
+                      placeholder="Заметка клиента"
+                      accessibilityLabel="Заметка клиента"
+                      maxLength={500}
+                    />
+                  }
+                />
+              </SmsComposeProvider>
 
               {/* ОБЪЕКТ — ТОТ ЖЕ, ЧТО В КЛИЕНТАХ, ОДИН В ОДИН (владелец
                   2026-09-08: «объект надо сделать точно такой же вид объекта,

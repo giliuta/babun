@@ -97,6 +97,8 @@ describe("role policy", () => {
       "/cabinet/account",
       "/cabinet/business",
       "/cabinet/inventory",
+      // Лист «SMS» ведёт в шаблоны того, кому их открыли (STORY-089).
+      "/cabinet/sms-templates",
       "/cabinet/invitations",
       "/cabinet/profile",
       "/cabinet/notifications",
