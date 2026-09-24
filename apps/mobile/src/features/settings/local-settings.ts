@@ -449,7 +449,7 @@ function safeLoadPersonalEventTypes(): PersonalEventType[] {
   try {
     return loadPersonalEventTypes();
   } catch {
-    return [...SEED_PERSONAL_EVENT_TYPES];
+    return [];
   }
 }
 

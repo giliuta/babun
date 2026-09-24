@@ -3,8 +3,9 @@
 // User-configurable list of "kinds" of events that show up as a tile
 // grid in the new PersonalEventSheet. Each type carries an icon, a
 // label, a colour, a default duration, and an optional all-day flag.
-// Five iOS-Reminders-style defaults seed first-run; the user adds /
-// edits / deletes from /dashboard/settings/calendar/event-types.
+// ЗАГОТОВОК НЕТ (владелец 2026-09-24: «события нестандартные, их надо самому
+// создавать — почисти, каждый клиент будет под себя»). Первый запуск — пустой
+// список; компания заводит свои типы в Календарь → Запись → Страница события.
 
 import { getStorage } from "../storage/provider";
 
@@ -39,18 +40,26 @@ export interface PersonalEventType {
 
 const STORAGE_KEY = "babun2:settings:personal-event-types";
 
-export const SEED_PERSONAL_EVENT_TYPES: PersonalEventType[] = [
-  { id: "ev-lunch",    label: "Обед",         icon: "coffee",     color: "#FF9500", defaultDuration: 60,  allDay: false, order: 0, hidden: false },
-  { id: "ev-meeting",  label: "Встреча",      icon: "briefcase",  color: "#007AFF", defaultDuration: 60,  allDay: false, order: 1, hidden: false },
-  { id: "ev-office",   label: "Выезд в офис", icon: "navigation", color: "#AF52DE", defaultDuration: 90,  allDay: false, order: 2, hidden: false },
-  { id: "ev-dayoff",   label: "Выходной",     icon: "moon",       color: "#8E8E93", defaultDuration: 720, allDay: true,  order: 3, hidden: false },
-  { id: "ev-vacation", label: "Отпуск",       icon: "plane",      color: "#34C759", defaultDuration: 720, allDay: true,  order: 4, hidden: false },
-];
+/** Заготовок больше нет — список пустой. Имя осталось: по нему сохранение
+ *  перекладывает старые общие id на авторские (`useSavePersonalEventTypes`). */
+export const SEED_PERSONAL_EVENT_TYPES: PersonalEventType[] = [];
+
+/** Id пяти прежних заготовок (Обед, Встреча, Выезд в офис, Выходной, Отпуск).
+ *  На сервер они не уезжали ни у кого (в базе 24.09 — ноль строк), но лежат
+ *  в памяти телефонов; загрузка их выбрасывает. Свои типы (id `pet-…`) не
+ *  трогаются. */
+const RETIRED_SEED_IDS = new Set([
+  "ev-lunch",
+  "ev-meeting",
+  "ev-office",
+  "ev-dayoff",
+  "ev-vacation",
+]);
 
 export function loadPersonalEventTypes(): PersonalEventType[] {
   // DATA-LOSS GUARD (offline-fallback resurrection fix): distinguish
-  // «key never written» (genuine first run → seed the iOS-style
-  // defaults) from «key written as an empty list» (the user deleted
+  // «key never written» (first run → empty list; заготовок нет с 24.09)
+  // from «key written as an empty list» (the user deleted
   // every type → respect that, return []). getRaw returns null ONLY
   // when the key is absent; a saved `[]` comes back as the string
   // "[]". The old `parsed.length === 0 → SEED` path revived the five
@@ -59,14 +68,14 @@ export function loadPersonalEventTypes(): PersonalEventType[] {
   // disambiguates via soft-deleted rows — this only fixes the loader
   // it falls back to. Same pattern as services.ts / expense-categories.
   const raw = getStorage().getRaw(STORAGE_KEY);
-  if (raw === null) return SEED_PERSONAL_EVENT_TYPES;
+  if (raw === null) return [];
   const parsed = getStorage().get<PersonalEventType[]>(STORAGE_KEY);
   if (!Array.isArray(parsed)) {
-    // Corrupt / non-array payload — fall back to seeds rather than
-    // an empty screen. (A valid empty list is `[]`, handled above.)
-    return SEED_PERSONAL_EVENT_TYPES;
+    // Corrupt / non-array payload — пустой список, как у первого запуска.
+    return [];
   }
   return parsed
+      .filter((p) => !RETIRED_SEED_IDS.has(String(p.id ?? "")))
       .map((p, i) => ({
         id: String(p.id ?? `ev-${Date.now()}-${i}`),
         label: String(p.label ?? "").trim() || "Без названия",
