@@ -1813,6 +1813,11 @@ export default function BookScreen() {
     ({ query }) =>
       query.isError && !essentialQueries.some((e) => e.query === query),
   );
+  // ЗАПИСЬ КЛИЕНТА = КЛИЕНТ + УСЛУГА (владелец 25.09: «нельзя сохранить
+  // запись без клиента — без клиента это событие; после клиента нельзя
+  // сохранить без услуги»). «Сохранить» остаётся нажимаемым и говорит
+  // сверху, чего не хватает.
+  const hasService = serviceIds.length > 0;
   const canSave =
     timeEnd > timeStart &&
     !failedReference &&
@@ -1820,6 +1825,7 @@ export default function BookScreen() {
     (kind === "event"
       ? teamId == null || hasValidTeam
       : clientId != null &&
+        hasService &&
         hasValidTeam &&
         workSelectionValid);
   const bookingBusy = booking.isPending || updateMut.isPending;
@@ -1838,6 +1844,8 @@ export default function BookScreen() {
         // ошибки оплаты — иначе предоплата-ошибка маскирует «Выберите клиента».
         clientId == null
         ? "Выберите клиента"
+      : !hasService
+        ? "Выберите услугу"
       : !hasValidTeam
         ? archivedRecord
           ? "Календарь в архиве — запись только для просмотра"
@@ -3240,6 +3248,12 @@ export default function BookScreen() {
           }
           onPress={save}
           disabled={!canSave || bookingBusy}
+          // Серая кнопка отвечает плашкой сверху: «Выберите клиента»,
+          // «Выберите услугу» — что мешает сохранить.
+          onDisabledPress={() => {
+            haptics.warning();
+            toast(missingHint, "info");
+          }}
           loading={bookingBusy}
         />
         </View>

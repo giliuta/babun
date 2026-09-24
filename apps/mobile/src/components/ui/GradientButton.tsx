@@ -50,6 +50,7 @@ export function GradientButton({
   loading,
   tint,
   accessibilityHint,
+  onDisabledPress,
 }: {
   label: string;
   onPress: () => void;
@@ -57,6 +58,10 @@ export function GradientButton({
   loading?: boolean;
   tint?: string;
   accessibilityHint?: string;
+  /** Тап по НЕАКТИВНОЙ кнопке — сказать, чего не хватает (владелец 25.09:
+   *  «нельзя нажать сохранить — уведомление сверху, что выберите услугу»).
+   *  Кнопка остаётся серой и ничего не сохраняет. */
+  onDisabledPress?: () => void;
 }) {
   const t = useThemeColors();
   const reduced = useReduceMotion();
@@ -115,7 +120,7 @@ export function GradientButton({
 
   return (
     <Pressable
-      onPress={pressable ? onPress : undefined}
+      onPress={pressable ? onPress : !loading ? onDisabledPress : undefined}
       onPressIn={() => {
         if (!pressable) return;
         haptics.tap();
@@ -128,7 +133,7 @@ export function GradientButton({
         contact.value = withTiming(0, OUT);
         if (!reduced) dip.value = withSpring(0, RECOIL);
       }}
-      disabled={!pressable}
+      disabled={!pressable && !(onDisabledPress && !loading)}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
