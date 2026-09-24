@@ -112,6 +112,10 @@ import { useTeamSchedule } from "@/features/reference/team-schedule";
 import { useAppointments } from "@/features/calendar/queries";
 import { useUpdateAppointment } from "@/features/calendar/mutations";
 import { useBookingSave } from "@/features/appointments/useBookingSave";
+import { useCalendarActions, useRecordBlocks } from "@/features/appointments/useRecordRights";
+import { bookRights } from "@/features/appointments/record-blocks";
+import { changedFields } from "@/features/appointments/member-writes";
+import { useSession } from "@/providers/SessionProvider";
 import {
   useCalendarSettings,
   usePersonalEventTypes,
@@ -598,6 +602,25 @@ export default function BookScreen() {
   const requestActions = useLocationRequestActions();
   const viewerRole = useCurrentRole().data;
   const canRequestAddress = viewerRole === "owner" || viewerRole === "dispatcher";
+  // ОДНА СТРАНИЦА ЗАПИСИ ДЛЯ ВСЕХ, ДВЕРИ ПО ПРАВАМ (STORY-088, владелец
+  // 21.09: «визуал идентичный… даёшь просто разрешение на блоки»). Владельцу
+  // `bookRights` отдаёт всё; сотруднику — по блокам календаря записи. Сервер
+  // проверяет то же самое поле за полем, поэтому погашенная дверь здесь —
+  // не украшение, а честный ответ заранее.
+  const isMemberView = viewerRole === "master";
+  const sessionUserId = useSession().session?.user.id ?? null;
+  const rightsTeamId = isEdit ? (editing?.team_id ?? null) : teamId;
+  const recordRights = useRecordBlocks(rightsTeamId);
+  const calendarRights = useCalendarActions(rightsTeamId);
+  const can = bookRights({
+    isMember: isMemberView,
+    kind,
+    isEdit,
+    record: recordRights,
+    eventWritable:
+      calendarRights.events === "write" &&
+      (!isEdit || (editing?.created_by ?? null) === sessionUserId),
+  });
   // ОБЪЕКТ, ДОБАВЛЕННЫЙ ОТСЮДА, ВИДЕН СРАЗУ. Список клиентов после записи
   // только инвалидируется, и с полсекунды `client.locations` не знает о новом
   // объекте: блок мигал «Выбрать объект», а сохранение в эту щель писало
@@ -1827,7 +1850,19 @@ export default function BookScreen() {
         // Правка идёт мимо useBookingSave: тот хук — про РОЖДЕНИЕ заявки и
         // её хвост (гашение напоминания ТО, постановка push события). У
         // существующей записи этот хвост уже отработал в день создания.
-        await updateMut.mutateAsync({ id: editId, patch: buildPatch() });
+        // Сотрудник шлёт только изменённое: каждое поле в двери сервера
+        // требует своего права, и нетронутый клиент в патче стоил бы отказа
+        // тому, у кого нет «Клиент: Меняет». Снимок — та же подпись, что
+        // считает «есть несохранённое».
+        const patch = isMemberView
+          ? changedFields(
+              editBaselineRef.current
+                ? (JSON.parse(editBaselineRef.current) as Partial<Appointment>)
+                : (editing ?? {}),
+              buildPatch(),
+            )
+          : buildPatch();
+        await updateMut.mutateAsync({ id: editId, patch });
         toast("Изменения сохранены", "success");
         haptics.success();
       } else {
@@ -2228,10 +2263,15 @@ export default function BookScreen() {
             {/* Подписанный контрол цвета (не Done-слот): swatch + «Цвет» —
                 самоочевидная кнопка, единственный коммит — градиент снизу. */}
             <Pressable
-              onPress={() => {
-                setColorSheetOpen(true);
-                haptics.tap();
-              }}
+              onPress={
+                can.editColor
+                  ? () => {
+                      setColorSheetOpen(true);
+                      haptics.tap();
+                    }
+                  : undefined
+              }
+              disabled={!can.editColor}
               hitSlop={8}
               className="items-center justify-center rounded-[10px] px-1.5"
               style={{ minHeight: 44 }}
@@ -2354,17 +2394,25 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                showLabel={showLabelBlock}
-                onEditTeam={() => {
-                  // Из архива запись не переносят: она только для просмотра.
-                  if (archivedRecord) return;
-                  setTeamSheetOpen(true);
-                  haptics.tap();
-                }}
-                onEditLabel={() => {
-                  setLabelSheetOpen(true);
-                  haptics.tap();
-                }}
+                showLabel={showLabelBlock && can.showLabel}
+                onEditTeam={
+                  can.editTeam
+                    ? () => {
+                        // Из архива запись не переносят: она только для просмотра.
+                        if (archivedRecord) return;
+                        setTeamSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
+                onEditLabel={
+                  can.editLabel
+                    ? () => {
+                        setLabelSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               {/* КОГДА — своим блоком ниже; предупреждения о времени живут
@@ -2377,10 +2425,14 @@ export default function BookScreen() {
                 // заданный руками, докет иначе игнорировал.
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
+                onPress={
+                  can.editWhen
+                    ? () => {
+                        setWhenOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               {/* КЛИЕНТ — ПЕРВЫЙ БЛОК И САМ ПО СЕБЕ (владелец 2026-08-31:
@@ -2404,11 +2456,12 @@ export default function BookScreen() {
               {/* БЛОК «КЛИЕНТ» ЖИВЁТ ОТДЕЛЬНО (`features/appointments/ClientBlock.tsx`):
                   его же ставит составитель чека. До 2026-09-20 разметка стояла здесь
                   ДВАЖДЫ — своя у записи, своя у события, — и копии уже разошлись. */}
+              {can.showClient ? (
               <ClientBlock
                 client={client}
                 stats={clientStats}
                 summary={clientHistory}
-                onPick={() => setClientPickerOpen(true)}
+                onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
                 onOpenCard={openClientCard}
                 note={
                   <InlineNoteField
@@ -2419,6 +2472,7 @@ export default function BookScreen() {
                   />
                 }
               />
+              ) : null}
 
               {/* ОБЪЕКТ — ВТОРОЙ БЛОК, И ОН СТОИТ ВСЕГДА (владелец: «хочу,
                   чтоб был зафиксированный блок, и он никуда не девался и не
@@ -2430,7 +2484,9 @@ export default function BookScreen() {
                   сперва «можно добавить объект без клиента», потом — «объект
                   есть, а клиента нет, это очень странно, не та архитектура».
                   Верно второе: объект принадлежит клиенту. */}
-              {showObject ? (
+              {/* Объект без права менять и без выбранного — смотреть нечего:
+                  блока нет, а не пригашенная дверь «Добавить объект». */}
+              {showObject && can.showObject && (can.editObject || selectedLocation) ? (
               <SectionCard title="Объект">
                 {client ? (
                   // БЕЗ ВЕРХНЕГО ВОЛОСКА: он шёл сразу под заголовком «ОБЪЕКТ»
@@ -2456,14 +2512,22 @@ export default function BookScreen() {
                         <ObjectRow
                           loc={selectedLocation}
                           showNote={false}
-                          onMore={() => {
-                            setObjectEdit(true);
-                            haptics.tap();
-                          }}
-                          onPress={() => {
-                            setObjectPicker(true);
-                            haptics.tap();
-                          }}
+                          onMore={
+                            can.editObject
+                              ? () => {
+                                  setObjectEdit(true);
+                                  haptics.tap();
+                                }
+                              : undefined
+                          }
+                          onPress={
+                            can.editObject
+                              ? () => {
+                                  setObjectPicker(true);
+                                  haptics.tap();
+                                }
+                              : undefined
+                          }
                         />
                         {/* ЗАМЕТКА ОБЪЕКТА — «код ворот», «ключ у соседей»:
                             мини-блок пишет прямо в объект (см. `writeObjectNote`),
@@ -2474,7 +2538,7 @@ export default function BookScreen() {
                           accessibilityLabel="Заметка объекта"
                         />
                       </>
-                    ) : clientLocations.length > 0 ? (
+                    ) : clientLocations.length > 0 && can.editObject ? (
                       /* Объекты есть, но ни один не выбран (снят после
                          удаления или запись сохранена с разовым адресом): та
                          же строка-дверь, что «Выбрать клиента».
@@ -2530,7 +2594,7 @@ export default function BookScreen() {
                         под надписью «ОБЪЕКТ», а голая синяя строка — рядом с
                         «Выбрать услугу», у которой кружок есть. Один вопрос —
                         одна дверь: `ChooseRow`, как у соседей. */}
-                    {clientLocations.length === 0 ? (
+                    {clientLocations.length === 0 && can.editObject ? (
                       <View
                         style={{
                           borderTopWidth: pendingRequests.length > 0 ? 1 : 0,
@@ -2573,14 +2637,17 @@ export default function BookScreen() {
                   его же ставит составитель чека — владелец 2026-09-20 попросил там
                   «такой же блок, как в записи», а вторая копия разметки назавтра
                   разошлась бы с первой. Вид не менялся ни на пиксель. */}
-              <ServicesBlock
-                lines={serviceLines}
-                total={effectiveTotal}
-                custom={customTotal}
-                discountAmount={discountAmount}
-                onPickServices={() => setServicePickerOpen(true)}
-                onOpenTotal={() => setTotalSheetOpen(true)}
-              />
+              {can.showServices ? (
+                <ServicesBlock
+                  lines={serviceLines}
+                  total={effectiveTotal}
+                  custom={customTotal}
+                  discountAmount={discountAmount}
+                  onPickServices={can.editServices ? () => setServicePickerOpen(true) : undefined}
+                  onOpenTotal={can.editTotal ? () => setTotalSheetOpen(true) : undefined}
+                  showMoney={can.showMoney}
+                />
+              ) : null}
 
               {/* Оплата — сразу после «Итого»: плитки счетов команды, тап
                   пишет деньги сразу (STORY-065). Выключается в Кабинет →
@@ -2639,6 +2706,7 @@ export default function BookScreen() {
                   // введённый текст.
                   placeholder="Заметка записи"
                   accessibilityLabel="Заметка записи"
+                  readOnly={!can.editNote}
                 />
               </SectionCard>
               ) : null}
@@ -2706,15 +2774,23 @@ export default function BookScreen() {
                   teamCities.find((c) => c.name === effectiveLabel)?.color ?? null
                 }
                 labelFromDay={city == null}
-                showLabel={showLabelBlock}
-                onEditTeam={() => {
-                  setEventTeamSheetOpen(true);
-                  haptics.tap();
-                }}
-                onEditLabel={() => {
-                  setLabelSheetOpen(true);
-                  haptics.tap();
-                }}
+                showLabel={showLabelBlock && can.showLabel}
+                onEditTeam={
+                  can.editTeam
+                    ? () => {
+                        setEventTeamSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
+                onEditLabel={
+                  can.editLabel
+                    ? () => {
+                        setLabelSheetOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
 
               <WhenRow
@@ -2723,23 +2799,35 @@ export default function BookScreen() {
                 timeEnd={timeEnd}
                 duration={minutesBetweenHM(timeStart, timeEnd) || slotFallback}
                 warning={workWarning}
-                onPress={() => {
-                  setWhenOpen(true);
-                  haptics.tap();
-                }}
+                onPress={
+                  can.editWhen
+                    ? () => {
+                        setWhenOpen(true);
+                        haptics.tap();
+                      }
+                    : undefined
+                }
               />
               {/* ТИП СОБЫТИЯ — ПОД ВРЕМЕНЕМ (владелец 2026-09-06 завёл его
                   здесь; 2026-09-08 я поднял блок выше, и владелец вернул:
                   «нет, я неправильно объяснил — опусти на один блок ниже,
                   время обратно»). Тот же блок, что «Категория» в финансах:
                   строка-дверь → шторка. Цвет события и есть цвет типа. */}
-              <EventTypeBlock
-                type={eventType}
-                onPress={() => {
-                  setEventTypeSheetOpen(true);
-                  haptics.tap();
-                }}
-              />
+              {/* Без права править событие тип только читается: пустую дверь
+                  «Выбрать тип» не показываем, выбранный — без действия. */}
+              {can.editEventType || eventType ? (
+                <EventTypeBlock
+                  type={eventType}
+                  onPress={
+                    can.editEventType
+                      ? () => {
+                          setEventTypeSheetOpen(true);
+                          haptics.tap();
+                        }
+                      : () => {}
+                  }
+                />
+              ) : null}
 
 
               {/* КЛИЕНТ — НЕОБЯЗАТЕЛЕН: событие бывает и без человека, поэтому
@@ -2752,12 +2840,16 @@ export default function BookScreen() {
                 client={client}
                 stats={clientStats}
                 summary={clientHistory}
-                onPick={() => setClientPickerOpen(true)}
+                onPick={can.editClient ? () => setClientPickerOpen(true) : undefined}
                 onOpenCard={openClientCard}
-                onClear={() => {
-                  setClientId(null);
-                  setLocationId(null);
-                }}
+                onClear={
+                  can.editClient
+                    ? () => {
+                        setClientId(null);
+                        setLocationId(null);
+                      }
+                    : undefined
+                }
                 note={
                   <InlineNoteField
                     note={clientNote}
@@ -2786,21 +2878,30 @@ export default function BookScreen() {
 
                   Прежний вольный адрес старого события НЕ ТЕРЯЕТСЯ: пока
                   объект не выбран, он стоит тем же полем и уезжает в патч. */}
-              {showObject ? (
+              {showObject &&
+              (can.editObject || eventLocationEntry || eventAddress.trim()) ? (
               <SectionCard title="Объект">
                 {eventLocationEntry ? (
                   <>
                     <ObjectRow
                       loc={eventLocationEntry.loc}
                       showNote={false}
-                      onMore={() => {
-                        setObjectEdit(true);
-                        haptics.tap();
-                      }}
-                      onPress={() => {
-                        setObjectPicker(true);
-                        haptics.tap();
-                      }}
+                      onMore={
+                        can.editObject
+                          ? () => {
+                              setObjectEdit(true);
+                              haptics.tap();
+                            }
+                          : undefined
+                      }
+                      onPress={
+                        can.editObject
+                          ? () => {
+                              setObjectPicker(true);
+                              haptics.tap();
+                            }
+                          : undefined
+                      }
                     />
                     {/* Чей объект — строкой под ним, когда это не клиент
                         события: иначе «Дом» ничего не говорит о том, куда
@@ -2918,6 +3019,7 @@ export default function BookScreen() {
                   }}
                   placeholder="Заметка события"
                   accessibilityLabel="Заметка события"
+                  readOnly={!can.editNote}
                 />
               </SectionCard>
               ) : null}

@@ -89,6 +89,8 @@ export function BookSlotSheet({
   bandFor,
   onClose,
   onPick,
+  canWork = true,
+  canEvent = true,
 }: {
   /** Тапнутый слот; null = лист закрыт. */
   slot: SlotDraft | null;
@@ -98,6 +100,10 @@ export function BookSlotSheet({
   onClose: () => void;
   /** Выбор дороги создания — родитель закрывает лист и открывает /book. */
   onPick: (kind: "work" | "event", slot: SlotDraft) => void;
+  /** Права сотрудника в этом календаре (STORY-088): «Новые записи» и
+   *  «События: Меняет». Нет права — нет и кнопки, а не кнопка с отказом. */
+  canWork?: boolean;
+  canEvent?: boolean;
 }) {
   const t = useThemeColors();
   // Записывать клиентов умеет платный тариф. Бесплатный личный календарь
@@ -238,15 +244,15 @@ export function BookSlotSheet({
                   встроенных покупок. Тариф решает не здесь: настоящий запрет —
                   триггер `enforce_plan_limits` в базе. */}
               {/* События выключены у компании (STORY-088) — второй дороги нет. */}
-              {eventsOn ? (
+              {eventsOn && canEvent ? (
                 <Button
                   label="Событие"
-                  variant={canBookClients ? "secondary" : "primary"}
+                  variant={canBookClients && canWork ? "secondary" : "primary"}
                   accessibilityHint="Откроет новое событие на выбранное время"
                   onPress={() => pick("event")}
                 />
               ) : null}
-              {canBookClients ? (
+              {!canWork ? null : canBookClients ? (
                 <Button
                   label="Клиент"
                   accessibilityHint="Откроет новую запись клиенту на выбранное время"

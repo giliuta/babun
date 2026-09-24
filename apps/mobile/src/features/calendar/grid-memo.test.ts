@@ -145,7 +145,9 @@ describe("сетка календаря мемоизирована и корми
     assert.ok(grid.includes(opening));
     const body = grid.slice(grid.indexOf(opening) + opening.length, grid.indexOf("\n  );"));
     assert.match(body, /onEdit: onEditGrid,/);
-    assert.match(body, /onReschedule: canManageBookings \? rescheduleGrid : undefined,/);
+    // Сотрудник двигает по «Переносить» (STORY-088): обработчик есть и у
+    // него, а можно ли двигать эту запись — отвечает `canReschedule`.
+    assert.match(body, /onReschedule: canManageBookings \|\| isCrew \? rescheduleGrid : undefined,/);
     assert.match(body, /onZoom,/);
     assert.doesNotMatch(body, /=>/, "стрелка внутри gridProps — новая функция на каждый рендер");
     assert.match(screen, /const clientName = useCallback\(/);

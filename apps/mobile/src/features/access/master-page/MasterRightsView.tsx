@@ -16,7 +16,7 @@ import { useThemeColors } from "@/theme/colors";
 import type { AccessBlock, AccessLevel } from "../access-map";
 import type { RightsArea } from "./master-draft";
 import { sectionColumns, segmentSlot } from "./rights-columns";
-import { SEGMENT_WORD, levelSentence } from "./rights-copy";
+import { levelSentence, segmentWord } from "./rights-copy";
 import { rightsSections, type LevelReader } from "./rights-rows";
 import type { RightsFocus } from "./rights-focus";
 
@@ -62,6 +62,9 @@ const SHORT_FINANCE_TITLE: Record<string, string> = {
   // контакты» ломались на две строки.
   Клиенты: "Карточки",
   "Телефоны и контакты": "Телефоны",
+  // Копия у сотрудника не живёт (STORY-088: копия несёт клиента и суммы,
+  // каждое поле спросило бы своё право) — строка говорит только про перенос.
+  "Переносить и копировать записи": "Переносить",
 };
 
 /** Под шапкой «Записи» хвост «в записи» / «записи» лишний: «Статус записи» →
@@ -263,7 +266,7 @@ export function RightsRow({
     <SegmentedControl
       compact
       style={{ width: levels.length * SEGMENT_SLOT }}
-      options={levels.map((value) => ({ value, label: SEGMENT_WORD[value] }))}
+      options={levels.map((value) => ({ value, label: segmentWord(levels, value) }))}
       value={level}
       onChange={onPick}
     />

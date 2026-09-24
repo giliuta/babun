@@ -4211,6 +4211,18 @@ export type Database = {
       }
       invitation_preview: { Args: { p_token: string }; Returns: Json }
       is_platform_admin: { Args: never; Returns: boolean }
+      member_appointment_create: {
+        Args: { p_row: Json }
+        Returns: Json
+      }
+      member_appointment_delete: {
+        Args: { p_appointment_id: string }
+        Returns: undefined
+      }
+      member_appointment_update: {
+        Args: { p_appointment_id: string; p_patch: Json }
+        Returns: Json
+      }
       set_default_company: {
         Args: { p_company_id: string }
         Returns: undefined

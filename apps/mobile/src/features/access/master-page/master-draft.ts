@@ -48,6 +48,11 @@ export const STARTER_CALENDAR_LEVELS: Readonly<Record<string, AccessLevel>> = {
   "record.status": "read",
   "record.object": "read",
   "record.services": "read",
+  // STORY-088, волна 1: события, метки дня и график команды сотрудник видел
+  // всегда — сервер засеял им «Видит», и новый мастер начинает так же.
+  "calendar.events": "read",
+  "calendar.day_labels": "read",
+  "calendar.schedule": "read",
 };
 
 /** Черновик без заготовки — чистая механика (и база для чтения с сервера). */
@@ -116,9 +121,19 @@ export const DEPENDANT_BLOCKS: Readonly<Record<string, readonly string[]>> = {
   // человека не открылось бы ничего.
   "calendar.records": [
     "calendar.create",
+    "calendar.move",
+    "calendar.cancel",
+    "calendar.events",
+    "calendar.schedule",
     "record.status",
+    "record.client",
+    "record.object",
+    "record.services",
     "record.amount",
     "record.payment",
+    "record.label",
+    "record.color",
+    "record.files",
     "calendar.day_labels",
     "finance.operations",
     "finance.accounts",

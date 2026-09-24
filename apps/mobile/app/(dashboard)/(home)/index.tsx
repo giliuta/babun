@@ -106,6 +106,7 @@ import {
 } from "@/features/calendar/day-label";
 import { resolveOffDayLabel } from "@/features/calendar/appointment-label";
 import { useFeatureOn } from "@/features/settings/company-features";
+import { useCalendarActionsReader } from "@/features/appointments/useRecordRights";
 import { isOverdue } from "@/features/calendar/overdue";
 import {
   useAutoColorRule,
@@ -291,11 +292,26 @@ export default function CalendarTab() {
   // Метки дня — функция компании (STORY-088): выключены — тап по дате метку
   // не открывает, в сетке меток нет.
   const dayLabelsOn = useFeatureOn("day_labels");
-  const canManageDayLabels = canManageBookings && dayLabelsOn;
+  // ПРАВА СОТРУДНИКА ПО КАЛЕНДАРЮ (STORY-088): у мастера каждое действие
+  // сетки — свой блок в календаре записи («Новые записи», «Переносить»,
+  // «Отменять и удалять», «События», «Метка дня», «Цвет записи»). Владельцу и
+  // диспетчеру читатель отдаёт всё — их ветки ниже не меняются.
+  const actionsIn = useCalendarActionsReader();
   const canMutateAppointment = useCallback(
     (appointment: Appointment) =>
       canMutateCalendarAppointment(role, session?.user.id, appointment),
     [role, session?.user.id],
+  );
+  /** Можно ли двигать запись: пальцем, «Перенести», растяжкой. */
+  const canMoveAppointment = useCallback(
+    (appointment: Appointment) => {
+      if (!isCrew) return canMutateAppointment(appointment);
+      const can = actionsIn(appointment.team_id ?? null);
+      return isCalendarEvent(appointment)
+        ? can.events === "write" && appointment.created_by === session?.user.id
+        : can.move;
+    },
+    [isCrew, canMutateAppointment, actionsIn, session?.user.id],
   );
   // «Первый день недели» — общая настройка; правит Неделю, Месяц и мини-
   // календарь одинаково (до этого понедельник был зашит в каждом из трёх).
@@ -343,7 +359,7 @@ export default function CalendarTab() {
     "Europe/Nicosia";
 
   const reschedule = (apt: Appointment, newStart: string, newEnd: string) => {
-    if (!canMutateAppointment(apt)) {
+    if (!canMoveAppointment(apt)) {
       toast(
         isCalendarEvent(apt)
           ? "Изменить событие может только его автор"
@@ -749,6 +765,14 @@ export default function CalendarTab() {
       ? teamChoice
       : teams[0]?.id ?? null;
   const activeTeam = teams.find((tm) => tm.id === activeTeamId);
+  // Что сотрудник может в открытом календаре: новые записи, события, метка
+  // дня. Владельцу — всё.
+  const activeActions = actionsIn(activeTeamId);
+  const canManageDayLabels =
+    dayLabelsOn && (canManageBookings || activeActions.dayLabels === "write");
+  const canCreateOnGrid =
+    canManageBookings ||
+    (isCrew && (activeActions.create || activeActions.events === "write"));
   // ДЕНЬГИ В КАЛЕНДАРЕ — ПО УРОВНЮ «ДОХОДЫ И РАСХОДЫ» В ЭТОМ КАЛЕНДАРЕ (этап 2
   // доступа, владелец 15.09: «чтоб всё сразу менялось в живом времени»).
   // Раньше — только владельцу, какие бы права ни выставили сотруднику. Смена
@@ -899,7 +923,9 @@ export default function CalendarTab() {
         // старый лист правки здесь больше не открывается. Дорогу назад отдаём
         // ей же: `returnToRef` читает только лист бригадира, а страница —
         // отдельное окно и про наш ref не знает (2026-09-08).
-        if (isCrew || !canMutateAppointment(target)) setCrewViewing(target);
+        // Сотрудник открывает ТУ ЖЕ страницу записи (владелец 21.09: «один в
+        // один»; STORY-088): блоки на ней гаснут по его правам сами.
+        if (!isCrew && !canMutateAppointment(target)) setCrewViewing(target);
         else
           router.push(
             `/book?appointmentId=${target.id}${returnToParam(params.from)}` as Href,
@@ -1480,11 +1506,19 @@ export default function CalendarTab() {
     clientId?: string;
     locationId?: string;
   }) => {
-    if (!canManageBookings) {
+    // Сотрудник создаёт по «Новым записям» / «Событиям: Меняет» в открытом
+    // календаре (STORY-088); проверку держит и сервер.
+    const kindAllowed =
+      defaults?.kind === "event"
+        ? activeActions.events === "write"
+        : activeActions.create;
+    if (!canManageBookings && !(isCrew && kindAllowed)) {
       toast(
         roleQuery.isPending
           ? "Проверяем права доступа"
-          : "Новую запись создаёт владелец или диспетчер",
+          : isCrew
+            ? "Новые записи в этом календаре вам не открыты"
+            : "Новую запись создаёт владелец или диспетчер",
         "info",
       );
       return;
@@ -1582,7 +1616,9 @@ export default function CalendarTab() {
     // у виртуала синтетический id, мутации по нему невалидны (web parity).
     const parentId = (apt as { virtualParentId?: string }).virtualParentId;
     const target = parentId ? appts.find((a) => a.id === parentId) ?? apt : apt;
-    if (isCrew || !canMutateAppointment(target)) {
+    // Сотрудник — на ту же страницу записи, что владелец (STORY-088): двери
+    // на ней погашены по его правам. Лист просмотра остался чужому событию.
+    if (!isCrew && !canMutateAppointment(target)) {
       setCrewViewing(target);
       return;
     }
@@ -1902,6 +1938,34 @@ export default function CalendarTab() {
             Linking.openURL(
               `https://maps.apple.com/?daddr=${encodeURIComponent(address)}`,
             ),
+        });
+      // ДЕЙСТВИЯ ПО ПРАВАМ (STORY-088): каждое — свой блок в календаре
+      // записи; нет права — нет пункта. Своё событие при «События: Меняет»
+      // двигают, красят и удаляют; рабочую запись — по «Переносить»,
+      // «Цвет записи» и «Отменять и удалять». Копии у сотрудника нет: копия
+      // несёт клиента, услуги и суммы, и каждое поле спросило бы своё право.
+      const can = actionsIn(apt.team_id ?? null);
+      const ownEvent =
+        event && can.events === "write" && apt.created_by === session?.user.id;
+      if (
+        apt.status !== "cancelled" &&
+        apt.event_all_day !== true &&
+        (event ? ownEvent : can.move)
+      )
+        items.push({ label: "Перенести", run: () => startMove(apt) });
+      if (event ? ownEvent : can.color)
+        items.push({ label: "Цвет", run: () => setRecolor(apt) });
+      if (!event && can.cancel)
+        items.push(
+          apt.status === "cancelled"
+            ? { label: "Восстановить", run: () => setCancelled(apt, null) }
+            : { label: "Отменить визит", run: () => cancelWithReason(apt) },
+        );
+      if (event ? ownEvent : can.cancel)
+        items.push({
+          label: event ? "Удалить событие" : "Удалить запись",
+          destructive: true,
+          run: () => deleteAppointmentConfirmed(apt),
         });
     } else {
       // МИНИ-МЕНЮ ДИСПЕТЧЕРА — ЧЕТЫРЕ ДЕЙСТВИЯ (владелец 2026-09-06: «долгое
@@ -2441,8 +2505,8 @@ export default function CalendarTab() {
       addressFor,
       teamColorFor,
       onEdit: onEditGrid,
-      onReschedule: canManageBookings ? rescheduleGrid : undefined,
-      canReschedule: canMutateAppointment,
+      onReschedule: canManageBookings || isCrew ? rescheduleGrid : undefined,
+      canReschedule: canMoveAppointment,
       startHour: visStartHour,
       endHour: visEndHour,
       // Привязка драга и тапа по пустому слоту — 15 мин, константа. «Шаг сетки»
@@ -2470,8 +2534,9 @@ export default function CalendarTab() {
       teamColorFor,
       onEditGrid,
       canManageBookings,
+      isCrew,
       rescheduleGrid,
-      canMutateAppointment,
+      canMoveAppointment,
       visStartHour,
       visEndHour,
       calSettings?.workStartHour,
@@ -2728,7 +2793,7 @@ export default function CalendarTab() {
               today={now}
               labelFor={labelFor}
               offLabelColorFor={offLabelColorFor}
-              onCreateAt={canManageBookings ? createAtGrid : undefined}
+              onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
               onMenu={onMenuGrid}
               onPickDay={pickDay}
               onPickLabelDay={onPickLabelDay}
@@ -2761,7 +2826,7 @@ export default function CalendarTab() {
               offLabelColorFor={offLabelColorFor}
               onDayLabelTap={onDayLabelTap}
               onMenu={onMenuGrid}
-              onCreateAt={canManageBookings ? createAtGrid : undefined}
+              onCreateAt={canCreateOnGrid || moving ? createAtGrid : undefined}
               onCommitPage={onCommitDayPage}
               {...gridProps}
             />
@@ -2852,6 +2917,8 @@ export default function CalendarTab() {
       <BookSlotSheet
         slot={slotDraft}
         bandFor={sheetBandFor}
+        canWork={activeActions.create}
+        canEvent={activeActions.events === "write"}
         onClose={() => setSlotDraft(null)}
         onPick={(kind, s) => {
           setSlotDraft(null);

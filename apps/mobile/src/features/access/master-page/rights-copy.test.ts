@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import { LEVEL_WORD, type AccessBlock } from "../access-map";
-import { hasSentences, levelSentence, offeredBlocks } from "./rights-copy";
+import { hasSentences, levelSentence, offeredBlocks, segmentWord } from "./rights-copy";
 
 const block = (over: Partial<AccessBlock>): AccessBlock => ({
   key: "clients",
@@ -144,5 +144,15 @@ describe("слова прав", () => {
       b.key === "calendar.records" ? { ...b, live: true } : b,
     );
     assert.ok(offeredBlocks(withLiveCalendar).some((b) => b.key === "calendar.records"));
+  });
+});
+
+describe("слово сегмента", () => {
+  test("блок-действие говорит «Может», а не «Меняет» и «Не видит»", () => {
+    assert.equal(segmentWord(["off", "write"], "off"), "Не может");
+    assert.equal(segmentWord(["off", "write"], "write"), "Может");
+    assert.equal(segmentWord(["off", "read", "write"], "off"), "Не видит");
+    assert.equal(segmentWord(["off", "read"], "read"), "Видит");
+    assert.equal(segmentWord(["read", "write"], "write"), "Меняет");
   });
 });

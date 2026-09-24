@@ -60,6 +60,7 @@ export function ServicesBlock({
   onPickServices,
   onPickLine,
   onOpenTotal,
+  showMoney = true,
 }: {
   /** Шапка блока: «Услуги» у записи и чека, «Позиции» у инвойса. */
   title?: string;
@@ -74,14 +75,27 @@ export function ServicesBlock({
   /** Сумму перебили рукой — «Итого» перестало следовать за услугами. */
   custom: boolean;
   discountAmount: number;
-  onPickServices: () => void;
+  /** Нет — состав только читается (STORY-088: сотрудник без «Сумма и услуги:
+   *  Меняет»). Строки без стрелок и нажатий, дверь выбора гаснет. */
+  onPickServices?: () => void;
   /** Тап по строке правит САМУ СТРОКУ (позиция инвойса — свой текст, своё
    *  описание). Не передан — тап открывает список услуг заново, как просил
    *  владелец для записи 2026-09-04. */
   onPickLine?: (lineId: string) => void;
-  onOpenTotal: () => void;
+  /** Нет — «Итого» только читается. */
+  onOpenTotal?: () => void;
+  /** Деньги строк и «Итого». Нет права видеть сумму — ни цены за штуку, ни
+   *  суммы строки, ни итога: сервер и так прислал нули, а ноль врёт. */
+  showMoney?: boolean;
 }) {
   const t = useThemeColors();
+  const openTotal = onOpenTotal
+    ? () => {
+        onOpenTotal();
+        haptics.tap();
+      }
+    : undefined;
+  const lineTap = onPickLine ?? (onPickServices ? () => onPickServices() : undefined);
 
   return (
     <SectionCard title={title}>
@@ -92,19 +106,19 @@ export function ServicesBlock({
               одинаково. */}
           <ChooseRow
             icon={Briefcase}
-            label={emptyLabel}
-            hint="Открывает список услуг"
-            onPress={onPickServices}
+            label={onPickServices ? emptyLabel : "Услуги не выбраны"}
+            hint={onPickServices ? "Открывает список услуг" : undefined}
+            disabled={!onPickServices}
+            onPress={onPickServices ?? (() => {})}
           />
-          <TotalRow
-            total={total}
-            custom={custom}
-            discountAmount={discountAmount}
-            onPress={() => {
-              onOpenTotal();
-              haptics.tap();
-            }}
-          />
+          {showMoney ? (
+            <TotalRow
+              total={total}
+              custom={custom}
+              discountAmount={discountAmount}
+              onPress={openTotal}
+            />
+          ) : null}
         </>
       ) : (
         <>
@@ -121,17 +135,20 @@ export function ServicesBlock({
                   клиента и объекта: строка выбранного и есть дверь к выбору. */}
               <Pressable
                 className="flex-row items-center px-4 py-2.5"
+                disabled={!lineTap}
                 onPress={() => {
-                  if (onPickLine) onPickLine(line.id);
-                  else onPickServices();
+                  if (!lineTap) return;
+                  lineTap(line.id);
                   haptics.tap();
                 }}
                 style={({ pressed }) => ({
-                  backgroundColor: pressed ? t.pressed : "transparent",
+                  backgroundColor: pressed && lineTap ? t.pressed : "transparent",
                 })}
-                accessibilityRole="button"
-                accessibilityLabel={`${line.name}${line.subtitle ? `, ${line.subtitle}` : ""}, ${formatEURExact(line.total)}`}
-                accessibilityHint={onPickLine ? "Открывает строку" : "Открывает выбор услуг"}
+                accessibilityRole={lineTap ? "button" : "text"}
+                accessibilityLabel={`${line.name}${line.subtitle ? `, ${line.subtitle}` : ""}${showMoney ? `, ${formatEURExact(line.total)}` : ""}`}
+                accessibilityHint={
+                  !lineTap ? undefined : onPickLine ? "Открывает строку" : "Открывает выбор услуг"
+                }
               >
                 {/* ЦВЕТНОЙ ТОЧКИ БОЛЬШЕ НЕТ (владелец 2026-09-08: «убираем
                     полностью цвет — я понял, что он вообще не нужен»). */}
@@ -146,6 +163,8 @@ export function ServicesBlock({
                 {/* СКОЛЬКО РАЗ ВЗЯЛИ — ОТТИСКОМ «×3» (владелец 2026-09-04,
                     выбрал из четырёх вариантов на экране сравнения). */}
                 <QtyBadge qty={line.qty} unit={line.unit ?? null} />
+                {showMoney ? (
+                  <>
                 {/* ЦЕНА ЗА ОДНУ — МЕЛКО, МЕЖДУ КОЛИЧЕСТВОМ И СУММОЙ (владелец
                     2026-09-07: «посередине количество, потом цена за штуку
                     маленькими цифрами, правее общая сумма за услугу»). */}
@@ -174,13 +193,15 @@ export function ServicesBlock({
                 >
                   {formatEURExact(line.total)}
                 </Text>
+                  </>
+                ) : null}
               </Pressable>
             </View>
           ))}
           {/* ДВЕРЬ ДЛЯ ВТОРОЙ ПОЗИЦИИ — ТА ЖЕ СТРОКА, ЧТО В ПУСТОМ БЛОКЕ.
               Своей клавиши у блока нет: у пустого состояния и у списка одна
               грамматика. */}
-          {addLabel ? (
+          {addLabel && onPickServices ? (
             <View style={{ borderTopWidth: 1, borderTopColor: t.separator }}>
               <ChooseRow
                 icon={Briefcase}
@@ -194,15 +215,14 @@ export function ServicesBlock({
               „Итого“, открывается шторка, где прописаны каждая услуга,
               количество их, и там же скидки»). Скидка называется прямо в
               строке: видно, почему сумма меньше суммы услуг. */}
-          <TotalRow
-            total={total}
-            custom={custom}
-            discountAmount={discountAmount}
-            onPress={() => {
-              onOpenTotal();
-              haptics.tap();
-            }}
-          />
+          {showMoney ? (
+            <TotalRow
+              total={total}
+              custom={custom}
+              discountAmount={discountAmount}
+              onPress={openTotal}
+            />
+          ) : null}
         </>
       )}
     </SectionCard>

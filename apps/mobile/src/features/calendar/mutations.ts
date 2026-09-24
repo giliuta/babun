@@ -17,6 +17,7 @@ import {
   listPhotoPaths,
   removePhotoBlobs,
 } from "@babun/shared/db/repositories/appointment-photos";
+import type { Json } from "@babun/shared/db/database.types";
 import type { Appointment } from "@babun/shared/local/appointments";
 import {
   resetAppointmentPayment,
@@ -31,6 +32,12 @@ import { useCurrentRole } from "@/features/settings/tenant";
 import { isConfirmedNetworkUnavailable } from "@/features/settings/server-read-fallback";
 import { useSession } from "@/providers/SessionProvider";
 import { autoAssignClientLabel } from "@/features/clients/label-auto-assign";
+import { useAccessBlocks } from "@/features/access/queries";
+import {
+  memberCreateRow,
+  memberPatch,
+  memberWriteRefusal,
+} from "@/features/appointments/member-writes";
 import { appointmentsQueryKey } from "./queries";
 
 // Mirror of the wrapper's UUID guard. createBlankAppointment falls back to a
@@ -42,6 +49,18 @@ import { appointmentsQueryKey } from "./queries";
 // the replayer silently drops it, losing the edit.
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Сотрудник пишет запись только дверями сервера (STORY-088): каждое поле там
+ *  проверяется своим блоком в календаре записи. Отказ — словами, с названием
+ *  блока, которого не хватило. */
+function useMemberRefusal() {
+  const blocks = useAccessBlocks().data;
+  return (step: string, message: string): Error =>
+    new Error(
+      memberWriteRefusal(message, (key) => blocks?.find((b) => b.key === key)?.title) ??
+        `${step}: ${message}`,
+    );
+}
 
 // Appointment writes go through the shared repo (same as web). Completing an
 // appointment triggers finance income sync server-side (sync_appointment_finance
@@ -82,11 +101,25 @@ export function useCreateAppointment() {
   const role = useCurrentRole().data;
   const { session } = useSession();
   const qc = useQueryClient();
+  const refusal = useMemberRefusal();
   return useMutation({
     mutationFn: async (input: Appointment) => {
       if (!tenantId) throw new Error("Нет активного тенанта");
+      if (role === "master") {
+        // Квоту месяца держит серверный триггер вставки; предпроверка —
+        // удобство владельца, сотруднику она не нужна. Без сети дверь
+        // сервера не откроется — офлайн-очереди у сотрудника нет.
+        const stamped = UUID_RE.test(input.id) ? input : { ...input, id: randomUuid() };
+        const { error } = await supabase.rpc("member_appointment_create", {
+          p_row: memberCreateRow(stamped) as Json,
+        });
+        if (error) throw refusal("createAppointment", error.message);
+        // Дверь отвечает только id — он наш же; форме нужна запись целиком,
+        // свежую строку довезёт перечитывание списка.
+        return { ...stamped, status: "scheduled" } as Appointment;
+      }
       if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Создавать заявки может владелец или диспетчер.");
+        throw new Error("Роль сотрудника ещё не подтверждена.");
       }
       await preflightQuotaForCreate(
         supabase,
@@ -146,6 +179,7 @@ export function useUpdateAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const qc = useQueryClient();
+  const refusal = useMemberRefusal();
   return useMutation({
     mutationFn: async ({
       id,
@@ -155,25 +189,19 @@ export function useUpdateAppointment() {
       patch: Partial<Appointment>;
     }) => {
       if (role === "master") {
-        const keys = Object.keys(patch);
-        if (
-          keys.length === 0 ||
-          keys.some((key) => key !== "status" && key !== "comment")
-        ) {
-          throw new Error("Мастер может изменить только статус и заметку.");
-        }
-        const safePatch: { status?: string; comment?: string } = {};
-        if (patch.status !== undefined) safePatch.status = patch.status;
-        if (patch.comment !== undefined) safePatch.comment = patch.comment;
-        const { data, error } = await supabase.rpc(
-          "update_master_appointment_safe",
-          {
-            p_appointment_id: id,
-            p_patch: safePatch,
-          },
-        );
-        if (error) throw new Error(`updateAppointment: ${error.message}`);
-        if (!data) throw new Error("Заявка не найдена или больше не назначена.");
+        // Каждое поле сервер проверит своим блоком (STORY-088). Поле, которого
+        // дверь не знает, не выбрасываем молча — это потерянная правка.
+        const kind = qc
+          .getQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role))
+          ?.find((a) => a.id === id)?.kind;
+        const { body, foreign } = memberPatch(patch, kind);
+        if (foreign.length > 0) throw new Error("Это поле меняет только владелец");
+        if (Object.keys(body).length === 0) return null;
+        const { data, error } = await supabase.rpc("member_appointment_update", {
+          p_appointment_id: id,
+          p_patch: body as Json,
+        });
+        if (error) throw refusal("updateAppointment", error.message);
         return data;
       }
       if (role !== "owner" && role !== "dispatcher") {
@@ -262,17 +290,26 @@ export function useDeleteAppointment() {
   const tenantId = useTenantId();
   const role = useCurrentRole().data;
   const qc = useQueryClient();
+  const refusal = useMemberRefusal();
   return useMutation({
     mutationFn: async (id: string) => {
-      if (role !== "owner" && role !== "dispatcher") {
-        throw new Error("Удалять заявки может владелец или диспетчер.");
+      if (role !== "owner" && role !== "dispatcher" && role !== "master") {
+        throw new Error("Роль сотрудника ещё не подтверждена.");
       }
       // ФАЙЛЫ ЗАПИСИ: строки appointment_photos уходят каскадом вместе с
       // записью, а блобы в хранилище — нет (2026-09-07: в бакете лежали
       // файлы уже удалённых записей). Пути снимаем ДО удаления, чистим
       // после и best effort — запись важнее мусора.
       const paths = await listPhotoPaths(supabase, id).catch(() => [] as string[]);
-      await deleteAppointment(supabase, id, tenantId as string);
+      if (role === "master") {
+        // «Отменять и удалять» (или своё событие) проверяет сервер.
+        const { error } = await supabase.rpc("member_appointment_delete", {
+          p_appointment_id: id,
+        });
+        if (error) throw refusal("deleteAppointment", error.message);
+      } else {
+        await deleteAppointment(supabase, id, tenantId as string);
+      }
       if (paths.length > 0) void removePhotoBlobs(supabase, paths);
     },
     onSuccess: () => {

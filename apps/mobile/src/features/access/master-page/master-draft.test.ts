@@ -529,8 +529,11 @@ describe("стартовые права нового календаря (вла�
   });
 
   test("изменения для сотрудника — только живые блоки", () => {
+    // В тестовом реестре живы «Статус» и «Метка дня»: остальные заготовки
+    // сервер бы отверг, и в изменения они не идут.
     assert.deepEqual(starterCalendarChanges(REGISTRY, "B"), [
       { block: "record.status", team_id: "B", level: "read" },
+      { block: "calendar.day_labels", team_id: "B", level: "read" },
     ]);
   });
 });
