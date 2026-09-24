@@ -19,6 +19,7 @@
 // «Выбранного дня» в Неделе нет: тап по дате открывает попап метки,
 // долгий тап проваливается в День (см. WeekHeaderRow).
 import { Text, View } from "react-native";
+import { blockSolid } from "@/components/ui/color-contrast";
 import { LabelTag } from "@/components/ui/LabelTag";
 import { useThemeColors } from "@/theme/colors";
 
@@ -104,6 +105,23 @@ export function DateCell({
             <LabelTag color={label.color} text={label.name} lg />
           ) : null}
         </View>
+      {/* ПОЛОСКА МЕТКИ ДНЯ ПО ВЕРХУ КОЛОНКИ (вариант B, 24.09): день с меткой
+          узнаётся боковым зрением, не читая корешок. Тон — как у плотного
+          блока записи (`blockSolid`), чтобы бледная метка не терялась. */}
+      {label && !dayOff ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 3,
+            right: 3,
+            bottom: 0,
+            height: 3,
+            borderRadius: 999,
+            backgroundColor: blockSolid(label.color),
+          }}
+        />
+      ) : null}
       </View>
     );
   }
@@ -171,6 +189,23 @@ export function DateCell({
           {count}
         </Text>
       ) : null}
+    {/* ПОЛОСКА МЕТКИ ДНЯ ПО ВЕРХУ КОЛОНКИ (вариант B, 24.09): день с меткой
+        узнаётся боковым зрением, не читая корешок. Тон — как у плотного
+        блока записи (`blockSolid`), чтобы бледная метка не терялась. */}
+    {label && !dayOff ? (
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 3,
+          right: 3,
+          bottom: 0,
+          height: 3,
+          borderRadius: 999,
+          backgroundColor: blockSolid(label.color),
+        }}
+      />
+    ) : null}
     </View>
   );
 }
