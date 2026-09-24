@@ -119,3 +119,14 @@ describe("presetHint / periodDates — подписи строк", () => {
     );
   });
 });
+
+describe("квартал — для VAT", () => {
+  test("текущий и прошлый квартал, в том числе через границу года", () => {
+    const sep = new Date(2026, 8, 24);
+    assert.deepEqual(presetRange("quarter", sep), { from: "2026-07-01", to: "2026-09-30" });
+    assert.deepEqual(presetRange("lastquarter", sep), { from: "2026-04-01", to: "2026-06-30" });
+    const feb = new Date(2026, 1, 10);
+    assert.deepEqual(presetRange("quarter", feb), { from: "2026-01-01", to: "2026-03-31" });
+    assert.deepEqual(presetRange("lastquarter", feb), { from: "2025-10-01", to: "2025-12-31" });
+  });
+});

@@ -30,7 +30,6 @@ export function RecordRowsPanel({
   emptyAction,
   headerRight,
   countEveryTone,
-  onReset,
   refreshControl,
   onOpenRecord,
 }: {
@@ -53,8 +52,6 @@ export function RecordRowsPanel({
    *  пришёл, перевод переехал между своими счетами, и складывать их с доходом
    *  значит печатать числа, которые не значат ничего. */
   countEveryTone?: boolean;
-  /** «Все» в эйбрау — возврат к полной ленте. */
-  onReset?: () => void;
   refreshControl?: ReactElement<RefreshControlProps>;
   onOpenRecord: (row: RecordRow) => void;
 }) {
@@ -130,7 +127,7 @@ export function RecordRowsPanel({
       keyExtractor={(row) => row.key}
       ListHeaderComponent={
         title !== undefined ? (
-          <PanelHeader title={title} right={headerRight} onReset={onReset} />
+          <PanelHeader title={title} right={headerRight} />
         ) : null
       }
       ListEmptyComponent={

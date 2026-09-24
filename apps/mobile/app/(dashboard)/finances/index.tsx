@@ -1030,7 +1030,9 @@ function FinancesContent() {
           открывается, ну значит не будет данных там»). Что человек увидит
           внутри, решают его же права на записи и деньги. */}
       <Pressable
-        onPress={() => router.push("/cabinet/insights")}
+        onPress={() =>
+          router.push({ pathname: "/finances/insights", params: { period: "month" } })
+        }
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel="Аналитика по финансам"
@@ -1262,7 +1264,6 @@ function FinancesContent() {
                     ? "Расхода за период нет"
                     : "Нет операций за период"
             }
-            onReset={view !== "all" ? () => setView("all") : undefined}
             refreshControl={refreshControl}
             onOpenRecord={openRecordRow}
           />

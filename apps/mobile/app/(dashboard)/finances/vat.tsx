@@ -11,6 +11,8 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { SettingsRow } from "@/components/ui/SettingsRow";
 import { SwitchRow } from "@/components/ui/SwitchRow";
+import { NavRow } from "@/components/ui/card-rows";
+import { presetHint, presetRange } from "@/features/finances/period";
 import { Percent } from "lucide-react-native";
 import type { VatMode } from "@babun/shared/local/finance/vat";
 import { grossFromNet, netFromGross } from "@babun/shared/local/finance/vat";
@@ -18,6 +20,7 @@ import { formatEUR } from "@babun/shared/common/utils/money";
 import {
   useSaveVatSettings,
   useTeamVatOverrides,
+  useVatSummaryForRange,
   useVatSettings,
   VAT_MODE_LABELS,
 } from "@/features/finances/vat-queries";
@@ -127,6 +130,7 @@ export default function VatSettingsScreen() {
 
         {v.mode === "off" ? null : (
           <>
+            <VatDueCard />
             <SectionEyebrow>Как назначается цена</SectionEyebrow>
             <SectionCard>
               <View className="flex-row flex-wrap gap-2 p-3">
@@ -255,5 +259,49 @@ export default function VatSettingsScreen() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * К УПЛАТЕ ЗА КВАРТАЛ — ответ на главный вопрос страницы налога: сколько
+ * отдать государству. Одна строка на квартал, число справа; расшифровка
+ * (собрано с клиентов · уплачено в расходах) — тихой подписью под текущим.
+ * Минус значит, что государство должно вам: печатается словом «к возврату».
+ */
+function VatDueCard() {
+  const t = useThemeColors();
+  const cur = presetRange("quarter");
+  const prev = presetRange("lastquarter");
+  const curQ = useVatSummaryForRange(cur.from, cur.to, true);
+  const prevQ = useVatSummaryForRange(prev.from, prev.to, true);
+  const line = (due: number | undefined) =>
+    due === undefined
+      ? "…"
+      : due < 0
+        ? `к возврату ${formatEUR(Math.abs(due))}`
+        : formatEUR(due);
+  return (
+    <>
+      <SectionEyebrow>К уплате</SectionEyebrow>
+      <SectionCard>
+        <NavRow
+          label={`Текущий квартал · ${presetHint("quarter")}`}
+          value={line(curQ.data?.due)}
+        />
+        {curQ.data ? (
+          <Text
+            maxFontSizeMultiplier={1.3}
+            style={{ paddingHorizontal: 16, paddingBottom: 10, marginTop: -4, fontSize: 13, color: t.sub }}
+          >
+            {`Собрано ${formatEUR(curQ.data.collected)} · в расходах ${formatEUR(curQ.data.paid)}`}
+          </Text>
+        ) : null}
+        <Divider inset={16} />
+        <NavRow
+          label={`Прошлый квартал · ${presetHint("lastquarter")}`}
+          value={line(prevQ.data?.due)}
+        />
+      </SectionCard>
+    </>
   );
 }

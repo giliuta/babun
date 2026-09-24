@@ -30,7 +30,6 @@ export function panelCount(label: string, count: number): string {
 export function PanelHeader({
   title,
   right,
-  onReset,
   onSettings,
   settingsLabel,
 }: {
@@ -40,9 +39,9 @@ export function PanelHeader({
    *  Полноширинный сегмент над списком занимал строку экрана ради выбора из
    *  двух слов. */
   right?: ReactNode;
-  /** «Все» — снять разрез и вернуть полную ленту. Есть только там, где разрез
-   *  что-то прячет: панель, показывающая всё, сбрасывать не от чего. */
-  onReset?: () => void;
+  // «ВСЕ» СНЯТО (прогон финансов 2026-09-24): второй тап по плитке и так
+  // возвращает полную ленту — та же вторая дверь к одному жесту, что владелец
+  // убрал у «Счетов» 2026-09-15.
   /** Ползунки справа — дверь в НАСТРОЙКИ того, что панель показывает (глиф
    *  владельца 2026-08-15: «две палочки с кружочками, как в клиентах»). У
    *  «Счетов» это страница «Счета»: порядок, скрытие и правка каждого счёта
@@ -66,18 +65,6 @@ export function PanelHeader({
         {title}
       </Text>
       {right ? <View className="ml-auto flex-row items-center gap-1.5">{right}</View> : null}
-      {onReset ? (
-        <Pressable
-          onPress={onReset}
-          accessibilityRole="button"
-          accessibilityLabel="Показать все операции"
-          className={`${right ? "" : "ml-auto"} min-h-11 justify-center px-2 active:opacity-60`}
-        >
-          <Text className="text-[13px] font-semibold" style={{ color: t.accent }}>
-            Все
-          </Text>
-        </Pressable>
-      ) : null}
       {onSettings ? (
         <Pressable
           onPress={onSettings}
@@ -86,7 +73,7 @@ export function PanelHeader({
           hitSlop={8}
           // `ml-auto` только когда слева ничего не заняло место: два элемента
           // с ним разъехались бы по краям и оставили дыру посередине.
-          className={`${onReset || right ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
+          className={`${right ? "" : "ml-auto"} min-h-11 justify-center pl-3 active:opacity-60`}
         >
           <Settings2 color={t.sub} size={ICON.sm} strokeWidth={2} />
         </Pressable>

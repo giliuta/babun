@@ -2,11 +2,11 @@ import { useMemo, useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { Minus, TrendingDown, TrendingUp } from "lucide-react-native";
 import {
-  getRecognizedRevenue,
+  getPaidAmount,
   type Appointment,
 } from "@babun/shared/local/appointments";
 import { formatEUR } from "@babun/shared/common/utils/money";
-import { formatCountRu, FORMS_RAZ } from "@babun/shared/common/utils/plural-ru";
+import { formatCountRu, FORMS_RAZ, pluralRu } from "@babun/shared/common/utils/plural-ru";
 import { Screen } from "@/components/ui/Screen";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -211,18 +211,21 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
 // тогда экран берёт её источником. Без хвоста — как было: компания
 // устройства, и «Финансы» ведут сюда по-прежнему.
 export default function InsightsRoute() {
-  const { tenant } = useLocalSearchParams<{ tenant?: string }>();
-  if (!tenant) return <InsightsScreen />;
+  const { tenant, period } = useLocalSearchParams<{ tenant?: string; period?: string }>();
+  const start = PERIODS.some((p) => p.key === period) ? (period as PeriodKey) : "week";
+  if (!tenant) return <InsightsScreen initialPeriod={start} />;
   return (
     <ClientsCompanyRoute kind="tab">
-      <InsightsScreen />
+      <InsightsScreen initialPeriod={start} />
     </ClientsCompanyRoute>
   );
 }
 
-function InsightsScreen() {
+function InsightsScreen({ initialPeriod }: { initialPeriod: PeriodKey }) {
   const t = useThemeColors();
-  const [period, setPeriod] = useState<PeriodKey>("week");
+  // С «Финансов» сводка приходит с периодом МЕСЯЦ (`?period=month`) — тем же,
+  // что по умолчанию стоит на «Финансах»; из «Клиентов» — неделя, как было.
+  const [period, setPeriod] = useState<PeriodKey>(initialPeriod);
   // Записи — становой хребет всех KPI: их загрузку/ошибку показываем
   // честно (раньше сбой сети выглядел как нулевая сводка, аудит P2-21).
   // Остальные три запроса только резолвят имена — их сбой не нулит цифры.
@@ -263,34 +266,33 @@ function InsightsScreen() {
     [currentApts],
   );
 
-  // KPI + PoP-дельты (web parity: count / revenue / completed).
-  const revenue = completedApts.reduce(
-    (sum, appointment) => sum + getRecognizedRevenue(appointment),
-    0,
-  );
+  // ДЕНЬГИ СВОДКИ — ПОЛУЧЕННЫЕ, А НЕ СТОИМОСТЬ РАБОТ (владелец 2026-09-24:
+  // «если не заплатили — это не считается доходом»). Здесь стояла стоимость
+  // выполненных записей: неоплаченная работа шла в «Выручку» и в «Топ
+  // клиенты» (Nikita €195, у которого оплату сняли), и сводка расходилась с
+  // «Финансами». Теперь — деньги, пришедшие по записям периода, любой записи
+  // (предоплата тоже деньги); полный возврат `getPaidAmount` сводит к нулю.
+  // Ручные операции («Товары») сюда не входят — сводка считает записи,
+  // поэтому плитка зовётся «Оплачено», а не «Доход».
+  const revenue = currentApts.reduce((sum, a) => sum + getPaidAmount(a), 0);
   const prevCompleted = prevApts.filter((a) => a.status === "completed");
-  const prevRevenue = prevCompleted.reduce(
-    (sum, appointment) => sum + getRecognizedRevenue(appointment),
-    0,
-  );
+  const prevRevenue = prevApts.reduce((sum, a) => sum + getPaidAmount(a), 0);
   const countDelta = deltaOf(currentApts.length, prevApts.length);
   const revenueDelta = deltaOf(revenue, prevRevenue);
   const completedDelta = deltaOf(completedApts.length, prevCompleted.length);
 
   const topTeams = useMemo((): LeaderItem[] => {
     const map = new Map<string, number>();
-    for (const a of completedApts) {
+    for (const a of currentApts) {
       if (!a.team_id) continue;
-      map.set(
-        a.team_id,
-        (map.get(a.team_id) ?? 0) + getRecognizedRevenue(a),
-      );
+      map.set(a.team_id, (map.get(a.team_id) ?? 0) + getPaidAmount(a));
     }
     return [...map.entries()]
+      .filter(([, val]) => val > 0)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([id, val]) => ({ id, name: teamName.get(id) ?? id, value: val, valueLabel: formatEUR(val) }));
-  }, [completedApts, teamName]);
+  }, [currentApts, teamName]);
 
   const topServices = useMemo((): LeaderItem[] => {
     const map = new Map<string, number>();
@@ -320,18 +322,16 @@ function InsightsScreen() {
 
   const topClients = useMemo((): LeaderItem[] => {
     const map = new Map<string, number>();
-    for (const a of completedApts) {
+    for (const a of currentApts) {
       if (!a.client_id) continue;
-      map.set(
-        a.client_id,
-        (map.get(a.client_id) ?? 0) + getRecognizedRevenue(a),
-      );
+      map.set(a.client_id, (map.get(a.client_id) ?? 0) + getPaidAmount(a));
     }
     return [...map.entries()]
+      .filter(([, val]) => val > 0)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([id, val]) => ({ id, name: clientName.get(id) ?? "—", value: val, valueLabel: formatEUR(val) }));
-  }, [completedApts, clientName]);
+  }, [currentApts, clientName]);
 
   if (apptsLoading || apptsError) {
     return (
@@ -364,9 +364,12 @@ function InsightsScreen() {
         </View>
 
         <View className="flex-row gap-2.5 px-4">
-          <KpiTile label="Записей" value={String(currentApts.length)} delta={toDeltaPct(countDelta)} color={t.accent} t={t} />
+          {/* Слово согласовано с числом (прогон 2026-09-24: «1 Записей»). */}
+          <KpiTile
+            label={pluralRu(currentApts.length, ["Запись", "Записи", "Записей"])}
+            value={String(currentApts.length)} delta={toDeltaPct(countDelta)} color={t.accent} t={t} />
           {canSeeMoney ? (
-            <KpiTile label="Выручка" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
+            <KpiTile label="Оплачено" value={formatEUR(revenue)} delta={toDeltaPct(revenueDelta)} color={t.success} t={t} />
           ) : null}
           <KpiTile label="Завершено" value={String(completedApts.length)} delta={toDeltaPct(completedDelta)} color={t.accent} t={t} />
         </View>

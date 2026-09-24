@@ -4,6 +4,7 @@ import {
   summarizeVat,
   type VatMode,
   type VatSettings,
+  type VatSummary,
 } from "@babun/shared/local/finance/vat";
 
 import { accountVatDueQueryKey } from "@/lib/company-query-keys";
@@ -185,6 +186,45 @@ export function useAccountVatDue(accountId: string, enabled: boolean) {
         if (page.length < VAT_PAGE) break;
       }
       return summarizeVat(rows).due;
+    },
+  });
+}
+
+/**
+ * VAT ЗА ПЕРИОД ПО КОМПАНИИ (прогон финансов 2026-09-24). Плашку «НДС к
+ * уплате» владелец снял с главного экрана 2026-08-15: «эту информацию
+ * переместим в другое место» — место так и не появилось. Налог — квартальный
+ * вопрос, поэтому он живёт на странице VAT, а считает его та же
+ * `summarizeVat`, что и скобку «(VAT €x)» у счёта. Ключ под «accounts»:
+ * любая денежная правка, сбрасывающая остатки, сбрасывает и его.
+ */
+export function useVatSummaryForRange(from: string, to: string, enabled: boolean) {
+  const tenantId = useTenantId();
+  return useQuery({
+    queryKey: ["accounts", tenantId, "vat-summary", from, to],
+    enabled: enabled && !!tenantId,
+    queryFn: async (): Promise<VatSummary> => {
+      const rows: FinanceTransaction[] = [];
+      for (let start = 0; ; start += VAT_PAGE) {
+        const { data, error } = await supabase
+          .from("finance_transactions")
+          .select("id, type, amount, vat_mode, vat_amount")
+          .eq("tenant_id", tenantId as string)
+          .gte("occurred_on", from)
+          .lte("occurred_on", to)
+          .not("vat_amount", "is", null)
+          .order("id")
+          .range(start, start + VAT_PAGE - 1);
+        if (error) throw new Error(error.message);
+        const page = (data ?? []).map((r) => ({
+          ...r,
+          amount: Number(r.amount),
+          vat_amount: r.vat_amount == null ? null : Number(r.vat_amount),
+        })) as unknown as FinanceTransaction[];
+        rows.push(...page);
+        if (page.length < VAT_PAGE) break;
+      }
+      return summarizeVat(rows);
     },
   });
 }

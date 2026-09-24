@@ -15,6 +15,8 @@ export type PeriodKind =
   | "lastweek"
   | "month"
   | "lastmonth"
+  | "quarter"
+  | "lastquarter"
   | "year"
   | "lastyear"
   | "custom";
@@ -40,6 +42,8 @@ export const PERIOD_LABELS: Record<PeriodKind, string> = {
   lastweek: "Прошлая неделя",
   month: "Текущий месяц",
   lastmonth: "Прошлый месяц",
+  quarter: "Текущий квартал",
+  lastquarter: "Прошлый квартал",
   year: "Текущий год",
   lastyear: "Прошлый год",
   custom: "Свой период",
@@ -51,6 +55,9 @@ export const PERIOD_BLOCKS: [PeriodKind, PeriodKind][] = [
   ["today", "yesterday"],
   ["week", "lastweek"],
   ["month", "lastmonth"],
+  // КВАРТАЛ (прогон финансов 2026-09-24): VAT на Кипре сдаётся поквартально,
+  // и собирать квартал руками из трёх месяцев — лишняя работа каждые 90 дней.
+  ["quarter", "lastquarter"],
   ["year", "lastyear"],
 ];
 
@@ -83,6 +90,14 @@ export function presetRange(
       return { from: ymd(new Date(y, m, 1)), to: ymd(new Date(y, m + 1, 0)) };
     case "lastmonth":
       return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case "quarter": {
+      const q = Math.floor(m / 3) * 3;
+      return { from: ymd(new Date(y, q, 1)), to: ymd(new Date(y, q + 3, 0)) };
+    }
+    case "lastquarter": {
+      const q = Math.floor(m / 3) * 3 - 3;
+      return { from: ymd(new Date(y, q, 1)), to: ymd(new Date(y, q + 3, 0)) };
+    }
     case "year":
       return { from: ymd(new Date(y, 0, 1)), to: ymd(new Date(y, 11, 31)) };
     case "lastyear":
