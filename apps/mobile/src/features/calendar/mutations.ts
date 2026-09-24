@@ -147,6 +147,23 @@ export function useCreateAppointment() {
         tenantId,
       );
     },
+    // ЗАПИСЬ ВСТАЁТ НА СЕТКУ В МОМЕНТ ТАПА (владелец 2026-09-24: «зажал,
+    // выбираю — и оно должно сразу ставиться, а ставится спустя 10 секунд»).
+    // До ответа сервера шли квота месяца, вставка и перечитывание списка —
+    // три поездки подряд. Теперь список на экране получает запись сразу, как
+    // у переноса (`useUpdateAppointment`); отказ сервера её убирает.
+    onMutate: async (input) => {
+      const key = appointmentsQueryKey(tenantId, role);
+      await qc.cancelQueries({ queryKey: key });
+      qc.setQueryData<Appointment[]>(key, (cur) =>
+        cur && !cur.some((a) => a.id === input.id) ? [...cur, input] : cur,
+      );
+    },
+    onError: (_err, input) => {
+      qc.setQueryData<Appointment[]>(appointmentsQueryKey(tenantId, role), (cur) =>
+        cur?.filter((a) => a.id !== input.id),
+      );
+    },
     onSuccess: (_data, input) => {
       for (const key of invalidateKeys()) qc.invalidateQueries({ queryKey: key });
       // Метка дня → метка клиента: рабочая запись в помеченный день
