@@ -27,6 +27,7 @@ import {
   rowsThatFit,
 } from "@/features/calendar/block-geometry";
 import { BLOCK_TEXT, fillRgba } from "@/components/ui/color-contrast";
+import { BLOCK_GLASS } from "@/components/ui/RecordMark";
 import { blockPropsEqual } from "@/features/calendar/grid-memo";
 import {
   dayShort,
@@ -47,14 +48,8 @@ import {
 const EDGE_H = 16;
 /** Зона у края экрана, где перетаскивание уходит в соседнюю неделю. */
 const EDGE_PAGE = 28;
-/** Блик плотного блока: высота плёнки от верха и её белизна. ВОСЕМЬ ТОНКИХ
- *  ПЛЁНОК ВМЕСТО ТРЁХ (24.09): три плёнки по 5–7 % давали на широкой
- *  карточке Дня три заметные полосы — ровно по строкам имени, времени и
- *  услуги. Восемь по 2.3 % до той же глубины 52 % дают ту же силу блика
- *  сверху (≈17 %), но ступень в 2.3 % глаз уже не видит — перелив плавный. */
-const GLASS: readonly (readonly [`${number}%`, number])[] = [
-  6.5, 13, 19.5, 26, 32.5, 39, 45.5, 52,
-].map((h) => [`${h}%` as const, 0.023] as const);
+/** Блик — общий со знаком записи в настройках (`BLOCK_GLASS`). */
+const GLASS = BLOCK_GLASS;
 
 // `memo` со сравнением размещения по содержимому (`blockPropsEqual`): перенос
 // одной записи пересоздаёт размещения всей колонки, а перерисовать надо только
