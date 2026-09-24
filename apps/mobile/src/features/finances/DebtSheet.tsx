@@ -118,6 +118,8 @@ export function DebtSheet({
     destroy,
     leaveForClient,
     runAfterExit,
+    guardedClose,
+    askingClose,
   } = useDebtDraft({
     visible,
     debt,
@@ -135,8 +137,8 @@ export function DebtSheet({
   return (
     <BottomSheet
       padded={false}
-      visible={visible && !doorway.parked}
-      onClose={onClose}
+      visible={visible && !doorway.parked && !askingClose}
+      onClose={guardedClose}
       onExited={runAfterExit}
       title={isEdit ? "Долг" : "Новый долг"}
       subtitle={teamName ?? "Компания"}

@@ -6,7 +6,8 @@ import { parseMoneyInputToCents } from "@babun/shared/common/utils/money";
 import { useToast } from "@/components/ui/Toast";
 import { formatHM } from "@/features/appointments/helpers";
 import { takeCreatedClient } from "@/features/appointments/pending-client";
-import { confirmThen } from "@/lib/confirm";
+import { confirmAction, confirmThen } from "@/lib/confirm";
+import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
 import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useIsOnline } from "@babun/shared/sync";
@@ -70,6 +71,10 @@ export function useDebtDraft({
    *  — иначе набранные сумма и заметка пропали бы по дороге. */
   const wentForClient = useRef(false);
   const keepDraft = useRef(false);
+  /** Снимок черновика при открытии: по нему решается, спросить ли перед
+   *  закрытием свайпом (прогон финансов 2026-09-24 — €44 пропали молча). */
+  const initialKey = useRef<string | null>(null);
+  const [askingClose, setAskingClose] = useState(false);
 
   const { clients, statsById, recentIds } = useClientChoice();
   const client = useMemo(
@@ -99,6 +104,15 @@ export function useDebtDraft({
     setNote(debt?.note ?? "");
     setReceiptUrl(debt?.receipt_url ?? null);
     setBusy(false);
+    initialKey.current = draftKey({
+      direction: debt?.direction ?? initialDirection,
+      counterparty: debt?.counterparty ?? "",
+      clientId: debt?.client_id ?? null,
+      amount: debt ? String(debt.amount) : "",
+      categoryId: debt?.category_id ?? null,
+      note: debt?.note ?? "",
+      receiptUrl: debt?.receipt_url ?? null,
+    });
   }, [visible, debt, initialDirection]);
 
   // ВОЗВРАЩЕНИЕ ИЗ КАРТОЧКИ НОВОГО КЛИЕНТА. Карточка кладёт id в ящик и уходит
@@ -222,6 +236,36 @@ export function useDebtDraft({
     onClose();
   };
 
+  // НАБРАННОЕ НЕ ТЕРЯЕТСЯ МОЛЧА — тот же закон, что у формы операции
+  // (`operation-dirty.ts`): есть что терять — лист уезжает и спрашивает;
+  // «Отмена» возвращает его со всем набранным.
+  const dirty =
+    initialKey.current !== null
+    && draftKey({ direction, counterparty, clientId, amount, categoryId, note, receiptUrl })
+      !== initialKey.current;
+  const guardedClose = () => {
+    if (busy) return;
+    if (!dirty) {
+      onClose();
+      return;
+    }
+    afterExit.current = () => {
+      void confirmAction("Закрыть без сохранения?", {
+        message: "Набранное в долге не сохранится.",
+        confirmLabel: "Закрыть",
+        destructive: true,
+      }).then((ok) => {
+        if (ok) {
+          setAskingClose(false);
+          onClose();
+          return;
+        }
+        setTimeout(() => setAskingClose(false), SHEET_EXIT_MS + 350);
+      });
+    };
+    setAskingClose(true);
+  };
+
   const runAfterExit = () => {
     const run = afterExit.current;
     afterExit.current = null;
@@ -266,5 +310,31 @@ export function useDebtDraft({
     leaveForClient,
     /** Что отложено до полного ухода листа — зовётся из `onExited`. */
     runAfterExit,
+    /** Закрытие свайпом/скримом с вопросом, если есть что терять. */
+    guardedClose,
+    /** Лист уехал на время вопроса: `visible && !askingClose`. */
+    askingClose,
   };
+}
+
+/** Снимок полей, которые человек набирает руками (дата и время — подстановки
+ *  формы, в снимок не входят). Пробелы по краям не считаются вводом. */
+function draftKey(f: {
+  direction: string;
+  counterparty: string;
+  clientId: string | null;
+  amount: string;
+  categoryId: string | null;
+  note: string;
+  receiptUrl: string | null;
+}): string {
+  return JSON.stringify([
+    f.direction,
+    f.counterparty.trim(),
+    f.clientId,
+    f.amount.trim(),
+    f.categoryId,
+    f.note.trim(),
+    f.receiptUrl,
+  ]);
 }
