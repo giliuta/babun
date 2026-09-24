@@ -128,14 +128,16 @@ export default function BookingRecordSettingsScreen() {
 
   const blocksSub =
     blocks.length === BOOKING_BLOCKS.length
-      ? "все блоки"
+      ? "Все блоки"
       : BOOKING_BLOCKS.filter((b) => blocks.includes(b.id))
           .map((b) => b.label)
-          .join(" · ") || "ни одного";
+          .join(" · ") || "Ни одного";
 
   return (
     <Screen>
-      <ScreenHeader title="Запись" />
+      {/* Заголовок = слово двери: развилка «Запись» уже называется «Запись»,
+          и два экрана подряд под одним именем путали, где ты. */}
+      <ScreenHeader title="Страница записи" />
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* ЛЕГЕНДА — НАСТОЯЩИЕ БЛОКИ КАЛЕНДАРЯ: та же плотная заливка, тот же
             контур и радиус (общий `RecordMark`), поэтому разойтись с сеткой они

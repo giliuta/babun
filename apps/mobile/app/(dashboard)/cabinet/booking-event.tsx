@@ -38,7 +38,9 @@ export default function BookingEventSettingsScreen() {
     ? "Загрузка…"
     : live.length === 0
       ? "Типов пока нет"
-      : `${live.length} в форме${hidden > 0 ? `, ${hidden} скрыто` : ""}`;
+      : // Те же типы стоят в «Быстром событии» (долгое нажатие по
+        // свободному месту календаря) — подпись говорит, где они живут.
+        `${live.length} · в форме и быстром событии${hidden > 0 ? `, ${hidden} скрыто` : ""}`;
 
   const blocks = useBookingBlocks();
   const blocksDesc =
@@ -53,7 +55,8 @@ export default function BookingEventSettingsScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Событие" />
+      {/* Заголовок = слово двери развилки «Запись». */}
+      <ScreenHeader title="Страница события" />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <SectionCard title="Форма события">
           {/* Тип называет событие, красит его в календаре и подсказывает
