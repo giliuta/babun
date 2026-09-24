@@ -12,7 +12,8 @@ import { haptics } from "@/lib/haptics";
 import { notify } from "@/lib/notify";
 import { useIsOnline } from "@babun/shared/sync";
 import { useFinanceCategories } from "./queries";
-import { pickableCategories } from "./category-asks";
+import { categoryInTeam, pickableCategories } from "./category-asks";
+import { useTeams } from "@/features/reference/queries";
 import { useClientChoice } from "./use-client-choice";
 import { useDeleteDebt, useInsertDebt, useUpdateDebt } from "./debts-queries";
 import { useReceiptSession } from "./receipt-upload";
@@ -62,6 +63,11 @@ export function useDebtDraft({
   // колонки часа нет, и подставлять выдуманный нельзя.
   const [time, setTime] = useState<string | null>(() => formatHM(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  // КОМАНДА ДОЛГА (владелец 2026-09-24: «всё отдельно под каждую команду»;
+  // долг без команды сервер не примет). Своя у долга, а не «выбранная сейчас
+  // на странице»: правка долга из общего вида раньше слала `team_id: null` и
+  // снимала с долга команду.
+  const [pickedTeamId, setPickedTeamId] = useState<string | null>(null);
   const [note, setNote] = useState("");
   // Документ под долгом — тот же приватный бакет чеков, что у операции.
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -90,6 +96,9 @@ export function useDebtDraft({
     [clients, clientId],
   );
   const categoriesQuery = useFinanceCategories();
+  const teams = useTeams().data ?? [];
+  // Одна команда — вопроса нет, она и есть команда долга.
+  const debtTeamId = pickedTeamId ?? (teams.length === 1 ? teams[0].id : null);
   const insert = useInsertDebt();
   const update = useUpdateDebt();
   const remove = useDeleteDebt();
@@ -109,6 +118,7 @@ export function useDebtDraft({
     setDate(debt?.occurred_on ?? todayYmd());
     setTime(debt ? debt.occurred_time : formatHM(new Date()));
     setCategoryId(debt?.category_id ?? null);
+    setPickedTeamId(debt?.team_id ?? teamId ?? null);
     setNote(debt?.note ?? "");
     setReceiptUrl(debt?.receipt_url ?? null);
     setBusy(false);
@@ -121,6 +131,9 @@ export function useDebtDraft({
       note: debt?.note ?? "",
       receiptUrl: debt?.receipt_url ?? null,
     });
+    // Команду страницы берём только при открытии — смена чипа под шторкой не
+    // должна перекидывать набранный долг.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, debt, initialDirection]);
 
   // ВОЗВРАЩЕНИЕ ИЗ КАРТОЧКИ НОВОГО КЛИЕНТА. Карточка кладёт id в ящик и уходит
@@ -145,9 +158,14 @@ export function useDebtDraft({
   // 2026-09-10): в списке поставщиков и займов «Бензину» делать нечего.
   // И они у команды долга (владелец 2026-09-24): чужих команд в выборе нет.
   const cats = useMemo(
-    () => pickableCategories(categoriesQuery.data ?? [], "debt", categoryId, teamId ?? null),
-    [categoriesQuery.data, categoryId, teamId],
+    () => pickableCategories(categoriesQuery.data ?? [], "debt", categoryId, debtTeamId),
+    [categoriesQuery.data, categoryId, debtTeamId],
   );
+  // Сменили команду — категория переходит на такую же у новой или снимается.
+  useEffect(() => {
+    if (!debtTeamId) return;
+    setCategoryId((current) => categoryInTeam(categoriesQuery.data ?? [], current, debtTeamId));
+  }, [debtTeamId, categoriesQuery.data]);
   const category = cats.find((c) => c.id === categoryId);
 
   // Остаток по СОХРАНЁННОМУ долгу, а не по тому, что сейчас в поле: платят по
@@ -160,15 +178,18 @@ export function useDebtDraft({
   // из карточки СНИМАЕТСЯ в долг, а не читается из неё каждый раз.
   const who = (client?.full_name || counterparty).trim();
   const named = who.length > 0;
-  const canSave = online && !busy && named && cents != null && cents > 0;
+  const canSave =
+    online && !busy && !!debtTeamId && named && cents != null && cents > 0;
 
   const reason = !online
     ? { text: OFFLINE, error: true }
-    : !named
-      ? { text: "Выберите клиента", error: false }
-      : cents == null || cents <= 0
-        ? { text: "Введите сумму долга", error: false }
-        : null;
+    : !debtTeamId
+      ? { text: "Выберите команду", error: false }
+      : !named
+        ? { text: "Выберите клиента", error: false }
+        : cents == null || cents <= 0
+          ? { text: "Введите сумму долга", error: false }
+          : null;
 
   // Синхронный засов: `busy` включается только к следующему кадру, и
   // двойной тап успевал записать два одинаковых долга (аудит 2026-09-24) —
@@ -189,7 +210,7 @@ export function useDebtDraft({
         category_id: categoryId,
         note: note.trim() || null,
         receipt_url: receiptUrl,
-        team_id: teamId ?? null,
+        team_id: debtTeamId,
         business_today: todayYmd(),
       };
       if (isEdit && debt) {
@@ -308,6 +329,9 @@ export function useDebtDraft({
     setCategoryId,
     category,
     cats,
+    teams,
+    debtTeamId,
+    setDebtTeamId: setPickedTeamId,
     note,
     setNote,
     receiptUrl,

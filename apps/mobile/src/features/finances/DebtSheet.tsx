@@ -29,6 +29,7 @@ import { haptics } from "@/lib/haptics";
 import { useThemeColors } from "@/theme/colors";
 import { VIEW_ONLY_REASON } from "./finance-page-access";
 import { useDebtDraft } from "./use-debt-draft";
+import { TeamChips } from "./account-editor/TeamChips";
 
 // ФОРМА ДОЛГА — ТЕ ЖЕ БЛОКИ, ЧТО У ОПЕРАЦИИ (владелец 2026-09-10: «почему,
 // когда я нажимаю „Добавить долг“, открывается форма записи? Там должна
@@ -103,6 +104,9 @@ export function DebtSheet({
     setCategoryId,
     category,
     cats,
+    teams,
+    debtTeamId,
+    setDebtTeamId,
     note,
     setNote,
     receiptUrl,
@@ -142,7 +146,9 @@ export function DebtSheet({
       onClose={() => guardedClose()}
       onExited={runAfterExit}
       title={isEdit ? "Долг" : "Новый долг"}
-      subtitle={teamName ?? "Компания"}
+      subtitle={
+        teams.find((team) => team.id === debtTeamId)?.name ?? teamName ?? "Компания"
+      }
       scroll
       avoidKeyboard
       maxHeightRatio={0.86}
@@ -209,6 +215,26 @@ export function DebtSheet({
             потому что у долга не было часа в базе; час завела миграция
             20260910020000, и блок стал тем же — «день · час», полоса недель и
             одни барабаны. */}
+        {/* КОМАНДА ДОЛГА (владелец 2026-09-24: «всё отдельно под каждую
+            команду»). Открыли из общего вида — долг спрашивает, чей он, теми же
+            пилюлями, что счёт; из страницы команды вопроса нет — она и есть
+            команда долга. */}
+        {teamId == null && teams.length > 1 ? (
+          <SectionCard title="Команда" dense>
+            <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+              <TeamChips
+                teams={teams}
+                selectedId={debtTeamId}
+                onSelect={(id) => {
+                  setDebtTeamId(id);
+                  haptics.tap();
+                }}
+                disabled={!canWrite}
+              />
+            </View>
+          </SectionCard>
+        ) : null}
+
         <WhenRow
           date={date}
           timeStart={time ?? formatHM(new Date())}
