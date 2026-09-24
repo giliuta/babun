@@ -30,6 +30,9 @@ import { useFinanceCategories } from "@/features/finances/queries";
 import { categoryInTeam, pickableCategories } from "@/features/finances/category-asks";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { useTeams } from "@/features/reference/queries";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { notify } from "@/lib/notify";
 import { confirmAction, confirmThen } from "@/lib/confirm";
 import {
@@ -94,6 +97,16 @@ export default function TemplatesScreen() {
     [categoriesQuery.data],
   );
   const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  // ШАБЛОНЫ — У КОМАНДЫ (владелец 2026-09-24: «всё отдельно под каждую
+  // команду»). Команда — в адресе (`?team=`), как у категорий: настройки
+  // финансов открывают список сразу на ней, лента сверху её меняет.
+  const router = useRouter();
+  const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
+  const teamId = settingsTeamId(teams, teamParam);
+  const teamTemplates = useMemo(
+    () => (teamId ? templates.filter((tpl) => tpl.brigade_id === teamId) : templates),
+    [templates, teamId],
+  );
   const accounts = useMemo(
     () => accountsQuery.data ?? [],
     [accountsQuery.data],
@@ -151,10 +164,6 @@ export default function TemplatesScreen() {
   // тогда шаблон нечем оплачивать, и сказать об этом надо до сохранения.
   const accountMismatch =
     !!accountId && !brigadeAccounts.some((a) => a.id === accountId);
-  const teamName = useMemo(
-    () => new Map(teams.map((tm) => [tm.id, tm.name])),
-    [teams],
-  );
 
   // Comma decimals («12,50» from the ru decimal-pad) must pass the same
   // normalisation as submit(), otherwise the button never enables.
@@ -206,7 +215,8 @@ export default function TemplatesScreen() {
     setKind("expense");
     setAmount("");
     setCategoryId(null);
-    setBrigadeId(null);
+    // Новый шаблон — у команды, открытой в ленте.
+    setBrigadeId(teamId);
     setAccountId(null);
     setBrigadeTouched(false);
     setAccountTouched(false);
@@ -367,7 +377,14 @@ export default function TemplatesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Шаблоны операций" />
+      <ScreenHeader title="Шаблоны операций" seam={teams.length === 0} />
+      {teams.length > 0 ? (
+        <ScopeChips
+          items={teams}
+          activeId={teamId}
+          onSelect={(id) => router.setParams({ team: id })}
+        />
+      ) : null}
       {loading ? (
         <EmptyState state="loading" fill />
       ) : loadError ? (
@@ -380,7 +397,7 @@ export default function TemplatesScreen() {
       ) : (
         <FlatList
           style={{ flex: 1 }}
-          data={templates}
+          data={teamTemplates}
           keyExtractor={(item) => item.id}
           // СТРОКА — СВОЯ КАРТОЧКА, как у категорий и счетов (`ReorderList
           // spaced`): полоса во всю ширину экрана с волосиной между строками
@@ -392,14 +409,11 @@ export default function TemplatesScreen() {
             paddingHorizontal: GUTTER,
           }}
           renderItem={({ item }) => {
-            // Подзаголовок: вид · способ · команда (команду — только когда их
-            // несколько: у одной команды это повтор в каждой строке).
+            // Подзаголовок: вид · способ. Команду называет лента сверху —
+            // в каждой строке она была бы повтором.
             const bits = [
               item.kind === "expense" ? "Расход" : "Доход",
               methodLabel(item.payment_method),
-              teams.length > 1 && item.brigade_id
-                ? teamName.get(item.brigade_id)
-                : null,
             ].filter(Boolean);
             return (
               <View

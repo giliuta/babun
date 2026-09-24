@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { settingsTeamId } from "@/features/finances/team-settings-lines";
 import { money, moneySign } from "@babun/shared/common/utils/money";
 import { useIsOnline } from "@babun/shared/sync";
 import { SHEET_EXIT_MS } from "@/components/ui/BottomSheet";
@@ -98,7 +100,10 @@ export default function AccountsScreen() {
   // ещё раз, только если адрес назвал ДРУГОЙ счёт — закрытая шторка не
   // всплывает снова от повторного рендера. `id` живёт отдельно от `open`,
   // чтобы уезжающая шторка не меняла содержимое на полпути.
-  const { edit } = useLocalSearchParams<{ edit?: string | string[] }>();
+  const { edit, team: teamParam } = useLocalSearchParams<{
+    edit?: string | string[];
+    team?: string;
+  }>();
   const editParam = accountEditParam(edit);
   // Шторка по адресу поднимается ПОСЛЕ въезда страницы: открытая в первом
   // рендере, она попадала на анимацию перехода (а из листа операции — ещё и
@@ -141,6 +146,13 @@ export default function AccountsScreen() {
     [all, teams],
   );
   const hider = useHideAccount({ accounts: all, teamById });
+  // ОДНА КОМАНДА ПО АДРЕСУ (`?team=`, владелец 2026-09-24: «настройки
+  // финансов по каждой команде»). Из «Настроек финансов» страница приходит на
+  // команде — сверху лента, ниже только её счета, и новый счёт заводится ей.
+  // Из панели «Счета» адреса нет, и страница прежняя: все команды группами.
+  const liveTeams = useMemo(() => teams.filter((team) => team.is_active), [teams]);
+  const teamId = teamParam ? settingsTeamId(liveTeams, teamParam) : null;
+  const shownGroups = teamId ? groups.filter((group) => group.key === teamId) : groups;
 
   /** Новый порядок строк группы: пишем позиции 0, 1, 2… по списку id. */
   const applyOrder = (ids: string[]) => {
@@ -189,7 +201,15 @@ export default function AccountsScreen() {
         // сюда и заходят, а не на календарь, куда примитив уводит пустую
         // историю.
         fallbackHref={financeAccountsHref() as Href}
+        seam={!teamId}
       />
+      {teamId ? (
+        <ScopeChips
+          items={liveTeams}
+          activeId={teamId}
+          onSelect={(id) => router.setParams({ team: id })}
+        />
+      ) : null}
       {!hasData && !loadError ? (
         online ? (
           <EmptyState state="loading" fill title="Загружаем счета" />
@@ -217,10 +237,10 @@ export default function AccountsScreen() {
         >
           {/* Пусто — словами, без кнопки (владелец 2026-09-15: «никаких
               кнопок внутри»). Добавить — футером, закрытые — строкой ниже. */}
-          {groups.length === 0 ? (
+          {shownGroups.length === 0 ? (
             <RowCaption text="Открытых счетов нет" />
           ) : null}
-          {groups.map((group) => (
+          {shownGroups.map((group) => (
             <View key={group.key} style={{ marginTop: 12 }}>
               {/* ПОДЫТОГ СТОИТ НАД ГРУППОЙ, А НЕ ПОД НЕЙ: это заголовок
                   раздела с числом, как везде в продукте. У компании с одной
@@ -291,7 +311,7 @@ export default function AccountsScreen() {
       <AccountEditorSheet
         visible={editor.open}
         accountId={editor.id}
-        presetTeamId={presetTeamFor(teams)}
+        presetTeamId={teamId ?? presetTeamFor(teams)}
         onClose={() => setEditor((current) => ({ ...current, open: false }))}
       />
       {hider.sheet}

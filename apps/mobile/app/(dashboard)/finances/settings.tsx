@@ -1,5 +1,5 @@
 import { ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import {
   Building2,
   FileText,
@@ -19,15 +19,26 @@ import { SwitchRow } from "@/components/ui/SwitchRow";
 import { useFeatureOn, useSetCompanyFeature } from "@/features/settings/company-features";
 import { SETTINGS_TILE } from "@/components/ui/settings-tiles";
 import {
+  useSaveVatSettings,
+  useTeamVatOverrides,
   useVatSettings,
   vatSummaryLine,
 } from "@/features/finances/vat-queries";
+import { effectiveVatSettings } from "@babun/shared/local/finance/vat";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useTeams } from "@/features/reference/queries";
+import { useFinanceTemplates } from "@/features/finances/templates-queries";
+import {
+  settingsTeamId,
+  teamCategoriesLine,
+  teamTemplatesLine,
+} from "@/features/finances/team-settings-lines";
+import { notify } from "@/lib/notify";
 import { useAccountsWithBalances } from "@/features/finances/accounts";
 import { accountsDoorLine } from "@/features/finances/accounts-sections";
 import { useCurrentRole, useTenant, type Tenant } from "@/features/settings/tenant";
 import { financeSettingsRows } from "@/features/finances/settings-rows";
 import { LedgerExportRow } from "@/features/finances/LedgerExportRow";
-import { categoriesDoorLine } from "@/features/finances/category-asks";
 import { useFinanceCategories } from "@/features/finances/queries";
 import { formatInvoiceNumber } from "@/features/invoices/numbering";
 import { useNextInvoiceNumber } from "@/features/invoices/queries";
@@ -60,65 +71,114 @@ function invoiceLine(tenant: Tenant | undefined, nextNumber?: string | null): st
   return `${sample} · ${lines} · ${due}`;
 }
 
-// НАСТРОЙКИ ФИНАНСОВ — СТРАНИЦА, А НЕ СПИСОК В ALERT.
+// НАСТРОЙКИ ФИНАНСОВ — ПО КОМАНДЕ (владелец 2026-09-24: «надо сделать
+// качественные настройки в финансах по каждой команде»; «у нас всё отдельно
+// под каждую команду»).
 //
-// Было: шестерёнка открывала системный Alert с шестью строками. Это против
+// Устроено как настройки календаря: сверху лента команд, под ней — деньги
+// ВЫБРАННОЙ команды (её счета, её категории и бюджеты, её шаблоны, её VAT).
+// Ниже — то, что владелец оставил единым на компанию: бланк счёта клиенту,
+// реквизиты (нумерация документов одна на компанию) и выгрузка бухгалтеру.
+// Последним — функции: выключенное пропадает у всех, вместе со своими
+// дверями.
+//
+// VAT — ФУНКЦИЯ, А НЕ ДВЕРЬ (владелец 2026-09-24: «VAT уже там по идее не
+// нужен»). Не работаешь с налогом — один тумблер в «Функциях», и ни одной
+// строки про VAT на странице нет. Работаешь — у каждой команды свой режим и
+// ставка в её блоке денег.
+//
+// Было: шестерёнка открывала системный Alert с шестью строками — против
 // закона продукта («настройка — всегда полноценная страница, лист — только
-// действие»), и вдобавок Alert не умеет ни подписей, ни текущих значений:
-// нельзя было увидеть, включён ли НДС, не проваливаясь внутрь.
+// действие»).
 
 export default function FinanceSettingsScreen() {
   const router = useRouter();
   const vat = useVatSettings();
+  const saveVat = useSaveVatSettings();
+  const vatOverrides = useTeamVatOverrides();
   const tenant = useTenant();
   const nextNumber = useNextInvoiceNumber(new Date().getFullYear());
-  // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
-  // общий со страницей «Счета», так что дверь и страница не назовут разные
-  // числа.
   // СТРАНИЦА ОТКРЫТА ВСЕМ, СТРОКИ — ПО ДОСТУПУ (владелец 20.09). Правило и
   // его причины — `features/finances/settings-rows.ts`.
   const debtsOn = useFeatureOn("debts");
   const accountsOn = useFeatureOn("accounts");
   const documentsOn = useFeatureOn("documents");
+  const vatOn = !!vat.data && vat.data.mode !== "off";
   const setFeature = useSetCompanyFeature();
   // Выключенная функция уносит и свою дверь в настройки.
   const base = financeSettingsRows(useCurrentRole().data);
   const rows = {
     ...base,
     accounts: base.accounts && accountsOn,
+    vat: base.vat && vatOn,
     invoices: base.invoices && documentsOn,
     requisites: base.requisites && documentsOn,
   };
+
+  const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
+  const teams = useTeams().data ?? [];
+  const teamId = settingsTeamId(teams, teamParam);
+  const withTeam = (path: string, key = "team") =>
+    (teamId ? `${path}?${key}=${encodeURIComponent(teamId)}` : path) as Href;
+
+  // Полный список ради двух чисел — сколько счетов открыто и закрыто. Кэш
+  // общий со страницей «Счета», так что дверь и страница не назовут разные
+  // числа.
   const accounts = useAccountsWithBalances({ includeInactive: true });
+  const teamAccounts = (accounts.data ?? []).filter((a) => a.brigade_id === teamId);
   const categoriesQuery = useFinanceCategories();
-  const openCount = accounts.data?.filter((a) => a.is_active).length;
-  const closedCount = accounts.data?.filter((a) => !a.is_active).length;
+  const templatesQuery = useFinanceTemplates();
+  const teamTemplates = (templatesQuery.data ?? []).filter(
+    (tpl) => tpl.brigade_id === teamId,
+  ).length;
+  const teamVat = effectiveVatSettings(
+    vat.data,
+    (vatOverrides.data ?? []).find((o) => o.teamId === teamId) ?? null,
+    null,
+  );
+
+  const teamGroup = rows.accounts || rows.categories || rows.templates || rows.vat;
+  const companyGroup = rows.invoices || rows.requisites || rows.templates;
 
   return (
-    <Screen>
-      <ScreenHeader title="Настройки финансов" />
+    <Screen edges={["top"]}>
+      {/* Шов под шапкой один — его несёт лента команд. */}
+      <ScreenHeader title="Настройки финансов" seam={teams.length === 0} />
+      {/* КОМАНДЫ СВЕРХУ, КАК В НАСТРОЙКАХ КАЛЕНДАРЯ: выбрана ровно одна —
+          деньги правятся у конкретной команды. */}
+      {rows.any && teams.length > 0 ? (
+        <ScopeChips
+          items={teams}
+          activeId={teamId}
+          onSelect={(id) => router.setParams({ team: id })}
+        />
+      ) : null}
       {rows.any ? (
-        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
-          {rows.moneyGroup ? (
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 32 }}>
+          {teamGroup && teamId ? (
             <>
-              <SectionEyebrow>Деньги</SectionEyebrow>
+              <SectionEyebrow>Деньги команды</SectionEyebrow>
               <SectionCard>
                 {/* «СЧЕТА» — ТА ЖЕ СТРАНИЦА, ЧТО ЗА ПОЛЗУНКАМИ ПАНЕЛИ (владелец
-                    2026-09-15: «эту настройку поставь в шестерёнку, и там счета,
-                    чтоб была одна и та же страница»). Остатки, порядок, скрытие,
-                    «Добавить счёт» и закрытые счета — всё там; двух разных
-                    страниц счетов у продукта нет.
-                    Соседство с «Счетами клиентам» ниже различают подписи: здесь
-                    числа счетов, там номер следующего инвойса.
-                    РАЗДЕЛИТЕЛЬ ПРИНАДЛЕЖИТ СВОЕЙ СТРОКЕ и живёт под её же
-                    условием: иначе погашенная строка оставляет висеть волосинку. */}
+                    2026-09-15): остатки, порядок, скрытие, «Добавить счёт» и
+                    закрытые счета — всё там; здесь она открывается на этой
+                    команде. РАЗДЕЛИТЕЛЬ ПРИНАДЛЕЖИТ СВОЕЙ СТРОКЕ и живёт под её
+                    же условием: иначе погашенная строка оставляет висеть
+                    волосинку. */}
                 {rows.accounts ? (
                   <SettingsRow
                     tile={SETTINGS_TILE.blue}
                     icon={Wallet}
                     title="Счета"
-                    sub={accountsDoorLine(openCount, closedCount)}
-                    onPress={() => router.push("/accounts/settings")}
+                    sub={
+                      accounts.data
+                        ? accountsDoorLine(
+                            teamAccounts.filter((a) => a.is_active).length,
+                            teamAccounts.filter((a) => !a.is_active).length,
+                          )
+                        : accountsDoorLine(undefined, undefined)
+                    }
+                    onPress={() => router.push(withTeam("/accounts/settings"))}
                   />
                 ) : null}
                 {rows.categories ? (
@@ -127,9 +187,9 @@ export default function FinanceSettingsScreen() {
                     <SettingsRow
                       tile={SETTINGS_TILE.purple}
                       icon={Tags}
-                      title="Категории операций"
-                      sub={categoriesDoorLine(categoriesQuery.data ?? [])}
-                      onPress={() => router.push("/finances/categories")}
+                      title="Категории и бюджеты"
+                      sub={teamCategoriesLine(categoriesQuery.data ?? [], teamId)}
+                      onPress={() => router.push(withTeam("/finances/categories"))}
                     />
                   </>
                 ) : null}
@@ -140,69 +200,64 @@ export default function FinanceSettingsScreen() {
                       tile={SETTINGS_TILE.teal}
                       icon={Receipt}
                       title="Шаблоны операций"
-                      sub="Повторяющиеся расходы в один тап"
-                      onPress={() => router.push("/finances/templates")}
+                      sub={teamTemplatesLine(teamTemplates)}
+                      onPress={() => router.push(withTeam("/finances/templates"))}
                     />
                   </>
                 ) : null}
-                {rows.templates ? (
+                {rows.vat ? (
                   <>
-                    <Divider inset={56} />
-                    <LedgerExportRow />
+                    {rows.accounts || rows.categories || rows.templates ? (
+                      <Divider inset={56} />
+                    ) : null}
+                    <SettingsRow
+                      tile={SETTINGS_TILE.red}
+                      icon={Percent}
+                      title="VAT"
+                      sub={vatSummaryLine(teamVat)}
+                      onPress={() => router.push(withTeam("/finances/vat-team", "teamId"))}
+                    />
                   </>
                 ) : null}
               </SectionCard>
             </>
           ) : null}
 
-          {rows.documentsGroup ? (
+          {companyGroup ? (
             <>
-              <SectionEyebrow>Документы</SectionEyebrow>
+              {/* ЕДИНОЕ НА КОМПАНИЮ (владелец 2026-09-24): реквизиты и
+                  нумерация документов одни на все команды — у налоговой один
+                  продавец и одна нумерация. Выгрузка бухгалтеру — тоже по всей
+                  компании. */}
+              <SectionEyebrow>Вся компания</SectionEyebrow>
               <SectionCard>
-                {rows.vat ? (
-                  <SettingsRow
-                    tile={SETTINGS_TILE.red}
-                    icon={Percent}
-                    // ПРОСТО «НДС»: страны на этой странице нет и не было — она
-                    // живёт в «Реквизитах компании» (`cabinet/business.tsx`),
-                    // рядом с адресом и телефоном. Дверь обещала настройку,
-                    // которой за ней нет, и человек шёл искать страну туда, где
-                    // её никогда не стояло.
-                    title="VAT"
-                    sub={vatSummaryLine(vat.data)}
-                    onPress={() => router.push("/finances/vat")}
-                  />
-                ) : null}
-                {/* Списка счетов здесь нет: его открывает плитка «Документы» на
-                    «Финансах». Эта дверь — в НАСТРОЙКИ документа: что подставлять
-                    в новый счёт и какой у него номер. Оба вопроса про одну бумагу
-                    и живут на одной странице. */}
                 {rows.invoices ? (
-                  <>
-                    {rows.vat ? <Divider inset={56} /> : null}
-                    <SettingsRow
-                      tile={SETTINGS_TILE.blue}
-                      icon={FileText}
-                      title="Счета клиентам"
-                      sub={invoiceLine(tenant.data, nextNumber.data)}
-                      onPress={() => router.push("/finances/invoices")}
-                    />
-                  </>
+                  <SettingsRow
+                    tile={SETTINGS_TILE.blue}
+                    icon={FileText}
+                    title="Счета клиентам"
+                    sub={invoiceLine(tenant.data, nextNumber.data)}
+                    onPress={() => router.push("/finances/invoices")}
+                  />
                 ) : null}
                 {rows.requisites ? (
                   <>
-                    {rows.vat || rows.invoices ? <Divider inset={56} /> : null}
+                    {rows.invoices ? <Divider inset={56} /> : null}
                     <SettingsRow
-                      // Цветная плитка, как у соседей (прогон 2026-09-23):
-                      // голый глиф в ряду плиток читался как строка другого
-                      // рода. Зелёный — «наружу и вовне»: этим подписаны
-                      // документы клиенту.
+                      // Цветная плитка, как у соседей (прогон 2026-09-23): голый
+                      // глиф в ряду плиток читался как строка другого рода.
                       tile={SETTINGS_TILE.green}
                       icon={Building2}
                       title="Реквизиты"
                       sub="Чем подписаны чеки и инвойсы"
                       onPress={() => router.push("/finances/requisites")}
                     />
+                  </>
+                ) : null}
+                {rows.templates ? (
+                  <>
+                    {rows.invoices || rows.requisites ? <Divider inset={56} /> : null}
+                    <LedgerExportRow />
                   </>
                 ) : null}
               </SectionCard>
@@ -213,7 +268,7 @@ export default function FinanceSettingsScreen() {
               будет ни у кого, даже у владельца»). Каждый тумблер — своя
               карточка, как в настройках календаря. Данные выключенной функции
               не стираются. */}
-          {rows.moneyGroup ? (
+          {base.moneyGroup ? (
             <>
               <SectionEyebrow>Функции</SectionEyebrow>
               <SectionCard>
@@ -237,9 +292,28 @@ export default function FinanceSettingsScreen() {
                   onChange={(v) => setFeature.mutate({ key: "documents", on: v })}
                 />
               </SectionCard>
+              {/* VAT — тот же выключатель, что стоял на его странице
+                  («Работаем с VAT»): выключен — налог нигде не спрашивается и
+                  не считается; включён — режим и ставка у каждой команды. */}
+              {vat.data ? (
+                <SectionCard>
+                  <SwitchRow
+                    label="VAT"
+                    value={vatOn}
+                    onChange={(on) =>
+                      saveVat.mutate(
+                        { mode: on ? "inclusive" : "off" },
+                        {
+                          onError: (e) =>
+                            notify("Не удалось сохранить", (e as Error).message),
+                        },
+                      )
+                    }
+                  />
+                </SectionCard>
+              ) : null}
             </>
           ) : null}
-
         </ScrollView>
       ) : (
         // Строк не открыли ни одной: страница остаётся собой, а тело

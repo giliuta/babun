@@ -11,7 +11,6 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { OptionSheet, type SheetOption } from "@/components/ui/OptionSheet";
 import { ValueRow } from "@/components/ui/ValueRow";
-import { SwitchRow } from "@/components/ui/SwitchRow";
 import type { VatMode } from "@babun/shared/local/finance/vat";
 import {
   type TeamVatOverride,
@@ -34,12 +33,16 @@ import { useThemeColors } from "@/theme/colors";
 // у режима три смысла, Switch физически умеет два.
 //
 // Приоритет действующего НДС: счёт → команда → компания
-// (effectiveVatSettings) — про это говорит футнот, чтобы «поставил команде
-// „плюсом“, а операция считает по-старому» не выглядело поломкой.
+// (effectiveVatSettings).
+//
+// ТЕПЕРЬ ЭТО ЕДИНСТВЕННАЯ СТРАНИЦА VAT (владелец 2026-09-24: «всё отдельно
+// под каждую команду»; «VAT там по идее не нужен»). У компании остался только
+// выключатель в «Функциях» настроек финансов, а режим и ставка — у команды.
+// «Как у компании» больше не показывается: значения компании видны только
+// как ТЕКУЩИЕ у команды, которая их ещё не меняла, и первая правка
+// записывает их команде целиком.
 
-/** «Как у компании» — обычная опция того же списка: единственное место,
- *  откуда в переопределение уходит null. */
-type ModeChoice = VatMode | "inherit";
+type ModeChoice = VatMode;
 
 export default function TeamVatSettingsScreen() {
   const t = useThemeColors();
@@ -51,7 +54,8 @@ export default function TeamVatSettingsScreen() {
   const teamsQuery = useTeams();
 
   const override = (overrides.data ?? []).find((o) => o.teamId === teamId);
-  const ownRate = override?.rate ?? null;
+  // Ставка команды — своя или, пока её не меняли, та, что действует сейчас.
+  const ownRate = override?.rate ?? settings.data?.rate ?? null;
 
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [rateDraft, setRateDraft] = useState("");
@@ -117,8 +121,10 @@ export default function TeamVatSettingsScreen() {
       setRateDraft(ownRate == null ? "" : String(ownRate));
       return;
     }
-    if (next === ownRate) return;
-    commit({ rate: next });
+    if (next === ownRate && override?.rate != null) return;
+    // Ставка команды пишется вместе с её режимом — команда, которую ещё не
+    // настраивали, получает свои значения целиком.
+    commit({ rate: next, mode: override?.mode ?? v.mode });
   };
 
   // Порядок — рабочие ключи первыми, умолчание последним с видимым значением
@@ -140,12 +146,8 @@ export default function TeamVatSettingsScreen() {
       label: VAT_MODE_LABELS.off,
       hint: "Клавиш VAT в операциях команды нет",
     },
-    {
-      value: "inherit",
-      label: "Как у компании",
-      hint: VAT_MODE_LABELS[v.mode],
-    },
   ];
+  const teamMode: VatMode = override?.mode ?? v.mode;
 
   return (
     <Screen>
@@ -163,8 +165,7 @@ export default function TeamVatSettingsScreen() {
               color: t.warning,
             }}
           >
-            VAT выключен у всей компании — настройка команды заработает после
-            включения на странице «VAT».
+            VAT выключен — включите его в «Настройках финансов», в «Функциях».
           </Text>
         ) : null}
 
@@ -172,30 +173,10 @@ export default function TeamVatSettingsScreen() {
         <SectionCard>
           <ValueRow
             label="Режим"
-            value={
-              override?.mode
-                ? VAT_MODE_LABELS[override.mode]
-                : `Как у компании · ${VAT_MODE_LABELS[v.mode]}`
-            }
-            muted={!override?.mode}
+            value={VAT_MODE_LABELS[teamMode]}
             onPress={() => setModeSheetOpen(true)}
           />
-          <Divider inset={16} />
-          <SwitchRow
-            label="Своя ставка"
-            hint={
-              ownRate != null
-                ? "Действует вместо ставки компании"
-                : `Действует ставка компании — ${v.rate}%`
-            }
-            value={ownRate != null}
-            onChange={(on) =>
-              // Включение копирует ставку компании как стартовую: своей ставки
-              // «без числа» не бывает, а поле ниже сразу показывает, что менять.
-              commit({ rate: on ? v.rate : null })
-            }
-          />
-          {ownRate == null ? null : (
+          {teamMode === "off" ? null : (
             <>
               <Divider inset={16} />
               <View
@@ -203,7 +184,7 @@ export default function TeamVatSettingsScreen() {
                 style={{ gap: 12 }}
               >
                 <Text className="flex-1 text-[15px]" style={{ color: t.ink }}>
-                  Ставка команды
+                  Ставка
                 </Text>
                 <TextInput
                   value={rateDraft}
@@ -236,10 +217,12 @@ export default function TeamVatSettingsScreen() {
         visible={modeSheetOpen}
         title="Режим VAT"
         options={modeOptions}
-        value={override?.mode ?? "inherit"}
+        value={teamMode}
         onPick={(choice) => {
           haptics.tap();
-          commit({ mode: choice === "inherit" ? null : choice });
+          // Режим пишется команде вместе с действующей ставкой: команда,
+          // которую ещё не настраивали, получает свои значения целиком.
+          commit({ mode: choice, rate: override?.rate ?? v.rate });
         }}
         onClose={() => setModeSheetOpen(false)}
       />

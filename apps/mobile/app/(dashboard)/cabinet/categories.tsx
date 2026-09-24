@@ -54,7 +54,9 @@ import {
 import { askBudgetNotificationPermission } from "@/features/finances/budget-notify";
 import { useCategoryMonthSpend } from "@/features/finances/use-category-budget";
 import { useTeams } from "@/features/reference/queries";
-import { Chip } from "@/components/ui/Chip";
+import { ScopeChips } from "@/components/ui/ScopeChips";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { settingsTeamId } from "@/features/finances/team-settings-lines";
 
 // КАТЕГОРИИ — ПО РЕЦЕПТУ «МЕТКИ» (сведено 2026-09-10).
 //
@@ -155,12 +157,13 @@ export default function CategoriesScreen() {
   const [icon, setIcon] = useState<string | null>(null);
   const [asks, setAsks] = useState<Asks>(NO_ASKS);
   const [budgetText, setBudgetText] = useState("");
+  const router = useRouter();
   const teams = useTeams().data ?? [];
-  const [pickedTeamId, setPickedTeamId] = useState<string | null>(null);
-  // Выбранная команда; пока не выбирали — первая. Команда пропала (ушла в
-  // архив) — тоже первая, а не пустой список.
-  const teamId =
-    teams.find((t) => t.id === pickedTeamId)?.id ?? teams[0]?.id ?? null;
+  // КОМАНДА — В АДРЕСЕ (`?team=`): «Настройки финансов» открывают справочник
+  // сразу на своей команде, а лента меняет её, не уводя со страницы. Команды
+  // нет или она ушла в архив — первая, а не пустой список.
+  const { team: teamParam } = useLocalSearchParams<{ team?: string }>();
+  const teamId = settingsTeamId(teams, teamParam);
   const [allTeams, setAllTeams] = useState(false);
   const currency = useCurrency();
   const fmt = (n: number) => money(n, currency);
@@ -351,28 +354,15 @@ export default function CategoriesScreen() {
 
   return (
     <Screen edges={["top"]}>
-      <ScreenHeader title="Категории" />
+      <ScreenHeader title="Категории" seam={teams.length === 0} />
 
-      {/* КОМАНДЫ — пилюлями, как во всём продукте. Одна команда — выбирать
-          нечего, ряда нет. */}
-      {teams.length > 1 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0 }}
-          contentContainerStyle={{ gap: 8, paddingHorizontal: GUTTER, paddingTop: 12 }}
-        >
-          {teams.map((team) => (
-            <Chip
-              key={team.id}
-              label={team.name}
-              color={team.color ?? undefined}
-              selected={team.id === teamId}
-              radio
-              onPress={() => setPickedTeamId(team.id)}
-            />
-          ))}
-        </ScrollView>
+      {/* КОМАНДЫ — ТА ЖЕ ЛЕНТА, ЧТО В НАСТРОЙКАХ КАЛЕНДАРЯ И ФИНАНСОВ. */}
+      {teams.length > 0 ? (
+        <ScopeChips
+          items={teams}
+          activeId={teamId}
+          onSelect={(id) => router.setParams({ team: id })}
+        />
       ) : null}
 
       <SegmentedControl

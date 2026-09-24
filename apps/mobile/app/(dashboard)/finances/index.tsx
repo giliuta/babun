@@ -956,7 +956,14 @@ function FinancesContent() {
   // Настройки — ПОЛНОЦЕННАЯ СТРАНИЦА (закон продукта). Здесь был системный
   // Alert со списком: он не умеет показывать текущие значения, и «включён ли
   // НДС» приходилось выяснять, проваливаясь внутрь.
-  const openFinanceSettings = () => pushOnce("/finances/settings");
+  // Настройки открываются на команде, которую смотрят (владелец 2026-09-24:
+  // «настройки в финансах по каждой команде»).
+  const openFinanceSettings = () =>
+    pushOnce(
+      scope && scope !== NO_TEAM
+        ? `/finances/settings?team=${encodeURIComponent(scope)}`
+        : "/finances/settings",
+    );
 
   // ШАПКА — ТА ЖЕ, ЧТО У КЛИЕНТОВ: шестерёнка · поиск · аналитика.
   //
