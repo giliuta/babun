@@ -1463,39 +1463,45 @@ export type Database = {
       }
       finance_categories: {
         Row: {
-          attach: string
+          ask_client: boolean
+          ask_employee: boolean
           color: string | null
           created_at: string
           icon: string | null
           id: string
           is_system: boolean
           name: string
+          require_receipt: boolean
           retired: boolean
           slug: string
           tenant_id: string | null
           type: string
         }
         Insert: {
-          attach?: string
+          ask_client?: boolean
+          ask_employee?: boolean
           color?: string | null
           created_at?: string
           icon?: string | null
           id?: string
           is_system?: boolean
           name: string
+          require_receipt?: boolean
           retired?: boolean
           slug: string
           tenant_id?: string | null
           type: string
         }
         Update: {
-          attach?: string
+          ask_client?: boolean
+          ask_employee?: boolean
           color?: string | null
           created_at?: string
           icon?: string | null
           id?: string
           is_system?: boolean
           name?: string
+          require_receipt?: boolean
           retired?: boolean
           slug?: string
           tenant_id?: string | null

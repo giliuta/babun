@@ -8,11 +8,11 @@ import {
 } from "react-native";
 import { EyeOff, RotateCcw, Trash2 } from "lucide-react-native";
 import type {
-  CategoryAttach,
   FinanceCategory,
   FinanceCategoryKind,
 } from "@babun/shared/db/repositories/finance-categories";
-import { Chip } from "@/components/ui/Chip";
+import { SwitchRow } from "@/components/ui/SwitchRow";
+import { Divider } from "@/components/ui/Divider";
 import { FieldLabel } from "@/components/ui/Field";
 import { PRESET_COLOR_CYCLE } from "@babun/shared/common/utils/colors";
 import { Screen } from "@/components/ui/Screen";
@@ -81,20 +81,23 @@ import {
 // («Услуги» оплаты записи, «Возврат», пересчёт кассы) здесь не показываются:
 // их не выбирают руками.
 //
-// ЧТО ПРИКРЕПЛЯЕТ (владелец 2026-09-24: «при добавлении категории надо
-// понимать, что она должна делать — зарплата смотрит сотрудников, другая
-// прикрепляет клиента»). Выбор — в создании и правке, и форма операции
-// показывает ровно этот блок.
+// ЧТО СПРАШИВАТЬ В ОПЕРАЦИИ (владелец 2026-09-24: «при добавлении категории
+// надо понимать, что она должна делать — зарплата смотрит сотрудников, другая
+// прикрепляет клиента»; «продумай, что ещё можно прикрепить»). Три
+// независимых тумблера, а не выбор одного из трёх: у чаевых и клиент, и
+// мастер; топливу нужен чек. Форма операции показывает ровно эти блоки.
 //
 // УДАЛИТЬ МОЖНО ТОЛЬКО НЕИСПОЛЬЗОВАННУЮ. По категории с операциями сервер
 // удаление отбивает (история не теряет подписей), и экран предлагает то, что
 // можно, — скрыть её из выбора.
 
-const ATTACH_OPTIONS: { value: CategoryAttach; label: string }[] = [
-  { value: "none", label: "Ничего" },
-  { value: "employee", label: "Сотрудника" },
-  { value: "client", label: "Клиента" },
-];
+interface Asks {
+  employee: boolean;
+  client: boolean;
+  receipt: boolean;
+}
+
+const NO_ASKS: Asks = { employee: false, client: false, receipt: false };
 
 // Palette unified on the shared PRESET_COLORS (see ColorPicker); the old
 // tailwind-hued SWATCHES are gone — default stays индиго.
@@ -123,7 +126,7 @@ export default function CategoriesScreen() {
   const [name, setName] = useState("");
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [icon, setIcon] = useState<string | null>(null);
-  const [attach, setAttach] = useState<CategoryAttach>("none");
+  const [asks, setAsks] = useState<Asks>(NO_ASKS);
 
   const filtered = useMemo(
     // Скрытые в конец, дальше — ПОРЯДОК ТЕНАНТА (перетаскивание), дальше имя.
@@ -148,7 +151,7 @@ export default function CategoriesScreen() {
     setName("");
     setColor(DEFAULT_COLOR);
     setIcon(null);
-    setAttach("none");
+    setAsks(NO_ASKS);
     setOpen(true);
   };
   // СТАНДАРТНУЮ КАТЕГОРИЮ НЕЛЬЗЯ ПЕРЕИМЕНОВАТЬ — она общая на весь продукт,
@@ -177,17 +180,23 @@ export default function CategoriesScreen() {
     setName(c.name);
     setColor(c.color ?? DEFAULT_COLOR);
     setIcon(c.icon ?? null);
-    setAttach(c.attach);
+    setAsks({ employee: c.ask_employee, client: c.ask_client, receipt: c.require_receipt });
     setOpen(true);
   };
 
   const submit = async () => {
     if (!name.trim()) return;
+    // У долга своих вопросов нет — «кто» у него отдельным блоком.
+    const asksPayload = {
+      ask_employee: attachable && asks.employee,
+      ask_client: attachable && asks.client,
+      require_receipt: attachable && asks.receipt,
+    };
     try {
       if (editing) {
         await update.mutateAsync({
           id: editing.id,
-          patch: { name: name.trim(), color, icon, attach: attachable ? attach : "none" },
+          patch: { name: name.trim(), color, icon, ...asksPayload },
         });
       } else {
         await insert.mutateAsync({
@@ -195,7 +204,7 @@ export default function CategoriesScreen() {
           type,
           color,
           icon,
-          attach: attachable ? attach : "none",
+          ...asksPayload,
         });
       }
       setName("");
@@ -363,23 +372,36 @@ export default function CategoriesScreen() {
           onIconChange={setIcon}
           autoFocus={!editing}
         />
-        {/* Та же вёрстка, что у поля «Название» над ним: подпись поля и
-            ряд выбора под ней, без своей карточки — карточка в листе
-            отступала бы от поля и читалась как отдельный блок. */}
+        {/* В ОПЕРАЦИИ СПРАШИВАТЬ — тумблеры с последствием словами: человек
+            решает по тому, что появится в форме, а не по термину. Вёрстка —
+            как у поля «Название» над ними: подпись поля и строки без своей
+            карточки, иначе лист отступал бы от поля. */}
         {attachable ? (
-          <View style={{ marginTop: 16, marginBottom: 12 }}>
-            <FieldLabel text="Прикреплять к операции" />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {ATTACH_OPTIONS.map((o) => (
-                <Chip
-                  key={o.value}
-                  label={o.label}
-                  radio
-                  selected={attach === o.value}
-                  onPress={() => setAttach(o.value)}
-                />
-              ))}
-            </View>
+          <View style={{ marginTop: 16, marginBottom: 8 }}>
+            <FieldLabel text="В операции спрашивать" />
+            <SwitchRow
+              inset={false}
+              label="Сотрудника"
+              hint="Кому выплата или кто принёс: зарплата, аванс, подотчёт"
+              value={asks.employee}
+              onChange={(v) => setAsks((a) => ({ ...a, employee: v }))}
+            />
+            <Divider />
+            <SwitchRow
+              inset={false}
+              label="Клиента"
+              hint="От кого или для кого: продажа, чаевые, поставщик"
+              value={asks.client}
+              onChange={(v) => setAsks((a) => ({ ...a, client: v }))}
+            />
+            <Divider />
+            <SwitchRow
+              inset={false}
+              label="Фото чека"
+              hint="Без фото чека операцию не сохранить"
+              value={asks.receipt}
+              onChange={(v) => setAsks((a) => ({ ...a, receipt: v }))}
+            />
           </View>
         ) : null}
       </BottomSheet>

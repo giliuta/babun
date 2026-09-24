@@ -68,7 +68,9 @@ const CATEGORIES: FinanceCategory[] = [
     color: null,
     hidden: false,
     position: 0,
-    attach: "none",
+    ask_employee: false,
+    ask_client: false,
+    require_receipt: false,
     is_system: false,
   },
   {
@@ -81,7 +83,9 @@ const CATEGORIES: FinanceCategory[] = [
     color: null,
     hidden: false,
     position: 0,
-    attach: "none",
+    ask_employee: false,
+    ask_client: false,
+    require_receipt: false,
     is_system: false,
   },
 ];

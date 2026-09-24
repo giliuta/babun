@@ -13,10 +13,6 @@ import type { Database } from "../database.types";
 // займов «Бензину» делать нечего.
 export type FinanceCategoryKind = "income" | "expense" | "debt";
 
-/** Что категория прикрепляет к операции (владелец 2026-09-24: «зарплата
- *  смотрит сотрудников, другая прикрепляет клиента»): ничего, сотрудника
- *  (`master_id`) или клиента (`client_id`). */
-export type CategoryAttach = "none" | "employee" | "client";
 
 export interface FinanceCategory {
   id: string;
@@ -28,7 +24,13 @@ export interface FinanceCategory {
   color: string | null;
   /** Тенант убрал строку из своего списка (finance_category_hidden). */
   hidden: boolean;
-  attach: CategoryAttach;
+  /** Что категория спрашивает в операции (владелец 2026-09-24: «зарплата
+   *  смотрит сотрудников, другая прикрепляет клиента»). Флажки независимы:
+   *  у чаевых — и клиент, и мастер. */
+  ask_employee: boolean;
+  ask_client: boolean;
+  /** Без фото чека операцию этой категории не сохранить. */
+  require_receipt: boolean;
   /** Служебная: ею подписывает деньги сервер («Услуги» оплаты записи,
    *  «Возврат», «Излишек», «Недостача»). Человек её не выбирает и не видит
    *  в справочнике. */
@@ -58,7 +60,9 @@ function rowToCategory(
     color: r.color,
     hidden,
     position,
-    attach: (["employee", "client"].includes(r.attach) ? r.attach : "none") as CategoryAttach,
+    ask_employee: Boolean(r.ask_employee),
+    ask_client: Boolean(r.ask_client),
+    require_receipt: Boolean(r.require_receipt),
     is_system: Boolean(r.is_system),
   };
 }
@@ -128,7 +132,9 @@ export interface NewFinanceCategory {
   type: FinanceCategoryKind;
   icon?: string | null;
   color?: string | null;
-  attach?: CategoryAttach;
+  ask_employee?: boolean;
+  ask_client?: boolean;
+  require_receipt?: boolean;
 }
 
 /** Inserts a tenant-owned category. RLS (finance_categories_write_own)
@@ -149,7 +155,9 @@ export async function insertFinanceCategory(
       type: draft.type,
       icon: draft.icon ?? null,
       color: draft.color ?? null,
-      attach: draft.attach ?? "none",
+      ask_employee: draft.ask_employee ?? false,
+      ask_client: draft.ask_client ?? false,
+      require_receipt: draft.require_receipt ?? false,
     })
     .select("*")
     .single();
@@ -163,7 +171,9 @@ export interface FinanceCategoryPatch {
   name?: string;
   icon?: string | null;
   color?: string | null;
-  attach?: CategoryAttach;
+  ask_employee?: boolean;
+  ask_client?: boolean;
+  require_receipt?: boolean;
 }
 
 /** Updates a tenant-owned category. RLS blocks edits to global defaults
@@ -177,7 +187,9 @@ export async function updateFinanceCategory(
   if (patch.name !== undefined) update.name = patch.name.trim();
   if (patch.icon !== undefined) update.icon = patch.icon;
   if (patch.color !== undefined) update.color = patch.color;
-  if (patch.attach !== undefined) update.attach = patch.attach;
+  if (patch.ask_employee !== undefined) update.ask_employee = patch.ask_employee;
+  if (patch.ask_client !== undefined) update.ask_client = patch.ask_client;
+  if (patch.require_receipt !== undefined) update.require_receipt = patch.require_receipt;
   const { data, error } = await supabase
     .from("finance_categories")
     .update(update)

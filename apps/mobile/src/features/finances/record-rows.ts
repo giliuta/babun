@@ -240,7 +240,13 @@ export function recordRows(
         tx.type === "transfer"
           ? "Перевод"
           : categoryName
-            ? withPayee(categoryName, payeeName(refs.people, tx.master_id))
+            ? withPayee(
+                categoryName,
+                // Сотрудник важнее: у чаевых оба, а строка про того, кому
+                // достались деньги. Нет сотрудника — клиент операции.
+                payeeName(refs.people, tx.master_id) ??
+                  (tx.client_id ? client.get(tx.client_id) : null),
+              )
             : note || "Операция";
       rows.push({
         key: tx.id,

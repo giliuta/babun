@@ -4,20 +4,33 @@
 // готовых — клиент сам их создаёт»).
 //
 // Поэтому ни одно имя и ни один slug здесь не зашит: «Зарплата» — просто
-// категория компании с `attach = 'employee'`, и назвать её можно как угодно
+// категория компании с `ask_employee`, и назвать её можно как угодно
 // («Выплаты», «ЗП бригаде»). Сотрудник ложится в `master_id`, клиент — в
 // `client_id` проводки.
 
 import type {
-  CategoryAttach,
   FinanceCategory,
   FinanceCategoryKind,
 } from "@babun/shared/db/repositories/finance-categories";
 
-export function attachOf(
-  category: { attach?: CategoryAttach } | null | undefined,
-): CategoryAttach {
-  return category?.attach ?? "none";
+/** Что спрашивает форма операции у этой категории. Нет категории — ничего. */
+export interface CategoryAsks {
+  employee: boolean;
+  client: boolean;
+  receipt: boolean;
+}
+
+export function asksOf(
+  category:
+    | Pick<FinanceCategory, "ask_employee" | "ask_client" | "require_receipt">
+    | null
+    | undefined,
+): CategoryAsks {
+  return {
+    employee: !!category?.ask_employee,
+    client: !!category?.ask_client,
+    receipt: !!category?.require_receipt,
+  };
 }
 
 /** Категории, которые человек выбирает руками: свои, этого вида, не скрытые

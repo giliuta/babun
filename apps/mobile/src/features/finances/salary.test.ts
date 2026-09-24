@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { attachOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./salary";
+import { asksOf, payeeName, payeeOptions, pickableCategories, withPayee } from "./salary";
 
 const p = (id: string, full_name: string, team_id: string | null, is_active = true) => ({
   id,
@@ -10,18 +10,20 @@ const p = (id: string, full_name: string, team_id: string | null, is_active = tr
 });
 
 describe("зарплата — расход с получателем", () => {
-  test("что прикрепить, решает сама категория, а не её имя", () => {
-    assert.equal(attachOf({ attach: "employee" }), "employee");
-    assert.equal(attachOf({ attach: "client" }), "client");
-    assert.equal(attachOf({}), "none");
-    assert.equal(attachOf(null), "none");
+  test("что спросить, решает сама категория, а не её имя; флажки независимы", () => {
+    assert.deepEqual(
+      asksOf({ ask_employee: true, ask_client: true, require_receipt: false }),
+      { employee: true, client: true, receipt: false },
+    );
+    assert.deepEqual(asksOf(null), { employee: false, client: false, receipt: false });
   });
 
   test("в выборе — свои категории вида, без служебных; скрытая только уже стоящая", () => {
     const cat = (id: string, over: Record<string, unknown> = {}) =>
       ({
         id, tenant_id: "t", slug: id, name: id, type: "expense", icon: null, color: null,
-        hidden: false, position: 0, attach: "none", is_system: false, ...over,
+        hidden: false, position: 0, ask_employee: false, ask_client: false,
+        require_receipt: false, is_system: false, ...over,
       }) as never;
     const list = [
       cat("fuel"),

@@ -65,7 +65,7 @@ import { formatHM } from "@/features/appointments/helpers";
 import { useRouter, type Href } from "expo-router";
 import { useMasters, useTeams } from "@/features/reference/queries";
 import { ReferenceBlock } from "@/components/ui/ReferenceBlock";
-import { attachOf, payeeOptions, pickableCategories } from "./salary";
+import { asksOf, payeeOptions, pickableCategories } from "./salary";
 import { DebtWhoBlock } from "./DebtWhoBlock";
 import { useClientChoice } from "./use-client-choice";
 import { ClientPickerSheet } from "@/features/clients/ClientPickerSheet";
@@ -552,8 +552,20 @@ export function OperationSheet({
   const categoriesHref = useReferenceHref().categories;
   const busy = insert.isPending || update.isPending || del.isPending;
   const dateInFuture = date > businessToday;
+  // Категория говорит собой: иконка и цвет из справочника, как у типа события
+  // в записи. Не выбрана — нейтральный ярлычок, а не пустое место.
+  const category = categoryId
+    ? categories.find((c) => c.id === categoryId) ?? null
+    : null;
+  // ЧТО СПРОСИТЬ, РЕШАЕТ КАТЕГОРИЯ (владелец 2026-09-24): сотрудника, клиента,
+  // фото чека — флажками в её настройках, а не по имени.
+  const asks = asksOf(category);
+  // Фото прикладывает владелец: хранилище чеков владельческое, у сотрудника
+  // блока файла нет — требовать от него то, что он приложить не может, нельзя.
+  const receiptMissing = asks.receipt && isOwner && !receiptUrl;
   const canSave =
     canWrite &&
+    !receiptMissing &&
     amountCents != null &&
     // КАТЕГОРИЯ ОБЯЗАТЕЛЬНА (владелец 2026-09-10: «чтобы создать операцию,
     // нужно обязательно выбрать категорию»). Кнопка её не спрашивала, и деньги
@@ -574,11 +586,6 @@ export function OperationSheet({
     online &&
     !busy;
   const isExpense = type === "expense";
-  // Категория говорит собой: иконка и цвет из справочника, как у типа события
-  // в записи. Не выбрана — нейтральный ярлычок, а не пустое место.
-  const category = categoryId
-    ? categories.find((c) => c.id === categoryId) ?? null
-    : null;
   // Значок и цвет категории живут теперь в самом блоке (`CategoryBlock`) —
   // одном на долг и операцию: две копии этой развилки уже начинали расходиться.
 
@@ -586,9 +593,8 @@ export function OperationSheet({
   // сотрудников, другая прикрепляет клиента»). Блок «Кому» или «Клиент» есть
   // только у категории, которая это прикрепляет: у прочих человеку нечего
   // выбирать, и лишний блок стоял бы пустым.
-  const attach = attachOf(category);
-  const salary = attach === "employee";
-  const attachClient = attach === "client" && !debtPayment;
+  const salary = asks.employee;
+  const attachClient = asks.client && !debtPayment;
   const pickedClient = clientId
     ? ((clientChoice.clients as Client[]).find((c) => c.id === clientId) ?? null)
     : null;
@@ -878,7 +884,12 @@ export function OperationSheet({
                             text: "Выберите категорию операции",
                             error: true,
                           }
-                        : null;
+                        : receiptMissing
+                          ? {
+                              text: `Для категории «${category?.name ?? ""}» нужно фото чека`,
+                              error: true,
+                            }
+                          : null;
   // ТОЛЬКО ПРОСМОТР СИЛЬНЕЕ ПРИЧИН ВВОДА: заполнять форму дальше незачем,
   // если записать её этому человеку всё равно нельзя.
   const reason = canWrite
@@ -1034,7 +1045,8 @@ export function OperationSheet({
         {salary ? (
           <ReferenceBlock
             dense
-            title="Кому"
+            // Расход — «Кому» ушли деньги; доход — «Сотрудник», кто их принёс.
+            title={isExpense ? "Кому" : "Сотрудник"}
             emptyIcon={User}
             emptyLabel="Выбрать сотрудника"
             emptyHint="Открывает список сотрудников"
@@ -1198,7 +1210,7 @@ export function OperationSheet({
             владельческий: у сотрудника выбор файла закончился бы отказом
             хранилища, поэтому строки у него нет вовсе. */}
         {isOwner ? (
-          <SectionCard title="Файл" dense>
+          <SectionCard title={asks.receipt ? "Фото чека" : "Файл"} dense>
             <OperationReceiptRow
               receiptUrl={receiptUrl}
               onPick={setReceiptUrl}
@@ -1361,7 +1373,7 @@ export function OperationSheet({
       />
       <PickerSheet
         visible={payeePickerOpen}
-        title="Кому"
+        title={isExpense ? "Кому" : "Сотрудник"}
         // ПУСТОЙ СПИСОК — СЛОВАМИ (канон пустых состояний): у компании без
         // сотрудников лист иначе был бы одной шапкой без ответа, что делать.
         subtitle={
