@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import type { Appointment } from "@babun/shared/local/appointments";
 import { useThemeColors } from "@/theme/colors";
 import {
+  blockContour,
   blockOverdueEdge,
   blockPressed,
   blockSolid,
@@ -91,6 +92,8 @@ export type BlockColors = {
   solid: string;
   /** Та же заливка под пальцем — на ступень глубже. */
   pressed: string;
+  /** Контур блока: тот же тон на 0.2 темнее по светлоте. */
+  contour: string;
   /** Кант просрочки на плотном блоке: тот же тон почти чёрным. */
   overdueEdge: string;
 };
@@ -111,6 +114,7 @@ export function blockColorsFor(hue: string): BlockColors {
     edge: edgeColor(hue),
     solid: blockSolid(hue),
     pressed: blockPressed(hue),
+    contour: blockContour(hue),
     overdueEdge: blockOverdueEdge(hue),
   };
   cache.set(hue, out);
@@ -149,10 +153,9 @@ export function blockEdge(
   overdue = false,
 ): string {
   if (status === "cancelled") return CANCELLED_EDGE;
-  // На плотной заливке кант цвета записи невидим — он и есть заливка. Кант
-  // остаётся в бокс-модели (геометрия строк считает его), но говорит только
-  // просрочка: тёмным ободком того же тона.
-  return overdue ? colors.overdueEdge : colors.solid;
+  // Кант плотного блока — контур его же тона, темнее заливки; просрочка —
+  // почти чёрным тоном и на точку толще (толщина — в DayView).
+  return overdue ? colors.overdueEdge : colors.contour;
 }
 
 /** Заливка блока поверх названной подложки — для измерений и тестов. */

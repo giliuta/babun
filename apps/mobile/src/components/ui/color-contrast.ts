@@ -235,16 +235,20 @@ export function markColor(token: string): string {
 // где белое имя читается: янтарь остаётся оранжевым, лаванда — сиреневой. У
 // пятого варианта затемнение к чёрному топило их в коричневый и серый.
 //
-// ПОРОГ 3.6 : 1, А НЕ 4.5. Имя в блоке — 13pt/700, это рубеж «крупного текста»
-// WCAG (14pt жирным → 3 : 1); 3.6 даёт запас сверх него на бликующем экране.
-// При 4.5 светлые оттенки палитры (янтарный, небесный, мятный) темнеют до
-// неузнаваемости — ровно то, от чего вариант 5 и уходил. Время и адрес под
-// именем набраны тем же белым без прозрачности.
+// ПОРОГ 3.3 : 1, А НЕ 4.5. Имя в блоке — 13pt/700, это рубеж «крупного текста»
+// WCAG (14pt жирным → 3 : 1); 3.3 даёт запас сверх него. При 4.5 светлые
+// оттенки палитры (янтарный, небесный, мятный) темнеют до неузнаваемости —
+// ровно то, от чего вариант 5 и уходил. Вторая итерация того же дня
+// (владелец: «насыщенность добавить, контур») опустила порог с 3.6 и подняла
+// сочность на 18 %: цвет ярче, а край блоку даёт контур `blockContour`.
 
 /** Белое имя обязано взять к заливке блока хотя бы это. */
-export const BLOCK_TEXT_MIN = 3.6;
+export const BLOCK_TEXT_MIN = 3.3;
 /** Текст на плотном блоке — белый, всегда. */
 export const BLOCK_TEXT = "#ffffff";
+
+/** Прибавка сочности плотного блока (OKLCH C × это). */
+export const BLOCK_CHROMA = 1.18;
 
 const solidCache = new Map<string, string>();
 
@@ -258,12 +262,18 @@ export function blockSolid(hue: string): string {
   const lch = rgb ? hexToOklch(out) : null;
   if (lch && contrastRatio(BLOCK_TEXT, out) < BLOCK_TEXT_MIN) {
     const [l0, c, h] = lch;
-    // Чуть больше сочности при затемнении: без неё тёмный цвет выглядит
-    // пыльным. Гамут всё равно подрежет лишнее.
+    // Сочнее исходного на 18 %: без этого тёмный цвет выглядит пыльным.
+    // Гамут подрежет лишнее, тон при этом держится.
     for (let l = l0; l > 0.2; l -= 0.005) {
-      out = oklchToHex([l, c * 1.04, h]);
+      out = oklchToHex([l, c * BLOCK_CHROMA, h]);
       if (contrastRatio(BLOCK_TEXT, out) >= BLOCK_TEXT_MIN) break;
     }
+  } else if (lch) {
+    // Уже тёмный цвет не темнеет, но сочность получает ту же прибавку —
+    // иначе соседние блоки говорили бы разной насыщенностью. Если белое имя
+    // при этом теряет порог, остаётся исходный цвет.
+    const richer = oklchToHex([lch[0], lch[1] * BLOCK_CHROMA, lch[2]]);
+    if (contrastRatio(BLOCK_TEXT, richer) >= BLOCK_TEXT_MIN) out = richer;
   }
   solidCache.set(hue, out);
   return out;
@@ -277,12 +287,20 @@ export function blockPressed(hue: string): string {
   return oklchToHex([Math.max(0.2, lch[0] - 0.07), lch[1], lch[2]]);
 }
 
+/** Контур блока: его же тон, на 0.2 темнее по светлоте OKLCH. Отделяет
+ *  соседние записи и даёт плотной заливке край (вариант 3 второй итерации). */
+export function blockContour(hue: string): string {
+  const lch = hexToOklch(blockSolid(hue));
+  if (!lch) return CANCELLED_EDGE;
+  return oklchToHex([Math.max(0.2, lch[0] - 0.2), lch[1], lch[2]]);
+}
+
 /** Кант просрочки: тот же тон, почти чёрный. На плотной заливке цветной кант
  *  невидим, а тёмный ободок того же тона читается и сохраняет «чей» блок. */
 export function blockOverdueEdge(hue: string): string {
   const lch = hexToOklch(blockSolid(hue));
   if (!lch) return CANCELLED_EDGE;
-  return oklchToHex([0.28, Math.min(lch[1], 0.12), lch[2]]);
+  return oklchToHex([0.2, Math.min(lch[1], 0.1), lch[2]]);
 }
 
 /** `rgba()`-строка для анимации заливки: восьмизначный hex Reanimated

@@ -41,8 +41,12 @@ describe("плотный блок записи", () => {
     });
   }
 
-  test("уже тёмный цвет не трогается", () => {
-    assert.equal(blockSolid("#4B1D82"), "#4b1d82");
+  test("уже тёмный цвет не темнеет — только сочнее", () => {
+    const before = hexToOklch("#4B1D82");
+    const after = hexToOklch(blockSolid("#4B1D82"));
+    assert.ok(before && after);
+    assert.ok(Math.abs(before[0] - after[0]) < 0.01, "светлота на месте");
+    assert.ok(after[1] >= before[1] - 0.001, "сочность не упала");
   });
 
   test("янтарный остаётся оранжевым, а не коричневым", () => {

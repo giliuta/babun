@@ -5,6 +5,7 @@ import {
   chipPad,
   chipTextW,
   chipsThatFit,
+  blockLadder,
   rowsThatFit,
   textRows,
   TEXT_MIN_W,
@@ -115,5 +116,40 @@ describe("чипы «весь день»", () => {
   test("пустой список и нулевая ширина не ломают счёт", () => {
     assert.equal(chipsThatFit(300, 0), 0);
     assert.equal(chipsThatFit(0, 3), 0);
+  });
+});
+
+describe("лестница содержимого блока", () => {
+  const base = { textW: 40, nameWords: 2, hasService: true, hasAddress: true };
+  test("узкий высокий блок: имя в две строки, потом время, услуга, адрес", () => {
+    const l = blockLadder({ ...base, rowsFit: 6 });
+    assert.deepEqual(l, { nameRows: 2, showTime: true, showService: true, showAddress: true, lastRow: "address" });
+  });
+  test("узкий на три строки: имя в две и время", () => {
+    const l = blockLadder({ ...base, rowsFit: 3 });
+    assert.equal(l.nameRows, 2);
+    assert.equal(l.showTime, true);
+    assert.equal(l.showService, false);
+  });
+  test("узкий на две строки: имя одной строкой и время", () => {
+    const l = blockLadder({ ...base, rowsFit: 2 });
+    assert.equal(l.nameRows, 1);
+    assert.equal(l.lastRow, "time");
+  });
+  test("имя из одного слова не делится", () => {
+    assert.equal(blockLadder({ ...base, nameWords: 1, rowsFit: 6 }).nameRows, 1);
+  });
+  test("широкий блок: имя одной строкой, потолка в три строки нет", () => {
+    const l = blockLadder({ ...base, textW: 300, rowsFit: 4 });
+    assert.equal(l.nameRows, 1);
+    assert.equal(l.showAddress, true);
+  });
+  test("нет услуги — адрес встаёт на её место", () => {
+    const l = blockLadder({ ...base, textW: 300, hasService: false, rowsFit: 3 });
+    assert.equal(l.showService, false);
+    assert.equal(l.showAddress, true);
+  });
+  test("самый низкий блок печатает хотя бы имя", () => {
+    assert.equal(blockLadder({ ...base, rowsFit: 0 }).lastRow, "name");
   });
 });

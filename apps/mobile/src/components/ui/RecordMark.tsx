@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { View } from "react-native";
 import {
   BLOCK_TEXT,
+  blockContour,
   blockSolid,
   CANCELLED_BORDER,
   CANCELLED_EDGE,
@@ -72,7 +73,7 @@ export function RecordMark({
         borderColor: cancelled
           ? CANCELLED_EDGE
           : hue
-            ? blockSolid(hue)
+            ? blockContour(hue)
             : t.separator,
         borderStyle: cancelled ? CANCELLED_BORDER : "solid",
       }}

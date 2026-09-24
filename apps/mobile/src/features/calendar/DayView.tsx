@@ -35,8 +35,8 @@ import {
   chipPad,
   chipTextW,
   chipsThatFit,
+  blockLadder,
   rowsThatFit,
-  textRows,
   CHIP_GAP,
   TEXT_MIN_W,
 } from "@/features/calendar/block-geometry";
@@ -283,7 +283,7 @@ export function AllDayRow({
                   justifyContent: "center",
                   paddingHorizontal: pad,
                   borderWidth: 1,
-                  borderColor: cancelled ? CANCELLED_EDGE : c.solid,
+                  borderColor: cancelled ? CANCELLED_EDGE : c.contour,
                   borderStyle: cancelled ? CANCELLED_BORDER : "solid",
                   borderRadius: t.radius.card,
                   borderCurve: "continuous",
@@ -446,7 +446,11 @@ const Block = memo(function Block({
   // там, где знака нет (markSize 0 при ширине < 40), и слабеет там, где есть
   // текст. Геометрия не меняется ни при дейтеранопии, ни при перекраске
   // палитры владельцем — в отличие от любого оттенка.
-  const bw = overdue ? 2 : 1;
+  // КОНТУР 1.5pt У КАЖДОГО БЛОКА (владелец 2026-09-24, вариант 3 второй
+  // итерации: «контур добавить, насыщенность»): тёмный тон своего же цвета
+  // отделяет соседние записи и даёт плотной заливке край. Просрочка — на
+  // точку толще и почти чёрным тоном (`blockEdge`).
+  const bw = overdue ? 2.5 : 1.5;
   const markSize = width >= 96 ? 14 : width >= 40 ? 8 : 0;
   // Место под знак резервирует ТОЛЬКО выполненная: у просрочки знака нет.
   // Пока его резервировала и она, просроченный блок недели на экране 393pt
@@ -467,32 +471,29 @@ const Block = memo(function Block({
   // того названо рельсом слева и позицией блока — потому имя и стоит первым.
   // Единица снизу остаётся: у самого низкого блока имя пытается напечататься
   // всегда, как было.
-  const lines = textRows(cardH, lineH);
-  // ОТМЕНЁННАЯ ТЕРЯЕТ ЦВЕТ ЗАПИСИ: она никуда не едет и не имеет права
-  // занимать слот палитры. Выполненная гаснет вполовину — сигнал носит
-  // зелёный знак, а не плотность заливки.
-  // ЧЕТВЁРТАЯ СТУПЕНЬ — АДРЕС. «Кто» отвечает имя, «что» — услуга, «когда» —
-  // рельс и высота блока; «куда» не сказано нигде, ни в одном виде календаря,
-  // а у выездной бригады это второй вопрос после времени. Гейт ширины тот же,
-  // что у услуги: в Неделе (textW ≈ 36) и в Дне с тремя наложениями решает
-  // арифметика, а не флаг вида. Когда услуги нет, адрес занимает её строку, а
-  // не требует лишней высоты на пустом месте.
-  const showService = lines >= 3 && textW >= 120 && !!service;
-  const showAddress =
-    !!address && textW >= 120 && rowsFit >= (showService ? 4 : 3);
+  // ЛЕСТНИЦА — ЧИСТОЙ ФУНКЦИЕЙ ПОД ТЕСТОМ (`blockLadder`): имя (в узком блоке
+  // — имя и фамилия двумя строками), время, услуга, адрес — сколько влезает.
+  // Потолка в три строки и гейта ширины 120pt у услуги с адресом больше нет:
+  // владелец хочет, чтобы в блок «больше влазило».
+  const nameWords = label.trim().split(/\s+/);
+  const ladder = blockLadder({
+    rowsFit,
+    textW,
+    nameWords: nameWords.length,
+    hasService: !!service,
+    hasAddress: !!address,
+  });
+  const nameParts =
+    ladder.nameRows === 2
+      ? [nameWords[0], nameWords.slice(1).join(" ")]
+      : [label];
+  const { showService, showAddress, lastRow } = ladder;
   // ТОЧКУ ЧУЖОЙ МЕТКИ ОБХОДИТ ПОСЛЕДНЯЯ СТРОКА, КАКОЙ БЫ ОНА НИ БЫЛА. Точка
   // лежит абсолютно в правом нижнем углу; раньше отступ был вшит только в
   // адрес, и на карточке, где последней осталась услуга (или время), её хвост
   // заезжал под точку.
   const dotReserve =
     offLabelColor && markSize > 0 && cardH >= (completed ? 30 : 20) ? 12 : 0;
-  const lastRow = showAddress
-    ? "address"
-    : showService
-      ? "service"
-      : lines >= 2
-        ? "time"
-        : "name";
 
   // КАНТ ЗАБИРАЕТ ТОЛЬКО ОТМЕНЁННАЯ — правило и его гейт в `status-colors`.
   const edge = blockEdge(colors, apt.status, overdue);
@@ -707,27 +708,32 @@ const Block = memo(function Block({
               девятка, которой неделя набиралась раньше, была нечитаема.
               Лестница только ДОПИСЫВАЕТСЯ вниз и никогда не переставляется:
               при щипке глаз не должен терять якорь. */}
-          {lines >= 1 && textW >= 24 ? (
-            <Text
-              style={{
-                color: nameColor,
-                fontSize: 13,
-                lineHeight: lineH,
-                fontWeight: "700",
-                marginRight: Math.max(
-                  markReserve,
-                  lastRow === "name" ? dotReserve : 0,
-                ),
-                textDecorationLine: cancelled ? "line-through" : "none",
-              }}
-              numberOfLines={1}
-              ellipsizeMode={textW < 96 ? "clip" : "tail"}
-              maxFontSizeMultiplier={1.3}
-            >
-              {label}
-            </Text>
-          ) : null}
-          {lines >= 2 && textW >= 24 ? (
+          {textW >= 24
+            ? nameParts.map((part, i) => (
+                <Text
+                  key={i}
+                  style={{
+                    color: nameColor,
+                    fontSize: 13,
+                    lineHeight: lineH,
+                    fontWeight: "700",
+                    marginRight: Math.max(
+                      i === 0 ? markReserve : 0,
+                      lastRow === "name" && i === nameParts.length - 1
+                        ? dotReserve
+                        : 0,
+                    ),
+                    textDecorationLine: cancelled ? "line-through" : "none",
+                  }}
+                  numberOfLines={1}
+                  ellipsizeMode={textW < 96 ? "clip" : "tail"}
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {part}
+                </Text>
+              ))
+            : null}
+          {ladder.showTime && textW >= 24 ? (
             <Text
               style={{
                 color: subColor,
@@ -743,7 +749,7 @@ const Block = memo(function Block({
               {textW >= 92 ? `${apt.time_start} – ${apt.time_end}` : apt.time_start}
             </Text>
           ) : null}
-          {showService ? (
+          {showService && textW >= 24 ? (
             <Text
               style={{
                 color: subColor,
@@ -752,12 +758,13 @@ const Block = memo(function Block({
                 marginRight: lastRow === "service" ? dotReserve : 0,
               }}
               numberOfLines={1}
+              ellipsizeMode={textW < 96 ? "clip" : "tail"}
               maxFontSizeMultiplier={1.3}
             >
               {service}
             </Text>
           ) : null}
-          {showAddress ? (
+          {showAddress && textW >= 24 ? (
             <Text
               style={{
                 color: subColor,
@@ -766,7 +773,7 @@ const Block = memo(function Block({
                 marginRight: dotReserve,
               }}
               numberOfLines={1}
-              ellipsizeMode="tail"
+              ellipsizeMode={textW < 96 ? "clip" : "tail"}
               maxFontSizeMultiplier={1.3}
             >
               {address}
